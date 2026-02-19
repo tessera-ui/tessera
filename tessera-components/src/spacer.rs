@@ -25,6 +25,19 @@ impl LayoutSpec for SpacerLayout {
     }
 }
 
+#[derive(Clone, PartialEq)]
+/// Props for [`spacer`].
+pub struct SpacerArgs {
+    modifier: Modifier,
+}
+
+impl SpacerArgs {
+    /// Creates spacer component props.
+    pub fn new(modifier: Modifier) -> Self {
+        Self { modifier }
+    }
+}
+
 /// # spacer
 ///
 /// Renders an empty, flexible space to influence layout.
@@ -36,14 +49,14 @@ impl LayoutSpec for SpacerLayout {
 ///
 /// ## Parameters
 ///
-/// - `modifier` — configures sizing and layout constraints for this spacer.
+/// - `args` — props for this component; see [`SpacerArgs`].
 ///
 /// ## Examples
 ///
 /// ```
 /// use tessera_components::{
 ///     row::{RowArgs, row},
-///     spacer::spacer,
+///     spacer::{SpacerArgs, spacer},
 ///     text::{TextArgs, text},
 /// };
 /// use tessera_ui::Modifier;
@@ -52,20 +65,18 @@ impl LayoutSpec for SpacerLayout {
 /// # #[tessera]
 /// # fn component() {
 /// row(RowArgs::default(), |scope| {
-///     scope.child(|| text(TextArgs::default().text("Left")));
+///     scope.child(|| text(&TextArgs::default().text("Left")));
 ///     // Use weight to let the spacer expand and push the trailing content.
-///     scope.child_weighted(|| spacer(Modifier::new()), 1.0);
-///     scope.child(|| text(TextArgs::default().text("Right")));
+///     scope.child_weighted(|| spacer(&SpacerArgs::new(Modifier::new())), 1.0);
+///     scope.child(|| text(&TextArgs::default().text("Right")));
 /// });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn spacer(modifier: Modifier) {
-    modifier.run(spacer_inner);
-}
-
-#[tessera]
-fn spacer_inner() {
-    layout(SpacerLayout);
+pub fn spacer(args: &SpacerArgs) {
+    let modifier = args.modifier.clone();
+    modifier.run(|| {
+        layout(SpacerLayout);
+    });
 }

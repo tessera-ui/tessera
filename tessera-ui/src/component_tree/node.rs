@@ -20,7 +20,7 @@ use crate::{
     layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
-    runtime::{RuntimePhase, push_current_node, push_phase},
+    runtime::{RuntimePhase, push_current_component_instance_key, push_current_node, push_phase},
 };
 
 use super::{
@@ -270,6 +270,8 @@ pub struct ComponentNode {
     pub input_handler_fn: Option<Box<InputHandlerFn>>,
     /// Pure layout spec for skipping and record passes.
     pub layout_spec: Box<dyn LayoutSpecDyn>,
+    /// Optional replay metadata for subtree-level rerun.
+    pub replay: Option<crate::prop::ComponentReplayData>,
 }
 
 /// Contains metadata of the component node.
@@ -677,6 +679,7 @@ pub(crate) fn measure_node(
     // instrumentation.
     let _node_ctx_guard =
         push_current_node(node_id, node_data.logic_id, node_data.fn_name.as_str());
+    let _instance_ctx_guard = push_current_component_instance_key(node_data.instance_key);
     let _phase_guard = push_phase(RuntimePhase::Measure);
 
     let resolve_instance_key = |child_id: NodeId| {

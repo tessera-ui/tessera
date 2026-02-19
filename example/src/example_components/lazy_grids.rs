@@ -19,30 +19,28 @@ use tessera_components::{
     theme::MaterialTheme,
 };
 use tessera_ui::{Color, Dp, Modifier, shard, tessera, use_context};
-
 #[tessera]
 #[shard]
 pub fn lazy_grids_showcase() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             lazy_column(
-                LazyColumnArgs {
+                &LazyColumnArgs {
                     content_padding: Dp(24.0),
                     ..Default::default()
-                },
-                move |scope| {
+                }
+                .content(move |scope| {
                     scope.item(move || {
                         column(
                             ColumnArgs::default()
                                 .modifier(Modifier::new().fill_max_width()),
                             move |scope| {
                                 scope.child(|| {
-                                    text(TextArgs::default().text("Lazy Grids").size(Dp(24.0)));
+                                    text(&TextArgs::default().text("Lazy Grids").size(Dp(24.0)));
                                 });
                                 scope.child(|| {
-                                    text(
-                                        TextArgs::default()
+                                    text(&TextArgs::default()
                                             .text(
                                                 "Virtualized grids that only mount visible cells in the viewport.",
                                             )
@@ -52,37 +50,30 @@ pub fn lazy_grids_showcase() {
                                                     .get()
                                                     .color_scheme
                                                     .on_surface_variant,
-                                            ),
-                                    );
+                                            ));
                                 });
                                 scope.child(|| {
-                                    text(
-                                        TextArgs::default()
+                                    text(&TextArgs::default()
                                             .text("Vertical grid (lazy_vertical_grid)")
-                                            .size(Dp(18.0)),
-                                    );
+                                            .size(Dp(18.0)));
                                 });
                                 scope.child(vertical_grid);
                                 scope.child(|| {
-                                    text(
-                                        TextArgs::default()
+                                    text(&TextArgs::default()
                                             .text("Horizontal grid (lazy_horizontal_grid)")
-                                            .size(Dp(18.0)),
-                                    );
+                                            .size(Dp(18.0)));
                                 });
                                 scope.child(horizontal_grid);
                             },
                         );
                     });
-                },
+                }),
             );
         },
-    );
+    ));
 }
-
-#[tessera]
 fn vertical_grid() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
@@ -96,7 +87,7 @@ fn vertical_grid() {
             .shape(Shape::rounded_rectangle(Dp(18.0))),
         move || {
             lazy_vertical_grid(
-                LazyVerticalGridArgs::default()
+                &LazyVerticalGridArgs::default()
                     .scrollable(
                         ScrollableArgs::default()
                             .modifier(Modifier::new().fill_max_width().height(Dp(360.0))),
@@ -107,20 +98,18 @@ fn vertical_grid() {
                     .cross_axis_alignment(MainAxisAlignment::SpaceBetween)
                     .item_alignment(CrossAxisAlignment::Stretch)
                     .estimated_item_size(Dp(120.0))
-                    .overscan(2),
-                |scope| {
-                    scope.items(180, |index| {
-                        grid_tile(index, None, Some(Dp(120.0)));
-                    });
-                },
+                    .overscan(2)
+                    .content(|scope| {
+                        scope.items(180, |index| {
+                            grid_tile(index, None, Some(Dp(120.0)));
+                        });
+                    }),
             );
         },
-    );
+    ));
 }
-
-#[tessera]
 fn horizontal_grid() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
@@ -134,7 +123,7 @@ fn horizontal_grid() {
             .shape(Shape::rounded_rectangle(Dp(18.0))),
         move || {
             lazy_horizontal_grid(
-                LazyHorizontalGridArgs::default()
+                &LazyHorizontalGridArgs::default()
                     .scrollable(
                         ScrollableArgs::default()
                             .modifier(Modifier::new().fill_max_width().height(Dp(220.0))),
@@ -145,18 +134,16 @@ fn horizontal_grid() {
                     .cross_axis_alignment(MainAxisAlignment::SpaceAround)
                     .item_alignment(CrossAxisAlignment::Stretch)
                     .estimated_item_size(Dp(180.0))
-                    .overscan(3),
-                |scope| {
-                    scope.items(140, |index| {
-                        grid_tile(index, Some(Dp(180.0)), None);
-                    });
-                },
+                    .overscan(3)
+                    .content(|scope| {
+                        scope.items(140, |index| {
+                            grid_tile(index, Some(Dp(180.0)), None);
+                        });
+                    }),
             );
         },
-    );
+    ));
 }
-
-#[tessera]
 fn grid_tile(index: usize, width: Option<Dp>, height: Option<Dp>) {
     let mut modifier = Modifier::new();
     if let Some(width) = width {
@@ -167,20 +154,20 @@ fn grid_tile(index: usize, width: Option<Dp>, height: Option<Dp>) {
     }
     let modifier = modifier.padding_all(Dp(8.0));
 
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(modifier)
             .shape(Shape::rounded_rectangle(Dp(16.0)))
             .style(color_for_index(index).into()),
         move || {
             text(
-                TextArgs::default()
+                &TextArgs::default()
                     .text(format!("Tile {}", index + 1))
                     .size(Dp(16.0))
                     .color(Color::WHITE),
             );
         },
-    );
+    ));
 }
 
 fn color_for_index(index: usize) -> Color {

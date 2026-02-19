@@ -21,7 +21,7 @@
 
 mod cursor;
 
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use glyphon::{
     Cursor, Edit,
@@ -29,10 +29,10 @@ use glyphon::{
 };
 use tessera_platform::clipboard;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
+    CallbackWith, Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    tessera, winit,
+    tessera, winit, with_frame_nanos,
 };
 use winit::keyboard::NamedKey;
 
@@ -41,16 +41,16 @@ use crate::{
         command::{TextCommand, TextConstraint},
         pipeline::{TextData, write_font_system},
     },
-    selection_highlight_rect::selection_highlight_rect,
+    selection_highlight_rect::{SelectionHighlightRectArgs, selection_highlight_rect},
     text_edit_core::cursor::CURSOR_WIDRH,
 };
 
 /// Display-only text transform applied to the text content before rendering
 /// (e.g., masking or formatting without changing the underlying buffer).
-pub type DisplayTransform = Arc<dyn Fn(&str) -> String + Send + Sync>;
+pub type DisplayTransform = CallbackWith<String, String>;
 
 /// Definition of a rectangular selection highlight
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq)]
 /// Defines a rectangular region for text selection highlighting.
 ///
 /// Used internally to represent the geometry of a selection highlight in pixel
@@ -67,7 +67,7 @@ pub struct RectDef {
 }
 
 /// Types of mouse clicks
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 /// Represents the type of mouse click detected in the editor.
 ///
 /// Used for distinguishing between single, double, and triple click actions.
@@ -182,7 +182,7 @@ impl TextEditorController {
         let text_buffer = if let Some(transform) = self.display_transform.as_ref() {
             let metrics = self.editor.with_buffer(|buffer| buffer.metrics());
             let content = editor_content(&self.editor);
-            let display_text = transform(&content);
+            let display_text = transform.call(content);
             build_display_buffer(
                 &display_text,
                 self.text_color,
@@ -277,7 +277,7 @@ impl TextEditorController {
     pub fn set_display_transform(&mut self, transform: Option<DisplayTransform>) {
         let should_update = match (&self.display_transform, &transform) {
             (None, None) => false,
-            (Some(current), Some(next)) => !Arc::ptr_eq(current, next),
+            (Some(current), Some(next)) => current != next,
             _ => true,
         };
         if should_update {
@@ -787,7 +787,9 @@ impl LayoutSpec for TextEditLayout {
 ///
 /// * `controller` - Shared controller for the text editor.
 #[tessera]
-pub fn text_edit_core(controller: State<TextEditorController>) {
+pub fn text_edit_core(args: &TextEditCoreArgs) {
+    let controller = args.controller;
+
     // text rendering with constraints from parent container
     let layout_version = controller.with(|c| c.layout_version());
     layout(TextEditLayout {
@@ -801,14 +803,33 @@ pub fn text_edit_core(controller: State<TextEditorController>) {
             controller.with(|c| (c.current_selection_rects.clone(), c.selection_color));
 
         for def in rect_definitions {
-            selection_highlight_rect(def.width, def.height, color_for_selection);
+            let render_args =
+                SelectionHighlightRectArgs::new(def.width, def.height, color_for_selection);
+            selection_highlight_rect(&render_args);
         }
     }
 
     // Cursor rendering (only when focused)
     if controller.with(|c| c.focus_handler().is_focused()) {
+        let controller_for_frame = controller;
+        with_frame_nanos(move |_| {
+            controller_for_frame.with_mut(|_| {});
+        });
         let (line_height, blink_timer, cursor_color) =
             controller.with(|c| (c.line_height(), c.blink_timer(), c.cursor_color()));
         cursor::cursor(line_height, blink_timer, cursor_color);
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct TextEditCoreArgs {
+    /// Shared controller for text content, cursor, and selection state.
+    pub controller: State<TextEditorController>,
+}
+
+impl TextEditCoreArgs {
+    /// Creates text editor core component props.
+    pub fn new(controller: State<TextEditorController>) -> Self {
+        Self { controller }
     }
 }

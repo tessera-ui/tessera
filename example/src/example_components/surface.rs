@@ -1,4 +1,4 @@
-use std::{fmt::Display, sync::Arc};
+use std::fmt::Display;
 
 use tessera_components::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
@@ -8,12 +8,12 @@ use tessera_components::{
     scrollable::{ScrollableArgs, scrollable},
     shape_def::{RoundedCorner, Shape},
     slider::{SliderArgs, slider},
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, SurfaceStyle, surface},
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{Dp, Modifier, State, remember, shard, tessera, use_context};
+use tessera_ui::{CallbackWith, Dp, Modifier, State, remember, shard, tessera, use_context};
 
 struct CornerRadius(f32);
 
@@ -62,31 +62,29 @@ impl Default for ExampleSurfaceState {
         }
     }
 }
-
 #[tessera]
 #[shard]
 pub fn surface_showcase() {
     let example_surface_state = remember(ExampleSurfaceState::default);
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgs::default().modifier(Modifier::new().fill_max_size()),
-                move || {
-                    surface(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0))),
-                        move || {
-                            test_content(example_surface_state);
-                        },
-                    );
-                },
+                &ScrollableArgs::default()
+                    .modifier(Modifier::new().fill_max_size())
+                    .child(move || {
+                        surface(&SurfaceArgs::with_child(
+                            SurfaceArgs::default()
+                                .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0))),
+                            move || {
+                                test_content(example_surface_state);
+                            },
+                        ));
+                    }),
             )
         },
-    );
+    ));
 }
-
-#[tessera]
 fn test_content(state: State<ExampleSurfaceState>) {
     column(
         ColumnArgs::default()
@@ -134,7 +132,7 @@ fn test_content(state: State<ExampleSurfaceState>) {
                                         .primary_container,
                                 }
                             };
-                            surface(
+                            surface(&SurfaceArgs::with_child(
                                 SurfaceArgs::default()
                                     .modifier(Modifier::new().size(width, height))
                                     .shape(Shape::RoundedRectangle {
@@ -148,61 +146,65 @@ fn test_content(state: State<ExampleSurfaceState>) {
                                         println!("Surface clicked");
                                     }),
                                 || {},
-                            );
+                            ));
                         });
 
-                        scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                        scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
                         scope.child(move || {
-                            text(TextArgs::default().text(state_string).size(Dp(16.0)));
+                            text(
+                                &TextArgs::default()
+                                    .text(state_string.clone())
+                                    .size(Dp(16.0)),
+                            );
                         });
                     },
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
             scope.child(move || {
                 surface_config_slider(
                     "Width",
                     state.with(|s| s.width.value.0 as f32 / 500.0),
-                    Arc::new(move |value| {
+                    CallbackWith::new(move |value| {
                         state.with_mut(|s| s.width.value = Dp(f64::from(value) * 500.0));
                     }),
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
             scope.child(move || {
                 surface_config_slider(
                     "Height",
                     state.with(|s| s.height.value.0 as f32 / 500.0),
-                    Arc::new(move |value| {
+                    CallbackWith::new(move |value| {
                         state.with_mut(|s| s.height.value = Dp(f64::from(value) * 500.0));
                     }),
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
             scope.child(move || {
                 surface_config_slider(
                     "Corner Radius",
                     state.with(|s| s.corner_radius.value.0 / 100.0),
-                    Arc::new(move |value| {
+                    CallbackWith::new(move |value| {
                         state.with_mut(|s| s.corner_radius.value = CornerRadius(value * 100.0));
                     }),
                 );
             });
 
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
             scope.child(move || {
                 surface_config_slider(
                     "Border Width",
                     state.with(|s| s.border_width.value.0 as f32 / 20.0),
-                    Arc::new(move |value| {
+                    CallbackWith::new(move |value| {
                         state.with_mut(|s| s.border_width.value = Dp(f64::from(value) * 20.0));
                     }),
                 );
@@ -210,9 +212,7 @@ fn test_content(state: State<ExampleSurfaceState>) {
         },
     );
 }
-
-#[tessera]
-fn surface_config_slider(label: &str, value: f32, on_change: Arc<dyn Fn(f32) + Send + Sync>) {
+fn surface_config_slider(label: &str, value: f32, on_change: CallbackWith<f32>) {
     let label = label.to_string();
     column(
         ColumnArgs::default()
@@ -221,18 +221,20 @@ fn surface_config_slider(label: &str, value: f32, on_change: Arc<dyn Fn(f32) + S
             .modifier(Modifier::new().fill_max_width()),
         move |scope| {
             scope.child(move || {
+                let label = label.clone();
+                let on_change = on_change.clone();
                 column(ColumnArgs::default(), |scope| {
                     scope.child(move || {
-                        text(TextArgs::default().text(label).size(Dp(16.0)));
+                        text(&TextArgs::default().text(label.clone()).size(Dp(16.0)));
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
                     scope.child(move || {
                         slider(
-                            SliderArgs::default()
+                            &SliderArgs::default()
                                 .value(value)
-                                .on_change_shared(on_change)
+                                .on_change_shared(on_change.clone())
                                 .modifier(Modifier::new().width(Dp(300.0))),
                         );
                     });

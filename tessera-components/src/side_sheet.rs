@@ -4,17 +4,14 @@
 //!
 //! Show filters, details, or secondary tasks without leaving the current
 //! screen.
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera, use_context, winit,
+    remember, tessera, use_context, winit, with_frame_nanos,
 };
 
 use crate::{
@@ -30,6 +27,36 @@ const SCRIM_ALPHA: f32 = 0.32;
 const MAX_SHEET_WIDTH: Dp = Dp(360.0);
 const CORNER_RADIUS: Dp = Dp(16.0);
 const MODAL_ELEVATION: Dp = Dp(1.0);
+
+type SharedContent = RenderSlot;
+
+#[derive(Clone, PartialEq)]
+struct SideSheetProviderInnerArgs {
+    sheet_type: SideSheetType,
+    on_close_request: Callback,
+    position: SideSheetPosition,
+    is_open: bool,
+    controller: Option<State<SideSheetController>>,
+    main_content: SharedContent,
+    side_sheet_content: SharedContent,
+}
+
+#[derive(Clone, PartialEq)]
+struct SideSheetProviderRenderArgs {
+    sheet_type: SideSheetType,
+    on_close_request: Callback,
+    position: SideSheetPosition,
+    controller: State<SideSheetController>,
+    main_content: SharedContent,
+    side_sheet_content: SharedContent,
+}
+
+#[derive(Clone, PartialEq)]
+struct SideSheetContentWrapperArgs {
+    sheet_type: SideSheetType,
+    position: SideSheetPosition,
+    content: SharedContent,
+}
 
 /// Defines how the side sheet behaves relative to the main content.
 #[derive(Default, Clone, Copy, PartialEq)]
@@ -52,27 +79,39 @@ pub enum SideSheetPosition {
 }
 
 /// Configuration arguments for side sheet providers.
-#[derive(Setters)]
+#[derive(Clone, PartialEq, Setters)]
 pub struct SideSheetProviderArgs {
     /// A callback invoked when the user requests to close the sheet.
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape`
     /// key. The callback is responsible for closing the sheet.
     #[setters(skip)]
-    pub on_close_request: Arc<dyn Fn() + Send + Sync>,
+    pub on_close_request: Callback,
     /// Which edge the sheet is attached to. See [`SideSheetPosition`].
     pub position: SideSheetPosition,
     /// Whether the sheet is initially open (for declarative usage).
     pub is_open: bool,
+    /// Optional external controller for open/close state.
+    #[setters(skip)]
+    pub controller: Option<State<SideSheetController>>,
+    /// Optional main content rendered behind the side sheet.
+    #[setters(skip)]
+    pub main_content: Option<RenderSlot>,
+    /// Optional content rendered inside the side sheet.
+    #[setters(skip)]
+    pub side_sheet_content: Option<RenderSlot>,
 }
 
 impl SideSheetProviderArgs {
     /// Create args with a required close-request callback.
     pub fn new(on_close_request: impl Fn() + Send + Sync + 'static) -> Self {
         Self {
-            on_close_request: Arc::new(on_close_request),
+            on_close_request: Callback::new(on_close_request),
             position: SideSheetPosition::default(),
             is_open: false,
+            controller: None,
+            main_content: None,
+            side_sheet_content: None,
         }
     }
 
@@ -81,16 +120,49 @@ impl SideSheetProviderArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_close_request = Arc::new(on_close_request);
+        self.on_close_request = Callback::new(on_close_request);
         self
     }
 
     /// Set the close-request callback using a shared callback.
-    pub fn on_close_request_shared(
-        mut self,
-        on_close_request: Arc<dyn Fn() + Send + Sync>,
-    ) -> Self {
-        self.on_close_request = on_close_request;
+    pub fn on_close_request_shared(mut self, on_close_request: impl Into<Callback>) -> Self {
+        self.on_close_request = on_close_request.into();
+        self
+    }
+
+    /// Sets an external side sheet controller.
+    pub fn controller(mut self, controller: State<SideSheetController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the main content slot.
+    pub fn main_content<F>(mut self, main_content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.main_content = Some(RenderSlot::new(main_content));
+        self
+    }
+
+    /// Sets the main content slot using a shared render slot.
+    pub fn main_content_shared(mut self, main_content: impl Into<RenderSlot>) -> Self {
+        self.main_content = Some(main_content.into());
+        self
+    }
+
+    /// Sets the side sheet content slot.
+    pub fn side_sheet_content<F>(mut self, side_sheet_content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.side_sheet_content = Some(RenderSlot::new(side_sheet_content));
+        self
+    }
+
+    /// Sets the side sheet content slot using a shared render slot.
+    pub fn side_sheet_content_shared(mut self, side_sheet_content: impl Into<RenderSlot>) -> Self {
+        self.side_sheet_content = Some(side_sheet_content.into());
         self
     }
 }
@@ -98,8 +170,8 @@ impl SideSheetProviderArgs {
 /// Controller for side sheet providers, managing open/closed state.
 ///
 /// This controller can be created by the application and passed to the
-/// [`modal_side_sheet_provider_with_controller`] or
-/// [`standard_side_sheet_provider_with_controller`]. It is used to control the
+/// [`modal_side_sheet_provider`] or
+/// [`standard_side_sheet_provider`]. It is used to control the
 /// visibility of the sheet programmatically.
 ///
 /// # Example
@@ -114,7 +186,7 @@ impl SideSheetProviderArgs {
 /// controller.close();
 /// assert!(!controller.is_open());
 /// ```
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct SideSheetController {
     is_open: bool,
     timer: Option<Instant>,
@@ -253,36 +325,36 @@ fn compute_side_sheet_x(
     x as i32
 }
 
-fn render_modal_scrim(on_close_request: Arc<dyn Fn() + Send + Sync>, progress: f32, is_open: bool) {
+fn render_modal_scrim(on_close_request: Callback, progress: f32, is_open: bool) {
     let scrim_alpha = scrim_alpha_for(progress, is_open);
     let scrim_color = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme
         .scrim;
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(scrim_color.with_alpha(scrim_alpha).into())
             .on_click_shared(on_close_request)
             .modifier(Modifier::new().fill_max_size())
             .block_input(true),
         || {},
-    );
+    ));
 }
 
 fn render_standard_scrim() {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(Color::TRANSPARENT.into())
             .modifier(Modifier::new().fill_max_size()),
         || {},
-    );
+    ));
 }
 
 /// Render scrim according to configured type.
 fn render_scrim(
     sheet_type: SideSheetType,
-    on_close_request: Arc<dyn Fn() + Send + Sync>,
+    on_close_request: Callback,
     progress: f32,
     is_open: bool,
 ) {
@@ -294,7 +366,7 @@ fn render_scrim(
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(
-    on_close: Arc<dyn Fn() + Send + Sync>,
+    on_close: Callback,
 ) -> Box<dyn Fn(tessera_ui::InputHandlerInput<'_>) + Send + Sync> {
     Box::new(move |input: tessera_ui::InputHandlerInput<'_>| {
         for event in input.keyboard_events.drain(..) {
@@ -302,7 +374,7 @@ fn make_keyboard_closure(
                 && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
                     event.physical_key
             {
-                (on_close)();
+                on_close.call();
             }
         }
     })
@@ -373,84 +445,42 @@ fn place_side_sheet_if_present(
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::side_sheet::{SideSheetProviderArgs, modal_side_sheet_provider};
-/// let args = SideSheetProviderArgs::new(|| {}).is_open(true);
-/// assert!(args.is_open);
-/// material_theme(MaterialTheme::default, || {
-///     modal_side_sheet_provider(
-///         args,
-///         || { /* main content */ },
-///         || { /* side sheet content */ },
-///     );
-/// });
+/// let sheet_args = SideSheetProviderArgs::new(|| {})
+///     .is_open(true)
+///     .main_content(|| { /* main content */ })
+///     .side_sheet_content(|| { /* side sheet content */ });
+/// assert!(sheet_args.is_open);
+/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
+///     || MaterialTheme::default(),
+///     move || {
+///         modal_side_sheet_provider(&sheet_args);
+///     },
+/// );
+/// material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn modal_side_sheet_provider(
-    args: impl Into<SideSheetProviderArgs>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    side_sheet_content: impl FnOnce() + Send + Sync + 'static,
-) {
-    side_sheet_provider_inner(SideSheetType::Modal, args, main_content, side_sheet_content);
-}
-
-/// # modal_side_sheet_provider_with_controller
-///
-/// Controlled version of [`modal_side_sheet_provider`] that accepts an
-/// external controller.
-///
-/// ## Usage
-///
-/// Use when you need to control the modal sheet state programmatically.
-///
-/// ## Parameters
-///
-/// - `args` - configuration for the sheet's behavior; see
-///   [`SideSheetProviderArgs`].
-/// - `controller` - a [`SideSheetController`] used to open and close the sheet.
-/// - `main_content` - closure that renders the main UI behind the sheet.
-/// - `side_sheet_content` - closure that renders the sheet content.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::side_sheet::{
-///     SideSheetController, SideSheetProviderArgs, modal_side_sheet_provider_with_controller,
-/// };
-/// use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn component() {
-///     let controller = remember(|| SideSheetController::new(false));
-///     assert!(!controller.with(|c| c.is_open()));
-///     controller.with_mut(|c| c.open());
-///     assert!(controller.with(|c| c.is_open()));
-///     material_theme(MaterialTheme::default, || {
-///         modal_side_sheet_provider_with_controller(
-///             SideSheetProviderArgs::new(|| {}),
-///             controller,
-///             || { /* main content */ },
-///             || { /* side sheet content */ },
-///         );
-///     });
-/// }
-/// component();
-/// ```
-#[tessera]
-pub fn modal_side_sheet_provider_with_controller(
-    args: impl Into<SideSheetProviderArgs>,
-    controller: State<SideSheetController>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    side_sheet_content: impl FnOnce() + Send + Sync + 'static,
-) {
-    side_sheet_provider_with_controller_inner(
-        SideSheetType::Modal,
-        args,
-        controller,
+pub fn modal_side_sheet_provider(args: &SideSheetProviderArgs) {
+    let args = args.clone();
+    let main_content = args
+        .main_content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let side_sheet_content = args
+        .side_sheet_content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let provider_inner_args = SideSheetProviderInnerArgs {
+        sheet_type: SideSheetType::Modal,
+        on_close_request: args.on_close_request,
+        position: args.position,
+        is_open: args.is_open,
+        controller: args.controller,
         main_content,
         side_sheet_content,
-    );
+    };
+    side_sheet_provider_inner_node(&provider_inner_args);
 }
 
 /// # standard_side_sheet_provider
@@ -477,102 +507,53 @@ pub fn modal_side_sheet_provider_with_controller(
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::side_sheet::{SideSheetProviderArgs, standard_side_sheet_provider};
-/// let args = SideSheetProviderArgs::new(|| {}).is_open(true);
-/// assert!(args.is_open);
-/// material_theme(MaterialTheme::default, || {
-///     standard_side_sheet_provider(
-///         args,
-///         || { /* main content */ },
-///         || { /* side sheet content */ },
-///     );
-/// });
+/// let sheet_args = SideSheetProviderArgs::new(|| {})
+///     .is_open(true)
+///     .main_content(|| { /* main content */ })
+///     .side_sheet_content(|| { /* side sheet content */ });
+/// assert!(sheet_args.is_open);
+/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
+///     || MaterialTheme::default(),
+///     move || {
+///         standard_side_sheet_provider(&sheet_args);
+///     },
+/// );
+/// material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn standard_side_sheet_provider(
-    args: impl Into<SideSheetProviderArgs>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    side_sheet_content: impl FnOnce() + Send + Sync + 'static,
-) {
-    side_sheet_provider_inner(
-        SideSheetType::Standard,
-        args,
+pub fn standard_side_sheet_provider(args: &SideSheetProviderArgs) {
+    let args = args.clone();
+    let main_content = args
+        .main_content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let side_sheet_content = args
+        .side_sheet_content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let provider_inner_args = SideSheetProviderInnerArgs {
+        sheet_type: SideSheetType::Standard,
+        on_close_request: args.on_close_request,
+        position: args.position,
+        is_open: args.is_open,
+        controller: args.controller,
         main_content,
         side_sheet_content,
-    );
-}
-
-/// # standard_side_sheet_provider_with_controller
-///
-/// Controlled version of [`standard_side_sheet_provider`] that accepts an
-/// external controller.
-///
-/// ## Usage
-///
-/// Use when you need to control the standard sheet state programmatically.
-///
-/// ## Parameters
-///
-/// - `args` - configuration for the sheet's behavior; see
-///   [`SideSheetProviderArgs`].
-/// - `controller` - a [`SideSheetController`] used to open and close the sheet.
-/// - `main_content` - closure that renders the main UI behind the sheet.
-/// - `side_sheet_content` - closure that renders the sheet content.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::side_sheet::{
-///     SideSheetController, SideSheetProviderArgs, standard_side_sheet_provider_with_controller,
-/// };
-/// use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn component() {
-///     let controller = remember(|| SideSheetController::new(false));
-///     assert!(!controller.with(|c| c.is_open()));
-///     controller.with_mut(|c| c.open());
-///     assert!(controller.with(|c| c.is_open()));
-///     material_theme(MaterialTheme::default, || {
-///         standard_side_sheet_provider_with_controller(
-///             SideSheetProviderArgs::new(|| {}),
-///             controller,
-///             || { /* main content */ },
-///             || { /* side sheet content */ },
-///         );
-///     });
-/// }
-/// component();
-/// ```
-#[tessera]
-pub fn standard_side_sheet_provider_with_controller(
-    args: impl Into<SideSheetProviderArgs>,
-    controller: State<SideSheetController>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    side_sheet_content: impl FnOnce() + Send + Sync + 'static,
-) {
-    side_sheet_provider_with_controller_inner(
-        SideSheetType::Standard,
-        args,
-        controller,
-        main_content,
-        side_sheet_content,
-    );
+    };
+    side_sheet_provider_inner_node(&provider_inner_args);
 }
 
 #[tessera]
-fn side_sheet_provider_inner(
-    sheet_type: SideSheetType,
-    args: impl Into<SideSheetProviderArgs>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    side_sheet_content: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args: SideSheetProviderArgs = args.into();
-    let controller = remember(|| SideSheetController::new(args.is_open));
+fn side_sheet_provider_inner_node(args: &SideSheetProviderInnerArgs) {
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(|| SideSheetController::new(args.is_open)));
 
-    if args.is_open != controller.with(|c| c.is_open()) {
+    // In controlled mode (external controller provided), do not override
+    // controller state from `is_open`.
+    if args.controller.is_none() && args.is_open != controller.with(|c| c.is_open()) {
         if args.is_open {
             controller.with_mut(|c| c.open());
         } else {
@@ -580,40 +561,51 @@ fn side_sheet_provider_inner(
         }
     }
 
-    side_sheet_provider_with_controller_inner(
-        sheet_type,
-        args,
+    let provider_render_args = SideSheetProviderRenderArgs {
+        sheet_type: args.sheet_type,
+        on_close_request: args.on_close_request.clone(),
+        position: args.position,
         controller,
-        main_content,
-        side_sheet_content,
-    );
+        main_content: args.main_content.clone(),
+        side_sheet_content: args.side_sheet_content.clone(),
+    };
+    side_sheet_provider_render_inner_node(&provider_render_args);
 }
 
 #[tessera]
-fn side_sheet_provider_with_controller_inner(
-    sheet_type: SideSheetType,
-    args: impl Into<SideSheetProviderArgs>,
-    controller: State<SideSheetController>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    side_sheet_content: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args: SideSheetProviderArgs = args.into();
+fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
+    args.main_content.render();
 
-    main_content();
+    let (is_open, timer_opt) = args.controller.with(|c| c.snapshot());
+    let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
+    if is_animating {
+        let controller_for_frame = args.controller;
+        with_frame_nanos(move |_| {
+            controller_for_frame.with_mut(|_| {});
+        });
+    }
 
-    let (is_open, timer_opt) = controller.with(|c| c.snapshot());
-
-    if !(is_open || timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME)) {
+    if !(is_open || is_animating) {
         return;
     }
 
     let progress = calc_progress_from_timer(timer_opt.as_ref());
 
-    render_scrim(sheet_type, args.on_close_request.clone(), progress, is_open);
+    render_scrim(
+        args.sheet_type,
+        args.on_close_request.clone(),
+        progress,
+        is_open,
+    );
 
     input_handler(make_keyboard_closure(args.on_close_request.clone()));
 
-    side_sheet_content_wrapper(sheet_type, args.position, side_sheet_content);
+    let content_wrapper_args = SideSheetContentWrapperArgs {
+        sheet_type: args.sheet_type,
+        position: args.position,
+        content: args.side_sheet_content.clone(),
+    };
+    side_sheet_content_wrapper_node(&content_wrapper_args);
 
     layout(SideSheetLayout {
         progress,
@@ -623,34 +615,34 @@ fn side_sheet_provider_with_controller_inner(
 }
 
 #[tessera]
-fn side_sheet_content_wrapper(
-    sheet_type: SideSheetType,
-    position: SideSheetPosition,
-    content: impl FnOnce() + Send + Sync + 'static,
-) {
+fn side_sheet_content_wrapper_node(args: &SideSheetContentWrapperArgs) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let container_color = match sheet_type {
+    let container_color = match args.sheet_type {
         SideSheetType::Modal => scheme.surface_container_low,
         SideSheetType::Standard => scheme.surface,
     };
-    let surface_args = match sheet_type {
+    let surface_args = match args.sheet_type {
         SideSheetType::Modal => SurfaceArgs::default().elevation(MODAL_ELEVATION),
         SideSheetType::Standard => SurfaceArgs::default(),
     };
+    let content = args.content.clone();
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         surface_args
             .style(container_color.into())
-            .shape(sheet_shape(position))
+            .shape(sheet_shape(args.position))
             .modifier(Modifier::new().fill_max_height())
             .block_input(true),
         move || {
-            Modifier::new().padding_all(Dp(16.0)).run(content);
+            let content = content.clone();
+            Modifier::new()
+                .padding_all(Dp(16.0))
+                .run(move || content.render());
         },
-    );
+    ));
 }
 
 #[derive(Clone, PartialEq)]

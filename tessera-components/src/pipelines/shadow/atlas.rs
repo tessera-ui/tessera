@@ -26,7 +26,7 @@ use crate::{
 };
 
 /// Composite command describing a shadow atlas expansion.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct ShadowAtlasCommand {
     /// Resolved shape geometry for the mask.
     pub shape: ResolvedShape,
@@ -360,7 +360,7 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct ShadowLayerInfo {
     layer: ShadowLayer,
     radii: SmallVec<[f32; 4]>,
@@ -492,7 +492,7 @@ struct ShadowHeatEntry {
     last_seen_frame: u64,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, PartialEq, Copy)]
 struct AtlasRect {
     x: u32,
     y: u32,

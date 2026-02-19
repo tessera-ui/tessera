@@ -8,7 +8,7 @@ use material_color_utilities::{
     dynamiccolor::{DynamicSchemeBuilder, MaterialDynamicColors, SpecVersion, Variant},
     hct::Hct,
 };
-use tessera_ui::{Color, Dp, provide_context, tessera};
+use tessera_ui::{CallbackWith, Color, Dp, RenderSlot, provide_context, tessera};
 
 use crate::shape_def::Shape;
 
@@ -16,7 +16,7 @@ const DEFAULT_COLOR: Color = Color::from_rgb(0.4039, 0.3137, 0.6431); // #6750A4
 
 /// Ambient content color used by text and icons when no explicit tint is
 /// provided.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct ContentColor {
     /// Current content color used by text/icons when no explicit tint is
     /// provided.
@@ -50,7 +50,7 @@ impl MaterialAlpha {
 }
 
 /// Colors used for text selection highlights and handles.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct TextSelectionColors {
     /// Color of the selection handle (when rendered).
     pub handle: Color,
@@ -78,7 +78,7 @@ pub fn content_color_for(background: Color, scheme: &MaterialColorScheme) -> Opt
 
 /// A simple text style used by components to derive default font size and line
 /// height.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct TextStyle {
     /// Font size in density-independent pixels (dp).
     pub font_size: Dp,
@@ -100,8 +100,28 @@ pub fn provide_text_style(style: TextStyle, child: impl FnOnce()) {
     provide_context(|| style, child);
 }
 
+#[derive(Clone, PartialEq)]
+/// Props for [`material_theme`].
+pub struct MaterialThemeProviderArgs {
+    theme: CallbackWith<(), MaterialTheme>,
+    child: RenderSlot,
+}
+
+impl MaterialThemeProviderArgs {
+    /// Creates Material theme component props.
+    pub fn new(
+        theme: impl Fn() -> MaterialTheme + Send + Sync + 'static,
+        child: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        Self {
+            theme: CallbackWith::new(move |()| theme()),
+            child: RenderSlot::new(child),
+        }
+    }
+}
+
 /// Material typography scale used by components to resolve default text styles.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct MaterialTypography {
     /// Large display text.
     pub display_large: TextStyle,
@@ -203,7 +223,7 @@ impl Default for MaterialTypography {
 }
 
 /// Material shape scale used by components to resolve default container shapes.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct MaterialShapes {
     /// Extra small container shape.
     pub extra_small: Shape,
@@ -231,7 +251,7 @@ impl Default for MaterialShapes {
 
 /// Material theme container holding the three primary Material 3 theme
 /// primitives.
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, PartialEq, Debug, Default)]
 pub struct MaterialTheme {
     /// Color scheme used by Material components.
     pub color_scheme: MaterialColorScheme,
@@ -268,15 +288,14 @@ impl MaterialTheme {
 ///
 /// ## Parameters
 ///
-/// - `theme` — initializer closure for theme configuration; see
-///   [`MaterialTheme`].
-/// - `child` — subtree that consumes the theme.
+/// - `args` — props for this component; see [`MaterialThemeProviderArgs`].
 ///
 /// ## Examples
 ///
 /// ```
 /// use tessera_components::theme::{
-///     MaterialColorScheme, MaterialTheme, MaterialTypography, material_theme,
+///     MaterialColorScheme, MaterialTheme, MaterialThemeProviderArgs, MaterialTypography,
+///     material_theme,
 /// };
 /// use tessera_ui::{Color, tessera};
 ///
@@ -285,9 +304,9 @@ impl MaterialTheme {
 ///     let scheme = MaterialColorScheme::light_from_seed(Color::from_rgb(0.4, 0.3, 0.6));
 ///     let typography = MaterialTypography::default();
 ///
-///     material_theme(
-///         || MaterialTheme {
-///             color_scheme: scheme,
+///     let args = MaterialThemeProviderArgs::new(
+///         move || MaterialTheme {
+///             color_scheme: scheme.clone(),
 ///             typography,
 ///             ..MaterialTheme::default()
 ///         },
@@ -295,16 +314,24 @@ impl MaterialTheme {
 ///             // Your UI here.
 ///         },
 ///     );
+///     material_theme(&args);
 /// }
 /// ```
 #[tessera]
-pub fn material_theme(theme: impl FnOnce() -> MaterialTheme, child: impl FnOnce()) {
-    provide_context(theme, child);
+pub fn material_theme(args: &MaterialThemeProviderArgs) {
+    let theme = args.theme.clone();
+    let child = args.child.clone();
+    provide_context(
+        move || theme.call(()),
+        move || {
+            child.render();
+        },
+    );
 }
 
 /// A Material Design color scheme, which can be light or dark,
 /// produced from a seed color.
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct MaterialColorScheme {
     /// Indicates if the scheme is dark mode (`true`) or light mode (`false`).
     pub is_dark: bool,

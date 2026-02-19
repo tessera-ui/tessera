@@ -3,10 +3,8 @@
 //! ## Usage
 //!
 //! Use for visually distinctive actions in layered or modern UIs.
-use std::sync::Arc;
-
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, tessera};
+use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, tessera};
 
 use crate::{
     fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
@@ -14,14 +12,14 @@ use crate::{
 };
 
 /// Arguments for the `glass_button` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 #[setters(into)]
 pub struct GlassButtonArgs {
     /// Optional modifier chain applied to the button node.
     pub modifier: Modifier,
     /// The click callback function
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// The ripple color (RGB) for the button.
     pub ripple_color: Color,
     /// The padding of the button.
@@ -61,6 +59,9 @@ pub struct GlassButtonArgs {
     /// Whether the button should remain focusable even when no click handler is
     /// provided.
     pub accessibility_focusable: bool,
+    /// Content rendered inside the glass button.
+    #[setters(skip)]
+    pub child: RenderSlot,
 }
 
 impl GlassButtonArgs {
@@ -69,13 +70,28 @@ impl GlassButtonArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
+        self
+    }
+
+    /// Set the child content slot.
+    pub fn child<F>(mut self, child: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.child = RenderSlot::new(child);
+        self
+    }
+
+    /// Set the child content slot using a shared render slot.
+    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
+        self.child = child.into();
         self
     }
 }
@@ -107,6 +123,7 @@ impl Default for GlassButtonArgs {
             accessibility_label: None,
             accessibility_description: None,
             accessibility_focusable: false,
+            child: RenderSlot::new(|| {}),
         }
     }
 }
@@ -175,59 +192,60 @@ impl GlassButtonArgs {
 /// # #[tessera]
 /// # fn component() {
 /// glass_button(
-///     GlassButtonArgs::default()
+///     &GlassButtonArgs::default()
 ///         .on_click(|| println!("Button clicked!"))
-///         .tint_color(Color::new(0.2, 0.3, 0.8, 0.3)),
-///     || text(TextArgs::default().text("Click Me")),
+///         .tint_color(Color::new(0.2, 0.3, 0.8, 0.3))
+///         .child(|| text(&TextArgs::default().text("Click Me"))),
 /// );
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn glass_button(
-    args: impl Into<GlassButtonArgs>,
-    child: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args: GlassButtonArgs = args.into();
+pub fn glass_button(args: &GlassButtonArgs) {
+    let button_args = args.clone();
 
     let mut glass_args = FluidGlassArgs::default();
-    if let Some(contrast) = args.contrast {
+    if let Some(contrast) = button_args.contrast {
         glass_args = glass_args.contrast(contrast);
     }
 
     let mut glass_args = glass_args
-        .modifier(args.modifier)
-        .tint_color(args.tint_color)
-        .shape(args.shape)
-        .blur_radius(args.blur_radius)
-        .dispersion_height(args.dispersion_height)
-        .chroma_multiplier(args.chroma_multiplier)
-        .refraction_height(args.refraction_height)
-        .refraction_amount(args.refraction_amount)
-        .noise_amount(args.noise_amount)
-        .noise_scale(args.noise_scale)
-        .time(args.time)
-        .padding(args.padding);
+        .modifier(button_args.modifier)
+        .tint_color(button_args.tint_color)
+        .shape(button_args.shape)
+        .blur_radius(button_args.blur_radius)
+        .dispersion_height(button_args.dispersion_height)
+        .chroma_multiplier(button_args.chroma_multiplier)
+        .refraction_height(button_args.refraction_height)
+        .refraction_amount(button_args.refraction_amount)
+        .noise_amount(button_args.noise_amount)
+        .noise_scale(button_args.noise_scale)
+        .time(button_args.time)
+        .padding(button_args.padding);
 
-    if let Some(on_click) = args.on_click {
+    if let Some(on_click) = button_args.on_click {
         glass_args = glass_args.on_click_shared(on_click);
     }
 
-    if let Some(border) = args.border {
+    if let Some(border) = button_args.border {
         glass_args = glass_args.border(border);
     }
 
-    if let Some(label) = args.accessibility_label {
+    if let Some(label) = button_args.accessibility_label {
         glass_args = glass_args.accessibility_label(label);
     }
 
-    if let Some(description) = args.accessibility_description {
+    if let Some(description) = button_args.accessibility_description {
         glass_args = glass_args.accessibility_description(description);
     }
 
-    if args.accessibility_focusable {
+    if button_args.accessibility_focusable {
         glass_args = glass_args.accessibility_focusable(true);
     }
 
-    fluid_glass(glass_args, child);
+    let child = button_args.child.clone();
+    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
+        &glass_args,
+        move || child.render(),
+    ));
 }

@@ -7,14 +7,14 @@ use std::time::{Duration, Instant};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError, Modifier,
-    PressKeyEventType, Px, PxPosition, State, key,
+    CallbackWith, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
+    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    remember, tessera,
+    remember, tessera, with_frame_nanos,
 };
 
 use crate::{
-    alignment::CrossAxisAlignment, modifier::ModifierExt as _, pos_misc::is_position_in_component,
+    alignment::CrossAxisAlignment, modifier::ModifierExt as _, pos_misc::is_position_inside_bounds,
 };
 
 const DEFAULT_SNAP_THRESHOLD: f32 = 0.5;
@@ -32,7 +32,7 @@ pub enum PagerPageSize {
 }
 
 /// Configuration arguments shared by pager variants.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct PagerArgs {
     /// Modifier chain applied to the pager subtree.
     pub modifier: Modifier,
@@ -56,6 +56,37 @@ pub struct PagerArgs {
     pub snap_threshold: f32,
     /// Smoothing factor for snapping animations.
     pub scroll_smoothing: f32,
+    /// Optional page-rendering callback.
+    #[setters(skip)]
+    pub page_content: CallbackWith<usize>,
+    /// Optional external pager controller.
+    ///
+    /// When this is `None`, the pager creates and owns an internal controller.
+    #[setters(skip)]
+    pub controller: Option<State<PagerController>>,
+}
+
+impl PagerArgs {
+    /// Sets the page rendering callback.
+    pub fn page_content<F>(mut self, page_content: F) -> Self
+    where
+        F: Fn(usize) + Send + Sync + 'static,
+    {
+        self.page_content = CallbackWith::new(page_content);
+        self
+    }
+
+    /// Sets the page rendering callback using a shared callback.
+    pub fn page_content_shared(mut self, page_content: impl Into<CallbackWith<usize>>) -> Self {
+        self.page_content = page_content.into();
+        self
+    }
+
+    /// Sets an external pager controller.
+    pub fn controller(mut self, controller: State<PagerController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
 }
 
 impl Default for PagerArgs {
@@ -72,12 +103,14 @@ impl Default for PagerArgs {
             user_scroll_enabled: true,
             snap_threshold: DEFAULT_SNAP_THRESHOLD,
             scroll_smoothing: DEFAULT_SCROLL_SMOOTHING,
+            page_content: CallbackWith::new(|_| {}),
+            controller: None,
         }
     }
 }
 
 /// Controller for pager components.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct PagerController {
     current_page: usize,
     current_page_offset_fraction: f32,
@@ -207,6 +240,24 @@ impl PagerController {
         self.update_scroll_offset(now, scroll_smoothing);
         self.scroll_offset = self.clamp_offset(self.scroll_offset);
         self.update_current_page_from_offset();
+    }
+
+    fn has_pending_animation_frame(&self, now: Instant) -> bool {
+        if self.page_count == 0 || self.page_distance() <= f32::EPSILON {
+            return false;
+        }
+
+        if self.is_dragging {
+            return true;
+        }
+
+        if (self.target_offset - self.scroll_offset).abs() > f32::EPSILON {
+            return true;
+        }
+
+        self.last_scroll_time
+            .map(|t| now.duration_since(t) <= SNAP_IDLE_TIME)
+            .unwrap_or(false)
     }
 
     fn apply_scroll_delta(&mut self, delta: f32, now: Instant) {
@@ -630,6 +681,22 @@ fn px_from_i64(value: i64) -> Px {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct PagerRenderArgs {
+    page_count: usize,
+    page_size: PagerPageSize,
+    page_spacing: Dp,
+    content_padding: Dp,
+    beyond_viewport_page_count: usize,
+    cross_axis_alignment: CrossAxisAlignment,
+    user_scroll_enabled: bool,
+    snap_threshold: f32,
+    scroll_smoothing: f32,
+    controller: State<PagerController>,
+    axis: PagerAxis,
+    page_content: CallbackWith<usize>,
+}
+
 /// # horizontal_pager
 ///
 /// Renders a horizontally swipeable pager that snaps between full-width pages.
@@ -648,7 +715,7 @@ fn px_from_i64(value: i64) -> Px {
 ///
 /// ```
 /// use tessera_components::pager::{PagerArgs, horizontal_pager};
-/// use tessera_components::text::text;
+/// use tessera_components::text::{TextArgs, text};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
@@ -658,67 +725,24 @@ fn px_from_i64(value: i64) -> Px {
 ///     assert_eq!(start_page.get(), 2);
 ///
 ///     horizontal_pager(
-///         PagerArgs::default()
+///         &PagerArgs::default()
 ///             .page_count(4)
-///             .initial_page(start_page.get()),
-///         |page| {
-///             text(format!("Page {page}"));
-///         },
+///             .initial_page(start_page.get())
+///             .page_content(|page| {
+///                 text(&TextArgs::default().text(format!("Page {page}")));
+///             }),
 ///     );
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn horizontal_pager(args: PagerArgs, page_content: impl Fn(usize) + Send + Sync + 'static) {
-    let controller = remember(|| PagerController::new(args.initial_page));
-    horizontal_pager_with_controller(args, controller, page_content);
-}
-
-/// # horizontal_pager_with_controller
-///
-/// Horizontal pager variant that is driven by an explicit controller.
-///
-/// ## Usage
-///
-/// Use when you need to drive paging programmatically or read the current
-/// page.
-///
-/// ## Parameters
-///
-/// - `args` — configures paging, spacing, and layout behavior; see
-///   [`PagerArgs`].
-/// - `controller` — a [`PagerController`] that tracks the current page and
-///   scroll offset.
-/// - `page_content` — closure that renders each page by index.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::pager::{PagerArgs, PagerController, horizontal_pager_with_controller};
-/// use tessera_components::text::text;
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let controller = remember(|| PagerController::new(1));
-///     horizontal_pager_with_controller(PagerArgs::default().page_count(3), controller, |page| {
-///         text(format!("Page {page}"));
-///     });
-///
-///     assert_eq!(controller.with(|pager| pager.current_page()), 1);
-/// }
-///
-/// demo();
-/// ```
-#[tessera]
-pub fn horizontal_pager_with_controller(
-    args: PagerArgs,
-    controller: State<PagerController>,
-    page_content: impl Fn(usize) + Send + Sync + 'static,
-) {
-    let modifier = args.modifier;
-    modifier.run(move || pager_inner(args, controller, PagerAxis::Horizontal, page_content));
+pub fn horizontal_pager(args: &PagerArgs) {
+    let pager_args = args.clone();
+    let controller = pager_args
+        .controller
+        .unwrap_or_else(|| remember(|| PagerController::new(pager_args.initial_page)));
+    pager_node(pager_args, controller, PagerAxis::Horizontal);
 }
 
 /// # vertical_pager
@@ -739,7 +763,7 @@ pub fn horizontal_pager_with_controller(
 ///
 /// ```
 /// use tessera_components::pager::{PagerArgs, vertical_pager};
-/// use tessera_components::text::text;
+/// use tessera_components::text::{TextArgs, text};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
@@ -748,77 +772,62 @@ pub fn horizontal_pager_with_controller(
 ///     start_page.with_mut(|value| *value = 0);
 ///     assert_eq!(start_page.get(), 0);
 ///
-///     vertical_pager(PagerArgs::default().page_count(2), |page| {
-///         text(format!("Page {page}"));
-///     });
+///     vertical_pager(&PagerArgs::default().page_count(2).page_content(|page| {
+///         text(&TextArgs::default().text(format!("Page {page}")));
+///     }));
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn vertical_pager(args: PagerArgs, page_content: impl Fn(usize) + Send + Sync + 'static) {
-    let controller = remember(|| PagerController::new(args.initial_page));
-    vertical_pager_with_controller(args, controller, page_content);
+pub fn vertical_pager(args: &PagerArgs) {
+    let pager_args = args.clone();
+    let controller = pager_args
+        .controller
+        .unwrap_or_else(|| remember(|| PagerController::new(pager_args.initial_page)));
+    pager_node(pager_args, controller, PagerAxis::Vertical);
 }
 
-/// # vertical_pager_with_controller
-///
-/// Vertical pager variant that is driven by an explicit controller.
-///
-/// ## Usage
-///
-/// Use when you need to drive paging programmatically or read the current
-/// page.
-///
-/// ## Parameters
-///
-/// - `args` — configures paging, spacing, and layout behavior; see
-///   [`PagerArgs`].
-/// - `controller` — a [`PagerController`] that tracks the current page and
-///   scroll offset.
-/// - `page_content` — closure that renders each page by index.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::pager::{PagerArgs, PagerController, vertical_pager_with_controller};
-/// use tessera_components::text::text;
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let controller = remember(|| PagerController::new(0));
-///     controller.with_mut(|pager| pager.scroll_to_page(1));
-///     assert_eq!(controller.with(|pager| pager.current_page()), 0);
-///
-///     vertical_pager_with_controller(PagerArgs::default().page_count(2), controller, |page| {
-///         text(format!("Page {page}"));
-///     });
-/// }
-///
-/// demo();
-/// ```
-#[tessera]
-pub fn vertical_pager_with_controller(
-    args: PagerArgs,
-    controller: State<PagerController>,
-    page_content: impl Fn(usize) + Send + Sync + 'static,
-) {
-    let modifier = args.modifier;
-    modifier.run(move || pager_inner(args, controller, PagerAxis::Vertical, page_content));
+fn pager_node(args: PagerArgs, controller: State<PagerController>, axis: PagerAxis) {
+    let pager_args = args;
+    let modifier = pager_args.modifier.clone();
+    modifier.run(move || {
+        let render_args = PagerRenderArgs {
+            page_count: pager_args.page_count,
+            page_size: pager_args.page_size,
+            page_spacing: pager_args.page_spacing,
+            content_padding: pager_args.content_padding,
+            beyond_viewport_page_count: pager_args.beyond_viewport_page_count,
+            cross_axis_alignment: pager_args.cross_axis_alignment,
+            user_scroll_enabled: pager_args.user_scroll_enabled,
+            snap_threshold: pager_args.snap_threshold,
+            scroll_smoothing: pager_args.scroll_smoothing,
+            controller,
+            axis,
+            page_content: pager_args.page_content.clone(),
+        };
+        pager_inner_node(&render_args);
+    });
 }
 
 #[tessera]
-fn pager_inner(
-    args: PagerArgs,
-    controller: State<PagerController>,
-    axis: PagerAxis,
-    page_content: impl Fn(usize) + Send + Sync + 'static,
-) {
+fn pager_inner_node(args: &PagerRenderArgs) {
+    let args = args.clone();
+    let controller = args.controller;
+    let axis = args.axis;
+    let page_content = args.page_content;
     controller.with_mut(|c| c.set_page_count(args.page_count));
     controller.with_mut(|c| {
         c.tick(Instant::now(), args.snap_threshold, args.scroll_smoothing);
     });
+    if controller.with(|c| c.has_pending_animation_frame(Instant::now())) {
+        let controller_for_frame = controller;
+        with_frame_nanos(move |_| {
+            controller_for_frame.with_mut(|c| {
+                c.tick(Instant::now(), args.snap_threshold, args.scroll_smoothing);
+            });
+        });
+    }
 
     let current_page = controller.with(|c| c.current_page());
     let visible_pages = compute_visible_pages(
@@ -855,7 +864,7 @@ fn pager_inner(
 
         let is_cursor_in_component = input
             .cursor_position_rel
-            .map(|pos| is_position_in_component(input.computed_data, pos))
+            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
             .unwrap_or(false);
         let is_dragging = controller.with(|c| c.is_dragging());
         if !is_cursor_in_component && !is_dragging {
@@ -916,10 +925,10 @@ fn pager_inner(
         });
     });
 
-    let page_content = &page_content;
+    let page_content = page_content.clone();
     for page_index in visible_pages {
         key(page_index, || {
-            page_content(page_index);
+            page_content.call(page_index);
         });
     }
 }

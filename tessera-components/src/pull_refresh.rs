@@ -3,22 +3,19 @@
 //! ## Usage
 //!
 //! Trigger data reloads when users pull down at the top of a scrollable view.
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Px, State, remember, tessera,
-    use_context,
+    Callback, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Px, RenderSlot, State,
+    remember, tessera, use_context, with_frame_nanos,
 };
 
 use crate::{
     alignment::Alignment,
     boxed::{BoxedArgs, boxed},
     modifier::ModifierExt,
-    pos_misc::is_position_in_component,
+    pos_misc::is_position_inside_bounds,
     progress::{CircularProgressIndicatorArgs, circular_progress_indicator},
     shape_def::Shape,
     surface::{SurfaceArgs, surface},
@@ -225,16 +222,20 @@ impl PullRefreshController {
     fn set_target_position(&mut self, target: f32) {
         self.target_position = target.max(0.0);
     }
+
+    fn has_pending_animation_frame(&self) -> bool {
+        (self.target_position - self.position).abs() > f32::EPSILON
+    }
 }
 
 /// Arguments for the `pull_refresh` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct PullRefreshArgs {
     /// Modifier chain applied to the pull-refresh container.
     pub modifier: Modifier,
     /// Callback invoked when a refresh is triggered.
     #[setters(skip)]
-    pub on_refresh: Arc<dyn Fn() + Send + Sync>,
+    pub on_refresh: Callback,
     /// Whether a refresh is currently in progress.
     pub refreshing: bool,
     /// Whether pull-to-refresh interactions are enabled.
@@ -255,6 +256,15 @@ pub struct PullRefreshArgs {
     pub indicator_stroke_width: Dp,
     /// Indicator elevation.
     pub indicator_elevation: Dp,
+    /// Optional external refresh controller.
+    ///
+    /// When this is `None`, `pull_refresh` creates and owns an internal
+    /// controller.
+    #[setters(skip)]
+    pub controller: Option<State<PullRefreshController>>,
+    /// Optional child content rendered inside the pull-refresh container.
+    #[setters(skip)]
+    pub child: Option<RenderSlot>,
 }
 
 impl PullRefreshArgs {
@@ -267,7 +277,7 @@ impl PullRefreshArgs {
         let background = scheme.surface;
         Self {
             modifier: Modifier::new().fill_max_size(),
-            on_refresh: Arc::new(on_refresh),
+            on_refresh: Callback::new(on_refresh),
             refreshing: false,
             enabled: true,
             refresh_threshold: PullRefreshDefaults::REFRESH_THRESHOLD,
@@ -279,18 +289,41 @@ impl PullRefreshArgs {
             indicator_track_color: Color::TRANSPARENT,
             indicator_stroke_width: PullRefreshDefaults::INDICATOR_STROKE_WIDTH,
             indicator_elevation: PullRefreshDefaults::INDICATOR_ELEVATION,
+            controller: None,
+            child: None,
         }
     }
 
     /// Set the refresh handler using a shared callback.
-    pub fn on_refresh_shared(mut self, on_refresh: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_refresh = on_refresh;
+    pub fn on_refresh_shared(mut self, on_refresh: impl Into<Callback>) -> Self {
+        self.on_refresh = on_refresh.into();
+        self
+    }
+
+    /// Sets an external pull-refresh controller.
+    pub fn controller(mut self, controller: State<PullRefreshController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the child content.
+    pub fn child<F>(mut self, child: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.child = Some(RenderSlot::new(child));
+        self
+    }
+
+    /// Sets the child content using a shared render slot.
+    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
+        self.child = Some(child.into());
         self
     }
 }
 
 /// Arguments for the pull-refresh indicator.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct PullRefreshIndicatorArgs {
     /// Modifier chain applied to the indicator.
     pub modifier: Modifier,
@@ -306,6 +339,12 @@ pub struct PullRefreshIndicatorArgs {
     pub stroke_width: Dp,
     /// Indicator elevation.
     pub elevation: Dp,
+    /// Optional external refresh controller.
+    ///
+    /// When this is `None`, `pull_refresh_indicator` creates and owns an
+    /// internal controller.
+    #[setters(skip)]
+    pub controller: Option<State<PullRefreshController>>,
 }
 
 impl Default for PullRefreshIndicatorArgs {
@@ -323,7 +362,16 @@ impl Default for PullRefreshIndicatorArgs {
             track_color: Color::TRANSPARENT,
             stroke_width: PullRefreshDefaults::INDICATOR_STROKE_WIDTH,
             elevation: PullRefreshDefaults::INDICATOR_ELEVATION,
+            controller: None,
         }
+    }
+}
+
+impl PullRefreshIndicatorArgs {
+    /// Sets an external pull-refresh controller.
+    pub fn controller(mut self, controller: State<PullRefreshController>) -> Self {
+        self.controller = Some(controller);
+        self
     }
 }
 
@@ -354,22 +402,23 @@ impl Default for PullRefreshIndicatorArgs {
 ///
 /// #[tessera]
 /// fn demo() {
-///     material_theme(
+///     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let controller = remember(PullRefreshController::new);
-///             pull_refresh_indicator(PullRefreshIndicatorArgs::default(), controller);
+///             pull_refresh_indicator(&PullRefreshIndicatorArgs::default().controller(controller));
 ///             assert_eq!(controller.with(|s| s.progress()), 0.0);
 ///         },
 ///     );
+///     material_theme(&args);
 /// }
 /// ```
 #[tessera]
-pub fn pull_refresh_indicator(
-    args: impl Into<PullRefreshIndicatorArgs>,
-    controller: State<PullRefreshController>,
-) {
-    let args: PullRefreshIndicatorArgs = args.into();
+pub fn pull_refresh_indicator(args: &PullRefreshIndicatorArgs) {
+    let args: PullRefreshIndicatorArgs = args.clone();
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(PullRefreshController::new));
     let refreshing = controller.with(|s| s.refreshing());
     let progress = controller.with(|s| s.progress()).clamp(0.0, 1.0);
     let indicator_alpha = if refreshing {
@@ -394,7 +443,7 @@ pub fn pull_refresh_indicator(
         .alpha(indicator_alpha);
     let content_size = Dp(indicator_size.0 * INDICATOR_CONTENT_SCALE as f64);
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(indicator_modifier)
             .shape(Shape::Ellipse)
@@ -412,9 +461,9 @@ pub fn pull_refresh_indicator(
                 indicator_args = indicator_args.progress(progress);
             }
 
-            circular_progress_indicator(indicator_args);
+            circular_progress_indicator(&indicator_args);
         },
-    );
+    ));
 }
 
 /// # pull_refresh
@@ -439,7 +488,7 @@ pub fn pull_refresh_indicator(
 /// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_components::{
 ///     column::{ColumnArgs, column},
-///     pull_refresh::{PullRefreshArgs, PullRefreshController, pull_refresh_with_controller},
+///     pull_refresh::{PullRefreshArgs, PullRefreshController, pull_refresh},
 ///     scrollable::{ScrollableArgs, scrollable},
 ///     text::{TextArgs, text},
 /// };
@@ -447,86 +496,37 @@ pub fn pull_refresh_indicator(
 ///
 /// #[tessera]
 /// fn demo() {
-///     material_theme(
+///     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let refresh_controller = remember(PullRefreshController::new);
-///             pull_refresh_with_controller(
-///                 PullRefreshArgs::new(|| {}).refreshing(false),
-///                 refresh_controller,
-///                 || {
-///                     scrollable(ScrollableArgs::default(), || {
+///             let pull_args = PullRefreshArgs::new(|| {})
+///                 .refreshing(false)
+///                 .controller(refresh_controller)
+///                 .child(|| {
+///                     scrollable(&ScrollableArgs::default().child(|| {
 ///                         column(ColumnArgs::default(), |scope| {
 ///                             scope.child(|| {
-///                                 text(TextArgs::default().text("Pull down to refresh"));
+///                                 text(&TextArgs::default().text("Pull down to refresh"));
 ///                             });
 ///                         });
-///                     });
-///                 },
-///             );
+///                     }));
+///                 });
+///             pull_refresh(&pull_args);
 ///             assert!(!refresh_controller.with(|s| s.refreshing()));
 ///         },
 ///     );
+///     material_theme(&args);
 /// }
 /// ```
 #[tessera]
-pub fn pull_refresh(
-    args: impl Into<PullRefreshArgs>,
-    child: impl FnOnce() + Send + Sync + 'static,
-) {
-    let refresh_controller = remember(PullRefreshController::new);
-    pull_refresh_with_controller(args, refresh_controller, child);
-}
-
-/// # pull_refresh_with_controller
-///
-/// Pull-to-refresh container that accepts an explicit refresh
-/// controller for externally controlled refresh flows.
-///
-/// ## Usage
-///
-/// Use when you need to read pull progress or control the refreshing state
-/// externally.
-///
-/// ## Parameters
-///
-/// - `args` — configures indicator visuals and refresh behavior; see
-///   [`PullRefreshArgs`].
-/// - `controller` — a [`PullRefreshController`] retained across frames.
-/// - `child` — closure that renders the scrollable content.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::pull_refresh::{
-///     PullRefreshArgs, PullRefreshController, pull_refresh_with_controller,
-/// };
-/// use tessera_components::scrollable::{ScrollableArgs, scrollable};
-/// use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     material_theme(
-///         || MaterialTheme::default(),
-///         || {
-///             let controller = remember(PullRefreshController::new);
-///             pull_refresh_with_controller(PullRefreshArgs::new(|| {}), controller, || {
-///                 scrollable(ScrollableArgs::default(), || {});
-///             });
-///             assert!(!controller.with(|s| s.refreshing()));
-///         },
-///     );
-/// }
-/// ```
-#[tessera]
-pub fn pull_refresh_with_controller(
-    args: impl Into<PullRefreshArgs>,
-    controller: State<PullRefreshController>,
-    child: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args: PullRefreshArgs = args.into();
-    let modifier = args.modifier.clip_to_bounds();
+pub fn pull_refresh(args: &PullRefreshArgs) {
+    let args: PullRefreshArgs = args.clone();
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(PullRefreshController::new));
+    let child = args.child.clone().unwrap_or_else(|| RenderSlot::new(|| {}));
+    let modifier = args.modifier.clone().clip_to_bounds();
 
     controller.with_mut(|state| {
         state.set_threshold(args.refresh_threshold.to_pixels_f32());
@@ -539,6 +539,14 @@ pub fn pull_refresh_with_controller(
     controller.with_mut(|s| {
         s.update_position(INDICATOR_SMOOTHING);
     });
+    if controller.with(|s| s.has_pending_animation_frame()) {
+        let controller_for_frame = controller;
+        with_frame_nanos(move |_| {
+            controller_for_frame.with_mut(|s| {
+                s.update_position(INDICATOR_SMOOTHING);
+            });
+        });
+    }
 
     let on_refresh = args.on_refresh.clone();
     let enabled = args.enabled;
@@ -547,7 +555,7 @@ pub fn pull_refresh_with_controller(
         let size = input.computed_data;
         let cursor_pos_option = input.cursor_position_rel;
         let is_cursor_in_component = cursor_pos_option
-            .map(|pos| is_position_in_component(size, pos))
+            .map(|pos| is_position_inside_bounds(size, pos))
             .unwrap_or(false);
 
         if enabled && !is_cursor_in_component {
@@ -614,7 +622,7 @@ pub fn pull_refresh_with_controller(
             {
                 let should_refresh = controller.with_mut(|s| s.on_release());
                 if should_refresh {
-                    (on_refresh)();
+                    on_refresh.call();
                 }
                 did_pull = true;
             }
@@ -625,16 +633,22 @@ pub fn pull_refresh_with_controller(
         }
     });
 
+    let render_args = args.clone();
     modifier.run(move || {
+        let child = child.clone();
+        let indicator_args = render_args.clone();
         boxed(
             BoxedArgs::default()
                 .modifier(Modifier::new().fill_max_size())
                 .alignment(Alignment::TopCenter),
             |scope| {
-                scope.child(child);
+                let child = child.clone();
+                scope.child(move || {
+                    child.render();
+                });
                 scope.child_with_alignment(Alignment::TopCenter, move || {
-                    let offset = indicator_offset_dp(controller, args.indicator_size);
-                    pull_refresh_indicator_with_offset(args, controller, offset);
+                    let offset = indicator_offset_dp(controller, indicator_args.indicator_size);
+                    pull_refresh_indicator_with_offset(indicator_args.clone(), controller, offset);
                 });
             },
         );
@@ -653,10 +667,11 @@ fn pull_refresh_indicator_with_offset(
         .content_color(args.indicator_content_color)
         .track_color(args.indicator_track_color)
         .stroke_width(args.indicator_stroke_width)
-        .elevation(args.indicator_elevation);
+        .elevation(args.indicator_elevation)
+        .controller(refresh_controller);
 
     Modifier::new().offset(Dp(0.0), offset).run(move || {
-        pull_refresh_indicator(indicator_args, refresh_controller);
+        pull_refresh_indicator(&indicator_args);
     });
 }
 

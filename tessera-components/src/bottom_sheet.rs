@@ -4,16 +4,16 @@
 //!
 //! Used to show contextual information or actions in a modal sheet.
 use std::{
-    sync::Arc,
+    sync::{Arc, Mutex},
     time::{Duration, Instant},
 };
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, PressKeyEventType, Px, PxPosition, State,
+    Callback, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
+    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera, use_context, winit,
+    remember, tessera, use_context, winit, with_frame_nanos,
 };
 
 use crate::{
@@ -34,7 +34,7 @@ const ANIM_TIME: Duration = Duration::from_millis(300);
 ///
 /// The scrim is the overlay that appears behind the bottom sheet, covering the
 /// main content.
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, PartialEq, Copy)]
 pub enum BottomSheetStyle {
     /// A translucent glass effect that blurs the content behind it.
     /// This style is more resource-intensive and may not be suitable for all
@@ -46,27 +46,39 @@ pub enum BottomSheetStyle {
 }
 
 /// Configuration arguments for the [`bottom_sheet_provider`].
-#[derive(Setters)]
+#[derive(Clone, PartialEq, Setters)]
 pub struct BottomSheetProviderArgs {
     /// A callback that is invoked when the user requests to close the sheet.
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape`
     /// key. The callback is responsible for closing the sheet.
     #[setters(skip)]
-    pub on_close_request: Arc<dyn Fn() + Send + Sync>,
+    pub on_close_request: Callback,
     /// The visual style of the scrim. See [`BottomSheetStyle`].
     pub style: BottomSheetStyle,
     /// Whether the sheet is initially open (for declarative usage).
     pub is_open: bool,
+    /// Optional external controller for programmatic open/close.
+    #[setters(skip)]
+    pub controller: Option<State<BottomSheetController>>,
+    /// Optional main content rendered behind the sheet.
+    #[setters(skip)]
+    pub main_content: Option<RenderSlot>,
+    /// Optional content rendered inside the bottom sheet.
+    #[setters(skip)]
+    pub bottom_sheet_content: Option<RenderSlot>,
 }
 
 impl BottomSheetProviderArgs {
     /// Create args with a required close-request callback.
     pub fn new(on_close_request: impl Fn() + Send + Sync + 'static) -> Self {
         Self {
-            on_close_request: Arc::new(on_close_request),
+            on_close_request: Callback::new(on_close_request),
             style: BottomSheetStyle::default(),
             is_open: false,
+            controller: None,
+            main_content: None,
+            bottom_sheet_content: None,
         }
     }
 
@@ -75,26 +87,62 @@ impl BottomSheetProviderArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_close_request = Arc::new(on_close_request);
+        self.on_close_request = Callback::new(on_close_request);
         self
     }
 
     /// Set the close-request callback using a shared callback.
-    pub fn on_close_request_shared(
+    pub fn on_close_request_shared(mut self, on_close_request: impl Into<Callback>) -> Self {
+        self.on_close_request = on_close_request.into();
+        self
+    }
+
+    /// Sets an external bottom sheet controller.
+    pub fn controller(mut self, controller: State<BottomSheetController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the main content slot.
+    pub fn main_content<F>(mut self, main_content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.main_content = Some(RenderSlot::new(main_content));
+        self
+    }
+
+    /// Sets the main content slot using a shared render slot.
+    pub fn main_content_shared(mut self, main_content: impl Into<RenderSlot>) -> Self {
+        self.main_content = Some(main_content.into());
+        self
+    }
+
+    /// Sets the bottom sheet content slot.
+    pub fn bottom_sheet_content<F>(mut self, bottom_sheet_content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.bottom_sheet_content = Some(RenderSlot::new(bottom_sheet_content));
+        self
+    }
+
+    /// Sets the bottom sheet content slot using a shared render slot.
+    pub fn bottom_sheet_content_shared(
         mut self,
-        on_close_request: Arc<dyn Fn() + Send + Sync>,
+        bottom_sheet_content: impl Into<RenderSlot>,
     ) -> Self {
-        self.on_close_request = on_close_request;
+        self.bottom_sheet_content = Some(bottom_sheet_content.into());
         self
     }
 }
 
 /// Controller for [`bottom_sheet_provider`], managing open/closed state.
 ///
-/// This controller can be created by the application and passed to the
-/// [`bottom_sheet_provider_with_controller`]. It is used to control the
+/// This controller can be created by the application and passed through
+/// [`BottomSheetProviderArgs::controller`]. It is used to control the
 /// visibility of the sheet programmatically.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct BottomSheetController {
     is_open: bool,
     timer: Option<Instant>,
@@ -255,7 +303,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
     // Glass scrim: compute blur radius and render using fluid_glass.
     let max_blur_radius = 5.0;
     let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
-    fluid_glass(
+    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
         FluidGlassArgs::default()
             .on_click_shared(args.on_close_request.clone())
             .tint_color(Color::TRANSPARENT)
@@ -273,7 +321,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
             })
             .noise_amount(0.0),
         || {},
-    );
+    ));
 }
 
 fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
@@ -284,14 +332,14 @@ fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open:
         .get()
         .color_scheme
         .scrim;
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(scrim_color.with_alpha(scrim_alpha).into())
             .on_click_shared(args.on_close_request.clone())
             .modifier(Modifier::new().fill_max_size())
             .block_input(true),
         || {},
-    );
+    ));
 }
 
 /// Render scrim according to configured style.
@@ -306,7 +354,7 @@ fn render_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(
-    on_close: Arc<dyn Fn() + Send + Sync>,
+    on_close: Callback,
 ) -> Box<dyn Fn(tessera_ui::InputHandlerInput<'_>) + Send + Sync> {
     Box::new(move |input: tessera_ui::InputHandlerInput<'_>| {
         for event in input.keyboard_events.drain(..) {
@@ -314,7 +362,7 @@ fn make_keyboard_closure(
                 && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
                     event.physical_key
             {
-                (on_close)();
+                on_close.call();
             }
         }
     })
@@ -324,7 +372,7 @@ fn make_keyboard_closure(
 fn handle_drag_gestures(
     controller: State<BottomSheetController>,
     input: &mut tessera_ui::InputHandlerInput<'_>,
-    on_close: &Arc<dyn Fn() + Send + Sync>,
+    on_close: &Callback,
 ) {
     let mut is_dragging = controller.with(|c| c.is_dragging());
     let drag_offset = controller.with(|c| c.get_drag_offset());
@@ -346,7 +394,7 @@ fn handle_drag_gestures(
                     controller.with_mut(|c| c.set_dragging(false));
 
                     if drag_offset > 100.0 {
-                        (on_close)();
+                        on_close.call();
                     } else {
                         controller.with_mut(|c| c.update_drag_offset(0.0));
                     }
@@ -438,76 +486,100 @@ fn place_bottom_sheet_if_present(
 
     output.place_child(bottom_sheet_id, PxPosition::new(x, Px(y)));
 }
-
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 struct DragHandlerArgs {
     controller: State<BottomSheetController>,
-    on_close: Arc<dyn Fn() + Send + Sync>,
+    on_close: Callback,
+    child: RenderSlot,
 }
 
 #[tessera]
-fn drag_handler(args: DragHandlerArgs, child: impl FnOnce() + Send + Sync + 'static) {
+fn drag_handler_node(args: &DragHandlerArgs) {
     let controller = args.controller;
-    let on_close = args.on_close;
+    let on_close = args.on_close.clone();
+    let child = args.child.clone();
 
     input_handler(move |mut input| {
         handle_drag_gestures(controller, &mut input, &on_close);
     });
 
-    child();
+    child.render();
 }
 
 fn render_content(
     style: BottomSheetStyle,
-    bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
+    bottom_sheet_content: RenderSlot,
     controller: State<BottomSheetController>,
-    on_close: Arc<dyn Fn() + Send + Sync>,
+    on_close: Callback,
 ) {
+    let bottom_sheet_content = bottom_sheet_content.clone();
     let content_wrapper = move || {
-        drag_handler(
-            DragHandlerArgs {
-                controller,
-                on_close: on_close.clone(),
-            },
-            || {
-                column(
-                    ColumnArgs::default()
-                        .modifier(Modifier::new().fill_max_width())
-                        .cross_axis_alignment(CrossAxisAlignment::Center),
-                    |scope| {
-                        scope.child(|| {
-                            spacer(Modifier::new().height(Dp(22.0)));
-                        });
-                        scope.child(|| {
-                            surface(
-                                SurfaceArgs::default()
-                                    .style(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .color_scheme
-                                            .on_surface_variant
-                                            .with_alpha(0.4)
-                                            .into(),
-                                    )
-                                    .shape(Shape::capsule())
-                                    .modifier(Modifier::new().size(Dp(32.0), Dp(4.0))),
-                                || {},
-                            );
-                        });
-                        scope.child(|| {
-                            spacer(Modifier::new().height(Dp(22.0)));
-                        });
+        let bottom_sheet_content = bottom_sheet_content.clone();
+        let child_once: Box<dyn FnOnce() + Send + Sync> = Box::new(move || {
+            column(
+                ColumnArgs::default()
+                    .modifier(Modifier::new().fill_max_width())
+                    .cross_axis_alignment(CrossAxisAlignment::Center),
+                |scope| {
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(22.0)),
+                        ));
+                    });
+                    scope.child(|| {
+                        surface(&crate::surface::SurfaceArgs::with_child(
+                            SurfaceArgs::default()
+                                .style(
+                                    use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
+                                        .get()
+                                        .color_scheme
+                                        .on_surface_variant
+                                        .with_alpha(0.4)
+                                        .into(),
+                                )
+                                .shape(Shape::capsule())
+                                .modifier(Modifier::new().size(Dp(32.0), Dp(4.0))),
+                            || {},
+                        ));
+                    });
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(22.0)),
+                        ));
+                    });
 
-                        scope.child(bottom_sheet_content);
-                    },
-                );
-            },
-        );
+                    let bottom_sheet_content = bottom_sheet_content.clone();
+                    scope.child(move || {
+                        bottom_sheet_content.render();
+                    });
+                },
+            );
+        });
+        let child_slot = Arc::new(Mutex::new(Some(child_once)));
+        let replayable_child = {
+            let child_slot = Arc::clone(&child_slot);
+            RenderSlot::new(move || {
+                if let Some(child_once) = child_slot
+                    .lock()
+                    .expect("drag_handler child mutex poisoned")
+                    .take()
+                {
+                    child_once();
+                }
+            })
+        };
+
+        let drag_handler_args = DragHandlerArgs {
+            controller,
+            on_close: on_close.clone(),
+            child: replayable_child,
+        };
+        drag_handler_node(&drag_handler_args);
     };
     match style {
         BottomSheetStyle::Glass => {
-            fluid_glass(
+            fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
                 FluidGlassArgs::default()
                     .shape(Shape::RoundedRectangle {
                         top_left: RoundedCorner::manual(Dp(28.0), 3.0),
@@ -521,10 +593,10 @@ fn render_content(
                     .blur_radius(Dp(5.0))
                     .block_input(true),
                 content_wrapper,
-            );
+            ));
         }
         BottomSheetStyle::Material => {
-            surface(
+            surface(&crate::surface::SurfaceArgs::with_child(
                 SurfaceArgs::default()
                     .style(
                         use_context::<MaterialTheme>()
@@ -543,7 +615,7 @@ fn render_content(
                     .modifier(Modifier::new().fill_max_width())
                     .block_input(true),
                 content_wrapper,
-            );
+            ));
         }
     }
 }
@@ -561,9 +633,6 @@ fn render_content(
 ///
 /// - `args` — configuration for the sheet's appearance and behavior; see
 ///   [`BottomSheetProviderArgs`].
-/// - `main_content` — closure that renders the always-visible base UI.
-/// - `bottom_sheet_content` — closure that renders the content of the sheet
-///   itself.
 ///
 /// # Examples
 ///
@@ -572,90 +641,79 @@ fn render_content(
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::bottom_sheet::{BottomSheetProviderArgs, bottom_sheet_provider};
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// # use tessera_components::theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme};
 ///
-/// # material_theme(|| MaterialTheme::default(), || {
+/// # material_theme(&MaterialThemeProviderArgs::new(
+/// #     MaterialTheme::default,
+/// #     || {
 /// bottom_sheet_provider(
-///     BottomSheetProviderArgs::new(|| {}).is_open(true),
-///     || { /* main content */ },
-///     || { /* bottom sheet content */ },
+///     &BottomSheetProviderArgs::new(|| {})
+///         .is_open(true)
+///         .main_content(|| { /* main content */ })
+///         .bottom_sheet_content(|| { /* bottom sheet content */ }),
 /// );
-/// # });
+/// #     },
+/// # ));
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn bottom_sheet_provider(
-    args: impl Into<BottomSheetProviderArgs>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args: BottomSheetProviderArgs = args.into();
-    let controller = remember(|| BottomSheetController::new(args.is_open));
+pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
+    let provider_args = args.clone();
+    let main_content = provider_args
+        .main_content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let bottom_sheet_content = provider_args
+        .bottom_sheet_content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let controller = provider_args
+        .controller
+        .unwrap_or_else(|| remember(|| BottomSheetController::new(provider_args.is_open)));
 
-    let current_open = controller.with(|c| c.is_open());
-    if args.is_open != current_open {
-        if args.is_open {
-            controller.with_mut(|c| c.open());
-        } else {
-            controller.with_mut(|c| c.close());
+    // In controlled mode (external controller provided), do not override
+    // controller state from `is_open`.
+    if provider_args.controller.is_none() {
+        let current_open = controller.with(|c| c.is_open());
+        if provider_args.is_open != current_open {
+            if provider_args.is_open {
+                controller.with_mut(|c| c.open());
+            } else {
+                controller.with_mut(|c| c.close());
+            }
         }
     }
 
-    bottom_sheet_provider_with_controller(args, controller, main_content, bottom_sheet_content);
-}
-
-/// # bottom_sheet_provider_with_controller
-///
-/// Controlled version of [`bottom_sheet_provider`] that accepts an external
-/// controller.
-///
-/// # Usage
-///
-/// Show contextual menus, supplemental information, or simple forms without
-/// navigating away from the main screen. And also need to control the sheet's
-/// open/closed state programmatically via a controller.
-///
-/// # Parameters
-///
-/// - `args` — configuration for the sheet's appearance and behavior; see
-///   [`BottomSheetProviderArgs`].
-/// - `controller` — a [`BottomSheetController`] used to open and close the
-///   sheet.
-/// - `main_content` — closure that renders the always-visible base UI.
-/// - `bottom_sheet_content` — closure that renders the content of the sheet
-///   itself.
-#[tessera]
-pub fn bottom_sheet_provider_with_controller(
-    args: impl Into<BottomSheetProviderArgs>,
-    controller: State<BottomSheetController>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    bottom_sheet_content: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args: BottomSheetProviderArgs = args.into();
-
-    main_content();
+    main_content.render();
 
     // Snapshot state to minimize locking overhead.
     let (is_open, timer_opt, drag_offset) = controller.with(|c| c.snapshot());
+    let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
+    if is_animating {
+        let controller_for_frame = controller;
+        with_frame_nanos(move |_| {
+            controller_for_frame.with_mut(|_| {});
+        });
+    }
 
-    if !(is_open || timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME)) {
+    if !(is_open || is_animating) {
         return;
     }
 
-    let on_close_for_keyboard = args.on_close_request.clone();
+    let on_close_for_keyboard = provider_args.on_close_request.clone();
     let progress = calc_progress_from_timer(timer_opt.as_ref());
 
-    render_scrim(&args, progress, is_open);
+    render_scrim(&provider_args, progress, is_open);
 
     let keyboard_closure = make_keyboard_closure(on_close_for_keyboard);
     input_handler(keyboard_closure);
 
     render_content(
-        args.style,
+        provider_args.style,
         bottom_sheet_content,
         controller,
-        args.on_close_request.clone(),
+        provider_args.on_close_request.clone(),
     );
 
     layout(BottomSheetLayout {

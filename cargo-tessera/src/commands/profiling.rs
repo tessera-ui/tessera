@@ -18,16 +18,107 @@ const DEFAULT_ANDROID_REMOTE_PATHS: [&str; 2] =
     ["tessera-profiler.jsonl", "files/tessera-profiler.jsonl"];
 
 #[derive(Deserialize)]
+struct TraceFileHeader {
+    version: u32,
+    format: String,
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum TraceEvent {
+    Frame(Box<FrameRecord>),
+    Wake(WakeRecord),
+    Runtime(RuntimeRecord),
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum BuildMode {
+    FullInitial,
+    PartialReplay,
+    SkipNoInvalidation,
+}
+
+#[derive(Deserialize, Clone, Copy, Eq, Hash, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum RedrawReason {
+    Startup,
+    WindowResized,
+    CursorMoved,
+    CursorLeft,
+    MouseInput,
+    MouseWheel,
+    TouchInput,
+    ScaleFactorChanged,
+    KeyboardInput,
+    ModifiersChanged,
+    ImeEvent,
+    FocusChanged,
+    RuntimeInvalidation,
+    RuntimeFrameAwaiter,
+}
+
+#[derive(Deserialize, Clone, Copy, Eq, Hash, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum WakeSource {
+    Lifecycle,
+    WindowEvent,
+    Runtime,
+}
+
+#[derive(Deserialize, Clone, Copy, Eq, Hash, PartialEq)]
+#[serde(rename_all = "snake_case")]
+enum RuntimeEventKind {
+    Resumed,
+    Suspended,
+}
+
+#[derive(Deserialize)]
 struct FrameRecord {
     #[allow(dead_code)]
     frame: u64,
-    render_time_ns: Option<u128>,
-    build_tree_time_ns: Option<u128>,
-    draw_time_ns: Option<u128>,
-    record_time_ns: Option<u128>,
-    frame_total_ns: Option<u128>,
+    build_mode: BuildMode,
+    redraw_reasons: Vec<RedrawReason>,
+    inter_frame_wait_ns: Option<u64>,
+    partial_replay_nodes: Option<u64>,
+    total_nodes_before_build: Option<u64>,
+    render_time_ns: Option<u64>,
+    build_tree_time_ns: Option<u64>,
+    draw_time_ns: Option<u64>,
+    record_time_ns: Option<u64>,
+    frame_total_ns: Option<u64>,
     layout_diagnostics: Option<LayoutDiagnosticsRecord>,
     components: Vec<ComponentRecord>,
+}
+
+#[derive(Default, Clone, Copy)]
+struct RatioSummary {
+    sum: f64,
+    count: u64,
+    min: Option<f64>,
+    max: Option<f64>,
+}
+
+impl RatioSummary {
+    fn record(&mut self, value: f64) {
+        self.sum += value;
+        self.count += 1;
+        self.min = Some(self.min.map_or(value, |v| v.min(value)));
+        self.max = Some(self.max.map_or(value, |v| v.max(value)));
+    }
+}
+
+#[derive(Deserialize)]
+struct WakeRecord {
+    #[allow(dead_code)]
+    frame: u64,
+    source: WakeSource,
+    reasons: Vec<RedrawReason>,
+}
+
+#[derive(Deserialize)]
+struct RuntimeRecord {
+    kind: RuntimeEventKind,
 }
 
 #[derive(Deserialize)]
@@ -42,10 +133,10 @@ struct ComponentRecord {
 
 #[derive(Deserialize)]
 struct PhaseDurations {
-    build_ns: Option<u128>,
-    measure_ns: Option<u128>,
-    record_ns: Option<u128>,
-    input_ns: Option<u128>,
+    build_ns: Option<u64>,
+    measure_ns: Option<u64>,
+    record_ns: Option<u64>,
+    input_ns: Option<u64>,
 }
 
 #[derive(Deserialize, Clone, Copy)]
@@ -63,12 +154,6 @@ struct LayoutDiagnosticsRecord {
     cache_miss_child_size: u64,
     cache_store_count: u64,
     cache_drop_non_cacheable_count: u64,
-}
-
-#[derive(Deserialize)]
-struct JsonLineProbe {
-    format: Option<String>,
-    frame: Option<u64>,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -141,6 +226,20 @@ impl LayoutDiagnosticsSummary {
 #[derive(Default)]
 struct Summary {
     frames: u64,
+    build_mode_full_initial: u64,
+    build_mode_partial_replay: u64,
+    build_mode_skip_no_invalidation: u64,
+    partial_replay_node_ratio: RatioSummary,
+    frame_redraw_reason_counts: HashMap<RedrawReason, u64>,
+    inter_frame_wait: MetricSummary,
+    timeline_active_sum: u128,
+    timeline_wait_sum: u128,
+    timeline_count: u64,
+    wake_events: u64,
+    wake_source_counts: HashMap<WakeSource, u64>,
+    wake_reason_counts: HashMap<RedrawReason, u64>,
+    runtime_events: u64,
+    runtime_event_counts: HashMap<RuntimeEventKind, u64>,
     frame_total_sum: u128,
     frame_total_min: Option<u128>,
     frame_total_max: Option<u128>,
@@ -235,29 +334,47 @@ pub fn analyze(
 
     let mut summary = Summary::default();
     let mut stats_by_name: HashMap<String, Stats> = HashMap::new();
+    let mut lines = reader.lines().enumerate();
 
-    for (line_idx, line_result) in reader.lines().enumerate() {
+    let header = loop {
+        let Some((line_idx, line_result)) = lines.next() else {
+            bail!("no profiler records found");
+        };
         let line = line_result.with_context(|| format!("failed to read line {}", line_idx + 1))?;
         let trimmed = line.trim();
         if trimmed.is_empty() {
             continue;
         }
 
-        match serde_json::from_str::<FrameRecord>(trimmed) {
-            Ok(frame) => process_frame(frame, &mut summary, &mut stats_by_name),
-            Err(_) => {
-                if let Ok(probe) = serde_json::from_str::<JsonLineProbe>(trimmed) {
-                    if probe.format.as_deref() == Some("tessera-profiler") {
-                        continue;
-                    }
-                    if probe.frame.is_some() {
-                        bail!("invalid frame record at line {}", line_idx + 1);
-                    }
-                    if !skip_invalid {
-                        bail!("unrecognized JSON line at {}", line_idx + 1);
-                    }
-                } else if !skip_invalid {
-                    bail!("unrecognized JSON line at {}", line_idx + 1);
+        let header: TraceFileHeader = parse_json_line(trimmed)
+            .with_context(|| format!("invalid profiler header at line {}", line_idx + 1))?;
+        break header;
+    };
+
+    if header.format != "tessera-profiler" {
+        bail!("unsupported profiler format `{}`", header.format);
+    }
+    if header.version != 3 {
+        bail!(
+            "unsupported profiler version {}; expected version 3",
+            header.version
+        );
+    }
+
+    for (line_idx, line_result) in lines {
+        let line = line_result.with_context(|| format!("failed to read line {}", line_idx + 1))?;
+        let trimmed = line.trim();
+        if trimmed.is_empty() {
+            continue;
+        }
+
+        match parse_json_line::<TraceEvent>(trimmed) {
+            Ok(TraceEvent::Frame(frame)) => process_frame(*frame, &mut summary, &mut stats_by_name),
+            Ok(TraceEvent::Wake(wake)) => process_wake(wake, &mut summary),
+            Ok(TraceEvent::Runtime(runtime)) => process_runtime(runtime, &mut summary),
+            Err(err) => {
+                if !skip_invalid {
+                    bail!("invalid JSON event at line {}: {}", line_idx + 1, err);
                 }
             }
         }
@@ -277,27 +394,49 @@ pub fn analyze(
     Ok(())
 }
 
-pub fn analyze_android(
-    package: &str,
-    device: Option<&str>,
-    remote_path: Option<&str>,
-    pull_to: &Path,
-    top: usize,
-    min_count: u64,
-    skip_invalid: bool,
-    csv: Option<&Path>,
-) -> Result<()> {
+fn parse_json_line<T>(line: &str) -> Result<T, serde_json::Error>
+where
+    T: serde::de::DeserializeOwned,
+{
+    let mut deserializer = serde_json::Deserializer::from_str(line);
+    deserializer.disable_recursion_limit();
+    T::deserialize(&mut deserializer)
+}
+
+pub struct AnalyzeAndroidOptions<'a> {
+    pub package: &'a str,
+    pub device: Option<&'a str>,
+    pub remote_path: Option<&'a str>,
+    pub pull_to: &'a Path,
+    pub top: usize,
+    pub min_count: u64,
+    pub skip_invalid: bool,
+    pub csv: Option<&'a Path>,
+}
+
+pub fn analyze_android(options: AnalyzeAndroidOptions<'_>) -> Result<()> {
     output::status(
         "Pulling",
-        format!("android profiler from package `{package}`"),
+        format!("android profiler from package `{}`", options.package),
     );
-    let pulled_remote_path = pull_android_profile(device, package, remote_path, pull_to)?;
+    let pulled_remote_path = pull_android_profile(
+        options.device,
+        options.package,
+        options.remote_path,
+        options.pull_to,
+    )?;
     output::status(
         "Pulled",
-        format!("{} -> {}", pulled_remote_path, pull_to.display()),
+        format!("{} -> {}", pulled_remote_path, options.pull_to.display()),
     );
 
-    analyze(pull_to, top, min_count, skip_invalid, csv)
+    analyze(
+        options.pull_to,
+        options.top,
+        options.min_count,
+        options.skip_invalid,
+        options.csv,
+    )
 }
 
 fn pull_android_profile(
@@ -519,15 +658,72 @@ fn export_csv(path: &Path, stats: &HashMap<String, Stats>) -> Result<()> {
     Ok(())
 }
 
+fn bump_counter<K>(map: &mut HashMap<K, u64>, key: K)
+where
+    K: Eq + std::hash::Hash,
+{
+    *map.entry(key).or_insert(0) += 1;
+}
+
+fn process_wake(wake: WakeRecord, summary: &mut Summary) {
+    summary.wake_events += 1;
+    bump_counter(&mut summary.wake_source_counts, wake.source);
+    for reason in wake.reasons {
+        bump_counter(&mut summary.wake_reason_counts, reason);
+    }
+}
+
+fn process_runtime(runtime: RuntimeRecord, summary: &mut Summary) {
+    summary.runtime_events += 1;
+    bump_counter(&mut summary.runtime_event_counts, runtime.kind);
+}
+
 fn process_frame(
     frame: FrameRecord,
     summary: &mut Summary,
     stats_by_name: &mut HashMap<String, Stats>,
 ) {
+    let FrameRecord {
+        frame: _,
+        build_mode,
+        redraw_reasons,
+        inter_frame_wait_ns,
+        partial_replay_nodes,
+        total_nodes_before_build,
+        render_time_ns,
+        build_tree_time_ns,
+        draw_time_ns,
+        record_time_ns,
+        frame_total_ns,
+        layout_diagnostics,
+        components,
+    } = frame;
+
     summary.frames += 1;
+    match build_mode {
+        BuildMode::FullInitial => summary.build_mode_full_initial += 1,
+        BuildMode::PartialReplay => {
+            summary.build_mode_partial_replay += 1;
+            if let (Some(replayed), Some(total)) = (partial_replay_nodes, total_nodes_before_build)
+                && replayed > 0
+                && total > 0
+            {
+                summary
+                    .partial_replay_node_ratio
+                    .record(replayed as f64 / total as f64);
+            }
+        }
+        BuildMode::SkipNoInvalidation => summary.build_mode_skip_no_invalidation += 1,
+    }
+    for reason in redraw_reasons {
+        bump_counter(&mut summary.frame_redraw_reason_counts, reason);
+    }
+    if let Some(wait_ns) = inter_frame_wait_ns {
+        summary.inter_frame_wait.record(u128::from(wait_ns));
+    }
 
     let mut frame_totals = PhaseTotals::default();
-    for component in &frame.components {
+    for component in &components {
         let _ =
             accumulate_component_exclusive(component, summary, stats_by_name, &mut frame_totals);
     }
@@ -584,17 +780,19 @@ fn process_frame(
             .map_or(frame_totals.input, |v| v.max(frame_totals.input)),
     );
 
-    if let Some(layout_diagnostics) = frame.layout_diagnostics {
+    if let Some(layout_diagnostics) = layout_diagnostics {
         summary.layout_diagnostics.record(layout_diagnostics);
     }
 
-    if let Some(total) = frame.frame_total_ns {
+    if let Some(total) = frame_total_ns {
+        let total = u128::from(total);
         summary.frame_total_sum += total;
         summary.frame_total_count += 1;
         summary.frame_total_min = Some(summary.frame_total_min.map_or(total, |v| v.min(total)));
         summary.frame_total_max = Some(summary.frame_total_max.map_or(total, |v| v.max(total)));
 
-        if let Some(build_tree) = frame.build_tree_time_ns {
+        if let Some(build_tree) = build_tree_time_ns {
+            let build_tree = u128::from(build_tree);
             summary.build_tree_total += build_tree;
             summary.build_tree_count += 1;
             summary.build_tree_min = Some(
@@ -608,20 +806,23 @@ fn process_frame(
                     .map_or(build_tree, |v| v.max(build_tree)),
             );
         }
-        if let Some(draw) = frame.draw_time_ns {
+        if let Some(draw) = draw_time_ns {
+            let draw = u128::from(draw);
             summary.draw_total += draw;
             summary.draw_count += 1;
             summary.draw_min = Some(summary.draw_min.map_or(draw, |v| v.min(draw)));
             summary.draw_max = Some(summary.draw_max.map_or(draw, |v| v.max(draw)));
         }
-        if let Some(record) = frame.record_time_ns {
+        if let Some(record) = record_time_ns {
+            let record = u128::from(record);
             summary.record_total += record;
             summary.record_count += 1;
             summary.record_min = Some(summary.record_min.map_or(record, |v| v.min(record)));
             summary.record_max = Some(summary.record_max.map_or(record, |v| v.max(record)));
         }
 
-        if let Some(render) = frame.render_time_ns {
+        if let Some(render) = render_time_ns {
+            let render = u128::from(render);
             summary.render_total += render;
             summary.render_count += 1;
 
@@ -645,6 +846,12 @@ fn process_frame(
             );
         }
     }
+
+    if let (Some(total), Some(wait_ns)) = (frame_total_ns, inter_frame_wait_ns) {
+        summary.timeline_active_sum += u128::from(total);
+        summary.timeline_wait_sum += u128::from(wait_ns);
+        summary.timeline_count += 1;
+    }
 }
 
 fn accumulate_component_exclusive(
@@ -666,10 +873,10 @@ fn accumulate_component_exclusive(
     }
 
     let inclusive = PhaseTotals {
-        build: component.phases.build_ns.unwrap_or(0),
-        measure: component.phases.measure_ns.unwrap_or(0),
-        record: component.phases.record_ns.unwrap_or(0),
-        input: component.phases.input_ns.unwrap_or(0),
+        build: u128::from(component.phases.build_ns.unwrap_or(0)),
+        measure: u128::from(component.phases.measure_ns.unwrap_or(0)),
+        record: u128::from(component.phases.record_ns.unwrap_or(0)),
+        input: u128::from(component.phases.input_ns.unwrap_or(0)),
     };
 
     let exclusive = PhaseTotals {
@@ -734,6 +941,116 @@ fn print_summary(summary: &Summary) {
         Cell::new(""),
         Cell::new(""),
     ]));
+    if let Some(anomalies) = format_build_mode_anomalies(summary) {
+        table.add_row(Row::from(vec![
+            Cell::new("Build mode anomalies"),
+            Cell::new(anomalies),
+            Cell::new(""),
+            Cell::new(""),
+        ]));
+    }
+
+    if summary.partial_replay_node_ratio.count > 0 {
+        let ratio = summary.partial_replay_node_ratio;
+        let avg = ratio.sum / ratio.count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Partial replay node ratio"),
+            Cell::new(format!(
+                "{}% (partial frames {})",
+                format_pct(avg),
+                ratio.count
+            )),
+            Cell::new(format!("{}%", format_pct(ratio.min.unwrap_or(0.0)))),
+            Cell::new(format!("{}%", format_pct(ratio.max.unwrap_or(0.0)))),
+        ]));
+    }
+
+    if !summary.frame_redraw_reason_counts.is_empty() {
+        table.add_row(Row::from(vec![
+            Cell::new("Frame redraw reasons"),
+            Cell::new(format_redraw_reason_counts(
+                &summary.frame_redraw_reason_counts,
+                6,
+            )),
+            Cell::new(""),
+            Cell::new(""),
+        ]));
+    }
+
+    if summary.inter_frame_wait.count > 0 {
+        let avg_ns = summary.inter_frame_wait.sum as f64 / summary.inter_frame_wait.count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Inter-frame wait"),
+            Cell::new(format!("{} ms", format_ms(avg_ns))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.inter_frame_wait.min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.inter_frame_wait.max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
+
+    if summary.timeline_count > 0 {
+        let total = summary.timeline_active_sum + summary.timeline_wait_sum;
+        if total > 0 {
+            let active_ratio = summary.timeline_active_sum as f64 / total as f64;
+            let wait_ratio = summary.timeline_wait_sum as f64 / total as f64;
+            table.add_row(Row::from(vec![
+                Cell::new("Timeline active ratio"),
+                Cell::new(format!(
+                    "{}% active / {}% wait",
+                    format_pct(active_ratio),
+                    format_pct(wait_ratio)
+                )),
+                Cell::new(""),
+                Cell::new(""),
+            ]));
+        }
+    }
+
+    table.add_row(Row::from(vec![
+        Cell::new("Wake events"),
+        Cell::new(summary.wake_events.to_string()),
+        Cell::new(""),
+        Cell::new(""),
+    ]));
+
+    if !summary.wake_source_counts.is_empty() {
+        table.add_row(Row::from(vec![
+            Cell::new("Wake source distribution"),
+            Cell::new(format_wake_source_counts(&summary.wake_source_counts)),
+            Cell::new(""),
+            Cell::new(""),
+        ]));
+    }
+
+    if !summary.wake_reason_counts.is_empty() {
+        table.add_row(Row::from(vec![
+            Cell::new("Wake reasons"),
+            Cell::new(format_redraw_reason_counts(&summary.wake_reason_counts, 6)),
+            Cell::new(""),
+            Cell::new(""),
+        ]));
+    }
+
+    table.add_row(Row::from(vec![
+        Cell::new("Runtime events"),
+        Cell::new(summary.runtime_events.to_string()),
+        Cell::new(""),
+        Cell::new(""),
+    ]));
+
+    if !summary.runtime_event_counts.is_empty() {
+        table.add_row(Row::from(vec![
+            Cell::new("Runtime lifecycle"),
+            Cell::new(format_runtime_event_counts(&summary.runtime_event_counts)),
+            Cell::new(""),
+            Cell::new(""),
+        ]));
+    }
 
     if summary.frame_total_count > 0 {
         let avg = summary.frame_total_sum as f64 / summary.frame_total_count as f64;
@@ -1010,6 +1327,108 @@ fn print_summary(summary: &Summary) {
     ]));
 
     println!("{table}");
+}
+
+fn format_build_mode_anomalies(summary: &Summary) -> Option<String> {
+    let mut anomalies = Vec::new();
+
+    let expected_full_initial = u64::from(summary.frames > 0);
+    let unexpected_full_initial = summary
+        .build_mode_full_initial
+        .saturating_sub(expected_full_initial);
+    if unexpected_full_initial > 0 {
+        anomalies.push(format!("unexpected_full_initial {unexpected_full_initial}"));
+    }
+    if summary.frames > 0 && summary.build_mode_full_initial == 0 {
+        anomalies.push("missing_full_initial 1".to_string());
+    }
+    if summary.build_mode_skip_no_invalidation > 0 {
+        anomalies.push(format!(
+            "skip_no_invalidation {}",
+            summary.build_mode_skip_no_invalidation
+        ));
+    }
+
+    if anomalies.is_empty() {
+        None
+    } else {
+        Some(anomalies.join(", "))
+    }
+}
+
+fn format_wake_source_counts(counts: &HashMap<WakeSource, u64>) -> String {
+    [
+        WakeSource::Lifecycle,
+        WakeSource::WindowEvent,
+        WakeSource::Runtime,
+    ]
+    .into_iter()
+    .filter_map(|source| {
+        counts
+            .get(&source)
+            .copied()
+            .map(|count| format!("{} {}", wake_source_label(source), count))
+    })
+    .collect::<Vec<_>>()
+    .join(", ")
+}
+
+fn format_runtime_event_counts(counts: &HashMap<RuntimeEventKind, u64>) -> String {
+    [RuntimeEventKind::Resumed, RuntimeEventKind::Suspended]
+        .into_iter()
+        .filter_map(|kind| {
+            counts
+                .get(&kind)
+                .copied()
+                .map(|count| format!("{} {}", runtime_event_label(kind), count))
+        })
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn format_redraw_reason_counts(counts: &HashMap<RedrawReason, u64>, limit: usize) -> String {
+    let mut entries: Vec<(RedrawReason, u64)> = counts.iter().map(|(k, v)| (*k, *v)).collect();
+    entries.sort_by_key(|(_, count)| Reverse(*count));
+    entries
+        .into_iter()
+        .take(limit)
+        .map(|(reason, count)| format!("{} {}", redraw_reason_label(reason), count))
+        .collect::<Vec<_>>()
+        .join(", ")
+}
+
+fn wake_source_label(source: WakeSource) -> &'static str {
+    match source {
+        WakeSource::Lifecycle => "lifecycle",
+        WakeSource::WindowEvent => "window_event",
+        WakeSource::Runtime => "runtime",
+    }
+}
+
+fn runtime_event_label(kind: RuntimeEventKind) -> &'static str {
+    match kind {
+        RuntimeEventKind::Resumed => "resumed",
+        RuntimeEventKind::Suspended => "suspended",
+    }
+}
+
+fn redraw_reason_label(reason: RedrawReason) -> &'static str {
+    match reason {
+        RedrawReason::Startup => "startup",
+        RedrawReason::WindowResized => "window_resized",
+        RedrawReason::CursorMoved => "cursor_moved",
+        RedrawReason::CursorLeft => "cursor_left",
+        RedrawReason::MouseInput => "mouse_input",
+        RedrawReason::MouseWheel => "mouse_wheel",
+        RedrawReason::TouchInput => "touch_input",
+        RedrawReason::ScaleFactorChanged => "scale_factor_changed",
+        RedrawReason::KeyboardInput => "keyboard_input",
+        RedrawReason::ModifiersChanged => "modifiers_changed",
+        RedrawReason::ImeEvent => "ime_event",
+        RedrawReason::FocusChanged => "focus_changed",
+        RedrawReason::RuntimeInvalidation => "runtime_invalidation",
+        RedrawReason::RuntimeFrameAwaiter => "runtime_frame_awaiter",
+    }
 }
 
 fn print_top_sections(stats: &HashMap<String, Stats>, top: usize, min_count: u64) {

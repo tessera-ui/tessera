@@ -3,18 +3,16 @@ use tessera_components::{
     button::{ButtonArgs, button},
     column::{ColumnArgs, column},
     menus::{
-        MenuAnchor, MenuController, MenuItemArgs, MenuPlacement, MenuProviderArgs,
-        menu_provider_with_controller,
+        MenuAnchor, MenuController, MenuItemArgs, MenuPlacement, MenuProviderArgs, menu_provider,
     },
     modifier::ModifierExt as _,
     row::{RowArgs, row},
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
 use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
-
 #[tessera]
 #[shard]
 pub fn menus_showcase() {
@@ -24,15 +22,14 @@ pub fn menus_showcase() {
     // Anchor near the trigger button (padding 20dp + title/subtitle + spacer).
     let anchor = MenuAnchor::from_dp((Dp(20.0), Dp(72.0)), (Dp(180.0), Dp(48.0)));
 
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
-            menu_provider_with_controller(
-                MenuProviderArgs::default()
-                    .placement(MenuPlacement::BelowStart)
-                    .offset([Dp(0.0), Dp(6.0)]),
-                menu_controller,
-                {
+            let menu_args = MenuProviderArgs::default()
+                .placement(MenuPlacement::BelowStart)
+                .offset([Dp(0.0), Dp(6.0)])
+                .controller(menu_controller)
+                .main_content({
                     move || {
                         column(
                             ColumnArgs::default()
@@ -40,12 +37,11 @@ pub fn menus_showcase() {
                                 .cross_axis_alignment(CrossAxisAlignment::Start),
                             |scope| {
                                 scope.child(|| {
-                                    text(TextArgs::default().text("Menus Showcase").size(Dp(20.0)));
+                                    text(&TextArgs::default().text("Menus Showcase").size(Dp(20.0)));
                                 });
 
                                 scope.child(move || {
-                                    text(
-                                        TextArgs::default()
+                                    text(&TextArgs::default()
                                             .text(format!(
                                                 "Selected: {} | Pinned: {}",
                                                 selected_label.get(),
@@ -58,12 +54,13 @@ pub fn menus_showcase() {
                                                     .get()
                                                     .color_scheme
                                                     .on_surface_variant,
-                                            ),
-                                    );
+                                            ));
                                 });
 
                                 scope.child(|| {
-                                    spacer(Modifier::new().height(Dp(12.0)));
+                                    spacer(&SpacerArgs::new(
+                                        Modifier::new().height(Dp(12.0)),
+                                    ));
                                 });
 
                                 scope.child(move || {
@@ -72,7 +69,7 @@ pub fn menus_showcase() {
                                             .modifier(Modifier::new().fill_max_width()),
                                         |row_scope| {
                                             row_scope.child(move || {
-                                                button(
+                                                button(&ButtonArgs::with_child(
                                                     ButtonArgs::default()
                                                         .modifier(Modifier::new().width(Dp(180.0)))
                                                         .on_click(move || {
@@ -80,18 +77,17 @@ pub fn menus_showcase() {
                                                                 .with_mut(|c| c.open_at(anchor));
                                                         }),
                                                     || {
-                                                        text("Open anchored menu");
+                                                        text(&TextArgs::from("Open anchored menu"));
                                                     },
-                                                );
+                                                ));
                                             });
 
                                             row_scope.child(|| {
-                                                spacer(Modifier::new().width(Dp(12.0)));
+                                                spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0))));
                                             });
 
                                             row_scope.child(|| {
-                                                text(
-                                                    TextArgs::default()
+                                                text(&TextArgs::default()
                                                         .text("Click to open at the button's anchor point.")
                                                         .size(Dp(14.0))
                                                         .color(
@@ -100,8 +96,7 @@ pub fn menus_showcase() {
                                                                 .get()
                                                                 .color_scheme
                                                                 .on_surface_variant,
-                                                        ),
-                                                );
+                                                        ));
                                             });
                                         },
                                     );
@@ -109,22 +104,22 @@ pub fn menus_showcase() {
                             },
                         );
                     }
-                },
-                move |menu_scope| {
-                    menu_scope.menu_item(MenuItemArgs::default().label("Revert").on_click(
+                })
+                .menu_content(move |menu_scope| {
+                    menu_scope.menu_item(&MenuItemArgs::default().label("Revert").on_click(
                         move || {
                             selected_label.set("Revert".to_string());
                         },
                     ));
 
-                    menu_scope.menu_item(MenuItemArgs::default().label("Settings").on_click(
+                    menu_scope.menu_item(&MenuItemArgs::default().label("Settings").on_click(
                         move || {
                             selected_label.set("Settings".to_string());
                         },
                     ));
 
                     menu_scope.menu_item(
-                        MenuItemArgs::default()
+                        &MenuItemArgs::default()
                             .label("Send Feedback")
                             .selected(pinned.get())
                             .on_click(move || {
@@ -140,9 +135,9 @@ pub fn menus_showcase() {
                             }),
                     );
 
-                    menu_scope.menu_item(MenuItemArgs::default().label("Help"));
-                },
-            );
+                    menu_scope.menu_item(&MenuItemArgs::default().label("Help"));
+                });
+            menu_provider(&menu_args);
         },
-    );
+    ));
 }

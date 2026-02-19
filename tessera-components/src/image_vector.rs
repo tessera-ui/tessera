@@ -26,7 +26,7 @@ use crate::pipelines::image_vector::command::ImageVectorVertex;
 pub use crate::pipelines::image_vector::command::{ImageVectorData, VectorTintMode as TintMode};
 
 /// Source for loading SVG vector data.
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ImageVectorSource {
     /// Load from a filesystem path.
     Path(String),

@@ -6,7 +6,7 @@
 
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, PxPosition, PxSize, RenderInput, tessera,
+    MeasurementError, PxPosition, PxSize, RenderInput, RenderSlot, tessera,
 };
 
 use crate::{
@@ -14,24 +14,21 @@ use crate::{
     shape_def::{ResolvedShape, Shape},
 };
 
-#[tessera]
-pub(crate) fn modifier_alpha<F>(alpha: f32, child: F)
-where
-    F: FnOnce(),
-{
-    layout(AlphaLayout { alpha });
+#[derive(Clone, PartialEq)]
+struct ModifierAlphaArgs {
+    alpha: f32,
+    child: RenderSlot,
+}
 
-    child();
+pub(crate) fn modifier_alpha(alpha: f32, child: RenderSlot) {
+    let args = ModifierAlphaArgs { alpha, child };
+    modifier_alpha_node(&args);
 }
 
 #[tessera]
-pub(crate) fn modifier_clip_to_bounds<F>(child: F)
-where
-    F: FnOnce(),
-{
-    layout(ClipLayout);
-
-    child();
+fn modifier_alpha_node(args: &ModifierAlphaArgs) {
+    layout(AlphaLayout { alpha: args.alpha });
+    args.child.render();
 }
 
 fn shape_background_command(color: Color, shape: Shape, size: PxSize) -> ShapeCommand {
@@ -67,34 +64,91 @@ fn shape_border_command(color: Color, width: Dp, shape: Shape, size: PxSize) -> 
     }
 }
 
-#[tessera]
-pub(crate) fn modifier_background<F>(color: Color, shape: Shape, child: F)
-where
-    F: FnOnce(),
-{
-    layout(BackgroundLayout { color, shape });
+#[derive(Clone, PartialEq)]
+struct ModifierClipToBoundsArgs {
+    child: RenderSlot,
+}
 
-    child();
+pub(crate) fn modifier_clip_to_bounds(child: RenderSlot) {
+    let args = ModifierClipToBoundsArgs { child };
+    modifier_clip_to_bounds_node(&args);
 }
 
 #[tessera]
-fn modifier_border_overlay(width: Dp, color: Color, shape: Shape) {
-    layout(BorderOverlayLayout {
-        width,
+fn modifier_clip_to_bounds_node(args: &ModifierClipToBoundsArgs) {
+    layout(ClipLayout);
+    args.child.render();
+}
+
+#[derive(Clone, PartialEq)]
+struct ModifierBackgroundArgs {
+    color: Color,
+    shape: Shape,
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_background(color: Color, shape: Shape, child: RenderSlot) {
+    let args = ModifierBackgroundArgs {
         color,
         shape,
+        child,
+    };
+    modifier_background_node(&args);
+}
+
+#[tessera]
+fn modifier_background_node(args: &ModifierBackgroundArgs) {
+    layout(BackgroundLayout {
+        color: args.color,
+        shape: args.shape,
+    });
+    args.child.render();
+}
+
+#[derive(Clone, PartialEq)]
+struct ModifierBorderOverlayArgs {
+    width: Dp,
+    color: Color,
+    shape: Shape,
+}
+
+#[tessera]
+fn modifier_border_overlay_node(args: &ModifierBorderOverlayArgs) {
+    layout(BorderOverlayLayout {
+        width: args.width,
+        color: args.color,
+        shape: args.shape,
     });
 }
 
-#[tessera]
-pub(crate) fn modifier_border<F>(width: Dp, color: Color, shape: Shape, child: F)
-where
-    F: FnOnce(),
-{
-    layout(BorderLayout);
+#[derive(Clone, PartialEq)]
+struct ModifierBorderArgs {
+    width: Dp,
+    color: Color,
+    shape: Shape,
+    child: RenderSlot,
+}
 
-    child();
-    modifier_border_overlay(width, color, shape);
+pub(crate) fn modifier_border(width: Dp, color: Color, shape: Shape, child: RenderSlot) {
+    let args = ModifierBorderArgs {
+        width,
+        color,
+        shape,
+        child,
+    };
+    modifier_border_node(&args);
+}
+
+#[tessera]
+fn modifier_border_node(args: &ModifierBorderArgs) {
+    layout(BorderLayout);
+    args.child.render();
+    let overlay = ModifierBorderOverlayArgs {
+        width: args.width,
+        color: args.color,
+        shape: args.shape,
+    };
+    modifier_border_overlay_node(&overlay);
 }
 
 #[derive(Clone, Copy, PartialEq)]

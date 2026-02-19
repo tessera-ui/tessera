@@ -233,7 +233,7 @@ impl CursorState {
                 // Return a scroll event for immediate feedback.
                 return Some(CursorEvent {
                     timestamp: now,
-                    content: CursorEventContent::Scroll(ScrollEventConent {
+                    content: CursorEventContent::Scroll(ScrollEventContent {
                         delta_x, // Direct scroll delta for touch move
                         delta_y,
                         source: ScrollEventSource::Touch,
@@ -302,11 +302,11 @@ pub struct CursorEvent {
 
 /// Contains scroll movement data for scroll events.
 ///
-/// `ScrollEventConent` represents the amount of scrolling that occurred,
+/// `ScrollEventContent` represents the amount of scrolling that occurred,
 /// with positive values typically indicating rightward/downward movement
 /// and negative values indicating leftward/upward movement.
 #[derive(Debug, Clone, PartialEq)]
-pub struct ScrollEventConent {
+pub struct ScrollEventContent {
     /// Horizontal scroll distance in pixels.
     pub delta_x: f32,
     /// Vertical scroll distance in pixels.
@@ -327,7 +327,7 @@ pub enum CursorEventContent {
     /// A cursor button or touch point was released.
     Released(PressKeyEventType),
     /// A scroll action occurred (mouse wheel or touch drag).
-    Scroll(ScrollEventConent),
+    Scroll(ScrollEventContent),
 }
 
 /// Describes the high-level gesture classification of a cursor event.
@@ -395,7 +395,7 @@ impl CursorEventContent {
         };
 
         const MOUSE_WHEEL_SPEED_MULTIPLIER: f32 = 50.0;
-        Self::Scroll(ScrollEventConent {
+        Self::Scroll(ScrollEventContent {
             delta_x: delta_x * MOUSE_WHEEL_SPEED_MULTIPLIER,
             delta_y: delta_y * MOUSE_WHEEL_SPEED_MULTIPLIER,
             source: ScrollEventSource::Wheel,

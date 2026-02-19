@@ -44,14 +44,14 @@ struct AtlasCacheEntry {
     page_index: usize,
 }
 
-#[derive(ShaderType, Clone, Copy)]
+#[derive(ShaderType, Clone, PartialEq, Copy)]
 struct ImageVectorUniforms {
     origin: Vec2,
     scale: Vec2,
     tint: Vec4,
 }
 
-#[derive(ShaderType, Clone, Copy)]
+#[derive(ShaderType, Clone, PartialEq, Copy)]
 struct AtlasSampleUniforms {
     origin: Vec2,
     scale: Vec2,
@@ -542,7 +542,7 @@ fn raster_uniforms() -> ImageVectorUniforms {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, PartialEq, Copy)]
 struct SampleUniformParams {
     start_pos: PxPosition,
     size: PxSize,
@@ -599,7 +599,7 @@ struct AtlasAllocation {
     page_size: (u32, u32),
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, PartialEq, Copy)]
 struct AtlasRect {
     x: u32,
     y: u32,

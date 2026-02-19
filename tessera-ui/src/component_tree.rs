@@ -21,7 +21,10 @@ use crate::{
     layout::{LayoutResult, RenderInput},
     px::{PxPosition, PxSize},
     render_graph::{RenderGraph, RenderGraphBuilder},
-    runtime::{RuntimePhase, StructureReconcileResult, push_current_node, push_phase},
+    runtime::{
+        RuntimePhase, StructureReconcileResult, push_current_component_instance_key,
+        push_current_node, push_phase,
+    },
 };
 
 pub use constraint::{Constraint, DimensionValue, ParentConstraint};
@@ -207,6 +210,36 @@ pub struct ComponentTree {
     node_queue: Vec<indextree::NodeId>,
 }
 
+#[derive(Clone, PartialEq)]
+pub(crate) enum ReplayReplaceError {
+    NodeNotFound,
+    RootNodeNotReplaceable,
+    ReplayDidNotCreateRoot,
+}
+
+#[derive(Default)]
+pub(crate) struct ReplayReplaceResult {
+    pub removed_instance_keys: HashSet<u64>,
+    pub removed_logic_ids: HashSet<u64>,
+    pub inserted_instance_keys: HashSet<u64>,
+    pub inserted_logic_ids: HashSet<u64>,
+}
+
+pub(crate) struct ReplayReplaceContext {
+    parent_id: indextree::NodeId,
+    next_sibling: Option<indextree::NodeId>,
+    existing_children: HashSet<indextree::NodeId>,
+    previous_queue: Vec<indextree::NodeId>,
+    removed_instance_keys: HashSet<u64>,
+    removed_logic_ids: HashSet<u64>,
+}
+
+impl ReplayReplaceContext {
+    pub(crate) fn removed_instance_keys(&self) -> &HashSet<u64> {
+        &self.removed_instance_keys
+    }
+}
+
 impl Default for ComponentTree {
     fn default() -> Self {
         Self::new()
@@ -241,6 +274,142 @@ impl ComponentTree {
     /// Get mutable node by NodeId
     pub fn get_mut(&mut self, node_id: indextree::NodeId) -> Option<&mut ComponentNode> {
         self.tree.get_mut(node_id).map(|n| n.get_mut())
+    }
+
+    /// Find a node id by stable instance key.
+    pub(crate) fn find_node_id_by_instance_key(
+        &self,
+        instance_key: u64,
+    ) -> Option<indextree::NodeId> {
+        let root = self
+            .tree
+            .get_node_id_at(NonZero::new(1).expect("root node index must be non-zero"))?;
+        for edge in root.traverse(&self.tree) {
+            let indextree::NodeEdge::Start(node_id) = edge else {
+                continue;
+            };
+            let Some(node) = self.tree.get(node_id) else {
+                continue;
+            };
+            if node.get().instance_key == instance_key {
+                return Some(node_id);
+            }
+        }
+        None
+    }
+
+    pub(crate) fn begin_replace_subtree_by_instance_key(
+        &mut self,
+        instance_key: u64,
+    ) -> Result<ReplayReplaceContext, ReplayReplaceError> {
+        let Some(target_node_id) = self.find_node_id_by_instance_key(instance_key) else {
+            return Err(ReplayReplaceError::NodeNotFound);
+        };
+
+        let Some(parent_id) = self.tree.get(target_node_id).and_then(|n| n.parent()) else {
+            return Err(ReplayReplaceError::RootNodeNotReplaceable);
+        };
+
+        let mut next_sibling = None;
+        let mut seen_target = false;
+        for child in parent_id.children(&self.tree) {
+            if seen_target {
+                next_sibling = Some(child);
+                break;
+            }
+            if child == target_node_id {
+                seen_target = true;
+            }
+        }
+
+        let removed_node_ids: Vec<_> = target_node_id
+            .traverse(&self.tree)
+            .filter_map(|edge| match edge {
+                indextree::NodeEdge::Start(id) => Some(id),
+                indextree::NodeEdge::End(_) => None,
+            })
+            .collect();
+        let mut removed_instance_keys = HashSet::new();
+        let mut removed_logic_ids = HashSet::new();
+        for id in &removed_node_ids {
+            if let Some(node) = self.tree.get(*id) {
+                removed_instance_keys.insert(node.get().instance_key);
+                removed_logic_ids.insert(node.get().logic_id);
+            }
+        }
+        for id in &removed_node_ids {
+            self.metadatas.remove(id);
+        }
+        target_node_id.remove_subtree(&mut self.tree);
+
+        let existing_children = parent_id.children(&self.tree).collect();
+
+        let previous_queue = std::mem::replace(&mut self.node_queue, vec![parent_id]);
+        Ok(ReplayReplaceContext {
+            parent_id,
+            next_sibling,
+            existing_children,
+            previous_queue,
+            removed_instance_keys,
+            removed_logic_ids,
+        })
+    }
+
+    pub(crate) fn finish_replace_subtree(
+        &mut self,
+        context: ReplayReplaceContext,
+    ) -> Result<ReplayReplaceResult, ReplayReplaceError> {
+        let ReplayReplaceContext {
+            parent_id,
+            next_sibling,
+            existing_children,
+            previous_queue,
+            removed_instance_keys,
+            removed_logic_ids,
+        } = context;
+
+        let mut inserted_root_ids = parent_id
+            .children(&self.tree)
+            .filter(|child_id| !existing_children.contains(child_id))
+            .collect::<Vec<_>>();
+        if inserted_root_ids.is_empty() {
+            self.node_queue = previous_queue;
+            return Err(ReplayReplaceError::ReplayDidNotCreateRoot);
+        }
+
+        if let Some(next_sibling) = next_sibling {
+            for inserted_root_id in &inserted_root_ids {
+                if *inserted_root_id != next_sibling {
+                    next_sibling.insert_before(*inserted_root_id, &mut self.tree);
+                }
+            }
+            inserted_root_ids = parent_id
+                .children(&self.tree)
+                .filter(|child_id| !existing_children.contains(child_id))
+                .collect::<Vec<_>>();
+        }
+
+        let mut inserted_instance_keys = HashSet::new();
+        let mut inserted_logic_ids = HashSet::new();
+        for inserted_root_id in inserted_root_ids {
+            for edge in inserted_root_id.traverse(&self.tree) {
+                let indextree::NodeEdge::Start(id) = edge else {
+                    continue;
+                };
+                if let Some(node) = self.tree.get(id) {
+                    inserted_instance_keys.insert(node.get().instance_key);
+                    inserted_logic_ids.insert(node.get().logic_id);
+                }
+            }
+        }
+
+        self.node_queue = previous_queue;
+        Ok(ReplayReplaceResult {
+            removed_instance_keys,
+            removed_logic_ids,
+            inserted_instance_keys,
+            inserted_logic_ids,
+        })
     }
 
     /// Get current node
@@ -495,18 +664,22 @@ impl ComponentTree {
             let current_cursor_position = cursor_position_ref.map(|pos| pos - abs_pos);
 
             if let Some(node_computed_data) = node_computed_data {
-                let logic_id = self
+                let (logic_id, instance_key, fn_name) = self
                     .tree
                     .get(node_id)
-                    .map(|n| n.get().logic_id)
+                    .map(|n| {
+                        let node = n.get();
+                        (
+                            node.logic_id,
+                            node.instance_key,
+                            node.fn_name.as_str().to_owned(),
+                        )
+                    })
                     .unwrap_or_default();
                 #[cfg(feature = "profiling")]
                 let mut profiler_guard = {
                     let parent_id = self.tree.get(node_id).and_then(|n| n.parent());
-                    let fn_name = self
-                        .tree
-                        .get(node_id)
-                        .map(|n| n.get().fn_name.as_str().to_owned());
+                    let fn_name = Some(fn_name.clone());
                     Some(ProfilerScopeGuard::new(
                         ProfilerPhase::Input,
                         Some(node_id),
@@ -514,12 +687,8 @@ impl ComponentTree {
                         fn_name.as_deref(),
                     ))
                 };
-                let fn_name = self
-                    .tree
-                    .get(node_id)
-                    .map(|n| n.get().fn_name.as_str())
-                    .unwrap_or("");
-                let _node_ctx_guard = push_current_node(node_id, logic_id, fn_name);
+                let _node_ctx_guard = push_current_node(node_id, logic_id, fn_name.as_str());
+                let _instance_ctx_guard = push_current_component_instance_key(instance_key);
                 let _phase_guard = push_phase(RuntimePhase::Input);
                 let input = InputHandlerInput {
                     computed_data: node_computed_data,
@@ -790,5 +959,93 @@ fn build_render_graph_inner(
 
     if clips_children {
         context.builder.push_clip_pop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    use crate::{component_tree::ComponentNode, layout::DefaultLayoutSpec};
+
+    fn node(name: &str, logic_id: u64, instance_key: u64) -> ComponentNode {
+        ComponentNode {
+            fn_name: name.to_string(),
+            logic_id,
+            instance_key,
+            input_handler_fn: None,
+            layout_spec: Box::new(DefaultLayoutSpec),
+            replay: None,
+        }
+    }
+
+    #[test]
+    fn begin_replace_subtree_rejects_root_instance_key() {
+        let mut tree = ComponentTree::new();
+
+        let root = tree.add_node(node("root", 1, 1));
+        tree.pop_node();
+
+        let result = tree.begin_replace_subtree_by_instance_key(1);
+        assert!(matches!(
+            result,
+            Err(ReplayReplaceError::RootNodeNotReplaceable)
+        ));
+        assert!(tree.get(root).is_some());
+    }
+
+    #[test]
+    fn finish_replace_subtree_keeps_inserted_roots_before_next_sibling() {
+        let mut tree = ComponentTree::new();
+
+        let root = tree.add_node(node("root", 1, 1));
+
+        let _first = tree.add_node(node("first", 2, 2));
+        let _first_child = tree.add_node(node("first_child", 3, 3));
+        tree.pop_node();
+        tree.pop_node();
+
+        let second = tree.add_node(node("second", 4, 4));
+        tree.pop_node();
+        tree.pop_node();
+
+        let context = match tree.begin_replace_subtree_by_instance_key(2) {
+            Ok(context) => context,
+            Err(_) => panic!("replace context should be created"),
+        };
+
+        let new_a = tree.add_node(node("new_a", 5, 5));
+        let _new_a_child = tree.add_node(node("new_a_child", 6, 6));
+        tree.pop_node();
+        tree.pop_node();
+        let new_b = tree.add_node(node("new_b", 7, 7));
+        tree.pop_node();
+
+        let before_finish = root.children(tree.tree()).collect::<Vec<_>>();
+        assert_eq!(before_finish, vec![second, new_a, new_b]);
+
+        let replace_result = match tree.finish_replace_subtree(context) {
+            Ok(result) => result,
+            Err(_) => panic!("finish replace should succeed"),
+        };
+
+        let root_children = root
+            .children(tree.tree())
+            .map(|id| tree.get(id).expect("child must exist").fn_name.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(root_children, vec!["new_a", "new_b", "second"]);
+
+        assert!(replace_result.removed_instance_keys.contains(&2));
+        assert!(replace_result.removed_instance_keys.contains(&3));
+        assert!(replace_result.inserted_instance_keys.contains(&5));
+        assert!(replace_result.inserted_instance_keys.contains(&6));
+        assert!(replace_result.inserted_instance_keys.contains(&7));
+        assert!(replace_result.removed_logic_ids.contains(&2));
+        assert!(replace_result.removed_logic_ids.contains(&3));
+        assert!(replace_result.inserted_logic_ids.contains(&5));
+        assert!(replace_result.inserted_logic_ids.contains(&6));
+        assert!(replace_result.inserted_logic_ids.contains(&7));
+
+        assert!(tree.get(second).is_some());
     }
 }

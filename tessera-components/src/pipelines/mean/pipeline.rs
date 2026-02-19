@@ -6,7 +6,7 @@ use tessera_ui::{
 use super::command::MeanCommand;
 
 #[repr(C)]
-#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, PartialEq, Copy, bytemuck::Pod, bytemuck::Zeroable)]
 struct AreaUniform {
     area_x: u32,
     area_y: u32,

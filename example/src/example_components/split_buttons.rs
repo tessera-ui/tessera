@@ -5,7 +5,7 @@ use tessera_components::{
     material_icons::filled,
     modifier::ModifierExt as _,
     row::{RowArgs, row},
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     split_buttons::{
         SplitButtonDefaults, SplitButtonLayoutArgs, SplitButtonLeadingArgs, SplitButtonSize,
         SplitButtonTrailingArgs, SplitButtonVariant, split_button_layout, split_leading_button,
@@ -15,7 +15,6 @@ use tessera_components::{
     text::{TextArgs, text},
 };
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
-
 #[tessera]
 #[shard]
 pub fn split_buttons_showcase() {
@@ -23,7 +22,7 @@ pub fn split_buttons_showcase() {
     let small = SplitButtonSize::Small;
     let medium = SplitButtonSize::Medium;
 
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             column(
@@ -33,104 +32,103 @@ pub fn split_buttons_showcase() {
                 |scope| {
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .text("Split Buttons Showcase")
                                 .size(Dp(20.0)),
                         );
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
-                    scope.child(|| text(TextArgs::default().text("Filled").size(Dp(14.0))));
+                    scope.child(|| text(&TextArgs::default().text("Filled").size(Dp(14.0))));
 
                     scope.child(move || {
                         let leading_counter = counter;
                         let trailing_counter = counter;
-                        split_button_layout(
-                            SplitButtonLayoutArgs::default(),
-                            move || {
+                        let args = SplitButtonLayoutArgs::default()
+                            .leading_button(move || {
                                 split_leading_button(
-                                    SplitButtonLeadingArgs::default()
+                                    &SplitButtonLeadingArgs::default()
                                         .variant(SplitButtonVariant::Filled)
                                         .size(small)
                                         .on_click(move || {
                                             leading_counter.with_mut(|value| *value += 1);
-                                        }),
-                                    || text("Create"),
+                                        })
+                                        .content(|| text(&TextArgs::from("Create"))),
                                 );
-                            },
-                            move || {
+                            })
+                            .trailing_button(move || {
                                 split_trailing_button(
-                                    SplitButtonTrailingArgs::default()
+                                    &SplitButtonTrailingArgs::default()
                                         .variant(SplitButtonVariant::Filled)
                                         .size(small)
                                         .on_click(move || {
                                             trailing_counter.with_mut(|value| *value += 1);
+                                        })
+                                        .content(move || {
+                                            icon(
+                                                &IconArgs::from(filled::chevron_right_icon()).size(
+                                                    SplitButtonDefaults::trailing_icon_size(small),
+                                                ),
+                                            );
                                         }),
-                                    move || {
-                                        icon(
-                                            IconArgs::from(filled::chevron_right_icon()).size(
-                                                SplitButtonDefaults::trailing_icon_size(small),
-                                            ),
-                                        );
-                                    },
                                 );
-                            },
-                        );
+                            });
+                        split_button_layout(&args);
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
-                    scope.child(|| text(TextArgs::default().text("Outlined").size(Dp(14.0))));
+                    scope.child(|| text(&TextArgs::default().text("Outlined").size(Dp(14.0))));
 
                     scope.child(move || {
-                        split_button_layout(
-                            SplitButtonLayoutArgs::default(),
-                            move || {
+                        let args = SplitButtonLayoutArgs::default()
+                            .leading_button(move || {
                                 split_leading_button(
-                                    SplitButtonLeadingArgs::default()
+                                    &SplitButtonLeadingArgs::default()
                                         .variant(SplitButtonVariant::Outlined)
-                                        .size(medium),
-                                    || {
-                                        row(
-                                            RowArgs::default()
-                                                .main_axis_alignment(MainAxisAlignment::Center)
-                                                .cross_axis_alignment(CrossAxisAlignment::Center),
-                                            |row_scope| {
-                                                row_scope.child(|| {
-                                                    icon(
-                                                        IconArgs::from(filled::inbox_icon()).size(
-                                                            SplitButtonDefaults::LEADING_ICON_SIZE,
-                                                        ),
-                                                    );
-                                                });
-                                                row_scope.child(|| {
-                                                    spacer(Modifier::new().width(Dp(8.0)));
-                                                });
-                                                row_scope.child(|| text("Archive"));
-                                            },
-                                        );
-                                    },
+                                        .size(medium)
+                                        .content(|| {
+                                            row(
+                                                RowArgs::default()
+                                                    .main_axis_alignment(MainAxisAlignment::Center)
+                                                    .cross_axis_alignment(CrossAxisAlignment::Center),
+                                                |row_scope| {
+                                                    row_scope.child(|| {
+                                                        icon(
+                                                            &IconArgs::from(filled::inbox_icon())
+                                                                .size(SplitButtonDefaults::LEADING_ICON_SIZE),
+                                                        );
+                                                    });
+                                                    row_scope.child(|| {
+                                                        spacer(&SpacerArgs::new(Modifier::new().width(Dp(8.0))));
+                                                    });
+                                                    row_scope.child(|| {
+                                                        text(&TextArgs::from("Archive"))
+                                                    });
+                                                },
+                                            );
+                                        }),
                                 );
-                            },
-                            move || {
+                            })
+                            .trailing_button(move || {
                                 split_trailing_button(
-                                    SplitButtonTrailingArgs::default()
+                                    &SplitButtonTrailingArgs::default()
                                         .variant(SplitButtonVariant::Outlined)
-                                        .size(medium),
-                                    move || {
-                                        icon(
-                                            IconArgs::from(filled::chevron_right_icon()).size(
-                                                SplitButtonDefaults::trailing_icon_size(medium),
-                                            ),
-                                        );
-                                    },
+                                        .size(medium)
+                                        .content(move || {
+                                            icon(
+                                                &IconArgs::from(filled::chevron_right_icon()).size(
+                                                    SplitButtonDefaults::trailing_icon_size(medium),
+                                                ),
+                                            );
+                                        }),
                                 );
-                            },
-                        );
+                            });
+                        split_button_layout(&args);
                     });
                 },
             );
         },
-    );
+    ));
 }

@@ -48,7 +48,7 @@ pub struct RippleAnimation {
     pub alpha: f32,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 struct RippleAnimationState {
     start: Instant,
     center: [f32; 2],
@@ -197,6 +197,16 @@ impl RippleState {
     /// Returns the current ripple animation snapshot.
     pub fn animation(&mut self) -> Option<RippleAnimation> {
         self.animation_at(Instant::now())
+    }
+
+    /// Returns a read-only snapshot of the current ripple animation.
+    pub fn animation_snapshot(&self) -> Option<RippleAnimation> {
+        self.animation_snapshot_at(Instant::now())
+    }
+
+    /// Returns a read-only animation snapshot at `now`.
+    pub fn animation_snapshot_at(&self, now: Instant) -> Option<RippleAnimation> {
+        self.animation.and_then(|state| state.animation_at(now))
     }
 
     /// Returns the current ripple animation snapshot at `now`.

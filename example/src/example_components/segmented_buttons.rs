@@ -7,12 +7,11 @@ use tessera_components::{
         SegmentedButtonArgs, SegmentedButtonDefaults, SegmentedButtonRowArgs,
         multi_choice_segmented_button_row, segmented_button, single_choice_segmented_button_row,
     },
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
-
 #[tessera]
 #[shard]
 pub fn segmented_buttons_showcase() {
@@ -20,7 +19,7 @@ pub fn segmented_buttons_showcase() {
     let selected_filters = remember(|| vec![true, false, false]);
     let base_shape = SegmentedButtonDefaults::shape();
 
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             column(
@@ -29,27 +28,27 @@ pub fn segmented_buttons_showcase() {
                 |scope| {
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .text("Segmented Buttons Showcase")
                                 .size(Dp(20.0)),
                         )
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
-                    scope.child(|| text(TextArgs::default().text("Single choice").size(Dp(14.0))));
+                    scope.child(|| text(&TextArgs::default().text("Single choice").size(Dp(14.0))));
 
                     scope.child(move || {
                         let options = ["Day", "Week", "Month"];
                         let count = options.len();
                         single_choice_segmented_button_row(
-                            SegmentedButtonRowArgs::default(),
+                            &SegmentedButtonRowArgs::default(),
                             move || {
                                 for (index, label) in options.iter().enumerate() {
                                     let selected_index = selected_index;
                                     let label = (*label).to_string();
                                     segmented_button(
-                                        SegmentedButtonArgs::new(label)
+                                        &SegmentedButtonArgs::new(label)
                                             .selected(selected_index.get() == index)
                                             .shape(SegmentedButtonDefaults::item_shape(
                                                 index, count, base_shape,
@@ -63,15 +62,15 @@ pub fn segmented_buttons_showcase() {
                         );
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(20.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(20.0)))));
 
-                    scope.child(|| text(TextArgs::default().text("Multi choice").size(Dp(14.0))));
+                    scope.child(|| text(&TextArgs::default().text("Multi choice").size(Dp(14.0))));
 
                     scope.child(move || {
                         let options = ["Inbox", "Alerts", "Settings"];
                         let count = options.len();
                         multi_choice_segmented_button_row(
-                            SegmentedButtonRowArgs::default(),
+                            &SegmentedButtonRowArgs::default(),
                             move || {
                                 for (index, label) in options.iter().enumerate() {
                                     let icon_args = match index {
@@ -84,7 +83,7 @@ pub fn segmented_buttons_showcase() {
                                     let selected_filters = selected_filters;
                                     let label = (*label).to_string();
                                     segmented_button(
-                                        SegmentedButtonArgs::new(label)
+                                        &SegmentedButtonArgs::new(label)
                                             .icon(icon_args)
                                             .selected(is_selected)
                                             .shape(SegmentedButtonDefaults::item_shape(
@@ -105,5 +104,5 @@ pub fn segmented_buttons_showcase() {
                 },
             );
         },
-    );
+    ));
 }

@@ -65,12 +65,28 @@ impl LayoutSpec for CursorLayout {
 ///   line height
 /// * `bink_timer` - Timer used to control the blinking animation cycle
 #[tessera]
-pub(super) fn cursor(height_px: Px, bink_timer: Instant, color: Color) {
-    let visible = bink_timer.elapsed().as_millis() % 1000 >= 500;
+fn cursor_node(args: &CursorArgs) {
+    let visible = args.blink_timer.elapsed().as_millis() % 1000 >= 500;
 
     layout(CursorLayout {
-        height: height_px,
+        height: args.height_px,
         visible,
-        color,
+        color: args.color,
     });
+}
+
+#[derive(Clone, PartialEq)]
+struct CursorArgs {
+    height_px: Px,
+    blink_timer: Instant,
+    color: Color,
+}
+
+pub(super) fn cursor(height_px: Px, blink_timer: Instant, color: Color) {
+    let args = CursorArgs {
+        height_px,
+        blink_timer,
+        color,
+    };
+    cursor_node(&args);
 }

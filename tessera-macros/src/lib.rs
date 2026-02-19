@@ -8,7 +8,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{Block, Expr, ItemFn, parse_macro_input, parse_quote, visit_mut::VisitMut};
+use syn::{
+    Block, Expr, FnArg, ItemFn, Pat, Type, parse_macro_input, parse_quote, visit_mut::VisitMut,
+};
 
 /// Helper: parse crate path from attribute TokenStream
 fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Path {
@@ -37,9 +39,122 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
                         instance_key: 0,
                         input_handler_fn: None,
                         layout_spec: Box::new(DefaultLayoutSpec::default()),
+                        replay: None,
                     }
                 )
             })
+        }
+    }
+}
+
+/// Parse and validate strict component props signature:
+/// `fn component(<prop>: &T)`.
+enum ComponentPropSignature {
+    Unit,
+    RefArg {
+        ident: syn::Ident,
+        ty: Box<syn::Type>,
+    },
+}
+
+impl ComponentPropSignature {
+    fn prop_type(&self) -> syn::Type {
+        match self {
+            Self::Unit => syn::parse_quote!(()),
+            Self::RefArg { ty, .. } => ty.as_ref().clone(),
+        }
+    }
+}
+
+fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature, syn::Error> {
+    if sig.inputs.is_empty() {
+        return Ok(ComponentPropSignature::Unit);
+    }
+
+    if sig.inputs.len() != 1 {
+        return Err(syn::Error::new_spanned(
+            &sig.inputs,
+            "#[tessera] components must have signature `fn name()` or `fn name(<prop>: &T)`",
+        ));
+    }
+
+    let arg = sig.inputs.first().expect("single input already validated");
+    let FnArg::Typed(arg) = arg else {
+        return Err(syn::Error::new_spanned(
+            arg,
+            "#[tessera] methods are not supported; use free functions with `&T` props",
+        ));
+    };
+
+    let Pat::Ident(pat_ident) = arg.pat.as_ref() else {
+        return Err(syn::Error::new_spanned(
+            &arg.pat,
+            "component parameter must be a named identifier",
+        ));
+    };
+
+    let Type::Reference(type_ref) = arg.ty.as_ref() else {
+        return Err(syn::Error::new_spanned(
+            &arg.ty,
+            "component parameter must be a shared reference `&T`",
+        ));
+    };
+
+    if type_ref.mutability.is_some() {
+        return Err(syn::Error::new_spanned(
+            type_ref,
+            "component parameter must be an immutable reference `&T`",
+        ));
+    }
+
+    Ok(ComponentPropSignature::RefArg {
+        ident: pat_ident.ident.clone(),
+        ty: Box::new(type_ref.elem.as_ref().clone()),
+    })
+}
+
+/// Helper: tokens to attach replay metadata to the current component node.
+fn replay_register_tokens(
+    crate_path: &syn::Path,
+    fn_name: &syn::Ident,
+    signature: &ComponentPropSignature,
+) -> proc_macro2::TokenStream {
+    match signature {
+        ComponentPropSignature::RefArg { ident, ty } => {
+            let ty = ty.as_ref();
+            quote! {
+                {
+                    use #crate_path::runtime::TesseraRuntime;
+                    let __tessera_runner = #crate_path::prop::make_component_runner::<#ty>(#fn_name);
+                    TesseraRuntime::with_mut(|runtime| {
+                        runtime.set_current_component_replay(__tessera_runner, #ident);
+                    });
+                }
+            }
+        }
+        ComponentPropSignature::Unit => quote! {
+            {
+                use #crate_path::runtime::TesseraRuntime;
+                fn __tessera_noarg_runner(_props: &()) {
+                    #fn_name();
+                }
+                let __tessera_runner =
+                    #crate_path::prop::make_component_runner::<()>(__tessera_noarg_runner);
+                let __tessera_unit_props = ();
+                TesseraRuntime::with_mut(|runtime| {
+                    runtime.set_current_component_replay(__tessera_runner, &__tessera_unit_props);
+                });
+            }
+        },
+    }
+}
+
+/// Helper: compile-time assertion that component props implement `Prop`.
+fn prop_assert_tokens(crate_path: &syn::Path, prop_type: &syn::Type) -> proc_macro2::TokenStream {
+    quote! {
+        {
+            fn __tessera_assert_prop<T: #crate_path::Prop>() {}
+            __tessera_assert_prop::<#prop_type>();
         }
     }
 }
@@ -77,6 +192,37 @@ fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStre
                     .unwrap()
                     .input_handler_fn = Some(Box::new(fun) as Box<InputHandlerFn>)
             });
+        }
+    }
+}
+
+/// Helper: tokens to inject `callback`, `callback_with`, and `render_slot`.
+fn callback_helpers_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
+    quote! {
+        #[allow(clippy::needless_pass_by_value)]
+        fn remember_callback<F>(fun: F) -> #crate_path::Callback
+        where
+            F: Fn() + Send + Sync + 'static,
+        {
+            #crate_path::Callback::new(fun)
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn remember_callback_with<T, R, F>(fun: F) -> #crate_path::CallbackWith<T, R>
+        where
+            T: Send + Sync + 'static,
+            R: Send + Sync + 'static,
+            F: Fn(T) -> R + Send + Sync + 'static,
+        {
+            #crate_path::CallbackWith::new(fun)
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn remember_render_slot<F>(fun: F) -> #crate_path::RenderSlot
+        where
+            F: Fn() + Send + Sync + 'static,
+        {
+            #crate_path::RenderSlot::new(fun)
         }
     }
 }
@@ -227,6 +373,11 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_vis = &input_fn.vis;
     let fn_attrs = &input_fn.attrs;
     let fn_sig = &input_fn.sig;
+    let prop_signature = match strict_prop_signature(fn_sig) {
+        Ok(v) => v,
+        Err(err) => return err.to_compile_error().into(),
+    };
+    let prop_type = prop_signature.prop_type();
 
     // Generate a stable hash seed based on function name in order to avoid ID
     // collisions
@@ -243,6 +394,9 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let register_tokens = register_node_tokens(&crate_path, fn_name);
     let layout_tokens = layout_inject_tokens(&crate_path);
     let state_tokens = input_handler_inject_tokens(&crate_path);
+    let callback_helper_tokens = callback_helpers_inject_tokens(&crate_path);
+    let replay_tokens = replay_register_tokens(&crate_path, fn_name, &prop_signature);
+    let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
     let logic_id_tokens = logic_id_tokens(fn_name);
 
     // Generate the transformed function with Tessera runtime integration
@@ -279,15 +433,23 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             };
 
             let __tessera_instance_key: u64 = #crate_path::runtime::current_instance_key();
+            let _instance_ctx_guard = {
+                use #crate_path::runtime::push_current_component_instance_key;
+                push_current_component_instance_key(__tessera_instance_key)
+            };
             {
                 use #crate_path::runtime::TesseraRuntime;
                 TesseraRuntime::with_mut(|runtime| {
                     runtime.set_current_instance_key(__tessera_instance_key);
                 });
             }
+            #prop_assert_tokens
+            #crate_path::context::record_current_context_snapshot_for(__tessera_instance_key);
+            #replay_tokens
             // Inject helper tokens
             #layout_tokens
             #state_tokens
+            #callback_helper_tokens
             // Execute user's function body
             #fn_block
         }
@@ -348,13 +510,13 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Lifecycle
 ///
-/// Controlled by the generated destination (via `#[state(...)]`).
+/// Controlled by the generated state injection (via `#[state(...)]`).
 /// * Default: `Shard` – state is removed when the destination is `pop()`‑ed
-/// * Override: `#[state(app)]` (or `#[state(application)]`) – persist for the
-///   entire application
+/// * Override: `#[state(scope)]` – persist for the lifetime of current
+///   `router_scope`
 ///
-/// When `pop()` is called and the destination lifecycle is `Shard`, the
-/// registry entry is removed, freeing the state.
+/// Route-scoped state is removed on route pop/clear. Scope-scoped state is
+/// removed when the router scope is dropped.
 ///
 /// # Parameter Transformation
 ///
@@ -382,13 +544,8 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # See Also
 ///
-/// * Routing helpers: `tessera_ui::router::{push, pop, router_root}`
-/// * Shard state registry: `tessera_shard::ShardRegistry`
-///
-/// # Safety
-///
-/// Internally uses an unsafe cast inside the registry to recover `Arc<T>` from
-/// `Arc<dyn ShardState>`; this is encapsulated and not exposed.
+/// * Routing helpers: `tessera_ui::router::{Router, router_root}`
+/// * Scoped router internals: `tessera_shard::router::Router`
 ///
 /// # Errors / Panics
 ///
@@ -408,9 +565,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let mut func = parse_macro_input!(input as ItemFn);
 
-    // Handle #[state] parameters, ensuring it's unique and removing it from the
-    // signature Also parse optional lifecycle argument: #[state(app)] or
-    // #[state(shard)]
+    // Handle #[state] parameters, ensuring it's unique and removing it from
+    // the signature. Also parse optional lifecycle argument:
+    // #[state(scope)] or #[state(shard)].
     let mut state_param = None;
     let mut state_lifecycle: Option<proc_macro2::TokenStream> = None;
     let mut new_inputs = syn::punctuated::Punctuated::new();
@@ -422,12 +579,13 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
             for attr in &pat_type.attrs {
                 if attr.path().is_ident("state") {
                     is_state = true;
-                    // Try parse an optional argument: #[state(app)] / #[state(shard)]
+                    // Try parse an optional argument: #[state(scope)] /
+                    // #[state(shard)]
                     if let Ok(arg_ident) = attr.parse_args::<syn::Ident>() {
                         let s = arg_ident.to_string().to_lowercase();
-                        if s == "app" || s == "application" {
+                        if s == "scope" {
                             lifecycle_override = Some(
-                                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Application },
+                                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Scope },
                             );
                         } else if s == "shard" {
                             lifecycle_override = Some(
@@ -435,7 +593,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                             );
                         } else {
                             panic!(
-                                "Unsupported #[state(...)] argument in #[shard]: expected `app` or `shard`"
+                                "Unsupported #[state(...)] argument in #[shard]: expected `scope` or `shard`"
                             );
                         }
                     }
@@ -509,16 +667,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         })
         .collect();
 
-    let lifecycle_method_tokens = if let Some(lc) = state_lifecycle.clone() {
-        quote! {
-            fn life_cycle(&self) -> #crate_path::tessera_shard::ShardStateLifeCycle {
-                #lc
-            }
-        }
-    } else {
-        // Default is `Shard` per RouterDestination trait; no override needed.
-        quote! {}
-    };
+    let state_lifecycle_tokens = state_lifecycle.clone().unwrap_or_else(|| {
+        quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard }
+    });
 
     let expanded = {
         // `exec_component` only passes struct fields (unmarked parameters).
@@ -545,8 +696,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     fn shard_id(&self) -> &'static str {
                         concat!(module_path!(), "::", #func_name_str)
                     }
-
-                    #lifecycle_method_tokens
                 }
 
                 #(#func_attrs)*
@@ -554,15 +703,13 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     // Generate a stable unique ID at the call site
                     const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
 
-                    // Call the global registry and pass the original function body as a closure
-                    unsafe {
-                        #crate_path::tessera_shard::ShardRegistry::get().init_or_get::<#state_type, _, _>(
-                            SHARD_ID,
-                            |#state_name| {
-                                #func_body
-                            },
-                        )
-                    }
+                    #crate_path::router::with_current_router_shard_state::<#state_type, _, _>(
+                        SHARD_ID,
+                        #state_lifecycle_tokens,
+                        |#state_name| {
+                            #func_body
+                        },
+                    )
                 }
             }
         } else {
@@ -583,8 +730,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     fn shard_id(&self) -> &'static str {
                         concat!(module_path!(), "::", #func_name_str)
                     }
-
-                    #lifecycle_method_tokens
                 }
 
                 #(#func_attrs)*

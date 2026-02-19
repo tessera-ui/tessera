@@ -22,7 +22,7 @@ use crate::{
 /// ```
 /// use tessera_ui::DrawCommand;
 ///
-/// #[derive(Clone)]
+/// #[derive(Clone, PartialEq)]
 /// struct RectangleCommand {
 ///     color: [f32; 4],
 ///     corner_radius: f32,

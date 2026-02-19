@@ -6,15 +6,20 @@ use std::{
     collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     marker::PhantomData,
-    sync::{Arc, OnceLock},
+    sync::{
+        Arc, OnceLock,
+        atomic::{AtomicBool, Ordering},
+    },
+    time::{Duration, Instant},
 };
 
-use parking_lot::RwLock;
+use parking_lot::{Mutex, RwLock};
 
 use crate::{
     NodeId,
     component_tree::ComponentTree,
     layout::{LayoutSpec, LayoutSpecDyn},
+    prop::{ComponentReplayData, ErasedComponentRunner, Prop},
 };
 
 thread_local! {
@@ -40,6 +45,24 @@ thread_local! {
 
     /// Call counter stack used for instance identity, reset by `key` blocks.
     static INSTANCE_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+
+    /// Call counter stack used by frame awaiters.
+    ///
+    /// This must be independent from `CALL_COUNTER_STACK` so frame-awaiting APIs
+    /// never perturb `remember` slot identity.
+    static FRAME_AWAITER_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+
+    /// Stack of currently executing component instance keys for the current thread.
+    ///
+    /// Unlike `current_instance_key()`, this remains stable for the whole
+    /// component body even when nested control-flow groups are entered.
+    static CURRENT_COMPONENT_INSTANCE_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+
+    /// One-shot logic-id override used by subtree replay.
+    ///
+    /// When set, the next `push_current_node` call will consume this value as
+    /// the component logic id instead of deriving it from parent stacks.
+    static NEXT_NODE_LOGIC_ID_OVERRIDE: RefCell<Option<u64>> = const { RefCell::new(None) };
 }
 
 pub(crate) fn compute_context_slot_key() -> (u64, u64) {
@@ -134,6 +157,454 @@ pub(crate) struct StructureReconcileResult {
     pub removed_nodes: HashSet<u64>,
 }
 
+/// Persisted replay snapshot for one component instance.
+#[allow(dead_code)]
+#[derive(Clone)]
+pub(crate) struct ReplayNodeSnapshot {
+    pub instance_key: u64,
+    pub parent_instance_key: Option<u64>,
+    pub logic_id: u64,
+    pub group_path: Vec<u64>,
+    pub fn_name: String,
+    pub replay: ComponentReplayData,
+}
+
+#[derive(Default)]
+struct ComponentReplayTracker {
+    previous_nodes: HashMap<u64, ReplayNodeSnapshot>,
+    current_nodes: HashMap<u64, ReplayNodeSnapshot>,
+}
+
+static COMPONENT_REPLAY_TRACKER: OnceLock<RwLock<ComponentReplayTracker>> = OnceLock::new();
+
+fn component_replay_tracker() -> &'static RwLock<ComponentReplayTracker> {
+    COMPONENT_REPLAY_TRACKER.get_or_init(|| RwLock::new(ComponentReplayTracker::default()))
+}
+
+pub(crate) fn begin_frame_component_replay_tracking() {
+    component_replay_tracker().write().current_nodes.clear();
+}
+
+pub(crate) fn finalize_frame_component_replay_tracking() {
+    let mut tracker = component_replay_tracker().write();
+    tracker.previous_nodes = std::mem::take(&mut tracker.current_nodes);
+}
+
+pub(crate) fn finalize_frame_component_replay_tracking_partial() {
+    let mut tracker = component_replay_tracker().write();
+    let current = std::mem::take(&mut tracker.current_nodes);
+    tracker.previous_nodes.extend(current);
+}
+
+pub(crate) fn reset_component_replay_tracking() {
+    *component_replay_tracker().write() = ComponentReplayTracker::default();
+}
+
+pub(crate) fn previous_component_replay_nodes() -> HashMap<u64, ReplayNodeSnapshot> {
+    component_replay_tracker().read().previous_nodes.clone()
+}
+
+pub(crate) fn remove_previous_component_replay_nodes(instance_keys: &HashSet<u64>) {
+    if instance_keys.is_empty() {
+        return;
+    }
+    let mut tracker = component_replay_tracker().write();
+    tracker
+        .previous_nodes
+        .retain(|instance_key, _| !instance_keys.contains(instance_key));
+    tracker
+        .current_nodes
+        .retain(|instance_key, _| !instance_keys.contains(instance_key));
+}
+
+#[derive(Default)]
+struct BuildInvalidationTracker {
+    dirty_instance_keys: HashSet<u64>,
+}
+
+#[derive(Default)]
+pub(crate) struct BuildInvalidationSet {
+    pub dirty_instance_keys: HashSet<u64>,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct StateReadDependencyKey {
+    // Keep generation in the dependency key to avoid ABA when a slot is recycled
+    // and later reused for another state value.
+    slot: u32,
+    generation: u64,
+}
+
+#[derive(Default)]
+struct StateReadDependencyTracker {
+    readers_by_state: HashMap<StateReadDependencyKey, HashSet<u64>>,
+    states_by_reader: HashMap<u64, HashSet<StateReadDependencyKey>>,
+}
+
+static BUILD_INVALIDATION_TRACKER: OnceLock<RwLock<BuildInvalidationTracker>> = OnceLock::new();
+static STATE_READ_DEPENDENCY_TRACKER: OnceLock<RwLock<StateReadDependencyTracker>> =
+    OnceLock::new();
+type RedrawWaker = Arc<dyn Fn() + Send + Sync + 'static>;
+static REDRAW_WAKER: OnceLock<RwLock<Option<RedrawWaker>>> = OnceLock::new();
+static REDRAW_REQUEST_PENDING: AtomicBool = AtomicBool::new(false);
+
+fn build_invalidation_tracker() -> &'static RwLock<BuildInvalidationTracker> {
+    BUILD_INVALIDATION_TRACKER.get_or_init(|| RwLock::new(BuildInvalidationTracker::default()))
+}
+
+fn state_read_dependency_tracker() -> &'static RwLock<StateReadDependencyTracker> {
+    STATE_READ_DEPENDENCY_TRACKER.get_or_init(|| RwLock::new(StateReadDependencyTracker::default()))
+}
+
+fn redraw_waker() -> &'static RwLock<Option<RedrawWaker>> {
+    REDRAW_WAKER.get_or_init(|| RwLock::new(None))
+}
+
+fn schedule_runtime_redraw() {
+    if REDRAW_REQUEST_PENDING
+        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+        .is_err()
+    {
+        return;
+    }
+
+    let callback = redraw_waker().read().clone();
+    if let Some(callback) = callback {
+        callback();
+    } else {
+        REDRAW_REQUEST_PENDING.store(false, Ordering::Release);
+    }
+}
+
+pub(crate) fn install_redraw_waker(callback: RedrawWaker) {
+    *redraw_waker().write() = Some(callback);
+    if REDRAW_REQUEST_PENDING.load(Ordering::Acquire) {
+        let callback = redraw_waker().read().clone();
+        if let Some(callback) = callback {
+            callback();
+        }
+    }
+}
+
+pub(crate) fn clear_redraw_waker() {
+    *redraw_waker().write() = None;
+    REDRAW_REQUEST_PENDING.store(false, Ordering::Release);
+}
+
+pub(crate) fn consume_scheduled_redraw() {
+    REDRAW_REQUEST_PENDING.store(false, Ordering::Release);
+}
+
+fn current_component_instance_key_from_scope() -> Option<u64> {
+    CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| stack.borrow().last().copied())
+}
+
+fn take_next_node_logic_id_override() -> Option<u64> {
+    NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| slot.borrow_mut().take())
+}
+
+/// Runs `f` inside a replay scope restored from a previously recorded component
+/// snapshot.
+///
+/// The replay scope restores:
+/// - the control-flow group path active at the original call site
+/// - a one-shot logic-id override for the replayed component root
+pub(crate) fn with_replay_scope<R>(logic_id: u64, group_path: &[u64], f: impl FnOnce() -> R) -> R {
+    struct ReplayScopeGuard {
+        previous_group_path: Option<Vec<u64>>,
+        previous_logic_id_override: Option<Option<u64>>,
+    }
+
+    impl Drop for ReplayScopeGuard {
+        fn drop(&mut self) {
+            if let Some(previous_group_path) = self.previous_group_path.take() {
+                GROUP_PATH_STACK.with(|stack| {
+                    *stack.borrow_mut() = previous_group_path;
+                });
+            }
+            if let Some(previous_logic_id_override) = self.previous_logic_id_override.take() {
+                NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| {
+                    *slot.borrow_mut() = previous_logic_id_override;
+                });
+            }
+        }
+    }
+
+    let previous_group_path = GROUP_PATH_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        std::mem::replace(&mut *stack, group_path.to_vec())
+    });
+    let previous_logic_id_override = NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| {
+        let mut slot = slot.borrow_mut();
+        (*slot).replace(logic_id)
+    });
+    let _guard = ReplayScopeGuard {
+        previous_group_path: Some(previous_group_path),
+        previous_logic_id_override: Some(previous_logic_id_override),
+    };
+
+    f()
+}
+
+pub(crate) fn current_component_instance_key_in_scope() -> Option<u64> {
+    current_component_instance_key_from_scope()
+}
+
+pub(crate) fn record_component_invalidation_for_instance_key(instance_key: u64) {
+    let inserted = build_invalidation_tracker()
+        .write()
+        .dirty_instance_keys
+        .insert(instance_key);
+    if inserted {
+        schedule_runtime_redraw();
+    }
+}
+
+fn track_state_read_dependency(slot: u32, generation: u64) {
+    if !matches!(current_phase(), Some(RuntimePhase::Build)) {
+        return;
+    }
+    let Some(reader_instance_key) = current_component_instance_key_from_scope() else {
+        return;
+    };
+
+    let key = StateReadDependencyKey { slot, generation };
+    let mut tracker = state_read_dependency_tracker().write();
+    tracker
+        .readers_by_state
+        .entry(key)
+        .or_default()
+        .insert(reader_instance_key);
+    tracker
+        .states_by_reader
+        .entry(reader_instance_key)
+        .or_default()
+        .insert(key);
+}
+
+fn state_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
+    let key = StateReadDependencyKey { slot, generation };
+    state_read_dependency_tracker()
+        .read()
+        .readers_by_state
+        .get(&key)
+        .map(|readers| readers.iter().copied().collect())
+        .unwrap_or_default()
+}
+
+pub(crate) fn remove_state_read_dependencies(instance_keys: &HashSet<u64>) {
+    if instance_keys.is_empty() {
+        return;
+    }
+    let mut tracker = state_read_dependency_tracker().write();
+    for instance_key in instance_keys {
+        let Some(state_keys) = tracker.states_by_reader.remove(instance_key) else {
+            continue;
+        };
+        for state_key in state_keys {
+            let mut remove_entry = false;
+            if let Some(readers) = tracker.readers_by_state.get_mut(&state_key) {
+                readers.remove(instance_key);
+                remove_entry = readers.is_empty();
+            }
+            if remove_entry {
+                tracker.readers_by_state.remove(&state_key);
+            }
+        }
+    }
+}
+
+pub(crate) fn reset_state_read_dependencies() {
+    *state_read_dependency_tracker().write() = StateReadDependencyTracker::default();
+}
+
+pub(crate) fn take_build_invalidations() -> BuildInvalidationSet {
+    let mut tracker = build_invalidation_tracker().write();
+    BuildInvalidationSet {
+        dirty_instance_keys: std::mem::take(&mut tracker.dirty_instance_keys),
+    }
+}
+
+pub(crate) fn reset_build_invalidations() {
+    *build_invalidation_tracker().write() = BuildInvalidationTracker::default();
+}
+
+pub(crate) fn has_pending_build_invalidations() -> bool {
+    !build_invalidation_tracker()
+        .read()
+        .dirty_instance_keys
+        .is_empty()
+}
+
+#[derive(Default)]
+struct FrameClockTracker {
+    frame_origin: Option<Instant>,
+    current_frame_time: Option<Instant>,
+    current_frame_nanos: u64,
+    previous_frame_time: Option<Instant>,
+    frame_delta: Duration,
+    awaiters: HashMap<FrameAwaiterKey, FrameAwaiter>,
+}
+
+#[derive(Hash, Eq, PartialEq, Clone, Copy)]
+struct FrameAwaiterKey {
+    logic_id: u64,
+    awaiter_hash: u64,
+}
+
+type FrameAwaiterCallback = Box<dyn FnOnce(u64) + Send + 'static>;
+
+struct FrameAwaiter {
+    callback: FrameAwaiterCallback,
+}
+
+static FRAME_CLOCK_TRACKER: OnceLock<Mutex<FrameClockTracker>> = OnceLock::new();
+
+fn frame_clock_tracker() -> &'static Mutex<FrameClockTracker> {
+    FRAME_CLOCK_TRACKER.get_or_init(|| Mutex::new(FrameClockTracker::default()))
+}
+
+pub(crate) fn begin_frame_clock(now: Instant) {
+    let mut tracker = frame_clock_tracker().lock();
+    let frame_origin = *tracker.frame_origin.get_or_insert(now);
+    tracker.previous_frame_time = tracker.current_frame_time;
+    tracker.current_frame_time = Some(now);
+    tracker.current_frame_nanos = now
+        .saturating_duration_since(frame_origin)
+        .as_nanos()
+        .min(u64::MAX as u128) as u64;
+    tracker.frame_delta = tracker
+        .previous_frame_time
+        .map(|previous| now.saturating_duration_since(previous))
+        .unwrap_or_default();
+}
+
+pub(crate) fn reset_frame_clock() {
+    *frame_clock_tracker().lock() = FrameClockTracker::default();
+}
+
+pub(crate) fn has_pending_frame_awaiters() -> bool {
+    !frame_clock_tracker().lock().awaiters.is_empty()
+}
+
+pub(crate) fn drain_frame_awaiters() {
+    let (frame_nanos, awaiters) = {
+        let mut tracker = frame_clock_tracker().lock();
+        (
+            tracker.current_frame_nanos,
+            std::mem::take(&mut tracker.awaiters),
+        )
+    };
+
+    for (_, awaiter) in awaiters {
+        (awaiter.callback)(frame_nanos);
+    }
+}
+
+/// Returns the timestamp of the current frame, if available.
+///
+/// The value is set by the renderer at frame begin.
+pub fn current_frame_time() -> Option<Instant> {
+    frame_clock_tracker().lock().current_frame_time
+}
+
+/// Returns the elapsed time since the previous frame.
+pub fn frame_delta() -> Duration {
+    frame_clock_tracker().lock().frame_delta
+}
+
+fn ensure_frame_await_phase() {
+    match current_phase() {
+        Some(RuntimePhase::Build) | Some(RuntimePhase::Input) => {}
+        Some(RuntimePhase::Measure) => {
+            panic!("with_frame_nanos must not be called inside measure")
+        }
+        None => panic!(
+            "with_frame_nanos must be called inside a tessera component build or input handler"
+        ),
+    }
+}
+
+fn current_component_instance_key_for_awaiter() -> Option<u64> {
+    current_component_instance_key_from_scope()
+}
+
+fn compute_frame_awaiter_key() -> FrameAwaiterKey {
+    let logic_id =
+        current_logic_id().expect("with_frame_nanos must be called inside a tessera component");
+    let group_path_hash = current_group_path_hash();
+
+    let call_counter = FRAME_AWAITER_CALL_COUNTER_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        debug_assert!(
+            !stack.is_empty(),
+            "FRAME_AWAITER_CALL_COUNTER_STACK is empty; with_frame_nanos must be called inside a component"
+        );
+        let counter = *stack
+            .last()
+            .expect("FRAME_AWAITER_CALL_COUNTER_STACK should not be empty");
+        *stack
+            .last_mut()
+            .expect("FRAME_AWAITER_CALL_COUNTER_STACK should not be empty") += 1;
+        counter
+    });
+
+    let awaiter_hash = hash_components(&[&group_path_hash, &call_counter]);
+    FrameAwaiterKey {
+        logic_id,
+        awaiter_hash,
+    }
+}
+
+/// Register a one-shot callback to run on the next frame.
+///
+/// The callback receives the current frame time in nanoseconds from a monotonic
+/// runtime origin. Calling this repeatedly at the same callsite replaces the
+/// previous pending callback.
+pub fn with_frame_nanos<F>(callback: F)
+where
+    F: FnOnce(u64) + Send + 'static,
+{
+    ensure_frame_await_phase();
+
+    current_component_instance_key_for_awaiter()
+        .unwrap_or_else(|| panic!("with_frame_nanos requires an active component node context"));
+    let key = compute_frame_awaiter_key();
+
+    frame_clock_tracker().lock().awaiters.insert(
+        key,
+        FrameAwaiter {
+            callback: Box::new(callback),
+        },
+    );
+}
+
+pub(crate) fn drop_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
+    if logic_ids.is_empty() {
+        return;
+    }
+
+    let mut table = slot_table().write();
+    let mut freed: Vec<(u32, SlotKey)> = Vec::new();
+    for (slot, entry) in table.entries.iter_mut().enumerate() {
+        if entry.value.is_none() {
+            continue;
+        }
+        if !logic_ids.contains(&entry.key.logic_id) {
+            continue;
+        }
+        freed.push((slot as u32, entry.key));
+        entry.value = None;
+        entry.generation = entry.generation.wrapping_add(1);
+        entry.last_alive_epoch = 0;
+        entry.retained = false;
+    }
+    for (slot, key) in freed {
+        table.key_to_slot.remove(&key);
+        table.free_list.push(slot);
+    }
+}
+
 static LAYOUT_DIRTY_TRACKER: OnceLock<RwLock<LayoutDirtyTracker>> = OnceLock::new();
 
 fn layout_dirty_tracker() -> &'static RwLock<LayoutDirtyTracker> {
@@ -177,6 +648,35 @@ pub(crate) fn reset_layout_dirty_tracking() {
     *layout_dirty_tracker().write() = LayoutDirtyTracker::default();
 }
 
+fn record_component_replay_snapshot(runtime: &TesseraRuntime, node_id: NodeId) {
+    let Some(node) = runtime.component_tree.get(node_id) else {
+        return;
+    };
+    let Some(replay) = node.replay.clone() else {
+        return;
+    };
+
+    let tree = runtime.component_tree.tree();
+    let parent_instance_key = tree
+        .get(node_id)
+        .and_then(|n| n.parent())
+        .and_then(|parent_id| tree.get(parent_id))
+        .map(|parent| parent.get().instance_key);
+
+    let snapshot = ReplayNodeSnapshot {
+        instance_key: node.instance_key,
+        parent_instance_key,
+        logic_id: node.logic_id,
+        group_path: current_group_path(),
+        fn_name: node.fn_name.clone(),
+        replay,
+    };
+    component_replay_tracker()
+        .write()
+        .current_nodes
+        .insert(snapshot.instance_key, snapshot);
+}
+
 pub(crate) fn reconcile_layout_structure(
     current_children_by_node: &HashMap<u64, Vec<u64>>,
 ) -> StructureReconcileResult {
@@ -214,6 +714,9 @@ pub(crate) fn reconcile_layout_structure(
 /// `State<T>` is `Copy + Send + Sync` and provides `with`, `with_mut`, `get`,
 /// `set`, and `cloned` to read or update the stored value.
 ///
+/// Handles are validated with a slot generation token so stale references fail
+/// fast if their slot has been recycled.
+///
 /// # Examples
 ///
 /// ```
@@ -238,6 +741,21 @@ impl<T> Copy for State<T> {}
 impl<T> Clone for State<T> {
     fn clone(&self) -> Self {
         *self
+    }
+}
+
+impl<T> PartialEq for State<T> {
+    fn eq(&self, other: &Self) -> bool {
+        self.slot == other.slot && self.generation == other.generation
+    }
+}
+
+impl<T> Eq for State<T> {}
+
+impl<T> Hash for State<T> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.slot.hash(state);
+        self.generation.hash(state);
     }
 }
 
@@ -293,19 +811,27 @@ where
 
     /// Execute a closure with a shared reference to the stored value.
     pub fn with<R>(&self, f: impl FnOnce(&T) -> R) -> R {
+        track_state_read_dependency(self.slot, self.generation);
         let lock = self.load_lock();
         let guard = lock.read();
         f(&guard)
     }
 
     /// Execute a closure with a mutable reference to the stored value.
+    #[track_caller]
     pub fn with_mut<R>(&self, f: impl FnOnce(&mut T) -> R) -> R {
         let lock = self.load_lock();
 
-        {
+        let result = {
             let mut guard = lock.write();
             f(&mut guard)
+        };
+
+        let subscribers = state_read_subscribers(self.slot, self.generation);
+        for instance_key in subscribers {
+            record_component_invalidation_for_instance_key(instance_key);
         }
+        result
     }
 
     /// Get a cloned value. Requires `T: Clone`.
@@ -317,6 +843,7 @@ where
     }
 
     /// Replace the stored value.
+    #[track_caller]
     pub fn set(&self, value: T) {
         self.with_mut(|slot| *slot = value);
     }
@@ -377,6 +904,28 @@ impl TesseraRuntime {
         }
     }
 
+    /// Stores replay metadata for the current component node.
+    #[doc(hidden)]
+    pub fn set_current_component_replay<P>(
+        &mut self,
+        runner: Arc<dyn ErasedComponentRunner>,
+        props: &P,
+    ) where
+        P: Prop,
+    {
+        if let Some(node) = self.component_tree.current_node_mut() {
+            node.replay = Some(ComponentReplayData::new(runner, props));
+        } else {
+            debug_assert!(
+                false,
+                "set_current_component_replay must be called inside a component build"
+            );
+        }
+        if let Some(node_id) = current_node_id() {
+            record_component_replay_snapshot(self, node_id);
+        }
+    }
+
     /// Sets the layout spec for the current component node.
     #[doc(hidden)]
     pub fn set_current_layout_spec<S>(&mut self, spec: S)
@@ -414,6 +963,10 @@ pub struct NodeContextGuard {
     logic_id_popped: bool,
     #[cfg(feature = "profiling")]
     profiling_guard: Option<crate::profiler::ScopeGuard>,
+}
+
+pub struct CurrentComponentInstanceGuard {
+    popped: bool,
 }
 
 /// Execution phase for `remember` usage checks.
@@ -482,6 +1035,26 @@ impl Drop for NodeContextGuard {
     }
 }
 
+impl CurrentComponentInstanceGuard {
+    /// Pop the current component instance key immediately. Usually you rely on
+    /// `Drop` instead.
+    pub fn pop(mut self) {
+        if !self.popped {
+            pop_current_component_instance_key();
+            self.popped = true;
+        }
+    }
+}
+
+impl Drop for CurrentComponentInstanceGuard {
+    fn drop(&mut self) {
+        if !self.popped {
+            pop_current_component_instance_key();
+            self.popped = true;
+        }
+    }
+}
+
 /// Push the given node id as the current executing component for this thread.
 pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> NodeContextGuard {
     #[cfg(not(feature = "profiling"))]
@@ -518,7 +1091,9 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
         parent_call_index
     };
 
-    let instance_logic_id = if parent_call_index == 0
+    let instance_logic_id = if let Some(logic_id_override) = take_next_node_logic_id_override() {
+        logic_id_override
+    } else if parent_call_index == 0
         && parent_logic_id == 0
         && current_instance_key_override().is_none()
     {
@@ -538,6 +1113,9 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
     // Push a new call counter layer for this component's child instance identity
     INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
 
+    // Push a new call counter layer for frame-awaiting APIs.
+    FRAME_AWAITER_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+
     #[cfg(feature = "profiling")]
     let profiling_guard = match current_phase() {
         Some(RuntimePhase::Build) => {
@@ -552,6 +1130,22 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
         #[cfg(feature = "profiling")]
         profiling_guard,
     }
+}
+
+/// Push the current component instance key for the active execution scope.
+pub fn push_current_component_instance_key(instance_key: u64) -> CurrentComponentInstanceGuard {
+    CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| stack.borrow_mut().push(instance_key));
+    CurrentComponentInstanceGuard { popped: false }
+}
+
+fn pop_current_component_instance_key() {
+    CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| {
+        let popped = stack.borrow_mut().pop();
+        debug_assert!(
+            popped.is_some(),
+            "Attempted to pop current component instance key from an empty stack"
+        );
+    });
 }
 
 fn pop_current_node() {
@@ -586,6 +1180,14 @@ fn pop_current_node() {
         debug_assert!(
             popped.is_some(),
             "INSTANCE_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
+        );
+    });
+
+    FRAME_AWAITER_CALL_COUNTER_STACK.with(|stack| {
+        let popped = stack.borrow_mut().pop();
+        debug_assert!(
+            popped.is_some(),
+            "FRAME_AWAITER_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
         );
     });
 }
@@ -783,7 +1385,7 @@ pub(crate) fn ensure_build_phase() {
     }
 }
 
-/// Swap slot buffers at the beginning of a frame.
+/// Start a new state-slot epoch for the current build pass.
 pub fn begin_frame_slots() {
     slot_table().write().begin_frame();
 }
@@ -793,7 +1395,7 @@ pub fn reset_slots() {
     slot_table().write().reset();
 }
 
-/// Recycle state slots that were not touched in the current frame.
+/// Recycle state slots that were not touched in the current build epoch.
 ///
 /// Slots marked as `retained` (created via [`retain`] or [`retain_with_key`])
 /// will not be recycled even if unused.
@@ -820,12 +1422,42 @@ pub fn recycle_frame_slots() {
     }
 }
 
+pub(crate) fn recycle_frame_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
+    if logic_ids.is_empty() {
+        return;
+    }
+
+    let mut table = slot_table().write();
+    let epoch = table.epoch;
+    let mut freed: Vec<(u32, SlotKey)> = Vec::new();
+
+    for (slot, entry) in table.entries.iter_mut().enumerate() {
+        if !logic_ids.contains(&entry.key.logic_id) {
+            continue;
+        }
+        // Skip if touched this frame, already empty, or marked as retained.
+        if entry.last_alive_epoch == epoch || entry.value.is_none() || entry.retained {
+            continue;
+        }
+
+        freed.push((slot as u32, entry.key));
+        entry.value = None;
+        entry.generation = entry.generation.wrapping_add(1);
+        entry.last_alive_epoch = 0;
+    }
+
+    for (slot, key) in freed {
+        table.key_to_slot.remove(&key);
+        table.free_list.push(slot);
+    }
+}
+
 /// Remember a value across frames with an explicit key.
 ///
-/// This function allows a component to "remember" state between frames, using
-/// a user-provided key to identify the state. This is particularly useful for
-/// state generated inside loops or dynamic collections where the execution
-/// order might change.
+/// This function allows a component to "remember" state across recomposition
+/// (build) passes, using a user-provided key to identify the state. This is
+/// particularly useful for state generated inside loops or dynamic collections
+/// where the execution order might change.
 ///
 /// The `init` closure is executed only once — when the key is first
 /// encountered. On subsequent updates with the same key, the stored value is
@@ -929,9 +1561,10 @@ where
     }
 }
 
-/// Remember a value across frames.
+/// Remember a value across recomposition (build) passes.
 ///
-/// This function allows a component to "remember" state between frames.
+/// This function allows a component to "remember" state across recomposition
+/// (build) passes.
 /// The `init` closure is executed only once — when the component first runs.
 /// On subsequent updates, the stored value is returned and `init` is not
 /// called.
@@ -962,7 +1595,8 @@ where
     remember_with_key((), init)
 }
 
-/// Retain a value across frames with an explicit key, even if unused.
+/// Retain a value across recomposition (build) passes with an explicit key,
+/// even if unused.
 ///
 /// Unlike [`remember_with_key`], state created with this function will **not**
 /// be recycled when the component stops calling it. This is useful for state
@@ -990,7 +1624,8 @@ where
 ///
 /// Use [`remember_with_key`] for ephemeral component state that should be
 /// cleaned up when the component is no longer rendered. Use `retain_with_key`
-/// for persistent state that must survive across frame gaps.
+/// for persistent state that must survive even when a subtree is not rebuilt
+/// for some time.
 ///
 /// # Panics
 ///
@@ -1080,7 +1715,7 @@ where
     }
 }
 
-/// Retain a value across frames, even if unused.
+/// Retain a value across recomposition (build) passes, even if unused.
 ///
 /// Unlike [`remember`], state created with this function will **not** be
 /// recycled when the component stops calling it. This is useful for state that
@@ -1133,9 +1768,14 @@ where
 /// ```
 /// use tessera_ui::{key, remember, tessera};
 ///
+/// #[derive(Clone, PartialEq)]
+/// struct MyListArgs {
+///     items: Vec<String>,
+/// }
+///
 /// #[tessera]
-/// fn my_list(items: Vec<String>) {
-///     for item in items {
+/// fn my_list(args: &MyListArgs) {
+///     for item in args.items.iter() {
 ///         key(item.clone(), || {
 ///             let state = remember(|| 0);
 ///         });
@@ -1151,4 +1791,66 @@ where
     let _group_guard = GroupGuard::new(key_hash);
     let _instance_guard = InstanceKeyGuard::new(key_hash);
     block()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn frame_awaiter_uses_component_scope_instance_key() {
+        let _instance_guard = push_current_component_instance_key(7);
+        assert_eq!(current_component_instance_key_for_awaiter(), Some(7));
+    }
+
+    #[test]
+    fn with_frame_nanos_panics_without_component_scope() {
+        reset_frame_clock();
+        begin_frame_clock(Instant::now());
+
+        let result = std::panic::catch_unwind(|| with_frame_nanos(|_| {}));
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn with_replay_scope_restores_group_path_and_override() {
+        GROUP_PATH_STACK.with(|stack| {
+            *stack.borrow_mut() = vec![1, 2, 3];
+        });
+        NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| {
+            *slot.borrow_mut() = Some(9);
+        });
+
+        with_replay_scope(42, &[7, 8], || {
+            assert_eq!(current_group_path(), vec![7, 8]);
+            assert_eq!(take_next_node_logic_id_override(), Some(42));
+            assert_eq!(take_next_node_logic_id_override(), None);
+        });
+
+        assert_eq!(current_group_path(), vec![1, 2, 3]);
+        let restored_override = NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
+        assert_eq!(restored_override, Some(9));
+    }
+
+    #[test]
+    fn with_replay_scope_restores_on_panic() {
+        GROUP_PATH_STACK.with(|stack| {
+            *stack.borrow_mut() = vec![5];
+        });
+        NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| {
+            *slot.borrow_mut() = None;
+        });
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_replay_scope(77, &[10], || {
+                assert_eq!(current_group_path(), vec![10]);
+                panic!("expected panic");
+            });
+        }));
+        assert!(result.is_err());
+
+        assert_eq!(current_group_path(), vec![5]);
+        let restored_override = NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
+        assert_eq!(restored_override, None);
+    }
 }

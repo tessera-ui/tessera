@@ -3,18 +3,15 @@
 //! ## Usage
 //!
 //! Use in settings, forms, or toolbars to control a boolean state.
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, State,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Px, PxPosition, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera,
+    remember, tessera, with_frame_nanos,
 };
 
 use crate::{
@@ -27,7 +24,7 @@ use crate::{
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 
 /// Controller for the `glass_switch` component.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct GlassSwitchController {
     checked: bool,
     progress: f32,
@@ -78,6 +75,11 @@ impl GlassSwitchController {
         }
         self.progress
     }
+
+    /// Returns whether the toggle animation is currently running.
+    pub fn is_animating(&self) -> bool {
+        self.last_toggle_time.is_some()
+    }
 }
 
 impl Default for GlassSwitchController {
@@ -87,13 +89,13 @@ impl Default for GlassSwitchController {
 }
 
 /// Arguments for the `glass_switch` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct GlassSwitchArgs {
     /// Optional modifier chain applied to the switch subtree.
     pub modifier: Modifier,
     /// Optional callback invoked when the switch toggles.
     #[setters(skip)]
-    pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    pub on_toggle: Option<CallbackWith<bool, ()>>,
     /// Initial checked state.
     pub checked: bool,
 
@@ -129,6 +131,12 @@ pub struct GlassSwitchArgs {
     /// Optional accessibility description.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional external controller for checked state and animation.
+    ///
+    /// When this is `None`, `glass_switch` creates and owns an internal
+    /// controller.
+    #[setters(skip)]
+    pub controller: Option<State<GlassSwitchController>>,
 }
 
 impl GlassSwitchArgs {
@@ -137,13 +145,19 @@ impl GlassSwitchArgs {
     where
         F: Fn(bool) + Send + Sync + 'static,
     {
-        self.on_toggle = Some(Arc::new(on_toggle));
+        self.on_toggle = Some(CallbackWith::new(on_toggle));
         self
     }
 
     /// Sets the on_toggle handler using a shared callback.
-    pub fn on_toggle_shared(mut self, on_toggle: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
-        self.on_toggle = Some(on_toggle);
+    pub fn on_toggle_shared(mut self, on_toggle: impl Into<CallbackWith<bool, ()>>) -> Self {
+        self.on_toggle = Some(on_toggle.into());
+        self
+    }
+
+    /// Sets an external glass switch controller.
+    pub fn controller(mut self, controller: State<GlassSwitchController>) -> Self {
+        self.controller = Some(controller);
         self
     }
 }
@@ -165,6 +179,7 @@ impl Default for GlassSwitchArgs {
             thumb_padding: Dp(3.0),
             accessibility_label: None,
             accessibility_description: None,
+            controller: None,
         }
     }
 }
@@ -194,9 +209,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::glass_switch::{
-///     GlassSwitchArgs, GlassSwitchController, glass_switch_with_controller,
-/// };
+/// use tessera_components::glass_switch::{GlassSwitchArgs, GlassSwitchController, glass_switch};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
@@ -204,7 +217,8 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 ///     let controller = remember(|| GlassSwitchController::new(false));
 ///     assert!(!controller.with(|c| c.is_checked()));
 ///
-///     glass_switch_with_controller(GlassSwitchArgs::default(), controller);
+///     let args = GlassSwitchArgs::default().controller(controller);
+///     glass_switch(&args);
 ///
 ///     controller.with_mut(|c| c.toggle());
 ///     assert!(controller.with(|c| c.is_checked()));
@@ -213,48 +227,24 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// demo();
 /// ```
 #[tessera]
-pub fn glass_switch(args: impl Into<GlassSwitchArgs>) {
-    let args: GlassSwitchArgs = args.into();
-    let controller = remember(|| GlassSwitchController::new(args.checked));
-    glass_switch_with_controller(args, controller);
+pub fn glass_switch(args: &GlassSwitchArgs) {
+    let mut switch_args = args.clone();
+    let controller = switch_args
+        .controller
+        .unwrap_or_else(|| remember(|| GlassSwitchController::new(switch_args.checked)));
+    if controller.with(|c| c.is_checked()) != switch_args.checked {
+        controller.with_mut(|c| c.set_checked(switch_args.checked));
+    }
+    switch_args.controller = Some(controller);
+    glass_switch_node(&switch_args);
 }
 
-/// # glass_switch_with_controller
-///
-/// Controlled glass switch variant.
-///
-/// # Usage
-///
-/// Use when you need a toggle switch with a glassmorphic style and explicit
-/// state control.
-///
-/// # Parameters
-///
-/// - `args` — configures the switch's appearance and `on_toggle` callback; see
-///   [`GlassSwitchArgs`].
-/// - `controller` manage the component's checked and animation state; see
-///   [`GlassSwitchController`].
-///
-/// # Examples
-///
-/// ```
-/// use tessera_components::glass_switch::{
-///     GlassSwitchArgs, GlassSwitchController, glass_switch_with_controller,
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn foo() {
-///     let controller = remember(|| GlassSwitchController::new(false));
-///     glass_switch_with_controller(GlassSwitchArgs::default(), controller);
-/// }
-/// ```
 #[tessera]
-pub fn glass_switch_with_controller(
-    args: impl Into<GlassSwitchArgs>,
-    controller: State<GlassSwitchController>,
-) {
-    let args: GlassSwitchArgs = args.into();
+fn glass_switch_node(args: &GlassSwitchArgs) {
+    let args = args.clone();
+    let controller = args
+        .controller
+        .expect("glass_switch_node requires controller to be set");
     let mut modifier = args.modifier;
 
     let on_toggle = args.on_toggle.clone();
@@ -264,16 +254,13 @@ pub fn glass_switch_with_controller(
     if enabled {
         modifier = modifier.minimum_interactive_component_size();
         let on_toggle = on_toggle.clone();
-        let mut toggle_args = ToggleableArgs::new(
-            checked,
-            Arc::new(move |_| {
-                controller.with_mut(|c| c.toggle());
-                let checked = controller.with(|c| c.is_checked());
-                if let Some(on_toggle) = on_toggle.as_ref() {
-                    on_toggle(checked);
-                }
-            }),
-        )
+        let mut toggle_args = ToggleableArgs::new(checked, move |_| {
+            controller.with_mut(|c| c.toggle());
+            let checked = controller.with(|c| c.is_checked());
+            if let Some(on_toggle) = on_toggle.as_ref() {
+                on_toggle.call(checked);
+            }
+        })
         .enabled(true)
         .role(Role::Switch);
         if let Some(label) = args.accessibility_label.clone() {
@@ -296,6 +283,14 @@ pub fn glass_switch_with_controller(
 
     // Track tint color interpolation based on progress
     let progress = controller.with_mut(|c| c.animation_progress());
+    if controller.with(|c| c.is_animating()) {
+        let controller_for_frame = controller;
+        with_frame_nanos(move |_| {
+            controller_for_frame.with_mut(|c| {
+                c.animation_progress();
+            });
+        });
+    }
     let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);
 
     modifier.run(move || {
@@ -311,7 +306,10 @@ pub fn glass_switch_with_controller(
         if let Some(border) = args.track_border {
             track_args = track_args.border(border);
         }
-        fluid_glass(track_args, || {});
+        fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
+            &track_args,
+            || {},
+        ));
 
         // Build and render thumb
         let thumb_alpha =
@@ -328,7 +326,10 @@ pub fn glass_switch_with_controller(
         if let Some(border) = args.thumb_border {
             thumb_args = thumb_args.border(border);
         }
-        fluid_glass(thumb_args, || {});
+        fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
+            &thumb_args,
+            || {},
+        ));
 
         // Measurement and placement
         layout(GlassSwitchLayout {

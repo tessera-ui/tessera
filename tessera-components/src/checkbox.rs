@@ -3,15 +3,12 @@
 //! ## Usage
 //!
 //! Use in forms, settings, or lists to enable boolean selections.
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
-use closure::closure;
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, Dp, Modifier, PxSize, State, accesskit::Role, remember, tessera, use_context,
+    CallbackWith, Color, Dp, Modifier, PxSize, RenderSlot, State, accesskit::Role, remember,
+    tessera, use_context, with_frame_nanos,
 };
 
 use crate::{
@@ -51,7 +48,7 @@ impl CheckboxDefaults {
 }
 
 /// Controller for [`checkbox`] state.
-#[derive(Clone, Default)]
+#[derive(Clone, PartialEq, Default)]
 pub struct CheckboxController {
     checkmark: CheckmarkState,
 }
@@ -92,16 +89,21 @@ impl CheckboxController {
     fn progress(&self) -> f32 {
         self.checkmark.progress()
     }
+
+    /// Returns whether the checkmark animation is currently running.
+    fn is_animating(&self) -> bool {
+        self.checkmark.last_toggle_time.is_some()
+    }
 }
 
 /// Arguments for the `checkbox` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct CheckboxArgs {
     /// Optional modifier chain applied to the checkbox subtree.
     pub modifier: Modifier,
     /// Callback invoked when the checkbox is toggled.
     #[setters(skip)]
-    pub on_toggle: Arc<dyn Fn(bool) + Send + Sync>,
+    pub on_toggle: CallbackWith<bool, ()>,
     /// Initial checked state for the checkbox.
     pub checked: bool,
     /// Size of the checkbox (width and height).
@@ -158,6 +160,11 @@ pub struct CheckboxArgs {
     /// `accessibility_label` for users of assistive technology.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional external controller for checked state and animation progress.
+    ///
+    /// When this is `None`, `checkbox` creates and owns an internal controller.
+    #[setters(skip)]
+    pub controller: Option<State<CheckboxController>>,
 }
 
 impl CheckboxArgs {
@@ -166,13 +173,19 @@ impl CheckboxArgs {
     where
         F: Fn(bool) + Send + Sync + 'static,
     {
-        self.on_toggle = Arc::new(on_toggle);
+        self.on_toggle = CallbackWith::new(on_toggle);
         self
     }
 
     /// Sets the on_toggle handler using a shared callback.
-    pub fn on_toggle_shared(mut self, on_toggle: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
-        self.on_toggle = on_toggle;
+    pub fn on_toggle_shared(mut self, on_toggle: impl Into<CallbackWith<bool, ()>>) -> Self {
+        self.on_toggle = on_toggle.into();
+        self
+    }
+
+    /// Sets an external controller for controlled checkbox state.
+    pub fn controller(mut self, controller: State<CheckboxController>) -> Self {
+        self.controller = Some(controller);
         self
     }
 }
@@ -185,7 +198,7 @@ impl Default for CheckboxArgs {
             .color_scheme;
         Self {
             modifier: Modifier::new(),
-            on_toggle: Arc::new(|_| {}),
+            on_toggle: CallbackWith::new(|_| {}),
             checked: false,
             size: CheckboxDefaults::GLYPH_SIZE,
             color: scheme.on_surface_variant,
@@ -205,6 +218,7 @@ impl Default for CheckboxArgs {
             disabled_checkmark_color: scheme.surface,
             accessibility_label: None,
             accessibility_description: None,
+            controller: None,
         }
     }
 }
@@ -213,7 +227,7 @@ impl Default for CheckboxArgs {
 const CHECKMARK_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 
 /// State for checkmark animation (similar to `SwitchState`)
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct CheckmarkState {
     checked: bool,
     progress: f32,
@@ -275,8 +289,6 @@ impl CheckmarkState {
 ///
 /// - `args` — configures the checkbox's appearance, initial state, and
 ///   `on_toggle` callback; see [`CheckboxArgs`].
-/// - `controller` — optional external controller; use
-///   [`checkbox_with_controller`] for a controlled checkbox.
 ///
 /// ## Examples
 ///
@@ -289,7 +301,7 @@ impl CheckmarkState {
 /// fn checkbox_demo() {
 ///     let is_checked = remember(|| false);
 ///     checkbox(
-///         CheckboxArgs::default()
+///         &CheckboxArgs::default()
 ///             .checked(true)
 ///             .on_toggle(move |new_value| {
 ///                 is_checked.set(new_value);
@@ -298,50 +310,29 @@ impl CheckmarkState {
 /// }
 /// ```
 #[tessera]
-pub fn checkbox(args: impl Into<CheckboxArgs>) {
-    let args: CheckboxArgs = args.into();
-    let controller = remember(|| CheckboxController::new(args.checked));
-    checkbox_with_controller(args, controller);
+pub fn checkbox(args: &CheckboxArgs) {
+    let mut args = args.clone();
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(|| CheckboxController::new(args.checked)));
+    args.controller = Some(controller);
+    checkbox_node(&args);
 }
 
-/// # checkbox_with_controller
-///
-/// Controlled checkbox variant that accepts an explicit controller.
-///
-/// ## Usage
-///
-/// Use when you need to drive or observe the checked state from outside the
-/// component.
-///
-/// ## Parameters
-///
-/// - `args` — configures the checkbox appearance and callbacks; see
-///   [`CheckboxArgs`].
-/// - `controller` — a [`CheckboxController`] that owns the checked state and
-///   animation timeline.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::checkbox::{
-///     CheckboxArgs, CheckboxController, checkbox_with_controller,
-/// };
-/// use tessera_ui::{Dp, remember, tessera};
-///
-/// #[tessera]
-/// fn controlled_demo() {
-///     let controller = remember(|| CheckboxController::new(false));
-///     checkbox_with_controller(CheckboxArgs::default().size(Dp(20.0)), controller);
-/// }
-/// ```
 #[tessera]
-pub fn checkbox_with_controller(
-    args: impl Into<CheckboxArgs>,
-    controller: State<CheckboxController>,
-) {
-    let args: CheckboxArgs = args.into();
+fn checkbox_node(args: &CheckboxArgs) {
+    let args = args.clone();
+    let controller = args
+        .controller
+        .expect("checkbox_node requires controller to be set");
     let enabled = !args.disabled;
     controller.with_mut(|c| c.update_progress());
+    if controller.with(|c| c.is_animating()) {
+        let controller_for_frame = controller;
+        with_frame_nanos(move |_| {
+            controller_for_frame.with_mut(|c| c.update_progress());
+        });
+    }
 
     // Clone fields needed for closures before moving on_toggle
     let size = args.size;
@@ -352,10 +343,10 @@ pub fn checkbox_with_controller(
     let ripple_state = enabled.then(|| remember(RippleState::new));
     let on_value_change = {
         let on_toggle = args.on_toggle.clone();
-        Arc::new(move |checked| {
+        CallbackWith::new(move |checked| {
             controller.with_mut(|c| c.set_checked(checked));
-            on_toggle(checked);
-        }) as Arc<dyn Fn(bool) + Send + Sync>
+            on_toggle.call(checked);
+        })
     };
 
     // Determine colors based on state
@@ -402,7 +393,7 @@ pub fn checkbox_with_controller(
     // Checkmark
     let checkmark_stroke_width = args.checkmark_stroke_width;
     let checkbox_size = args.size;
-    let render_checkmark = move || {
+    let render_checkmark = RenderSlot::new(move || {
         let progress = controller.with(|c| c.progress());
         if progress > 0.0 {
             boxed(
@@ -412,7 +403,7 @@ pub fn checkbox_with_controller(
                 |scope| {
                     scope.child(move || {
                         checkmark(
-                            CheckmarkArgs::default()
+                            &CheckmarkArgs::default()
                                 .color(icon_color)
                                 .stroke_width(checkmark_stroke_width)
                                 .progress(progress)
@@ -423,48 +414,50 @@ pub fn checkbox_with_controller(
                 },
             );
         }
-    };
+    });
 
     // Checkbox Surface (18x18)
-    let render_checkbox_surface = closure!(
-        clone size,
-        clone shape,
-        clone checkbox_style,
-        clone render_checkmark,
-        || {
-            surface(
+    let render_checkbox_surface = {
+        let render_checkmark = render_checkmark.clone();
+        RenderSlot::new(move || {
+            let shape = shape;
+            let checkbox_style = checkbox_style.clone();
+            let render_checkmark = render_checkmark.clone();
+            surface(&crate::surface::SurfaceArgs::with_child(
                 SurfaceArgs::default()
                     .modifier(Modifier::new().size(size, size))
                     .shape(shape)
                     .style(checkbox_style),
-                render_checkmark,
-            );
-        }
-    );
+                move || {
+                    render_checkmark.render();
+                },
+            ));
+        })
+    };
 
     // Checkbox Container (centering the 18x18 surface)
-    let render_checkbox_container = closure!(
-        clone render_checkbox_surface,
-        || {
+    let render_checkbox_container = {
+        let render_checkbox_surface = render_checkbox_surface.clone();
+        RenderSlot::new(move || {
+            let render_checkbox_surface = render_checkbox_surface.clone();
             boxed(
                 BoxedArgs::default()
                     .alignment(Alignment::Center)
                     .modifier(Modifier::new().fill_max_size()),
-                |scope| {
-                    scope.child(render_checkbox_surface);
+                move |scope| {
+                    let render_checkbox_surface = render_checkbox_surface.clone();
+                    scope.child(move || {
+                        render_checkbox_surface.render();
+                    });
                 },
             );
-        }
-    );
+        })
+    };
 
     // State Layer Surface (40x40)
-    let render_state_layer = closure!(
-        clone enabled,
-        clone state_layer_base,
-        clone interaction_state,
-        clone render_checkbox_container,
-        clone ripple_state,
-        || {
+    let render_state_layer = {
+        let render_checkbox_container = render_checkbox_container.clone();
+        RenderSlot::new(move || {
             let mut surface_args = SurfaceArgs::default()
                 .modifier(Modifier::new().size(
                     CheckboxDefaults::STATE_LAYER_SIZE,
@@ -486,9 +479,15 @@ pub fn checkbox_with_controller(
             let mut surface_args = surface_args;
             surface_args.set_ripple_state(ripple_state);
 
-            surface(surface_args, render_checkbox_container);
-        }
-    );
+            let render_checkbox_container = render_checkbox_container.clone();
+            surface(&crate::surface::SurfaceArgs::with_child(
+                surface_args,
+                move || {
+                    render_checkbox_container.render();
+                },
+            ));
+        })
+    };
 
     // Outer Box (Layout 48x48)
     let mut modifier = args.modifier.size(
@@ -507,13 +506,12 @@ pub fn checkbox_with_controller(
         let press_handler = ripple_state.map(|state| {
             let spec = ripple_spec;
             let size = ripple_size;
-            Arc::new(move |ctx: PointerEventContext| {
+            move |ctx: PointerEventContext| {
                 state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
-            })
+            }
         });
-        let release_handler = ripple_state.map(|state| {
-            Arc::new(move |_ctx: PointerEventContext| state.with_mut(|s| s.release()))
-        });
+        let release_handler = ripple_state
+            .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
         let mut toggle_args = ToggleableArgs::new(is_checked, on_value_change)
             .enabled(true)
             .role(Role::CheckBox);
@@ -538,11 +536,11 @@ pub fn checkbox_with_controller(
         BoxedArgs::default()
             .modifier(modifier)
             .alignment(Alignment::Center),
-        closure!(
-            clone render_state_layer,
-            |scope| {
-                scope.child(render_state_layer);
-            }
-        ),
+        move |scope| {
+            let render_state_layer = render_state_layer.clone();
+            scope.child(move || {
+                render_state_layer.render();
+            });
+        },
     );
 }

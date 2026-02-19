@@ -38,10 +38,23 @@ fn my_component() {
 
 ```rust
 use tessera_macros::tessera;
-use std::sync::Arc;
+use tessera_ui::{Callback, Prop};
+
+#[derive(Clone)]
+struct ButtonArgs {
+    label: String,
+    on_click: Callback,
+}
+
+impl Prop for ButtonArgs {
+    fn prop_eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
 
 #[tessera]
-fn button_component(label: String, on_click: Arc<dyn Fn()>) {
+fn button_component(args: &ButtonArgs) {
+    let _ = args;
     // 组件实现
     // 宏处理组件树集成
 }

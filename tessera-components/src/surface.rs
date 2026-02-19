@@ -3,15 +3,13 @@
 //! ## Usage
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
-use std::sync::Arc;
-
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, PxSize, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    provide_context, remember, tessera, use_context,
+    provide_context, remember, tessera, use_context, with_frame_nanos,
 };
 
 use crate::{
@@ -22,13 +20,13 @@ use crate::{
         ShadowArgs,
     },
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
-    pos_misc::is_position_in_component,
+    pos_misc::is_position_inside_bounds,
     ripple_state::{RippleSpec, RippleState},
     shape_def::{ResolvedShape, RoundedCorner, Shape},
     theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
 };
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 struct AbsoluteTonalElevation {
     current: Dp,
 }
@@ -82,7 +80,7 @@ impl SurfaceDefaults {
 }
 
 /// Defines the visual style of the surface (fill, outline, or both).
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub enum SurfaceStyle {
     /// A solid color fill.
     Filled {
@@ -126,7 +124,7 @@ impl From<Color> for SurfaceStyle {
 }
 
 /// Arguments for the `surface` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct SurfaceArgs {
     /// Optional modifier chain applied to the surface subtree.
     pub modifier: Modifier,
@@ -166,7 +164,7 @@ pub struct SurfaceArgs {
     /// * Press / release events are captured
     /// * Ripple animation starts on press
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// Color of the ripple effect (used when interactive).
     pub ripple_color: Color,
     /// Whether ripples are bounded to the surface shape.
@@ -202,21 +200,44 @@ pub struct SurfaceArgs {
     pub accessibility_description: Option<String>,
     /// Whether this surface should be focusable even when not interactive.
     pub accessibility_focusable: bool,
+    /// Optional child render slot.
+    #[setters(skip)]
+    pub child: Option<RenderSlot>,
 }
 
 impl SurfaceArgs {
+    /// Creates props from base args and a child render function.
+    pub fn with_child(args: SurfaceArgs, child: impl Fn() + Send + Sync + 'static) -> Self {
+        args.child(child)
+    }
+
     /// Set the click handler.
     pub fn on_click<F>(mut self, on_click: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
+        self
+    }
+
+    /// Sets the child render slot.
+    pub fn child<F>(mut self, child: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.child = Some(RenderSlot::new(child));
+        self
+    }
+
+    /// Sets the child render slot using a shared callback.
+    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
+        self.child = Some(child.into());
         self
     }
 }
@@ -255,6 +276,7 @@ impl Default for SurfaceArgs {
             accessibility_label: None,
             accessibility_description: None,
             accessibility_focusable: false,
+            child: None,
         }
     }
 }
@@ -326,7 +348,7 @@ fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<State<RippleState
         return RippleProps::default();
     };
 
-    if let Some(animation) = ripple_state.with_mut(|s| s.animation()) {
+    if let Some(animation) = ripple_state.with(|s| s.animation_snapshot()) {
         return RippleProps {
             center: [animation.center[0] - 0.5, animation.center[1] - 0.5],
             bounded: args.ripple_bounded,
@@ -532,7 +554,7 @@ fn try_build_simple_rect_command(
     }
     if args.show_ripple
         && ripple_state
-            .and_then(|state| state.with_mut(|s| s.animation()))
+            .and_then(|state| state.with(|s| s.animation_snapshot()))
             .is_some()
     {
         return None;
@@ -754,9 +776,7 @@ impl LayoutSpec for SurfaceLayout {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the surface's appearance, layout, and interaction; see
-///   [`SurfaceArgs`].
-/// - `child` — a closure that renders the content inside the surface.
+/// - `args` — props for this component; see [`SurfaceArgs`].
 ///
 /// ## Examples
 ///
@@ -772,21 +792,25 @@ impl LayoutSpec for SurfaceLayout {
 /// use tessera_ui::{Dp, Modifier};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(|| MaterialTheme::default(), || {
-/// surface(
-///     SurfaceArgs::default()
-///         .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
-///         .on_click(|| println!("Surface was clicked!")),
-///     || {
-///         text(TextArgs::default().text("Click me"));
-///     },
-/// );
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
+/// let args = SurfaceArgs::default()
+///     .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
+///     .on_click(|| println!("Surface was clicked!"))
+///     .child(|| {
+///         text(&TextArgs::default().text("Click me"));
+///     });
+/// surface(&args);
 /// # });
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
-pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) {
-    let mut modifier = args.modifier;
+/// Renders a styled surface container.
+#[tessera]
+pub fn surface(args: &SurfaceArgs) {
+    let args = args.clone();
+    let child = args.child.clone();
+    let mut modifier = args.modifier.clone();
     let clickable = args.on_click.is_some();
     let interactive = args.enabled && clickable;
     let interaction_state = args
@@ -814,15 +838,14 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) 
         };
         let press_handler = ripple_state.map(|state| {
             let spec = ripple_spec;
-            Arc::new(move |ctx: PointerEventContext| {
+            move |ctx: PointerEventContext| {
                 state.with_mut(|s| {
                     s.start_animation_with_spec(ctx.normalized_pos, ctx.size, spec);
                 });
-            })
+            }
         });
-        let release_handler = ripple_state.map(|state| {
-            Arc::new(move |_ctx: PointerEventContext| state.with_mut(|s| s.release()))
-        });
+        let release_handler = ripple_state
+            .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
         let mut clickable_args = ClickableArgs::new(
             args.on_click
                 .clone()
@@ -878,19 +901,28 @@ pub fn surface(args: SurfaceArgs, child: impl FnOnce() + Send + Sync + 'static) 
     if let Some(elevation) = args.elevation
         && elevation.0 > 0.0
     {
-        modifier = modifier.shadow(ShadowArgs::new(elevation).shape(args.shape).clip(false));
+        modifier = modifier.shadow(&ShadowArgs::new(elevation).shape(args.shape).clip(false));
     }
 
-    modifier.run(move || surface_inner(args, interaction_state, ripple_state, child));
+    let inner_args = SurfaceInnerArgs {
+        surface: args.clone(),
+        interaction_state,
+        ripple_state,
+        child,
+    };
+
+    modifier.run(move || {
+        let inner_args = inner_args.clone();
+        surface_inner(&inner_args);
+    });
 }
 
 #[tessera]
-fn surface_inner(
-    args: SurfaceArgs,
-    interaction_state: Option<State<InteractionState>>,
-    ripple_state: Option<State<RippleState>>,
-    child: impl FnOnce() + Send + Sync + 'static,
-) {
+fn surface_inner(args: &SurfaceInnerArgs) {
+    let surface = &args.surface;
+    let interaction_state = args.interaction_state;
+    let ripple_state = args.ripple_state;
+
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -898,21 +930,34 @@ fn surface_inner(
     let parent_absolute_elevation = use_context::<AbsoluteTonalElevation>()
         .map(|e| e.get().current)
         .unwrap_or_else(|| AbsoluteTonalElevation::default().current);
-    let absolute_tonal_elevation = Dp(parent_absolute_elevation.0 + args.tonal_elevation.0);
+    let absolute_tonal_elevation = Dp(parent_absolute_elevation.0 + surface.tonal_elevation.0);
     let inherited_content_color = use_context::<ContentColor>()
         .map(|c| c.get().current)
         .unwrap_or_else(|| ContentColor::default().current);
-    let content_color = args.content_color.unwrap_or_else(|| match &args.style {
-        SurfaceStyle::Filled { color } => {
-            content_color_for(*color, &scheme).unwrap_or(inherited_content_color)
+    let content_color = surface
+        .content_color
+        .unwrap_or_else(|| match &surface.style {
+            SurfaceStyle::Filled { color } => {
+                content_color_for(*color, &scheme).unwrap_or(inherited_content_color)
+            }
+            SurfaceStyle::FilledOutlined { fill_color, .. } => {
+                content_color_for(*fill_color, &scheme).unwrap_or(inherited_content_color)
+            }
+            SurfaceStyle::Outlined { .. } => inherited_content_color,
+        });
+    let clickable = surface.on_click.is_some();
+    let interactive = surface.enabled && clickable;
+
+    if surface.show_ripple
+        && let Some(ripple_state) = ripple_state
+    {
+        let has_active_ripple = ripple_state.with(|s| s.animation_snapshot().is_some());
+        if has_active_ripple {
+            with_frame_nanos(move |_| {
+                ripple_state.with_mut(|_| {});
+            });
         }
-        SurfaceStyle::FilledOutlined { fill_color, .. } => {
-            content_color_for(*fill_color, &scheme).unwrap_or(inherited_content_color)
-        }
-        SurfaceStyle::Outlined { .. } => inherited_content_color,
-    });
-    let clickable = args.on_click.is_some();
-    let interactive = args.enabled && clickable;
+    }
 
     provide_context(
         || AbsoluteTonalElevation {
@@ -924,13 +969,15 @@ fn surface_inner(
                     current: content_color,
                 },
                 || {
-                    (child)();
+                    if let Some(child) = args.child.as_ref() {
+                        child.render();
+                    }
                 },
             );
         },
     );
 
-    let layout_args = args.clone();
+    let layout_args = surface.clone();
     layout(SurfaceLayout {
         args: layout_args,
         interaction_state,
@@ -939,16 +986,24 @@ fn surface_inner(
         absolute_tonal_elevation,
     });
 
-    if !interactive && args.block_input {
+    if !interactive && surface.block_input {
         input_handler(move |mut input| {
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option
-                .map(|pos| is_position_in_component(size, pos))
+                .map(|pos| is_position_inside_bounds(size, pos))
                 .unwrap_or(false);
             if is_cursor_in_surface {
                 input.block_all();
             }
         });
     }
+}
+
+#[derive(Clone, PartialEq)]
+struct SurfaceInnerArgs {
+    surface: SurfaceArgs,
+    interaction_state: Option<State<InteractionState>>,
+    ripple_state: Option<State<RippleState>>,
+    child: Option<RenderSlot>,
 }

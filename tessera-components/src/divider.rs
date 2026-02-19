@@ -57,7 +57,7 @@ impl DividerDefaults {
 }
 
 /// Arguments for [`horizontal_divider`] and [`vertical_divider`].
-#[derive(Clone, Debug, Setters)]
+#[derive(PartialEq, Clone, Debug, Setters)]
 pub struct DividerArgs {
     /// Thickness of the divider line.
     ///
@@ -154,8 +154,7 @@ impl LayoutSpec for DividerLayout {
 /// assert_eq!(args.thickness, Dp::ZERO);
 /// ```
 #[tessera]
-pub fn horizontal_divider(args: impl Into<DividerArgs>) {
-    let args: DividerArgs = args.into();
+pub fn horizontal_divider(args: &DividerArgs) {
     let thickness_px = resolve_thickness_px(args.thickness);
     let color = args.color;
 
@@ -191,8 +190,7 @@ pub fn horizontal_divider(args: impl Into<DividerArgs>) {
 /// assert_eq!(args.thickness, Dp(2.0));
 /// ```
 #[tessera]
-pub fn vertical_divider(args: impl Into<DividerArgs>) {
-    let args: DividerArgs = args.into();
+pub fn vertical_divider(args: &DividerArgs) {
     let thickness_px = resolve_thickness_px(args.thickness);
     let color = args.color;
 

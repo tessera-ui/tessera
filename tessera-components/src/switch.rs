@@ -3,18 +3,15 @@
 //! ## Usage
 //!
 //! Use to control a boolean on/off state.
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::{Duration, Instant};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, PxSize, State,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera, use_context,
+    remember, tessera, use_context, with_frame_nanos,
 };
 
 use crate::{
@@ -266,6 +263,11 @@ impl SwitchController {
         self.progress
     }
 
+    /// Returns whether the switch animation is currently running.
+    pub fn is_animating(&self) -> bool {
+        self.last_toggle_time.is_some()
+    }
+
     /// Advances the animation timeline based on elapsed time.
     fn update_progress(&mut self) {
         if let Some(last_toggle_time) = self.last_toggle_time {
@@ -295,13 +297,13 @@ impl Default for SwitchController {
 }
 
 /// Arguments for configuring the `switch` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct SwitchArgs {
     /// Optional modifier chain applied to the switch subtree.
     pub modifier: Modifier,
     /// Optional callback invoked when the switch toggles.
     #[setters(skip)]
-    pub on_toggle: Option<Arc<dyn Fn(bool) + Send + Sync>>,
+    pub on_toggle: Option<CallbackWith<bool, ()>>,
     /// Whether the control is enabled for user interaction.
     ///
     /// When `false`, the switch will not react to input and will expose a
@@ -335,6 +337,14 @@ pub struct SwitchArgs {
     /// Optional accessibility description.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional external controller for checked state and animation.
+    ///
+    /// When this is `None`, `switch` creates and owns an internal controller.
+    #[setters(skip)]
+    pub controller: Option<State<SwitchController>>,
+    /// Optional content rendered at the thumb center.
+    #[setters(skip)]
+    pub child: Option<RenderSlot>,
 }
 
 impl SwitchArgs {
@@ -343,13 +353,34 @@ impl SwitchArgs {
     where
         F: Fn(bool) + Send + Sync + 'static,
     {
-        self.on_toggle = Some(Arc::new(on_toggle));
+        self.on_toggle = Some(CallbackWith::new(on_toggle));
         self
     }
 
     /// Sets the on_toggle handler using a shared callback.
-    pub fn on_toggle_shared(mut self, on_toggle: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
-        self.on_toggle = Some(on_toggle);
+    pub fn on_toggle_shared(mut self, on_toggle: impl Into<CallbackWith<bool, ()>>) -> Self {
+        self.on_toggle = Some(on_toggle.into());
+        self
+    }
+
+    /// Sets an external switch controller.
+    pub fn controller(mut self, controller: State<SwitchController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the thumb-center content.
+    pub fn child<F>(mut self, child: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.child = Some(RenderSlot::new(child));
+        self
+    }
+
+    /// Sets the thumb-center content using a shared render slot.
+    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
+        self.child = Some(child.into());
         self
     }
 }
@@ -377,19 +408,28 @@ impl Default for SwitchArgs {
             thumb_icon_color: scheme.surface_container_highest,
             accessibility_label: None,
             accessibility_description: None,
+            controller: None,
+            child: None,
         }
     }
 }
 
 #[tessera]
-fn switch_inner(
-    args: SwitchArgs,
-    controller: State<SwitchController>,
-    child: Option<Box<dyn FnOnce() + Send + Sync>>,
-) {
-    let mut modifier = args.modifier;
+fn switch_inner_node(args: &SwitchArgs) {
+    let args = args.clone();
+    let controller = args
+        .controller
+        .expect("switch_inner_node requires controller to be set");
+    let child = args.child.clone();
+    let mut modifier = args.modifier.clone();
 
     controller.with_mut(|c| c.update_progress());
+    if controller.with(|c| c.is_animating()) {
+        let controller_for_frame = controller;
+        with_frame_nanos(move |_| {
+            controller_for_frame.with_mut(|c| c.update_progress());
+        });
+    }
 
     let on_toggle = args.enabled.then(|| args.on_toggle.clone()).flatten();
     let interactive = on_toggle.is_some();
@@ -410,23 +450,19 @@ fn switch_inner(
         let press_handler = ripple_state.map(|state| {
             let spec = ripple_spec;
             let size = ripple_size;
-            Arc::new(move |ctx: PointerEventContext| {
+            move |ctx: PointerEventContext| {
                 state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
-            })
+            }
         });
-        let release_handler = ripple_state.map(|state| {
-            Arc::new(move |_ctx: PointerEventContext| state.with_mut(|s| s.release()))
-        });
-        let mut toggle_args = ToggleableArgs::new(
-            checked,
-            Arc::new(move |_| {
-                controller.with_mut(|c| c.toggle());
-                let checked = controller.with(|c| c.is_checked());
-                if let Some(on_toggle) = on_toggle.as_ref() {
-                    on_toggle(checked);
-                }
-            }),
-        )
+        let release_handler = ripple_state
+            .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
+        let mut toggle_args = ToggleableArgs::new(checked, move |_| {
+            controller.with_mut(|c| c.toggle());
+            let checked = controller.with(|c| c.is_checked());
+            if let Some(on_toggle) = on_toggle.as_ref() {
+                on_toggle.call(checked);
+            }
+        })
         .enabled(args.enabled)
         .role(Role::Switch);
         if let Some(label) = args.accessibility_label.clone() {
@@ -491,7 +527,7 @@ fn switch_inner(
             }
         };
 
-        surface(
+        surface(&crate::surface::SurfaceArgs::with_child(
             SurfaceArgs::default()
                 .modifier(Modifier::new().size(args.width, args.height))
                 .style(track_style)
@@ -499,7 +535,7 @@ fn switch_inner(
                 .show_state_layer(false)
                 .show_ripple(false),
             || {},
-        );
+        ));
 
         // A non-visual state layer for hover + ripple feedback.
         let mut state_layer_args = SurfaceArgs::default()
@@ -521,10 +557,13 @@ fn switch_inner(
         }
         let mut state_layer_args = state_layer_args;
         state_layer_args.set_ripple_state(ripple_state);
-        surface(state_layer_args, || {});
+        surface(&crate::surface::SurfaceArgs::with_child(
+            state_layer_args,
+            || {},
+        ));
 
-        let child = child;
-        surface(
+        let child = child.clone();
+        surface(&crate::surface::SurfaceArgs::with_child(
             SurfaceArgs::default()
                 .modifier(Modifier::new().constrain(
                     Some(DimensionValue::Fixed(thumb_size_px)),
@@ -536,6 +575,7 @@ fn switch_inner(
                 .shape(Shape::Ellipse)
                 .content_color(colors.icon_color),
             move || {
+                let child = child.clone();
                 if let Some(child) = child {
                     boxed(
                         BoxedArgs::default()
@@ -545,14 +585,12 @@ fn switch_inner(
                             ))
                             .alignment(Alignment::Center),
                         |scope| {
-                            scope.child(move || {
-                                child();
-                            });
+                            scope.child(move || child.render());
                         },
                     );
                 }
             },
-        );
+        ));
 
         let track_outline_width = args.track_outline_width;
         let track_width = args.width;
@@ -591,131 +629,23 @@ fn switch_inner(
 /// use tessera_components::switch::{SwitchArgs, switch};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
 /// #     || {
-/// switch(SwitchArgs::default().on_toggle(|checked| {
+/// switch(&SwitchArgs::default().on_toggle(|checked| {
 ///     assert!(checked || !checked);
 /// }));
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
-#[tessera]
-pub fn switch(args: impl Into<SwitchArgs>) {
-    let args: SwitchArgs = args.into();
-    let controller = remember(|| SwitchController::new(args.checked));
-    switch_with_controller(args, controller);
-}
-
-/// # switch_with_child
-///
-/// Animated Material 3 switch with required custom thumb content; ideal for
-/// boolean toggles that show an icon or label.
-///
-/// ## Usage
-///
-/// Use for settings or binary preferences; provide a `child` to draw custom
-/// content (e.g., an icon) inside the thumb.
-///
-/// ## Parameters
-///
-/// - `args` — configures sizing, colors, and callbacks; see [`SwitchArgs`].
-/// - `controller` — an `Arc<SwitchController>` to drive and observe state.
-/// - `child` — closure rendered at the thumb center.
-///
-/// ## Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::{
-///     switch::{SwitchArgs, switch_with_child},
-///     text::{TextArgs, text},
-/// };
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
-///
-/// # material_theme(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// switch_with_child(
-///     SwitchArgs::default().on_toggle(|checked| {
-///         assert!(checked || !checked);
-///     }),
-///     || {
-///         text(TextArgs::default().text("✓"));
-///     },
-/// );
-/// #     },
-/// # );
-/// # }
-/// # component();
-/// ```
-#[tessera]
-pub fn switch_with_child(
-    args: impl Into<SwitchArgs>,
-    child: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args = args.into();
-    let controller = remember(|| SwitchController::new(args.checked));
-    switch_inner(args, controller, Some(Box::new(child)));
-}
-
-/// # switch_with_child_and_controller
-///
-/// Controlled switch variant with custom thumb content.
-///
-/// # Usage
-///
-/// Use when you need to sync the switch state with external application state
-/// and want custom thumb content.
-///
-/// # Parameters
-///
-/// - `args` — configures sizing, colors, and callbacks; see [`SwitchArgs`].
-/// - `controller` — an `Arc<SwitchController>` to drive and observe state.
-/// - `child` — closure rendered at the thumb center.
-///
-/// # Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::switch::{
-///     SwitchArgs, SwitchController, switch_with_child_and_controller,
-/// };
-/// use tessera_components::text::{TextArgs, text};
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn controlled_switch_example() {
-///     let controller = remember(|| SwitchController::new(false));
-///     switch_with_child_and_controller(
-///         SwitchArgs::default().on_toggle(|checked| {
-///             println!("Switch is now: {}", checked);
-///         }),
-///         controller,
-///         || {
-///             text(TextArgs::default().text("✓"));
-///         },
-///     );
-/// }
-/// # }
-/// # component();
-/// ```
-#[tessera]
-pub fn switch_with_child_and_controller(
-    args: impl Into<SwitchArgs>,
-    controller: State<SwitchController>,
-    child: impl FnOnce() + Send + Sync + 'static,
-) {
-    switch_inner(args.into(), controller, Some(Box::new(child)));
-}
-
-/// Controlled switch variant without thumb content customization.
-pub fn switch_with_controller(args: impl Into<SwitchArgs>, controller: State<SwitchController>) {
-    switch_inner(args.into(), controller, None);
+pub fn switch(args: &SwitchArgs) {
+    let mut args = args.clone();
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(|| SwitchController::new(args.checked)));
+    args.controller = Some(controller);
+    switch_inner_node(&args);
 }

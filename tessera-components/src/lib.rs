@@ -6,12 +6,13 @@
 //! at application entry.
 //!
 //! ```no_run
-//! use tessera_components::theme::{MaterialTheme, material_theme};
+//! use tessera_components::theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme};
 //!
 //! fn app() {
-//!     material_theme(MaterialTheme::default, || {
+//!     let args = MaterialThemeProviderArgs::new(MaterialTheme::default, || {
 //!         // Your app code here
 //!     });
+//!     material_theme(&args);
 //! }
 //!
 //! use tessera_ui::EntryPoint;
@@ -40,17 +41,18 @@
 //!     text_input::{TextInputArgs, text_input},
 //! };
 //! use tessera_ui::Dp;
-//! # use tessera_components::theme::{MaterialTheme, material_theme};
-//! # material_theme(|| MaterialTheme::default(), || {
+//! # use tessera_components::theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme};
+//! # material_theme(&MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
 //!
 //! // Button example
-//! button(ButtonArgs::filled(|| { /* Handle click */ }), || {
-//!     text("Click me".to_string())
+//! let button_args = ButtonArgs::filled(|| { /* Handle click */ }).child(|| {
+//!     text(&tessera_components::text::TextArgs::default().text("Click me"));
 //! });
+//! button(&button_args);
 //!
 //! // Text editor example
-//! text_input(TextInputArgs::default());
-//! # });
+//! text_input(&TextInputArgs::default());
+//! # }));
 //! # }
 //! # component();
 //! ```
@@ -132,7 +134,7 @@ pub use pipelines::shape::command::RippleProps;
 pub use ripple_state::RippleState;
 
 /// Render module for registering all Tessera component pipelines.
-#[derive(Default, Clone, Copy)]
+#[derive(Default, Clone, PartialEq, Copy)]
 struct TesseraComponents;
 
 impl RenderModule for TesseraComponents {
@@ -142,7 +144,7 @@ impl RenderModule for TesseraComponents {
 }
 
 /// Package that registers the components module and required platform services.
-#[derive(Clone, Default, Copy)]
+#[derive(Clone, PartialEq, Default, Copy)]
 pub struct ComponentsPackage;
 
 impl ComponentsPackage {

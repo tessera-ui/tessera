@@ -55,7 +55,7 @@ impl From<Arc<ImageData>> for IconContent {
 }
 
 /// Arguments for the [`icon`] component.
-#[derive(Debug, Setters, Clone)]
+#[derive(PartialEq, Debug, Setters, Clone)]
 pub struct IconArgs {
     /// Icon content, provided as either raster pixels or vector geometry.
     #[setters(into)]
@@ -241,20 +241,18 @@ impl LayoutSpec for IconLayout {
 /// let vector_data =
 ///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
-/// icon(IconArgs::from(vector_data).tint(Color::new(0.2, 0.5, 0.8, 1.0)));
+/// icon(&IconArgs::from(vector_data).tint(Color::new(0.2, 0.5, 0.8, 1.0)));
 /// ```
 #[tessera]
-pub fn icon(args: impl Into<IconArgs>) {
-    let icon_args: IconArgs = args.into();
-
+pub fn icon(args: &IconArgs) {
     layout(IconLayout {
-        content: icon_args.content,
-        size: icon_args.size,
-        width: icon_args.width,
-        height: icon_args.height,
-        tint: icon_args.tint,
-        tint_mode: icon_args.tint_mode,
-        rotation: icon_args.rotation,
+        content: args.content.clone(),
+        size: args.size,
+        width: args.width,
+        height: args.height,
+        tint: args.tint,
+        tint_mode: args.tint_mode,
+        rotation: args.rotation,
     });
 }
 

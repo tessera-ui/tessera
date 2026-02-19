@@ -3,10 +3,10 @@
 //! ## Usage
 //!
 //! Trigger actions, submit forms, or navigate.
-use std::sync::Arc;
-
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, accesskit::Role, tessera, use_context};
+use tessera_ui::{
+    Callback, Color, Dp, Modifier, RenderSlot, accesskit::Role, tessera, use_context,
+};
 
 use crate::{
     alignment::Alignment,
@@ -65,7 +65,7 @@ impl ButtonDefaults {
 }
 
 /// Arguments for the `button` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct ButtonArgs {
     /// Whether the button is enabled for user interaction.
     pub enabled: bool,
@@ -84,7 +84,7 @@ pub struct ButtonArgs {
     pub padding: Dp,
     /// The click callback function
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// The ripple color (RGB) for the button.
     pub ripple_color: Color,
     /// Width of the border. If > 0, an outline will be drawn.
@@ -110,21 +110,44 @@ pub struct ButtonArgs {
     /// Optional longer description or hint for assistive technologies.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional child render slot.
+    #[setters(skip)]
+    pub child: Option<RenderSlot>,
 }
 
 impl ButtonArgs {
+    /// Creates props from base args and a child render function.
+    pub fn with_child(args: ButtonArgs, child: impl Fn() + Send + Sync + 'static) -> Self {
+        args.child(child)
+    }
+
     /// Set the click handler.
     pub fn on_click<F>(mut self, on_click: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
+        self
+    }
+
+    /// Sets the child render slot.
+    pub fn child<F>(mut self, child: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.child = Some(RenderSlot::new(child));
+        self
+    }
+
+    /// Sets the child render slot using a shared callback.
+    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
+        self.child = Some(child.into());
         self
     }
 }
@@ -142,7 +165,7 @@ impl Default for ButtonArgs {
             content_color: None,
             shape: Shape::capsule(),
             padding: ButtonDefaults::CONTENT_VERTICAL_PADDING,
-            on_click: Some(Arc::new(|| {})),
+            on_click: Some(Callback::new(|| {})),
             ripple_color: scheme.on_primary,
             border_width: Dp(0.0),
             border_color: None,
@@ -153,6 +176,7 @@ impl Default for ButtonArgs {
             disabled_border_color: ButtonDefaults::disabled_border_color(&scheme),
             accessibility_label: None,
             accessibility_description: None,
+            child: None,
         }
     }
 }
@@ -167,10 +191,7 @@ impl Default for ButtonArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the button's appearance and `on_click` handler; see
-///   [`ButtonArgs`].
-/// - `child` — a closure that renders the button's content (e.g., text or an
-///   icon).
+/// - `args` — props for this component; see [`ButtonArgs`].
 ///
 /// ## Examples
 ///
@@ -184,30 +205,38 @@ impl Default for ButtonArgs {
 /// };
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(|| MaterialTheme::default(), || {
-/// button(ButtonArgs::filled(|| {}), || {
-///     text(TextArgs::default().text("Click Me"));
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
+/// let args = ButtonArgs::filled(|| {}).child(|| {
+///     text(&TextArgs::default().text("Click Me"));
 /// });
+/// button(&args);
 /// # });
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
+/// Renders a Material button.
 #[tessera]
-pub fn button(args: impl Into<ButtonArgs>, child: impl FnOnce() + Send + Sync + 'static) {
-    let button_args: ButtonArgs = args.into();
+pub fn button(args: &ButtonArgs) {
+    let button_args = args.clone();
+    let child = button_args.child.clone();
     let typography = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .typography;
 
     // Create interactive surface for button
-    surface(create_surface_args(&button_args), move || {
+    surface(&create_surface_args(&button_args).child(move || {
+        let child = child.clone();
         Modifier::new()
             .padding_all(button_args.padding)
             .run(move || {
-                provide_text_style(typography.label_large, child);
+                if let Some(child) = child.as_ref() {
+                    let child = child.clone();
+                    provide_text_style(typography.label_large, move || child.render());
+                }
             });
-    });
+    }));
 }
 
 /// Create surface arguments based on button configuration
@@ -275,7 +304,7 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
     surface_args
         .style(style)
         .shape(args.shape)
-        .modifier(args.modifier.size_in(
+        .modifier(args.modifier.clone().size_in(
             Some(ButtonDefaults::MIN_WIDTH),
             None,
             Some(ButtonDefaults::MIN_HEIGHT),

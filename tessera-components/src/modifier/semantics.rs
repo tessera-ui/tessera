@@ -5,6 +5,7 @@
 //! Attach accessibility roles, labels, and testing tags to component subtrees.
 
 use tessera_ui::{
+    RenderSlot,
     accesskit::{Action, Live, Role, Toggled},
     tessera,
 };
@@ -12,7 +13,7 @@ use tessera_ui::{
 use super::layout::Padding;
 
 /// Arguments for the `semantics` modifier.
-#[derive(Clone, Default)]
+#[derive(PartialEq, Clone, Default)]
 pub struct SemanticsArgs {
     /// Optional accessibility role.
     pub role: Option<Role>,
@@ -253,11 +254,22 @@ impl SemanticsArgs {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct ModifierSemanticsArgs {
+    semantics: SemanticsArgs,
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_semantics(args: SemanticsArgs, child: RenderSlot) {
+    let render_args = ModifierSemanticsArgs {
+        semantics: args,
+        child,
+    };
+    modifier_semantics_node(&render_args);
+}
+
 #[tessera]
-pub(crate) fn modifier_semantics<F>(args: SemanticsArgs, child: F)
-where
-    F: FnOnce(),
-{
+fn modifier_semantics_node(args: &ModifierSemanticsArgs) {
     let SemanticsArgs {
         role,
         label,
@@ -285,9 +297,9 @@ where
         numeric_value_jump,
         collection_info,
         collection_item_info,
-    } = args;
+    } = args.semantics.clone();
 
-    child();
+    args.child.render();
 
     input_handler(move |input| {
         let mut builder = input.accessibility();

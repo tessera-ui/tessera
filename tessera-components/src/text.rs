@@ -21,7 +21,7 @@ use crate::{
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 
 /// Configuration arguments for the `text` component.
-#[derive(Debug, Setters, Clone)]
+#[derive(PartialEq, Debug, Setters, Clone)]
 pub struct TextArgs {
     /// Optional modifier chain applied to the text.
     pub modifier: Modifier,
@@ -83,6 +83,12 @@ impl From<&str> for TextArgs {
     }
 }
 
+impl From<&TextArgs> for TextArgs {
+    fn from(val: &TextArgs) -> Self {
+        val.clone()
+    }
+}
+
 /// # text
 ///
 /// Renders a block of text with a single, uniform style.
@@ -94,8 +100,7 @@ impl From<&str> for TextArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the text content and styling; see [`TextArgs`]. Can be
-///   converted from a `String` or `&str`.
+/// - `args` — props for this component; see [`TextArgs`].
 ///
 /// ## Examples
 ///
@@ -110,14 +115,14 @@ impl From<&str> for TextArgs {
 ///         .color(Color::new(0.2, 0.5, 0.8, 1.0))
 ///         .size(Dp(32.0));
 ///     assert_eq!(args.text, "Hello, world!");
-///     text(args);
+///     text(&args);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn text(args: impl Into<TextArgs>) {
-    let text_args: TextArgs = args.into();
+pub fn text(args: &TextArgs) {
+    let text_args = args.clone();
     let accessibility_label = text_args
         .accessibility_label
         .clone()
@@ -130,26 +135,30 @@ pub fn text(args: impl Into<TextArgs>) {
     if let Some(description) = accessibility_description {
         semantics = semantics.description(description);
     }
-    text_args.modifier.semantics(semantics).run(move || {
-        text_inner(text_args);
-    });
+    text_args
+        .modifier
+        .clone()
+        .semantics(semantics)
+        .run(move || {
+            text_inner(&text_args);
+        });
 }
 
 #[tessera]
-fn text_inner(text_args: TextArgs) {
+fn text_inner(args: &TextArgs) {
     let inherited_style = use_context::<TextStyle>()
         .map(|s| s.get())
         .unwrap_or_default();
 
-    let line_height = text_args
+    let line_height = args
         .line_height
         .or(inherited_style.line_height)
-        .unwrap_or(Dp(text_args.size.0 * 1.2));
+        .unwrap_or(Dp(args.size.0 * 1.2));
 
     layout(TextLayout {
-        text: text_args.text,
-        color: text_args.color,
-        size: text_args.size,
+        text: args.text.clone(),
+        color: args.color,
+        size: args.size,
         line_height,
     });
 }

@@ -6,12 +6,11 @@ use tessera_components::{
     icon::IconArgs,
     material_icons::filled,
     modifier::ModifierExt as _,
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
 use tessera_ui::{Dp, Modifier, remember, shard, tessera};
-
 #[tessera]
 #[shard]
 pub fn chip_showcase() {
@@ -19,7 +18,7 @@ pub fn chip_showcase() {
     let recent_selected = remember(|| true);
     let input_selected = remember(|| true);
 
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             column(
@@ -27,14 +26,14 @@ pub fn chip_showcase() {
                     .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                 move |scope| {
                     scope.child(|| {
-                        text(TextArgs::default().text("Chip Showcase").size(Dp(20.0)));
+                        text(&TextArgs::default().text("Chip Showcase").size(Dp(20.0)));
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .text("Assist and Suggestion")
                                 .size(Dp(16.0)),
                         );
@@ -49,14 +48,14 @@ pub fn chip_showcase() {
                             |row_scope| {
                                 row_scope.child(|| {
                                     chip(
-                                        ChipArgs::assist("Calendar")
+                                        &ChipArgs::assist("Calendar")
                                             .leading_icon(IconArgs::from(filled::info_icon()))
                                             .on_click(|| {}),
                                     );
                                 });
                                 row_scope.child(|| {
                                     chip(
-                                        ChipArgs::suggestion("Road Trip")
+                                        &ChipArgs::suggestion("Road Trip")
                                             .leading_icon(IconArgs::from(
                                                 filled::directions_car_icon(),
                                             ))
@@ -68,10 +67,10 @@ pub fn chip_showcase() {
                         );
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
                     scope.child(|| {
-                        text(TextArgs::default().text("Filter Chips").size(Dp(16.0)));
+                        text(&TextArgs::default().text("Filter Chips").size(Dp(16.0)));
                     });
 
                     scope.child(move || {
@@ -86,7 +85,7 @@ pub fn chip_showcase() {
                                 row_scope.child(move || {
                                     let selected = favorites_selected.with(|value| *value);
                                     chip(
-                                        ChipArgs::filter("Favorites")
+                                        &ChipArgs::filter("Favorites")
                                             .selected(selected)
                                             .leading_icon(IconArgs::from(filled::home_icon()))
                                             .on_click(move || {
@@ -100,7 +99,7 @@ pub fn chip_showcase() {
                                 row_scope.child(move || {
                                     let selected = recent_selected.with(|value| *value);
                                     chip(
-                                        ChipArgs::filter("Recent")
+                                        &ChipArgs::filter("Recent")
                                             .style(ChipStyle::Elevated)
                                             .selected(selected)
                                             .leading_icon(IconArgs::from(filled::info_icon()))
@@ -115,10 +114,10 @@ pub fn chip_showcase() {
                         );
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
                     scope.child(|| {
-                        text(TextArgs::default().text("Input Chips").size(Dp(16.0)));
+                        text(&TextArgs::default().text("Input Chips").size(Dp(16.0)));
                     });
 
                     scope.child(move || {
@@ -132,7 +131,7 @@ pub fn chip_showcase() {
                                 row_scope.child(move || {
                                     let selected = input_selected.with(|value| *value);
                                     chip(
-                                        ChipArgs::input("Budget")
+                                        &ChipArgs::input("Budget")
                                             .selected(selected)
                                             .leading_icon(IconArgs::from(filled::home_icon()))
                                             .trailing_icon(IconArgs::from(filled::info_icon()))
@@ -149,5 +148,5 @@ pub fn chip_showcase() {
                 },
             );
         },
-    );
+    ));
 }

@@ -312,14 +312,16 @@ fn run() -> Result<()> {
                     csv,
                 } => {
                     commands::profiling::analyze_android(
-                        &package,
-                        device.as_deref(),
-                        remote_path.as_deref(),
-                        &pull_to,
-                        top,
-                        min_count,
-                        skip_invalid,
-                        csv.as_deref(),
+                        commands::profiling::AnalyzeAndroidOptions {
+                            package: &package,
+                            device: device.as_deref(),
+                            remote_path: remote_path.as_deref(),
+                            pull_to: &pull_to,
+                            top,
+                            min_count,
+                            skip_invalid,
+                            csv: csv.as_deref(),
+                        },
                     )?;
                 }
             },

@@ -6,12 +6,13 @@
 
 use std::{
     collections::VecDeque,
-    sync::Arc,
     time::{Duration, Instant},
 };
 
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, State, tessera, use_context};
+use tessera_ui::{
+    Callback, CallbackWith, Color, Dp, Modifier, State, tessera, use_context, with_frame_nanos,
+};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
@@ -73,7 +74,7 @@ impl SnackbarDuration {
 }
 
 /// Request data for showing a snackbar with default behavior.
-#[derive(Clone, Debug, Setters)]
+#[derive(Clone, PartialEq, Debug, Setters)]
 pub struct SnackbarRequest {
     /// Primary message shown in the snackbar.
     #[setters(into)]
@@ -112,7 +113,7 @@ impl From<&str> for SnackbarRequest {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 struct ResolvedSnackbar {
     message: String,
     action_label: Option<String>,
@@ -137,7 +138,7 @@ impl From<SnackbarRequest> for ResolvedSnackbar {
 }
 
 /// Data describing the current snackbar shown by a [`SnackbarHost`].
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct SnackbarData {
     message: String,
     action_label: Option<String>,
@@ -201,7 +202,7 @@ impl SnackbarData {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct SnackbarRecord {
     id: u64,
     resolved: ResolvedSnackbar,
@@ -282,6 +283,19 @@ impl SnackbarHostState {
         }
 
         self.current.clone()
+    }
+
+    fn has_pending_timeout(&self, now: Instant) -> bool {
+        let Some(current) = &self.current else {
+            return false;
+        };
+        let Some(timeout) = current.resolved.duration.timeout() else {
+            return false;
+        };
+
+        self.current_started_at
+            .map(|started_at| now.duration_since(started_at) < timeout)
+            .unwrap_or(true)
     }
 
     fn resolve_current(&mut self, id: u64, result: SnackbarResult) -> bool {
@@ -382,7 +396,7 @@ impl SnackbarDefaults {
 }
 
 /// Arguments for the [`snackbar`] component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct SnackbarArgs {
     /// Modifier chain applied to the snackbar container.
     pub modifier: Modifier,
@@ -410,10 +424,10 @@ pub struct SnackbarArgs {
     pub content_padding: Padding,
     /// Optional action callback.
     #[setters(skip)]
-    pub on_action: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_action: Option<Callback>,
     /// Optional dismiss callback.
     #[setters(skip)]
-    pub on_dismiss: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_dismiss: Option<Callback>,
 }
 
 impl SnackbarArgs {
@@ -427,13 +441,13 @@ impl SnackbarArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_action = Some(Arc::new(on_action));
+        self.on_action = Some(Callback::new(on_action));
         self
     }
 
     /// Sets the action callback using a shared closure.
-    pub fn on_action_shared(mut self, on_action: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_action = Some(on_action);
+    pub fn on_action_shared(mut self, on_action: impl Into<Callback>) -> Self {
+        self.on_action = Some(on_action.into());
         self
     }
 
@@ -442,13 +456,13 @@ impl SnackbarArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_dismiss = Some(Arc::new(on_dismiss));
+        self.on_dismiss = Some(Callback::new(on_dismiss));
         self
     }
 
     /// Sets the dismiss callback using a shared closure.
-    pub fn on_dismiss_shared(mut self, on_dismiss: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_dismiss = Some(on_dismiss);
+    pub fn on_dismiss_shared(mut self, on_dismiss: impl Into<Callback>) -> Self {
+        self.on_dismiss = Some(on_dismiss.into());
         self
     }
 }
@@ -490,7 +504,7 @@ impl From<SnackbarData> for SnackbarArgs {
         }
 
         if action_label.is_some() {
-            let on_action: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            let on_action = Callback::new(move || {
                 host_state.with_mut(|state| {
                     state.resolve_current(id, SnackbarResult::ActionPerformed);
                 });
@@ -499,7 +513,7 @@ impl From<SnackbarData> for SnackbarArgs {
         }
 
         if with_dismiss_action {
-            let on_dismiss: Arc<dyn Fn() + Send + Sync> = Arc::new(move || {
+            let on_dismiss = Callback::new(move || {
                 host_state.with_mut(|state| {
                     state.resolve_current(id, SnackbarResult::Dismissed);
                 });
@@ -512,7 +526,7 @@ impl From<SnackbarData> for SnackbarArgs {
 }
 
 /// Arguments for the [`snackbar_host`] component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct SnackbarHostArgs {
     /// Modifier chain applied to the snackbar host container.
     pub modifier: Modifier,
@@ -520,7 +534,7 @@ pub struct SnackbarHostArgs {
     pub state: State<SnackbarHostState>,
     /// Optional custom snackbar slot for rendering.
     #[setters(skip)]
-    pub snackbar: Option<Arc<dyn Fn(SnackbarData) + Send + Sync>>,
+    pub snackbar: Option<CallbackWith<SnackbarData>>,
 }
 
 impl SnackbarHostArgs {
@@ -538,13 +552,13 @@ impl SnackbarHostArgs {
     where
         F: Fn(SnackbarData) + Send + Sync + 'static,
     {
-        self.snackbar = Some(Arc::new(snackbar));
+        self.snackbar = Some(CallbackWith::new(snackbar));
         self
     }
 
     /// Sets the custom snackbar slot using a shared closure.
-    pub fn snackbar_shared(mut self, snackbar: Arc<dyn Fn(SnackbarData) + Send + Sync>) -> Self {
-        self.snackbar = Some(snackbar);
+    pub fn snackbar_shared(mut self, snackbar: impl Into<CallbackWith<SnackbarData>>) -> Self {
+        self.snackbar = Some(snackbar.into());
         self
     }
 }
@@ -572,7 +586,7 @@ impl SnackbarHostArgs {
 ///
 /// #[tessera]
 /// fn demo() {
-///     material_theme(
+///     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let args = SnackbarArgs::new("Saved")
@@ -581,16 +595,17 @@ impl SnackbarHostArgs {
 ///                 .on_action(|| {})
 ///                 .on_dismiss(|| {});
 ///             assert_eq!(args.message, "Saved");
-///             snackbar(args);
+///             snackbar(&args);
 ///         },
 ///     );
+///     material_theme(&args);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn snackbar(args: impl Into<SnackbarArgs>) {
-    let args: SnackbarArgs = args.into();
+pub fn snackbar(args: &SnackbarArgs) {
+    let args: SnackbarArgs = args.clone();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -621,13 +636,13 @@ pub fn snackbar(args: impl Into<SnackbarArgs>) {
         None,
     );
     let on_action = if has_action {
-        Some(on_action.unwrap_or_else(|| Arc::new(|| {})))
+        Some(on_action.unwrap_or_default())
     } else {
         None
     };
     let show_dismiss_action = with_dismiss_action || on_dismiss.is_some();
     let on_dismiss = if show_dismiss_action {
-        Some(on_dismiss.unwrap_or_else(|| Arc::new(|| {})))
+        Some(on_dismiss.unwrap_or_default())
     } else {
         None
     };
@@ -642,7 +657,7 @@ pub fn snackbar(args: impl Into<SnackbarArgs>) {
         content_padding
     };
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(modifier)
             .style(container_color.into())
@@ -656,6 +671,10 @@ pub fn snackbar(args: impl Into<SnackbarArgs>) {
             .content_color(content_color)
             .elevation(SnackbarDefaults::CONTAINER_ELEVATION),
         move || {
+            let message = message.clone();
+            let action_label = action_label.clone();
+            let on_action = on_action.clone();
+            let on_dismiss = on_dismiss.clone();
             if action_on_new_line {
                 render_snackbar_column(SnackbarLayoutArgs {
                     message,
@@ -682,7 +701,7 @@ pub fn snackbar(args: impl Into<SnackbarArgs>) {
                 });
             }
         },
-    );
+    ));
 }
 
 /// # snackbar_host
@@ -708,40 +727,52 @@ pub fn snackbar(args: impl Into<SnackbarArgs>) {
 ///
 /// #[tessera]
 /// fn demo() {
-///     material_theme(
+///     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let host_state = remember(SnackbarHostState::new);
 ///             host_state.with_mut(|state| {
 ///                 state.show_snackbar("Saved");
 ///             });
-///             snackbar_host(SnackbarHostArgs::new(host_state));
+///             snackbar_host(&SnackbarHostArgs::new(host_state));
 ///             assert!(host_state.with(|state| state.is_showing()));
 ///         },
 ///     );
+///     material_theme(&args);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn snackbar_host(args: impl Into<SnackbarHostArgs>) {
-    let args: SnackbarHostArgs = args.into();
+pub fn snackbar_host(args: &SnackbarHostArgs) {
+    let args: SnackbarHostArgs = args.clone();
     let state = args.state;
     let snackbar_slot = args.snackbar;
-    let record = state.with_mut(|host| host.poll(Instant::now()));
+    let now = Instant::now();
+    let record = state.with_mut(|host| host.poll(now));
+    if state.with(|host| host.has_pending_timeout(now)) {
+        let state_for_frame = state;
+        with_frame_nanos(move |_| {
+            state_for_frame.with_mut(|host| {
+                let _ = host.poll(Instant::now());
+            });
+        });
+    }
     let Some(record) = record else {
         return;
     };
     let data = SnackbarData::new(record, state);
 
     args.modifier.run(move || {
+        let snackbar_slot = snackbar_slot.clone();
+        let data = data.clone();
         if let Some(snackbar_slot) = snackbar_slot {
-            snackbar_slot(data);
+            snackbar_slot.call(data.clone());
         } else {
             Modifier::new()
                 .padding(SnackbarDefaults::HOST_PADDING)
                 .run(move || {
-                    snackbar(data);
+                    snackbar(&SnackbarArgs::from(data.clone()));
                 });
         }
     });
@@ -770,8 +801,9 @@ fn render_snackbar_row(args: SnackbarLayoutArgs) {
                     boxed(
                         BoxedArgs::default().alignment(Alignment::CenterStart),
                         |boxed_scope| {
+                            let message_text = message_text.clone();
                             boxed_scope.child(move || {
-                                render_message(message_text, message_style, message_color);
+                                render_message(message_text.clone(), message_style, message_color);
                             });
                         },
                     );
@@ -779,15 +811,23 @@ fn render_snackbar_row(args: SnackbarLayoutArgs) {
                 1.0,
             );
 
-            if let Some(label) = action_label {
-                scope.child(|| spacer(Modifier::new().width(SnackbarDefaults::ACTION_SPACING)));
+            if let Some(label) = action_label.clone() {
+                scope.child(|| {
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().width(SnackbarDefaults::ACTION_SPACING),
+                    ))
+                });
                 scope.child(move || {
-                    render_action_button(label, action_color, on_action.clone());
+                    render_action_button(label.clone(), action_color, on_action.clone());
                 });
             }
 
             if on_dismiss.is_some() {
-                scope.child(|| spacer(Modifier::new().width(SnackbarDefaults::ACTION_SPACING)));
+                scope.child(|| {
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().width(SnackbarDefaults::ACTION_SPACING),
+                    ))
+                });
                 scope.child(move || {
                     render_dismiss_button(dismiss_action_color, on_dismiss.clone());
                 });
@@ -815,31 +855,46 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
         |scope| {
             let message_text = message.clone();
             scope.child(move || {
-                render_message(message_text, message_style, message_color);
+                render_message(message_text.clone(), message_style, message_color);
             });
 
             if action_label.is_some() || on_dismiss.is_some() {
                 scope.child(|| {
-                    spacer(Modifier::new().height(SnackbarDefaults::ACTION_VERTICAL_SPACING))
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().height(SnackbarDefaults::ACTION_VERTICAL_SPACING),
+                    ))
                 });
                 let action_label_for_row = action_label.clone();
+                let on_action_for_row = on_action.clone();
+                let on_dismiss_for_row = on_dismiss.clone();
                 scope.child(move || {
+                    let action_label_for_row = action_label_for_row.clone();
+                    let on_action_for_row = on_action_for_row.clone();
+                    let on_dismiss_for_row = on_dismiss_for_row.clone();
                     row(
                         RowArgs::default()
                             .modifier(Modifier::new().fill_max_width())
                             .main_axis_alignment(MainAxisAlignment::End)
                             .cross_axis_alignment(CrossAxisAlignment::Center),
-                        |row_scope| {
+                        move |row_scope| {
                             if let Some(label) = action_label_for_row.clone() {
+                                let on_action = on_action_for_row.clone();
                                 row_scope.child(move || {
-                                    render_action_button(label, action_color, on_action.clone());
+                                    render_action_button(
+                                        label.clone(),
+                                        action_color,
+                                        on_action.clone(),
+                                    );
                                 });
                             }
 
-                            if on_dismiss.is_some() {
+                            if on_dismiss_for_row.is_some() {
                                 row_scope.child(|| {
-                                    spacer(Modifier::new().width(SnackbarDefaults::ACTION_SPACING));
+                                    spacer(&crate::spacer::SpacerArgs::new(
+                                        Modifier::new().width(SnackbarDefaults::ACTION_SPACING),
+                                    ));
                                 });
+                                let on_dismiss = on_dismiss_for_row.clone();
                                 row_scope.child(move || {
                                     render_dismiss_button(dismiss_action_color, on_dismiss.clone());
                                 });
@@ -854,7 +909,9 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
 
 fn render_message(message: String, style: crate::theme::TextStyle, color: Color) {
     provide_text_style(style, move || {
-        text(TextArgs::default().text(message).color(color));
+        text(&crate::text::TextArgs::from(
+            &TextArgs::default().text(&message).color(color),
+        ));
     });
 }
 
@@ -865,34 +922,32 @@ struct SnackbarLayoutArgs {
     action_label: Option<String>,
     action_color: Color,
     dismiss_action_color: Color,
-    on_action: Option<Arc<dyn Fn() + Send + Sync>>,
-    on_dismiss: Option<Arc<dyn Fn() + Send + Sync>>,
+    on_action: Option<Callback>,
+    on_dismiss: Option<Callback>,
     padding: Padding,
 }
 
-fn render_action_button(
-    label: String,
-    action_color: Color,
-    on_action: Option<Arc<dyn Fn() + Send + Sync>>,
-) {
-    let on_action = on_action.unwrap_or_else(|| Arc::new(|| {}));
-    button(
+fn render_action_button(label: String, action_color: Color, on_action: Option<Callback>) {
+    let on_action = on_action.unwrap_or_default();
+    button(&crate::button::ButtonArgs::with_child(
         ButtonArgs::text(move || {
-            on_action();
+            on_action.call();
         })
         .content_color(action_color)
         .ripple_color(action_color),
         move || {
-            text(TextArgs::default().text(label).color(action_color));
+            text(&crate::text::TextArgs::from(
+                &TextArgs::default().text(label.clone()).color(action_color),
+            ));
         },
-    );
+    ));
 }
 
-fn render_dismiss_button(dismiss_color: Color, on_dismiss: Option<Arc<dyn Fn() + Send + Sync>>) {
-    let on_dismiss = on_dismiss.unwrap_or_else(|| Arc::new(|| {}));
+fn render_dismiss_button(dismiss_color: Color, on_dismiss: Option<Callback>) {
+    let on_dismiss = on_dismiss.unwrap_or_default();
     let icon_args = IconArgs::from(filled::close_icon()).tint_mode(TintMode::Solid);
     icon_button(
-        IconButtonArgs::new(icon_args)
+        &IconButtonArgs::new(icon_args)
             .variant(IconButtonVariant::Standard)
             .content_color(dismiss_color)
             .on_click_shared(on_dismiss),
