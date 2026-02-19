@@ -5,13 +5,14 @@
 //! Used to show contextual information or actions in a modal sheet.
 use std::{
     sync::{Arc, Mutex},
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
     MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -145,7 +146,7 @@ impl BottomSheetProviderArgs {
 #[derive(Clone, PartialEq)]
 pub struct BottomSheetController {
     is_open: bool,
-    timer: Option<Instant>,
+    animation_start_frame_nanos: Option<u64>,
     is_dragging: bool,
     drag_offset: f32,
     drag_start_y: f32,
@@ -156,7 +157,7 @@ impl BottomSheetController {
     pub fn new(initial_open: bool) -> Self {
         Self {
             is_open: initial_open,
-            timer: None,
+            animation_start_frame_nanos: None,
             is_dragging: false,
             drag_offset: 0.0,
             drag_start_y: 0.0,
@@ -172,14 +173,17 @@ impl BottomSheetController {
         if !self.is_open {
             self.is_open = true;
             self.drag_offset = 0.0;
-            let mut timer = Instant::now();
-            if let Some(old_timer) = self.timer {
-                let elapsed = old_timer.elapsed();
-                if elapsed < ANIM_TIME {
-                    timer += ANIM_TIME - elapsed;
+            let now_nanos = current_frame_nanos();
+            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
+                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
+                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+                if elapsed_nanos < animation_nanos {
+                    self.animation_start_frame_nanos =
+                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
+                    return;
                 }
             }
-            self.timer = Some(timer);
+            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -191,14 +195,17 @@ impl BottomSheetController {
     pub fn close(&mut self) {
         if self.is_open {
             self.is_open = false;
-            let mut timer = Instant::now();
-            if let Some(old_timer) = self.timer {
-                let elapsed = old_timer.elapsed();
-                if elapsed < ANIM_TIME {
-                    timer += ANIM_TIME - elapsed;
+            let now_nanos = current_frame_nanos();
+            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
+                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
+                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+                if elapsed_nanos < animation_nanos {
+                    self.animation_start_frame_nanos =
+                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
+                    return;
                 }
             }
-            self.timer = Some(timer);
+            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -209,11 +216,21 @@ impl BottomSheetController {
 
     /// Returns whether the sheet is currently animating in either direction.
     pub fn is_animating(&self) -> bool {
-        self.timer.is_some_and(|t| t.elapsed() < ANIM_TIME)
+        self.animation_start_frame_nanos
+            .map(|start| {
+                let elapsed_nanos = current_frame_nanos().saturating_sub(start);
+                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+                elapsed_nanos < animation_nanos
+            })
+            .unwrap_or(false)
     }
 
-    fn snapshot(&self) -> (bool, Option<Instant>, f32) {
-        (self.is_open, self.timer, self.drag_offset)
+    fn snapshot(&self) -> (bool, Option<u64>, f32) {
+        (
+            self.is_open,
+            self.animation_start_frame_nanos,
+            self.drag_offset,
+        )
     }
 
     fn set_dragging(&mut self, dragging: bool) {
@@ -248,15 +265,16 @@ impl Default for BottomSheetController {
 }
 
 /// Compute eased progress from an optional timer reference.
-fn calc_progress_from_timer(timer: Option<&Instant>) -> f32 {
-    let raw = match timer {
+fn calc_progress_from_timer(animation_start_frame_nanos: Option<u64>) -> f32 {
+    let raw = match animation_start_frame_nanos {
         None => 1.0,
-        Some(t) => {
-            let elapsed = t.elapsed();
-            if elapsed >= ANIM_TIME {
+        Some(start_frame_nanos) => {
+            let elapsed_nanos = current_frame_nanos().saturating_sub(start_frame_nanos);
+            let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+            if elapsed_nanos >= animation_nanos {
                 1.0
             } else {
-                elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
+                elapsed_nanos as f32 / animation_nanos as f32
             }
         }
     };
@@ -689,13 +707,19 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
 
     // Snapshot state to minimize locking overhead.
     let (is_open, timer_opt, drag_offset) = controller.with(|c| c.snapshot());
-    let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
+    let is_animating = controller.with(|c| c.is_animating());
     if is_animating {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
                 let (_, timer_opt, _) = controller.snapshot();
-                timer_opt.is_some_and(|timer| timer.elapsed() < ANIM_TIME)
+                if let Some(start_frame_nanos) = timer_opt {
+                    let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+                    let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+                    elapsed_nanos < animation_nanos
+                } else {
+                    false
+                }
             });
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
@@ -710,7 +734,7 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
     }
 
     let on_close_for_keyboard = provider_args.on_close_request.clone();
-    let progress = calc_progress_from_timer(timer_opt.as_ref());
+    let progress = calc_progress_from_timer(timer_opt);
 
     render_scrim(&provider_args, progress, is_open);
 

@@ -4,11 +4,12 @@
 //!
 //! Group related content into a single, elevated or outlined container.
 
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, State, receive_frame_nanos, remember, tessera, use_context,
+    Callback, Color, Dp, Modifier, State, current_frame_nanos, receive_frame_nanos, remember,
+    tessera, use_context,
 };
 
 use crate::{
@@ -86,14 +87,14 @@ impl Spring1D {
 
 #[derive(Clone, PartialEq, Debug)]
 struct CardElevationSpring {
-    last_frame_time: Option<Instant>,
+    last_frame_nanos: Option<u64>,
     spring: Spring1D,
 }
 
 impl CardElevationSpring {
     fn new(initial: Dp) -> Self {
         Self {
-            last_frame_time: None,
+            last_frame_nanos: None,
             spring: Spring1D::new(initial.0 as f32),
         }
     }
@@ -106,13 +107,13 @@ impl CardElevationSpring {
         self.spring.snap_to(target.0 as f32);
     }
 
-    fn tick(&mut self, now: Instant) {
-        let dt = if let Some(last) = self.last_frame_time {
-            now.saturating_duration_since(last).as_secs_f32()
+    fn tick(&mut self, frame_nanos: u64) {
+        let dt = if let Some(last_frame_nanos) = self.last_frame_nanos {
+            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
         } else {
             1.0 / 60.0
         };
-        self.last_frame_time = Some(now);
+        self.last_frame_nanos = Some(frame_nanos);
         self.spring
             .update(dt, DEFAULT_SPATIAL_STIFFNESS, DEFAULT_SPATIAL_DAMPING_RATIO);
     }
@@ -586,22 +587,22 @@ fn card_node(args: &CardRenderArgs) {
     let elevation_spring = remember(|| CardElevationSpring::new(elevation.default_elevation()));
 
     let enabled = args.enabled;
-    let now = Instant::now();
+    let frame_nanos = current_frame_nanos();
     let target = elevation.target(enabled, interaction_state);
     let should_schedule_frame = elevation_spring.with_mut(|spring| {
         spring.set_target(target);
         if !enabled {
             spring.snap_to(target);
         }
-        spring.tick(now);
+        spring.tick(frame_nanos);
         spring.is_animating()
     });
 
     if should_schedule_frame {
         let elevation_spring_for_frame = elevation_spring;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = elevation_spring_for_frame.with_mut(|spring| {
-                spring.tick(Instant::now());
+                spring.tick(frame_nanos);
                 spring.is_animating()
             });
             if is_animating {

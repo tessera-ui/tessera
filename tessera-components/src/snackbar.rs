@@ -4,14 +4,12 @@
 //!
 //! Show brief status updates with optional actions at the bottom of a screen.
 
-use std::{
-    collections::VecDeque,
-    time::{Duration, Instant},
-};
+use std::{collections::VecDeque, time::Duration};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, State, receive_frame_nanos, tessera, use_context,
+    Callback, CallbackWith, Color, Dp, Modifier, State, current_frame_nanos, receive_frame_nanos,
+    tessera, use_context,
 };
 
 use crate::{
@@ -212,7 +210,7 @@ struct SnackbarRecord {
 pub struct SnackbarHostState {
     queue: VecDeque<SnackbarRecord>,
     current: Option<SnackbarRecord>,
-    current_started_at: Option<Instant>,
+    current_started_frame_nanos: Option<u64>,
     next_id: u64,
     last_result: Option<SnackbarResult>,
 }
@@ -223,7 +221,7 @@ impl SnackbarHostState {
         Self {
             queue: VecDeque::new(),
             current: None,
-            current_started_at: None,
+            current_started_frame_nanos: None,
             next_id: 1,
             last_result: None,
         }
@@ -260,22 +258,25 @@ impl SnackbarHostState {
         self.last_result.take()
     }
 
-    fn poll(&mut self, now: Instant) -> Option<SnackbarRecord> {
+    fn poll(&mut self, frame_nanos: u64) -> Option<SnackbarRecord> {
         if self.current.is_none() {
             self.advance_queue();
         }
 
-        if self.current.is_some() && self.current_started_at.is_none() {
-            self.current_started_at = Some(now);
+        if self.current.is_some() && self.current_started_frame_nanos.is_none() {
+            self.current_started_frame_nanos = Some(frame_nanos);
         }
 
         let mut should_dismiss = false;
         if let Some(current) = &self.current
             && let Some(timeout) = current.resolved.duration.timeout()
-            && let Some(started_at) = self.current_started_at
-            && now.duration_since(started_at) >= timeout
+            && let Some(started_frame_nanos) = self.current_started_frame_nanos
         {
-            should_dismiss = true;
+            let elapsed_nanos = frame_nanos.saturating_sub(started_frame_nanos);
+            let timeout_nanos = timeout.as_nanos().min(u64::MAX as u128) as u64;
+            if elapsed_nanos >= timeout_nanos {
+                should_dismiss = true;
+            }
         }
 
         if should_dismiss && let Some(current) = &self.current {
@@ -285,7 +286,7 @@ impl SnackbarHostState {
         self.current.clone()
     }
 
-    fn has_pending_timeout(&self, now: Instant) -> bool {
+    fn has_pending_timeout(&self, frame_nanos: u64) -> bool {
         let Some(current) = &self.current else {
             return false;
         };
@@ -293,8 +294,12 @@ impl SnackbarHostState {
             return false;
         };
 
-        self.current_started_at
-            .map(|started_at| now.duration_since(started_at) < timeout)
+        self.current_started_frame_nanos
+            .map(|started_frame_nanos| {
+                let elapsed_nanos = frame_nanos.saturating_sub(started_frame_nanos);
+                let timeout_nanos = timeout.as_nanos().min(u64::MAX as u128) as u64;
+                elapsed_nanos < timeout_nanos
+            })
             .unwrap_or(true)
     }
 
@@ -309,7 +314,7 @@ impl SnackbarHostState {
 
     fn advance_queue(&mut self) {
         self.current = self.queue.pop_front();
-        self.current_started_at = None;
+        self.current_started_frame_nanos = None;
     }
 }
 
@@ -748,15 +753,14 @@ pub fn snackbar_host(args: &SnackbarHostArgs) {
     let args: SnackbarHostArgs = args.clone();
     let state = args.state;
     let snackbar_slot = args.snackbar;
-    let now = Instant::now();
-    let record = state.with_mut(|host| host.poll(now));
-    if state.with(|host| host.has_pending_timeout(now)) {
+    let frame_nanos = current_frame_nanos();
+    let record = state.with_mut(|host| host.poll(frame_nanos));
+    if state.with(|host| host.has_pending_timeout(frame_nanos)) {
         let state_for_frame = state;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let has_pending_timeout = state_for_frame.with_mut(|host| {
-                let now = Instant::now();
-                let _ = host.poll(now);
-                host.has_pending_timeout(now)
+                let _ = host.poll(frame_nanos);
+                host.has_pending_timeout(frame_nanos)
             });
             if has_pending_timeout {
                 tessera_ui::FrameNanosControl::Continue

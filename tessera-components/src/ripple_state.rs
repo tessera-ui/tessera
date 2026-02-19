@@ -7,7 +7,7 @@
 
 use std::time::{Duration, Instant};
 
-use tessera_ui::{Dp, PxSize};
+use tessera_ui::{Dp, PxSize, current_frame_nanos};
 
 use crate::theme::MaterialAlpha;
 
@@ -50,16 +50,35 @@ pub struct RippleAnimation {
 
 #[derive(Clone, PartialEq, Copy, Debug)]
 struct RippleAnimationState {
-    start: Instant,
+    start_instant: Instant,
+    start_frame_nanos: u64,
     center: [f32; 2],
     max_radius: f32,
 }
 
 impl RippleAnimationState {
-    fn animation_at(self, now: Instant) -> Option<RippleAnimation> {
-        let elapsed = now.saturating_duration_since(self.start);
-        let progress =
-            (elapsed.as_secs_f32() / RippleState::ANIMATION_DURATION.as_secs_f32()).clamp(0.0, 1.0);
+    fn animation_at_instant(self, now: Instant) -> Option<RippleAnimation> {
+        let elapsed_nanos = now
+            .saturating_duration_since(self.start_instant)
+            .as_nanos()
+            .min(u64::MAX as u128) as u64;
+        self.animation_from_elapsed_nanos(elapsed_nanos)
+    }
+
+    fn animation_at_frame_nanos(self, frame_nanos: u64) -> Option<RippleAnimation> {
+        let elapsed_nanos = frame_nanos.saturating_sub(self.start_frame_nanos);
+        self.animation_from_elapsed_nanos(elapsed_nanos)
+    }
+
+    fn animation_from_elapsed_nanos(self, elapsed_nanos: u64) -> Option<RippleAnimation> {
+        let duration_nanos = RippleState::ANIMATION_DURATION
+            .as_nanos()
+            .min(u64::MAX as u128) as u64;
+        let progress = if duration_nanos == 0 {
+            1.0
+        } else {
+            (elapsed_nanos as f32 / duration_nanos as f32).clamp(0.0, 1.0)
+        };
         if progress >= 1.0 {
             return None;
         }
@@ -152,8 +171,10 @@ impl RippleState {
     /// state.start_animation([0.5, 0.5]);
     /// ```
     pub fn start_animation(&mut self, click_pos: [f32; 2]) {
+        let now = Instant::now();
         self.animation = Some(RippleAnimationState {
-            start: Instant::now(),
+            start_instant: now,
+            start_frame_nanos: current_frame_nanos(),
             center: [click_pos[0].clamp(0.0, 1.0), click_pos[1].clamp(0.0, 1.0)],
             max_radius: 1.0,
         });
@@ -178,7 +199,8 @@ impl RippleState {
         };
 
         self.animation = Some(RippleAnimationState {
-            start: now,
+            start_instant: now,
+            start_frame_nanos: current_frame_nanos(),
             center,
             max_radius,
         });
@@ -196,23 +218,42 @@ impl RippleState {
 
     /// Returns the current ripple animation snapshot.
     pub fn animation(&mut self) -> Option<RippleAnimation> {
-        self.animation_at(Instant::now())
+        self.animation_at_frame_nanos(current_frame_nanos())
     }
 
     /// Returns a read-only snapshot of the current ripple animation.
     pub fn animation_snapshot(&self) -> Option<RippleAnimation> {
-        self.animation_snapshot_at(Instant::now())
+        self.animation_snapshot_at_frame_nanos(current_frame_nanos())
     }
 
     /// Returns a read-only animation snapshot at `now`.
     pub fn animation_snapshot_at(&self, now: Instant) -> Option<RippleAnimation> {
-        self.animation.and_then(|state| state.animation_at(now))
+        self.animation
+            .and_then(|state| state.animation_at_instant(now))
     }
 
     /// Returns the current ripple animation snapshot at `now`.
     pub fn animation_at(&mut self, now: Instant) -> Option<RippleAnimation> {
         let state = self.animation?;
-        match state.animation_at(now) {
+        match state.animation_at_instant(now) {
+            Some(animation) => Some(animation),
+            None => {
+                self.animation = None;
+                None
+            }
+        }
+    }
+
+    /// Returns a read-only animation snapshot at `frame_nanos`.
+    pub fn animation_snapshot_at_frame_nanos(&self, frame_nanos: u64) -> Option<RippleAnimation> {
+        self.animation
+            .and_then(|state| state.animation_at_frame_nanos(frame_nanos))
+    }
+
+    /// Returns the current ripple animation snapshot at `frame_nanos`.
+    pub fn animation_at_frame_nanos(&mut self, frame_nanos: u64) -> Option<RippleAnimation> {
+        let state = self.animation?;
+        match state.animation_at_frame_nanos(frame_nanos) {
             Some(animation) => Some(animation),
             None => {
                 self.animation = None;

@@ -3,12 +3,10 @@
 //! ## Usage
 //!
 //! Use to organize content into separate pages that can be switched between.
-use std::time::Instant;
-
 use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -172,7 +170,7 @@ pub struct TabsController {
     tab_row_scroll_max: Px,
     tab_row_scroll_user_overridden: bool,
     tab_bar_height: Px,
-    last_frame_time: Option<Instant>,
+    last_frame_nanos: Option<u64>,
     indicator_initialized: bool,
     content_scroll_initialized: bool,
     tab_row_scroll_initialized: bool,
@@ -191,7 +189,7 @@ impl TabsController {
             tab_row_scroll_max: Px(0),
             tab_row_scroll_user_overridden: false,
             tab_bar_height: Px(0),
-            last_frame_time: None,
+            last_frame_nanos: None,
             indicator_initialized: false,
             content_scroll_initialized: false,
             tab_row_scroll_initialized: false,
@@ -294,13 +292,13 @@ impl TabsController {
         self.indicator_x.value_px()
     }
 
-    fn tick(&mut self, now: Instant) {
-        let dt = if let Some(last) = self.last_frame_time {
-            now.saturating_duration_since(last).as_secs_f32()
+    fn tick(&mut self, frame_nanos: u64) {
+        let dt = if let Some(last_frame_nanos) = self.last_frame_nanos {
+            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
         } else {
             1.0 / 60.0
         };
-        self.last_frame_time = Some(now);
+        self.last_frame_nanos = Some(frame_nanos);
 
         self.indicator_x
             .update(dt, DEFAULT_SPATIAL_STIFFNESS, DEFAULT_SPATIAL_DAMPING_RATIO);
@@ -1305,12 +1303,12 @@ fn tabs_render_node(args: &TabsRenderArgs) {
         ));
     }
 
-    controller.with_mut(|c| c.tick(Instant::now()));
+    controller.with_mut(|c| c.tick(current_frame_nanos()));
     if controller.with(|c| c.has_pending_animation_frame()) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let has_pending_animation_frame = controller_for_frame.with_mut(|controller| {
-                controller.tick(Instant::now());
+                controller.tick(frame_nanos);
                 controller.has_pending_animation_frame()
             });
             if has_pending_animation_frame {

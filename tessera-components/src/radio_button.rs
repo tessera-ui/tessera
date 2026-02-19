@@ -4,12 +4,12 @@
 //!
 //! Add single-choice selectors to forms, filters, and settings panes.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, DimensionValue, Dp, Modifier, Px, PxSize, State, accesskit::Role,
-    receive_frame_nanos, remember, tessera, use_context,
+    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -40,7 +40,7 @@ pub struct RadioButtonController {
     selected: bool,
     progress: f32,
     start_progress: f32,
-    last_change_time: Option<Instant>,
+    last_change_frame_nanos: Option<u64>,
 }
 
 impl Default for RadioButtonController {
@@ -57,7 +57,7 @@ impl RadioButtonController {
             selected,
             progress,
             start_progress: progress,
-            last_change_time: None,
+            last_change_frame_nanos: None,
         }
     }
 
@@ -71,7 +71,7 @@ impl RadioButtonController {
         if self.selected != selected {
             self.selected = selected;
             self.start_progress = self.progress;
-            self.last_change_time = Some(Instant::now());
+            self.last_change_frame_nanos = Some(current_frame_nanos());
         }
     }
 
@@ -83,19 +83,23 @@ impl RadioButtonController {
         }
         self.selected = true;
         self.start_progress = self.progress;
-        self.last_change_time = Some(Instant::now());
+        self.last_change_frame_nanos = Some(current_frame_nanos());
         true
     }
 
-    fn update_animation(&mut self) {
-        if let Some(start) = self.last_change_time {
-            let elapsed = start.elapsed();
-            let fraction =
-                (elapsed.as_secs_f32() / RADIO_ANIMATION_DURATION.as_secs_f32()).min(1.0);
+    fn update_animation(&mut self, frame_nanos: u64) {
+        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = RADIO_ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            let fraction = if animation_nanos == 0 {
+                1.0
+            } else {
+                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
+            };
             let target = if self.selected { 1.0 } else { 0.0 };
             self.progress = self.start_progress + (target - self.start_progress) * fraction;
             if fraction >= 1.0 {
-                self.last_change_time = None;
+                self.last_change_frame_nanos = None;
                 self.progress = target;
                 self.start_progress = target;
             }
@@ -107,7 +111,7 @@ impl RadioButtonController {
     }
 
     fn is_animating(&self) -> bool {
-        self.last_change_time.is_some()
+        self.last_change_frame_nanos.is_some()
     }
 }
 
@@ -263,12 +267,12 @@ fn radio_button_node(args: &RadioButtonArgs) {
     let controller = args
         .controller
         .expect("radio_button_node requires controller to be set");
-    controller.with_mut(|c| c.update_animation());
+    controller.with_mut(|c| c.update_animation(current_frame_nanos()));
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
-                controller.update_animation();
+                controller.update_animation(frame_nanos);
                 controller.is_animating()
             });
             if is_animating {

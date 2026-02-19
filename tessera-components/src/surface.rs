@@ -8,6 +8,7 @@ use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
     PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -340,7 +341,11 @@ fn apply_tonal_elevation_to_style(
     }
 }
 
-fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<State<RippleState>>) -> RippleProps {
+fn build_ripple_props(
+    args: &SurfaceArgs,
+    ripple_state: Option<State<RippleState>>,
+    frame_nanos: u64,
+) -> RippleProps {
     if !args.show_ripple {
         return RippleProps::default();
     }
@@ -348,7 +353,9 @@ fn build_ripple_props(args: &SurfaceArgs, ripple_state: Option<State<RippleState
         return RippleProps::default();
     };
 
-    if let Some(animation) = ripple_state.with(|s| s.animation_snapshot()) {
+    if let Some(animation) =
+        ripple_state.with(|state| state.animation_snapshot_at_frame_nanos(frame_nanos))
+    {
         return RippleProps {
             center: [animation.center[0] - 0.5, animation.center[1] - 0.5],
             bounded: args.ripple_bounded,
@@ -538,9 +545,10 @@ fn make_surface_drawable(
     args: &SurfaceArgs,
     style: &SurfaceStyle,
     ripple_state: Option<State<RippleState>>,
+    frame_nanos: u64,
     size: PxSize,
 ) -> ShapeCommand {
-    let ripple_props = build_ripple_props(args, ripple_state);
+    let ripple_props = build_ripple_props(args, ripple_state, frame_nanos);
     build_shape_command(args, style, ripple_props, size)
 }
 
@@ -548,13 +556,16 @@ fn try_build_simple_rect_command(
     args: &SurfaceArgs,
     style: &SurfaceStyle,
     ripple_state: Option<State<RippleState>>,
+    frame_nanos: u64,
 ) -> Option<SimpleRectCommand> {
     if args.show_ripple && args.on_click.is_some() {
         return None;
     }
     if args.show_ripple
         && ripple_state
-            .and_then(|state| state.with(|s| s.animation_snapshot()))
+            .and_then(|state| {
+                state.with(|ripple| ripple.animation_snapshot_at_frame_nanos(frame_nanos))
+            })
             .is_some()
     {
         return None;
@@ -742,21 +753,26 @@ impl LayoutSpec for SurfaceLayout {
         } else {
             None
         };
+        let frame_nanos = current_frame_nanos();
 
         let mut metadata = input.metadata_mut();
         let size = metadata
             .computed_data
             .expect("Surface node must have computed size before record");
 
-        if let Some(simple) =
-            try_build_simple_rect_command(&self.args, &effective_style, ripple_state_for_draw)
-        {
+        if let Some(simple) = try_build_simple_rect_command(
+            &self.args,
+            &effective_style,
+            ripple_state_for_draw,
+            frame_nanos,
+        ) {
             metadata.fragment_mut().push_draw_command(simple);
         } else {
             let drawable = make_surface_drawable(
                 &self.args,
                 &effective_style,
                 ripple_state_for_draw,
+                frame_nanos,
                 PxSize::new(size.width, size.height),
             );
 
@@ -951,11 +967,18 @@ fn surface_inner(args: &SurfaceInnerArgs) {
     if surface.show_ripple
         && let Some(ripple_state) = ripple_state
     {
-        let has_active_ripple = ripple_state.with(|s| s.animation_snapshot().is_some());
+        let has_active_ripple = ripple_state.with(|state| {
+            state
+                .animation_snapshot_at_frame_nanos(current_frame_nanos())
+                .is_some()
+        });
         if has_active_ripple {
-            receive_frame_nanos(move |_| {
-                let has_active_ripple =
-                    ripple_state.with_mut(|state| state.animation_snapshot().is_some());
+            receive_frame_nanos(move |frame_nanos| {
+                let has_active_ripple = ripple_state.with(|state| {
+                    state
+                        .animation_snapshot_at_frame_nanos(frame_nanos)
+                        .is_some()
+                });
                 if has_active_ripple {
                     tessera_ui::FrameNanosControl::Continue
                 } else {

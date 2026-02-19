@@ -3,13 +3,14 @@
 //! ## Usage
 //!
 //! Use for bottom navigation between a small set of top-level destinations.
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
     PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -558,16 +559,17 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
+    let frame_nanos = current_frame_nanos();
 
     let animation_progress = controller
-        .with_mut(|c| c.animation_progress())
+        .with_mut(|c| c.animation_progress(frame_nanos))
         .unwrap_or(1.0);
-    if controller.with(|c| c.is_animating()) {
+    if controller.with(|c| c.is_animating(frame_nanos)) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
-                let _ = controller.animation_progress();
-                controller.is_animating()
+                let _ = controller.animation_progress(frame_nanos);
+                controller.is_animating(frame_nanos)
             });
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
@@ -652,7 +654,7 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
 pub struct NavigationBarController {
     selected: usize,
     previous_selected: usize,
-    anim_start_time: Option<Instant>,
+    animation_start_frame_nanos: Option<u64>,
 }
 
 impl NavigationBarController {
@@ -661,7 +663,7 @@ impl NavigationBarController {
         Self {
             selected,
             previous_selected: selected,
-            anim_start_time: None,
+            animation_start_frame_nanos: None,
         }
     }
 
@@ -684,19 +686,20 @@ impl NavigationBarController {
         if self.selected != index {
             self.previous_selected = self.selected;
             self.selected = index;
-            self.anim_start_time = Some(Instant::now());
+            self.animation_start_frame_nanos = Some(current_frame_nanos());
         }
     }
 
-    fn animation_progress(&mut self) -> Option<f32> {
-        if let Some(start_time) = self.anim_start_time {
-            let elapsed = start_time.elapsed();
-            if elapsed < ANIMATION_DURATION {
+    fn animation_progress(&mut self, frame_nanos: u64) -> Option<f32> {
+        if let Some(start_frame_nanos) = self.animation_start_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            if elapsed_nanos < animation_nanos {
                 Some(animation::easing(
-                    elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32(),
+                    elapsed_nanos as f32 / animation_nanos as f32,
                 ))
             } else {
-                self.anim_start_time = None;
+                self.animation_start_frame_nanos = None;
                 None
             }
         } else {
@@ -704,8 +707,13 @@ impl NavigationBarController {
         }
     }
 
-    fn is_animating(&self) -> bool {
-        self.anim_start_time.is_some()
+    fn is_animating(&self, frame_nanos: u64) -> bool {
+        self.animation_start_frame_nanos
+            .is_some_and(|start_frame_nanos| {
+                let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+                let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+                elapsed_nanos < animation_nanos
+            })
     }
 }
 

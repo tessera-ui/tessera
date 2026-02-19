@@ -3,13 +3,14 @@
 //! ## Usage
 //!
 //! Use to control a boolean on/off state.
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
     Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -225,7 +226,7 @@ impl LayoutSpec for SwitchLayout {
 pub struct SwitchController {
     checked: bool,
     progress: f32,
-    last_toggle_time: Option<Instant>,
+    last_toggle_frame_nanos: Option<u64>,
 }
 
 impl SwitchController {
@@ -234,7 +235,7 @@ impl SwitchController {
         Self {
             checked: initial_state,
             progress: if initial_state { 1.0 } else { 0.0 },
-            last_toggle_time: None,
+            last_toggle_frame_nanos: None,
         }
     }
 
@@ -248,14 +249,14 @@ impl SwitchController {
         if self.checked != checked {
             self.checked = checked;
             self.progress = if checked { 1.0 } else { 0.0 };
-            self.last_toggle_time = None;
+            self.last_toggle_frame_nanos = None;
         }
     }
 
     /// Toggles the switch and kicks off the animation timeline.
     pub fn toggle(&mut self) {
         self.checked = !self.checked;
-        self.last_toggle_time = Some(Instant::now());
+        self.last_toggle_frame_nanos = Some(current_frame_nanos());
     }
 
     /// Returns the current animation progress (0.0..1.0).
@@ -265,14 +266,19 @@ impl SwitchController {
 
     /// Returns whether the switch animation is currently running.
     pub fn is_animating(&self) -> bool {
-        self.last_toggle_time.is_some()
+        self.last_toggle_frame_nanos.is_some()
     }
 
     /// Advances the animation timeline based on elapsed time.
-    fn update_progress(&mut self) {
-        if let Some(last_toggle_time) = self.last_toggle_time {
-            let elapsed = last_toggle_time.elapsed();
-            let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
+    fn update_progress(&mut self, frame_nanos: u64) {
+        if let Some(last_toggle_frame_nanos) = self.last_toggle_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(last_toggle_frame_nanos);
+            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            let fraction = if animation_nanos == 0 {
+                1.0
+            } else {
+                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
+            };
             let target = if self.checked { 1.0 } else { 0.0 };
             let progress = if self.checked {
                 fraction
@@ -284,7 +290,7 @@ impl SwitchController {
 
             if (progress - target).abs() < f32::EPSILON || fraction >= 1.0 {
                 self.progress = target;
-                self.last_toggle_time = None;
+                self.last_toggle_frame_nanos = None;
             }
         }
     }
@@ -423,12 +429,12 @@ fn switch_inner_node(args: &SwitchArgs) {
     let child = args.child.clone();
     let mut modifier = args.modifier.clone();
 
-    controller.with_mut(|c| c.update_progress());
+    controller.with_mut(|c| c.update_progress(current_frame_nanos()));
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
-                controller.update_progress();
+                controller.update_progress(frame_nanos);
                 controller.is_animating()
             });
             if is_animating {

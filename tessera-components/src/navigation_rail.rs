@@ -3,13 +3,14 @@
 //! ## Usage
 //!
 //! Use for primary destinations on wide layouts with a collapsible side rail.
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
     PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -641,19 +642,20 @@ fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
+    let frame_nanos = current_frame_nanos();
     let selection_progress = controller
-        .with_mut(|c| c.selection_animation_progress())
+        .with_mut(|c| c.selection_animation_progress(frame_nanos))
         .unwrap_or(1.0);
     let selected_index = controller.with(|c| c.selected());
     let previous_index = controller.with(|c| c.previous_selected());
-    let expand_fraction = controller.with_mut(|c| c.expand_fraction());
-    if controller.with(|c| c.is_animating()) {
+    let expand_fraction = controller.with_mut(|c| c.expand_fraction(frame_nanos));
+    if controller.with(|c| c.is_animating(frame_nanos)) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
-                let _ = controller.selection_animation_progress();
-                let _ = controller.expand_fraction();
-                controller.is_animating()
+                let _ = controller.selection_animation_progress(frame_nanos);
+                let _ = controller.expand_fraction(frame_nanos);
+                controller.is_animating(frame_nanos)
             });
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
@@ -761,9 +763,9 @@ fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
 pub struct NavigationRailController {
     selected: usize,
     previous_selected: usize,
-    selection_start_time: Option<Instant>,
+    selection_start_frame_nanos: Option<u64>,
     expanded: bool,
-    expand_start_time: Option<Instant>,
+    expand_start_frame_nanos: Option<u64>,
 }
 
 impl NavigationRailController {
@@ -777,9 +779,9 @@ impl NavigationRailController {
         Self {
             selected,
             previous_selected: selected,
-            selection_start_time: None,
+            selection_start_frame_nanos: None,
             expanded: value.is_expanded(),
-            expand_start_time: None,
+            expand_start_frame_nanos: None,
         }
     }
 
@@ -831,33 +833,37 @@ impl NavigationRailController {
         if self.selected != index {
             self.previous_selected = self.selected;
             self.selected = index;
-            self.selection_start_time = Some(Instant::now());
+            self.selection_start_frame_nanos = Some(current_frame_nanos());
         }
     }
 
     fn set_expanded(&mut self, expanded: bool) {
         if self.expanded != expanded {
             self.expanded = expanded;
-            let mut timer = Instant::now();
-            if let Some(old_timer) = self.expand_start_time {
-                let elapsed = old_timer.elapsed();
-                if elapsed < ANIMATION_DURATION {
-                    timer += ANIMATION_DURATION - elapsed;
+            let now_nanos = current_frame_nanos();
+            if let Some(old_start_frame_nanos) = self.expand_start_frame_nanos {
+                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
+                let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+                if elapsed_nanos < animation_nanos {
+                    self.expand_start_frame_nanos =
+                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
+                    return;
                 }
             }
-            self.expand_start_time = Some(timer);
+            self.expand_start_frame_nanos = Some(now_nanos);
         }
     }
 
-    fn selection_animation_progress(&mut self) -> Option<f32> {
-        if let Some(start_time) = self.selection_start_time {
-            let elapsed = start_time.elapsed();
-            if elapsed < ANIMATION_DURATION {
+    fn selection_animation_progress(&mut self, frame_nanos: u64) -> Option<f32> {
+        if let Some(start_frame_nanos) = self.selection_start_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            if elapsed_nanos < animation_nanos {
                 Some(animation::easing(
-                    elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32(),
+                    elapsed_nanos as f32 / animation_nanos as f32,
                 ))
             } else {
-                self.selection_start_time = None;
+                self.selection_start_frame_nanos = None;
                 None
             }
         } else {
@@ -865,8 +871,8 @@ impl NavigationRailController {
         }
     }
 
-    fn expand_fraction(&mut self) -> f32 {
-        let progress = calc_progress_from_timer(self.expand_start_time.as_ref());
+    fn expand_fraction(&mut self, frame_nanos: u64) -> f32 {
+        let progress = calc_progress_from_timer(self.expand_start_frame_nanos, frame_nanos);
         if self.expanded {
             progress
         } else {
@@ -878,11 +884,17 @@ impl NavigationRailController {
         self.previous_selected
     }
 
-    fn is_animating(&self) -> bool {
-        self.selection_start_time.is_some()
+    fn is_animating(&self, frame_nanos: u64) -> bool {
+        let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+        self.selection_start_frame_nanos
+            .is_some_and(|start_frame_nanos| {
+                frame_nanos.saturating_sub(start_frame_nanos) < animation_nanos
+            })
             || self
-                .expand_start_time
-                .is_some_and(|start| start.elapsed() < ANIMATION_DURATION)
+                .expand_start_frame_nanos
+                .is_some_and(|start_frame_nanos| {
+                    frame_nanos.saturating_sub(start_frame_nanos) < animation_nanos
+                })
     }
 }
 
@@ -892,15 +904,16 @@ impl Default for NavigationRailController {
     }
 }
 
-fn calc_progress_from_timer(timer: Option<&Instant>) -> f32 {
-    let raw = match timer {
+fn calc_progress_from_timer(animation_start_frame_nanos: Option<u64>, frame_nanos: u64) -> f32 {
+    let raw = match animation_start_frame_nanos {
         None => 1.0,
-        Some(t) => {
-            let elapsed = t.elapsed();
-            if elapsed >= ANIMATION_DURATION {
+        Some(start_frame_nanos) => {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            if elapsed_nanos >= animation_nanos {
                 1.0
             } else {
-                elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()
+                elapsed_nanos as f32 / animation_nanos as f32
             }
         }
     };

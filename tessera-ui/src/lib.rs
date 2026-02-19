@@ -416,8 +416,8 @@ pub use crate::{
         external::{ExternalTextureHandle, ExternalTextureRegistry},
     },
     runtime::{
-        FrameNanosControl, State, current_frame_time, frame_delta, key, receive_frame_nanos,
-        remember, remember_with_key, retain, retain_with_key,
+        FrameNanosControl, State, current_frame_nanos, current_frame_time, frame_delta, key,
+        receive_frame_nanos, remember, remember_with_key, retain, retain_with_key,
     },
 };
 

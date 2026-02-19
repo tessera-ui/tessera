@@ -4,15 +4,12 @@
 //!
 //! Used to show modal dialogs such as alerts, confirmations, wizards and forms;
 //! dialogs block interaction with underlying content while active.
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::{sync::Arc, time::Duration};
 
 use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, ComputedData, DimensionValue, Dp, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot, State,
+    RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -37,13 +34,14 @@ const ANIM_TIME: Duration = Duration::from_millis(300);
 
 /// Compute normalized (0..1) linear progress from an optional animation timer.
 /// Placing this here reduces inline complexity inside the component body.
-fn compute_dialog_progress(timer_opt: Option<Instant>) -> f32 {
-    timer_opt.as_ref().map_or(1.0, |timer| {
-        let elapsed = timer.elapsed();
-        if elapsed >= ANIM_TIME {
+fn compute_dialog_progress(animation_start_frame_nanos: Option<u64>) -> f32 {
+    animation_start_frame_nanos.map_or(1.0, |start_frame_nanos| {
+        let elapsed_nanos = current_frame_nanos().saturating_sub(start_frame_nanos);
+        let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+        if elapsed_nanos >= animation_nanos {
             1.0
         } else {
-            elapsed.as_secs_f32() / ANIM_TIME.as_secs_f32()
+            elapsed_nanos as f32 / animation_nanos as f32
         }
     })
 }
@@ -169,7 +167,7 @@ impl DialogProviderArgs {
 /// Controller for [`dialog_provider`], controlling visibility and animation.
 pub struct DialogController {
     is_open: bool,
-    timer: Option<Instant>,
+    animation_start_frame_nanos: Option<u64>,
 }
 
 impl DialogController {
@@ -177,7 +175,7 @@ impl DialogController {
     pub fn new(initial_open: bool) -> Self {
         Self {
             is_open: initial_open,
-            timer: None,
+            animation_start_frame_nanos: None,
         }
     }
 
@@ -185,14 +183,17 @@ impl DialogController {
     pub fn open(&mut self) {
         if !self.is_open {
             self.is_open = true;
-            let mut timer = Instant::now();
-            if let Some(old_timer) = self.timer {
-                let elapsed = old_timer.elapsed();
-                if elapsed < ANIM_TIME {
-                    timer += ANIM_TIME - elapsed;
+            let now_nanos = current_frame_nanos();
+            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
+                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
+                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+                if elapsed_nanos < animation_nanos {
+                    self.animation_start_frame_nanos =
+                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
+                    return;
                 }
             }
-            self.timer = Some(timer);
+            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -200,14 +201,17 @@ impl DialogController {
     pub fn close(&mut self) {
         if self.is_open {
             self.is_open = false;
-            let mut timer = Instant::now();
-            if let Some(old_timer) = self.timer {
-                let elapsed = old_timer.elapsed();
-                if elapsed < ANIM_TIME {
-                    timer += ANIM_TIME - elapsed;
+            let now_nanos = current_frame_nanos();
+            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
+                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
+                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+                if elapsed_nanos < animation_nanos {
+                    self.animation_start_frame_nanos =
+                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
+                    return;
                 }
             }
-            self.timer = Some(timer);
+            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -216,8 +220,18 @@ impl DialogController {
         self.is_open
     }
 
-    fn snapshot(&self) -> (bool, Option<Instant>) {
-        (self.is_open, self.timer)
+    fn is_animating(&self) -> bool {
+        self.animation_start_frame_nanos
+            .map(|start| {
+                let elapsed_nanos = current_frame_nanos().saturating_sub(start);
+                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+                elapsed_nanos < animation_nanos
+            })
+            .unwrap_or(false)
+    }
+
+    fn snapshot(&self) -> (bool, Option<u64>) {
+        (self.is_open, self.animation_start_frame_nanos)
     }
 }
 
@@ -536,13 +550,19 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
     // Sample state once to avoid repeated locks and improve readability.
     let (is_open, timer_opt) = controller.with(|c| c.snapshot());
 
-    let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
+    let is_animating = controller.with(|c| c.is_animating());
     if is_animating {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
                 let (_, timer_opt) = controller.snapshot();
-                timer_opt.is_some_and(|timer| timer.elapsed() < ANIM_TIME)
+                if let Some(start_frame_nanos) = timer_opt {
+                    let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+                    let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
+                    elapsed_nanos < animation_nanos
+                } else {
+                    false
+                }
             });
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue

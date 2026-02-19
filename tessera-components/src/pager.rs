@@ -3,12 +3,10 @@
 //! ## Usage
 //!
 //! Show onboarding steps or media carousels that snap between pages.
-use std::time::{Duration, Instant};
-
 use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, State, key,
+    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, State, current_frame_nanos, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera,
 };
@@ -19,7 +17,7 @@ use crate::{
 
 const DEFAULT_SNAP_THRESHOLD: f32 = 0.5;
 const DEFAULT_SCROLL_SMOOTHING: f32 = 0.12;
-const SNAP_IDLE_TIME: Duration = Duration::from_millis(120);
+const SNAP_IDLE_TIME_NANOS: u64 = 120_000_000;
 
 /// Describes how a pager page is sized along the scroll axis.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
@@ -119,8 +117,8 @@ pub struct PagerController {
     page_spacing: Px,
     scroll_offset: f32,
     target_offset: f32,
-    last_frame_time: Option<Instant>,
-    last_scroll_time: Option<Instant>,
+    last_frame_nanos: Option<u64>,
+    last_scroll_frame_nanos: Option<u64>,
     is_dragging: bool,
     last_drag_position: Option<PxPosition>,
     initialized: bool,
@@ -137,8 +135,8 @@ impl PagerController {
             page_spacing: Px::ZERO,
             scroll_offset: 0.0,
             target_offset: 0.0,
-            last_frame_time: None,
-            last_scroll_time: None,
+            last_frame_nanos: None,
+            last_scroll_frame_nanos: None,
             is_dragging: false,
             last_drag_position: None,
             initialized: false,
@@ -162,7 +160,7 @@ impl PagerController {
         let offset = self.offset_for_page(page);
         self.scroll_offset = offset;
         self.target_offset = offset;
-        self.last_scroll_time = None;
+        self.last_scroll_frame_nanos = None;
         self.update_current_page_from_offset();
     }
 
@@ -170,7 +168,7 @@ impl PagerController {
     pub fn scroll_to_page(&mut self, page: usize) {
         let page = self.clamp_page(page);
         self.target_offset = self.offset_for_page(page);
-        self.last_scroll_time = None;
+        self.last_scroll_frame_nanos = None;
     }
 
     fn set_page_count(&mut self, page_count: usize) {
@@ -217,7 +215,7 @@ impl PagerController {
         self.update_current_page_from_offset();
     }
 
-    fn tick(&mut self, now: Instant, snap_threshold: f32, scroll_smoothing: f32) {
+    fn tick(&mut self, frame_nanos: u64, snap_threshold: f32, scroll_smoothing: f32) {
         if self.page_count == 0 {
             return;
         }
@@ -228,8 +226,10 @@ impl PagerController {
         let snap_threshold = snap_threshold.clamp(0.0, 1.0);
         let scroll_smoothing = scroll_smoothing.clamp(0.0, 1.0);
         let idle = self
-            .last_scroll_time
-            .map(|t| now.duration_since(t) > SNAP_IDLE_TIME)
+            .last_scroll_frame_nanos
+            .map(|last_scroll_frame_nanos| {
+                frame_nanos.saturating_sub(last_scroll_frame_nanos) > SNAP_IDLE_TIME_NANOS
+            })
             .unwrap_or(true);
 
         if idle && !self.is_dragging {
@@ -237,12 +237,12 @@ impl PagerController {
             self.target_offset = self.offset_for_page(target_page);
         }
 
-        self.update_scroll_offset(now, scroll_smoothing);
+        self.update_scroll_offset(frame_nanos, scroll_smoothing);
         self.scroll_offset = self.clamp_offset(self.scroll_offset);
         self.update_current_page_from_offset();
     }
 
-    fn has_pending_animation_frame(&self, now: Instant) -> bool {
+    fn has_pending_animation_frame(&self, frame_nanos: u64) -> bool {
         if self.page_count == 0 || self.page_distance() <= f32::EPSILON {
             return false;
         }
@@ -255,25 +255,27 @@ impl PagerController {
             return true;
         }
 
-        self.last_scroll_time
-            .map(|t| now.duration_since(t) <= SNAP_IDLE_TIME)
+        self.last_scroll_frame_nanos
+            .map(|last_scroll_frame_nanos| {
+                frame_nanos.saturating_sub(last_scroll_frame_nanos) <= SNAP_IDLE_TIME_NANOS
+            })
             .unwrap_or(false)
     }
 
-    fn apply_scroll_delta(&mut self, delta: f32, now: Instant) {
+    fn apply_scroll_delta(&mut self, delta: f32, frame_nanos: u64) {
         if self.page_distance() <= f32::EPSILON || self.page_count == 0 {
             return;
         }
         self.scroll_offset = self.clamp_offset(self.scroll_offset + delta);
         self.target_offset = self.scroll_offset;
-        self.last_scroll_time = Some(now);
+        self.last_scroll_frame_nanos = Some(frame_nanos);
         self.update_current_page_from_offset();
     }
 
-    fn start_drag(&mut self, pos: PxPosition, now: Instant) {
+    fn start_drag(&mut self, pos: PxPosition, frame_nanos: u64) {
         self.is_dragging = true;
         self.last_drag_position = Some(pos);
-        self.last_scroll_time = Some(now);
+        self.last_scroll_frame_nanos = Some(frame_nanos);
     }
 
     fn end_drag(&mut self) {
@@ -362,13 +364,13 @@ impl PagerController {
         self.current_page_offset_fraction = offset_fraction;
     }
 
-    fn update_scroll_offset(&mut self, now: Instant, smoothing: f32) {
-        let delta_time = if let Some(last) = self.last_frame_time {
-            now.duration_since(last).as_secs_f32()
+    fn update_scroll_offset(&mut self, frame_nanos: u64, smoothing: f32) {
+        let delta_time = if let Some(last_frame_nanos) = self.last_frame_nanos {
+            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
         } else {
             1.0 / 60.0
         };
-        self.last_frame_time = Some(now);
+        self.last_frame_nanos = Some(frame_nanos);
 
         let diff = self.target_offset - self.scroll_offset;
         if diff.abs() < 0.5 {
@@ -816,16 +818,17 @@ fn pager_inner_node(args: &PagerRenderArgs) {
     let controller = args.controller;
     let axis = args.axis;
     let page_content = args.page_content;
+    let frame_nanos = current_frame_nanos();
     controller.with_mut(|c| c.set_page_count(args.page_count));
     controller.with_mut(|c| {
-        c.tick(Instant::now(), args.snap_threshold, args.scroll_smoothing);
+        c.tick(frame_nanos, args.snap_threshold, args.scroll_smoothing);
     });
-    if controller.with(|c| c.has_pending_animation_frame(Instant::now())) {
+    if controller.with(|c| c.has_pending_animation_frame(frame_nanos)) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let has_pending_animation_frame = controller_for_frame.with_mut(|c| {
-                c.tick(Instant::now(), args.snap_threshold, args.scroll_smoothing);
-                c.has_pending_animation_frame(Instant::now())
+                c.tick(frame_nanos, args.snap_threshold, args.scroll_smoothing);
+                c.has_pending_animation_frame(frame_nanos)
             });
             if has_pending_animation_frame {
                 tessera_ui::FrameNanosControl::Continue
@@ -877,7 +880,7 @@ fn pager_inner_node(args: &PagerRenderArgs) {
             return;
         }
 
-        let now = Instant::now();
+        let frame_nanos = current_frame_nanos();
         let mut scroll_delta = 0.0;
         for event in input.cursor_events.iter() {
             if let CursorEventContent::Scroll(scroll_event) = &event.content {
@@ -890,7 +893,7 @@ fn pager_inner_node(args: &PagerRenderArgs) {
 
         if scroll_delta.abs() >= 0.01 {
             controller.with_mut(|c| {
-                c.apply_scroll_delta(scroll_delta, now);
+                c.apply_scroll_delta(scroll_delta, frame_nanos);
                 c.end_drag();
             });
             input
@@ -917,7 +920,7 @@ fn pager_inner_node(args: &PagerRenderArgs) {
 
         controller.with_mut(|c| {
             if let Some(pos) = drag_start_pos {
-                c.start_drag(pos, now);
+                c.start_drag(pos, frame_nanos);
             }
             if should_end_drag {
                 c.end_drag();
@@ -926,7 +929,7 @@ fn pager_inner_node(args: &PagerRenderArgs) {
                 && let Some(pos) = input.cursor_position_rel
                 && let Some(delta) = c.drag_delta(pos, axis)
             {
-                c.apply_scroll_delta(delta, now);
+                c.apply_scroll_delta(delta, frame_nanos);
             }
         });
     });

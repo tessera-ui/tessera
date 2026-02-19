@@ -3,12 +3,12 @@
 //! ## Usage
 //!
 //! Use in forms, settings, or lists to enable boolean selections.
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, Dp, Modifier, PxSize, RenderSlot, State, accesskit::Role,
-    receive_frame_nanos, remember, tessera, use_context,
+    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -71,7 +71,7 @@ impl CheckboxController {
         if self.checkmark.checked != checked {
             self.checkmark.checked = checked;
             self.checkmark.progress = if checked { 1.0 } else { 0.0 };
-            self.checkmark.last_toggle_time = None;
+            self.checkmark.last_toggle_frame_nanos = None;
         }
     }
 
@@ -81,8 +81,8 @@ impl CheckboxController {
     }
 
     /// Advances the checkmark animation progress based on elapsed time.
-    fn update_progress(&mut self) {
-        self.checkmark.update_progress();
+    fn update_progress(&mut self, frame_nanos: u64) {
+        self.checkmark.update_progress(frame_nanos);
     }
 
     /// Returns current animation progress (0.0..1.0).
@@ -92,7 +92,7 @@ impl CheckboxController {
 
     /// Returns whether the checkmark animation is currently running.
     fn is_animating(&self) -> bool {
-        self.checkmark.last_toggle_time.is_some()
+        self.checkmark.last_toggle_frame_nanos.is_some()
     }
 }
 
@@ -231,7 +231,7 @@ const CHECKMARK_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 struct CheckmarkState {
     checked: bool,
     progress: f32,
-    last_toggle_time: Option<Instant>,
+    last_toggle_frame_nanos: Option<u64>,
 }
 
 impl Default for CheckmarkState {
@@ -245,29 +245,35 @@ impl CheckmarkState {
         Self {
             checked: initial_state,
             progress: if initial_state { 1.0 } else { 0.0 },
-            last_toggle_time: None,
+            last_toggle_frame_nanos: None,
         }
     }
 
     /// Toggle checked state and start animation
     fn toggle(&mut self) {
         self.checked = !self.checked;
-        self.last_toggle_time = Some(Instant::now());
+        self.last_toggle_frame_nanos = Some(current_frame_nanos());
     }
 
     /// Update progress based on elapsed time
-    fn update_progress(&mut self) {
-        if let Some(start) = self.last_toggle_time {
-            let elapsed = start.elapsed();
-            let fraction =
-                (elapsed.as_secs_f32() / CHECKMARK_ANIMATION_DURATION.as_secs_f32()).min(1.0);
+    fn update_progress(&mut self, frame_nanos: u64) {
+        if let Some(start_frame_nanos) = self.last_toggle_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = CHECKMARK_ANIMATION_DURATION
+                .as_nanos()
+                .min(u64::MAX as u128) as u64;
+            let fraction = if animation_nanos == 0 {
+                1.0
+            } else {
+                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
+            };
             self.progress = if self.checked {
                 fraction
             } else {
                 1.0 - fraction
             };
             if fraction >= 1.0 {
-                self.last_toggle_time = None; // Animation ends
+                self.last_toggle_frame_nanos = None; // Animation ends
             }
         }
     }
@@ -326,12 +332,12 @@ fn checkbox_node(args: &CheckboxArgs) {
         .controller
         .expect("checkbox_node requires controller to be set");
     let enabled = !args.disabled;
-    controller.with_mut(|c| c.update_progress());
+    controller.with_mut(|c| c.update_progress(current_frame_nanos()));
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
-                controller.update_progress();
+                controller.update_progress(frame_nanos);
                 controller.is_animating()
             });
             if is_animating {

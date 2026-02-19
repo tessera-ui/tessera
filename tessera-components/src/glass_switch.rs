@@ -3,13 +3,14 @@
 //! ## Usage
 //!
 //! Use in settings, forms, or toolbars to control a boolean state.
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
     Px, PxPosition, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     receive_frame_nanos, remember, tessera,
 };
@@ -28,7 +29,7 @@ const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 pub struct GlassSwitchController {
     checked: bool,
     progress: f32,
-    last_toggle_time: Option<Instant>,
+    last_toggle_frame_nanos: Option<u64>,
 }
 
 impl GlassSwitchController {
@@ -37,7 +38,7 @@ impl GlassSwitchController {
         Self {
             checked: initial_state,
             progress: if initial_state { 1.0 } else { 0.0 },
-            last_toggle_time: None,
+            last_toggle_frame_nanos: None,
         }
     }
 
@@ -51,25 +52,30 @@ impl GlassSwitchController {
         if self.checked != checked {
             self.checked = checked;
             self.progress = if checked { 1.0 } else { 0.0 };
-            self.last_toggle_time = None;
+            self.last_toggle_frame_nanos = None;
         }
     }
 
     /// Toggles the switch and starts the animation timeline.
     pub fn toggle(&mut self) {
         self.checked = !self.checked;
-        self.last_toggle_time = Some(Instant::now());
+        self.last_toggle_frame_nanos = Some(current_frame_nanos());
     }
 
     /// Returns the current animation progress (0.0..1.0).
-    pub fn animation_progress(&mut self) -> f32 {
-        if let Some(start) = self.last_toggle_time {
-            let elapsed = start.elapsed();
-            let fraction = (elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()).min(1.0);
+    pub fn animation_progress(&mut self, frame_nanos: u64) -> f32 {
+        if let Some(start_frame_nanos) = self.last_toggle_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            let fraction = if animation_nanos == 0 {
+                1.0
+            } else {
+                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
+            };
             let target = if self.checked { 1.0 } else { 0.0 };
             self.progress = target * fraction + (1.0 - fraction) * (1.0 - target);
             if fraction >= 1.0 {
-                self.last_toggle_time = None;
+                self.last_toggle_frame_nanos = None;
                 self.progress = target;
             }
         }
@@ -78,7 +84,7 @@ impl GlassSwitchController {
 
     /// Returns whether the toggle animation is currently running.
     pub fn is_animating(&self) -> bool {
-        self.last_toggle_time.is_some()
+        self.last_toggle_frame_nanos.is_some()
     }
 }
 
@@ -282,12 +288,12 @@ fn glass_switch_node(args: &GlassSwitchArgs) {
     let thumb_px = thumb_dp.to_px();
 
     // Track tint color interpolation based on progress
-    let progress = controller.with_mut(|c| c.animation_progress());
+    let progress = controller.with_mut(|c| c.animation_progress(current_frame_nanos()));
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
-                let _ = controller.animation_progress();
+                let _ = controller.animation_progress(frame_nanos);
                 controller.is_animating()
             });
             if is_animating {

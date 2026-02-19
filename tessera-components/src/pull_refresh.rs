@@ -3,12 +3,12 @@
 //! ## Usage
 //!
 //! Trigger data reloads when users pull down at the top of a scrollable view.
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Px, RenderSlot, State,
-    receive_frame_nanos, remember, tessera, use_context,
+    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -53,9 +53,9 @@ pub struct PullRefreshController {
     distance_pulled: f32,
     threshold: f32,
     refreshing_offset: f32,
-    last_frame_time: Option<Instant>,
+    last_frame_nanos: Option<u64>,
     is_pressed: bool,
-    last_scroll_at: Option<Instant>,
+    last_scroll_frame_nanos: Option<u64>,
 }
 
 impl Default for PullRefreshController {
@@ -74,9 +74,9 @@ impl PullRefreshController {
             distance_pulled: 0.0,
             threshold: PullRefreshDefaults::REFRESH_THRESHOLD.to_pixels_f32(),
             refreshing_offset: PullRefreshDefaults::REFRESHING_OFFSET.to_pixels_f32(),
-            last_frame_time: None,
+            last_frame_nanos: None,
             is_pressed: false,
-            last_scroll_at: None,
+            last_scroll_frame_nanos: None,
         }
     }
 
@@ -106,13 +106,16 @@ impl PullRefreshController {
         self.is_pressed
     }
 
-    fn mark_scroll(&mut self, now: Instant) {
-        self.last_scroll_at = Some(now);
+    fn mark_scroll(&mut self, frame_nanos: u64) {
+        self.last_scroll_frame_nanos = Some(frame_nanos);
     }
 
-    fn should_release(&self, now: Instant, idle_timeout: Duration) -> bool {
-        self.last_scroll_at
-            .map(|last| now.duration_since(last) >= idle_timeout)
+    fn should_release(&self, frame_nanos: u64, idle_timeout: Duration) -> bool {
+        self.last_scroll_frame_nanos
+            .map(|last_scroll_frame_nanos| {
+                Duration::from_nanos(frame_nanos.saturating_sub(last_scroll_frame_nanos))
+                    >= idle_timeout
+            })
             .unwrap_or(true)
     }
 
@@ -122,7 +125,7 @@ impl PullRefreshController {
         }
         self.refreshing = refreshing;
         self.distance_pulled = 0.0;
-        self.last_scroll_at = None;
+        self.last_scroll_frame_nanos = None;
         let target = if refreshing {
             self.refreshing_offset
         } else {
@@ -175,14 +178,13 @@ impl PullRefreshController {
         should_refresh
     }
 
-    fn update_position(&mut self, smoothing: f32) -> bool {
-        let current_time = Instant::now();
-        let delta_time = if let Some(last_time) = self.last_frame_time {
-            current_time.duration_since(last_time).as_secs_f32()
+    fn update_position(&mut self, frame_nanos: u64, smoothing: f32) -> bool {
+        let delta_time = if let Some(last_frame_nanos) = self.last_frame_nanos {
+            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
         } else {
             0.016
         };
-        self.last_frame_time = Some(current_time);
+        self.last_frame_nanos = Some(frame_nanos);
 
         let diff = self.target_position - self.position;
         if diff.abs() < 0.5 {
@@ -536,14 +538,15 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
             state.set_pressed(false);
         }
     });
+    let frame_nanos = current_frame_nanos();
     controller.with_mut(|s| {
-        s.update_position(INDICATOR_SMOOTHING);
+        s.update_position(frame_nanos, INDICATOR_SMOOTHING);
     });
     if controller.with(|s| s.has_pending_animation_frame()) {
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let has_pending_animation_frame = controller_for_frame.with_mut(|s| {
-                s.update_position(INDICATOR_SMOOTHING);
+                s.update_position(frame_nanos, INDICATOR_SMOOTHING);
                 s.has_pending_animation_frame()
             });
             if has_pending_animation_frame {
@@ -571,7 +574,7 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
         let mut saw_scroll = false;
         let mut saw_release = false;
         let mut did_pull = false;
-        let now = Instant::now();
+        let frame_nanos = current_frame_nanos();
 
         if is_cursor_in_component && enabled {
             for event in input.cursor_events.iter() {
@@ -616,7 +619,7 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
             }
 
             if enabled && saw_scroll {
-                controller.with_mut(|s| s.mark_scroll(now));
+                controller.with_mut(|s| s.mark_scroll(frame_nanos));
             }
 
             if enabled
@@ -624,7 +627,8 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
                 && (saw_release
                     || (!saw_scroll
                         && !controller.with(|s| s.is_pressed())
-                        && controller.with(|s| s.should_release(now, SCROLL_IDLE_RELEASE_TIMEOUT))))
+                        && controller
+                            .with(|s| s.should_release(frame_nanos, SCROLL_IDLE_RELEASE_TIMEOUT))))
             {
                 let should_refresh = controller.with_mut(|s| s.on_release());
                 if should_refresh {

@@ -30,6 +30,7 @@ use glyphon::{
 use tessera_platform::clipboard;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
+    current_frame_nanos,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, tessera, winit,
@@ -90,7 +91,8 @@ pub enum ClickType {
 pub struct TextEditorController {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
-    blink_timer: Instant,
+    blink_start_frame_nanos: u64,
+    current_frame_nanos: u64,
     focus_handler: Focus,
     pub(crate) selection_color: Color,
     pub(crate) text_color: Color,
@@ -133,6 +135,7 @@ impl TextEditorController {
     pub fn with_selection_color(size: Dp, line_height: Option<Dp>, selection_color: Color) -> Self {
         let final_line_height = line_height.unwrap_or(Dp(size.0 * 1.2));
         let line_height_px: Px = final_line_height.into();
+        let frame_nanos = current_frame_nanos();
         let mut buffer = glyphon::Buffer::new(
             &mut write_font_system(),
             glyphon::Metrics::new(size.to_pixels_f32(), line_height_px.to_f32()),
@@ -144,7 +147,8 @@ impl TextEditorController {
         Self {
             line_height: line_height_px,
             editor,
-            blink_timer: Instant::now(),
+            blink_start_frame_nanos: frame_nanos,
+            current_frame_nanos: frame_nanos,
             focus_handler: Focus::new(),
             selection_color,
             text_color,
@@ -229,9 +233,19 @@ impl TextEditorController {
         result
     }
 
-    // Returns the current blink timer instant (for cursor blinking).
-    fn blink_timer(&self) -> Instant {
-        self.blink_timer
+    // Returns the cursor blink start timestamp.
+    fn blink_start_frame_nanos(&self) -> u64 {
+        self.blink_start_frame_nanos
+    }
+
+    // Returns the latest frame timestamp observed by this controller.
+    fn current_frame_nanos(&self) -> u64 {
+        self.current_frame_nanos
+    }
+
+    // Updates the latest frame timestamp used by cursor blink rendering.
+    fn update_frame_nanos(&mut self, frame_nanos: u64) {
+        self.current_frame_nanos = frame_nanos;
     }
 
     /// Returns the current selection highlight color.
@@ -811,19 +825,35 @@ pub fn text_edit_core(args: &TextEditCoreArgs) {
 
     // Cursor rendering (only when focused)
     if controller.with(|c| c.focus_handler().is_focused()) {
+        let frame_nanos = current_frame_nanos();
+        controller.with_mut(|controller| controller.update_frame_nanos(frame_nanos));
         let controller_for_frame = controller;
-        receive_frame_nanos(move |_| {
-            let is_focused =
-                controller_for_frame.with_mut(|controller| controller.focus_handler().is_focused());
+        receive_frame_nanos(move |frame_nanos| {
+            let is_focused = controller_for_frame.with_mut(|controller| {
+                controller.update_frame_nanos(frame_nanos);
+                controller.focus_handler().is_focused()
+            });
             if is_focused {
                 tessera_ui::FrameNanosControl::Continue
             } else {
                 tessera_ui::FrameNanosControl::Stop
             }
         });
-        let (line_height, blink_timer, cursor_color) =
-            controller.with(|c| (c.line_height(), c.blink_timer(), c.cursor_color()));
-        cursor::cursor(line_height, blink_timer, cursor_color);
+        let (line_height, blink_start_frame_nanos, frame_nanos, cursor_color) =
+            controller.with(|c| {
+                (
+                    c.line_height(),
+                    c.blink_start_frame_nanos(),
+                    c.current_frame_nanos(),
+                    c.cursor_color(),
+                )
+            });
+        cursor::cursor(
+            line_height,
+            blink_start_frame_nanos,
+            frame_nanos,
+            cursor_color,
+        );
     }
 }
 

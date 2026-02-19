@@ -13,6 +13,7 @@ use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, ScrollEventSource, State,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera,
 };
@@ -188,7 +189,7 @@ pub struct ScrollableController {
     /// Optional override for the child size used to clamp scroll extents.
     override_child_size: Option<ComputedData>,
     /// Last frame time for delta time calculation
-    last_frame_time: Option<Instant>,
+    last_frame_nanos: Option<u64>,
     /// The state for vertical scrollbar
     scrollbar_state_v: ScrollBarState,
     /// The state for horizontal scrollbar
@@ -214,7 +215,7 @@ impl ScrollableController {
             child_size: ComputedData::ZERO,
             visible_size: ComputedData::ZERO,
             override_child_size: None,
-            last_frame_time: None,
+            last_frame_nanos: None,
             scrollbar_state_v: ScrollBarState::default(),
             scrollbar_state_h: ScrollBarState::default(),
             velocity_tracker: None,
@@ -265,17 +266,15 @@ impl ScrollableController {
 
     /// Updates the scroll position based on time-based interpolation
     /// Returns true if the position changed (needs redraw)
-    pub(crate) fn update_scroll_position(&mut self, smoothing: f32) -> bool {
-        let current_time = Instant::now();
-
+    pub(crate) fn update_scroll_position(&mut self, frame_nanos: u64, smoothing: f32) -> bool {
         // Calculate delta time
-        let delta_time = if let Some(last_time) = self.last_frame_time {
-            current_time.duration_since(last_time).as_secs_f32()
+        let delta_time = if let Some(last_frame_nanos) = self.last_frame_nanos {
+            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
         } else {
             0.016 // Assume 60fps for first frame
         };
 
-        self.last_frame_time = Some(current_time);
+        self.last_frame_nanos = Some(frame_nanos);
 
         // Calculate the difference between target and current position
         let diff_x = self.target_position.x.to_f32() - self.child_position.x.to_f32();
@@ -921,14 +920,14 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
     let scrollbar_state_v = args.scrollbar_state_v.clone();
     let scrollbar_state_h = args.scrollbar_state_h.clone();
     let controller = args.controller;
-
-    controller.with_mut(|c| c.update_scroll_position(args.scroll_smoothing));
+    let frame_nanos = current_frame_nanos();
+    controller.with_mut(|c| c.update_scroll_position(frame_nanos, args.scroll_smoothing));
     if controller.with(|c| c.has_pending_animation_frame()) {
         let controller_for_frame = controller;
         let smoothing = args.scroll_smoothing;
-        receive_frame_nanos(move |_| {
+        receive_frame_nanos(move |frame_nanos| {
             let has_pending_animation_frame = controller_for_frame.with_mut(|c| {
-                c.update_scroll_position(smoothing);
+                c.update_scroll_position(frame_nanos, smoothing);
                 c.has_pending_animation_frame()
             });
             if has_pending_animation_frame {
@@ -956,6 +955,7 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
             .map(|pos| is_position_inside_bounds(size, pos))
             .unwrap_or(false);
         let now = Instant::now();
+        let frame_nanos = current_frame_nanos();
         let should_handle_scroll = is_cursor_in_component;
 
         if should_handle_scroll {
@@ -1003,14 +1003,14 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
                         {
                             if args.vertical {
                                 let mut scrollbar_state = scrollbar_state_v.write();
-                                scrollbar_state.last_scroll_activity =
-                                    Some(std::time::Instant::now());
+                                scrollbar_state.last_scroll_activity_frame_nanos =
+                                    Some(frame_nanos);
                                 scrollbar_state.should_be_visible = true;
                             }
                             if args.horizontal {
                                 let mut scrollbar_state = scrollbar_state_h.write();
-                                scrollbar_state.last_scroll_activity =
-                                    Some(std::time::Instant::now());
+                                scrollbar_state.last_scroll_activity_frame_nanos =
+                                    Some(frame_nanos);
                                 scrollbar_state.should_be_visible = true;
                             }
                         }

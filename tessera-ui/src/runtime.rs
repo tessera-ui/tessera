@@ -529,6 +529,11 @@ pub fn current_frame_time() -> Option<Instant> {
     frame_clock_tracker().lock().current_frame_time
 }
 
+/// Returns the current frame timestamp in nanoseconds from runtime origin.
+pub fn current_frame_nanos() -> u64 {
+    frame_clock_tracker().lock().current_frame_nanos
+}
+
 /// Returns the elapsed time since the previous frame.
 pub fn frame_delta() -> Duration {
     frame_clock_tracker().lock().frame_delta

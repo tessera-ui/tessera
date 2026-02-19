@@ -8,6 +8,7 @@ use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
     PxPosition, RenderSlot, SampleRegion, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember,
     renderer::DrawCommand,
@@ -401,15 +402,18 @@ pub fn fluid_glass(args: &FluidGlassArgs) {
 #[tessera]
 fn fluid_glass_inner(args: &FluidGlassInnerArgs) {
     let mut fluid_args = args.fluid.clone();
-    if let Some((progress, center)) = args
-        .ripple_state
-        .as_ref()
-        .and_then(|state| state.with_mut(|s| s.get_animation_progress()))
-    {
+    let frame_nanos = current_frame_nanos();
+    if let Some((progress, center)) = args.ripple_state.as_ref().and_then(|state| {
+        state.with_mut(|ripple| {
+            ripple
+                .animation_at_frame_nanos(frame_nanos)
+                .map(|animation| (animation.progress, animation.center))
+        })
+    }) {
         if let Some(ripple_state) = args.ripple_state {
-            receive_frame_nanos(move |_| {
-                let has_active_ripple =
-                    ripple_state.with_mut(|state| state.get_animation_progress().is_some());
+            receive_frame_nanos(move |frame_nanos| {
+                let has_active_ripple = ripple_state
+                    .with_mut(|ripple| ripple.animation_at_frame_nanos(frame_nanos).is_some());
                 if has_active_ripple {
                     tessera_ui::FrameNanosControl::Continue
                 } else {
