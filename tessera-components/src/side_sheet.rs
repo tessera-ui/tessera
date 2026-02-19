@@ -11,7 +11,7 @@ use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
     PxPosition, RenderSlot, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera, use_context, winit, with_frame_nanos,
+    receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -580,8 +580,16 @@ fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
     let is_animating = timer_opt.is_some_and(|t| t.elapsed() < ANIM_TIME);
     if is_animating {
         let controller_for_frame = args.controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|_| {});
+        receive_frame_nanos(move |_| {
+            let is_animating = controller_for_frame.with_mut(|controller| {
+                let (_, timer_opt) = controller.snapshot();
+                timer_opt.is_some_and(|timer| timer.elapsed() < ANIM_TIME)
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 

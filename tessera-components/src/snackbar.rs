@@ -11,7 +11,7 @@ use std::{
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, State, tessera, use_context, with_frame_nanos,
+    Callback, CallbackWith, Color, Dp, Modifier, State, receive_frame_nanos, tessera, use_context,
 };
 
 use crate::{
@@ -752,10 +752,17 @@ pub fn snackbar_host(args: &SnackbarHostArgs) {
     let record = state.with_mut(|host| host.poll(now));
     if state.with(|host| host.has_pending_timeout(now)) {
         let state_for_frame = state;
-        with_frame_nanos(move |_| {
-            state_for_frame.with_mut(|host| {
-                let _ = host.poll(Instant::now());
+        receive_frame_nanos(move |_| {
+            let has_pending_timeout = state_for_frame.with_mut(|host| {
+                let now = Instant::now();
+                let _ = host.poll(now);
+                host.has_pending_timeout(now)
             });
+            if has_pending_timeout {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
     let Some(record) = record else {

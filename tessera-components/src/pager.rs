@@ -10,7 +10,7 @@ use tessera_ui::{
     CallbackWith, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
     MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    remember, tessera, with_frame_nanos,
+    receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
@@ -822,10 +822,16 @@ fn pager_inner_node(args: &PagerRenderArgs) {
     });
     if controller.with(|c| c.has_pending_animation_frame(Instant::now())) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|c| {
+        receive_frame_nanos(move |_| {
+            let has_pending_animation_frame = controller_for_frame.with_mut(|c| {
                 c.tick(Instant::now(), args.snap_threshold, args.scroll_smoothing);
+                c.has_pending_animation_frame(Instant::now())
             });
+            if has_pending_animation_frame {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 

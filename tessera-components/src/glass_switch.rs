@@ -11,7 +11,7 @@ use tessera_ui::{
     Px, PxPosition, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera, with_frame_nanos,
+    receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
@@ -285,10 +285,16 @@ fn glass_switch_node(args: &GlassSwitchArgs) {
     let progress = controller.with_mut(|c| c.animation_progress());
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|c| {
-                c.animation_progress();
+        receive_frame_nanos(move |_| {
+            let is_animating = controller_for_frame.with_mut(|controller| {
+                let _ = controller.animation_progress();
+                controller.is_animating()
             });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
     let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);

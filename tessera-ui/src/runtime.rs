@@ -46,11 +46,11 @@ thread_local! {
     /// Call counter stack used for instance identity, reset by `key` blocks.
     static INSTANCE_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
 
-    /// Call counter stack used by frame awaiters.
+    /// Call counter stack used by frame-nanos receivers.
     ///
-    /// This must be independent from `CALL_COUNTER_STACK` so frame-awaiting APIs
+    /// This must be independent from `CALL_COUNTER_STACK` so frame-receive APIs
     /// never perturb `remember` slot identity.
-    static FRAME_AWAITER_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    static FRAME_RECEIVER_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
 
     /// Stack of currently executing component instance keys for the current thread.
     ///
@@ -443,19 +443,29 @@ struct FrameClockTracker {
     current_frame_nanos: u64,
     previous_frame_time: Option<Instant>,
     frame_delta: Duration,
-    awaiters: HashMap<FrameAwaiterKey, FrameAwaiter>,
+    receivers: HashMap<FrameNanosReceiverKey, FrameNanosReceiver>,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
-struct FrameAwaiterKey {
+struct FrameNanosReceiverKey {
     logic_id: u64,
-    awaiter_hash: u64,
+    receiver_hash: u64,
 }
 
-type FrameAwaiterCallback = Box<dyn FnOnce(u64) + Send + 'static>;
+/// Control flow for [`receive_frame_nanos`] callbacks.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum FrameNanosControl {
+    /// Keep this receiver registered and run it again on the next frame.
+    Continue,
+    /// Unregister this receiver after the current frame tick.
+    Stop,
+}
 
-struct FrameAwaiter {
-    callback: FrameAwaiterCallback,
+type FrameNanosReceiverCallback = Box<dyn FnMut(u64) -> FrameNanosControl + Send + 'static>;
+
+struct FrameNanosReceiver {
+    owner_instance_key: u64,
+    callback: FrameNanosReceiverCallback,
 }
 
 static FRAME_CLOCK_TRACKER: OnceLock<Mutex<FrameClockTracker>> = OnceLock::new();
@@ -483,22 +493,33 @@ pub(crate) fn reset_frame_clock() {
     *frame_clock_tracker().lock() = FrameClockTracker::default();
 }
 
-pub(crate) fn has_pending_frame_awaiters() -> bool {
-    !frame_clock_tracker().lock().awaiters.is_empty()
+pub(crate) fn has_pending_frame_nanos_receivers() -> bool {
+    !frame_clock_tracker().lock().receivers.is_empty()
 }
 
-pub(crate) fn drain_frame_awaiters() {
-    let (frame_nanos, awaiters) = {
-        let mut tracker = frame_clock_tracker().lock();
-        (
-            tracker.current_frame_nanos,
-            std::mem::take(&mut tracker.awaiters),
+pub(crate) fn tick_frame_nanos_receivers() {
+    let frame_nanos = frame_clock_tracker().lock().current_frame_nanos;
+    let mut tracker = frame_clock_tracker().lock();
+    tracker.receivers.retain(|_, receiver| {
+        matches!(
+            (receiver.callback)(frame_nanos),
+            FrameNanosControl::Continue
         )
-    };
+    });
+}
 
-    for (_, awaiter) in awaiters {
-        (awaiter.callback)(frame_nanos);
+pub(crate) fn remove_frame_nanos_receivers(instance_keys: &HashSet<u64>) {
+    if instance_keys.is_empty() {
+        return;
     }
+    frame_clock_tracker()
+        .lock()
+        .receivers
+        .retain(|_, receiver| !instance_keys.contains(&receiver.owner_instance_key));
+}
+
+pub(crate) fn clear_frame_nanos_receivers() {
+    frame_clock_tracker().lock().receivers.clear();
 }
 
 /// Returns the timestamp of the current frame, if available.
@@ -513,70 +534,72 @@ pub fn frame_delta() -> Duration {
     frame_clock_tracker().lock().frame_delta
 }
 
-fn ensure_frame_await_phase() {
+fn ensure_frame_receive_phase() {
     match current_phase() {
         Some(RuntimePhase::Build) | Some(RuntimePhase::Input) => {}
         Some(RuntimePhase::Measure) => {
-            panic!("with_frame_nanos must not be called inside measure")
+            panic!("receive_frame_nanos must not be called inside measure")
         }
         None => panic!(
-            "with_frame_nanos must be called inside a tessera component build or input handler"
+            "receive_frame_nanos must be called inside a tessera component build or input handler"
         ),
     }
 }
 
-fn current_component_instance_key_for_awaiter() -> Option<u64> {
+fn current_component_instance_key_for_receiver() -> Option<u64> {
     current_component_instance_key_from_scope()
 }
 
-fn compute_frame_awaiter_key() -> FrameAwaiterKey {
+fn compute_frame_nanos_receiver_key() -> FrameNanosReceiverKey {
     let logic_id =
-        current_logic_id().expect("with_frame_nanos must be called inside a tessera component");
+        current_logic_id().expect("receive_frame_nanos must be called inside a tessera component");
     let group_path_hash = current_group_path_hash();
 
-    let call_counter = FRAME_AWAITER_CALL_COUNTER_STACK.with(|stack| {
+    let call_counter = FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
         debug_assert!(
             !stack.is_empty(),
-            "FRAME_AWAITER_CALL_COUNTER_STACK is empty; with_frame_nanos must be called inside a component"
+            "FRAME_RECEIVER_CALL_COUNTER_STACK is empty; receive_frame_nanos must be called inside a component"
         );
         let counter = *stack
             .last()
-            .expect("FRAME_AWAITER_CALL_COUNTER_STACK should not be empty");
+            .expect("FRAME_RECEIVER_CALL_COUNTER_STACK should not be empty");
         *stack
             .last_mut()
-            .expect("FRAME_AWAITER_CALL_COUNTER_STACK should not be empty") += 1;
+            .expect("FRAME_RECEIVER_CALL_COUNTER_STACK should not be empty") += 1;
         counter
     });
 
-    let awaiter_hash = hash_components(&[&group_path_hash, &call_counter]);
-    FrameAwaiterKey {
+    let receiver_hash = hash_components(&[&group_path_hash, &call_counter]);
+    FrameNanosReceiverKey {
         logic_id,
-        awaiter_hash,
+        receiver_hash,
     }
 }
 
-/// Register a one-shot callback to run on the next frame.
+/// Register a per-frame callback driven by the renderer's frame clock.
 ///
-/// The callback receives the current frame time in nanoseconds from a monotonic
-/// runtime origin. Calling this repeatedly at the same callsite replaces the
-/// previous pending callback.
-pub fn with_frame_nanos<F>(callback: F)
+/// Registration is keyed by the current callsite identity. Repeated calls from
+/// the same position keep the existing active callback until it returns
+/// [`FrameNanosControl::Stop`].
+pub fn receive_frame_nanos<F>(callback: F)
 where
-    F: FnOnce(u64) + Send + 'static,
+    F: FnMut(u64) -> FrameNanosControl + Send + 'static,
 {
-    ensure_frame_await_phase();
+    ensure_frame_receive_phase();
 
-    current_component_instance_key_for_awaiter()
-        .unwrap_or_else(|| panic!("with_frame_nanos requires an active component node context"));
-    let key = compute_frame_awaiter_key();
+    let owner_instance_key = current_component_instance_key_for_receiver()
+        .unwrap_or_else(|| panic!("receive_frame_nanos requires an active component node context"));
+    let key = compute_frame_nanos_receiver_key();
 
-    frame_clock_tracker().lock().awaiters.insert(
-        key,
-        FrameAwaiter {
+    let mut tracker = frame_clock_tracker().lock();
+    tracker
+        .receivers
+        .entry(key)
+        .or_insert_with(|| FrameNanosReceiver {
+            owner_instance_key,
             callback: Box::new(callback),
-        },
-    );
+        });
 }
 
 pub(crate) fn drop_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
@@ -1113,8 +1136,8 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
     // Push a new call counter layer for this component's child instance identity
     INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
 
-    // Push a new call counter layer for frame-awaiting APIs.
-    FRAME_AWAITER_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+    // Push a new call counter layer for frame-nanos receivers.
+    FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
 
     #[cfg(feature = "profiling")]
     let profiling_guard = match current_phase() {
@@ -1183,11 +1206,11 @@ fn pop_current_node() {
         );
     });
 
-    FRAME_AWAITER_CALL_COUNTER_STACK.with(|stack| {
+    FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| {
         let popped = stack.borrow_mut().pop();
         debug_assert!(
             popped.is_some(),
-            "FRAME_AWAITER_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
+            "FRAME_RECEIVER_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
         );
     });
 }
@@ -1798,18 +1821,40 @@ mod tests {
     use super::*;
 
     #[test]
-    fn frame_awaiter_uses_component_scope_instance_key() {
+    fn frame_receiver_uses_component_scope_instance_key() {
         let _instance_guard = push_current_component_instance_key(7);
-        assert_eq!(current_component_instance_key_for_awaiter(), Some(7));
+        assert_eq!(current_component_instance_key_for_receiver(), Some(7));
     }
 
     #[test]
-    fn with_frame_nanos_panics_without_component_scope() {
+    fn receive_frame_nanos_panics_without_component_scope() {
         reset_frame_clock();
         begin_frame_clock(Instant::now());
 
-        let result = std::panic::catch_unwind(|| with_frame_nanos(|_| {}));
+        let result = std::panic::catch_unwind(|| {
+            receive_frame_nanos(|_| FrameNanosControl::Continue);
+        });
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn tick_frame_nanos_receivers_removes_stopped_receivers() {
+        reset_frame_clock();
+        begin_frame_clock(Instant::now());
+
+        frame_clock_tracker().lock().receivers.insert(
+            FrameNanosReceiverKey {
+                logic_id: 1,
+                receiver_hash: 1,
+            },
+            FrameNanosReceiver {
+                owner_instance_key: 123,
+                callback: Box::new(|_| FrameNanosControl::Stop),
+            },
+        );
+
+        tick_frame_nanos_receivers();
+        assert!(frame_clock_tracker().lock().receivers.is_empty());
     }
 
     #[test]

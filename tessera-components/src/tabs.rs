@@ -10,7 +10,7 @@ use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    remember, tessera, use_context, with_frame_nanos,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -1308,8 +1308,16 @@ fn tabs_render_node(args: &TabsRenderArgs) {
     controller.with_mut(|c| c.tick(Instant::now()));
     if controller.with(|c| c.has_pending_animation_frame()) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|c| c.tick(Instant::now()));
+        receive_frame_nanos(move |_| {
+            let has_pending_animation_frame = controller_for_frame.with_mut(|controller| {
+                controller.tick(Instant::now());
+                controller.has_pending_animation_frame()
+            });
+            if has_pending_animation_frame {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
     let scroll_offset = controller.with(|c| c.content_scroll_px());

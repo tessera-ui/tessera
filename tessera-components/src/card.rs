@@ -8,7 +8,7 @@ use std::{sync::Arc, time::Instant};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, State, remember, tessera, use_context, with_frame_nanos,
+    Callback, Color, Dp, Modifier, State, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -599,8 +599,16 @@ fn card_node(args: &CardRenderArgs) {
 
     if should_schedule_frame {
         let elevation_spring_for_frame = elevation_spring;
-        with_frame_nanos(move |_| {
-            elevation_spring_for_frame.with_mut(|spring| spring.tick(Instant::now()));
+        receive_frame_nanos(move |_| {
+            let is_animating = elevation_spring_for_frame.with_mut(|spring| {
+                spring.tick(Instant::now());
+                spring.is_animating()
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 

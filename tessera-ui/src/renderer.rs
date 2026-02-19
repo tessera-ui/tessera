@@ -53,15 +53,16 @@ use crate::{
     render_module::RenderModule,
     runtime::{
         TesseraRuntime, begin_frame_clock, begin_frame_component_replay_tracking,
-        begin_frame_layout_dirty_tracking, begin_frame_slots, clear_redraw_waker,
-        consume_scheduled_redraw, drain_frame_awaiters, drop_slots_for_logic_ids,
+        begin_frame_layout_dirty_tracking, begin_frame_slots, clear_frame_nanos_receivers,
+        clear_redraw_waker, consume_scheduled_redraw, drop_slots_for_logic_ids,
         finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
         finalize_frame_layout_dirty_tracking, has_pending_build_invalidations,
-        has_pending_frame_awaiters, install_redraw_waker, previous_component_replay_nodes,
-        remove_previous_component_replay_nodes, remove_state_read_dependencies,
-        reset_build_invalidations, reset_component_replay_tracking, reset_frame_clock,
-        reset_layout_dirty_tracking, reset_state_read_dependencies, take_build_invalidations,
-        take_dirty_layout_nodes, with_replay_scope,
+        has_pending_frame_nanos_receivers, install_redraw_waker, previous_component_replay_nodes,
+        remove_frame_nanos_receivers, remove_previous_component_replay_nodes,
+        remove_state_read_dependencies, reset_build_invalidations, reset_component_replay_tracking,
+        reset_frame_clock, reset_layout_dirty_tracking, reset_state_read_dependencies,
+        take_build_invalidations, take_dirty_layout_nodes, tick_frame_nanos_receivers,
+        with_replay_scope,
     },
     thread_utils,
 };
@@ -179,12 +180,12 @@ impl BuildTreeResult {
 #[derive(Clone, Copy, Debug, Default)]
 struct RuntimePendingWork {
     invalidation_pending: bool,
-    frame_awaiter_pending: bool,
+    frame_receiver_pending: bool,
 }
 
 impl RuntimePendingWork {
     fn requires_redraw(self) -> bool {
-        self.invalidation_pending || self.frame_awaiter_pending
+        self.invalidation_pending || self.frame_receiver_pending
     }
 
     #[cfg(feature = "profiling")]
@@ -193,7 +194,7 @@ impl RuntimePendingWork {
         if self.invalidation_pending {
             reasons.push(RedrawReason::RuntimeInvalidation);
         }
-        if self.frame_awaiter_pending {
+        if self.frame_receiver_pending {
             reasons.push(RedrawReason::RuntimeFrameAwaiter);
         }
         reasons
@@ -905,6 +906,7 @@ impl<F: Fn()> Renderer<F> {
     fn build_component_tree_full() -> std::time::Duration {
         let tree_timer = Instant::now();
         debug!("Building component tree...");
+        clear_frame_nanos_receivers();
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.clear());
         begin_frame_component_replay_tracking();
         begin_frame_component_context_tracking();
@@ -1089,6 +1091,7 @@ impl<F: Fn()> Renderer<F> {
         finalize_frame_component_context_tracking_partial();
         finalize_frame_layout_dirty_tracking();
         remove_previous_component_replay_nodes(&stale_instance_keys);
+        remove_frame_nanos_receivers(&stale_instance_keys);
         remove_state_read_dependencies(&stale_instance_keys);
         remove_previous_component_context_snapshots(&stale_instance_keys);
         remove_context_read_dependencies(&stale_instance_keys);
@@ -1299,9 +1302,9 @@ Fps: {:.2}
         #[cfg(feature = "profiling")]
         profiler_begin_frame(frame_idx);
         begin_frame_clock(Instant::now());
-        // Wake frame awaiters before build so their state writes are consumed by
-        // the current recomposition pass.
-        drain_frame_awaiters();
+        // Tick frame-nanos receivers before build so their state writes are
+        // consumed by the current recomposition pass.
+        tick_frame_nanos_receivers();
         // notify the windowing system before rendering
         // this will help winit to properly schedule and make assumptions about its
         // internal state
@@ -1452,7 +1455,7 @@ Fps: {:.2}
 
         let runtime_pending_work = RuntimePendingWork {
             invalidation_pending: has_pending_build_invalidations(),
-            frame_awaiter_pending: has_pending_frame_awaiters(),
+            frame_receiver_pending: has_pending_frame_nanos_receivers(),
         };
 
         RenderFrameOutcome {

@@ -32,7 +32,7 @@ use tessera_ui::{
     CallbackWith, Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    tessera, winit, with_frame_nanos,
+    receive_frame_nanos, tessera, winit,
 };
 use winit::keyboard::NamedKey;
 
@@ -812,8 +812,14 @@ pub fn text_edit_core(args: &TextEditCoreArgs) {
     // Cursor rendering (only when focused)
     if controller.with(|c| c.focus_handler().is_focused()) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|_| {});
+        receive_frame_nanos(move |_| {
+            let is_focused =
+                controller_for_frame.with_mut(|controller| controller.focus_handler().is_focused());
+            if is_focused {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
         let (line_height, blink_timer, cursor_color) =
             controller.with(|c| (c.line_height(), c.blink_timer(), c.cursor_color()));

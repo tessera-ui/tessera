@@ -11,7 +11,7 @@ use tessera_ui::{
     PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    provide_context, remember, tessera, use_context, with_frame_nanos,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -564,10 +564,16 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
         .unwrap_or(1.0);
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|c| {
-                let _ = c.animation_progress();
+        receive_frame_nanos(move |_| {
+            let is_animating = controller_for_frame.with_mut(|controller| {
+                let _ = controller.animation_progress();
+                controller.is_animating()
             });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
     let selected_index = controller.with(|c| c.selected());

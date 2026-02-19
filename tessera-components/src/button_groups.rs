@@ -9,7 +9,7 @@ use std::{collections::HashMap, time::Instant};
 use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, remember, tessera, use_context, with_frame_nanos,
+    Modifier, Px, PxPosition, RenderSlot, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -493,8 +493,21 @@ fn elastic_container(args: &ElasticContainerArgs) {
     });
     if should_schedule_frame {
         let frame_tick_for_frame = frame_tick;
-        with_frame_nanos(move |_| {
+        let state_for_frame = args.state;
+        let index = args.index;
+        receive_frame_nanos(move |_| {
             frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
+            let is_animating = state_for_frame.with(|state| {
+                state
+                    .item_states
+                    .get(&index)
+                    .is_some_and(|item| item.elastic_state.is_animating())
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 

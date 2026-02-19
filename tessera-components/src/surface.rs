@@ -9,7 +9,7 @@ use tessera_ui::{
     PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    provide_context, remember, tessera, use_context, with_frame_nanos,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -953,8 +953,14 @@ fn surface_inner(args: &SurfaceInnerArgs) {
     {
         let has_active_ripple = ripple_state.with(|s| s.animation_snapshot().is_some());
         if has_active_ripple {
-            with_frame_nanos(move |_| {
-                ripple_state.with_mut(|_| {});
+            receive_frame_nanos(move |_| {
+                let has_active_ripple =
+                    ripple_state.with_mut(|state| state.animation_snapshot().is_some());
+                if has_active_ripple {
+                    tessera_ui::FrameNanosControl::Continue
+                } else {
+                    tessera_ui::FrameNanosControl::Stop
+                }
             });
         }
     }

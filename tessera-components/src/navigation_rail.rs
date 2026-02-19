@@ -11,7 +11,7 @@ use tessera_ui::{
     PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    provide_context, remember, tessera, use_context, with_frame_nanos,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -649,11 +649,17 @@ fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
     let expand_fraction = controller.with_mut(|c| c.expand_fraction());
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|c| {
-                let _ = c.selection_animation_progress();
-                let _ = c.expand_fraction();
+        receive_frame_nanos(move |_| {
+            let is_animating = controller_for_frame.with_mut(|controller| {
+                let _ = controller.selection_animation_progress();
+                let _ = controller.expand_fraction();
+                controller.is_animating()
             });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 

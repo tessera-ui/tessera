@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, DimensionValue, Dp, Modifier, Px, PxSize, State, accesskit::Role,
-    remember, tessera, use_context, with_frame_nanos,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -266,8 +266,16 @@ fn radio_button_node(args: &RadioButtonArgs) {
     controller.with_mut(|c| c.update_animation());
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|c| c.update_animation());
+        receive_frame_nanos(move |_| {
+            let is_animating = controller_for_frame.with_mut(|controller| {
+                controller.update_animation();
+                controller.is_animating()
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
     let progress = controller.with(|c| c.animation_progress());

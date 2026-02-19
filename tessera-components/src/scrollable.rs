@@ -14,7 +14,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, ScrollEventSource, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    remember, tessera, with_frame_nanos,
+    receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
@@ -926,10 +926,16 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
     if controller.with(|c| c.has_pending_animation_frame()) {
         let controller_for_frame = controller;
         let smoothing = args.scroll_smoothing;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|c| {
+        receive_frame_nanos(move |_| {
+            let has_pending_animation_frame = controller_for_frame.with_mut(|c| {
                 c.update_scroll_position(smoothing);
+                c.has_pending_animation_frame()
             });
+            if has_pending_animation_frame {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
     let child_position = controller.with(|c| c.child_position());

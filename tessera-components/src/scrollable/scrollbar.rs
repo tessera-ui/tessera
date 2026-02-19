@@ -6,7 +6,7 @@ use tessera_ui::{
     Modifier, PressKeyEventType, Px, PxPosition, State,
     accesskit::{Action, Role},
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera, with_frame_nanos,
+    receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
@@ -730,8 +730,15 @@ pub fn scrollbar_v(args: &ScrollBarArgs) {
     handle_autohide_if_needed(&args, &state);
     if needs_scrollbar_frame_tick(&args, &state) {
         let frame_tick_for_frame = frame_tick;
-        with_frame_nanos(move |_| {
+        let args_for_frame = args.clone();
+        let state_for_frame = state.clone();
+        receive_frame_nanos(move |_| {
             frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
+            if needs_scrollbar_frame_tick(&args_for_frame, &state_for_frame) {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 
@@ -810,8 +817,15 @@ pub fn scrollbar_h(args: &ScrollBarArgs) {
     handle_autohide_if_needed(&args, &state);
     if needs_scrollbar_frame_tick(&args, &state) {
         let frame_tick_for_frame = frame_tick;
-        with_frame_nanos(move |_| {
+        let args_for_frame = args.clone();
+        let state_for_frame = state.clone();
+        receive_frame_nanos(move |_| {
             frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
+            if needs_scrollbar_frame_tick(&args_for_frame, &state_for_frame) {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 

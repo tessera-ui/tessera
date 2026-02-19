@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Px, RenderSlot, State,
-    remember, tessera, use_context, with_frame_nanos,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -541,10 +541,16 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
     });
     if controller.with(|s| s.has_pending_animation_frame()) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|s| {
+        receive_frame_nanos(move |_| {
+            let has_pending_animation_frame = controller_for_frame.with_mut(|s| {
                 s.update_position(INDICATOR_SMOOTHING);
+                s.has_pending_animation_frame()
             });
+            if has_pending_animation_frame {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 

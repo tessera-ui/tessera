@@ -9,9 +9,9 @@ use tessera_ui::{
     PxPosition, RenderSlot, SampleRegion, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    remember,
+    receive_frame_nanos, remember,
     renderer::DrawCommand,
-    tessera, with_frame_nanos,
+    tessera,
 };
 
 use crate::{
@@ -407,8 +407,14 @@ fn fluid_glass_inner(args: &FluidGlassInnerArgs) {
         .and_then(|state| state.with_mut(|s| s.get_animation_progress()))
     {
         if let Some(ripple_state) = args.ripple_state {
-            with_frame_nanos(move |_| {
-                ripple_state.with_mut(|_| {});
+            receive_frame_nanos(move |_| {
+                let has_active_ripple =
+                    ripple_state.with_mut(|state| state.get_animation_progress().is_some());
+                if has_active_ripple {
+                    tessera_ui::FrameNanosControl::Continue
+                } else {
+                    tessera_ui::FrameNanosControl::Stop
+                }
             });
         }
 

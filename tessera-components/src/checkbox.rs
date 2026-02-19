@@ -7,8 +7,8 @@ use std::time::{Duration, Instant};
 
 use derive_setters::Setters;
 use tessera_ui::{
-    CallbackWith, Color, Dp, Modifier, PxSize, RenderSlot, State, accesskit::Role, remember,
-    tessera, use_context, with_frame_nanos,
+    CallbackWith, Color, Dp, Modifier, PxSize, RenderSlot, State, accesskit::Role,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -329,8 +329,16 @@ fn checkbox_node(args: &CheckboxArgs) {
     controller.with_mut(|c| c.update_progress());
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
-        with_frame_nanos(move |_| {
-            controller_for_frame.with_mut(|c| c.update_progress());
+        receive_frame_nanos(move |_| {
+            let is_animating = controller_for_frame.with_mut(|controller| {
+                controller.update_progress();
+                controller.is_animating()
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
         });
     }
 
