@@ -390,9 +390,11 @@ impl ComponentTree {
                 .collect::<Vec<_>>();
         }
 
+        let detached_root_reused = inserted_root_ids.contains(&detached_root_id);
+
         let mut inserted_instance_keys = HashSet::new();
         let mut inserted_logic_ids = HashSet::new();
-        for inserted_root_id in inserted_root_ids {
+        for inserted_root_id in &inserted_root_ids {
             for edge in inserted_root_id.traverse(&self.tree) {
                 let indextree::NodeEdge::Start(id) = edge else {
                     continue;
@@ -413,17 +415,19 @@ impl ComponentTree {
             .copied()
             .collect::<HashSet<_>>();
 
-        let detached_node_ids = detached_root_id
-            .traverse(&self.tree)
-            .filter_map(|edge| match edge {
-                indextree::NodeEdge::Start(id) => Some(id),
-                indextree::NodeEdge::End(_) => None,
-            })
-            .collect::<Vec<_>>();
-        for node_id in &detached_node_ids {
-            self.metadatas.remove(node_id);
+        if !detached_root_reused {
+            let detached_node_ids = detached_root_id
+                .traverse(&self.tree)
+                .filter_map(|edge| match edge {
+                    indextree::NodeEdge::Start(id) => Some(id),
+                    indextree::NodeEdge::End(_) => None,
+                })
+                .collect::<Vec<_>>();
+            for node_id in &detached_node_ids {
+                self.metadatas.remove(node_id);
+            }
+            detached_root_id.remove_subtree(&mut self.tree);
         }
-        detached_root_id.remove_subtree(&mut self.tree);
         self.replay_reuse_candidates.clear();
 
         self.node_queue = previous_queue;
@@ -1106,5 +1110,50 @@ mod tests {
         assert!(replace_result.inserted_logic_ids.contains(&7));
 
         assert!(tree.get(second).is_some());
+    }
+
+    #[test]
+    fn finish_replace_subtree_keeps_reused_subtree_and_excludes_it_from_removed_sets() {
+        let mut tree = ComponentTree::new();
+
+        let root = tree.add_node(node("root", 1, 1));
+
+        let _first = tree.add_node(node("first", 2, 2));
+        let _first_child = tree.add_node(node("first_child", 3, 3));
+        tree.pop_node();
+        tree.pop_node();
+
+        let second = tree.add_node(node("second", 4, 4));
+        tree.pop_node();
+        tree.pop_node();
+
+        let context = match tree.begin_replace_subtree_by_instance_key(2) {
+            Ok(context) => context,
+            Err(_) => panic!("replace context should be created"),
+        };
+
+        let _replacement = tree.add_node(node("replacement", 2, 2));
+        assert!(tree.try_reuse_current_subtree(2, 2));
+        tree.pop_node();
+
+        let replace_result = match tree.finish_replace_subtree(context) {
+            Ok(result) => result,
+            Err(_) => panic!("finish replace should succeed"),
+        };
+
+        let root_children = root
+            .children(tree.tree())
+            .map(|id| tree.get(id).expect("child must exist").fn_name.clone())
+            .collect::<Vec<_>>();
+        assert_eq!(root_children, vec!["first", "second"]);
+        assert!(tree.find_node_id_by_instance_key(3).is_some());
+        assert!(tree.get(second).is_some());
+
+        assert!(replace_result.inserted_instance_keys.contains(&2));
+        assert!(replace_result.inserted_instance_keys.contains(&3));
+        assert!(!replace_result.removed_instance_keys.contains(&2));
+        assert!(!replace_result.removed_instance_keys.contains(&3));
+        assert!(!replace_result.removed_logic_ids.contains(&2));
+        assert!(!replace_result.removed_logic_ids.contains(&3));
     }
 }

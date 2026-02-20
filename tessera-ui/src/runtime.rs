@@ -1949,6 +1949,44 @@ mod tests {
     }
 
     #[test]
+    fn with_build_dirty_instance_keys_marks_current_scope() {
+        let mut outer = HashSet::new();
+        outer.insert(7);
+
+        assert!(!is_instance_key_build_dirty(7));
+        with_build_dirty_instance_keys(&outer, || {
+            assert!(is_instance_key_build_dirty(7));
+            assert!(!is_instance_key_build_dirty(8));
+
+            let mut inner = HashSet::new();
+            inner.insert(8);
+            with_build_dirty_instance_keys(&inner, || {
+                assert!(!is_instance_key_build_dirty(7));
+                assert!(is_instance_key_build_dirty(8));
+            });
+
+            assert!(is_instance_key_build_dirty(7));
+            assert!(!is_instance_key_build_dirty(8));
+        });
+        assert!(!is_instance_key_build_dirty(7));
+    }
+
+    #[test]
+    fn with_build_dirty_instance_keys_restores_on_panic() {
+        let mut dirty = HashSet::new();
+        dirty.insert(11);
+
+        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            with_build_dirty_instance_keys(&dirty, || {
+                assert!(is_instance_key_build_dirty(11));
+                panic!("expected panic");
+            });
+        }));
+        assert!(result.is_err());
+        assert!(!is_instance_key_build_dirty(11));
+    }
+
+    #[test]
     fn with_replay_scope_restores_group_path_and_override() {
         GROUP_PATH_STACK.with(|stack| {
             *stack.borrow_mut() = vec![1, 2, 3];
