@@ -332,11 +332,12 @@ where
 }
 
 /// Snapshot of a replayable component invocation.
+#[derive(Clone)]
 pub struct ComponentReplayData {
     /// Type-erased component runner.
     pub runner: Arc<dyn ErasedComponentRunner>,
     /// Latest props snapshot.
-    pub props: Box<dyn ErasedProp>,
+    pub props: Arc<dyn ErasedProp>,
 }
 
 impl ComponentReplayData {
@@ -347,16 +348,7 @@ impl ComponentReplayData {
     {
         Self {
             runner,
-            props: Box::new(props.clone()),
-        }
-    }
-}
-
-impl Clone for ComponentReplayData {
-    fn clone(&self) -> Self {
-        Self {
-            runner: Arc::clone(&self.runner),
-            props: self.props.clone_box(),
+            props: Arc::new(props.clone()),
         }
     }
 }

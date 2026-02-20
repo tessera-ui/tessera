@@ -272,6 +272,8 @@ pub struct ComponentNode {
     pub layout_spec: Box<dyn LayoutSpecDyn>,
     /// Optional replay metadata for subtree-level rerun.
     pub replay: Option<crate::prop::ComponentReplayData>,
+    /// Whether props are equal to the previous frame snapshot.
+    pub props_unchanged_from_previous: bool,
 }
 
 /// Contains metadata of the component node.

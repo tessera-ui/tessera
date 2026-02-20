@@ -941,8 +941,27 @@ impl TesseraRuntime {
     ) where
         P: Prop,
     {
+        let previous_replay = self.component_tree.current_node().and_then(|node| {
+            let tracker = component_replay_tracker().read();
+            let previous = tracker.previous_nodes.get(&node.instance_key)?;
+            if previous.logic_id != node.logic_id {
+                return None;
+            }
+            if previous.replay.props.equals(props) {
+                Some(previous.replay.clone())
+            } else {
+                None
+            }
+        });
+
         if let Some(node) = self.component_tree.current_node_mut() {
-            node.replay = Some(ComponentReplayData::new(runner, props));
+            if let Some(replay) = previous_replay {
+                node.replay = Some(replay);
+                node.props_unchanged_from_previous = true;
+            } else {
+                node.replay = Some(ComponentReplayData::new(runner, props));
+                node.props_unchanged_from_previous = false;
+            }
         } else {
             debug_assert!(
                 false,

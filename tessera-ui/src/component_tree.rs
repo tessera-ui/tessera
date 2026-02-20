@@ -976,6 +976,7 @@ mod tests {
             input_handler_fn: None,
             layout_spec: Box::new(DefaultLayoutSpec),
             replay: None,
+            props_unchanged_from_previous: false,
         }
     }
 
