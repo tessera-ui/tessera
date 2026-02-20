@@ -62,7 +62,7 @@ use crate::{
         remove_state_read_dependencies, reset_build_invalidations, reset_component_replay_tracking,
         reset_frame_clock, reset_layout_dirty_tracking, reset_state_read_dependencies,
         take_build_invalidations, take_layout_self_dirty_nodes, tick_frame_nanos_receivers,
-        with_replay_scope,
+        with_build_dirty_instance_keys, with_replay_scope,
     },
     thread_utils,
 };
@@ -1056,8 +1056,6 @@ impl<F: Fn()> Renderer<F> {
                     )
                 }
             };
-            remove_state_read_dependencies(replace_context.removed_instance_keys());
-            remove_context_read_dependencies(replace_context.removed_instance_keys());
 
             with_context_snapshot(context_snapshot, || {
                 with_replay_scope(replay_logic_id, &replay_group_path, || {
@@ -1114,35 +1112,37 @@ impl<F: Fn()> Renderer<F> {
         with_entry_point_callback(entry_point, || {
             let tree_is_empty = TesseraRuntime::with(|rt| rt.component_tree.tree().count() == 0);
             let invalidations = take_build_invalidations();
+            with_build_dirty_instance_keys(&invalidations.dirty_instance_keys, || {
+                if tree_is_empty {
+                    return BuildTreeResult::full_initial(Self::build_component_tree_full());
+                }
 
-            if tree_is_empty {
-                return BuildTreeResult::full_initial(Self::build_component_tree_full());
-            }
+                if invalidations.dirty_instance_keys.is_empty() {
+                    debug!("Skipping component tree build: no invalidations");
+                    return BuildTreeResult::skip_no_invalidation();
+                }
 
-            if invalidations.dirty_instance_keys.is_empty() {
-                debug!("Skipping component tree build: no invalidations");
-                return BuildTreeResult::skip_no_invalidation();
-            }
-
-            let dirty_roots = Self::collect_dirty_replay_roots(&invalidations.dirty_instance_keys);
-            #[cfg(feature = "profiling")]
-            let total_nodes_before_build = Self::component_tree_node_count();
-            let partial_replay_result = Self::build_component_tree_partial(&dirty_roots);
-            let Some(partial_replay_result) = partial_replay_result else {
-                return BuildTreeResult::full_initial(Self::build_component_tree_full());
-            };
-            #[cfg(feature = "profiling")]
-            {
-                BuildTreeResult::partial_replay(
-                    partial_replay_result.duration,
-                    partial_replay_result.replayed_nodes,
-                    total_nodes_before_build,
-                )
-            }
-            #[cfg(not(feature = "profiling"))]
-            {
-                BuildTreeResult::partial_replay(partial_replay_result.duration)
-            }
+                let dirty_roots =
+                    Self::collect_dirty_replay_roots(&invalidations.dirty_instance_keys);
+                #[cfg(feature = "profiling")]
+                let total_nodes_before_build = Self::component_tree_node_count();
+                let partial_replay_result = Self::build_component_tree_partial(&dirty_roots);
+                let Some(partial_replay_result) = partial_replay_result else {
+                    return BuildTreeResult::full_initial(Self::build_component_tree_full());
+                };
+                #[cfg(feature = "profiling")]
+                {
+                    BuildTreeResult::partial_replay(
+                        partial_replay_result.duration,
+                        partial_replay_result.replayed_nodes,
+                        total_nodes_before_build,
+                    )
+                }
+                #[cfg(not(feature = "profiling"))]
+                {
+                    BuildTreeResult::partial_replay(partial_replay_result.duration)
+                }
+            })
         })
     }
 

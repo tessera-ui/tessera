@@ -124,17 +124,17 @@ fn replay_register_tokens(
         ComponentPropSignature::RefArg { ident, ty } => {
             let ty = ty.as_ref();
             quote! {
-                {
+                let __tessera_component_reused = {
                     use #crate_path::runtime::TesseraRuntime;
                     let __tessera_runner = #crate_path::prop::make_component_runner::<#ty>(#fn_name);
                     TesseraRuntime::with_mut(|runtime| {
-                        runtime.set_current_component_replay(__tessera_runner, #ident);
-                    });
-                }
+                        runtime.set_current_component_replay(__tessera_runner, #ident)
+                    })
+                };
             }
         }
         ComponentPropSignature::Unit => quote! {
-            {
+            let __tessera_component_reused = {
                 use #crate_path::runtime::TesseraRuntime;
                 fn __tessera_noarg_runner(_props: &()) {
                     #fn_name();
@@ -143,9 +143,9 @@ fn replay_register_tokens(
                     #crate_path::prop::make_component_runner::<()>(__tessera_noarg_runner);
                 let __tessera_unit_props = ();
                 TesseraRuntime::with_mut(|runtime| {
-                    runtime.set_current_component_replay(__tessera_runner, &__tessera_unit_props);
-                });
-            }
+                    runtime.set_current_component_replay(__tessera_runner, &__tessera_unit_props)
+                })
+            };
         },
     }
 }
@@ -447,6 +447,9 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             #prop_assert_tokens
             #crate_path::context::record_current_context_snapshot_for(__tessera_instance_key);
             #replay_tokens
+            if __tessera_component_reused {
+                return;
+            }
             // Inject helper tokens
             #layout_tokens
             #state_tokens

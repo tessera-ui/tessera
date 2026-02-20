@@ -208,6 +208,8 @@ pub struct ComponentTree {
     metadatas: ComponentNodeMetaDatas,
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
+    /// Detached old-subtree nodes keyed by instance key during replay replace.
+    replay_reuse_candidates: HashMap<u64, indextree::NodeId>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -230,14 +232,9 @@ pub(crate) struct ReplayReplaceContext {
     next_sibling: Option<indextree::NodeId>,
     existing_children: HashSet<indextree::NodeId>,
     previous_queue: Vec<indextree::NodeId>,
+    detached_root_id: indextree::NodeId,
     removed_instance_keys: HashSet<u64>,
     removed_logic_ids: HashSet<u64>,
-}
-
-impl ReplayReplaceContext {
-    pub(crate) fn removed_instance_keys(&self) -> &HashSet<u64> {
-        &self.removed_instance_keys
-    }
 }
 
 impl Default for ComponentTree {
@@ -256,6 +253,7 @@ impl ComponentTree {
             tree,
             node_queue,
             metadatas,
+            replay_reuse_candidates: HashMap::new(),
         }
     }
 
@@ -264,6 +262,7 @@ impl ComponentTree {
         self.tree.clear();
         self.metadatas.clear();
         self.node_queue.clear();
+        self.replay_reuse_candidates.clear();
     }
 
     /// Get node by NodeId
@@ -302,6 +301,7 @@ impl ComponentTree {
         &mut self,
         instance_key: u64,
     ) -> Result<ReplayReplaceContext, ReplayReplaceError> {
+        self.replay_reuse_candidates.clear();
         let Some(target_node_id) = self.find_node_id_by_instance_key(instance_key) else {
             return Err(ReplayReplaceError::NodeNotFound);
         };
@@ -335,12 +335,11 @@ impl ComponentTree {
             if let Some(node) = self.tree.get(*id) {
                 removed_instance_keys.insert(node.get().instance_key);
                 removed_logic_ids.insert(node.get().logic_id);
+                self.replay_reuse_candidates
+                    .insert(node.get().instance_key, *id);
             }
         }
-        for id in &removed_node_ids {
-            self.metadatas.remove(id);
-        }
-        target_node_id.remove_subtree(&mut self.tree);
+        target_node_id.detach(&mut self.tree);
 
         let existing_children = parent_id.children(&self.tree).collect();
 
@@ -350,6 +349,7 @@ impl ComponentTree {
             next_sibling,
             existing_children,
             previous_queue,
+            detached_root_id: target_node_id,
             removed_instance_keys,
             removed_logic_ids,
         })
@@ -364,6 +364,7 @@ impl ComponentTree {
             next_sibling,
             existing_children,
             previous_queue,
+            detached_root_id,
             removed_instance_keys,
             removed_logic_ids,
         } = context;
@@ -403,6 +404,28 @@ impl ComponentTree {
             }
         }
 
+        let removed_instance_keys = removed_instance_keys
+            .difference(&inserted_instance_keys)
+            .copied()
+            .collect::<HashSet<_>>();
+        let removed_logic_ids = removed_logic_ids
+            .difference(&inserted_logic_ids)
+            .copied()
+            .collect::<HashSet<_>>();
+
+        let detached_node_ids = detached_root_id
+            .traverse(&self.tree)
+            .filter_map(|edge| match edge {
+                indextree::NodeEdge::Start(id) => Some(id),
+                indextree::NodeEdge::End(_) => None,
+            })
+            .collect::<Vec<_>>();
+        for node_id in &detached_node_ids {
+            self.metadatas.remove(node_id);
+        }
+        detached_root_id.remove_subtree(&mut self.tree);
+        self.replay_reuse_candidates.clear();
+
         self.node_queue = previous_queue;
         Ok(ReplayReplaceResult {
             removed_instance_keys,
@@ -423,6 +446,41 @@ impl ComponentTree {
     pub fn current_node_mut(&mut self) -> Option<&mut ComponentNode> {
         let node_id = self.node_queue.last()?;
         self.get_mut(*node_id)
+    }
+
+    pub(crate) fn try_reuse_current_subtree(&mut self, instance_key: u64, logic_id: u64) -> bool {
+        let Some(&candidate_node_id) = self.replay_reuse_candidates.get(&instance_key) else {
+            return false;
+        };
+        let Some(candidate_logic_id) = self
+            .tree
+            .get(candidate_node_id)
+            .map(|node| node.get().logic_id)
+        else {
+            self.replay_reuse_candidates.remove(&instance_key);
+            return false;
+        };
+        if candidate_logic_id != logic_id {
+            return false;
+        }
+
+        let Some(current_node_id) = self.node_queue.last().copied() else {
+            return false;
+        };
+        if current_node_id == candidate_node_id {
+            self.replay_reuse_candidates.remove(&instance_key);
+            return true;
+        }
+
+        candidate_node_id.detach(&mut self.tree);
+        current_node_id.insert_before(candidate_node_id, &mut self.tree);
+        self.metadatas.remove(&current_node_id);
+        current_node_id.remove_subtree(&mut self.tree);
+        if let Some(current_node) = self.node_queue.last_mut() {
+            *current_node = candidate_node_id;
+        }
+        self.replay_reuse_candidates.remove(&instance_key);
+        true
     }
 
     /// Add a new node to the tree

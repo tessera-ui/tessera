@@ -63,6 +63,9 @@ thread_local! {
     /// When set, the next `push_current_node` call will consume this value as
     /// the component logic id instead of deriving it from parent stacks.
     static NEXT_NODE_LOGIC_ID_OVERRIDE: RefCell<Option<u64>> = const { RefCell::new(None) };
+
+    /// Active reactive-dirty instance-key set for the current build pass.
+    static BUILD_DIRTY_INSTANCE_KEYS_STACK: RefCell<Vec<Arc<HashSet<u64>>>> = const { RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn compute_context_slot_key() -> (u64, u64) {
@@ -344,6 +347,49 @@ pub(crate) fn with_replay_scope<R>(logic_id: u64, group_path: &[u64], f: impl Fn
     };
 
     f()
+}
+
+pub(crate) fn with_build_dirty_instance_keys<R>(
+    dirty_instance_keys: &HashSet<u64>,
+    f: impl FnOnce() -> R,
+) -> R {
+    struct BuildDirtyScopeGuard {
+        popped: bool,
+    }
+
+    impl Drop for BuildDirtyScopeGuard {
+        fn drop(&mut self) {
+            if self.popped {
+                return;
+            }
+            BUILD_DIRTY_INSTANCE_KEYS_STACK.with(|stack| {
+                let mut stack = stack.borrow_mut();
+                let popped = stack.pop();
+                debug_assert!(
+                    popped.is_some(),
+                    "BUILD_DIRTY_INSTANCE_KEYS_STACK underflow: attempted to pop from empty stack"
+                );
+            });
+            self.popped = true;
+        }
+    }
+
+    BUILD_DIRTY_INSTANCE_KEYS_STACK.with(|stack| {
+        stack
+            .borrow_mut()
+            .push(Arc::new(dirty_instance_keys.clone()));
+    });
+    let _guard = BuildDirtyScopeGuard { popped: false };
+    f()
+}
+
+pub(crate) fn is_instance_key_build_dirty(instance_key: u64) -> bool {
+    BUILD_DIRTY_INSTANCE_KEYS_STACK.with(|stack| {
+        stack
+            .borrow()
+            .last()
+            .is_some_and(|dirty_instance_keys| dirty_instance_keys.contains(&instance_key))
+    })
 }
 
 pub(crate) fn current_component_instance_key_in_scope() -> Option<u64> {
@@ -938,13 +984,18 @@ impl TesseraRuntime {
         &mut self,
         runner: Arc<dyn ErasedComponentRunner>,
         props: &P,
-    ) where
+    ) -> bool
+    where
         P: Prop,
     {
-        let previous_replay = self.component_tree.current_node().and_then(|node| {
+        let current_node_info = self
+            .component_tree
+            .current_node()
+            .map(|node| (node.instance_key, node.logic_id));
+        let previous_replay = current_node_info.and_then(|(instance_key, logic_id)| {
             let tracker = component_replay_tracker().read();
-            let previous = tracker.previous_nodes.get(&node.instance_key)?;
-            if previous.logic_id != node.logic_id {
+            let previous = tracker.previous_nodes.get(&instance_key)?;
+            if previous.logic_id != logic_id {
                 return None;
             }
             if previous.replay.props.equals(props) {
@@ -953,6 +1004,20 @@ impl TesseraRuntime {
                 None
             }
         });
+
+        if let Some((instance_key, logic_id)) = current_node_info
+            && let Some(replay) = previous_replay.clone()
+            && !is_instance_key_build_dirty(instance_key)
+            && self
+                .component_tree
+                .try_reuse_current_subtree(instance_key, logic_id)
+        {
+            if let Some(node) = self.component_tree.current_node_mut() {
+                node.replay = Some(replay);
+                node.props_unchanged_from_previous = true;
+            }
+            return true;
+        }
 
         if let Some(node) = self.component_tree.current_node_mut() {
             if let Some(replay) = previous_replay {
@@ -967,10 +1032,12 @@ impl TesseraRuntime {
                 false,
                 "set_current_component_replay must be called inside a component build"
             );
+            return false;
         }
         if let Some(node_id) = current_node_id() {
             record_component_replay_snapshot(self, node_id);
         }
+        false
     }
 
     /// Sets the layout spec for the current component node.
