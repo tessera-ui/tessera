@@ -225,6 +225,7 @@ pub(crate) struct ReplayReplaceResult {
     pub removed_logic_ids: HashSet<u64>,
     pub inserted_instance_keys: HashSet<u64>,
     pub inserted_logic_ids: HashSet<u64>,
+    pub reused_logic_ids: HashSet<u64>,
 }
 
 pub(crate) struct ReplayReplaceContext {
@@ -233,6 +234,7 @@ pub(crate) struct ReplayReplaceContext {
     existing_children: HashSet<indextree::NodeId>,
     previous_queue: Vec<indextree::NodeId>,
     detached_root_id: indextree::NodeId,
+    detached_node_ids: HashSet<indextree::NodeId>,
     removed_instance_keys: HashSet<u64>,
     removed_logic_ids: HashSet<u64>,
 }
@@ -329,6 +331,7 @@ impl ComponentTree {
                 indextree::NodeEdge::End(_) => None,
             })
             .collect();
+        let detached_node_ids = removed_node_ids.iter().copied().collect::<HashSet<_>>();
         let mut removed_instance_keys = HashSet::new();
         let mut removed_logic_ids = HashSet::new();
         for id in &removed_node_ids {
@@ -350,6 +353,7 @@ impl ComponentTree {
             existing_children,
             previous_queue,
             detached_root_id: target_node_id,
+            detached_node_ids,
             removed_instance_keys,
             removed_logic_ids,
         })
@@ -365,6 +369,7 @@ impl ComponentTree {
             existing_children,
             previous_queue,
             detached_root_id,
+            detached_node_ids,
             removed_instance_keys,
             removed_logic_ids,
         } = context;
@@ -394,6 +399,7 @@ impl ComponentTree {
 
         let mut inserted_instance_keys = HashSet::new();
         let mut inserted_logic_ids = HashSet::new();
+        let mut reused_logic_ids = HashSet::new();
         for inserted_root_id in &inserted_root_ids {
             for edge in inserted_root_id.traverse(&self.tree) {
                 let indextree::NodeEdge::Start(id) = edge else {
@@ -402,6 +408,9 @@ impl ComponentTree {
                 if let Some(node) = self.tree.get(id) {
                     inserted_instance_keys.insert(node.get().instance_key);
                     inserted_logic_ids.insert(node.get().logic_id);
+                    if detached_node_ids.contains(&id) {
+                        reused_logic_ids.insert(node.get().logic_id);
+                    }
                 }
             }
         }
@@ -436,6 +445,7 @@ impl ComponentTree {
             removed_logic_ids,
             inserted_instance_keys,
             inserted_logic_ids,
+            reused_logic_ids,
         })
     }
 
@@ -1151,6 +1161,8 @@ mod tests {
 
         assert!(replace_result.inserted_instance_keys.contains(&2));
         assert!(replace_result.inserted_instance_keys.contains(&3));
+        assert!(replace_result.reused_logic_ids.contains(&2));
+        assert!(replace_result.reused_logic_ids.contains(&3));
         assert!(!replace_result.removed_instance_keys.contains(&2));
         assert!(!replace_result.removed_instance_keys.contains(&3));
         assert!(!replace_result.removed_logic_ids.contains(&2));

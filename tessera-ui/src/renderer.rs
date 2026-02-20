@@ -1071,7 +1071,12 @@ impl<F: Fn()> Renderer<F> {
             let replace_result = replace_result.unwrap_or_else(|_| {
                 panic!("finish_replace_subtree failed for instance key {instance_key}")
             });
-            rebuilt_logic_ids.extend(replace_result.inserted_logic_ids.iter().copied());
+            rebuilt_logic_ids.extend(
+                replace_result
+                    .inserted_logic_ids
+                    .difference(&replace_result.reused_logic_ids)
+                    .copied(),
+            );
 
             for removed in &replace_result.removed_instance_keys {
                 if !replace_result.inserted_instance_keys.contains(removed) {
