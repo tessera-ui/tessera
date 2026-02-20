@@ -61,7 +61,7 @@ use crate::{
         remove_frame_nanos_receivers, remove_previous_component_replay_nodes,
         remove_state_read_dependencies, reset_build_invalidations, reset_component_replay_tracking,
         reset_frame_clock, reset_layout_dirty_tracking, reset_state_read_dependencies,
-        take_build_invalidations, take_dirty_layout_nodes, tick_frame_nanos_receivers,
+        take_build_invalidations, take_layout_self_dirty_nodes, tick_frame_nanos_receivers,
         with_replay_scope,
     },
     thread_utils,
@@ -1217,7 +1217,7 @@ Fps: {:.2}
 
         // Clear any existing compute resources
         args.app.compute_resource_manager().write().clear();
-        let dirty_layout_nodes = take_dirty_layout_nodes();
+        let layout_self_dirty_nodes = take_layout_self_dirty_nodes();
 
         let (graph, window_requests, layout_diagnostics, record_cost) =
             TesseraRuntime::with_mut(|rt| {
@@ -1231,7 +1231,7 @@ Fps: {:.2}
                     modifiers: args.keyboard_state.modifiers(),
                     compute_resource_manager: args.app.compute_resource_manager(),
                     gpu: args.app.device(),
-                    dirty_layout_nodes: &dirty_layout_nodes,
+                    layout_self_dirty_nodes: &layout_self_dirty_nodes,
                 })
             });
 

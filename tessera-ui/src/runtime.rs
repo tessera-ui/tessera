@@ -146,8 +146,8 @@ fn slot_table() -> &'static RwLock<SlotTable> {
 struct LayoutDirtyTracker {
     previous_layout_specs_by_node: HashMap<u64, Box<dyn LayoutSpecDyn>>,
     frame_layout_specs_by_node: HashMap<u64, Box<dyn LayoutSpecDyn>>,
-    param_dirty_nodes: HashSet<u64>,
-    dirty_nodes: HashSet<u64>,
+    pending_self_dirty_nodes: HashSet<u64>,
+    ready_self_dirty_nodes: HashSet<u64>,
     previous_children_by_node: HashMap<u64, Vec<u64>>,
 }
 
@@ -649,7 +649,7 @@ fn record_layout_spec_dirty(instance_key: u64, layout_spec: &dyn LayoutSpecDyn) 
         None => true,
     };
     if changed {
-        tracker.param_dirty_nodes.insert(instance_key);
+        tracker.pending_self_dirty_nodes.insert(instance_key);
     }
     tracker
         .frame_layout_specs_by_node
@@ -659,17 +659,17 @@ fn record_layout_spec_dirty(instance_key: u64, layout_spec: &dyn LayoutSpecDyn) 
 pub(crate) fn begin_frame_layout_dirty_tracking() {
     let mut tracker = layout_dirty_tracker().write();
     tracker.frame_layout_specs_by_node.clear();
-    tracker.param_dirty_nodes.clear();
+    tracker.pending_self_dirty_nodes.clear();
 }
 
 pub(crate) fn finalize_frame_layout_dirty_tracking() {
     let mut tracker = layout_dirty_tracker().write();
-    tracker.dirty_nodes = std::mem::take(&mut tracker.param_dirty_nodes);
+    tracker.ready_self_dirty_nodes = std::mem::take(&mut tracker.pending_self_dirty_nodes);
     tracker.previous_layout_specs_by_node = std::mem::take(&mut tracker.frame_layout_specs_by_node);
 }
 
-pub(crate) fn take_dirty_layout_nodes() -> HashSet<u64> {
-    std::mem::take(&mut layout_dirty_tracker().write().dirty_nodes)
+pub(crate) fn take_layout_self_dirty_nodes() -> HashSet<u64> {
+    std::mem::take(&mut layout_dirty_tracker().write().ready_self_dirty_nodes)
 }
 
 pub(crate) fn reset_layout_dirty_tracking() {

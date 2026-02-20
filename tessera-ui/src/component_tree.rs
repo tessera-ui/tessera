@@ -197,7 +197,7 @@ pub(crate) struct ComputeParams<'a> {
     pub modifiers: winit::keyboard::ModifiersState,
     pub compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
     pub gpu: &'a wgpu::Device,
-    pub dirty_layout_nodes: &'a HashSet<u64>,
+    pub layout_self_dirty_nodes: &'a HashSet<u64>,
 }
 
 /// Respents a component tree
@@ -532,7 +532,7 @@ impl ComponentTree {
             modifiers,
             compute_resource_manager,
             gpu,
-            dirty_layout_nodes,
+            layout_self_dirty_nodes,
         } = params;
         let Some(root_node) = self
             .tree
@@ -556,10 +556,10 @@ impl ComponentTree {
         } = crate::runtime::reconcile_layout_structure(&current_children_by_node);
         remove_layout_snapshots(&removed_nodes);
 
-        let dirty_nodes_param = dirty_layout_nodes.len() as u64;
+        let dirty_nodes_param = layout_self_dirty_nodes.len() as u64;
         let dirty_nodes_structural = structural_dirty_nodes.len() as u64;
         let dirty_prepare_start = Instant::now();
-        let mut dirty_nodes_self = dirty_layout_nodes.clone();
+        let mut dirty_nodes_self = layout_self_dirty_nodes.clone();
         dirty_nodes_self.extend(structural_dirty_nodes.iter().copied());
         let dirty_nodes_effective =
             expand_dirty_nodes_with_ancestors(root_node, &self.tree, &dirty_nodes_self);
