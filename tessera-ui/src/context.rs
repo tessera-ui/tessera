@@ -294,7 +294,7 @@ fn context_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
 }
 
 pub(crate) fn begin_frame_context_slots() {
-    // Start a new context-slot epoch for the current build pass.
+    // Start a new context-slot epoch for the current recomposition pass.
     slot_table().write().begin_frame();
     CONTEXT_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
@@ -303,40 +303,12 @@ pub(crate) fn begin_frame_context_slots() {
     });
 }
 
-pub(crate) fn recycle_frame_context_slots() {
-    // Recycle context slots that were not touched in the current build epoch.
-    let mut table = slot_table().write();
-    let epoch = table.epoch;
-
-    let mut freed: Vec<(u32, SlotKey)> = Vec::new();
-    for (slot, entry) in table.entries.iter_mut().enumerate() {
-        if entry.value.is_none() {
-            continue;
-        }
-
-        if entry.last_alive_epoch == epoch {
-            continue;
-        }
-
-        freed.push((slot as u32, entry.key));
-        entry.value = None;
-        entry.generation = entry.generation.wrapping_add(1);
-        entry.last_alive_epoch = 0;
-    }
-
-    for (slot, key) in freed {
-        table.key_to_slot.remove(&key);
-        table.free_list.push(slot);
-    }
-}
-
-pub(crate) fn recycle_frame_context_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
+pub(crate) fn recycle_recomposed_context_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
     if logic_ids.is_empty() {
         return;
     }
 
-    // Recycle untouched context slots for the rebuilt logic ids in this build
-    // epoch.
+    // Recycle untouched context slots for logic ids recomposed in this pass.
     let mut table = slot_table().write();
     let epoch = table.epoch;
     let mut freed: Vec<(u32, SlotKey)> = Vec::new();
@@ -361,6 +333,16 @@ pub(crate) fn recycle_frame_context_slots_for_logic_ids(logic_ids: &HashSet<u64>
         table.key_to_slot.remove(&key);
         table.free_list.push(slot);
     }
+}
+
+pub(crate) fn live_context_slot_logic_ids() -> HashSet<u64> {
+    let table = slot_table().read();
+    table
+        .entries
+        .iter()
+        .filter(|entry| entry.value.is_some())
+        .map(|entry| entry.key.logic_id)
+        .collect()
 }
 
 pub(crate) fn drop_context_slots_for_logic_ids(logic_ids: &HashSet<u64>) {

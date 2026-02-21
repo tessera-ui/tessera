@@ -105,7 +105,7 @@ type RenderComputationOutput = (
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum BuildTreeMode {
-    FullInitial,
+    RootRecompose,
     PartialReplay,
     SkipNoInvalidation,
 }
@@ -121,10 +121,10 @@ struct BuildTreeResult {
 }
 
 impl BuildTreeResult {
-    fn full_initial(duration: Duration) -> Self {
+    fn root_recompose(duration: Duration) -> Self {
         Self {
             duration,
-            mode: BuildTreeMode::FullInitial,
+            mode: BuildTreeMode::RootRecompose,
             #[cfg(feature = "profiling")]
             partial_replay_nodes: None,
             #[cfg(feature = "profiling")]
@@ -170,7 +170,7 @@ impl BuildTreeResult {
 impl BuildTreeResult {
     fn profiler_build_mode(self) -> BuildMode {
         match self.mode {
-            BuildTreeMode::FullInitial => BuildMode::FullInitial,
+            BuildTreeMode::RootRecompose => BuildMode::FullInitial,
             BuildTreeMode::PartialReplay => BuildMode::PartialReplay,
             BuildTreeMode::SkipNoInvalidation => BuildMode::SkipNoInvalidation,
         }
@@ -904,9 +904,14 @@ impl<F: Fn()> Renderer<F> {
     /// for component tree processing and resource management.
     #[instrument(level = "debug")]
     fn build_component_tree_full() -> std::time::Duration {
+        let recomposed_state_logic_ids = crate::runtime::live_slot_logic_ids();
+        let recomposed_context_logic_ids = crate::context::live_context_slot_logic_ids();
         let tree_timer = Instant::now();
         debug!("Building component tree...");
         clear_frame_nanos_receivers();
+        // Root recomposition rebuilds reader dependencies from scratch.
+        reset_state_read_dependencies();
+        reset_context_read_dependencies();
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.clear());
         begin_frame_component_replay_tracking();
         begin_frame_component_context_tracking();
@@ -919,6 +924,10 @@ impl<F: Fn()> Renderer<F> {
         finalize_frame_component_replay_tracking();
         finalize_frame_component_context_tracking();
         finalize_frame_layout_dirty_tracking();
+        crate::runtime::recycle_recomposed_slots_for_logic_ids(&recomposed_state_logic_ids);
+        crate::context::recycle_recomposed_context_slots_for_logic_ids(
+            &recomposed_context_logic_ids,
+        );
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
         build_tree_cost
@@ -929,12 +938,14 @@ impl<F: Fn()> Renderer<F> {
             let mut roots = Vec::new();
             let tree = runtime.component_tree.tree();
             for instance_key in dirty_instance_keys {
-                let Some(node_id) = runtime
+                let node_id = runtime
                     .component_tree
                     .find_node_id_by_instance_key(*instance_key)
-                else {
-                    continue;
-                };
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "missing node for dirty instance key {instance_key}; this violates replay invariants"
+                        )
+                    });
 
                 let mut has_dirty_ancestor = false;
                 let mut parent_id = tree.get(node_id).and_then(|node| node.parent());
@@ -954,6 +965,25 @@ impl<F: Fn()> Renderer<F> {
                 }
             }
             roots
+        })
+    }
+
+    fn dirty_roots_include_tree_root(dirty_roots: &[u64]) -> bool {
+        TesseraRuntime::with(|runtime| {
+            let tree = runtime.component_tree.tree();
+            dirty_roots.iter().any(|instance_key| {
+                let node_id = runtime
+                    .component_tree
+                    .find_node_id_by_instance_key(*instance_key)
+                    .unwrap_or_else(|| {
+                        panic!(
+                            "missing node for dirty instance key {instance_key}; this violates replay invariants"
+                        )
+                    });
+                tree.get(node_id)
+                    .and_then(|node| node.parent())
+                    .is_none()
+            })
         })
     }
 
@@ -984,19 +1014,17 @@ impl<F: Fn()> Renderer<F> {
         TesseraRuntime::with(|runtime| runtime.component_tree.tree().count() as u64)
     }
 
-    /// Try subtree replay for dirty roots.
-    ///
-    /// Returns the replay duration.
+    /// Recompose dirty subtrees by replaying from dirty roots.
     ///
     /// All replay prerequisites are invariants under the new reactive model.
     /// Violations are treated as runtime bugs and fail fast.
-    fn build_component_tree_partial(dirty_roots: &[u64]) -> Option<PartialReplayBuildResult> {
+    fn build_component_tree_partial(dirty_roots: &[u64]) -> PartialReplayBuildResult {
         if dirty_roots.is_empty() {
-            return Some(PartialReplayBuildResult {
+            return PartialReplayBuildResult {
                 duration: Duration::ZERO,
                 #[cfg(feature = "profiling")]
                 replayed_nodes: 0,
-            });
+            };
         }
 
         let replay_snapshots = previous_component_replay_nodes();
@@ -1012,7 +1040,7 @@ impl<F: Fn()> Renderer<F> {
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
         let mut stale_instance_keys = HashSet::new();
         let mut stale_logic_ids = HashSet::new();
-        let mut rebuilt_logic_ids = HashSet::new();
+        let mut recomposed_logic_ids = HashSet::new();
         #[cfg(feature = "profiling")]
         let mut replayed_nodes = 0_u64;
 
@@ -1043,13 +1071,10 @@ impl<F: Fn()> Renderer<F> {
             });
             let replace_context = match replace_context {
                 Ok(context) => context,
-                Err(ReplayReplaceError::RootNodeNotReplaceable) => {
-                    debug!(
-                        "dirty root {} resolved to component tree root; falling back to full rebuild",
-                        instance_key
-                    );
-                    return None;
-                }
+                Err(ReplayReplaceError::RootNodeNotReplaceable) => panic!(
+                    "dirty root {} resolved to component tree root; root recomposition must be selected before partial replay",
+                    instance_key
+                ),
                 Err(_) => {
                     panic!(
                         "begin_replace_subtree_by_instance_key failed for instance key {instance_key}"
@@ -1071,7 +1096,7 @@ impl<F: Fn()> Renderer<F> {
             let replace_result = replace_result.unwrap_or_else(|_| {
                 panic!("finish_replace_subtree failed for instance key {instance_key}")
             });
-            rebuilt_logic_ids.extend(
+            recomposed_logic_ids.extend(
                 replace_result
                     .inserted_logic_ids
                     .difference(&replace_result.reused_logic_ids)
@@ -1096,19 +1121,20 @@ impl<F: Fn()> Renderer<F> {
         remove_previous_component_replay_nodes(&stale_instance_keys);
         remove_frame_nanos_receivers(&stale_instance_keys);
         remove_state_read_dependencies(&stale_instance_keys);
+        crate::runtime::remove_build_invalidations(&stale_instance_keys);
         remove_previous_component_context_snapshots(&stale_instance_keys);
         remove_context_read_dependencies(&stale_instance_keys);
         drop_slots_for_logic_ids(&stale_logic_ids);
         drop_context_slots_for_logic_ids(&stale_logic_ids);
-        crate::runtime::recycle_frame_slots_for_logic_ids(&rebuilt_logic_ids);
-        crate::context::recycle_frame_context_slots_for_logic_ids(&rebuilt_logic_ids);
+        crate::runtime::recycle_recomposed_slots_for_logic_ids(&recomposed_logic_ids);
+        crate::context::recycle_recomposed_context_slots_for_logic_ids(&recomposed_logic_ids);
         let build_tree_cost = tree_timer.elapsed();
         debug!("Dirty subtree replay finished in {build_tree_cost:?}");
-        Some(PartialReplayBuildResult {
+        PartialReplayBuildResult {
             duration: build_tree_cost,
             #[cfg(feature = "profiling")]
             replayed_nodes,
-        })
+        }
     }
 
     /// Build the component tree only when invalidated.
@@ -1119,7 +1145,7 @@ impl<F: Fn()> Renderer<F> {
             let invalidations = take_build_invalidations();
             with_build_dirty_instance_keys(&invalidations.dirty_instance_keys, || {
                 if tree_is_empty {
-                    return BuildTreeResult::full_initial(Self::build_component_tree_full());
+                    return BuildTreeResult::root_recompose(Self::build_component_tree_full());
                 }
 
                 if invalidations.dirty_instance_keys.is_empty() {
@@ -1129,12 +1155,12 @@ impl<F: Fn()> Renderer<F> {
 
                 let dirty_roots =
                     Self::collect_dirty_replay_roots(&invalidations.dirty_instance_keys);
+                if Self::dirty_roots_include_tree_root(&dirty_roots) {
+                    return BuildTreeResult::root_recompose(Self::build_component_tree_full());
+                }
                 #[cfg(feature = "profiling")]
                 let total_nodes_before_build = Self::component_tree_node_count();
                 let partial_replay_result = Self::build_component_tree_partial(&dirty_roots);
-                let Some(partial_replay_result) = partial_replay_result else {
-                    return BuildTreeResult::full_initial(Self::build_component_tree_full());
-                };
                 #[cfg(feature = "profiling")]
                 {
                     BuildTreeResult::partial_replay(
@@ -1451,12 +1477,6 @@ Fps: {:.2}
 
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
-
-        if matches!(build_tree_result.mode, BuildTreeMode::FullInitial) {
-            // On full build frames, recycle globally by epoch.
-            crate::runtime::recycle_frame_slots();
-            crate::context::recycle_frame_context_slots();
-        }
 
         let runtime_pending_work = RuntimePendingWork {
             invalidation_pending: has_pending_build_invalidations(),
