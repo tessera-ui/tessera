@@ -8,8 +8,7 @@ use tessera_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{Dp, Modifier, shard, tessera, use_context};
-#[tessera]
+use tessera_ui::{Dp, Modifier, shard, use_context};
 #[shard]
 pub fn tabs_showcase() {
     surface(&SurfaceArgs::with_child(

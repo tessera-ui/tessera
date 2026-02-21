@@ -13,7 +13,7 @@ use tessera_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{CallbackWith, Dp, Modifier, State, remember, shard, tessera, use_context};
+use tessera_ui::{CallbackWith, Dp, Modifier, State, remember, shard, use_context};
 
 struct CornerRadius(f32);
 
@@ -62,7 +62,6 @@ impl Default for ExampleSurfaceState {
         }
     }
 }
-#[tessera]
 #[shard]
 pub fn surface_showcase() {
     let example_surface_state = remember(ExampleSurfaceState::default);

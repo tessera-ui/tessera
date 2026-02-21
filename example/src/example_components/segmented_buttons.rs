@@ -11,8 +11,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
-#[tessera]
+use tessera_ui::{Dp, Modifier, remember, shard};
 #[shard]
 pub fn segmented_buttons_showcase() {
     let selected_index = remember(|| 0usize);

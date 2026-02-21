@@ -6,8 +6,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Color, Dp, Modifier, retain, shard, tessera};
-#[tessera]
+use tessera_ui::{Color, Dp, Modifier, retain, shard};
 #[shard]
 pub fn spacer_showcase() {
     surface(&SurfaceArgs::with_child(

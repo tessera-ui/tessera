@@ -7,8 +7,7 @@ use tessera_components::{
     switch::{SwitchArgs, SwitchController, switch},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-#[tessera]
+use tessera_ui::{Dp, Modifier, remember, retain, shard};
 #[shard]
 pub fn switch_showcase() {
     surface(&SurfaceArgs::with_child(

@@ -16,7 +16,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Callback, Dp, Modifier, remember, retain, shard, tessera};
+use tessera_ui::{Callback, Dp, Modifier, remember, retain, shard};
 
 const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -26,7 +26,6 @@ const ICON_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../assets/emoji_u1f416.svg"
 ));
-#[tessera]
 #[shard]
 pub fn glass_button_showcase() {
     surface(&SurfaceArgs::with_child(

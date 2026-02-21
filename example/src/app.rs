@@ -989,7 +989,6 @@ fn top_app_bar_node(args: &TopAppBarArgs) {
     });
 }
 
-#[tessera]
 #[shard]
 fn about() {
     about_node();

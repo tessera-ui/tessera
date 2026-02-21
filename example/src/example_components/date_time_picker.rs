@@ -17,14 +17,13 @@ use tessera_components::{
         time_picker_dialog,
     },
 };
-use tessera_ui::{Dp, Modifier, State, remember, shard, tessera, use_context};
+use tessera_ui::{Dp, Modifier, State, remember, shard, use_context};
 
 #[derive(Clone, Copy)]
 enum PickerDialog {
     Date,
     Time,
 }
-#[tessera]
 #[shard]
 pub fn date_time_picker_showcase() {
     let date_state = remember(DatePickerState::default);

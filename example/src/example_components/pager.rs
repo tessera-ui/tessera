@@ -10,8 +10,7 @@ use tessera_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{Color, Dp, Modifier, State, remember, shard, tessera, use_context};
-#[tessera]
+use tessera_ui::{Color, Dp, Modifier, State, remember, shard, use_context};
 #[shard]
 pub fn pager_showcase() {
     surface(&SurfaceArgs::with_child(

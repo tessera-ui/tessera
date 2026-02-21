@@ -12,8 +12,7 @@ use tessera_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
-#[tessera]
+use tessera_ui::{Dp, Modifier, remember, shard, use_context};
 #[shard]
 pub fn menus_showcase() {
     let menu_controller = remember(MenuController::new);

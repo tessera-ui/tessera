@@ -7,7 +7,7 @@
 use std::hash::{DefaultHasher, Hash, Hasher};
 
 use proc_macro::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 use syn::{
     Block, Expr, FnArg, ItemFn, Pat, Type, parse_macro_input, parse_quote, visit_mut::VisitMut,
 };
@@ -370,6 +370,18 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Parse the input function that will be transformed into a component
     let mut input_fn = parse_macro_input!(item as ItemFn);
+    if let Some(conflicting_attr) = input_fn
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("shard"))
+    {
+        return syn::Error::new_spanned(
+            conflicting_attr,
+            "#[tessera] and #[shard] cannot be combined on the same function; use #[shard] only",
+        )
+        .to_compile_error()
+        .into();
+    }
     let fn_name = &input_fn.sig.ident;
     let fn_vis = &input_fn.vis;
     let fn_attrs = &input_fn.attrs;
@@ -568,6 +580,18 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     };
 
     let mut func = parse_macro_input!(input as ItemFn);
+    if let Some(conflicting_attr) = func
+        .attrs
+        .iter()
+        .find(|attr| attr.path().is_ident("tessera"))
+    {
+        return syn::Error::new_spanned(
+            conflicting_attr,
+            "#[shard] already defines a component boundary; do not combine #[shard] with #[tessera]",
+        )
+        .to_compile_error()
+        .into();
+    }
 
     // Handle #[state] parameters, ensuring it's unique and removing it from
     // the signature. Also parse optional lifecycle argument:
@@ -643,6 +667,11 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         &format!("{}Destination", func_name_str.to_upper_camel_case()),
         func_name.span(),
     );
+    let inner_component_name = format_ident!("__{}_shard_component", func_name);
+    let shard_props_name = syn::Ident::new(
+        &format!("{}ShardProps", func_name_str.to_upper_camel_case()),
+        func_name.span(),
+    );
 
     // Generate fields for the new struct that will implement `RouterDestination`
     let dest_fields = func.sig.inputs.iter().map(|arg| match arg {
@@ -671,6 +700,18 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         })
         .collect();
 
+    let shard_prop_fields = func.sig.inputs.iter().map(|arg| match arg {
+        syn::FnArg::Typed(pat_type) => {
+            let ident = match *pat_type.pat {
+                syn::Pat::Ident(ref pat_ident) => &pat_ident.ident,
+                _ => panic!("Unsupported parameter pattern in #[shard] function."),
+            };
+            let ty = &pat_type.ty;
+            quote! { #ident: #ty }
+        }
+        _ => panic!("Unsupported parameter type in #[shard] function."),
+    });
+
     let state_lifecycle_tokens = state_lifecycle.clone().unwrap_or_else(|| {
         quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard }
     });
@@ -680,6 +721,12 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         let exec_args = param_idents
             .iter()
             .map(|ident| quote! { self.#ident.clone() });
+        let shard_prop_init = param_idents.iter().map(|ident| quote! { #ident });
+        let shard_prop_bindings = param_idents.iter().map(|ident| {
+            quote! {
+                let #ident = __tessera_shard_props.#ident.clone();
+            }
+        });
 
         if let Some(state_type) = state_type {
             let state_name = state_name.as_ref().unwrap();
@@ -704,16 +751,35 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                 #(#func_attrs)*
                 #func_vis #func_sig_modified {
-                    // Generate a stable unique ID at the call site
-                    const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
+                    #[derive(Clone)]
+                    struct #shard_props_name {
+                        #(#shard_prop_fields),*
+                    }
 
-                    #crate_path::router::with_current_router_shard_state::<#state_type, _, _>(
-                        SHARD_ID,
-                        #state_lifecycle_tokens,
-                        |#state_name| {
-                            #func_body
-                        },
-                    )
+                    impl #crate_path::Prop for #shard_props_name {
+                        fn prop_eq(&self, _other: &Self) -> bool {
+                            false
+                        }
+                    }
+
+                    #[#crate_path::tessera(#crate_path)]
+                    fn #inner_component_name(__tessera_shard_props: &#shard_props_name) {
+                        #(#shard_prop_bindings)*
+
+                        const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
+                        #crate_path::router::with_current_router_shard_state::<#state_type, _, _>(
+                            SHARD_ID,
+                            #state_lifecycle_tokens,
+                            |#state_name| {
+                                #func_body
+                            },
+                        )
+                    }
+
+                    let __tessera_shard_props = #shard_props_name {
+                        #(#shard_prop_init),*
+                    };
+                    #inner_component_name(&__tessera_shard_props);
                 }
             }
         } else {
@@ -738,7 +804,27 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
                 #(#func_attrs)*
                 #func_vis #func_sig_modified {
-                    #func_body
+                    #[derive(Clone)]
+                    struct #shard_props_name {
+                        #(#shard_prop_fields),*
+                    }
+
+                    impl #crate_path::Prop for #shard_props_name {
+                        fn prop_eq(&self, _other: &Self) -> bool {
+                            false
+                        }
+                    }
+
+                    #[#crate_path::tessera(#crate_path)]
+                    fn #inner_component_name(__tessera_shard_props: &#shard_props_name) {
+                        #(#shard_prop_bindings)*
+                        #func_body
+                    }
+
+                    let __tessera_shard_props = #shard_props_name {
+                        #(#shard_prop_init),*
+                    };
+                    #inner_component_name(&__tessera_shard_props);
                 }
             }
         }

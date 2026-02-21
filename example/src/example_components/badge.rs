@@ -10,7 +10,6 @@ use tessera_components::{
     text::{TextArgs, text},
 };
 use tessera_ui::{Dp, Modifier, shard, tessera};
-#[tessera]
 #[shard]
 pub fn badge_showcase() {
     badge_showcase_node();

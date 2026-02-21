@@ -7,8 +7,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{CallbackWith, Dp, Modifier, State, remember, retain, shard, tessera};
-#[tessera]
+use tessera_ui::{CallbackWith, Dp, Modifier, State, remember, retain, shard};
 #[shard]
 pub fn radio_button_showcase() {
     surface(&SurfaceArgs::with_child(

@@ -14,8 +14,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
-#[tessera]
+use tessera_ui::{Dp, Modifier, remember, shard};
 #[shard]
 pub fn split_buttons_showcase() {
     let counter = remember(|| 0u32);

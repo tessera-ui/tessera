@@ -8,7 +8,6 @@ use tessera_components::{
     text::{TextArgs, text},
 };
 use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-#[tessera]
 #[shard]
 pub fn checkbox_showcase() {
     checkbox_showcase_node();

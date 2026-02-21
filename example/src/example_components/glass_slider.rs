@@ -5,8 +5,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-#[tessera]
+use tessera_ui::{Dp, Modifier, remember, retain, shard};
 #[shard]
 pub fn glass_slider_showcase() {
     surface(&SurfaceArgs::with_child(

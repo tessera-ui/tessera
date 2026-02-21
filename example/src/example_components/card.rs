@@ -7,7 +7,6 @@ use tessera_components::{
     text::{TextArgs, text},
 };
 use tessera_ui::{Dp, Modifier, shard, tessera};
-#[tessera]
 #[shard]
 pub fn card_showcase() {
     card_showcase_node();

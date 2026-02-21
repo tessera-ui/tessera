@@ -8,8 +8,7 @@ use tessera_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{Color, Dp, Modifier, shard, tessera, use_context};
-#[tessera]
+use tessera_ui::{Color, Dp, Modifier, shard, use_context};
 #[shard]
 pub fn lazy_lists_showcase() {
     surface(&SurfaceArgs::with_child(

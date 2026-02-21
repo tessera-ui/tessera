@@ -8,7 +8,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, retain, shard};
 
 const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -18,7 +18,6 @@ const VECTOR_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../assets/emoji_u1f416.svg"
 ));
-#[tessera]
 #[shard]
 pub fn image_showcase() {
     surface(&SurfaceArgs::with_child(
@@ -56,7 +55,6 @@ fn test_content() {
             }),
     )
 }
-#[tessera]
 #[shard]
 pub fn icon_showcase() {
     let image_vector_data = remember(|| {

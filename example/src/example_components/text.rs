@@ -4,8 +4,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, retain, shard, tessera};
-#[tessera]
+use tessera_ui::{Dp, Modifier, retain, shard};
 #[shard]
 pub fn text_showcase() {
     surface(&SurfaceArgs::with_child(

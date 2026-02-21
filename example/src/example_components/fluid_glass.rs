@@ -15,7 +15,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{CallbackWith, Dp, Modifier, remember, retain, shard, tessera};
+use tessera_ui::{CallbackWith, Dp, Modifier, remember, retain, shard};
 
 const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
@@ -88,7 +88,6 @@ impl Default for ExampleGlassState {
         }
     }
 }
-#[tessera]
 #[shard]
 pub fn fluid_glass_showcase() {
     surface(&SurfaceArgs::with_child(

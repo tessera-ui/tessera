@@ -9,8 +9,7 @@ use tessera_components::{
     text_field::{TextFieldArgs, text_field},
     text_input::{TextInputArgs, TextInputController, text_input},
 };
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
-#[tessera]
+use tessera_ui::{Dp, Modifier, remember, retain, shard};
 #[shard]
 pub fn text_input_showcase() {
     surface(&SurfaceArgs::with_child(

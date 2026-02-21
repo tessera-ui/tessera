@@ -10,9 +10,8 @@ use tessera_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{Dp, Modifier, remember, shard, tessera, use_context};
+use tessera_ui::{Dp, Modifier, remember, shard, use_context};
 
-#[tessera]
 #[shard]
 pub fn pull_refresh_showcase() {
     let refreshing = remember(|| false);
