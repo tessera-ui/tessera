@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, RenderSlot, provide_context, use_context};
+use tessera_ui::{Color, Dp, Modifier, RenderSlot, provide_context, tessera, use_context};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
@@ -305,6 +305,7 @@ impl TopAppBarArgs {
 /// # }
 /// # component();
 /// ```
+#[tessera]
 pub fn top_app_bar(args: &TopAppBarArgs) {
     let args: TopAppBarArgs = args.clone();
     let typography = use_context::<MaterialTheme>()

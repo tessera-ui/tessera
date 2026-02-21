@@ -233,8 +233,8 @@ impl Default for TextInputArgs {
 /// # }
 /// # component();
 /// ```
+#[tessera]
 pub fn text_input(args: &TextInputArgs) {
-    let mut args: TextInputArgs = args.clone();
     let controller = args.controller.unwrap_or_else(|| {
         remember(|| {
             let mut c = TextInputController::new(args.font_size, args.line_height);
@@ -244,16 +244,8 @@ pub fn text_input(args: &TextInputArgs) {
             c
         })
     });
-    args.controller = Some(controller);
-    text_input_node(&args);
-}
-
-#[tessera]
-fn text_input_node(args: &TextInputArgs) {
-    let controller = args
-        .controller
-        .expect("text_input_node requires controller to be set");
-    let editor_args = args.clone();
+    let mut editor_args = args.clone();
+    editor_args.controller = Some(controller);
 
     if !editor_args.enabled {
         controller.with_mut(|c| c.focus_handler_mut().unfocus());

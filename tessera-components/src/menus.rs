@@ -685,12 +685,6 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     });
 }
 
-/// Convenience wrapper for rendering only the menu overlay without extra main
-/// content.
-pub fn menu(args: &MenuProviderArgs) {
-    menu_provider(args);
-}
-
 /// Defines the configuration for an individual menu item.
 #[derive(PartialEq, Clone, Setters)]
 pub struct MenuItemArgs {

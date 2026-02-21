@@ -420,12 +420,45 @@ impl Default for SwitchArgs {
     }
 }
 
+/// # switch
+///
+/// Render a Material switch for boolean on/off input in settings or forms.
+///
+/// ## Usage
+///
+/// Use when you want a standard on/off switch without custom thumb content.
+///
+/// ## Parameters
+///
+/// - `args` — configures sizing, colors, and callbacks; see [`SwitchArgs`].
+///
+/// ## Examples
+///
+/// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// use tessera_components::switch::{SwitchArgs, switch};
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
+/// #     || MaterialTheme::default(),
+/// #     || {
+/// switch(&SwitchArgs::default().on_toggle(|checked| {
+///     assert!(checked || !checked);
+/// }));
+/// #     },
+/// # );
+/// # material_theme(&args);
+/// # }
+/// # component();
+/// ```
 #[tessera]
-fn switch_inner_node(args: &SwitchArgs) {
-    let args = args.clone();
+pub fn switch(args: &SwitchArgs) {
+    let mut args = args.clone();
     let controller = args
         .controller
-        .expect("switch_inner_node requires controller to be set");
+        .unwrap_or_else(|| remember(|| SwitchController::new(args.checked)));
+    args.controller = Some(controller);
     let child = args.child.clone();
     let mut modifier = args.modifier.clone();
 
@@ -620,46 +653,4 @@ fn switch_inner_node(args: &SwitchArgs) {
             is_pressed,
         });
     });
-}
-
-/// # switch
-///
-/// Convenience wrapper for `switch_with_child` that renders no thumb content.
-///
-/// ## Usage
-///
-/// Use when you want a standard on/off switch without a custom icon.
-///
-/// ## Parameters
-///
-/// - `args` — configures sizing, colors, and callbacks; see [`SwitchArgs`].
-///
-/// ## Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::switch::{SwitchArgs, switch};
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
-///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// switch(&SwitchArgs::default().on_toggle(|checked| {
-///     assert!(checked || !checked);
-/// }));
-/// #     },
-/// # );
-/// # material_theme(&args);
-/// # }
-/// # component();
-/// ```
-pub fn switch(args: &SwitchArgs) {
-    let mut args = args.clone();
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(|| SwitchController::new(args.checked)));
-    args.controller = Some(controller);
-    switch_inner_node(&args);
 }

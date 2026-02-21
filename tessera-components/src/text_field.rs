@@ -1183,8 +1183,8 @@ fn configure_text_field_menu(
 /// # }
 /// # component();
 /// ```
+#[tessera]
 pub fn text_field(args: &TextFieldArgs) {
-    let mut args: TextFieldArgs = args.clone();
     let controller = args.controller.unwrap_or_else(|| {
         remember(|| {
             let mut controller = TextInputController::new(args.font_size, args.line_height);
@@ -1194,16 +1194,8 @@ pub fn text_field(args: &TextFieldArgs) {
             controller
         })
     });
+    let mut args = args.clone();
     args.controller = Some(controller);
-    text_field_node(&args);
-}
-
-#[tessera]
-fn text_field_node(args: &TextFieldArgs) {
-    let controller = args
-        .controller
-        .expect("text_field_node requires controller to be set");
-    let args = args.clone();
 
     let enabled = args.enabled;
     let read_only = args.read_only;
