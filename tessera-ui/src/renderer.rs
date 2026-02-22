@@ -201,12 +201,6 @@ impl RuntimePendingWork {
     }
 }
 
-struct PartialReplayBuildResult {
-    duration: Duration,
-    #[cfg(feature = "profiling")]
-    replayed_nodes: u64,
-}
-
 #[cfg(feature = "profiling")]
 fn resolve_profiler_output_path(config: &TesseraConfig) -> PathBuf {
     if let Ok(path) = std::env::var("TESSERA_PROFILING_OUTPUT")
@@ -902,39 +896,6 @@ impl<F: Fn()> Renderer<F> {
     ///
     /// This method runs on the main thread but coordinates with other threads
     /// for component tree processing and resource management.
-    #[instrument(level = "debug")]
-    fn build_component_tree_full() -> std::time::Duration {
-        let recomposed_state_instance_logic_ids = crate::runtime::live_slot_instance_logic_ids();
-        let recomposed_context_instance_logic_ids =
-            crate::context::live_context_slot_instance_logic_ids();
-        let tree_timer = Instant::now();
-        debug!("Building component tree...");
-        clear_frame_nanos_receivers();
-        // Root recomposition rebuilds reader dependencies from scratch.
-        reset_state_read_dependencies();
-        reset_context_read_dependencies();
-        TesseraRuntime::with_mut(|runtime| runtime.component_tree.clear());
-        begin_frame_component_replay_tracking();
-        begin_frame_component_context_tracking();
-        begin_frame_layout_dirty_tracking();
-        begin_recompose_slot_epoch();
-        begin_recompose_context_slot_epoch();
-        let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
-        entry_wrapper();
-        finalize_frame_component_replay_tracking();
-        finalize_frame_component_context_tracking();
-        finalize_frame_layout_dirty_tracking();
-        crate::runtime::recycle_recomposed_slots_for_instance_logic_ids(
-            &recomposed_state_instance_logic_ids,
-        );
-        crate::context::recycle_recomposed_context_slots_for_instance_logic_ids(
-            &recomposed_context_instance_logic_ids,
-        );
-        let build_tree_cost = tree_timer.elapsed();
-        debug!("Component tree built in {build_tree_cost:?}");
-        build_tree_cost
-    }
-
     fn collect_dirty_replay_roots(dirty_instance_keys: &HashSet<u64>) -> Vec<u64> {
         TesseraRuntime::with(|runtime| {
             let mut roots = Vec::new();
@@ -1016,142 +977,48 @@ impl<F: Fn()> Renderer<F> {
         TesseraRuntime::with(|runtime| runtime.component_tree.tree().count() as u64)
     }
 
-    /// Recompose dirty subtrees by replaying from dirty roots.
-    ///
-    /// All replay prerequisites are invariants under the new reactive model.
-    /// Violations are treated as runtime bugs and fail fast.
-    fn build_component_tree_partial(dirty_roots: &[u64]) -> PartialReplayBuildResult {
-        if dirty_roots.is_empty() {
-            return PartialReplayBuildResult {
-                duration: Duration::ZERO,
-                #[cfg(feature = "profiling")]
-                replayed_nodes: 0,
-            };
-        }
-
-        let replay_snapshots = previous_component_replay_nodes();
-        let context_snapshots = previous_component_context_snapshots();
-
-        let tree_timer = Instant::now();
-        debug!("Building dirty subtrees with replay...");
-        begin_frame_component_replay_tracking();
-        begin_frame_component_context_tracking();
-        begin_frame_layout_dirty_tracking();
-        begin_recompose_slot_epoch();
-        begin_recompose_context_slot_epoch();
-        let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
-        let mut stale_instance_keys = HashSet::default();
-        let mut stale_instance_logic_ids = HashSet::default();
-        let mut recomposed_instance_logic_ids = HashSet::default();
-        #[cfg(feature = "profiling")]
-        let mut replayed_nodes = 0_u64;
-
-        for instance_key in dirty_roots {
-            #[cfg(feature = "profiling")]
-            {
-                replayed_nodes = replayed_nodes
-                    .saturating_add(Self::subtree_node_count_by_instance_key(*instance_key));
-            }
-            let replay_snapshot = replay_snapshots.get(instance_key).unwrap_or_else(|| {
-                panic!(
-                    "missing replay snapshot for dirty instance key {instance_key}; this violates replay invariants"
-                )
-            });
-            let context_snapshot = context_snapshots.get(instance_key).unwrap_or_else(|| {
-                panic!(
-                    "missing context snapshot for dirty instance key {instance_key}; this violates replay invariants"
-                )
-            });
-            let replay = replay_snapshot.replay.clone();
-            let replay_instance_logic_id = replay_snapshot.instance_logic_id;
-            let replay_group_path = replay_snapshot.group_path.clone();
-
-            let replace_context = TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .begin_replace_subtree_by_instance_key(*instance_key)
-            });
-            let replace_context = match replace_context {
-                Ok(context) => context,
-                Err(ReplayReplaceError::RootNodeNotReplaceable) => panic!(
-                    "dirty root {} resolved to component tree root; root recomposition must be selected before partial replay",
-                    instance_key
-                ),
-                Err(_) => {
-                    panic!(
-                        "begin_replace_subtree_by_instance_key failed for instance key {instance_key}"
-                    )
-                }
-            };
-
-            with_context_snapshot(context_snapshot, || {
-                with_replay_scope(replay_instance_logic_id, &replay_group_path, || {
-                    replay.runner.run(replay.props.as_ref());
-                });
-            });
-
-            let replace_result = TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .finish_replace_subtree(replace_context)
-            });
-            let replace_result = replace_result.unwrap_or_else(|_| {
-                panic!("finish_replace_subtree failed for instance key {instance_key}")
-            });
-            recomposed_instance_logic_ids.extend(
-                replace_result
-                    .inserted_instance_logic_ids
-                    .difference(&replace_result.reused_instance_logic_ids)
-                    .copied(),
-            );
-
-            for removed in &replace_result.removed_instance_keys {
-                if !replace_result.inserted_instance_keys.contains(removed) {
-                    stale_instance_keys.insert(*removed);
-                }
-            }
-            for removed in &replace_result.removed_instance_logic_ids {
-                if !replace_result.inserted_instance_logic_ids.contains(removed) {
-                    stale_instance_logic_ids.insert(*removed);
-                }
-            }
-        }
-
-        finalize_frame_component_replay_tracking_partial();
-        finalize_frame_component_context_tracking_partial();
-        finalize_frame_layout_dirty_tracking();
-        remove_previous_component_replay_nodes(&stale_instance_keys);
-        remove_frame_nanos_receivers(&stale_instance_keys);
-        remove_state_read_dependencies(&stale_instance_keys);
-        crate::runtime::remove_build_invalidations(&stale_instance_keys);
-        remove_previous_component_context_snapshots(&stale_instance_keys);
-        remove_context_read_dependencies(&stale_instance_keys);
-        drop_slots_for_instance_logic_ids(&stale_instance_logic_ids);
-        drop_context_slots_for_instance_logic_ids(&stale_instance_logic_ids);
-        crate::runtime::recycle_recomposed_slots_for_instance_logic_ids(
-            &recomposed_instance_logic_ids,
-        );
-        crate::context::recycle_recomposed_context_slots_for_instance_logic_ids(
-            &recomposed_instance_logic_ids,
-        );
-        let build_tree_cost = tree_timer.elapsed();
-        debug!("Dirty subtree replay finished in {build_tree_cost:?}");
-        PartialReplayBuildResult {
-            duration: build_tree_cost,
-            #[cfg(feature = "profiling")]
-            replayed_nodes,
-        }
-    }
-
     /// Build the component tree only when invalidated.
     #[instrument(level = "debug", skip(entry_point))]
     fn build_component_tree(entry_point: &F) -> BuildTreeResult {
         with_entry_point_callback(entry_point, || {
+            let run_root_recompose = || {
+                let recomposed_state_instance_logic_ids =
+                    crate::runtime::live_slot_instance_logic_ids();
+                let recomposed_context_instance_logic_ids =
+                    crate::context::live_context_slot_instance_logic_ids();
+                let tree_timer = Instant::now();
+                debug!("Building component tree...");
+                clear_frame_nanos_receivers();
+                // Root recomposition rebuilds reader dependencies from scratch.
+                reset_state_read_dependencies();
+                reset_context_read_dependencies();
+                TesseraRuntime::with_mut(|runtime| runtime.component_tree.clear());
+                begin_frame_component_replay_tracking();
+                begin_frame_component_context_tracking();
+                begin_frame_layout_dirty_tracking();
+                begin_recompose_slot_epoch();
+                begin_recompose_context_slot_epoch();
+                let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
+                entry_wrapper();
+                finalize_frame_component_replay_tracking();
+                finalize_frame_component_context_tracking();
+                finalize_frame_layout_dirty_tracking();
+                crate::runtime::recycle_recomposed_slots_for_instance_logic_ids(
+                    &recomposed_state_instance_logic_ids,
+                );
+                crate::context::recycle_recomposed_context_slots_for_instance_logic_ids(
+                    &recomposed_context_instance_logic_ids,
+                );
+                let build_tree_cost = tree_timer.elapsed();
+                debug!("Component tree built in {build_tree_cost:?}");
+                BuildTreeResult::root_recompose(build_tree_cost)
+            };
+
             let tree_is_empty = TesseraRuntime::with(|rt| rt.component_tree.tree().count() == 0);
             let invalidations = take_build_invalidations();
             with_build_dirty_instance_keys(&invalidations.dirty_instance_keys, || {
                 if tree_is_empty {
-                    return BuildTreeResult::root_recompose(Self::build_component_tree_full());
+                    return run_root_recompose();
                 }
 
                 if invalidations.dirty_instance_keys.is_empty() {
@@ -1162,22 +1029,134 @@ impl<F: Fn()> Renderer<F> {
                 let dirty_roots =
                     Self::collect_dirty_replay_roots(&invalidations.dirty_instance_keys);
                 if Self::dirty_roots_include_tree_root(&dirty_roots) {
-                    return BuildTreeResult::root_recompose(Self::build_component_tree_full());
+                    return run_root_recompose();
                 }
+                if dirty_roots.is_empty() {
+                    debug!("Skipping component tree build: no dirty replay roots");
+                    return BuildTreeResult::skip_no_invalidation();
+                }
+
+                let replay_snapshots = previous_component_replay_nodes();
+                let context_snapshots = previous_component_context_snapshots();
+
+                let tree_timer = Instant::now();
+                debug!("Building dirty subtrees with replay...");
+                begin_frame_component_replay_tracking();
+                begin_frame_component_context_tracking();
+                begin_frame_layout_dirty_tracking();
+                begin_recompose_slot_epoch();
+                begin_recompose_context_slot_epoch();
+                let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
+                let mut stale_instance_keys = HashSet::default();
+                let mut stale_instance_logic_ids = HashSet::default();
+                let mut recomposed_instance_logic_ids = HashSet::default();
+                #[cfg(feature = "profiling")]
+                let mut replayed_nodes = 0_u64;
                 #[cfg(feature = "profiling")]
                 let total_nodes_before_build = Self::component_tree_node_count();
-                let partial_replay_result = Self::build_component_tree_partial(&dirty_roots);
+
+                for instance_key in &dirty_roots {
+                    #[cfg(feature = "profiling")]
+                    {
+                        replayed_nodes = replayed_nodes.saturating_add(
+                            Self::subtree_node_count_by_instance_key(*instance_key),
+                        );
+                    }
+                    let replay_snapshot = replay_snapshots.get(instance_key).unwrap_or_else(|| {
+                        panic!(
+                            "missing replay snapshot for dirty instance key {instance_key}; this violates replay invariants"
+                        )
+                    });
+                    let context_snapshot = context_snapshots.get(instance_key).unwrap_or_else(|| {
+                        panic!(
+                            "missing context snapshot for dirty instance key {instance_key}; this violates replay invariants"
+                        )
+                    });
+                    let replay = replay_snapshot.replay.clone();
+                    let replay_instance_logic_id = replay_snapshot.instance_logic_id;
+                    let replay_group_path = replay_snapshot.group_path.clone();
+
+                    let replace_context = TesseraRuntime::with_mut(|runtime| {
+                        runtime
+                            .component_tree
+                            .begin_replace_subtree_by_instance_key(*instance_key)
+                    });
+                    let replace_context = match replace_context {
+                        Ok(context) => context,
+                        Err(ReplayReplaceError::RootNodeNotReplaceable) => panic!(
+                            "dirty root {} resolved to component tree root; root recomposition must be selected before partial replay",
+                            instance_key
+                        ),
+                        Err(_) => {
+                            panic!(
+                                "begin_replace_subtree_by_instance_key failed for instance key {instance_key}"
+                            )
+                        }
+                    };
+
+                    with_context_snapshot(context_snapshot, || {
+                        with_replay_scope(replay_instance_logic_id, &replay_group_path, || {
+                            replay.runner.run(replay.props.as_ref());
+                        });
+                    });
+
+                    let replace_result = TesseraRuntime::with_mut(|runtime| {
+                        runtime
+                            .component_tree
+                            .finish_replace_subtree(replace_context)
+                    });
+                    let replace_result = replace_result.unwrap_or_else(|_| {
+                        panic!("finish_replace_subtree failed for instance key {instance_key}")
+                    });
+                    recomposed_instance_logic_ids.extend(
+                        replace_result
+                            .inserted_instance_logic_ids
+                            .difference(&replace_result.reused_instance_logic_ids)
+                            .copied(),
+                    );
+
+                    for removed in &replace_result.removed_instance_keys {
+                        if !replace_result.inserted_instance_keys.contains(removed) {
+                            stale_instance_keys.insert(*removed);
+                        }
+                    }
+                    for removed in &replace_result.removed_instance_logic_ids {
+                        if !replace_result.inserted_instance_logic_ids.contains(removed) {
+                            stale_instance_logic_ids.insert(*removed);
+                        }
+                    }
+                }
+
+                finalize_frame_component_replay_tracking_partial();
+                finalize_frame_component_context_tracking_partial();
+                finalize_frame_layout_dirty_tracking();
+                remove_previous_component_replay_nodes(&stale_instance_keys);
+                remove_frame_nanos_receivers(&stale_instance_keys);
+                remove_state_read_dependencies(&stale_instance_keys);
+                crate::runtime::remove_build_invalidations(&stale_instance_keys);
+                remove_previous_component_context_snapshots(&stale_instance_keys);
+                remove_context_read_dependencies(&stale_instance_keys);
+                drop_slots_for_instance_logic_ids(&stale_instance_logic_ids);
+                drop_context_slots_for_instance_logic_ids(&stale_instance_logic_ids);
+                crate::runtime::recycle_recomposed_slots_for_instance_logic_ids(
+                    &recomposed_instance_logic_ids,
+                );
+                crate::context::recycle_recomposed_context_slots_for_instance_logic_ids(
+                    &recomposed_instance_logic_ids,
+                );
+                let build_tree_cost = tree_timer.elapsed();
+                debug!("Dirty subtree replay finished in {build_tree_cost:?}");
                 #[cfg(feature = "profiling")]
                 {
                     BuildTreeResult::partial_replay(
-                        partial_replay_result.duration,
-                        partial_replay_result.replayed_nodes,
+                        build_tree_cost,
+                        replayed_nodes,
                         total_nodes_before_build,
                     )
                 }
                 #[cfg(not(feature = "profiling"))]
                 {
-                    BuildTreeResult::partial_replay(partial_replay_result.duration)
+                    BuildTreeResult::partial_replay(build_tree_cost)
                 }
             })
         })
