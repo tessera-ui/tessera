@@ -31,7 +31,7 @@ use tessera_components::{
     theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme, provide_text_style},
 };
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, WindowAction, remember, retain,
+    Callback, Color, Dp, Modifier, RenderSlot, State, remember, retain,
     router::{Router, router_scope, router_view},
     shard, tessera, use_context,
 };
@@ -891,6 +891,8 @@ fn window_controls() {
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tessera]
 fn window_controls_node(args: &WindowControlsArgs) {
+    use tessera_ui::WindowAction;
+
     let _ = args;
 
     let scheme = use_context::<MaterialTheme>()
