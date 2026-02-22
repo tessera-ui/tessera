@@ -880,20 +880,14 @@ fn window_control_button_node(args: &WindowControlButtonArgs) {
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[derive(Clone, PartialEq)]
-struct WindowControlsArgs;
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn window_controls() {
-    window_controls_node(&WindowControlsArgs);
+    window_controls_node();
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tessera]
-fn window_controls_node(args: &WindowControlsArgs) {
+fn window_controls_node() {
     use tessera_ui::WindowAction;
-
-    let _ = args;
 
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -932,16 +926,12 @@ fn window_controls_node(args: &WindowControlsArgs) {
     );
 }
 
-#[derive(Clone, PartialEq)]
-struct TopAppBarArgs;
-
 fn top_app_bar() {
-    top_app_bar_node(&TopAppBarArgs);
+    top_app_bar_node();
 }
 
 #[tessera]
-fn top_app_bar_node(args: &TopAppBarArgs) {
-    let _ = args;
+fn top_app_bar_node() {
     let app_bar_args = AppBarArgs::default().elevation(Dp(4.0));
     let title_style = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")

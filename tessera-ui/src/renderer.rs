@@ -920,8 +920,7 @@ impl<F: Fn()> Renderer<F> {
         begin_frame_slots();
         begin_frame_context_slots();
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
-        let args = EntryWrapperArgs;
-        entry_wrapper(&args);
+        entry_wrapper();
         finalize_frame_component_replay_tracking();
         finalize_frame_component_context_tracking();
         finalize_frame_layout_dirty_tracking();
@@ -2403,9 +2402,6 @@ pub fn hide_soft_input(android_app: &AndroidApp) {
 /// function guarantees it is invoked from a `tessera`-annotated function,
 /// ensuring correct behavior regardless of how the user supplied their entry
 /// point.
-#[derive(Clone, PartialEq)]
-struct EntryWrapperArgs;
-
 type EntryPointInvoker = fn(*const ());
 
 #[derive(Clone, Copy)]
@@ -2455,7 +2451,6 @@ fn run_entry_point_callback() {
 }
 
 #[tessera(crate)]
-fn entry_wrapper(args: &EntryWrapperArgs) {
-    let _ = args;
+fn entry_wrapper() {
     run_entry_point_callback();
 }
