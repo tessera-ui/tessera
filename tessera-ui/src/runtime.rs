@@ -3,7 +3,6 @@
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
-    collections::{HashMap, HashSet},
     hash::{Hash, Hasher},
     marker::PhantomData,
     sync::{
@@ -14,6 +13,8 @@ use std::{
 };
 
 use parking_lot::{Mutex, RwLock};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use slotmap::{SlotMap, new_key_type};
 
 use crate::{
     NodeId,
@@ -108,6 +109,10 @@ impl Default for SlotKey {
     }
 }
 
+new_key_type! {
+    struct SlotHandle;
+}
+
 #[derive(Default)]
 struct SlotEntry {
     key: SlotKey,
@@ -119,9 +124,8 @@ struct SlotEntry {
 
 #[derive(Default)]
 struct SlotTable {
-    entries: Vec<SlotEntry>,
-    free_list: Vec<u32>,
-    key_to_slot: HashMap<SlotKey, u32>,
+    entries: SlotMap<SlotHandle, SlotEntry>,
+    key_to_slot: HashMap<SlotKey, SlotHandle>,
     epoch: u64,
 }
 
@@ -132,7 +136,6 @@ impl SlotTable {
 
     fn reset(&mut self) {
         self.entries.clear();
-        self.free_list.clear();
         self.key_to_slot.clear();
         self.epoch = 0;
     }
@@ -233,7 +236,7 @@ pub(crate) struct BuildInvalidationSet {
 struct StateReadDependencyKey {
     // Keep generation in the dependency key to avoid ABA when a slot is recycled
     // and later reused for another state value.
-    slot: u32,
+    slot: SlotHandle,
     generation: u64,
 }
 
@@ -411,7 +414,7 @@ pub(crate) fn record_component_invalidation_for_instance_key(instance_key: u64) 
     }
 }
 
-fn track_state_read_dependency(slot: u32, generation: u64) {
+fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
     if !matches!(current_phase(), Some(RuntimePhase::Build)) {
         return;
     }
@@ -433,7 +436,7 @@ fn track_state_read_dependency(slot: u32, generation: u64) {
         .insert(key);
 }
 
-fn state_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
+fn state_read_subscribers(slot: SlotHandle, generation: u64) -> Vec<u64> {
     let key = StateReadDependencyKey { slot, generation };
     state_read_dependency_tracker()
         .read()
@@ -673,23 +676,16 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
     }
 
     let mut table = slot_table().write();
-    let mut freed: Vec<(u32, SlotKey)> = Vec::new();
-    for (slot, entry) in table.entries.iter_mut().enumerate() {
-        if entry.value.is_none() {
-            continue;
-        }
+    let mut freed: Vec<(SlotHandle, SlotKey)> = Vec::new();
+    for (slot, entry) in table.entries.iter() {
         if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
             continue;
         }
-        freed.push((slot as u32, entry.key));
-        entry.value = None;
-        entry.generation = entry.generation.wrapping_add(1);
-        entry.last_alive_epoch = 0;
-        entry.retained = false;
+        freed.push((slot, entry.key));
     }
     for (slot, key) in freed {
+        table.entries.remove(slot);
         table.key_to_slot.remove(&key);
-        table.free_list.push(slot);
     }
 }
 
@@ -771,8 +767,8 @@ pub(crate) fn reconcile_layout_structure(
     let mut tracker = layout_dirty_tracker().write();
     let previous_children_by_node = &tracker.previous_children_by_node;
 
-    let mut changed_nodes = HashSet::new();
-    let mut removed_nodes = HashSet::new();
+    let mut changed_nodes = HashSet::default();
+    let mut removed_nodes = HashSet::default();
 
     for (node, current_children) in current_children_by_node {
         match previous_children_by_node.get(node) {
@@ -819,7 +815,7 @@ pub(crate) fn reconcile_layout_structure(
 /// }
 /// ```
 pub struct State<T> {
-    slot: u32,
+    slot: SlotHandle,
     generation: u64,
     _marker: PhantomData<T>,
 }
@@ -848,7 +844,7 @@ impl<T> Hash for State<T> {
 }
 
 impl<T> State<T> {
-    fn new(slot: u32, generation: u64) -> Self {
+    fn new(slot: SlotHandle, generation: u64) -> Self {
         Self {
             slot,
             generation,
@@ -865,19 +861,19 @@ where
         let table = slot_table().read();
         let entry = table
             .entries
-            .get(self.slot as usize)
-            .unwrap_or_else(|| panic!("State points to freed slot: {}", self.slot));
+            .get(self.slot)
+            .unwrap_or_else(|| panic!("State points to freed slot: {:?}", self.slot));
 
         if entry.generation != self.generation {
             panic!(
-                "State is stale (slot {}, generation {}, current generation {})",
+                "State is stale (slot {:?}, generation {}, current generation {})",
                 self.slot, self.generation, entry.generation
             );
         }
 
         if entry.key.type_id != TypeId::of::<T>() {
             panic!(
-                "State type mismatch for slot {}: expected {}, stored {:?}",
+                "State type mismatch for slot {:?}: expected {}, stored {:?}",
                 self.slot,
                 std::any::type_name::<T>(),
                 entry.key.type_id
@@ -887,14 +883,14 @@ where
         entry
             .value
             .as_ref()
-            .unwrap_or_else(|| panic!("State slot {} has been cleared", self.slot))
+            .unwrap_or_else(|| panic!("State slot {:?} has been cleared", self.slot))
             .clone()
     }
 
     fn load_lock(&self) -> Arc<RwLock<T>> {
         self.load_entry()
             .downcast::<RwLock<T>>()
-            .unwrap_or_else(|_| panic!("State slot {} downcast failed", self.slot))
+            .unwrap_or_else(|_| panic!("State slot {:?} downcast failed", self.slot))
     }
 
     /// Execute a closure with a shared reference to the stored value.
@@ -1527,7 +1523,7 @@ impl Drop for InstanceKeyGuard {
 }
 
 fn hash_components<H: Hash>(parts: &[&H]) -> u64 {
-    let mut hasher = std::collections::hash_map::DefaultHasher::new();
+    let mut hasher = rustc_hash::FxHasher::default();
     for part in parts {
         part.hash(&mut hasher);
     }
@@ -1597,26 +1593,22 @@ pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids
 
     let mut table = slot_table().write();
     let epoch = table.epoch;
-    let mut freed: Vec<(u32, SlotKey)> = Vec::new();
+    let mut freed: Vec<(SlotHandle, SlotKey)> = Vec::new();
 
-    for (slot, entry) in table.entries.iter_mut().enumerate() {
+    for (slot, entry) in table.entries.iter() {
         if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
             continue;
         }
-        // Skip if touched in this recomposition pass, already empty, or marked
-        // as retained.
-        if entry.last_alive_epoch == epoch || entry.value.is_none() || entry.retained {
+        // Skip if touched in this recomposition pass or marked as retained.
+        if entry.last_alive_epoch == epoch || entry.retained {
             continue;
         }
-        freed.push((slot as u32, entry.key));
-        entry.value = None;
-        entry.generation = entry.generation.wrapping_add(1);
-        entry.last_alive_epoch = 0;
+        freed.push((slot, entry.key));
     }
 
     for (slot, key) in freed {
+        table.entries.remove(slot);
         table.key_to_slot.remove(&key);
-        table.free_list.push(slot);
     }
 }
 
@@ -1625,8 +1617,7 @@ pub(crate) fn live_slot_instance_logic_ids() -> HashSet<u64> {
     table
         .entries
         .iter()
-        .filter(|entry| entry.value.is_some())
-        .map(|entry| entry.key.instance_logic_id)
+        .map(|(_, entry)| entry.key.instance_logic_id)
         .collect()
 }
 
@@ -1680,7 +1671,7 @@ where
         let generation = {
             let entry = table
                 .entries
-                .get_mut(slot as usize)
+                .get_mut(slot)
                 .expect("slot entry should exist");
 
             if entry.key.type_id != slot_key.type_id {
@@ -1704,34 +1695,18 @@ where
 
         State::new(slot, generation)
     } else {
-        let slot = if let Some(slot) = table.free_list.pop() {
-            slot
-        } else {
-            table.entries.push(SlotEntry {
-                key: slot_key,
-                generation: 0,
-                value: None,
-                last_alive_epoch: 0,
-                retained: false,
-            });
-            (table.entries.len() - 1) as u32
-        };
-
         let epoch = table.epoch;
-        let generation = {
-            let entry = table
-                .entries
-                .get_mut(slot as usize)
-                .expect("slot entry should exist");
-            entry.key = slot_key;
-            entry.generation = entry.generation.wrapping_add(1);
-            let init_fn = init_opt
-                .take()
-                .expect("remember_with_key init called more than once");
-            entry.value = Some(Arc::new(RwLock::new(init_fn())));
-            entry.last_alive_epoch = epoch;
-            entry.generation
-        };
+        let init_fn = init_opt
+            .take()
+            .expect("remember_with_key init called more than once");
+        let generation = 1u64;
+        let slot = table.entries.insert(SlotEntry {
+            key: slot_key,
+            generation,
+            value: Some(Arc::new(RwLock::new(init_fn()))),
+            last_alive_epoch: epoch,
+            retained: false,
+        });
 
         table.key_to_slot.insert(slot_key, slot);
         State::new(slot, generation)
@@ -1831,7 +1806,7 @@ where
         let generation = {
             let entry = table
                 .entries
-                .get_mut(slot as usize)
+                .get_mut(slot)
                 .expect("slot entry should exist");
 
             if entry.key.type_id != slot_key.type_id {
@@ -1857,35 +1832,18 @@ where
 
         State::new(slot, generation)
     } else {
-        let slot = if let Some(slot) = table.free_list.pop() {
-            slot
-        } else {
-            table.entries.push(SlotEntry {
-                key: slot_key,
-                generation: 0,
-                value: None,
-                last_alive_epoch: 0,
-                retained: false,
-            });
-            (table.entries.len() - 1) as u32
-        };
-
         let epoch = table.epoch;
-        let generation = {
-            let entry = table
-                .entries
-                .get_mut(slot as usize)
-                .expect("slot entry should exist");
-            entry.key = slot_key;
-            entry.generation = entry.generation.wrapping_add(1);
-            entry.retained = true;
-            let init_fn = init_opt
-                .take()
-                .expect("retain_with_key init called more than once");
-            entry.value = Some(Arc::new(RwLock::new(init_fn())));
-            entry.last_alive_epoch = epoch;
-            entry.generation
-        };
+        let init_fn = init_opt
+            .take()
+            .expect("retain_with_key init called more than once");
+        let generation = 1u64;
+        let slot = table.entries.insert(SlotEntry {
+            key: slot_key,
+            generation,
+            value: Some(Arc::new(RwLock::new(init_fn()))),
+            last_alive_epoch: epoch,
+            retained: true,
+        });
 
         table.key_to_slot.insert(slot_key, slot);
         State::new(slot, generation)
@@ -2013,7 +1971,7 @@ mod tests {
 
     #[test]
     fn with_build_dirty_instance_keys_marks_current_scope() {
-        let mut outer = HashSet::new();
+        let mut outer = HashSet::default();
         outer.insert(7);
 
         assert!(!is_instance_key_build_dirty(7));
@@ -2021,7 +1979,7 @@ mod tests {
             assert!(is_instance_key_build_dirty(7));
             assert!(!is_instance_key_build_dirty(8));
 
-            let mut inner = HashSet::new();
+            let mut inner = HashSet::default();
             inner.insert(8);
             with_build_dirty_instance_keys(&inner, || {
                 assert!(!is_instance_key_build_dirty(7));
@@ -2036,7 +1994,7 @@ mod tests {
 
     #[test]
     fn with_build_dirty_instance_keys_restores_on_panic() {
-        let mut dirty = HashSet::new();
+        let mut dirty = HashSet::default();
         dirty.insert(11);
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {

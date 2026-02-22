@@ -2,7 +2,6 @@ mod constraint;
 mod node;
 
 use std::{
-    collections::{HashMap, HashSet},
     num::NonZero,
     sync::{
         Arc, OnceLock,
@@ -13,6 +12,7 @@ use std::{
 
 use dashmap::DashMap;
 use parking_lot::RwLock;
+use rustc_hash::{FxBuildHasher, FxHashMap as HashMap, FxHashSet as HashSet};
 use tracing::{debug, warn};
 
 use crate::{
@@ -45,14 +45,16 @@ pub(crate) struct LayoutSnapshotEntry {
     pub child_sizes: Vec<ComputedData>,
 }
 
+pub(crate) type LayoutSnapshotMap = DashMap<u64, LayoutSnapshotEntry, FxBuildHasher>;
+
 #[derive(Default)]
 struct LayoutSnapshotStore {
-    entries: DashMap<u64, LayoutSnapshotEntry>,
+    entries: LayoutSnapshotMap,
 }
 
 static LAYOUT_SNAPSHOT_STORE: OnceLock<LayoutSnapshotStore> = OnceLock::new();
 
-fn layout_snapshot_entries() -> &'static DashMap<u64, LayoutSnapshotEntry> {
+fn layout_snapshot_entries() -> &'static LayoutSnapshotMap {
     &LAYOUT_SNAPSHOT_STORE
         .get_or_init(LayoutSnapshotStore::default)
         .entries
@@ -74,7 +76,7 @@ fn remove_layout_snapshots(keys: &HashSet<u64>) {
 
 #[derive(Clone, Copy)]
 pub(crate) struct LayoutContext<'a> {
-    pub snapshots: &'a DashMap<u64, LayoutSnapshotEntry>,
+    pub snapshots: &'a LayoutSnapshotMap,
     pub dirty_self_nodes: &'a HashSet<u64>,
     pub dirty_effective_nodes: &'a HashSet<u64>,
     pub diagnostics: &'a LayoutDiagnosticsCollector,
@@ -255,7 +257,7 @@ impl ComponentTree {
             tree,
             node_queue,
             metadatas,
-            replay_reuse_candidates: HashMap::new(),
+            replay_reuse_candidates: HashMap::default(),
         }
     }
 
@@ -332,8 +334,8 @@ impl ComponentTree {
             })
             .collect();
         let detached_node_ids = removed_node_ids.iter().copied().collect::<HashSet<_>>();
-        let mut removed_instance_keys = HashSet::new();
-        let mut removed_instance_logic_ids = HashSet::new();
+        let mut removed_instance_keys = HashSet::default();
+        let mut removed_instance_logic_ids = HashSet::default();
         for id in &removed_node_ids {
             if let Some(node) = self.tree.get(*id) {
                 removed_instance_keys.insert(node.get().instance_key);
@@ -397,9 +399,9 @@ impl ComponentTree {
 
         let detached_root_reused = inserted_root_ids.contains(&detached_root_id);
 
-        let mut inserted_instance_keys = HashSet::new();
-        let mut inserted_instance_logic_ids = HashSet::new();
-        let mut reused_instance_logic_ids = HashSet::new();
+        let mut inserted_instance_keys = HashSet::default();
+        let mut inserted_instance_logic_ids = HashSet::default();
+        let mut reused_instance_logic_ids = HashSet::default();
         for inserted_root_id in &inserted_root_ids {
             for edge in inserted_root_id.traverse(&self.tree) {
                 let indextree::NodeEdge::Start(id) = edge else {
@@ -830,10 +832,10 @@ fn expand_dirty_nodes_with_ancestors(
     dirty_nodes_self: &HashSet<u64>,
 ) -> HashSet<u64> {
     if dirty_nodes_self.is_empty() {
-        return HashSet::new();
+        return HashSet::default();
     }
 
-    let mut parent_by_key: HashMap<u64, u64> = HashMap::new();
+    let mut parent_by_key: HashMap<u64, u64> = HashMap::default();
     for edge in root_node.traverse(tree) {
         let indextree::NodeEdge::Start(node_id) = edge else {
             continue;
@@ -866,7 +868,7 @@ fn collect_children_by_instance_key(
     root_node: indextree::NodeId,
     tree: &ComponentNodeTree,
 ) -> HashMap<u64, Vec<u64>> {
-    let mut children_by_node = HashMap::new();
+    let mut children_by_node = HashMap::default();
     for edge in root_node.traverse(tree) {
         let indextree::NodeEdge::Start(node_id) = edge else {
             continue;

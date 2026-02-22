@@ -7,13 +7,13 @@
 use std::{
     any::{Any, TypeId},
     cell::RefCell,
-    collections::{HashMap, HashSet},
     marker::PhantomData,
     sync::{Arc, OnceLock},
 };
 
 use im::HashMap as ImHashMap;
 use parking_lot::RwLock;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::runtime::{
     RuntimePhase, compute_context_slot_key, current_component_instance_key_in_scope, current_phase,

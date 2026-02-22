@@ -27,7 +27,7 @@ use crate::{
 };
 
 use super::{
-    LayoutContext, LayoutSnapshotEntry,
+    LayoutContext, LayoutSnapshotEntry, LayoutSnapshotMap,
     constraint::{Constraint, DimensionValue, ParentConstraint},
 };
 
@@ -600,7 +600,7 @@ fn restore_cached_subtree_metadata(
     rel_position: Option<PxPosition>,
     tree: &ComponentNodeTree,
     component_node_metadatas: &ComponentNodeMetaDatas,
-    snapshots: &DashMap<u64, LayoutSnapshotEntry>,
+    snapshots: &LayoutSnapshotMap,
 ) -> bool {
     let Some(node) = tree.get(node_id) else {
         return false;

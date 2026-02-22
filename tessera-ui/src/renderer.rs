@@ -10,7 +10,6 @@ pub mod external;
 
 use std::{
     cell::RefCell,
-    collections::HashSet,
     sync::Arc,
     time::{Duration, Instant},
 };
@@ -20,6 +19,7 @@ pub use core::{RenderCore, RenderResources};
 use accesskit::{self, TreeUpdate};
 use accesskit_winit::{Adapter as AccessKitAdapter, Event as AccessKitEvent};
 use parking_lot::RwLock;
+use rustc_hash::FxHashSet as HashSet;
 use tessera_macros::tessera;
 use tracing::{debug, error, instrument, warn};
 use winit::{
@@ -1040,9 +1040,9 @@ impl<F: Fn()> Renderer<F> {
         begin_frame_slots();
         begin_frame_context_slots();
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
-        let mut stale_instance_keys = HashSet::new();
-        let mut stale_instance_logic_ids = HashSet::new();
-        let mut recomposed_instance_logic_ids = HashSet::new();
+        let mut stale_instance_keys = HashSet::default();
+        let mut stale_instance_logic_ids = HashSet::default();
+        let mut recomposed_instance_logic_ids = HashSet::default();
         #[cfg(feature = "profiling")]
         let mut replayed_nodes = 0_u64;
 
