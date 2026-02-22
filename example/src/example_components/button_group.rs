@@ -6,14 +6,9 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, shard, tessera};
+use tessera_ui::{Dp, Modifier, shard};
 #[shard]
 pub fn button_group_showcase() {
-    button_group_showcase_node();
-}
-
-#[tessera]
-fn button_group_showcase_node() {
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {

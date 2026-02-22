@@ -105,12 +105,8 @@ fn measure_parent_width_node(args: &MeasureParentWidthArgs) {
 
     args.child.render();
 }
-pub fn app() {
-    app_node();
-}
-
 #[tessera]
-fn app_node() {
+pub fn app() {
     material_theme(&MaterialThemeProviderArgs::new(
         MaterialTheme::default,
         || {
@@ -119,12 +115,8 @@ fn app_node() {
     ));
 }
 
-fn app_inner() {
-    app_inner_node();
-}
-
 #[tessera]
-fn app_inner_node() {
+fn app_inner() {
     let side_sheet_controller = remember(SideSheetController::default);
     let bottom_sheet_controller = remember(BottomSheetController::default);
     let dialog_controller = remember(DialogController::default);
@@ -880,13 +872,8 @@ fn window_control_button_node(args: &WindowControlButtonArgs) {
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn window_controls() {
-    window_controls_node();
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[tessera]
-fn window_controls_node() {
+fn window_controls() {
     use tessera_ui::WindowAction;
 
     let scheme = use_context::<MaterialTheme>()
@@ -926,12 +913,8 @@ fn window_controls_node() {
     );
 }
 
-fn top_app_bar() {
-    top_app_bar_node();
-}
-
 #[tessera]
-fn top_app_bar_node() {
+fn top_app_bar() {
     let app_bar_args = AppBarArgs::default().elevation(Dp(4.0));
     let title_style = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -983,11 +966,6 @@ fn top_app_bar_node() {
 
 #[shard]
 fn about() {
-    about_node();
-}
-
-#[tessera]
-fn about_node() {
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         || {

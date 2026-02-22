@@ -7,14 +7,9 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, remember, retain, shard, tessera};
+use tessera_ui::{Dp, Modifier, remember, retain, shard};
 #[shard]
 pub fn checkbox_showcase() {
-    checkbox_showcase_node();
-}
-
-#[tessera]
-fn checkbox_showcase_node() {
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
