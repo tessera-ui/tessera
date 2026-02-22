@@ -616,18 +616,31 @@ struct ComponentRecordBuilder {
     children: Vec<String>,
 }
 
+fn mangle_component_fn_name(name: &str) -> String {
+    name.strip_prefix("__")
+        .and_then(|rest| rest.strip_suffix("_shard_component"))
+        .filter(|inner| !inner.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| name.to_owned())
+}
+
+fn mangle_component_fn_name_opt(name: Option<&str>) -> Option<String> {
+    name.map(mangle_component_fn_name)
+}
+
 fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<FrameEventRecord> {
     let mut nodes: HashMap<String, ComponentRecordBuilder> = HashMap::new();
 
     for node in frame_meta.nodes {
         let id = node.node_id.clone();
         let parent = node.parent.clone();
+        let node_fn_name = mangle_component_fn_name_opt(node.fn_name.as_deref());
         let entry = nodes
             .entry(id.clone())
             .or_insert_with(|| ComponentRecordBuilder {
                 id: id.clone(),
                 parent: parent.clone(),
-                fn_name: node.fn_name.clone(),
+                fn_name: node_fn_name.clone(),
                 abs_pos: node.abs_pos.map(|(x, y)| Pos { x, y }),
                 size: node.size.map(|(w, h)| Size { w, h }),
                 layout_cache_hit: node.layout_cache_hit,
@@ -636,7 +649,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             });
 
         if entry.fn_name.is_none() {
-            entry.fn_name = node.fn_name.clone();
+            entry.fn_name = node_fn_name.clone();
         }
         if entry.abs_pos.is_none() {
             entry.abs_pos = node.abs_pos.map(|(x, y)| Pos { x, y });
@@ -674,13 +687,14 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             continue;
         };
         let node_key = node_id.to_string();
+        let sample_fn_name = mangle_component_fn_name_opt(sample.fn_name.as_deref());
 
         let entry = nodes
             .entry(node_key.clone())
             .or_insert_with(|| ComponentRecordBuilder {
                 id: node_key.clone(),
                 parent: sample.parent_node_id.map(|p| p.to_string()),
-                fn_name: sample.fn_name.clone(),
+                fn_name: sample_fn_name.clone(),
                 abs_pos: sample.abs_pos.map(|(x, y)| Pos { x, y }),
                 size: sample.computed_size.map(|(w, h)| Size { w, h }),
                 layout_cache_hit: None,
@@ -689,7 +703,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             });
 
         if entry.fn_name.is_none() {
-            entry.fn_name = sample.fn_name.clone();
+            entry.fn_name = sample_fn_name.clone();
         }
         if entry.abs_pos.is_none() {
             entry.abs_pos = sample.abs_pos.map(|(x, y)| Pos { x, y });
@@ -889,5 +903,31 @@ impl Drop for ScopeGuard {
             sample.end = Instant::now();
             push_sample(sample);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{mangle_component_fn_name, mangle_component_fn_name_opt};
+
+    #[test]
+    fn mangle_shard_component_name() {
+        assert_eq!(
+            mangle_component_fn_name("__home_shard_component"),
+            "home".to_string()
+        );
+    }
+
+    #[test]
+    fn keep_regular_component_name() {
+        assert_eq!(mangle_component_fn_name("button"), "button".to_string());
+        assert_eq!(
+            mangle_component_fn_name_opt(Some("__settings_shard_component")),
+            Some("settings".to_string())
+        );
+        assert_eq!(
+            mangle_component_fn_name_opt(Some("text_input")),
+            Some("text_input".to_string())
+        );
     }
 }
