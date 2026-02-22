@@ -138,8 +138,8 @@ pub enum Phase {
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub enum BuildMode {
-    /// Full tree build because no previous tree exists.
-    FullInitial,
+    /// Recompose from the tree root.
+    RootRecompose,
     /// Partial dirty-subtree replay succeeded.
     PartialReplay,
     /// Build stage skipped because there were no invalidations.
@@ -282,7 +282,7 @@ pub struct RuntimeMeta {
 /// A minimal frame event written to the profiler output:
 ///
 /// ```json
-/// {"type":"frame","frame":1,"build_mode":"full_initial","redraw_reasons":["startup"],"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"layout_cache_hit":true,"phases":{"build_ns":5000},"children":[]}]}
+/// {"type":"frame","frame":1,"build_mode":"root_recompose","redraw_reasons":["startup"],"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"layout_cache_hit":true,"phases":{"build_ns":5000},"children":[]}]}
 /// ```
 
 enum Message {

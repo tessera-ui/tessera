@@ -170,7 +170,7 @@ impl BuildTreeResult {
 impl BuildTreeResult {
     fn profiler_build_mode(self) -> BuildMode {
         match self.mode {
-            BuildTreeMode::RootRecompose => BuildMode::FullInitial,
+            BuildTreeMode::RootRecompose => BuildMode::RootRecompose,
             BuildTreeMode::PartialReplay => BuildMode::PartialReplay,
             BuildTreeMode::SkipNoInvalidation => BuildMode::SkipNoInvalidation,
         }

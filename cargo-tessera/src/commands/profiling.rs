@@ -34,7 +34,7 @@ enum TraceEvent {
 #[derive(Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum BuildMode {
-    FullInitial,
+    RootRecompose,
     PartialReplay,
     SkipNoInvalidation,
 }
@@ -226,7 +226,7 @@ impl LayoutDiagnosticsSummary {
 #[derive(Default)]
 struct Summary {
     frames: u64,
-    build_mode_full_initial: u64,
+    build_mode_root_recompose: u64,
     build_mode_partial_replay: u64,
     build_mode_skip_no_invalidation: u64,
     partial_replay_node_ratio: RatioSummary,
@@ -701,7 +701,7 @@ fn process_frame(
 
     summary.frames += 1;
     match build_mode {
-        BuildMode::FullInitial => summary.build_mode_full_initial += 1,
+        BuildMode::RootRecompose => summary.build_mode_root_recompose += 1,
         BuildMode::PartialReplay => {
             summary.build_mode_partial_replay += 1;
             if let (Some(replayed), Some(total)) = (partial_replay_nodes, total_nodes_before_build)
@@ -938,6 +938,17 @@ fn print_summary(summary: &Summary) {
     table.add_row(Row::from(vec![
         Cell::new("Frames"),
         Cell::new(summary.frames.to_string()),
+        Cell::new(""),
+        Cell::new(""),
+    ]));
+    table.add_row(Row::from(vec![
+        Cell::new("Build modes"),
+        Cell::new(format!(
+            "root_recompose {}, partial_replay {}, skip_no_invalidation {}",
+            summary.build_mode_root_recompose,
+            summary.build_mode_partial_replay,
+            summary.build_mode_skip_no_invalidation
+        )),
         Cell::new(""),
         Cell::new(""),
     ]));
@@ -1332,20 +1343,13 @@ fn print_summary(summary: &Summary) {
 fn format_build_mode_anomalies(summary: &Summary) -> Option<String> {
     let mut anomalies = Vec::new();
 
-    let expected_full_initial = u64::from(summary.frames > 0);
-    let unexpected_full_initial = summary
-        .build_mode_full_initial
-        .saturating_sub(expected_full_initial);
-    if unexpected_full_initial > 0 {
-        anomalies.push(format!("unexpected_full_initial {unexpected_full_initial}"));
-    }
-    if summary.frames > 0 && summary.build_mode_full_initial == 0 {
-        anomalies.push("missing_full_initial 1".to_string());
-    }
-    if summary.build_mode_skip_no_invalidation > 0 {
+    let mode_frames = summary.build_mode_root_recompose
+        + summary.build_mode_partial_replay
+        + summary.build_mode_skip_no_invalidation;
+    if mode_frames != summary.frames {
         anomalies.push(format!(
-            "skip_no_invalidation {}",
-            summary.build_mode_skip_no_invalidation
+            "mode_frame_mismatch total_modes={} frames={}",
+            mode_frames, summary.frames
         ));
     }
 
