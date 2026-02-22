@@ -7,7 +7,7 @@
 use std::sync::Arc;
 
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, provide_context, tessera, use_context};
+use tessera_ui::{Color, Dp, Modifier, RenderSlot, provide_context, tessera, use_context};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
@@ -58,7 +58,7 @@ impl AppBarDefaults {
 }
 
 /// Configuration arguments for [`app_bar`].
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct AppBarArgs {
     /// Modifier chain applied to the app bar container.
     pub modifier: Modifier,
@@ -121,7 +121,7 @@ impl Default for AppBarArgs {
 /// };
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
 /// #     || {
 /// let args = AppBarArgs::default();
@@ -130,22 +130,23 @@ impl Default for AppBarArgs {
 ///     AppBarDefaults::HORIZONTAL_PADDING
 /// );
 ///
-/// app_bar(args, |scope| {
-///     scope.child(|| text(TextArgs::default().text("Inbox")));
+/// app_bar(&args, |scope| {
+///     scope.child(|| text(&TextArgs::default().text("Inbox")));
 /// });
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
-#[tessera]
-pub fn app_bar<F>(args: impl Into<AppBarArgs>, content: F)
+pub fn app_bar<F>(args: &AppBarArgs, content: F)
 where
-    F: FnOnce(&mut RowScope) + Send + Sync + 'static,
+    F: Fn(&mut RowScope) + Send + Sync + 'static,
 {
-    let args: AppBarArgs = args.into();
+    let args: AppBarArgs = args.clone();
+    let content = Arc::new(content);
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(args.container_color.into())
             .content_color(args.content_color)
@@ -154,6 +155,7 @@ where
             .tonal_elevation(args.elevation)
             .modifier(args.modifier),
         move || {
+            let content = Arc::clone(&content);
             row(
                 RowArgs::default()
                     .modifier(
@@ -163,14 +165,16 @@ where
                     )
                     .main_axis_alignment(args.main_axis_alignment)
                     .cross_axis_alignment(args.cross_axis_alignment),
-                content,
+                move |scope| {
+                    content(scope);
+                },
             );
         },
-    );
+    ));
 }
 
 /// Configuration arguments for [`top_app_bar`].
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct TopAppBarArgs {
     /// Base container configuration for the app bar; see [`AppBarArgs`].
     pub app_bar: AppBarArgs,
@@ -181,10 +185,10 @@ pub struct TopAppBarArgs {
     pub title_modifier: Modifier,
     /// Optional navigation icon rendered at the leading edge.
     #[setters(skip)]
-    pub navigation_icon: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub navigation_icon: Option<RenderSlot>,
     /// Actions rendered at the trailing edge.
     #[setters(skip)]
-    pub actions: Vec<Arc<dyn Fn() + Send + Sync>>,
+    pub actions: Vec<RenderSlot>,
     /// Color applied to the navigation icon slot.
     pub navigation_icon_color: Color,
     /// Color applied to the trailing action slot.
@@ -230,13 +234,13 @@ impl TopAppBarArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.navigation_icon = Some(Arc::new(navigation_icon));
+        self.navigation_icon = Some(RenderSlot::new(navigation_icon));
         self
     }
 
     /// Set the navigation icon slot content using a shared callback.
-    pub fn navigation_icon_shared(mut self, navigation_icon: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.navigation_icon = Some(navigation_icon);
+    pub fn navigation_icon_shared(mut self, navigation_icon: impl Into<RenderSlot>) -> Self {
+        self.navigation_icon = Some(navigation_icon.into());
         self
     }
 
@@ -245,18 +249,18 @@ impl TopAppBarArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.actions.push(Arc::new(action));
+        self.actions.push(RenderSlot::new(action));
         self
     }
 
     /// Append a trailing action item using a shared callback.
-    pub fn action_shared(mut self, action: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.actions.push(action);
+    pub fn action_shared(mut self, action: impl Into<RenderSlot>) -> Self {
+        self.actions.push(action.into());
         self
     }
 
     /// Replace the trailing actions with shared callbacks.
-    pub fn actions_shared(mut self, actions: Vec<Arc<dyn Fn() + Send + Sync>>) -> Self {
+    pub fn actions_shared(mut self, actions: Vec<RenderSlot>) -> Self {
         self.actions = actions;
         self
     }
@@ -286,23 +290,24 @@ impl TopAppBarArgs {
 /// };
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
 /// #     || {
 /// let args = TopAppBarArgs::new("Inbox").action(|| {
-///     text(TextArgs::default().text("Edit"));
+///     text(&TextArgs::default().text("Edit"));
 /// });
 /// assert_eq!(args.title, "Inbox");
 ///
-/// top_app_bar(args);
+/// top_app_bar(&args);
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn top_app_bar(args: impl Into<TopAppBarArgs>) {
-    let args: TopAppBarArgs = args.into();
+pub fn top_app_bar(args: &TopAppBarArgs) {
+    let args: TopAppBarArgs = args.clone();
     let typography = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -324,36 +329,45 @@ pub fn top_app_bar(args: impl Into<TopAppBarArgs>) {
     let extra_inset = Dp((title_inset.0 - start_padding.0).max(0.0));
     let title_style = typography.title_large;
 
-    app_bar(app_bar_args, move |scope| {
+    app_bar(&app_bar_args, move |scope| {
+        let navigation_icon = navigation_icon.clone();
+        let actions = actions.clone();
         if let Some(navigation_icon) = navigation_icon {
             let nav_color = navigation_icon_color;
             scope.child(move || {
                 provide_context(
                     || ContentColor { current: nav_color },
                     || {
-                        navigation_icon();
+                        navigation_icon.render();
                     },
                 );
             });
         } else if extra_inset.0 > 0.0 {
             let spacer_width = extra_inset;
             scope.child(move || {
-                spacer(Modifier::new().width(spacer_width));
+                spacer(&crate::spacer::SpacerArgs::new(
+                    Modifier::new().width(spacer_width),
+                ));
             });
         }
 
-        let title_text = title;
+        let title_text = title.clone();
+        let title_mod = title_modifier.clone();
         scope.child_weighted(
             move || {
                 if title_text.is_empty() {
-                    spacer(Modifier::new().fill_max_width());
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().fill_max_width(),
+                    ));
                 } else {
+                    let text_value = title_text.clone();
+                    let title_mod = title_mod.clone();
                     provide_text_style(title_style, move || {
-                        text(
-                            TextArgs::default()
-                                .text(title_text)
-                                .modifier(title_modifier),
-                        );
+                        text(&crate::text::TextArgs::from(
+                            &TextArgs::default()
+                                .text(&text_value)
+                                .modifier(title_mod.clone()),
+                        ));
                     });
                 }
             },
@@ -365,6 +379,7 @@ pub fn top_app_bar(args: impl Into<TopAppBarArgs>) {
             let spacing = actions_spacing;
             let action_color = action_icon_color;
             scope.child(move || {
+                let actions = actions.clone();
                 provide_context(
                     || ContentColor {
                         current: action_color,
@@ -373,14 +388,16 @@ pub fn top_app_bar(args: impl Into<TopAppBarArgs>) {
                         row(
                             RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
                             move |row_scope| {
-                                for (index, action) in actions.into_iter().enumerate() {
+                                for (index, action) in actions.iter().cloned().enumerate() {
                                     row_scope.child(move || {
-                                        action();
+                                        action.render();
                                     });
                                     if spacing.0 > 0.0 && index + 1 < actions_len {
                                         let spacer_width = spacing;
                                         row_scope.child(move || {
-                                            spacer(Modifier::new().width(spacer_width));
+                                            spacer(&crate::spacer::SpacerArgs::new(
+                                                Modifier::new().width(spacer_width),
+                                            ));
                                         });
                                     }
                                 }

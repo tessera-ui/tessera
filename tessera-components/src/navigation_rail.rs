@@ -3,18 +3,16 @@
 //! ## Usage
 //!
 //! Use for primary destinations on wide layouts with a collapsible side rail.
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::Duration;
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, PxSize, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    provide_context, remember, tessera, use_context,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -69,6 +67,7 @@ enum NavigationRailIconPosition {
     Start,
 }
 
+#[derive(Clone, PartialEq)]
 struct NavigationRailItemContentArgs {
     item: NavigationRailItem,
     icon_position: NavigationRailIconPosition,
@@ -82,7 +81,8 @@ struct NavigationRailItemContentArgs {
 }
 
 #[tessera]
-fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
+fn navigation_rail_item_content_node(args: &NavigationRailItemContentArgs) {
+    let args = args.clone();
     let NavigationRailItemContentArgs {
         item,
         icon_position,
@@ -138,7 +138,7 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
     .round()
     .max(0.0) as i32);
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(SurfaceStyle::Filled {
                 color: indicator_color,
@@ -151,7 +151,7 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
             .show_state_layer(false)
             .show_ripple(false),
         || {},
-    );
+    ));
 
     let indicator_args = SurfaceArgs::default()
         .style(SurfaceStyle::Filled {
@@ -162,21 +162,24 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
         .enabled(true)
         .interaction_state(interaction_state)
         .ripple_color(ripple_color);
-    surface(indicator_args, move || {
-        surface(
-            SurfaceArgs::default()
-                .style(SurfaceStyle::Filled {
-                    color: Color::TRANSPARENT,
-                })
-                .shape(Shape::capsule())
-                .modifier(Modifier::new().size(indicator_base_width, indicator_height))
-                .enabled(true)
-                .ripple_color(ripple_color)
-                .show_state_layer(false)
-                .ripple_state(ripple_state),
-            || {},
-        );
-    });
+    surface(&crate::surface::SurfaceArgs::with_child(
+        indicator_args,
+        move || {
+            surface(&crate::surface::SurfaceArgs::with_child(
+                SurfaceArgs::default()
+                    .style(SurfaceStyle::Filled {
+                        color: Color::TRANSPARENT,
+                    })
+                    .shape(Shape::capsule())
+                    .modifier(Modifier::new().size(indicator_base_width, indicator_height))
+                    .enabled(true)
+                    .ripple_color(ripple_color)
+                    .show_state_layer(false)
+                    .ripple_state(ripple_state),
+                || {},
+            ));
+        },
+    ));
 
     if let Some(draw_icon) = item.icon {
         provide_context(
@@ -184,7 +187,7 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
                 current: icon_color,
             },
             || {
-                draw_icon();
+                draw_icon.render();
             },
         );
     }
@@ -196,7 +199,9 @@ fn navigation_rail_item_content(args: NavigationRailItemContentArgs) {
             NavigationRailIconPosition::Start => typography.label_large,
         };
         provide_text_style(label_style, move || {
-            text(TextArgs::default().text(label).color(label_color));
+            text(&crate::text::TextArgs::from(
+                &TextArgs::default().text(&label).color(label_color),
+            ));
         });
     }
 
@@ -374,6 +379,7 @@ impl LayoutSpec for NavigationRailItemLayout {
     }
 }
 
+#[derive(Clone, PartialEq)]
 struct NavigationRailItemArgs {
     controller: State<NavigationRailController>,
     index: usize,
@@ -386,8 +392,23 @@ struct NavigationRailItemArgs {
     item_min_height: Dp,
 }
 
+#[derive(Clone, PartialEq)]
+struct NavigationRailComposeArgs {
+    controller: State<NavigationRailController>,
+    items: Vec<NavigationRailItem>,
+    header: Option<RenderSlot>,
+}
+
+#[derive(Clone, PartialEq)]
+struct NavigationRailRenderArgs {
+    controller: State<NavigationRailController>,
+    items: Vec<NavigationRailItem>,
+    header: Option<RenderSlot>,
+}
+
 #[tessera]
-fn navigation_rail_item(args: NavigationRailItemArgs) {
+fn navigation_rail_item_node(args: &NavigationRailItemArgs) {
+    let args = args.clone();
     let NavigationRailItemArgs {
         controller,
         index,
@@ -416,7 +437,7 @@ fn navigation_rail_item(args: NavigationRailItemArgs) {
     };
 
     let on_press = {
-        Arc::new(move |ctx: PointerEventContext| {
+        move |ctx: PointerEventContext| {
             let spec = RippleSpec {
                 bounded: true,
                 radius: None,
@@ -424,20 +445,20 @@ fn navigation_rail_item(args: NavigationRailItemArgs) {
             ripple_state.with_mut(|state| {
                 state.start_animation_with_spec(ctx.normalized_pos, ripple_size, spec);
             });
-        })
+        }
     };
     let on_release = {
-        Arc::new(move |_ctx: PointerEventContext| {
+        move |_ctx: PointerEventContext| {
             ripple_state.with_mut(|state| state.release());
-        })
+        }
     };
 
     let on_click_item = item.on_click.clone();
     let on_click = {
-        Arc::new(move || {
+        move || {
             controller.with_mut(|c| c.set_selected(index));
-            on_click_item();
-        })
+            on_click_item.call();
+        }
     };
 
     let selectable_args = SelectableArgs::new(is_selected, on_click)
@@ -451,8 +472,8 @@ fn navigation_rail_item(args: NavigationRailItemArgs) {
     Modifier::new().selectable(selectable_args).run({
         let item = item.clone();
         move || {
-            navigation_rail_item_content(NavigationRailItemContentArgs {
-                item,
+            let content_args = NavigationRailItemContentArgs {
+                item: item.clone(),
                 icon_position,
                 is_selected,
                 was_selected,
@@ -461,7 +482,8 @@ fn navigation_rail_item(args: NavigationRailItemArgs) {
                 item_min_height,
                 interaction_state,
                 ripple_state,
-            });
+            };
+            navigation_rail_item_content_node(&content_args);
         }
     });
 }
@@ -482,17 +504,17 @@ impl NavigationRailValue {
 }
 
 /// Item configuration for [`navigation_rail`].
-#[derive(Clone, Setters)]
+#[derive(Clone, PartialEq, Setters)]
 pub struct NavigationRailItem {
     /// Text label shown next to or below the icon.
     #[setters(into)]
     pub label: String,
     /// Optional icon rendered for the item.
     #[setters(skip)]
-    pub icon: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub icon: Option<RenderSlot>,
     /// Callback invoked after selection changes to this item.
     #[setters(skip)]
-    pub on_click: Arc<dyn Fn() + Send + Sync>,
+    pub on_click: Callback,
 }
 
 impl NavigationRailItem {
@@ -501,7 +523,7 @@ impl NavigationRailItem {
         Self {
             label: label.into(),
             icon: None,
-            on_click: Arc::new(|| {}),
+            on_click: Callback::new(|| {}),
         }
     }
 
@@ -510,13 +532,13 @@ impl NavigationRailItem {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.icon = Some(Arc::new(icon));
+        self.icon = Some(RenderSlot::new(icon));
         self
     }
 
     /// Set the icon drawing callback using a shared callback.
-    pub fn icon_shared(mut self, icon: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.icon = Some(icon);
+    pub fn icon_shared(mut self, icon: impl Into<RenderSlot>) -> Self {
+        self.icon = Some(icon.into());
         self
     }
 
@@ -525,13 +547,13 @@ impl NavigationRailItem {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Arc::new(on_click);
+        self.on_click = Callback::new(on_click);
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = on_click;
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = on_click.into();
         self
     }
 }
@@ -578,79 +600,70 @@ impl Default for NavigationRailItem {
 ///     });
 /// }
 /// ```
-#[tessera]
 pub fn navigation_rail<F>(scope_config: F)
 where
     F: FnOnce(&mut NavigationRailScope),
 {
     let controller = remember(|| NavigationRailController::new(0));
-    navigation_rail_with_controller(controller, scope_config);
-}
-
-/// # navigation_rail_with_controller
-///
-/// Navigation rail driven by an explicit controller when selection and
-/// expansion are app-managed.
-///
-/// ## Usage
-///
-/// Use when you need to manage selection and expanded state externally.
-///
-/// ## Parameters
-///
-/// - `controller` — explicit controller that tracks selection and expansion.
-/// - `scope_config` — closure that registers items and an optional header via
-///   [`NavigationRailScope`].
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::navigation_rail::{
-///     NavigationRailController, NavigationRailItem, NavigationRailValue,
-///     navigation_rail_with_controller,
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let controller = remember(|| NavigationRailController::new(0));
-///     assert_eq!(controller.with(|c| c.selected()), 0);
-///     controller.with_mut(|c| c.set_value(NavigationRailValue::Expanded));
-///     assert!(controller.with(|c| c.is_expanded()));
-///
-///     navigation_rail_with_controller(controller, |scope| {
-///         scope.item(NavigationRailItem::new("Home"));
-///         scope.item(NavigationRailItem::new("Search"));
-///     });
-/// }
-/// ```
-#[tessera]
-pub fn navigation_rail_with_controller<F>(
-    controller: State<NavigationRailController>,
-    scope_config: F,
-) where
-    F: FnOnce(&mut NavigationRailScope),
-{
     let mut items = Vec::new();
-    let mut header: Option<Box<dyn FnOnce() + Send + Sync>> = None;
+    let mut header: Option<RenderSlot> = None;
     {
         let mut scope = NavigationRailScope {
+            controller,
             items: &mut items,
             header: &mut header,
         };
         scope_config(&mut scope);
     }
+    let render_args = NavigationRailComposeArgs {
+        controller,
+        items,
+        header,
+    };
+    navigation_rail_node(&render_args);
+}
 
+#[tessera]
+fn navigation_rail_node(args: &NavigationRailComposeArgs) {
+    let render_args = NavigationRailRenderArgs {
+        controller: args.controller,
+        items: args.items.clone(),
+        header: args.header.clone(),
+    };
+    navigation_rail_render_node(&render_args);
+}
+
+#[tessera]
+fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
+    let controller = args.controller;
+    let items = args.items.clone();
+    let header = args.header.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
+    let frame_nanos = current_frame_nanos();
     let selection_progress = controller
-        .with_mut(|c| c.selection_animation_progress())
+        .with_mut(|c| c.selection_animation_progress(frame_nanos))
         .unwrap_or(1.0);
     let selected_index = controller.with(|c| c.selected());
     let previous_index = controller.with(|c| c.previous_selected());
-    let expand_fraction = controller.with_mut(|c| c.expand_fraction());
+    let expand_fraction = controller.with_mut(|c| c.expand_fraction(frame_nanos));
+    if controller.with(|c| c.is_animating(frame_nanos)) {
+        let controller_for_frame = controller;
+        receive_frame_nanos(move |frame_nanos| {
+            let is_animating = controller_for_frame.with_mut(|controller| {
+                let _ = controller.selection_animation_progress(frame_nanos);
+                let _ = controller.expand_fraction(frame_nanos);
+                controller.is_animating(frame_nanos)
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
 
     let icon_position = if expand_fraction >= 0.5 {
         NavigationRailIconPosition::Start
@@ -670,12 +683,14 @@ pub fn navigation_rail_with_controller<F>(
     let indicator_start_width =
         Dp((container_width.0 - ITEM_HORIZONTAL_PADDING.0 * 2.0).max(INDICATOR_TOP_WIDTH.0));
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_height().width(container_width))
             .style(scheme.surface.into())
             .block_input(true),
         move || {
+            let header = header.clone();
+            let items = items.clone();
             column(
                 ColumnArgs::default()
                     .modifier(Modifier::new().fill_max_size().padding(Padding::new(
@@ -687,8 +702,9 @@ pub fn navigation_rail_with_controller<F>(
                     .main_axis_alignment(MainAxisAlignment::Start)
                     .cross_axis_alignment(CrossAxisAlignment::Start),
                 move |column_scope| {
-                    if let Some(header) = header {
+                    if let Some(header) = header.clone() {
                         column_scope.child(move || {
+                            let header = header.clone();
                             row(
                                 RowArgs::default().modifier(Modifier::new().padding(Padding::new(
                                     ITEM_HORIZONTAL_PADDING,
@@ -697,52 +713,59 @@ pub fn navigation_rail_with_controller<F>(
                                     Dp::ZERO,
                                 ))),
                                 move |row_scope| {
-                                    row_scope.child(header);
+                                    row_scope.child(move || {
+                                        header.render();
+                                    });
                                 },
                             );
                         });
                         column_scope.child(move || {
-                            spacer(Modifier::new().height(HEADER_BOTTOM_PADDING));
+                            spacer(&crate::spacer::SpacerArgs::new(
+                                Modifier::new().height(HEADER_BOTTOM_PADDING),
+                            ));
                         });
                     }
 
                     let last_index = items.len().saturating_sub(1);
-                    for (index, item) in items.into_iter().enumerate() {
+                    for (index, item) in items.iter().cloned().enumerate() {
                         column_scope.child(move || {
-                            navigation_rail_item(NavigationRailItemArgs {
+                            let item_args = NavigationRailItemArgs {
                                 controller,
                                 index,
-                                item,
+                                item: item.clone(),
                                 selected_index,
                                 previous_index,
                                 selection_progress,
                                 icon_position,
                                 indicator_start_width,
                                 item_min_height,
-                            });
+                            };
+                            navigation_rail_item_node(&item_args);
                         });
 
                         if index != last_index && item_spacing.0 > 0.0 {
                             let spacing = item_spacing;
                             column_scope.child(move || {
-                                spacer(Modifier::new().height(spacing));
+                                spacer(&crate::spacer::SpacerArgs::new(
+                                    Modifier::new().height(spacing),
+                                ));
                             });
                         }
                     }
                 },
             );
         },
-    );
+    ));
 }
 
 /// Controller for the `navigation_rail` component.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct NavigationRailController {
     selected: usize,
     previous_selected: usize,
-    selection_start_time: Option<Instant>,
+    selection_start_frame_nanos: Option<u64>,
     expanded: bool,
-    expand_start_time: Option<Instant>,
+    expand_start_frame_nanos: Option<u64>,
 }
 
 impl NavigationRailController {
@@ -756,9 +779,9 @@ impl NavigationRailController {
         Self {
             selected,
             previous_selected: selected,
-            selection_start_time: None,
+            selection_start_frame_nanos: None,
             expanded: value.is_expanded(),
-            expand_start_time: None,
+            expand_start_frame_nanos: None,
         }
     }
 
@@ -810,33 +833,37 @@ impl NavigationRailController {
         if self.selected != index {
             self.previous_selected = self.selected;
             self.selected = index;
-            self.selection_start_time = Some(Instant::now());
+            self.selection_start_frame_nanos = Some(current_frame_nanos());
         }
     }
 
     fn set_expanded(&mut self, expanded: bool) {
         if self.expanded != expanded {
             self.expanded = expanded;
-            let mut timer = Instant::now();
-            if let Some(old_timer) = self.expand_start_time {
-                let elapsed = old_timer.elapsed();
-                if elapsed < ANIMATION_DURATION {
-                    timer += ANIMATION_DURATION - elapsed;
+            let now_nanos = current_frame_nanos();
+            if let Some(old_start_frame_nanos) = self.expand_start_frame_nanos {
+                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
+                let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+                if elapsed_nanos < animation_nanos {
+                    self.expand_start_frame_nanos =
+                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
+                    return;
                 }
             }
-            self.expand_start_time = Some(timer);
+            self.expand_start_frame_nanos = Some(now_nanos);
         }
     }
 
-    fn selection_animation_progress(&mut self) -> Option<f32> {
-        if let Some(start_time) = self.selection_start_time {
-            let elapsed = start_time.elapsed();
-            if elapsed < ANIMATION_DURATION {
+    fn selection_animation_progress(&mut self, frame_nanos: u64) -> Option<f32> {
+        if let Some(start_frame_nanos) = self.selection_start_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            if elapsed_nanos < animation_nanos {
                 Some(animation::easing(
-                    elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32(),
+                    elapsed_nanos as f32 / animation_nanos as f32,
                 ))
             } else {
-                self.selection_start_time = None;
+                self.selection_start_frame_nanos = None;
                 None
             }
         } else {
@@ -844,8 +871,8 @@ impl NavigationRailController {
         }
     }
 
-    fn expand_fraction(&mut self) -> f32 {
-        let progress = calc_progress_from_timer(self.expand_start_time.as_ref());
+    fn expand_fraction(&mut self, frame_nanos: u64) -> f32 {
+        let progress = calc_progress_from_timer(self.expand_start_frame_nanos, frame_nanos);
         if self.expanded {
             progress
         } else {
@@ -856,6 +883,19 @@ impl NavigationRailController {
     fn previous_selected(&self) -> usize {
         self.previous_selected
     }
+
+    fn is_animating(&self, frame_nanos: u64) -> bool {
+        let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+        self.selection_start_frame_nanos
+            .is_some_and(|start_frame_nanos| {
+                frame_nanos.saturating_sub(start_frame_nanos) < animation_nanos
+            })
+            || self
+                .expand_start_frame_nanos
+                .is_some_and(|start_frame_nanos| {
+                    frame_nanos.saturating_sub(start_frame_nanos) < animation_nanos
+                })
+    }
 }
 
 impl Default for NavigationRailController {
@@ -864,15 +904,16 @@ impl Default for NavigationRailController {
     }
 }
 
-fn calc_progress_from_timer(timer: Option<&Instant>) -> f32 {
-    let raw = match timer {
+fn calc_progress_from_timer(animation_start_frame_nanos: Option<u64>, frame_nanos: u64) -> f32 {
+    let raw = match animation_start_frame_nanos {
         None => 1.0,
-        Some(t) => {
-            let elapsed = t.elapsed();
-            if elapsed >= ANIMATION_DURATION {
+        Some(start_frame_nanos) => {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            if elapsed_nanos >= animation_nanos {
                 1.0
             } else {
-                elapsed.as_secs_f32() / ANIMATION_DURATION.as_secs_f32()
+                elapsed_nanos as f32 / animation_nanos as f32
             }
         }
     };
@@ -881,17 +922,23 @@ fn calc_progress_from_timer(timer: Option<&Instant>) -> f32 {
 
 /// Scope passed to the closure for defining children of the NavigationRail.
 pub struct NavigationRailScope<'a> {
+    controller: State<NavigationRailController>,
     items: &'a mut Vec<NavigationRailItem>,
-    header: &'a mut Option<Box<dyn FnOnce() + Send + Sync>>,
+    header: &'a mut Option<RenderSlot>,
 }
 
 impl<'a> NavigationRailScope<'a> {
+    /// Returns the controller for expanded/collapsed and selection state.
+    pub fn controller(&self) -> State<NavigationRailController> {
+        self.controller
+    }
+
     /// Set an optional header above the rail items.
     pub fn header<F>(&mut self, header: F)
     where
-        F: FnOnce() + Send + Sync + 'static,
+        F: Fn() + Send + Sync + 'static,
     {
-        *self.header = Some(Box::new(header));
+        *self.header = Some(RenderSlot::new(header));
     }
 
     /// Add a navigation item to the rail.

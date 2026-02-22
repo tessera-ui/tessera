@@ -7,11 +7,11 @@
 
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Px, PxPosition, tessera,
+    MeasurementError, Px, PxPosition, RenderSlot, tessera,
 };
 
 /// Controls whether minimum interactive size wrappers are enforced.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct MinimumInteractiveComponentEnforcement {
     /// When true, `minimum_interactive_component_size` expands to the minimum
     /// size.
@@ -139,49 +139,88 @@ pub(crate) fn shrink_dimension(dimension: DimensionValue, before: Px, after: Px)
 }
 
 #[tessera]
-pub(crate) fn modifier_padding<F>(padding: Padding, child: F)
-where
-    F: FnOnce(),
-{
-    layout(PaddingLayout { padding });
+fn modifier_padding_node(args: &ModifierPaddingArgs) {
+    layout(PaddingLayout {
+        padding: args.padding,
+    });
+    args.child.render();
+}
 
-    child();
+#[derive(Clone, PartialEq)]
+struct ModifierPaddingArgs {
+    padding: Padding,
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_padding(padding: Padding, child: RenderSlot) {
+    let args = ModifierPaddingArgs { padding, child };
+    modifier_padding_node(&args);
 }
 
 #[tessera]
-pub(crate) fn modifier_offset<F>(x: Dp, y: Dp, child: F)
-where
-    F: FnOnce(),
-{
-    layout(OffsetLayout { x, y });
+fn modifier_offset_node(args: &ModifierOffsetArgs) {
+    layout(OffsetLayout {
+        x: args.x,
+        y: args.y,
+    });
+    args.child.render();
+}
 
-    child();
+#[derive(Clone, PartialEq)]
+struct ModifierOffsetArgs {
+    x: Dp,
+    y: Dp,
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_offset(x: Dp, y: Dp, child: RenderSlot) {
+    let args = ModifierOffsetArgs { x, y, child };
+    modifier_offset_node(&args);
 }
 
 #[tessera]
-pub(crate) fn modifier_constraints<F>(
+fn modifier_constraints_node(args: &ModifierConstraintsArgs) {
+    layout(ConstraintLayout {
+        width_override: args.width_override,
+        height_override: args.height_override,
+    });
+    args.child.render();
+}
+
+#[derive(Clone, PartialEq)]
+struct ModifierConstraintsArgs {
     width_override: Option<DimensionValue>,
     height_override: Option<DimensionValue>,
-    child: F,
-) where
-    F: FnOnce(),
-{
-    layout(ConstraintLayout {
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_constraints(
+    width_override: Option<DimensionValue>,
+    height_override: Option<DimensionValue>,
+    child: RenderSlot,
+) {
+    let args = ModifierConstraintsArgs {
         width_override,
         height_override,
-    });
-
-    child();
+        child,
+    };
+    modifier_constraints_node(&args);
 }
 
 #[tessera]
-pub(crate) fn modifier_minimum_interactive_size<F>(child: F)
-where
-    F: FnOnce(),
-{
+fn modifier_minimum_interactive_size_node(args: &ModifierMinimumInteractiveArgs) {
     layout(MinimumInteractiveLayout);
+    args.child.render();
+}
 
-    child();
+#[derive(Clone, PartialEq)]
+struct ModifierMinimumInteractiveArgs {
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_minimum_interactive_size(child: RenderSlot) {
+    let args = ModifierMinimumInteractiveArgs { child };
+    modifier_minimum_interactive_size_node(&args);
 }
 
 #[derive(Clone, Copy, PartialEq)]

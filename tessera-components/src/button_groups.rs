@@ -4,12 +4,13 @@
 //!
 //! Used for grouping related actions.
 
-use std::{collections::HashMap, sync::Arc, time::Instant};
+use std::collections::HashMap;
 
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier, Px,
-    PxPosition, remember, tessera, use_context,
+    CallbackWith, Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError,
+    Modifier, Px, PxPosition, RenderSlot, current_frame_nanos, receive_frame_nanos, remember,
+    tessera, use_context,
 };
 
 use crate::{
@@ -35,7 +36,7 @@ use crate::{
 ///
 /// Buttons are adjacent with no spacing, and each button must be the same
 /// width.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum ButtonGroupsStyle {
     /// Buttons have spacing between them and do not need to be the same width.
     #[default]
@@ -67,7 +68,7 @@ pub enum ButtonGroupsSelectionMode {
 
 /// According to the [`ButtonGroups-Configurations`](https://m3.material.io/components/button-groups/specs#0d2cf762-275c-4693-9484-fe011501439e)
 /// spec, the [`button_groups`] component supports a series of sizes.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum ButtonGroupsSize {
     /// Extra small size.
     ExtraSmall,
@@ -84,8 +85,8 @@ pub enum ButtonGroupsSize {
 
 /// A scope for declaratively adding children to a [`button_groups`] component.
 pub struct ButtonGroupsScope<'a> {
-    child_closures: &'a mut Vec<Box<dyn FnOnce(Color) + Send + Sync>>,
-    on_click_closures: &'a mut Vec<Arc<dyn Fn(bool) + Send + Sync>>,
+    child_closures: &'a mut Vec<CallbackWith<Color>>,
+    on_click_closures: &'a mut Vec<CallbackWith<bool>>,
 }
 
 impl ButtonGroupsScope<'_> {
@@ -102,16 +103,16 @@ impl ButtonGroupsScope<'_> {
     ///   button is now active (selected) or not.
     pub fn child<F, C>(&mut self, child: F, on_click: C)
     where
-        F: FnOnce(Color) + Send + Sync + 'static,
+        F: Fn(Color) + Send + Sync + 'static,
         C: Fn(bool) + Send + Sync + 'static,
     {
-        self.child_closures.push(Box::new(child));
-        self.on_click_closures.push(Arc::new(on_click));
+        self.child_closures.push(CallbackWith::new(child));
+        self.on_click_closures.push(CallbackWith::new(on_click));
     }
 }
 
 /// Arguments for the [`button_groups`] component.
-#[derive(Default, Setters)]
+#[derive(Clone, PartialEq, Default, Setters)]
 pub struct ButtonGroupsArgs {
     /// Size of the button group.
     pub size: ButtonGroupsSize,
@@ -121,7 +122,7 @@ pub struct ButtonGroupsArgs {
     pub selection_mode: ButtonGroupsSelectionMode,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct ButtonGroupsLayout {
     container_height: Dp,
     between_space: Dp,
@@ -186,14 +187,14 @@ impl ButtonGroupsLayout {
     }
 }
 
-#[derive(Default)]
+#[derive(PartialEq, Default)]
 struct ButtonItemState {
     actived: bool,
     elastic_state: ElasticState,
 }
 
 /// Internal state of a button group.
-#[derive(Default)]
+#[derive(PartialEq, Default)]
 struct ButtonGroupsState {
     item_states: HashMap<usize, ButtonItemState>,
 }
@@ -231,11 +232,11 @@ impl ButtonGroupsState {
 /// };
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(|| MaterialTheme::default(), || {
-/// button_groups(ButtonGroupsArgs::default(), |scope| {
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
+/// button_groups(&ButtonGroupsArgs::default(), |scope| {
 ///     scope.child(
 ///         |color| {
-///             text(TextArgs {
+///             text(&TextArgs {
 ///                 text: "Button 1".to_string(),
 ///                 color,
 ///                 ..Default::default()
@@ -248,7 +249,7 @@ impl ButtonGroupsState {
 ///
 ///     scope.child(
 ///         |color| {
-///             text(TextArgs {
+///             text(&TextArgs {
 ///                 text: "Button 2".to_string(),
 ///                 color,
 ///                 ..Default::default()
@@ -261,7 +262,7 @@ impl ButtonGroupsState {
 ///
 ///     scope.child(
 ///         |color| {
-///             text(TextArgs {
+///             text(&TextArgs {
 ///                 text: "Button 3".to_string(),
 ///                 color,
 ///                 ..Default::default()
@@ -273,14 +274,13 @@ impl ButtonGroupsState {
 ///     );
 /// });
 /// # });
+/// # material_theme(&args);
 /// ```
-#[tessera]
-pub fn button_groups<F>(args: impl Into<ButtonGroupsArgs>, scope_config: F)
+pub fn button_groups<F>(args: &ButtonGroupsArgs, scope_config: F)
 where
     F: FnOnce(&mut ButtonGroupsScope),
 {
-    let state = remember(ButtonGroupsState::default);
-    let args = args.into();
+    let args = args.clone();
     let mut child_closures = Vec::new();
     let mut on_click_closures = Vec::new();
     {
@@ -290,6 +290,31 @@ where
         };
         scope_config(&mut scope);
     }
+    let render_args = ButtonGroupsRenderArgs {
+        size: args.size,
+        style: args.style,
+        selection_mode: args.selection_mode,
+        child_closures,
+        on_click_closures,
+    };
+
+    button_groups_node(&render_args);
+}
+
+#[derive(Clone, PartialEq)]
+struct ButtonGroupsRenderArgs {
+    size: ButtonGroupsSize,
+    style: ButtonGroupsStyle,
+    selection_mode: ButtonGroupsSelectionMode,
+    child_closures: Vec<CallbackWith<Color>>,
+    on_click_closures: Vec<CallbackWith<bool>>,
+}
+
+#[tessera]
+fn button_groups_node(args: &ButtonGroupsRenderArgs) {
+    let state = remember(ButtonGroupsState::default);
+    let child_closures = args.child_closures.clone();
+    let on_click_closures = args.on_click_closures.clone();
     let layout = ButtonGroupsLayout::new(args.size, args.style);
     let child_len = child_closures.len();
     let selection_mode = args.selection_mode;
@@ -299,33 +324,46 @@ where
             .modifier(row_modifier)
             .main_axis_alignment(MainAxisAlignment::Start),
         move |scope| {
-            for (index, child_closure) in child_closures.into_iter().enumerate() {
+            for (index, child_closure) in child_closures.iter().cloned().enumerate() {
                 let on_click_closure = on_click_closures[index].clone();
+                let item_layout = layout.clone();
+                let between_space = layout.between_space;
 
                 scope.child(move || {
                     let actived =
                         state.with(|s| s.item_states.get(&index).is_some_and(|item| item.actived));
                     if actived {
+                        let on_click_closure = on_click_closure.clone();
                         let mut button_args = ButtonArgs::filled(move || {
-                            on_click_closure(false);
+                            on_click_closure.call(false);
                             state.with_mut(|s| {
                                 let item = s.item_state_mut(index);
                                 item.actived = false;
                                 item.elastic_state.toggle();
                             });
                         });
-                        button_args.shape = layout.active_button_shape;
+                        button_args.shape = item_layout.active_button_shape;
                         let scheme = use_context::<MaterialTheme>()
                             .expect("MaterialTheme must be provided")
                             .get()
                             .color_scheme;
                         let label_color = scheme.on_primary;
-                        button(button_args, move || {
-                            elastic_container(state, index, move || child_closure(label_color))
-                        });
+                        button(&crate::button::ButtonArgs::with_child(button_args, {
+                            let child_closure = child_closure.clone();
+                            move || {
+                                let child_closure = child_closure.clone();
+                                let elastic_args = ElasticContainerArgs {
+                                    state,
+                                    index,
+                                    child: RenderSlot::new(move || child_closure.call(label_color)),
+                                };
+                                elastic_container(&elastic_args);
+                            }
+                        }));
                     } else {
+                        let on_click_closure = on_click_closure.clone();
                         let mut button_args = ButtonArgs::filled(move || {
-                            on_click_closure(true);
+                            on_click_closure.call(true);
                             state.with_mut(|s| {
                                 if selection_mode == ButtonGroupsSelectionMode::Single {
                                     for (other_index, item) in s.item_states.iter_mut() {
@@ -347,11 +385,11 @@ where
                             .color_scheme;
                         button_args.color = scheme.secondary_container;
                         if index == 0 {
-                            button_args.shape = layout.inactive_button_shape_start;
+                            button_args.shape = item_layout.inactive_button_shape_start;
                         } else if index == child_len - 1 {
-                            button_args.shape = layout.inactive_button_shape_end;
+                            button_args.shape = item_layout.inactive_button_shape_end;
                         } else {
-                            button_args.shape = layout.inactive_button_shape;
+                            button_args.shape = item_layout.inactive_button_shape;
                         }
 
                         let scheme = use_context::<MaterialTheme>()
@@ -359,14 +397,25 @@ where
                             .get()
                             .color_scheme;
                         let label_color = scheme.on_secondary_container;
-                        button(button_args, move || {
-                            elastic_container(state, index, move || child_closure(label_color))
-                        });
+                        button(&crate::button::ButtonArgs::with_child(button_args, {
+                            let child_closure = child_closure.clone();
+                            move || {
+                                let child_closure = child_closure.clone();
+                                let elastic_args = ElasticContainerArgs {
+                                    state,
+                                    index,
+                                    child: RenderSlot::new(move || child_closure.call(label_color)),
+                                };
+                                elastic_container(&elastic_args);
+                            }
+                        }));
                     }
                 });
                 if index != child_len - 1 {
                     scope.child(move || {
-                        spacer(Modifier::new().width(layout.between_space));
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().width(between_space),
+                        ));
                     })
                 }
             }
@@ -374,9 +423,10 @@ where
     )
 }
 
+#[derive(PartialEq)]
 struct ElasticState {
     expended: bool,
-    last_toggle: Option<Instant>,
+    last_toggle_frame_nanos: Option<u64>,
     start_progress: f32,
 }
 
@@ -384,7 +434,7 @@ impl Default for ElasticState {
     fn default() -> Self {
         Self {
             expended: false,
-            last_toggle: None,
+            last_toggle_frame_nanos: None,
             start_progress: 0.0,
         }
     }
@@ -392,14 +442,15 @@ impl Default for ElasticState {
 
 impl ElasticState {
     fn toggle(&mut self) {
-        let current_visual_progress = self.calculate_current_progress();
+        let frame_nanos = current_frame_nanos();
+        let current_visual_progress = self.calculate_current_progress(frame_nanos);
         self.expended = !self.expended;
-        self.last_toggle = Some(Instant::now());
+        self.last_toggle_frame_nanos = Some(frame_nanos);
         self.start_progress = current_visual_progress;
     }
 
-    fn update(&mut self) -> f32 {
-        let current_progress = self.calculate_current_progress();
+    fn update(&mut self, frame_nanos: u64) -> f32 {
+        let current_progress = self.calculate_current_progress(frame_nanos);
         if self.expended {
             animation::spring(current_progress, 15.0, 0.35)
         } else {
@@ -407,12 +458,13 @@ impl ElasticState {
         }
     }
 
-    fn calculate_current_progress(&self) -> f32 {
-        let Some(last_toggle) = self.last_toggle else {
+    fn calculate_current_progress(&self, frame_nanos: u64) -> f32 {
+        let Some(last_toggle_frame_nanos) = self.last_toggle_frame_nanos else {
             return if self.expended { 1.0 } else { 0.0 };
         };
 
-        let elapsed = last_toggle.elapsed().as_secs_f32();
+        let elapsed_nanos = frame_nanos.saturating_sub(last_toggle_frame_nanos);
+        let elapsed = elapsed_nanos as f32 / 1_000_000_000.0;
         let duration = 0.25;
         let t = (elapsed / duration).clamp(0.0, 1.0);
         let start = self.start_progress;
@@ -420,17 +472,61 @@ impl ElasticState {
 
         start + (target - start) * t
     }
+
+    fn is_animating(&self, frame_nanos: u64) -> bool {
+        self.last_toggle_frame_nanos
+            .is_some_and(|last_toggle_frame_nanos| {
+                frame_nanos.saturating_sub(last_toggle_frame_nanos) < 250_000_000
+            })
+    }
 }
 
 #[tessera]
-fn elastic_container(
+fn elastic_container(args: &ElasticContainerArgs) {
+    let frame_tick = remember(|| 0_u64);
+    let _ = frame_tick.with(|tick| *tick);
+    let frame_nanos = current_frame_nanos();
+
+    args.child.render();
+    let progress = args.state.with_mut(|s| {
+        s.item_state_mut(args.index)
+            .elastic_state
+            .update(frame_nanos)
+    });
+
+    let should_schedule_frame = args.state.with(|s| {
+        s.item_states
+            .get(&args.index)
+            .is_some_and(|item| item.elastic_state.is_animating(frame_nanos))
+    });
+    if should_schedule_frame {
+        let frame_tick_for_frame = frame_tick;
+        let state_for_frame = args.state;
+        let index = args.index;
+        receive_frame_nanos(move |frame_nanos| {
+            frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
+            let is_animating = state_for_frame.with(|state| {
+                state
+                    .item_states
+                    .get(&index)
+                    .is_some_and(|item| item.elastic_state.is_animating(frame_nanos))
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+
+    layout(ElasticContainerLayout { progress })
+}
+
+#[derive(Clone, PartialEq)]
+struct ElasticContainerArgs {
     state: tessera_ui::State<ButtonGroupsState>,
     index: usize,
-    child: impl FnOnce(),
-) {
-    child();
-    let progress = state.with_mut(|s| s.item_state_mut(index).elastic_state.update());
-    layout(ElasticContainerLayout { progress })
+    child: RenderSlot,
 }
 
 #[derive(Clone, Copy, PartialEq)]

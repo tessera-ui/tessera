@@ -9,6 +9,7 @@ use dashmap::DashMap;
 use indextree::NodeId;
 use parking_lot::RwLock;
 use rayon::prelude::*;
+use rustc_hash::FxBuildHasher;
 use tracing::debug;
 use winit::window::CursorIcon;
 
@@ -20,11 +21,14 @@ use crate::{
     layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
-    runtime::{RuntimePhase, push_current_node, push_phase},
+    runtime::{
+        RuntimePhase, push_current_component_instance_key,
+        push_current_node_with_instance_logic_id, push_phase,
+    },
 };
 
 use super::{
-    LayoutContext, LayoutSnapshotEntry,
+    LayoutContext, LayoutSnapshotEntry, LayoutSnapshotMap,
     constraint::{Constraint, DimensionValue, ParentConstraint},
 };
 
@@ -261,8 +265,10 @@ impl Drop for AccessibilityBuilderGuard<'_> {
 pub struct ComponentNode {
     /// Component function's name, for debugging purposes.
     pub fn_name: String,
-    /// Stable logic identifier for the component function.
-    pub logic_id: u64,
+    /// Stable identifier of the component function/type.
+    pub component_type_id: u64,
+    /// Stable logic identifier of this concrete component instance.
+    pub instance_logic_id: u64,
     /// Stable instance identifier for this node in the current frame.
     pub instance_key: u64,
     /// Describes the input handler for the component.
@@ -270,6 +276,10 @@ pub struct ComponentNode {
     pub input_handler_fn: Option<Box<InputHandlerFn>>,
     /// Pure layout spec for skipping and record passes.
     pub layout_spec: Box<dyn LayoutSpecDyn>,
+    /// Optional replay metadata for subtree-level rerun.
+    pub replay: Option<crate::prop::ComponentReplayData>,
+    /// Whether props are equal to the previous frame snapshot.
+    pub props_unchanged_from_previous: bool,
 }
 
 /// Contains metadata of the component node.
@@ -341,7 +351,7 @@ impl Default for ComponentNodeMetaData {
 /// A tree of component nodes, using `indextree::Arena` for storage.
 pub type ComponentNodeTree = indextree::Arena<ComponentNode>;
 /// Contains all component nodes' metadatas, using a thread-safe `DashMap`.
-pub type ComponentNodeMetaDatas = DashMap<NodeId, ComponentNodeMetaData>;
+pub type ComponentNodeMetaDatas = DashMap<NodeId, ComponentNodeMetaData, FxBuildHasher>;
 
 /// Represents errors that can occur during node measurement.
 #[derive(Debug, Clone, PartialEq)]
@@ -591,7 +601,7 @@ fn restore_cached_subtree_metadata(
     rel_position: Option<PxPosition>,
     tree: &ComponentNodeTree,
     component_node_metadatas: &ComponentNodeMetaDatas,
-    snapshots: &DashMap<u64, LayoutSnapshotEntry>,
+    snapshots: &LayoutSnapshotMap,
 ) -> bool {
     let Some(node) = tree.get(node_id) else {
         return false;
@@ -675,8 +685,12 @@ pub(crate) fn measure_node(
 
     // Ensure thread-local current node context for nested control-flow
     // instrumentation.
-    let _node_ctx_guard =
-        push_current_node(node_id, node_data.logic_id, node_data.fn_name.as_str());
+    let _node_ctx_guard = push_current_node_with_instance_logic_id(
+        node_id,
+        node_data.instance_logic_id,
+        node_data.fn_name.as_str(),
+    );
+    let _instance_ctx_guard = push_current_component_instance_key(node_data.instance_key);
     let _phase_guard = push_phase(RuntimePhase::Measure);
 
     let resolve_instance_key = |child_id: NodeId| {

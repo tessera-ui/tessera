@@ -8,8 +8,8 @@ use std::sync::Arc;
 use derive_setters::Setters;
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, ParentConstraint, Px, PxPosition, PxSize, State,
+    Callback, Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp,
+    MeasurementError, Modifier, ParentConstraint, Px, PxPosition, PxSize, RenderSlot, Slot, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera, use_context, winit,
@@ -37,6 +37,26 @@ const MENU_HORIZONTAL_PADDING: Dp = Dp(16.0);
 const MENU_LEADING_SIZE: Dp = Dp(20.0);
 const MENU_ITEM_HEIGHT: Dp = Dp(48.0);
 const MENU_TRAILING_SPACING: Dp = Dp(16.0);
+
+type MenuContentBuilder = dyn for<'a, 'b> Fn(&mut MenuScope<'a, 'b>) + Send + Sync;
+
+/// Shared menu content renderer.
+#[derive(Clone, PartialEq)]
+pub struct MenuContentSlot(Slot<MenuContentBuilder>);
+
+impl MenuContentSlot {
+    /// Creates a new menu content slot.
+    pub fn new(
+        content: impl for<'a, 'b> Fn(&mut MenuScope<'a, 'b>) + Send + Sync + 'static,
+    ) -> Self {
+        Self(Slot::from_shared(Arc::new(content)))
+    }
+
+    fn render<'a, 'b>(&self, scope: &mut MenuScope<'a, 'b>) {
+        let render = self.0.shared();
+        render(scope);
+    }
+}
 
 fn default_menu_width() -> DimensionValue {
     DimensionValue::Wrap {
@@ -79,26 +99,27 @@ impl<'a, 'b> MenuScope<'a, 'b> {
     /// Adds a menu child (typically a menu item).
     pub fn item<F>(&mut self, child: F)
     where
-        F: FnOnce() + Send + Sync + 'static,
+        F: Fn() + Send + Sync + 'static,
     {
         self.scope.child(child);
     }
 
     /// Adds a menu item to the menu.
-    pub fn menu_item(&mut self, args: impl Into<MenuItemArgs>) {
-        let mut args = args.into();
+    pub fn menu_item(&mut self, args: &MenuItemArgs) {
+        let mut args = args.clone();
         if args.close_on_click {
-            let prev = args.on_click;
+            let prev = args.on_click.clone();
             let controller = self.controller;
-            args.on_click = Some(Arc::new(move || {
+            args.on_click = Some(Callback::new(move || {
                 if let Some(f) = &prev {
-                    f();
+                    f.call();
                 }
                 controller.with_mut(|c| c.close());
             }));
         }
         self.scope.child(move || {
-            menu_item(args);
+            let render_args = args.clone();
+            menu_item_node(&render_args);
         });
     }
 }
@@ -139,7 +160,7 @@ impl Default for MenuAnchor {
 }
 
 /// Shared state for controlling menu visibility and anchor placement.
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 pub struct MenuController {
     is_open: bool,
     anchor: Option<MenuAnchor>,
@@ -201,7 +222,7 @@ pub enum MenuPlacement {
 }
 
 /// Configuration for the menu overlay/provider.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct MenuProviderArgs {
     /// How the menu is aligned relative to the provided anchor.
     pub placement: MenuPlacement,
@@ -228,9 +249,18 @@ pub struct MenuProviderArgs {
     pub close_on_escape: bool,
     /// Optional callback invoked before the menu closes (background or Escape).
     #[setters(skip)]
-    pub on_dismiss: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_dismiss: Option<Callback>,
     /// Whether the menu is currently open.
     pub is_open: bool,
+    /// Optional external controller for open/close and anchor state.
+    #[setters(skip)]
+    pub controller: Option<State<MenuController>>,
+    /// Optional main content rendered behind the menu.
+    #[setters(skip)]
+    pub main_content: Option<RenderSlot>,
+    /// Optional menu content builder.
+    #[setters(skip)]
+    pub menu_content: Option<MenuContentSlot>,
 }
 
 impl MenuProviderArgs {
@@ -239,13 +269,49 @@ impl MenuProviderArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_dismiss = Some(Arc::new(on_dismiss));
+        self.on_dismiss = Some(Callback::new(on_dismiss));
         self
     }
 
     /// Set the dismiss callback using a shared callback.
-    pub fn on_dismiss_shared(mut self, on_dismiss: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_dismiss = Some(on_dismiss);
+    pub fn on_dismiss_shared(mut self, on_dismiss: impl Into<Callback>) -> Self {
+        self.on_dismiss = Some(on_dismiss.into());
+        self
+    }
+
+    /// Sets an external menu controller.
+    pub fn controller(mut self, controller: State<MenuController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the main content slot.
+    pub fn main_content<F>(mut self, main_content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.main_content = Some(RenderSlot::new(main_content));
+        self
+    }
+
+    /// Sets the main content slot using a shared render slot.
+    pub fn main_content_shared(mut self, main_content: impl Into<RenderSlot>) -> Self {
+        self.main_content = Some(main_content.into());
+        self
+    }
+
+    /// Sets the menu content slot.
+    pub fn menu_content<F>(mut self, menu_content: F) -> Self
+    where
+        F: for<'a, 'b> Fn(&mut MenuScope<'a, 'b>) + Send + Sync + 'static,
+    {
+        self.menu_content = Some(MenuContentSlot::new(menu_content));
+        self
+    }
+
+    /// Sets the menu content slot using a shared content slot.
+    pub fn menu_content_shared(mut self, menu_content: MenuContentSlot) -> Self {
+        self.menu_content = Some(menu_content);
         self
     }
 }
@@ -265,6 +331,9 @@ impl Default for MenuProviderArgs {
             close_on_escape: true,
             on_dismiss: None,
             is_open: false,
+            controller: None,
+            main_content: None,
+            menu_content: None,
         }
     }
 }
@@ -272,7 +341,7 @@ impl Default for MenuProviderArgs {
 /// Backward compatibility alias for earlier menu args naming.
 pub type MenuArgs = MenuProviderArgs;
 
-#[derive(Clone, Copy)]
+#[derive(Clone, PartialEq, Copy)]
 struct MenuBounds {
     origin: PxPosition,
     size: ComputedData,
@@ -433,12 +502,9 @@ fn should_close_on_click(
     })
 }
 
-fn apply_close_action(
-    controller: State<MenuController>,
-    on_dismiss: &Option<Arc<dyn Fn() + Send + Sync>>,
-) {
+fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Callback>) {
     if let Some(callback) = on_dismiss {
-        callback();
+        callback.call();
     }
     controller.with_mut(|c| c.close());
 }
@@ -456,9 +522,6 @@ fn apply_close_action(
 ///
 /// - `args` — configures placement, styling, and dismissal behavior; see
 ///   [`MenuProviderArgs`].
-/// - `main_content` — closure rendering the underlying page UI.
-/// - `menu_content` — closure that receives a [`MenuScope`] to register menu
-///   items.
 ///
 /// ## Examples
 ///
@@ -475,108 +538,49 @@ fn apply_close_action(
 /// use tessera_ui::Dp;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(|| MaterialTheme::default(), || {
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
 /// let args = MenuProviderArgs::default()
 ///     .placement(MenuPlacement::BelowStart)
-///     .is_open(true);
+///     .is_open(true)
+///     .main_content(|| {
+///         text(&tessera_components::text::TextArgs::default().text("Main content"));
+///     })
+///     .menu_content(move |menu_scope: &mut MenuScope<'_, '_>| {
+///         menu_scope.menu_item(&MenuItemArgs::default().label("Edit").on_click(|| {}));
+///     });
 ///
-/// menu_provider(
-///     args,
-///     || {
-///         text("Main content");
-///     },
-///     move |menu_scope: &mut MenuScope<'_, '_>| {
-///         menu_scope.menu_item(MenuItemArgs::default().label("Edit").on_click(|| {}));
-///     },
-/// );
+/// menu_provider(&args);
 /// # });
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn menu_provider(
-    args: impl Into<MenuProviderArgs>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    menu_content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
-) {
-    let args: MenuProviderArgs = args.into();
-    let controller = remember(MenuController::new);
+pub fn menu_provider(args: &MenuProviderArgs) {
+    let provider_args = args.clone();
+    let controller = provider_args
+        .controller
+        .unwrap_or_else(|| remember(MenuController::new));
 
-    if controller.with(|c| c.is_open()) != args.is_open {
-        if args.is_open {
+    if controller.with(|c| c.is_open()) != provider_args.is_open {
+        if provider_args.is_open {
             controller.with_mut(|c| c.open());
         } else {
             controller.with_mut(|c| c.close());
         }
     }
 
-    menu_provider_with_controller(args, controller, main_content, menu_content);
-}
-
-/// # menu_provider_with_controller
-///
-/// Provides a Material Design 3 menu overlay anchored to a rectangle with an
-/// external controller.
-///
-/// ## Usage
-///
-/// Wrap page content and show contextual or overflow actions aligned to a
-/// trigger element, controlled via a shared [`MenuController`].
-///
-/// ## Parameters
-///
-/// - `args` — configures placement, styling, and dismissal behavior; see
-///   [`MenuProviderArgs`].
-/// - `controller` — A [`MenuController`] controlling open/close and anchor
-///   position.
-/// - `main_content` — closure rendering the underlying page UI.
-/// - `menu_content` — closure that receives a [`MenuScope`] to register menu
-///   items.
-///
-/// ## Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::{
-///     menus::{
-///         MenuAnchor, MenuController, MenuItemArgs, MenuPlacement, MenuProviderArgs, MenuScope,
-///         menu_provider_with_controller,
-///     },
-///     text::text,
-/// };
-/// use tessera_ui::{Dp, remember, tessera};
-///
-/// #[tessera]
-/// fn foo() {
-///     let menu_controller = remember(MenuController::new);
-///     let args = MenuProviderArgs::default().placement(MenuPlacement::BelowStart);
-///     menu_provider_with_controller(
-///         args,
-///         menu_controller,
-///         || { /* Main content */ },
-///         move |menu_scope| {
-///             menu_scope.menu_item(MenuItemArgs::default().label("Edit").on_click(|| {
-///                 // Handle edit action
-///             }));
-///         },
-///     );
-/// }
-/// # }
-/// # component();
-/// ```
-#[tessera]
-pub fn menu_provider_with_controller(
-    args: impl Into<MenuProviderArgs>,
-    controller: State<MenuController>,
-    main_content: impl FnOnce() + Send + Sync + 'static,
-    menu_content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
-) {
-    let args: MenuProviderArgs = args.into();
+    let main_content = provider_args
+        .main_content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let menu_content = provider_args
+        .menu_content
+        .clone()
+        .unwrap_or_else(|| MenuContentSlot::new(|_| {}));
 
     // Render underlying content first.
-    main_content();
+    main_content.render();
 
     let (is_open, anchor) = controller.with(|c| c.snapshot());
     if !is_open {
@@ -587,40 +591,43 @@ pub fn menu_provider_with_controller(
     let bounds: Arc<RwLock<Option<MenuBounds>>> = Arc::new(RwLock::new(None));
 
     // Background layer (non-dimming by default).
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(SurfaceStyle::Filled {
-                color: args.scrim_color,
+                color: provider_args.scrim_color,
             })
             .modifier(Modifier::new().fill_max_size())
             .block_input(true),
         || {},
-    );
+    ));
 
     // Menu panel.
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         {
             SurfaceArgs::default()
                 .style(SurfaceStyle::Filled {
-                    color: args.container_color,
+                    color: provider_args.container_color,
                 })
-                .shape(args.shape)
+                .shape(provider_args.shape)
                 .modifier(
-                    args.modifier
+                    provider_args
+                        .modifier
+                        .clone()
                         .constrain(
                             None,
                             Some(DimensionValue::Wrap {
                                 min: None,
-                                max: args.max_height,
+                                max: provider_args.max_height,
                             }),
                         )
                         .clip_to_bounds(),
                 )
                 .accessibility_role(Role::Menu)
                 .block_input(true)
-                .elevation(args.elevation)
+                .elevation(provider_args.elevation)
         },
         move || {
+            let menu_content = menu_content.clone();
             column(
                 ColumnArgs::default()
                     .modifier(Modifier::new().fill_max_width())
@@ -628,18 +635,18 @@ pub fn menu_provider_with_controller(
                 {
                     move |scope| {
                         let mut menu_scope = MenuScope { scope, controller };
-                        menu_content(&mut menu_scope);
+                        menu_content.render(&mut menu_scope);
                     }
                 },
             );
         },
-    );
+    ));
 
     // Parent input handler: block propagation and close on background click.
     let bounds_for_handler = bounds.clone();
-    let on_dismiss_for_handler = args.on_dismiss.clone();
-    let close_on_escape = args.close_on_escape;
-    let close_on_background = args.close_on_background;
+    let on_dismiss_for_handler = provider_args.on_dismiss.clone();
+    let close_on_escape = provider_args.close_on_escape;
+    let close_on_background = provider_args.close_on_background;
     input_handler(move |mut input| {
         let mut cursor_events: Vec<_> = Vec::new();
         std::mem::swap(&mut cursor_events, input.cursor_events);
@@ -671,36 +678,15 @@ pub fn menu_provider_with_controller(
 
     // Measurement: place main content, background, and menu based on anchor.
     layout(MenuLayout {
-        placement: args.placement,
-        offset: args.offset,
+        placement: provider_args.placement,
+        offset: provider_args.offset,
         anchor,
         bounds,
     });
 }
 
-/// Convenience wrapper for rendering only the menu overlay without extra main
-/// content.
-#[tessera]
-pub fn menu(
-    args: impl Into<MenuProviderArgs>,
-    content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
-) {
-    menu_provider(args, || {}, content);
-}
-
-/// Convenience wrapper for rendering only the menu overlay without extra main
-/// content with an external controller.
-#[tessera]
-pub fn menu_with_controller(
-    args: impl Into<MenuProviderArgs>,
-    controller: State<MenuController>,
-    content: impl FnOnce(&mut MenuScope<'_, '_>) + Send + Sync + 'static,
-) {
-    menu_provider_with_controller(args, controller, || {}, content);
-}
-
 /// Defines the configuration for an individual menu item.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct MenuItemArgs {
     /// Primary label text for the item.
     #[setters(into)]
@@ -734,7 +720,7 @@ pub struct MenuItemArgs {
     pub disabled_color: Color,
     /// Callback invoked when the item is activated.
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
 }
 
 impl MenuItemArgs {
@@ -768,13 +754,13 @@ impl MenuItemArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
         self
     }
 }
@@ -788,7 +774,7 @@ impl Default for MenuItemArgs {
 fn render_leading(args: &MenuItemArgs, enabled: bool) {
     if args.selected {
         checkmark(
-            CheckmarkArgs::default()
+            &CheckmarkArgs::default()
                 .color(if enabled {
                     args.label_color
                 } else {
@@ -804,13 +790,15 @@ fn render_leading(args: &MenuItemArgs, enabled: bool) {
         let height = icon
             .height
             .unwrap_or_else(|| DimensionValue::Fixed(Px::from(MENU_LEADING_SIZE)));
-        crate::icon::icon(icon.width(width).height(height).tint(if enabled {
+        crate::icon::icon(&icon.width(width).height(height).tint(if enabled {
             args.supporting_color
         } else {
             args.disabled_color
         }));
     } else {
-        spacer(Modifier::new().size(MENU_LEADING_SIZE, MENU_LEADING_SIZE));
+        spacer(&crate::spacer::SpacerArgs::new(
+            Modifier::new().size(MENU_LEADING_SIZE, MENU_LEADING_SIZE),
+        ));
     }
 }
 
@@ -836,23 +824,23 @@ fn render_labels(args: &MenuItemArgs, enabled: bool) {
             scope.child(move || {
                 let text_value = label_text.clone();
                 let color = label_color;
-                text(
-                    TextArgs::default()
-                        .text(text_value)
+                text(&crate::text::TextArgs::from(
+                    &TextArgs::default()
+                        .text(&text_value)
                         .size(Dp(16.0))
                         .color(color),
-                );
+                ));
             });
             if let Some(supporting) = supporting_text {
                 scope.child(move || {
                     let supporting_value = supporting.clone();
                     let color = supporting_color;
-                    text(
-                        TextArgs::default()
-                            .text(supporting_value)
+                    text(&crate::text::TextArgs::from(
+                        &TextArgs::default()
+                            .text(&supporting_value)
                             .size(Dp(14.0))
                             .color(color),
-                    );
+                    ));
                 });
             }
         },
@@ -863,28 +851,28 @@ fn render_trailing(args: &MenuItemArgs, enabled: bool) {
     if let Some(trailing_icon) = args.trailing_icon.clone() {
         let width = trailing_icon.width.unwrap_or(DimensionValue::WRAP);
         let height = trailing_icon.height.unwrap_or(DimensionValue::WRAP);
-        crate::icon::icon(trailing_icon.width(width).height(height).tint(if enabled {
+        crate::icon::icon(&trailing_icon.width(width).height(height).tint(if enabled {
             args.supporting_color
         } else {
             args.disabled_color
         }));
     } else if let Some(trailing_text) = args.trailing_text.clone() {
-        text(
-            TextArgs::default()
-                .text(trailing_text)
+        text(&crate::text::TextArgs::from(
+            &TextArgs::default()
+                .text(&trailing_text)
                 .size(Dp(14.0))
                 .color(if enabled {
                     args.supporting_color
                 } else {
                     args.disabled_color
                 }),
-        );
+        ));
     }
 }
 
 #[tessera]
-fn menu_item(args: impl Into<MenuItemArgs>) {
-    let args: MenuItemArgs = args.into();
+fn menu_item_node(args: &MenuItemArgs) {
+    let args = args.clone();
     let enabled = args.enabled && args.on_click.is_some();
 
     let mut surface_args = SurfaceArgs::default()
@@ -919,76 +907,81 @@ fn menu_item(args: impl Into<MenuItemArgs>) {
         surface_args = surface_args.accessibility_description(description);
     }
 
-    surface(surface_args, move || {
-        row(
-            RowArgs::default()
-                .modifier(Modifier::new().constrain(
-                    Some(DimensionValue::FILLED),
-                    Some(DimensionValue::Wrap {
-                        min: Some(Px::from(args.height)),
-                        max: None,
-                    }),
-                ))
-                .cross_axis_alignment(CrossAxisAlignment::Center),
-            |row_scope| {
-                // Leading padding
-                row_scope.child(|| {
-                    spacer(Modifier::new().constrain(
-                        Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
-                        None,
-                    ));
-                });
-
-                // Leading indicator / icon.
-                let leading_args = args.clone();
-                row_scope.child(move || {
-                    render_leading(&leading_args, enabled);
-                });
-
-                // Gap after leading.
-                row_scope.child(|| {
-                    spacer(Modifier::new().constrain(
-                        Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
-                        None,
-                    ));
-                });
-
-                // Labels column.
-                let label_args = args.clone();
-                row_scope.child(move || {
-                    render_labels(&label_args, enabled);
-                });
-
-                // Flexible spacer.
-                row_scope.child_weighted(
-                    || {
-                        spacer(Modifier::new().fill_max_width());
-                    },
-                    1.0,
-                );
-
-                // Trailing text/icon if any.
-                if args.trailing_icon.is_some() || args.trailing_text.is_some() {
-                    let trailing_args = args.clone();
-                    row_scope.child(move || {
-                        render_trailing(&trailing_args, enabled);
-                    });
-
+    surface(&crate::surface::SurfaceArgs::with_child(
+        surface_args,
+        move || {
+            row(
+                RowArgs::default()
+                    .modifier(Modifier::new().constrain(
+                        Some(DimensionValue::FILLED),
+                        Some(DimensionValue::Wrap {
+                            min: Some(Px::from(args.height)),
+                            max: None,
+                        }),
+                    ))
+                    .cross_axis_alignment(CrossAxisAlignment::Center),
+                |row_scope| {
+                    // Leading padding
                     row_scope.child(|| {
-                        spacer(Modifier::new().constrain(
-                            Some(DimensionValue::Fixed(Px::from(MENU_TRAILING_SPACING))),
-                            None,
-                        ));
-                    });
-                } else {
-                    row_scope.child(|| {
-                        spacer(Modifier::new().constrain(
+                        spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
                             Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
                             None,
-                        ));
+                        )));
                     });
-                }
-            },
-        );
-    });
+
+                    // Leading indicator / icon.
+                    let leading_args = args.clone();
+                    row_scope.child(move || {
+                        render_leading(&leading_args, enabled);
+                    });
+
+                    // Gap after leading.
+                    row_scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
+                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                            None,
+                        )));
+                    });
+
+                    // Labels column.
+                    let label_args = args.clone();
+                    row_scope.child(move || {
+                        render_labels(&label_args, enabled);
+                    });
+
+                    // Flexible spacer.
+                    row_scope.child_weighted(
+                        || {
+                            spacer(&crate::spacer::SpacerArgs::new(
+                                Modifier::new().fill_max_width(),
+                            ));
+                        },
+                        1.0,
+                    );
+
+                    // Trailing text/icon if any.
+                    if args.trailing_icon.is_some() || args.trailing_text.is_some() {
+                        let trailing_args = args.clone();
+                        row_scope.child(move || {
+                            render_trailing(&trailing_args, enabled);
+                        });
+
+                        row_scope.child(|| {
+                            spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
+                                Some(DimensionValue::Fixed(Px::from(MENU_TRAILING_SPACING))),
+                                None,
+                            )));
+                        });
+                    } else {
+                        row_scope.child(|| {
+                            spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
+                                Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                                None,
+                            )));
+                        });
+                    }
+                },
+            );
+        },
+    ));
 }

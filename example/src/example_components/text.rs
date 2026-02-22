@@ -1,35 +1,32 @@
 use tessera_components::{
-    lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
+    lazy_list::{LazyColumnArgs, LazyListController, lazy_column},
     modifier::ModifierExt as _,
     surface::{SurfaceArgs, surface},
-    text::text,
+    text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, retain, shard, tessera};
-
-#[tessera]
+use tessera_ui::{Dp, Modifier, retain, shard};
 #[shard]
 pub fn text_showcase() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             let controller = retain(LazyListController::new);
-            lazy_column_with_controller(
-                LazyColumnArgs::default()
+            lazy_column(
+                &LazyColumnArgs::default()
                     .modifier(Modifier::new().fill_max_width())
-                    .content_padding(Dp(16.0)),
-                controller,
-                move |scope| {
-                    scope.item(|| {
-                        test_content();
-                    });
-                },
+                    .content_padding(Dp(16.0))
+                    .controller(controller)
+                    .content(move |scope| {
+                        scope.item(|| {
+                            test_content();
+                        });
+                    }),
             )
         },
-    );
+    ));
 }
-#[tessera]
 fn test_content() {
-    text(
+    text(&TextArgs::from(
         r#"Emoji Test:
 
 yello face:
@@ -240,5 +237,5 @@ Article 30
 Nothing in this Declaration may be interpreted as implying for any State, group or 
 person any right to engage in any activity or to perform any act aimed at the 
 destruction of any of the rights and freedoms set forth herein."#,
-    );
+    ));
 }

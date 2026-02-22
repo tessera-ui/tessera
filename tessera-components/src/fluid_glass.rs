@@ -3,15 +3,14 @@
 //! ## Usage
 //!
 //! Use as a background for buttons, panels, or other UI elements.
-use std::sync::Arc;
-
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, SampleRegion, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot, SampleRegion, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    remember,
+    receive_frame_nanos, remember,
     renderer::DrawCommand,
     tessera,
 };
@@ -22,7 +21,7 @@ use crate::{
     pipelines::{
         blur::command::DualBlurCommand, contrast::ContrastCommand, mean::command::MeanCommand,
     },
-    pos_misc::is_position_in_component,
+    pos_misc::is_position_inside_bounds,
     ripple_state::RippleState,
     shape_def::{RoundedCorner, Shape},
 };
@@ -109,7 +108,7 @@ pub struct FluidGlassArgs {
 
     /// Optional click callback for interactive glass surfaces.
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
 
     /// Optional border defining the outline thickness for the glass.
     pub border: Option<GlassBorder>,
@@ -130,6 +129,9 @@ pub struct FluidGlassArgs {
     pub accessibility_description: Option<String>,
     /// Whether the surface should be focusable even when not interactive.
     pub accessibility_focusable: bool,
+    /// Optional child render slot.
+    #[setters(skip)]
+    pub child: Option<RenderSlot>,
 }
 
 impl PartialEq for FluidGlassArgs {
@@ -153,22 +155,46 @@ impl PartialEq for FluidGlassArgs {
             && self.ripple_strength == other.ripple_strength
             && self.border == other.border
             && self.block_input == other.block_input
+            && self.child == other.child
     }
 }
 
 impl FluidGlassArgs {
+    /// Creates props from base args and a child render function.
+    pub fn with_child(
+        args: impl Into<FluidGlassArgs>,
+        child: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        args.into().child(child)
+    }
+
     /// Set the click handler.
     pub fn on_click<F>(mut self, on_click: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
+        self
+    }
+
+    /// Sets the child render slot.
+    pub fn child<F>(mut self, child: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.child = Some(RenderSlot::new(child));
+        self
+    }
+
+    /// Sets the child render slot using a shared callback.
+    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
+        self.child = Some(child.into());
         self
     }
 }
@@ -208,7 +234,14 @@ impl Default for FluidGlassArgs {
             accessibility_label: None,
             accessibility_description: None,
             accessibility_focusable: false,
+            child: None,
         }
+    }
+}
+
+impl From<&FluidGlassArgs> for FluidGlassArgs {
+    fn from(value: &FluidGlassArgs) -> Self {
+        value.clone()
     }
 }
 
@@ -241,13 +274,20 @@ fn handle_block_input(input: &mut tessera_ui::InputHandlerInput) {
     let size = input.computed_data;
     let cursor_pos_option = input.cursor_position_rel;
     let is_cursor_in = cursor_pos_option
-        .map(|pos| is_position_in_component(size, pos))
+        .map(|pos| is_position_inside_bounds(size, pos))
         .unwrap_or(false);
 
     if is_cursor_in {
         // Consume all input events to prevent interaction with underlying components
         input.block_all();
     }
+}
+
+#[derive(Clone, PartialEq)]
+struct FluidGlassInnerArgs {
+    fluid: FluidGlassArgs,
+    ripple_state: Option<State<RippleState>>,
+    child: Option<RenderSlot>,
 }
 
 /// # fluid_glass
@@ -261,8 +301,7 @@ fn handle_block_input(input: &mut tessera_ui::InputHandlerInput) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the glass effect's appearance; see [`FluidGlassArgs`].
-/// - `child` — a closure that renders content on top of the glass surface.
+/// - `args` — props for this component; see [`FluidGlassArgs`].
 ///
 /// ## Examples
 ///
@@ -275,49 +314,52 @@ fn handle_block_input(input: &mut tessera_ui::InputHandlerInput) {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// fluid_glass(FluidGlassArgs::default(), || {
-///     text(TextArgs::default().text("Content on glass"));
+/// let args = FluidGlassArgs::default().child(|| {
+///     text(&TextArgs::default().text("Content on glass"));
 /// });
+/// fluid_glass(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn fluid_glass(args: FluidGlassArgs, child: impl FnOnce() + Send + Sync + 'static) {
-    let mut modifier = args.modifier;
-    let interactive = args.on_click.is_some();
+pub fn fluid_glass(args: &FluidGlassArgs) {
+    let fluid_args = args.clone();
+    let mut modifier = fluid_args.modifier.clone();
+    let interactive = fluid_args.on_click.is_some();
     let interaction_state = interactive.then(|| remember(InteractionState::new));
     let ripple_state = interactive.then(|| remember(RippleState::new));
-    let has_semantics = args.accessibility_role.is_some()
-        || args.accessibility_label.is_some()
-        || args.accessibility_description.is_some();
+    let has_semantics = fluid_args.accessibility_role.is_some()
+        || fluid_args.accessibility_label.is_some()
+        || fluid_args.accessibility_description.is_some();
 
     if interactive {
         let press_handler = ripple_state.map(|state| {
-            Arc::new(move |ctx: PointerEventContext| {
+            move |ctx: PointerEventContext| {
                 state.with_mut(|s| {
                     s.start_animation(ctx.normalized_pos);
                 });
-            })
+            }
         });
         let release_handler = ripple_state.map(|state| {
-            Arc::new(move |_ctx: PointerEventContext| {
+            move |_ctx: PointerEventContext| {
                 state.with_mut(|s| s.release());
-            })
+            }
         });
         let mut clickable_args = ClickableArgs::new(
-            args.on_click
+            fluid_args
+                .on_click
                 .clone()
                 .expect("interactive implies on_click is set"),
         )
-        .block_input(args.block_input);
+        .block_input(fluid_args.block_input);
 
-        if let Some(role) = args.accessibility_role {
+        if let Some(role) = fluid_args.accessibility_role {
             clickable_args = clickable_args.role(role);
         }
-        if let Some(label) = args.accessibility_label.clone() {
+        if let Some(label) = fluid_args.accessibility_label.clone() {
             clickable_args = clickable_args.label(label);
         }
-        if let Some(description) = args.accessibility_description.clone() {
+        if let Some(description) = fluid_args.accessibility_description.clone() {
             clickable_args = clickable_args.description(description);
         }
         if let Some(state) = interaction_state {
@@ -331,46 +373,69 @@ pub fn fluid_glass(args: FluidGlassArgs, child: impl FnOnce() + Send + Sync + 's
         }
 
         modifier = modifier.clickable(clickable_args);
-    } else if args.block_input {
+    } else if fluid_args.block_input {
         modifier = modifier.block_touch_propagation();
     }
     if !interactive && has_semantics {
         let mut semantics = SemanticsArgs::new();
-        if let Some(role) = args.accessibility_role {
+        if let Some(role) = fluid_args.accessibility_role {
             semantics = semantics.role(role);
         }
-        if let Some(label) = args.accessibility_label.clone() {
+        if let Some(label) = fluid_args.accessibility_label.clone() {
             semantics = semantics.label(label);
         }
-        if let Some(desc) = args.accessibility_description.clone() {
+        if let Some(desc) = fluid_args.accessibility_description.clone() {
             semantics = semantics.description(desc);
         }
         modifier = modifier.semantics(semantics);
     }
 
-    modifier.run(move || fluid_glass_inner(args, ripple_state, child));
+    let inner_args = FluidGlassInnerArgs {
+        fluid: fluid_args,
+        ripple_state,
+        child: args.child.clone(),
+    };
+
+    modifier.run(move || fluid_glass_inner(&inner_args));
 }
 
 #[tessera]
-fn fluid_glass_inner(
-    mut args: FluidGlassArgs,
-    ripple_state: Option<State<RippleState>>,
-    child: impl FnOnce() + Send + Sync + 'static,
-) {
-    if let Some((progress, center)) = ripple_state
-        .as_ref()
-        .and_then(|state| state.with_mut(|s| s.get_animation_progress()))
-    {
-        args.ripple_center = Some(center);
-        args.ripple_radius = Some(progress);
-        args.ripple_alpha = Some((1.0 - progress) * 0.3);
-        args.ripple_strength = Some(progress);
-    }
-    (child)();
-    layout(FluidGlassLayout { args: args.clone() });
+fn fluid_glass_inner(args: &FluidGlassInnerArgs) {
+    let mut fluid_args = args.fluid.clone();
+    let frame_nanos = current_frame_nanos();
+    if let Some((progress, center)) = args.ripple_state.as_ref().and_then(|state| {
+        state.with_mut(|ripple| {
+            ripple
+                .animation_at_frame_nanos(frame_nanos)
+                .map(|animation| (animation.progress, animation.center))
+        })
+    }) {
+        if let Some(ripple_state) = args.ripple_state {
+            receive_frame_nanos(move |frame_nanos| {
+                let has_active_ripple = ripple_state
+                    .with_mut(|ripple| ripple.animation_at_frame_nanos(frame_nanos).is_some());
+                if has_active_ripple {
+                    tessera_ui::FrameNanosControl::Continue
+                } else {
+                    tessera_ui::FrameNanosControl::Stop
+                }
+            });
+        }
 
-    if args.on_click.is_none() && args.block_input {
-        let args_for_handler = args.clone();
+        fluid_args.ripple_center = Some(center);
+        fluid_args.ripple_radius = Some(progress);
+        fluid_args.ripple_alpha = Some((1.0 - progress) * 0.3);
+        fluid_args.ripple_strength = Some(progress);
+    }
+    if let Some(child) = args.child.as_ref() {
+        child.render();
+    }
+    layout(FluidGlassLayout {
+        args: fluid_args.clone(),
+    });
+
+    if fluid_args.on_click.is_none() && fluid_args.block_input {
+        let args_for_handler = fluid_args.clone();
         input_handler(move |mut input: tessera_ui::InputHandlerInput| {
             if args_for_handler.block_input {
                 handle_block_input(&mut input);

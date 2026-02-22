@@ -6,13 +6,13 @@
 use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, Px, PxPosition, tessera,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, tessera,
 };
 
 use crate::alignment::Alignment;
 
 /// Arguments for the `Boxed` component.
-#[derive(Clone, Debug, Setters)]
+#[derive(PartialEq, Clone, Debug, Setters)]
 pub struct BoxedArgs {
     /// The alignment of children within the `Boxed` container.
     pub alignment: Alignment,
@@ -31,7 +31,7 @@ impl Default for BoxedArgs {
 
 /// A scope for declaratively adding children to a `boxed` component.
 pub struct BoxedScope<'a> {
-    child_closures: &'a mut Vec<Box<dyn FnOnce() + Send + Sync>>,
+    child_closures: &'a mut Vec<RenderSlot>,
     child_alignments: &'a mut Vec<Option<Alignment>>,
 }
 
@@ -39,9 +39,9 @@ impl<'a> BoxedScope<'a> {
     /// Adds a child component to the box.
     pub fn child<F>(&mut self, child_closure: F)
     where
-        F: FnOnce() + Send + Sync + 'static,
+        F: Fn() + Send + Sync + 'static,
     {
-        self.child_closures.push(Box::new(child_closure));
+        self.child_closures.push(RenderSlot::new(child_closure));
         self.child_alignments.push(None);
     }
 
@@ -49,11 +49,18 @@ impl<'a> BoxedScope<'a> {
     /// default.
     pub fn child_with_alignment<F>(&mut self, alignment: Alignment, child_closure: F)
     where
-        F: FnOnce() + Send + Sync + 'static,
+        F: Fn() + Send + Sync + 'static,
     {
-        self.child_closures.push(Box::new(child_closure));
+        self.child_closures.push(RenderSlot::new(child_closure));
         self.child_alignments.push(Some(alignment));
     }
+}
+
+#[derive(Clone, PartialEq)]
+struct BoxedRenderArgs {
+    alignment: Alignment,
+    child_alignments: Vec<Option<Alignment>>,
+    child_closures: Vec<RenderSlot>,
 }
 
 fn resolve_final_dimension(dv: DimensionValue, largest_child: Px) -> Px {
@@ -140,24 +147,23 @@ fn compute_child_offset(
 /// boxed(BoxedArgs::default(), |scope| {
 ///     // Add a child that will be in the background (rendered first).
 ///     scope.child(|| {
-///         text(TextArgs::default().text("Background"));
+///         text(&TextArgs::default().text("Background"));
 ///     });
 ///     // Add another child aligned to the center, which will appear on top.
 ///     scope.child_with_alignment(Alignment::Center, || {
-///         text(TextArgs::default().text("Foreground"));
+///         text(&TextArgs::default().text("Foreground"));
 ///     });
 /// });
 /// # }
 /// # component();
 /// ```
-#[tessera]
 pub fn boxed<F>(args: BoxedArgs, scope_config: F)
 where
     F: FnOnce(&mut BoxedScope),
 {
     let modifier = args.modifier;
 
-    let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
+    let mut child_closures: Vec<RenderSlot> = Vec::new();
     let mut child_alignments: Vec<Option<Alignment>> = Vec::new();
 
     {
@@ -168,22 +174,24 @@ where
         scope_config(&mut scope);
     }
 
-    modifier.run(move || boxed_inner(args, child_closures, child_alignments));
+    let render_args = BoxedRenderArgs {
+        alignment: args.alignment,
+        child_alignments,
+        child_closures,
+    };
+
+    modifier.run(move || boxed_inner(&render_args));
 }
 
 #[tessera]
-fn boxed_inner(
-    args: BoxedArgs,
-    child_closures: Vec<Box<dyn FnOnce() + Send + Sync>>,
-    child_alignments: Vec<Option<Alignment>>,
-) {
+fn boxed_inner(args: &BoxedRenderArgs) {
     layout(BoxedLayout {
         alignment: args.alignment,
-        child_alignments,
+        child_alignments: args.child_alignments.clone(),
     });
 
-    for child_closure in child_closures {
-        child_closure();
+    for child_closure in &args.child_closures {
+        child_closure.render();
     }
 }
 

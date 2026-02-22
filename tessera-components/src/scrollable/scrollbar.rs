@@ -5,8 +5,9 @@ use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
     Modifier, PressKeyEventType, Px, PxPosition, State,
     accesskit::{Action, Role},
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    tessera,
+    receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
@@ -16,10 +17,17 @@ use crate::{
     surface::{SurfaceArgs, surface},
 };
 
-#[derive(Clone, Copy)]
+#[derive(Clone, PartialEq, Copy)]
 enum ScrollOrientation {
     Vertical,
     Horizontal,
+}
+
+const HOVER_FADE_DURATION_SECS: f32 = 0.2;
+const AUTO_HIDE_TIMEOUT_SECS: f32 = 2.0;
+
+fn elapsed_secs_from_frame_nanos(current_frame_nanos: u64, start_frame_nanos: u64) -> f32 {
+    current_frame_nanos.saturating_sub(start_frame_nanos) as f32 / 1_000_000_000.0
 }
 
 #[derive(Clone, PartialEq)]
@@ -67,8 +75,7 @@ impl LayoutSpec for ScrollBarHLayout {
         Ok(size)
     }
 }
-
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 pub struct ScrollBarArgs {
     /// The total size of the scrollable content.
     pub total: Px,
@@ -88,19 +95,23 @@ pub struct ScrollBarArgs {
     pub thumb_color: Color,
     /// The color of the scrollbar thumb when hovered.
     pub thumb_hover_color: Color,
+    /// Optional external state for hover/drag visibility behavior.
+    ///
+    /// When this is `None`, the scrollbar creates and owns an internal state.
+    pub scrollbar_state: Option<ScrollBarState>,
 }
 
-#[derive(Default)]
+#[derive(PartialEq, Default)]
 pub struct ScrollBarStateInner {
     /// Whether the scrollbar's thumb is currently being dragged.
     pub is_dragging: bool,
     /// Whether the scrollbar's thumb is currently being hovered.
     pub is_hovered: bool,
-    /// The instant when the hover state last changed.
-    pub hover_instant: Option<std::time::Instant>,
-    /// The instant when the last scroll activity occurred (for AutoHide
+    /// The frame timestamp when the hover state last changed.
+    pub hover_start_frame_nanos: Option<u64>,
+    /// The frame timestamp when the last scroll activity occurred (for AutoHide
     /// behavior).
-    pub last_scroll_activity: Option<std::time::Instant>,
+    pub last_scroll_activity_frame_nanos: Option<u64>,
     /// Whether the scrollbar should be visible (for AutoHide behavior).
     pub should_be_visible: bool,
 }
@@ -110,6 +121,12 @@ pub struct ScrollBarStateInner {
 #[derive(Clone)]
 pub struct ScrollBarState {
     inner: Arc<RwLock<ScrollBarStateInner>>,
+}
+
+impl PartialEq for ScrollBarState {
+    fn eq(&self, other: &Self) -> bool {
+        Arc::ptr_eq(&self.inner, &other.inner)
+    }
 }
 
 impl ScrollBarState {
@@ -209,15 +226,21 @@ fn calculate_target_pos_h(
 /// Compute the thumb color with hover interpolation.
 /// Extracted to reduce duplication between vertical and horizontal scrollbar
 /// implementations.
-fn compute_thumb_color(state_lock: &ScrollBarState, args: &ScrollBarArgs) -> Color {
+fn compute_thumb_color(
+    state_lock: &ScrollBarState,
+    args: &ScrollBarArgs,
+    frame_nanos: u64,
+) -> Color {
     let state = state_lock.read();
     let (from_color, to_color) = if state.is_hovered {
         (args.thumb_color, args.thumb_hover_color)
     } else {
         (args.thumb_hover_color, args.thumb_color)
     };
-    let progress = if let Some(instant) = state.hover_instant {
-        (instant.elapsed().as_secs_f32() / 0.2).min(1.0)
+    let progress = if let Some(hover_start_frame_nanos) = state.hover_start_frame_nanos {
+        (elapsed_secs_from_frame_nanos(frame_nanos, hover_start_frame_nanos)
+            / HOVER_FADE_DURATION_SECS)
+            .min(1.0)
     } else {
         0.0
     };
@@ -225,7 +248,7 @@ fn compute_thumb_color(state_lock: &ScrollBarState, args: &ScrollBarArgs) -> Col
 }
 /// Render a rounded surface for a vertical track (radius based on width).
 fn render_track_surface_v(width: Px, height: Px, color: Color) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
@@ -239,12 +262,12 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
                 bottom_right: RoundedCorner::ZERO,
             }),
         || {},
-    );
+    ));
 }
 
 /// Render a rounded surface for a vertical thumb (radius based on width).
 fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
@@ -258,12 +281,12 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
             })
             .style(color.into()),
         || {},
-    );
+    ));
 }
 
 /// Render a rounded surface for a horizontal track (radius based on height).
 fn render_track_surface_h(width: Px, height: Px, color: Color) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
@@ -277,12 +300,12 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
                 bottom_right: RoundedCorner::ZERO,
             }),
         || {},
-    );
+    ));
 }
 
 /// Render a rounded surface for a horizontal thumb (radius based on height).
 fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
@@ -296,7 +319,7 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
             })
             .style(color.into()),
         || {},
-    );
+    ));
 }
 
 /// Decide whether the scrollbar should be shown according to behavior and
@@ -313,24 +336,59 @@ fn should_show_scrollbar(args: &ScrollBarArgs, state: &ScrollBarState) -> bool {
 }
 
 /// Handle AutoHide behavior: hide the scrollbar after a timeout if no activity.
-fn handle_autohide_if_needed(args: &ScrollBarArgs, state: &ScrollBarState) {
+fn handle_autohide_if_needed(args: &ScrollBarArgs, state: &ScrollBarState, frame_nanos: u64) {
     if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
         let mut state_guard = state.write();
-        if let Some(last_activity) = state_guard.last_scroll_activity {
+        if let Some(last_scroll_activity_frame_nanos) = state_guard.last_scroll_activity_frame_nanos
+        {
             // Hide scrollbar after 2 seconds of inactivity
-            if last_activity.elapsed().as_secs_f32() > 2.0 {
+            if elapsed_secs_from_frame_nanos(frame_nanos, last_scroll_activity_frame_nanos)
+                > AUTO_HIDE_TIMEOUT_SECS
+            {
                 state_guard.should_be_visible = false;
             }
         }
     }
 }
 
+fn needs_scrollbar_frame_tick(
+    args: &ScrollBarArgs,
+    state: &ScrollBarState,
+    frame_nanos: u64,
+) -> bool {
+    let state_guard = state.read();
+
+    let hover_animating =
+        state_guard
+            .hover_start_frame_nanos
+            .is_some_and(|hover_start_frame_nanos| {
+                elapsed_secs_from_frame_nanos(frame_nanos, hover_start_frame_nanos)
+                    < HOVER_FADE_DURATION_SECS
+            });
+    if hover_animating || state_guard.is_dragging {
+        return true;
+    }
+
+    if !matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
+        return false;
+    }
+
+    state_guard.should_be_visible
+        || state_guard.is_hovered
+        || state_guard.last_scroll_activity_frame_nanos.is_some_and(
+            |last_scroll_activity_frame_nanos| {
+                elapsed_secs_from_frame_nanos(frame_nanos, last_scroll_activity_frame_nanos)
+                    < AUTO_HIDE_TIMEOUT_SECS
+            },
+        )
+}
+
 /// Mark recent scroll activity and make the scrollbar visible (used by AutoHide
 /// behavior).
-fn mark_scroll_activity(state: &ScrollBarState, behavior: &ScrollBarBehavior) {
+fn mark_scroll_activity(state: &ScrollBarState, behavior: &ScrollBarBehavior, frame_nanos: u64) {
     if matches!(*behavior, ScrollBarBehavior::AutoHide) {
         let mut state_guard = state.write();
-        state_guard.last_scroll_activity = Some(std::time::Instant::now());
+        state_guard.last_scroll_activity_frame_nanos = Some(frame_nanos);
         state_guard.should_be_visible = true;
     }
 }
@@ -472,11 +530,7 @@ fn scroll_accessibility_step(
         .with(|c| c.target_position().saturating_offset(delta.x, delta.y));
     args.state.with_mut(|c| c.set_target_position(new_target));
 
-    if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
-        let mut scroll_state = state.write();
-        scroll_state.last_scroll_activity = Some(std::time::Instant::now());
-        scroll_state.should_be_visible = true;
-    }
+    mark_scroll_activity(state, &args.scrollbar_behavior, current_frame_nanos());
 }
 
 /// Return true if there is a left-press event in the input.
@@ -496,12 +550,13 @@ fn update_drag_vertical(
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarArgs,
     state: &ScrollBarState,
+    frame_nanos: u64,
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(cursor_pos.y);
         args.state
             .with_mut(|c| c.set_target_position(new_target_pos));
-        mark_scroll_activity(state, &args.scrollbar_behavior);
+        mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
     } else {
         // Cursor left window: stop dragging.
         state.write().is_dragging = false;
@@ -509,15 +564,15 @@ fn update_drag_vertical(
 }
 
 /// Update hovered state uniformly.
-fn update_hover_state(is_on_thumb: bool, state: &ScrollBarState) {
+fn update_hover_state(is_on_thumb: bool, state: &ScrollBarState, frame_nanos: u64) {
     if is_on_thumb && !state.read().is_hovered {
         let mut state_guard = state.write();
         state_guard.is_hovered = true;
-        state_guard.hover_instant = Some(std::time::Instant::now());
+        state_guard.hover_start_frame_nanos = Some(frame_nanos);
     } else if !is_on_thumb && state.read().is_hovered {
         let mut state_guard = state.write();
         state_guard.is_hovered = false;
-        state_guard.hover_instant = Some(std::time::Instant::now());
+        state_guard.hover_start_frame_nanos = Some(frame_nanos);
     }
 }
 
@@ -527,9 +582,10 @@ fn handle_state_v(
     track_height: Px,
     thumb_height: Px,
     input: &mut tessera_ui::InputHandlerInput<'_>,
+    frame_nanos: u64,
 ) {
     // Handle AutoHide behavior - hide scrollbar after inactivity
-    handle_autohide_if_needed(args, state);
+    handle_autohide_if_needed(args, state, frame_nanos);
 
     // Capture current target position once to avoid locking inside helper on every
     // call.
@@ -553,7 +609,7 @@ fn handle_state_v(
         }
 
         // Update dragging position or stop if cursor left.
-        update_drag_vertical(input, &calculate_target_pos, args, state);
+        update_drag_vertical(input, &calculate_target_pos, args, state, frame_nanos);
     } else {
         // Not dragging, check for interactions to start dragging or jump
         let Some(cursor_pos) = input.cursor_position_rel else {
@@ -570,7 +626,7 @@ fn handle_state_v(
         );
 
         // Update hover state (extracted).
-        update_hover_state(is_on_thumb, state);
+        update_hover_state(is_on_thumb, state, frame_nanos);
 
         // Check for left mouse button press
         if !is_pressed_left(input) {
@@ -600,12 +656,13 @@ fn update_drag_horizontal(
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarArgs,
     state: &ScrollBarState,
+    frame_nanos: u64,
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(cursor_pos.x);
         args.state
             .with_mut(|c| c.set_target_position(new_target_pos));
-        mark_scroll_activity(state, &args.scrollbar_behavior);
+        mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
     } else {
         // Cursor left window: stop dragging.
         state.write().is_dragging = false;
@@ -618,9 +675,10 @@ fn handle_state_h(
     track_width: Px,
     thumb_width: Px,
     input: &mut tessera_ui::InputHandlerInput<'_>,
+    frame_nanos: u64,
 ) {
     // Handle AutoHide behavior - hide scrollbar after inactivity
-    handle_autohide_if_needed(args, state);
+    handle_autohide_if_needed(args, state, frame_nanos);
 
     // Capture current target position once to avoid locking inside helper on every
     // call.
@@ -643,7 +701,7 @@ fn handle_state_h(
         }
 
         // Update dragging position or stop if cursor left.
-        update_drag_horizontal(input, &calculate_target_pos, args, state);
+        update_drag_horizontal(input, &calculate_target_pos, args, state, frame_nanos);
     } else {
         // Not dragging, check for interactions to start dragging or jump
         let Some(cursor_pos) = input.cursor_position_rel else {
@@ -660,7 +718,7 @@ fn handle_state_h(
         );
 
         // Update hover state (re-use helper).
-        update_hover_state(is_on_thumb, state);
+        update_hover_state(is_on_thumb, state, frame_nanos);
 
         if !is_pressed_left(input) {
             return;
@@ -683,8 +741,30 @@ fn handle_state_h(
 }
 
 #[tessera]
-pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
-    let args: ScrollBarArgs = args.into();
+pub fn scrollbar_v(args: &ScrollBarArgs) {
+    let args = args.clone();
+    let state = args.scrollbar_state.clone().unwrap_or_else(|| {
+        let remembered = remember(ScrollBarState::new);
+        remembered.with(|s| s.clone())
+    });
+    let frame_tick = remember(|| 0_u64);
+    let _ = frame_tick.with(|tick| *tick);
+    let frame_nanos = current_frame_nanos();
+
+    handle_autohide_if_needed(&args, &state, frame_nanos);
+    if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
+        let frame_tick_for_frame = frame_tick;
+        let args_for_frame = args.clone();
+        let state_for_frame = state.clone();
+        receive_frame_nanos(move |frame_nanos| {
+            frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
+            if needs_scrollbar_frame_tick(&args_for_frame, &state_for_frame, frame_nanos) {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
 
     // Check if scrollbar should be visible based on behavior
     let should_show = should_show_scrollbar(&args, &state);
@@ -713,7 +793,7 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
     render_track_surface_v(width, track_height, track_color);
 
     let thumb_color = if has_vertical_overflow {
-        compute_thumb_color(&state, &args)
+        compute_thumb_color(&state, &args, frame_nanos)
     } else {
         args.thumb_color.with_alpha(0.0)
     };
@@ -729,28 +809,52 @@ pub fn scrollbar_v(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
         thumb_offset: Px::from_f32(thumb_y),
     });
 
-    let args_for_handler = args.clone();
-    let state_for_handler = state.clone();
+    let handler_args = args.clone();
+    let handler_state = state.clone();
     input_handler(move |mut input| {
+        let frame_nanos = current_frame_nanos();
         handle_state_v(
-            &args_for_handler,
-            &state_for_handler,
+            &handler_args,
+            &handler_state,
             track_height,
             thumb_height,
             &mut input,
+            frame_nanos,
         );
         apply_scrollbar_accessibility(
             &mut input,
-            &args_for_handler,
-            &state_for_handler,
+            &handler_args,
+            &handler_state,
             ScrollOrientation::Vertical,
         );
     });
 }
 
 #[tessera]
-pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
-    let args: ScrollBarArgs = args.into();
+pub fn scrollbar_h(args: &ScrollBarArgs) {
+    let args = args.clone();
+    let state = args.scrollbar_state.clone().unwrap_or_else(|| {
+        let remembered = remember(ScrollBarState::new);
+        remembered.with(|s| s.clone())
+    });
+    let frame_tick = remember(|| 0_u64);
+    let _ = frame_tick.with(|tick| *tick);
+    let frame_nanos = current_frame_nanos();
+
+    handle_autohide_if_needed(&args, &state, frame_nanos);
+    if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
+        let frame_tick_for_frame = frame_tick;
+        let args_for_frame = args.clone();
+        let state_for_frame = state.clone();
+        receive_frame_nanos(move |frame_nanos| {
+            frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
+            if needs_scrollbar_frame_tick(&args_for_frame, &state_for_frame, frame_nanos) {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
 
     // Check if scrollbar should be visible based on behavior
     let should_show = should_show_scrollbar(&args, &state);
@@ -779,7 +883,7 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
     render_track_surface_h(track_width, height, track_color);
 
     let thumb_color = if has_horizontal_overflow {
-        compute_thumb_color(&state, &args)
+        compute_thumb_color(&state, &args, frame_nanos)
     } else {
         args.thumb_color.with_alpha(0.0)
     };
@@ -795,20 +899,22 @@ pub fn scrollbar_h(args: impl Into<ScrollBarArgs>, state: ScrollBarState) {
         thumb_offset: Px::from_f32(thumb_x),
     });
 
-    let args_for_handler = args.clone();
-    let state_for_handler = state.clone();
+    let handler_args = args.clone();
+    let handler_state = state.clone();
     input_handler(move |mut input| {
+        let frame_nanos = current_frame_nanos();
         handle_state_h(
-            &args_for_handler,
-            &state_for_handler,
+            &handler_args,
+            &handler_state,
             track_width,
             thumb_width,
             &mut input,
+            frame_nanos,
         );
         apply_scrollbar_accessibility(
             &mut input,
-            &args_for_handler,
-            &state_for_handler,
+            &handler_args,
+            &handler_state,
             ScrollOrientation::Horizontal,
         );
     });

@@ -40,7 +40,7 @@ struct ShapeCacheEntry {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, PartialEq, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 2],
 }
@@ -60,7 +60,7 @@ pub struct ShapeUniforms {
     pub screen_size: Vec2,
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct ShapeInstances {
     #[shader(size(runtime))]
     instances: Vec<ShapeUniforms>,

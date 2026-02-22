@@ -3,10 +3,11 @@
 //! ## Usage
 //!
 //! Emphasize a primary action with a prominent floating button.
-use std::sync::Arc;
-
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, State, accesskit::Role, remember, tessera, use_context};
+use tessera_ui::{
+    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera,
+    use_context,
+};
 
 use crate::{
     alignment::Alignment,
@@ -50,7 +51,7 @@ impl FloatingActionButtonSize {
 }
 
 /// Elevation values used by floating action buttons across interaction states.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct FloatingActionButtonElevation {
     default_elevation: Dp,
     pressed_elevation: Dp,
@@ -184,7 +185,7 @@ impl FloatingActionButtonDefaults {
 }
 
 /// Arguments for configuring [`floating_action_button`].
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct FloatingActionButtonArgs {
     /// The size variant of the floating action button.
     pub size: FloatingActionButtonSize,
@@ -204,7 +205,7 @@ pub struct FloatingActionButtonArgs {
     pub elevation: FloatingActionButtonElevation,
     /// Optional click handler for the button.
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// Container color when disabled.
     pub disabled_container_color: Color,
     /// Content color when disabled.
@@ -221,9 +222,20 @@ pub struct FloatingActionButtonArgs {
     /// Optional accessibility description announced by assistive technologies.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional child render slot.
+    #[setters(skip)]
+    pub content: Option<RenderSlot>,
 }
 
 impl FloatingActionButtonArgs {
+    /// Creates props from base args and a content render function.
+    pub fn with_content(
+        args: FloatingActionButtonArgs,
+        content: impl Fn() + Send + Sync + 'static,
+    ) -> Self {
+        args.content(content)
+    }
+
     /// Creates a configuration with the required click handler.
     pub fn new(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         Self::default().on_click(on_click)
@@ -244,13 +256,28 @@ impl FloatingActionButtonArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Sets the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
+        self
+    }
+
+    /// Sets the FAB content render slot.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.content = Some(RenderSlot::new(content));
+        self
+    }
+
+    /// Sets the FAB content render slot using a shared callback.
+    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
+        self.content = Some(content.into());
         self
     }
 }
@@ -278,6 +305,7 @@ impl Default for FloatingActionButtonArgs {
             ripple_color: None,
             accessibility_label: None,
             accessibility_description: None,
+            content: None,
         }
     }
 }
@@ -300,41 +328,39 @@ impl Default for FloatingActionButtonArgs {
 /// ## Examples
 ///
 /// ```
-/// use std::sync::Arc;
 /// use tessera_components::floating_action_button::{
 ///     FloatingActionButtonArgs, floating_action_button,
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{Callback, remember, tessera};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn component() {
-/// #     material_theme(
+/// #     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #         || MaterialTheme::default(),
 /// #         || {
 ///     let clicked = remember(|| false);
-///     let on_click: Arc<dyn Fn() + Send + Sync> = {
+///     let on_click = Callback::new({
 ///         let clicked = clicked;
-///         Arc::new(move || clicked.with_mut(|value| *value = true))
-///     };
+///         move || clicked.with_mut(|value| *value = true)
+///     });
 ///     let args = FloatingActionButtonArgs::default().on_click_shared(on_click.clone());
-///     on_click();
+///     on_click.call();
 ///
 ///     assert!(clicked.with(|value| *value));
 ///
-///     floating_action_button(args, || {});
+///     floating_action_button(&args.content(|| {}));
 /// #         },
 /// #     );
+/// #     material_theme(&args);
 /// }
 ///
 /// component();
 /// ```
 #[tessera]
-pub fn floating_action_button(
-    args: impl Into<FloatingActionButtonArgs>,
-    content: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args: FloatingActionButtonArgs = args.into();
+pub fn floating_action_button(args: &FloatingActionButtonArgs) {
+    let args = args.clone();
+    let content = args.content.clone();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -408,11 +434,15 @@ pub fn floating_action_button(
         surface_args = surface_args.accessibility_description(description);
     }
 
-    surface(surface_args, move || {
+    let content_for_surface = content.clone();
+    surface(&surface_args.child(move || {
+        let content = content_for_surface.clone();
         provide_text_style(typography.label_large, move || {
-            content();
+            if let Some(content) = content.as_ref() {
+                content.render();
+            }
         });
-    });
+    }));
 }
 
 fn shape_from_size(size: FloatingActionButtonSize, theme: &MaterialTheme) -> Shape {

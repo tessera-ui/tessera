@@ -3,12 +3,10 @@
 //! ## Usage
 //!
 //! Use to allow users to select a value from a continuous range.
-use std::sync::Arc;
-
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, InputHandlerInput, MeasurementError,
-    Modifier, Px, PxPosition, State,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, InputHandlerInput,
+    MeasurementError, Modifier, Px, PxPosition, State,
     accesskit::{Action, Role},
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -53,6 +51,7 @@ fn tick_fractions(steps: usize) -> Vec<f32> {
     (0..=steps + 1).map(|i| i as f32 / denom).collect()
 }
 
+#[derive(Clone, PartialEq)]
 struct RangeThumbAccessibilityArgs {
     key: &'static str,
     label: Option<String>,
@@ -63,7 +62,15 @@ struct RangeThumbAccessibilityArgs {
     value: f32,
     min: f32,
     max: f32,
-    on_change: Arc<dyn Fn(f32) + Send + Sync>,
+    on_change: CallbackWith<f32>,
+}
+
+#[derive(Clone, PartialEq)]
+struct RangeSliderThumbArgs {
+    thumb_layout: SliderLayout,
+    handle_width: Px,
+    colors: SliderColors,
+    accessibility: RangeThumbAccessibilityArgs,
 }
 
 fn apply_range_thumb_accessibility(input: &InputHandlerInput, args: &RangeThumbAccessibilityArgs) {
@@ -116,18 +123,14 @@ fn apply_range_thumb_accessibility(input: &InputHandlerInput, args: &RangeThumbA
             _ => return,
         };
         let next = snap_fraction(next, steps).clamp(min, max);
-        on_change(next);
+        on_change.call(next);
     });
 }
 
 #[tessera]
-fn range_slider_thumb(
-    thumb_layout: SliderLayout,
-    handle_width: Px,
-    colors: SliderColors,
-    accessibility: RangeThumbAccessibilityArgs,
-) {
-    render_handle(thumb_layout, handle_width, &colors);
+fn range_slider_thumb_node(args: &RangeSliderThumbArgs) {
+    render_handle(args.thumb_layout, args.handle_width, &args.colors);
+    let accessibility = args.accessibility.clone();
 
     input_handler(move |input| {
         apply_range_thumb_accessibility(&input, &accessibility);
@@ -223,7 +226,7 @@ impl LayoutSpec for CenteredSliderLayoutSpec {
 #[derive(Clone)]
 struct RangeSliderLayoutSpec {
     args: RangeSliderArgs,
-    slider_args: SliderArgs,
+    slider: SliderArgs,
     start: f32,
     end: f32,
     start_handle_width: Px,
@@ -248,7 +251,7 @@ impl LayoutSpec for RangeSliderLayoutSpec {
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let component_width = resolve_component_width(&self.slider_args, input.parent_constraint());
+        let component_width = resolve_component_width(&self.slider, input.parent_constraint());
         let resolved_layout = range_slider_layout(&self.args, component_width);
         measure_range_slider(
             input,
@@ -336,7 +339,7 @@ pub enum SliderSize {
 }
 
 /// Arguments for the `slider` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct SliderArgs {
     /// Modifier chain applied to the slider subtree.
     pub modifier: Modifier,
@@ -344,7 +347,7 @@ pub struct SliderArgs {
     pub value: f32,
     /// Callback function triggered when the slider's value changes.
     #[setters(skip)]
-    pub on_change: Arc<dyn Fn(f32) + Send + Sync>,
+    pub on_change: CallbackWith<f32>,
     /// Size variant of the slider.
     pub size: SliderSize,
     /// The color of the active part of the track (progress fill).
@@ -374,6 +377,12 @@ pub struct SliderArgs {
     /// Medium sizes and above).
     #[setters(strip_option, into)]
     pub inset_icon: Option<crate::icon::IconContent>,
+    /// Optional external controller for drag and focus state.
+    ///
+    /// When this is `None`, `slider` and `centered_slider` create and own an
+    /// internal controller.
+    #[setters(skip)]
+    pub controller: Option<State<SliderController>>,
 }
 
 impl SliderArgs {
@@ -382,13 +391,19 @@ impl SliderArgs {
     where
         F: Fn(f32) + Send + Sync + 'static,
     {
-        self.on_change = Arc::new(on_change);
+        self.on_change = CallbackWith::new(on_change);
         self
     }
 
     /// Sets the on_change handler using a shared callback.
-    pub fn on_change_shared(mut self, on_change: Arc<dyn Fn(f32) + Send + Sync>) -> Self {
-        self.on_change = on_change;
+    pub fn on_change_shared(mut self, on_change: impl Into<CallbackWith<f32>>) -> Self {
+        self.on_change = on_change.into();
+        self
+    }
+
+    /// Sets an external slider controller.
+    pub fn controller(mut self, controller: State<SliderController>) -> Self {
+        self.controller = Some(controller);
         self
     }
 }
@@ -402,7 +417,7 @@ impl Default for SliderArgs {
         Self {
             modifier: Modifier::new(),
             value: 0.0,
-            on_change: Arc::new(|_| {}),
+            on_change: CallbackWith::new(|_| {}),
             size: SliderSize::default(),
             active_track_color: scheme.primary,
             inactive_track_color: scheme.secondary_container,
@@ -414,11 +429,12 @@ impl Default for SliderArgs {
             show_stop_indicator: true,
             steps: 0,
             inset_icon: None,
+            controller: None,
         }
     }
 }
 /// Arguments for the `range_slider` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct RangeSliderArgs {
     /// Modifier chain applied to the range slider subtree.
     pub modifier: Modifier,
@@ -427,7 +443,7 @@ pub struct RangeSliderArgs {
 
     /// Callback function triggered when the range values change.
     #[setters(skip)]
-    pub on_change: Arc<dyn Fn((f32, f32)) + Send + Sync>,
+    pub on_change: CallbackWith<(f32, f32)>,
 
     /// Size variant of the slider.
     pub size: SliderSize,
@@ -460,6 +476,12 @@ pub struct RangeSliderArgs {
     /// When set to a value greater than 0, the slider values snap to
     /// `steps + 2` evenly spaced tick positions (including both ends).
     pub steps: usize,
+    /// Optional external range slider controller.
+    ///
+    /// When this is `None`, `range_slider` creates and owns an internal
+    /// controller.
+    #[setters(skip)]
+    pub controller: Option<State<RangeSliderController>>,
 }
 
 impl RangeSliderArgs {
@@ -468,13 +490,19 @@ impl RangeSliderArgs {
     where
         F: Fn((f32, f32)) + Send + Sync + 'static,
     {
-        self.on_change = Arc::new(on_change);
+        self.on_change = CallbackWith::new(on_change);
         self
     }
 
     /// Sets the on_change handler using a shared callback.
-    pub fn on_change_shared(mut self, on_change: Arc<dyn Fn((f32, f32)) + Send + Sync>) -> Self {
-        self.on_change = on_change;
+    pub fn on_change_shared(mut self, on_change: impl Into<CallbackWith<(f32, f32)>>) -> Self {
+        self.on_change = on_change.into();
+        self
+    }
+
+    /// Sets an external range slider controller.
+    pub fn controller(mut self, controller: State<RangeSliderController>) -> Self {
+        self.controller = Some(controller);
         self
     }
 }
@@ -488,7 +516,7 @@ impl Default for RangeSliderArgs {
         Self {
             modifier: Modifier::new(),
             value: (0.0, 1.0),
-            on_change: Arc::new(|_| {}),
+            on_change: CallbackWith::new(|_| {}),
             size: SliderSize::default(),
             active_track_color: scheme.primary,
             inactive_track_color: scheme.secondary_container,
@@ -499,6 +527,7 @@ impl Default for RangeSliderArgs {
             accessibility_description: None,
             show_stop_indicator: true,
             steps: 0,
+            controller: None,
         }
     }
 }
@@ -646,7 +675,7 @@ fn measure_slider(
     })
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, PartialEq, Copy)]
 struct SliderColors {
     active_track: Color,
     inactive_track: Color,
@@ -721,8 +750,7 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 ///
 /// - `args` — configures the slider's value, appearance, and callbacks; see
 ///   [`SliderArgs`].
-/// - `controller` — optional; use [`slider_with_controller`] to provide your
-///   own controller.
+/// - `controller` — optional; use [`slider`] to provide your own controller.
 ///
 /// ## Examples
 ///
@@ -735,11 +763,11 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 /// use tessera_ui::{Dp, Modifier};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
 /// #     || {
 /// slider(
-///     SliderArgs::default()
+///     &SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(0.5)
 ///         .on_change(|new_value| {
@@ -749,68 +777,34 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 /// );
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn slider(args: impl Into<SliderArgs>) {
-    let args: SliderArgs = args.into();
-    let controller = remember(SliderController::new);
-    slider_with_controller(args, controller);
+pub fn slider(args: &SliderArgs) {
+    let args: SliderArgs = args.clone();
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(SliderController::new));
+    slider_node(args, controller);
 }
 
-/// # slider_with_controller
-///
-/// Controlled slider variant.
-///
-/// ## Usage
-///
-/// Use when you need to manage the slider's interactive state externally.
-///
-/// ## Parameters
-///
-/// - `args` — configures the slider's value, appearance, and callbacks; see
-///   [`SliderArgs`].
-/// - `controller` — the slider controller to manage interactive state.
-///
-/// ## Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::modifier::ModifierExt as _;
-/// use tessera_components::slider::{SliderArgs, SliderController, slider_with_controller};
-/// use tessera_ui::{Dp, Modifier, remember};
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
-///
-/// # material_theme(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// let controller = remember(|| SliderController::new());
-/// slider_with_controller(
-///     SliderArgs::default()
-///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(0.5)
-///         .on_change(|new_value| {
-///             println!("Slider value changed to: {}", new_value);
-///         }),
-///     controller,
-/// );
-/// #     },
-/// # );
-/// # }
-/// # component();
-/// ```
-#[tessera]
-pub fn slider_with_controller(args: impl Into<SliderArgs>, controller: State<SliderController>) {
-    let args: SliderArgs = args.into();
-    let modifier = args.modifier;
-    modifier.run(move || slider_with_controller_inner(args, controller));
+fn slider_node(slider_args: SliderArgs, controller: State<SliderController>) {
+    let modifier = slider_args.modifier.clone();
+    modifier.run(move || {
+        let mut inner_args = slider_args.clone();
+        inner_args.controller = Some(controller);
+        slider_inner_node(&inner_args);
+    });
 }
 
 #[tessera]
-fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderController>) {
+fn slider_inner_node(args: &SliderArgs) {
+    let args: SliderArgs = args.clone();
+    let controller = args
+        .controller
+        .expect("slider_inner_node requires controller to be set");
     let initial_width = fallback_component_width(&args);
     let clamped_value = args.value.clamp(0.0, 1.0);
     let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
@@ -843,7 +837,7 @@ fn slider_with_controller_inner(args: SliderArgs, controller: State<SliderContro
         };
 
         crate::icon::icon(
-            crate::icon::IconArgs::from(inset_icon.clone())
+            &crate::icon::IconArgs::from(inset_icon.clone())
                 .tint(tint)
                 .tint_mode(VectorTintMode::Solid)
                 .size(icon_size),
@@ -1065,8 +1059,7 @@ fn measure_centered_slider(
 ///
 /// - `args` — configures the slider's value, appearance, and callbacks; see
 ///   [`SliderArgs`].
-/// - `controller` — optional controller; use
-///   [`centered_slider_with_controller`] to supply one.
+/// - `controller` — optional controller; use [`centered_slider`] to supply one.
 ///
 /// ## Examples
 ///
@@ -1087,14 +1080,15 @@ fn measure_centered_slider(
 ///     *value_guard = 0.75;
 ///     assert_eq!(*value_guard, 0.75);
 /// }
+/// let value_for_slider = current_value.clone();
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
-/// #     || {
+/// #     move || {
 /// centered_slider(
-///     SliderArgs::default()
+///     &SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(*current_value.lock().unwrap())
+///         .value(*value_for_slider.lock().unwrap())
 ///         .on_change(move |new_value| {
 ///             // In a real app, you would update your state here.
 ///             // For this example, we'll just check it after the simulated change.
@@ -1103,6 +1097,7 @@ fn measure_centered_slider(
 /// );
 /// #     },
 /// # );
+/// # material_theme(&args);
 ///
 /// // Simulate another value change and check the state
 /// {
@@ -1114,65 +1109,21 @@ fn measure_centered_slider(
 /// # component();
 /// ```
 #[tessera]
-pub fn centered_slider(args: impl Into<SliderArgs>) {
-    let args: SliderArgs = args.into();
-    let controller = remember(SliderController::new);
-    centered_slider_with_controller(args, controller);
+pub fn centered_slider(args: &SliderArgs) {
+    let mut args: SliderArgs = args.clone();
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(SliderController::new));
+    args.controller = Some(controller);
+    centered_slider_node(&args);
 }
 
-/// # centered_slider_with_controller
-///
-/// Controlled centered slider variant.
-///
-/// ## Usage
-///
-/// Use when you need to manage the centered slider's interactive state
-/// externally.
-///
-/// ## Parameters
-///
-/// - `args` — configures the slider's value, appearance, and callbacks; see
-///   [`SliderArgs`].
-/// - `controller` — the slider controller to manage interactive state.
-///
-/// ## Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use std::sync::Arc;
-/// use tessera_components::modifier::ModifierExt as _;
-/// use tessera_components::slider::{
-///     SliderArgs, SliderController, centered_slider_with_controller,
-/// };
-/// use tessera_ui::{Dp, Modifier, remember};
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
-///
-/// # material_theme(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// let controller = remember(SliderController::new);
-/// centered_slider_with_controller(
-///     SliderArgs::default()
-///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(0.5)
-///         .on_change(|new_value| {
-///             println!("Centered slider value changed to: {}", new_value);
-///         }),
-///     controller,
-/// );
-/// #     },
-/// # );
-/// # }
-/// # component();
-/// ```
 #[tessera]
-pub fn centered_slider_with_controller(
-    args: impl Into<SliderArgs>,
-    controller: State<SliderController>,
-) {
-    let args: SliderArgs = args.into();
+fn centered_slider_node(args: &SliderArgs) {
+    let args = args.clone();
+    let controller = args
+        .controller
+        .expect("centered_slider_node requires controller to be set");
     let initial_width = fallback_component_width(&args);
     let clamped_value = args.value.clamp(0.0, 1.0);
     let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
@@ -1425,8 +1376,7 @@ fn measure_range_slider(
 ///
 /// - `args` — configures the slider's range, appearance, and callbacks; see
 ///   [`RangeSliderArgs`].
-/// - `controller` — optional controller; use [`range_slider_with_controller`]
-///   to supply one.
+/// - `controller` — optional controller; use [`range_slider`] to supply one.
 ///
 /// ## Examples
 ///
@@ -1441,11 +1391,11 @@ fn measure_range_slider(
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// let range_value = Arc::new(Mutex::new((0.2, 0.8)));
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
-/// #     || {
+/// #     move || {
 /// range_slider(
-///     RangeSliderArgs::default()
+///     &RangeSliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
 ///         .value(*range_value.lock().unwrap())
 ///         .on_change(move |(start, end)| {
@@ -1454,29 +1404,34 @@ fn measure_range_slider(
 /// );
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn range_slider(args: impl Into<RangeSliderArgs>) {
-    let args: RangeSliderArgs = args.into();
-    let state = remember(RangeSliderController::new);
-    range_slider_with_controller(args, state);
+pub fn range_slider(args: &RangeSliderArgs) {
+    let args: RangeSliderArgs = args.clone();
+    let state = args
+        .controller
+        .unwrap_or_else(|| remember(RangeSliderController::new));
+    range_slider_node(args, state);
 }
 
-/// Controlled range slider variant.
-#[tessera]
-pub fn range_slider_with_controller(
-    args: impl Into<RangeSliderArgs>,
-    state: State<RangeSliderController>,
-) {
-    let args: RangeSliderArgs = args.into();
-    let modifier = args.modifier;
-    modifier.run(move || range_slider_with_controller_inner(args, state));
+fn range_slider_node(args: RangeSliderArgs, state: State<RangeSliderController>) {
+    let modifier = args.modifier.clone();
+    modifier.run(move || {
+        let mut inner_args = args.clone();
+        inner_args.controller = Some(state);
+        range_slider_inner_node(&inner_args);
+    });
 }
 
 #[tessera]
-fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeSliderController>) {
+fn range_slider_inner_node(args: &RangeSliderArgs) {
+    let args: RangeSliderArgs = args.clone();
+    let state = args
+        .controller
+        .expect("range_slider_inner_node requires controller to be set");
     let dummy_slider_args = SliderArgs::default()
         .size(args.size)
         .show_stop_indicator(args.show_stop_indicator);
@@ -1523,11 +1478,11 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
     if range_layout.base.show_stop_indicator {
         render_range_stops(range_layout, &colors);
     }
-    range_slider_thumb(
-        range_layout.base,
-        start_handle_width,
+    let start_thumb_args = RangeSliderThumbArgs {
+        thumb_layout: range_layout.base,
+        handle_width: start_handle_width,
         colors,
-        RangeThumbAccessibilityArgs {
+        accessibility: RangeThumbAccessibilityArgs {
             key: "range_slider_start_thumb",
             label: args.accessibility_label.clone(),
             description: args.accessibility_description.clone(),
@@ -1537,17 +1492,19 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
             value: start,
             min: 0.0,
             max: end,
-            on_change: Arc::new({
+            on_change: CallbackWith::new({
                 let on_change = args.on_change.clone();
-                move |new_start| (on_change)((new_start, end))
+                move |new_start| on_change.call((new_start, end))
             }),
         },
-    );
-    range_slider_thumb(
-        range_layout.base,
-        end_handle_width,
+    };
+    range_slider_thumb_node(&start_thumb_args);
+
+    let end_thumb_args = RangeSliderThumbArgs {
+        thumb_layout: range_layout.base,
+        handle_width: end_handle_width,
         colors,
-        RangeThumbAccessibilityArgs {
+        accessibility: RangeThumbAccessibilityArgs {
             key: "range_slider_end_thumb",
             label: args.accessibility_label.clone(),
             description: args.accessibility_description.clone(),
@@ -1557,12 +1514,13 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
             value: end,
             min: start,
             max: 1.0,
-            on_change: Arc::new({
+            on_change: CallbackWith::new({
                 let on_change = args.on_change.clone();
-                move |new_end| (on_change)((start, new_end))
+                move |new_end| on_change.call((start, new_end))
             }),
         },
-    );
+    };
+    range_slider_thumb_node(&end_thumb_args);
 
     let cloned_args = args.clone();
     let start_val = start;
@@ -1607,7 +1565,7 @@ fn range_slider_with_controller_inner(args: RangeSliderArgs, state: State<RangeS
 
     layout(RangeSliderLayoutSpec {
         args,
-        slider_args: dummy_for_measure,
+        slider: dummy_for_measure,
         start,
         end,
         start_handle_width,

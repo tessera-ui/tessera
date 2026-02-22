@@ -5,11 +5,9 @@
 //! Attach pointer/keyboard handling with accessibility and ripple feedback to
 //! subtrees.
 
-use std::sync::Arc;
-
 use tessera_ui::{
-    ComputedData, CursorEventContent, GestureState, PressKeyEventType, PxPosition, PxSize, State,
-    WindowAction,
+    Callback, CallbackWith, ComputedData, CursorEventContent, GestureState, PressKeyEventType,
+    PxPosition, PxSize, RenderSlot, State, WindowAction,
     accesskit::{self, Action, Toggled},
     tessera,
     winit::window::CursorIcon,
@@ -18,7 +16,7 @@ use tessera_ui::{
 use crate::{pos_misc::is_position_in_rect, theme::MaterialAlpha};
 
 /// Context for pointer press/release callbacks.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct PointerEventContext {
     /// Pointer position normalized to `[0.0, 1.0]` within the element bounds.
     pub normalized_pos: [f32; 2],
@@ -26,13 +24,13 @@ pub struct PointerEventContext {
     pub size: PxSize,
 }
 
-type PressCallback = Arc<dyn Fn(PointerEventContext) + Send + Sync>;
+type PressCallback = CallbackWith<PointerEventContext, ()>;
 
 /// Arguments for the `clickable` modifier.
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 pub struct ClickableArgs {
     /// Callback invoked when the element is clicked.
-    pub on_click: Arc<dyn Fn() + Send + Sync>,
+    pub on_click: Callback,
     /// Whether the element is enabled for interaction.
     pub enabled: bool,
     /// Whether to block input propagation when within bounds. Defaults to true
@@ -54,9 +52,9 @@ pub struct ClickableArgs {
 
 impl ClickableArgs {
     /// Create a new `ClickableArgs` with the required `on_click` handler.
-    pub fn new(on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn new(on_click: impl Into<Callback>) -> Self {
         Self {
-            on_click,
+            on_click: on_click.into(),
             enabled: true,
             block_input: true,
             on_press: None,
@@ -81,14 +79,14 @@ impl ClickableArgs {
     }
 
     /// Set a press callback.
-    pub fn on_press(mut self, on_press: PressCallback) -> Self {
-        self.on_press = Some(on_press);
+    pub fn on_press(mut self, on_press: impl Into<PressCallback>) -> Self {
+        self.on_press = Some(on_press.into());
         self
     }
 
     /// Set a release callback.
-    pub fn on_release(mut self, on_release: PressCallback) -> Self {
-        self.on_release = Some(on_release);
+    pub fn on_release(mut self, on_release: impl Into<PressCallback>) -> Self {
+        self.on_release = Some(on_release.into());
         self
     }
 
@@ -118,12 +116,12 @@ impl ClickableArgs {
 }
 
 /// Arguments for the `toggleable` modifier.
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 pub struct ToggleableArgs {
     /// Current boolean value.
     pub value: bool,
     /// Callback invoked with the new value when changed.
-    pub on_value_change: Arc<dyn Fn(bool) + Send + Sync>,
+    pub on_value_change: CallbackWith<bool, ()>,
     /// Whether the control is enabled for interaction.
     pub enabled: bool,
     /// Optional accessibility role (defaults to `CheckBox` or similar).
@@ -143,10 +141,10 @@ pub struct ToggleableArgs {
 impl ToggleableArgs {
     /// Create a new `ToggleableArgs` with the required `value` and
     /// `on_value_change`.
-    pub fn new(value: bool, on_value_change: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
+    pub fn new(value: bool, on_value_change: impl Into<CallbackWith<bool, ()>>) -> Self {
         Self {
             value,
-            on_value_change,
+            on_value_change: on_value_change.into(),
             enabled: true,
             role: None,
             label: None,
@@ -188,25 +186,25 @@ impl ToggleableArgs {
     }
 
     /// Set a press callback.
-    pub fn on_press(mut self, on_press: PressCallback) -> Self {
-        self.on_press = Some(on_press);
+    pub fn on_press(mut self, on_press: impl Into<PressCallback>) -> Self {
+        self.on_press = Some(on_press.into());
         self
     }
 
     /// Set a release callback.
-    pub fn on_release(mut self, on_release: PressCallback) -> Self {
-        self.on_release = Some(on_release);
+    pub fn on_release(mut self, on_release: impl Into<PressCallback>) -> Self {
+        self.on_release = Some(on_release.into());
         self
     }
 }
 
 /// Arguments for the `selectable` modifier.
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 pub struct SelectableArgs {
     /// Whether the item is selected.
     pub selected: bool,
     /// Callback invoked when the selectable is activated.
-    pub on_click: Arc<dyn Fn() + Send + Sync>,
+    pub on_click: Callback,
     /// Whether the element is enabled for interaction.
     pub enabled: bool,
     /// Optional accessibility role (defaults to `Button`).
@@ -226,10 +224,10 @@ pub struct SelectableArgs {
 impl SelectableArgs {
     /// Create a new `SelectableArgs` with the required `selected` and
     /// `on_click`.
-    pub fn new(selected: bool, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
+    pub fn new(selected: bool, on_click: impl Into<Callback>) -> Self {
         Self {
             selected,
-            on_click,
+            on_click: on_click.into(),
             enabled: true,
             role: None,
             label: None,
@@ -271,14 +269,14 @@ impl SelectableArgs {
     }
 
     /// Set a press callback.
-    pub fn on_press(mut self, on_press: PressCallback) -> Self {
-        self.on_press = Some(on_press);
+    pub fn on_press(mut self, on_press: impl Into<PressCallback>) -> Self {
+        self.on_press = Some(on_press.into());
         self
     }
 
     /// Set a release callback.
-    pub fn on_release(mut self, on_release: PressCallback) -> Self {
-        self.on_release = Some(on_release);
+    pub fn on_release(mut self, on_release: impl Into<PressCallback>) -> Self {
+        self.on_release = Some(on_release.into());
         self
     }
 }
@@ -300,11 +298,22 @@ fn pointer_context(position: Option<PxPosition>, size: ComputedData) -> PointerE
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct ModifierClickableArgs {
+    clickable: ClickableArgs,
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_clickable(args: ClickableArgs, child: RenderSlot) {
+    let render_args = ModifierClickableArgs {
+        clickable: args,
+        child,
+    };
+    modifier_clickable_node(&render_args);
+}
+
 #[tessera]
-pub(crate) fn modifier_clickable<F>(args: ClickableArgs, child: F)
-where
-    F: FnOnce(),
-{
+fn modifier_clickable_node(args: &ModifierClickableArgs) {
     let ClickableArgs {
         on_click,
         enabled,
@@ -315,9 +324,9 @@ where
         label,
         description,
         interaction_state,
-    } = args;
+    } = args.clickable.clone();
 
-    child();
+    args.child.render();
 
     let role = role.unwrap_or(accesskit::Role::Button);
     input_handler(move |mut input| {
@@ -368,7 +377,7 @@ where
             let on_click_action = on_click.clone();
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
-                    on_click_action();
+                    on_click_action.call();
                 }
             });
         }
@@ -386,7 +395,7 @@ where
                         CursorEventContent::Released(PressKeyEventType::Left)
                     )
                 {
-                    on_click();
+                    on_click.call();
                 }
             }
             if block_input && within_bounds {
@@ -415,7 +424,7 @@ where
                 )
             {
                 if let Some(on_press) = on_press.as_ref() {
-                    on_press(context);
+                    on_press.call(context);
                 }
                 interaction_state.with_mut(|s| s.set_pressed(true));
             }
@@ -426,7 +435,7 @@ where
             ) {
                 interaction_state.with_mut(|s| s.release());
                 if let Some(on_release) = on_release.as_ref() {
-                    on_release(context);
+                    on_release.call(context);
                 }
             }
 
@@ -437,7 +446,7 @@ where
                     CursorEventContent::Released(PressKeyEventType::Left)
                 )
             {
-                on_click();
+                on_click.call();
             }
         }
 
@@ -454,12 +463,19 @@ where
     });
 }
 
+#[derive(Clone, PartialEq)]
+struct ModifierWindowDragRegionArgs {
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_window_drag_region(child: RenderSlot) {
+    let args = ModifierWindowDragRegionArgs { child };
+    modifier_window_drag_region_node(&args);
+}
+
 #[tessera]
-pub(crate) fn modifier_window_drag_region<F>(child: F)
-where
-    F: FnOnce(),
-{
-    child();
+fn modifier_window_drag_region_node(args: &ModifierWindowDragRegionArgs) {
+    args.child.render();
 
     input_handler(move |mut input| {
         let within_bounds = input
@@ -496,12 +512,21 @@ where
     });
 }
 
+#[derive(Clone, PartialEq)]
+struct ModifierWindowActionArgs {
+    action: WindowAction,
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_window_action(action: WindowAction, child: RenderSlot) {
+    let args = ModifierWindowActionArgs { action, child };
+    modifier_window_action_node(&args);
+}
+
 #[tessera]
-pub(crate) fn modifier_window_action<F>(action: WindowAction, child: F)
-where
-    F: FnOnce(),
-{
-    child();
+fn modifier_window_action_node(args: &ModifierWindowActionArgs) {
+    let action = args.action;
+    args.child.render();
 
     input_handler(move |mut input| {
         let within_bounds = input
@@ -551,12 +576,19 @@ where
     });
 }
 
+#[derive(Clone, PartialEq)]
+struct ModifierBlockTouchPropagationArgs {
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_block_touch_propagation(child: RenderSlot) {
+    let args = ModifierBlockTouchPropagationArgs { child };
+    modifier_block_touch_propagation_node(&args);
+}
+
 #[tessera]
-pub(crate) fn modifier_block_touch_propagation<F>(child: F)
-where
-    F: FnOnce(),
-{
-    child();
+fn modifier_block_touch_propagation_node(args: &ModifierBlockTouchPropagationArgs) {
+    args.child.render();
 
     input_handler(move |mut input| {
         let within_bounds = input
@@ -577,11 +609,22 @@ where
     });
 }
 
+#[derive(Clone, PartialEq)]
+struct ModifierToggleableArgs {
+    toggleable: ToggleableArgs,
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_toggleable(args: ToggleableArgs, child: RenderSlot) {
+    let render_args = ModifierToggleableArgs {
+        toggleable: args,
+        child,
+    };
+    modifier_toggleable_node(&render_args);
+}
+
 #[tessera]
-pub(crate) fn modifier_toggleable<F>(args: ToggleableArgs, child: F)
-where
-    F: FnOnce(),
-{
+fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
     let ToggleableArgs {
         value,
         on_value_change,
@@ -592,9 +635,9 @@ where
         interaction_state,
         on_press,
         on_release,
-    } = args;
+    } = args.toggleable.clone();
 
-    child();
+    args.child.render();
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
     input_handler(move |input| {
@@ -647,7 +690,7 @@ where
             let on_value_change = on_value_change.clone();
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
-                    on_value_change(!value);
+                    on_value_change.call(!value);
                 }
             });
         }
@@ -676,7 +719,7 @@ where
                 )
             {
                 if let Some(on_press) = on_press.as_ref() {
-                    on_press(context);
+                    on_press.call(context);
                 }
                 interaction_state.with_mut(|s| s.set_pressed(true));
             }
@@ -687,7 +730,7 @@ where
             ) {
                 interaction_state.with_mut(|s| s.release());
                 if let Some(on_release) = on_release.as_ref() {
-                    on_release(context);
+                    on_release.call(context);
                 }
             }
 
@@ -698,7 +741,7 @@ where
                     CursorEventContent::Released(PressKeyEventType::Left)
                 )
             {
-                on_value_change(!value);
+                on_value_change.call(!value);
             }
         }
 
@@ -711,11 +754,22 @@ where
     });
 }
 
+#[derive(Clone, PartialEq)]
+struct ModifierSelectableArgs {
+    selectable: SelectableArgs,
+    child: RenderSlot,
+}
+
+pub(crate) fn modifier_selectable(args: SelectableArgs, child: RenderSlot) {
+    let render_args = ModifierSelectableArgs {
+        selectable: args,
+        child,
+    };
+    modifier_selectable_node(&render_args);
+}
+
 #[tessera]
-pub(crate) fn modifier_selectable<F>(args: SelectableArgs, child: F)
-where
-    F: FnOnce(),
-{
+fn modifier_selectable_node(args: &ModifierSelectableArgs) {
     let SelectableArgs {
         selected,
         on_click,
@@ -726,9 +780,9 @@ where
         interaction_state,
         on_press,
         on_release,
-    } = args;
+    } = args.selectable.clone();
 
-    child();
+    args.child.render();
 
     let role = role.unwrap_or(accesskit::Role::Button);
     input_handler(move |input| {
@@ -785,7 +839,7 @@ where
             let on_click = on_click.clone();
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
-                    on_click();
+                    on_click.call();
                 }
             });
         }
@@ -814,7 +868,7 @@ where
                 )
             {
                 if let Some(on_press) = on_press.as_ref() {
-                    on_press(context);
+                    on_press.call(context);
                 }
                 interaction_state.with_mut(|s| s.set_pressed(true));
             }
@@ -825,7 +879,7 @@ where
             ) {
                 interaction_state.with_mut(|s| s.release());
                 if let Some(on_release) = on_release.as_ref() {
-                    on_release(context);
+                    on_release.call(context);
                 }
             }
 
@@ -836,7 +890,7 @@ where
                     CursorEventContent::Released(PressKeyEventType::Left)
                 )
             {
-                on_click();
+                on_click.call();
             }
         }
 
@@ -850,7 +904,7 @@ where
 }
 
 /// Tracks basic interaction flags and derives state-layer alpha.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, PartialEq, Copy, Debug, Default)]
 pub struct InteractionState {
     is_hovered: bool,
     is_focused: bool,

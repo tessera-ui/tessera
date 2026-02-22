@@ -4,16 +4,12 @@
 //!
 //! Add single-choice selectors to forms, filters, and settings panes.
 
-use std::{
-    sync::Arc,
-    time::{Duration, Instant},
-};
+use std::time::Duration;
 
-use closure::closure;
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, DimensionValue, Dp, Modifier, Px, PxSize, State, accesskit::Role, remember, tessera,
-    use_context,
+    CallbackWith, Color, DimensionValue, Dp, Modifier, Px, PxSize, State, accesskit::Role,
+    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -39,12 +35,12 @@ impl RadioButtonDefaults {
 
 /// Shared state for the `radio_button` component, including selection
 /// animation.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct RadioButtonController {
     selected: bool,
     progress: f32,
     start_progress: f32,
-    last_change_time: Option<Instant>,
+    last_change_frame_nanos: Option<u64>,
 }
 
 impl Default for RadioButtonController {
@@ -61,7 +57,7 @@ impl RadioButtonController {
             selected,
             progress,
             start_progress: progress,
-            last_change_time: None,
+            last_change_frame_nanos: None,
         }
     }
 
@@ -75,7 +71,7 @@ impl RadioButtonController {
         if self.selected != selected {
             self.selected = selected;
             self.start_progress = self.progress;
-            self.last_change_time = Some(Instant::now());
+            self.last_change_frame_nanos = Some(current_frame_nanos());
         }
     }
 
@@ -87,19 +83,23 @@ impl RadioButtonController {
         }
         self.selected = true;
         self.start_progress = self.progress;
-        self.last_change_time = Some(Instant::now());
+        self.last_change_frame_nanos = Some(current_frame_nanos());
         true
     }
 
-    fn update_animation(&mut self) {
-        if let Some(start) = self.last_change_time {
-            let elapsed = start.elapsed();
-            let fraction =
-                (elapsed.as_secs_f32() / RADIO_ANIMATION_DURATION.as_secs_f32()).min(1.0);
+    fn update_animation(&mut self, frame_nanos: u64) {
+        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = RADIO_ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            let fraction = if animation_nanos == 0 {
+                1.0
+            } else {
+                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
+            };
             let target = if self.selected { 1.0 } else { 0.0 };
             self.progress = self.start_progress + (target - self.start_progress) * fraction;
             if fraction >= 1.0 {
-                self.last_change_time = None;
+                self.last_change_frame_nanos = None;
                 self.progress = target;
                 self.start_progress = target;
             }
@@ -109,16 +109,20 @@ impl RadioButtonController {
     fn animation_progress(&self) -> f32 {
         self.progress
     }
+
+    fn is_animating(&self) -> bool {
+        self.last_change_frame_nanos.is_some()
+    }
 }
 
 /// Arguments for configuring the `radio_button` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct RadioButtonArgs {
     /// Optional modifier chain applied to the radio button subtree.
     pub modifier: Modifier,
     /// Callback invoked when the radio transitions to the selected state.
     #[setters(skip)]
-    pub on_select: Arc<dyn Fn(bool) + Send + Sync>,
+    pub on_select: CallbackWith<bool, ()>,
     /// Whether the radio button is currently selected.
     pub selected: bool,
     /// Visual diameter of the radio glyph (outer ring) in density-independent
@@ -146,6 +150,12 @@ pub struct RadioButtonArgs {
     /// Optional accessibility description.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional external controller for selection state and animation.
+    ///
+    /// When this is `None`, `radio_button` creates and owns an internal
+    /// controller.
+    #[setters(skip)]
+    pub controller: Option<State<RadioButtonController>>,
 }
 
 impl RadioButtonArgs {
@@ -154,13 +164,19 @@ impl RadioButtonArgs {
     where
         F: Fn(bool) + Send + Sync + 'static,
     {
-        self.on_select = Arc::new(on_select);
+        self.on_select = CallbackWith::new(on_select);
         self
     }
 
     /// Sets the on_select handler using a shared callback.
-    pub fn on_select_shared(mut self, on_select: Arc<dyn Fn(bool) + Send + Sync>) -> Self {
-        self.on_select = on_select;
+    pub fn on_select_shared(mut self, on_select: impl Into<CallbackWith<bool, ()>>) -> Self {
+        self.on_select = on_select.into();
+        self
+    }
+
+    /// Sets an external radio button controller.
+    pub fn controller(mut self, controller: State<RadioButtonController>) -> Self {
+        self.controller = Some(controller);
         self
     }
 }
@@ -173,7 +189,7 @@ impl Default for RadioButtonArgs {
             .color_scheme;
         Self {
             modifier: Modifier::new(),
-            on_select: Arc::new(|_| {}),
+            on_select: CallbackWith::new(|_| {}),
             selected: false,
             size: Dp(20.0),
             touch_target_size: Dp(48.0),
@@ -190,6 +206,7 @@ impl Default for RadioButtonArgs {
             enabled: true,
             accessibility_label: None,
             accessibility_description: None,
+            controller: None,
         }
     }
 }
@@ -226,38 +243,45 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 ///
 /// #[tessera]
 /// fn radio_demo() {
-///     radio_button(RadioButtonArgs::default().selected(true));
+///     radio_button(&RadioButtonArgs::default().selected(true));
 /// }
 /// ```
 #[tessera]
-pub fn radio_button(args: impl Into<RadioButtonArgs>) {
-    let args: RadioButtonArgs = args.into();
-    let controller = remember(|| RadioButtonController::new(args.selected));
+pub fn radio_button(args: &RadioButtonArgs) {
+    let mut args: RadioButtonArgs = args.clone();
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(|| RadioButtonController::new(args.selected)));
 
     if controller.with(|c| c.is_selected()) != args.selected {
         controller.with_mut(|c| c.set_selected(args.selected));
     }
 
-    radio_button_with_controller(args, controller);
+    args.controller = Some(controller);
+    radio_button_node(&args);
 }
 
-/// # radio_button_with_controller
-///
-/// Render a Material Design 3 radio button with an external controller.
-///
-/// ## Parameters
-///
-/// - `args` — configures sizing, colors, and callbacks; see
-///   [`RadioButtonArgs`].
-/// - `controller` — a clonable [`RadioButtonController`] that manages selection
-///   animation.
 #[tessera]
-pub fn radio_button_with_controller(
-    args: impl Into<RadioButtonArgs>,
-    controller: State<RadioButtonController>,
-) {
-    let args: RadioButtonArgs = args.into();
-    controller.with_mut(|c| c.update_animation());
+fn radio_button_node(args: &RadioButtonArgs) {
+    let args = args.clone();
+    let controller = args
+        .controller
+        .expect("radio_button_node requires controller to be set");
+    controller.with_mut(|c| c.update_animation(current_frame_nanos()));
+    if controller.with(|c| c.is_animating()) {
+        let controller_for_frame = controller;
+        receive_frame_nanos(move |frame_nanos| {
+            let is_animating = controller_for_frame.with_mut(|controller| {
+                controller.update_animation(frame_nanos);
+                controller.is_animating()
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
     let is_selected = controller.with(|c| c.is_selected());
@@ -296,11 +320,14 @@ pub fn radio_button_with_controller(
         width: args.stroke_width,
     };
 
-    let on_click = Arc::new(closure!(clone args.on_select, clone controller, || {
-        if controller.with_mut(|c| c.select()) {
-            on_select(true);
+    let on_click = {
+        let on_select = args.on_select.clone();
+        move || {
+            if controller.with_mut(|c| c.select()) {
+                on_select.call(true);
+            }
         }
-    })) as Arc<dyn Fn() + Send + Sync>;
+    };
 
     let state_layer_size = RadioButtonDefaults::STATE_LAYER_SIZE;
     let state_layer_radius = Dp(state_layer_size.0 / 2.0);
@@ -323,7 +350,7 @@ pub fn radio_button_with_controller(
     let mut state_layer_args = state_layer_args;
     state_layer_args.set_ripple_state(ripple_state);
 
-    let mut modifier = args.modifier.size(target_size, target_size);
+    let mut modifier = args.modifier.clone().size(target_size, target_size);
     if args.enabled {
         let ripple_spec = RippleSpec {
             bounded: false,
@@ -333,13 +360,12 @@ pub fn radio_button_with_controller(
         let press_handler = ripple_state.map(|state| {
             let spec = ripple_spec;
             let size = ripple_size;
-            Arc::new(move |ctx: PointerEventContext| {
+            move |ctx: PointerEventContext| {
                 state.with_mut(|s| s.start_animation_with_spec(ctx.normalized_pos, size, spec));
-            })
+            }
         });
-        let release_handler = ripple_state.map(|state| {
-            Arc::new(move |_ctx: PointerEventContext| state.with_mut(|s| s.release()))
-        });
+        let release_handler = ripple_state
+            .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
         let mut selectable_args = SelectableArgs::new(is_selected, on_click.clone())
             .enabled(true)
             .role(Role::RadioButton);
@@ -369,7 +395,12 @@ pub fn radio_button_with_controller(
             let args = args.clone();
             let ring_style = ring_style.clone();
             scope.child(move || {
-                surface(state_layer_args, move || {
+                let args = args.clone();
+                let ring_style = ring_style.clone();
+                let state_layer_args = state_layer_args.clone();
+                surface(&crate::surface::SurfaceArgs::with_child(state_layer_args, move || {
+                    let args = args.clone();
+                    let ring_style = ring_style.clone();
                     boxed(
                         BoxedArgs::default()
                             .alignment(Alignment::Center)
@@ -378,11 +409,12 @@ pub fn radio_button_with_controller(
                             let args = args.clone();
                             let ring_style = ring_style.clone();
                             center.child(move || {
-                                surface(
+                                let args = args.clone();
+                                surface(&crate::surface::SurfaceArgs::with_child(
                                     SurfaceArgs::default()
                                         .modifier(Modifier::new().size(args.size, args.size))
                                         .shape(Shape::Ellipse)
-                                        .style(ring_style),
+                                        .style(ring_style.clone()),
                                     {
                                         let dot_size_px = args.dot_size.to_px();
                                         move || {
@@ -401,7 +433,7 @@ pub fn radio_button_with_controller(
                                                         dot_scope.child({
                                                             let dot_color = active_dot_color;
                                                             move || {
-                                                                surface(
+                                                                surface(&crate::surface::SurfaceArgs::with_child(
                                                                     SurfaceArgs::default()
                                                                         .modifier(
                                                                             Modifier::new().constrain(
@@ -424,7 +456,7 @@ pub fn radio_button_with_controller(
                                                                             },
                                                                         ),
                                                                     || {},
-                                                                );
+                                                                ));
                                                             }
                                                         });
                                                     },
@@ -432,11 +464,11 @@ pub fn radio_button_with_controller(
                                             }
                                         }
                                     },
-                                );
+                                ));
                             });
                         },
                     );
-                });
+                }));
             });
         },
     );

@@ -4,10 +4,13 @@
 //!
 //! Group related content into a single, elevated or outlined container.
 
-use std::{sync::Arc, time::Instant};
+use std::sync::Arc;
 
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, InputHandlerInput, Modifier, State, remember, tessera, use_context};
+use tessera_ui::{
+    Callback, Color, Dp, Modifier, State, current_frame_nanos, receive_frame_nanos, remember,
+    tessera, use_context,
+};
 
 use crate::{
     column::{ColumnArgs, ColumnScope, column},
@@ -34,7 +37,7 @@ fn composite_over(base: Color, overlay: Color) -> Color {
     Color::new(r, g, b, out_a)
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 struct Spring1D {
     value: f32,
     velocity: f32,
@@ -82,16 +85,16 @@ impl Spring1D {
     }
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 struct CardElevationSpring {
-    last_frame_time: Option<Instant>,
+    last_frame_nanos: Option<u64>,
     spring: Spring1D,
 }
 
 impl CardElevationSpring {
     fn new(initial: Dp) -> Self {
         Self {
-            last_frame_time: None,
+            last_frame_nanos: None,
             spring: Spring1D::new(initial.0 as f32),
         }
     }
@@ -104,15 +107,19 @@ impl CardElevationSpring {
         self.spring.snap_to(target.0 as f32);
     }
 
-    fn tick(&mut self, now: Instant) {
-        let dt = if let Some(last) = self.last_frame_time {
-            now.saturating_duration_since(last).as_secs_f32()
+    fn tick(&mut self, frame_nanos: u64) {
+        let dt = if let Some(last_frame_nanos) = self.last_frame_nanos {
+            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
         } else {
             1.0 / 60.0
         };
-        self.last_frame_time = Some(now);
+        self.last_frame_nanos = Some(frame_nanos);
         self.spring
             .update(dt, DEFAULT_SPATIAL_STIFFNESS, DEFAULT_SPATIAL_DAMPING_RATIO);
+    }
+
+    fn is_animating(&self) -> bool {
+        (self.spring.value - self.spring.target).abs() >= 0.01 || self.spring.velocity.abs() >= 0.01
     }
 
     fn value_dp(&self) -> Dp {
@@ -121,7 +128,7 @@ impl CardElevationSpring {
 }
 
 /// Visual variants supported by [`card`].
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, PartialEq, Copy, Debug, Default)]
 pub enum CardVariant {
     /// Filled cards provide subtle separation from the background.
     #[default]
@@ -134,7 +141,7 @@ pub enum CardVariant {
 
 /// Represents the container and content colors used in a card in different
 /// states.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct CardColors {
     /// Container color used when enabled.
     pub container_color: Color,
@@ -165,7 +172,7 @@ impl CardColors {
 }
 
 /// Represents a border stroke for card containers.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct CardBorder {
     /// Border width.
     pub width: Dp,
@@ -174,7 +181,7 @@ pub struct CardBorder {
 }
 
 /// Represents the elevation for a card in different states.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct CardElevation {
     default_elevation: Dp,
     pressed_elevation: Dp,
@@ -371,7 +378,7 @@ impl CardDefaults {
 }
 
 /// Arguments for the [`card`] component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct CardArgs {
     /// Optional modifier chain applied to the card subtree.
     pub modifier: Modifier,
@@ -381,7 +388,7 @@ pub struct CardArgs {
     pub enabled: bool,
     /// Optional click handler for a clickable card.
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// Optional shared interaction state for elevation and state layers.
     #[setters(strip_option)]
     pub interaction_state: Option<State<InteractionState>>,
@@ -405,13 +412,13 @@ impl CardArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
         self
     }
 }
@@ -475,22 +482,71 @@ impl Default for CardArgs {
 ///
 /// #[tessera]
 /// fn component() {
-/// #     material_theme(
+/// #     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #         || MaterialTheme::default(),
 /// #         || {
 ///     card(CardArgs::filled(), |_scope| {});
 /// #         },
 /// #     );
+/// #     material_theme(&args);
 /// }
 ///
 /// component();
 /// ```
-#[tessera]
-pub fn card<F>(args: impl Into<CardArgs>, content: F)
+pub fn card<F>(args: CardArgs, content: F)
 where
-    F: FnOnce(&mut ColumnScope) + Send + Sync + 'static,
+    F: for<'a> Fn(&mut ColumnScope<'a>) + Send + Sync + 'static,
 {
-    let args: CardArgs = args.into();
+    let render_args = CardRenderArgs {
+        modifier: args.modifier,
+        on_click: args.on_click,
+        enabled: args.enabled,
+        variant: args.variant,
+        interaction_state: args.interaction_state,
+        shape: args.shape,
+        colors: args.colors,
+        elevation: args.elevation,
+        border: args.border,
+        content: Arc::new(content),
+    };
+    card_node(&render_args);
+}
+
+type CardContentBuilder = dyn for<'a> Fn(&mut ColumnScope<'a>) + Send + Sync;
+
+#[derive(Clone)]
+struct CardRenderArgs {
+    modifier: Modifier,
+    on_click: Option<Callback>,
+    enabled: bool,
+    variant: CardVariant,
+    interaction_state: Option<State<InteractionState>>,
+    shape: Option<Shape>,
+    colors: Option<CardColors>,
+    elevation: Option<CardElevation>,
+    border: Option<CardBorder>,
+    content: Arc<CardContentBuilder>,
+}
+
+impl PartialEq for CardRenderArgs {
+    fn eq(&self, other: &Self) -> bool {
+        self.modifier == other.modifier
+            && self.on_click == other.on_click
+            && self.enabled == other.enabled
+            && self.variant == other.variant
+            && self.interaction_state == other.interaction_state
+            && self.shape == other.shape
+            && self.colors == other.colors
+            && self.elevation == other.elevation
+            && self.border == other.border
+            && Arc::ptr_eq(&self.content, &other.content)
+    }
+}
+
+#[tessera]
+fn card_node(args: &CardRenderArgs) {
+    let args = args.clone();
+    let content = Arc::clone(&args.content);
 
     let shape = args.shape.unwrap_or_else(|| match args.variant {
         CardVariant::Filled => CardDefaults::shape(),
@@ -531,17 +587,31 @@ where
     let elevation_spring = remember(|| CardElevationSpring::new(elevation.default_elevation()));
 
     let enabled = args.enabled;
-    input_handler(move |_input: InputHandlerInput| {
-        let now = Instant::now();
-        let target = elevation.target(enabled, interaction_state);
-        elevation_spring.with_mut(|spring| {
-            spring.set_target(target);
-            if !enabled {
-                spring.snap_to(target);
-            }
-            spring.tick(now);
-        });
+    let frame_nanos = current_frame_nanos();
+    let target = elevation.target(enabled, interaction_state);
+    let should_schedule_frame = elevation_spring.with_mut(|spring| {
+        spring.set_target(target);
+        if !enabled {
+            spring.snap_to(target);
+        }
+        spring.tick(frame_nanos);
+        spring.is_animating()
     });
+
+    if should_schedule_frame {
+        let elevation_spring_for_frame = elevation_spring;
+        receive_frame_nanos(move |frame_nanos| {
+            let is_animating = elevation_spring_for_frame.with_mut(|spring| {
+                spring.tick(frame_nanos);
+                spring.is_animating()
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
 
     let shadow_elevation = if clickable {
         elevation_spring.with(|s| s.value_dp())
@@ -576,11 +646,17 @@ where
         surface_args = surface_args.interaction_state(state);
     }
 
-    if let Some(on_click) = args.on_click {
+    if let Some(on_click) = args.on_click.clone() {
         surface_args = surface_args.on_click_shared(on_click);
     }
 
-    surface(surface_args, move || {
-        column(ColumnArgs::default(), content);
-    });
+    surface(&crate::surface::SurfaceArgs::with_child(
+        surface_args,
+        move || {
+            let content = Arc::clone(&content);
+            column(ColumnArgs::default(), move |scope| {
+                (content)(scope);
+            });
+        },
+    ));
 }

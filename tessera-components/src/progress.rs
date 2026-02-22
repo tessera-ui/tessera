@@ -11,7 +11,7 @@ use tessera_ui::{
     ParentConstraint, Px, PxPosition,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    remember, tessera, use_context,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -519,7 +519,7 @@ fn stop_indicator_bounds(width: Px, height: Px) -> (PxPosition, Px) {
 }
 
 /// Arguments for configuring a Material Design linear progress indicator.
-#[derive(Clone, Debug, Setters)]
+#[derive(PartialEq, Clone, Debug, Setters)]
 pub struct LinearProgressIndicatorArgs {
     /// Current progress in the range 0.0..=1.0.
     ///
@@ -599,123 +599,136 @@ impl Default for LinearProgressIndicatorArgs {
 /// use tessera_components::progress::{LinearProgressIndicatorArgs, linear_progress_indicator};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
 /// #     || {
-/// linear_progress_indicator(LinearProgressIndicatorArgs::default().progress(0.75));
+/// linear_progress_indicator(&LinearProgressIndicatorArgs::default().progress(0.75));
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn linear_progress_indicator(args: impl Into<LinearProgressIndicatorArgs>) {
-    let args: LinearProgressIndicatorArgs = args.into();
-    let modifier = args.modifier;
-    modifier.run(move || linear_progress_indicator_inner(args));
-}
+pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
+    let args: LinearProgressIndicatorArgs = args.clone();
+    let modifier = args.modifier.clone();
+    modifier.run(move || {
+        let args_for_accessibility = args.clone();
+        let animation_start = remember(Instant::now);
+        let frame_tick = remember(|| 0_u64);
+        let should_receive_frames = remember(|| args_for_accessibility.progress.is_none());
+        should_receive_frames.set(args_for_accessibility.progress.is_none());
 
-#[tessera]
-fn linear_progress_indicator_inner(args: LinearProgressIndicatorArgs) {
-    let args_for_accessibility = args.clone();
-    let animation_start = remember(Instant::now);
-
-    let segment_shape = if args.stroke_cap == ProgressStrokeCap::Butt {
-        Shape::RECTANGLE
-    } else {
-        Shape::capsule()
-    };
-
-    let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
-    if let Some(label) = args_for_accessibility.accessibility_label.clone() {
-        semantics = semantics.label(label);
-    }
-    if let Some(description) = args_for_accessibility.accessibility_description.clone() {
-        semantics = semantics.description(description);
-    }
-    if let Some(progress) = args_for_accessibility.progress {
-        let progress = if progress.is_nan() {
-            0.0
-        } else {
-            progress.clamp(0.0, 1.0)
-        };
-        semantics = semantics
-            .numeric_range(0.0, 1.0)
-            .numeric_value(progress as f64);
-    }
-
-    let args_for_children = args.clone();
-    let args_for_measure = args;
-    let animation_start_for_measure = animation_start;
-
-    Modifier::new().semantics(semantics).run(move || {
-        if args_for_children.progress.is_some() {
-            surface(
-                SurfaceArgs::default()
-                    .style(args_for_children.track_color.into())
-                    .shape(segment_shape)
-                    .modifier(Modifier::new().fill_max_size()),
-                || {},
-            );
-            surface(
-                SurfaceArgs::default()
-                    .style(args_for_children.color.into())
-                    .shape(segment_shape)
-                    .modifier(Modifier::new().fill_max_size()),
-                || {},
-            );
-            if args_for_children.draw_stop_indicator {
-                let stop_shape = if args_for_children.stroke_cap == ProgressStrokeCap::Butt {
-                    Shape::RECTANGLE
-                } else {
-                    Shape::Ellipse
-                };
-                surface(
-                    SurfaceArgs::default()
-                        .style(args_for_children.color.into())
-                        .shape(stop_shape)
-                        .modifier(Modifier::new().fill_max_size()),
-                    || {},
-                );
-            }
-        } else {
-            for (color, shape) in [
-                (args_for_children.track_color, segment_shape),
-                (args_for_children.color, segment_shape),
-                (args_for_children.track_color, segment_shape),
-                (args_for_children.color, segment_shape),
-                (args_for_children.track_color, segment_shape),
-            ] {
-                surface(
-                    SurfaceArgs::default()
-                        .style(color.into())
-                        .shape(shape)
-                        .modifier(Modifier::new().fill_max_size()),
-                    || {},
-                );
-            }
+        if should_receive_frames.get() {
+            let frame_tick_for_next = frame_tick;
+            let should_receive_frames_for_frame = should_receive_frames;
+            receive_frame_nanos(move |frame_nanos| {
+                if !should_receive_frames_for_frame.get() {
+                    return tessera_ui::FrameNanosControl::Stop;
+                }
+                frame_tick_for_next.set(frame_nanos);
+                tessera_ui::FrameNanosControl::Continue
+            });
         }
 
-        let animation_cycle = if args_for_measure.progress.is_some() {
-            None
+        let segment_shape = if args.stroke_cap == ProgressStrokeCap::Butt {
+            Shape::RECTANGLE
         } else {
-            Some(linear_cycle_progress(
-                animation_start_for_measure.get(),
-                1750,
-            ))
+            Shape::capsule()
         };
-        layout(LinearProgressLayout {
-            progress: args_for_measure.progress,
-            stroke_cap: args_for_measure.stroke_cap,
-            gap_size: args_for_measure.gap_size,
-            draw_stop_indicator: args_for_measure.draw_stop_indicator,
-            animation_cycle,
+
+        let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
+        if let Some(label) = args_for_accessibility.accessibility_label.clone() {
+            semantics = semantics.label(label);
+        }
+        if let Some(description) = args_for_accessibility.accessibility_description.clone() {
+            semantics = semantics.description(description);
+        }
+        if let Some(progress) = args_for_accessibility.progress {
+            let progress = if progress.is_nan() {
+                0.0
+            } else {
+                progress.clamp(0.0, 1.0)
+            };
+            semantics = semantics
+                .numeric_range(0.0, 1.0)
+                .numeric_value(progress as f64);
+        }
+
+        let args_for_children = args.clone();
+        let args_for_measure = args.clone();
+        let animation_start_for_measure = animation_start;
+
+        Modifier::new().semantics(semantics).run(move || {
+            if args_for_children.progress.is_some() {
+                surface(&crate::surface::SurfaceArgs::with_child(
+                    SurfaceArgs::default()
+                        .style(args_for_children.track_color.into())
+                        .shape(segment_shape)
+                        .modifier(Modifier::new().fill_max_size()),
+                    || {},
+                ));
+                surface(&crate::surface::SurfaceArgs::with_child(
+                    SurfaceArgs::default()
+                        .style(args_for_children.color.into())
+                        .shape(segment_shape)
+                        .modifier(Modifier::new().fill_max_size()),
+                    || {},
+                ));
+                if args_for_children.draw_stop_indicator {
+                    let stop_shape = if args_for_children.stroke_cap == ProgressStrokeCap::Butt {
+                        Shape::RECTANGLE
+                    } else {
+                        Shape::Ellipse
+                    };
+                    surface(&crate::surface::SurfaceArgs::with_child(
+                        SurfaceArgs::default()
+                            .style(args_for_children.color.into())
+                            .shape(stop_shape)
+                            .modifier(Modifier::new().fill_max_size()),
+                        || {},
+                    ));
+                }
+            } else {
+                for (color, shape) in [
+                    (args_for_children.track_color, segment_shape),
+                    (args_for_children.color, segment_shape),
+                    (args_for_children.track_color, segment_shape),
+                    (args_for_children.color, segment_shape),
+                    (args_for_children.track_color, segment_shape),
+                ] {
+                    surface(&crate::surface::SurfaceArgs::with_child(
+                        SurfaceArgs::default()
+                            .style(color.into())
+                            .shape(shape)
+                            .modifier(Modifier::new().fill_max_size()),
+                        || {},
+                    ));
+                }
+            }
+
+            let animation_cycle = if args_for_measure.progress.is_some() {
+                None
+            } else {
+                Some(linear_cycle_progress(
+                    animation_start_for_measure.get(),
+                    1750,
+                ))
+            };
+            layout(LinearProgressLayout {
+                progress: args_for_measure.progress,
+                stroke_cap: args_for_measure.stroke_cap,
+                gap_size: args_for_measure.gap_size,
+                draw_stop_indicator: args_for_measure.draw_stop_indicator,
+                animation_cycle,
+            });
         });
     });
 }
 
 /// Arguments for configuring a Material Design circular progress indicator.
-#[derive(Clone, Debug, Setters)]
+#[derive(PartialEq, Clone, Debug, Setters)]
 pub struct CircularProgressIndicatorArgs {
     /// Current progress in the range 0.0..=1.0.
     ///
@@ -855,20 +868,36 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// };
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
 /// #     || {
-/// circular_progress_indicator(CircularProgressIndicatorArgs::default().progress(0.6));
+/// circular_progress_indicator(&CircularProgressIndicatorArgs::default().progress(0.6));
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn circular_progress_indicator(args: impl Into<CircularProgressIndicatorArgs>) {
-    let args: CircularProgressIndicatorArgs = args.into();
+pub fn circular_progress_indicator(args: &CircularProgressIndicatorArgs) {
+    let args: CircularProgressIndicatorArgs = args.clone();
     let args_for_accessibility = args.clone();
     let animation_start = remember(Instant::now);
+    let frame_tick = remember(|| 0_u64);
+    let should_receive_frames = remember(|| args_for_accessibility.progress.is_none());
+    should_receive_frames.set(args_for_accessibility.progress.is_none());
+
+    if should_receive_frames.get() {
+        let frame_tick_for_next = frame_tick;
+        let should_receive_frames_for_frame = should_receive_frames;
+        receive_frame_nanos(move |frame_nanos| {
+            if !should_receive_frames_for_frame.get() {
+                return tessera_ui::FrameNanosControl::Stop;
+            }
+            frame_tick_for_next.set(frame_nanos);
+            tessera_ui::FrameNanosControl::Continue
+        });
+    }
 
     let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
     if let Some(label) = args_for_accessibility.accessibility_label.clone() {
@@ -904,7 +933,7 @@ pub fn circular_progress_indicator(args: impl Into<CircularProgressIndicatorArgs
 }
 
 /// Arguments for the `progress` component.
-#[derive(Clone, Debug, Setters)]
+#[derive(PartialEq, Clone, Debug, Setters)]
 pub struct ProgressArgs {
     /// The current value of the progress bar, ranging from 0.0 to 1.0.
     pub value: f32,
@@ -961,21 +990,21 @@ impl Default for ProgressArgs {
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// // Creates a progress bar that is 75% complete.
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
 /// #     || {
-/// progress(ProgressArgs::default().value(0.75));
+/// progress(&ProgressArgs::default().value(0.75));
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn progress(args: impl Into<ProgressArgs>) {
-    let args: ProgressArgs = args.into();
-
+pub fn progress(args: &ProgressArgs) {
+    let args: ProgressArgs = args.clone();
     linear_progress_indicator(
-        LinearProgressIndicatorArgs::default()
+        &LinearProgressIndicatorArgs::default()
             .progress(args.value)
             .modifier(args.modifier)
             .color(args.progress_color)

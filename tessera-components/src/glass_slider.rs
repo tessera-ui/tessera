@@ -3,12 +3,10 @@
 //! ## Usage
 //!
 //! Use to select a value from a continuous range.
-use std::sync::Arc;
-
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, Px, PxPosition, State,
+    CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
+    MeasurementError, Modifier, Px, PxPosition, State,
     accesskit::Role,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -72,7 +70,7 @@ impl Default for GlassSliderController {
 }
 
 /// Arguments for the `glass_slider` component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct GlassSliderArgs {
     /// The current value of the slider, ranging from 0.0 to 1.0.
     pub value: f32,
@@ -82,7 +80,7 @@ pub struct GlassSliderArgs {
 
     /// Callback function triggered when the slider's value changes.
     #[setters(skip)]
-    pub on_change: Arc<dyn Fn(f32) + Send + Sync>,
+    pub on_change: CallbackWith<f32>,
 
     /// The height of the slider track.
     pub track_height: Dp,
@@ -107,6 +105,12 @@ pub struct GlassSliderArgs {
     /// Optional accessibility description.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional external controller for drag and focus state.
+    ///
+    /// When this is `None`, `glass_slider` creates and owns an internal
+    /// controller.
+    #[setters(skip)]
+    pub controller: Option<State<GlassSliderController>>,
 }
 
 impl GlassSliderArgs {
@@ -115,13 +119,19 @@ impl GlassSliderArgs {
     where
         F: Fn(f32) + Send + Sync + 'static,
     {
-        self.on_change = Arc::new(on_change);
+        self.on_change = CallbackWith::new(on_change);
         self
     }
 
     /// Sets the on_change handler using a shared callback.
-    pub fn on_change_shared(mut self, on_change: Arc<dyn Fn(f32) + Send + Sync>) -> Self {
-        self.on_change = on_change;
+    pub fn on_change_shared(mut self, on_change: impl Into<CallbackWith<f32>>) -> Self {
+        self.on_change = on_change.into();
+        self
+    }
+
+    /// Sets an external glass slider controller.
+    pub fn controller(mut self, controller: State<GlassSliderController>) -> Self {
+        self.controller = Some(controller);
         self
     }
 }
@@ -131,7 +141,7 @@ impl Default for GlassSliderArgs {
         Self {
             value: 0.0,
             modifier: default_slider_modifier(),
-            on_change: Arc::new(|_| {}),
+            on_change: CallbackWith::new(|_| {}),
             track_height: Dp(12.0),
             track_tint_color: Color::new(0.3, 0.3, 0.3, 0.15),
             progress_tint_color: Color::new(0.5, 0.7, 1.0, 0.25),
@@ -140,8 +150,16 @@ impl Default for GlassSliderArgs {
             disabled: false,
             accessibility_label: None,
             accessibility_description: None,
+            controller: None,
         }
     }
+}
+
+#[derive(Clone, PartialEq)]
+struct GlassSliderProgressFillArgs {
+    value: f32,
+    tint_color: Color,
+    blur_radius: Dp,
 }
 
 fn default_slider_modifier() -> Modifier {
@@ -150,7 +168,7 @@ fn default_slider_modifier() -> Modifier {
 
 /// Helper: check if a cursor position is inside a measured component area.
 /// Extracted to reduce duplication and keep the input handler concise.
-fn cursor_within_component(cursor_pos: Option<PxPosition>, computed: &ComputedData) -> bool {
+fn cursor_within_bounds(cursor_pos: Option<PxPosition>, computed: &ComputedData) -> bool {
     if let Some(pos) = cursor_pos {
         let within_x = pos.x.0 >= 0 && pos.x.0 < computed.width.0;
         let within_y = pos.y.0 >= 0 && pos.y.0 < computed.height.0;
@@ -215,16 +233,14 @@ fn process_cursor_events(
 ///
 /// - `args` — configures the slider's value, appearance, and `on_change`
 ///   callback; see [`GlassSliderArgs`].
-/// - `controller` — optional controller; use [`glass_slider_with_controller`]
-///   to provide your own.
+/// - `controller` — optional controller; use [`glass_slider`] to provide your
+///   own.
 ///
 /// ## Examples
 ///
 /// ```
 /// use std::sync::{Arc, Mutex};
-/// use tessera_components::glass_slider::{
-///     GlassSliderArgs, GlassSliderController, glass_slider_with_controller,
-/// };
+/// use tessera_components::glass_slider::{GlassSliderArgs, GlassSliderController, glass_slider};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
@@ -235,16 +251,17 @@ fn process_cursor_events(
 ///
 ///     let on_change = {
 ///         let slider_value = slider_value.clone();
-///         Arc::new(move |new_value| {
+///         move |new_value| {
 ///             *slider_value.lock().unwrap() = new_value;
-///         })
+///         }
 ///     };
 ///
 ///     let args = GlassSliderArgs::default()
 ///         .value(*slider_value.lock().unwrap())
-///         .on_change_shared(on_change);
+///         .on_change(on_change)
+///         .controller(slider_controller);
 ///
-///     glass_slider_with_controller(args, slider_controller);
+///     glass_slider(&args);
 ///
 ///     // For the doctest, we can simulate the callback.
 ///     assert_eq!(*slider_value.lock().unwrap(), 0.5);
@@ -253,22 +270,28 @@ fn process_cursor_events(
 /// demo();
 /// ```
 #[tessera]
-pub fn glass_slider(args: impl Into<GlassSliderArgs>) {
-    let args: GlassSliderArgs = args.into();
-    let controller = remember(GlassSliderController::new);
-    glass_slider_with_controller(args, controller);
+pub fn glass_slider(args: &GlassSliderArgs) {
+    let mut slider_args = args.clone();
+    let controller = slider_args
+        .controller
+        .unwrap_or_else(|| remember(GlassSliderController::new));
+    slider_args.controller = Some(controller);
+    glass_slider_node(&slider_args);
 }
 
 #[tessera]
-fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
-    fluid_glass(
+fn glass_slider_progress_fill_node(args: &GlassSliderProgressFillArgs) {
+    let value = args.value;
+    let tint_color = args.tint_color;
+    let blur_radius = args.blur_radius;
+    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
         FluidGlassArgs::default()
             .tint_color(tint_color)
             .blur_radius(blur_radius)
             .shape(Shape::capsule())
             .refraction_amount(0.0),
         || {},
-    );
+    ));
 
     let clamped = value.clamp(0.0, 1.0);
     layout(GlassSliderFillLayout { value: clamped });
@@ -321,49 +344,13 @@ impl LayoutSpec for GlassSliderFillLayout {
     }
 }
 
-/// # glass_slider_with_controller
-///
-/// Controlled glass slider variant.
-///
-/// # Usage
-///
-/// Use when you need a slider with a glassmorphic style and explicit control
-/// over its state.
-///
-/// # Parameters
-///
-/// - `args` — configures the slider's value, appearance, and `on_change`
-///   callback; see [`GlassSliderArgs`].
-/// - `controller` — an explicit [`GlassSliderController`] to manage the
-///   slider's state
-///
-/// # Examples
-///
-/// ```
-/// use std::sync::Arc;
-/// use tessera_components::glass_slider::{
-///     GlassSliderArgs, GlassSliderController, glass_slider_with_controller,
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn foo() {
-///     let controller = remember(|| GlassSliderController::new());
-///     glass_slider_with_controller(
-///         GlassSliderArgs::default().value(0.3).on_change(|v| {
-///             println!("Slider value changed to {}", v);
-///         }),
-///         controller,
-///     );
-/// }
-/// ```
 #[tessera]
-pub fn glass_slider_with_controller(
-    args: impl Into<GlassSliderArgs>,
-    controller: State<GlassSliderController>,
-) {
-    let args: GlassSliderArgs = args.into();
-    let mut modifier = args.modifier;
+fn glass_slider_node(args: &GlassSliderArgs) {
+    let args = args.clone();
+    let controller = args
+        .controller
+        .expect("glass_slider_node requires controller to be set");
+    let mut modifier = args.modifier.clone();
     let mut semantics = SemanticsArgs::new().role(Role::Slider);
     if let Some(label) = args.accessibility_label.clone() {
         semantics = semantics.label(label);
@@ -382,13 +369,21 @@ pub fn glass_slider_with_controller(
     };
     modifier = modifier.semantics(semantics);
 
-    modifier.run(move || glass_slider_inner(args, controller));
+    modifier.run(move || {
+        let mut inner_args = args.clone();
+        inner_args.controller = Some(controller);
+        glass_slider_inner_node(&inner_args);
+    });
 }
 
 #[tessera]
-fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderController>) {
+fn glass_slider_inner_node(args: &GlassSliderArgs) {
+    let args = args.clone();
+    let controller = args
+        .controller
+        .expect("glass_slider_inner_node requires controller to be set");
     // External track (background) with border - capsule shape
-    fluid_glass(
+    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
         FluidGlassArgs::default()
             .modifier(Modifier::new().fill_max_size())
             .tint_color(args.track_tint_color)
@@ -399,17 +394,22 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
         move || {
             // Internal progress fill - capsule shape using surface
             // Child constraint already excludes padding from the track.
-            glass_slider_progress_fill(args.value, args.progress_tint_color, args.blur_radius);
+            let fill_args = GlassSliderProgressFillArgs {
+                value: args.value,
+                tint_color: args.progress_tint_color,
+                blur_radius: args.blur_radius,
+            };
+            glass_slider_progress_fill_node(&fill_args);
         },
-    );
+    ));
 
     let on_change = args.on_change.clone();
-    let args_for_handler = args.clone();
+    let handler_args = args.clone();
 
     input_handler(move |input| {
-        if !args_for_handler.disabled {
+        if !handler_args.disabled {
             let is_in_component =
-                cursor_within_component(input.cursor_position_rel, &input.computed_data);
+                cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
 
             if is_in_component {
                 input.requests.cursor_icon = CursorIcon::Pointer;
@@ -419,9 +419,9 @@ fn glass_slider_inner(args: GlassSliderArgs, controller: State<GlassSliderContro
                 let width_f = input.computed_data.width.0 as f32;
 
                 if let Some(v) = process_cursor_events(controller, &input, width_f)
-                    && (v - args_for_handler.value).abs() > f32::EPSILON
+                    && (v - handler_args.value).abs() > f32::EPSILON
                 {
-                    on_change(v);
+                    on_change.call(v);
                 }
             }
         }

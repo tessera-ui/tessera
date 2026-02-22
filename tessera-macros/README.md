@@ -38,10 +38,23 @@ fn my_component() {
 
 ```rust
 use tessera_macros::tessera;
-use std::sync::Arc;
+use tessera_ui::{Callback, Prop};
+
+#[derive(Clone)]
+struct ButtonArgs {
+    label: String,
+    on_click: Callback,
+}
+
+impl Prop for ButtonArgs {
+    fn prop_eq(&self, _other: &Self) -> bool {
+        false
+    }
+}
 
 #[tessera]
-fn button_component(label: String, on_click: Arc<dyn Fn()>) {
+fn button_component(args: &ButtonArgs) {
+    let _ = args;
     // Component implementation
     // The macro handles component tree integration
 }
@@ -105,7 +118,9 @@ fn my_component() {
 ```rust
 fn my_component() {
     // Component tree registration
-    TesseraRuntime::write().component_tree.add_node(ComponentNode { ... });
+    TesseraRuntime::with_mut(|runtime| {
+        runtime.component_tree.add_node(ComponentNode { ... });
+    });
     
     // Inject layout and input_handler functions
     let layout = |spec: impl LayoutSpec| { /* ... */ };
@@ -118,9 +133,11 @@ fn my_component() {
         };
         closure()
     };
-    
+
     // Clean up component tree
-    TesseraRuntime::write().component_tree.pop_node();
+    TesseraRuntime::with_mut(|runtime| {
+        runtime.component_tree.pop_node();
+    });
     
     result
 }
@@ -135,17 +152,20 @@ use tessera_macros::tessera;
 use tessera_ui::remember;
 use tessera_components::{
     button::{ButtonArgs, button},
-    text::text,
+    text::{TextArgs, text},
 };
 
 #[tessera]
 fn counter_component() {
     let count = remember(|| 0i32);
 
-    button(
+    button(&ButtonArgs::with_child(
         ButtonArgs::filled(move || count.with_mut(|c| *c += 1)),
-        || text(format!("Count: {}", count.get())),
-    );
+        move || {
+            let label = format!("Count: {}", count.get());
+            text(&TextArgs::from(label));
+        },
+    ));
 }
 ```
 
@@ -153,6 +173,7 @@ fn counter_component() {
 
 ```rust
 use tessera_macros::tessera;
+use tessera_components::text::{TextArgs, text};
 use tessera_ui::{ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px};
 
 #[derive(Clone, PartialEq)]
@@ -174,9 +195,9 @@ impl LayoutSpec for FixedLayout {
 #[tessera]
 fn custom_layout() {
     layout(FixedLayout);
-    
+
     // Child components
-    text("Hello, World!");
+    text(&TextArgs::from("Hello, World!"));
 }
 ```
 

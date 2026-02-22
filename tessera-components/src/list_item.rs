@@ -4,12 +4,10 @@
 //!
 //! Present rows of content in settings, inboxes, or selection lists.
 
-use std::sync::Arc;
-
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, DimensionValue, Dp, Modifier, Px, State, accesskit::Role, provide_context, tessera,
-    use_context,
+    Callback, Color, DimensionValue, Dp, Modifier, Px, RenderSlot, State, accesskit::Role,
+    provide_context, tessera, use_context,
 };
 
 use crate::{
@@ -26,7 +24,7 @@ use crate::{
 };
 
 /// Colors used by list items in different states.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct ListItemColors {
     /// Container color when enabled and not selected.
     pub container_color: Color,
@@ -200,7 +198,7 @@ impl ListItemDefaults {
 }
 
 /// Arguments for the [`list_item`] component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct ListItemArgs {
     /// Modifier chain applied to the list item container.
     pub modifier: Modifier,
@@ -219,10 +217,10 @@ pub struct ListItemArgs {
     pub supporting_text: Option<String>,
     /// Optional leading slot content (icon/avatar/etc.).
     #[setters(skip)]
-    pub leading: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub leading: Option<RenderSlot>,
     /// Optional trailing slot content (icon/switch/etc.).
     #[setters(skip)]
-    pub trailing: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub trailing: Option<RenderSlot>,
     /// Colors used to render the list item.
     pub colors: ListItemColors,
     /// Shape of the list item container.
@@ -238,7 +236,7 @@ pub struct ListItemArgs {
     pub min_height: Option<Dp>,
     /// Optional click handler for the list item.
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// Optional shared interaction state for hover/press feedback.
     #[setters(strip_option)]
     pub interaction_state: Option<State<InteractionState>>,
@@ -261,13 +259,13 @@ impl ListItemArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.leading = Some(Arc::new(leading));
+        self.leading = Some(RenderSlot::new(leading));
         self
     }
 
     /// Set the leading slot content using a shared callback.
-    pub fn leading_shared(mut self, leading: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.leading = Some(leading);
+    pub fn leading_shared(mut self, leading: impl Into<RenderSlot>) -> Self {
+        self.leading = Some(leading.into());
         self
     }
 
@@ -276,13 +274,13 @@ impl ListItemArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.trailing = Some(Arc::new(trailing));
+        self.trailing = Some(RenderSlot::new(trailing));
         self
     }
 
     /// Set the trailing slot content using a shared callback.
-    pub fn trailing_shared(mut self, trailing: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.trailing = Some(trailing);
+    pub fn trailing_shared(mut self, trailing: impl Into<RenderSlot>) -> Self {
+        self.trailing = Some(trailing.into());
         self
     }
 
@@ -291,13 +289,13 @@ impl ListItemArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
         self
     }
 }
@@ -350,21 +348,22 @@ impl Default for ListItemArgs {
 ///
 /// #[tessera]
 /// fn demo() {
-/// #     material_theme(
+/// #     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #         || MaterialTheme::default(),
 /// #         || {
 ///     let args = ListItemArgs::new("Inbox").supporting_text("3 new messages");
 ///     assert_eq!(args.headline, "Inbox");
-///     list_item(args);
+///     list_item(&args);
 /// #         },
 /// #     );
+/// #     material_theme(&args);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn list_item(args: impl Into<ListItemArgs>) {
-    let args: ListItemArgs = args.into();
+pub fn list_item(args: &ListItemArgs) {
+    let args = args.clone();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -445,98 +444,129 @@ pub fn list_item(args: impl Into<ListItemArgs>) {
     let internal_spacing = ListItemDefaults::INTERNAL_SPACING;
     let content_padding = args.content_padding;
 
-    surface(surface_args, move || {
-        let row_modifier = Modifier::new()
-            .constrain(
-                None,
-                Some(DimensionValue::Wrap {
-                    min: Some(Px::from(content_min_height)),
-                    max: None,
-                }),
-            )
-            .padding(content_padding)
-            .fill_max_width();
+    surface(&crate::surface::SurfaceArgs::with_child(
+        surface_args,
+        move || {
+            let headline = headline.clone();
+            let leading = leading.clone();
+            let trailing = trailing.clone();
+            let overline_text = overline_text.clone();
+            let supporting_text = supporting_text.clone();
+            let row_modifier = Modifier::new()
+                .constrain(
+                    None,
+                    Some(DimensionValue::Wrap {
+                        min: Some(Px::from(content_min_height)),
+                        max: None,
+                    }),
+                )
+                .padding(content_padding)
+                .fill_max_width();
 
-        row(
-            RowArgs::default()
-                .modifier(row_modifier)
-                .main_axis_alignment(MainAxisAlignment::Start)
-                .cross_axis_alignment(CrossAxisAlignment::Center),
-            move |row_scope| {
-                if let Some(leading) = leading {
-                    let color = leading_color;
-                    row_scope.child(move || {
-                        render_slot(leading, color, ListItemDefaults::LEADING_MIN_SIZE);
-                    });
-                    row_scope.child(move || {
-                        spacer(Modifier::new().width(internal_spacing));
-                    });
-                }
+            row(
+                RowArgs::default()
+                    .modifier(row_modifier)
+                    .main_axis_alignment(MainAxisAlignment::Start)
+                    .cross_axis_alignment(CrossAxisAlignment::Center),
+                move |row_scope| {
+                    if let Some(leading) = leading.clone() {
+                        let color = leading_color;
+                        row_scope.child(move || {
+                            render_slot(leading.clone(), color, ListItemDefaults::LEADING_MIN_SIZE);
+                        });
+                        row_scope.child(move || {
+                            spacer(&crate::spacer::SpacerArgs::new(
+                                Modifier::new().width(internal_spacing),
+                            ));
+                        });
+                    }
 
-                let overline_text = overline_text.clone();
-                let supporting_text = supporting_text.clone();
-                let headline_text = headline.clone();
-                row_scope.child_weighted(
-                    move || {
-                        column(
-                            ColumnArgs::default()
-                                .modifier(Modifier::new().fill_max_width())
-                                .main_axis_alignment(MainAxisAlignment::Start)
-                                .cross_axis_alignment(CrossAxisAlignment::Start),
-                            move |column_scope| {
-                                if let Some(overline) = overline_text.clone() {
-                                    let color = overline_color;
-                                    column_scope.child(move || {
-                                        render_text_line(overline, typography.label_small, color);
-                                    });
-                                }
-
-                                let color = headline_color;
-                                column_scope.child(move || {
-                                    if headline_text.is_empty() {
-                                        spacer(Modifier::new());
-                                    } else {
-                                        render_text_line(
-                                            headline_text.clone(),
-                                            typography.body_large,
-                                            color,
-                                        );
+                    let overline_text = overline_text.clone();
+                    let supporting_text = supporting_text.clone();
+                    let headline_text = headline.clone();
+                    row_scope.child_weighted(
+                        move || {
+                            let overline_text = overline_text.clone();
+                            let supporting_text = supporting_text.clone();
+                            let headline_text = headline_text.clone();
+                            column(
+                                ColumnArgs::default()
+                                    .modifier(Modifier::new().fill_max_width())
+                                    .main_axis_alignment(MainAxisAlignment::Start)
+                                    .cross_axis_alignment(CrossAxisAlignment::Start),
+                                move |column_scope| {
+                                    if let Some(overline) = overline_text.clone() {
+                                        let color = overline_color;
+                                        column_scope.child(move || {
+                                            render_text_line(
+                                                overline.clone(),
+                                                typography.label_small,
+                                                color,
+                                            );
+                                        });
                                     }
-                                });
 
-                                if let Some(supporting) = supporting_text.clone() {
-                                    let color = supporting_color;
+                                    let color = headline_color;
                                     column_scope.child(move || {
-                                        render_text_line(supporting, typography.body_medium, color);
+                                        if headline_text.is_empty() {
+                                            spacer(
+                                                &crate::spacer::SpacerArgs::new(Modifier::new()),
+                                            );
+                                        } else {
+                                            render_text_line(
+                                                headline_text.clone(),
+                                                typography.body_large,
+                                                color,
+                                            );
+                                        }
                                     });
-                                }
-                            },
-                        );
-                    },
-                    1.0,
-                );
 
-                if let Some(trailing) = trailing {
-                    row_scope.child(move || {
-                        spacer(Modifier::new().width(internal_spacing));
-                    });
-                    let color = trailing_color;
-                    row_scope.child(move || {
-                        render_slot(trailing, color, ListItemDefaults::TRAILING_MIN_SIZE);
-                    });
-                }
-            },
-        );
-    });
+                                    if let Some(supporting) = supporting_text.clone() {
+                                        let color = supporting_color;
+                                        column_scope.child(move || {
+                                            render_text_line(
+                                                supporting.clone(),
+                                                typography.body_medium,
+                                                color,
+                                            );
+                                        });
+                                    }
+                                },
+                            );
+                        },
+                        1.0,
+                    );
+
+                    if let Some(trailing) = trailing.clone() {
+                        row_scope.child(move || {
+                            spacer(&crate::spacer::SpacerArgs::new(
+                                Modifier::new().width(internal_spacing),
+                            ));
+                        });
+                        let color = trailing_color;
+                        row_scope.child(move || {
+                            render_slot(
+                                trailing.clone(),
+                                color,
+                                ListItemDefaults::TRAILING_MIN_SIZE,
+                            );
+                        });
+                    }
+                },
+            );
+        },
+    ));
 }
 
 fn render_text_line(text_value: String, style: crate::theme::TextStyle, color: Color) {
     provide_text_style(style, move || {
-        text(TextArgs::default().text(text_value).color(color));
+        text(&crate::text::TextArgs::from(
+            &TextArgs::default().text(&text_value).color(color),
+        ));
     });
 }
 
-fn render_slot(content: Arc<dyn Fn() + Send + Sync>, color: Color, min_size: Dp) {
+fn render_slot(content: RenderSlot, color: Color, min_size: Dp) {
     provide_context(
         || ContentColor { current: color },
         move || {
@@ -546,7 +576,7 @@ fn render_slot(content: Arc<dyn Fn() + Send + Sync>, color: Color, min_size: Dp)
                     .modifier(Modifier::new().size_in(Some(min_size), None, Some(min_size), None)),
                 move |scope| {
                     scope.child(move || {
-                        content();
+                        content.render();
                     });
                 },
             );

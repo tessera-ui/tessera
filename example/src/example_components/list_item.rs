@@ -4,18 +4,16 @@ use tessera_components::{
     list_item::{ListItemArgs, list_item},
     material_icons::filled,
     modifier::{ModifierExt, Padding},
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, remember, shard, tessera};
-
-#[tessera]
+use tessera_ui::{Dp, Modifier, remember, shard};
 #[shard]
 pub fn list_item_showcase() {
     let selected = remember(|| false);
 
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             column(
@@ -23,7 +21,7 @@ pub fn list_item_showcase() {
                 |scope| {
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .text("List Item Showcase")
                                 .modifier(
                                     Modifier::new()
@@ -34,11 +32,11 @@ pub fn list_item_showcase() {
                         );
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .text("One-line")
                                 .modifier(Modifier::new().padding(Padding::left(Dp(16.0))))
                                 .size(Dp(14.0)),
@@ -47,23 +45,24 @@ pub fn list_item_showcase() {
 
                     scope.child(|| {
                         list_item(
-                            ListItemArgs::new("Inbox")
+                            &ListItemArgs::new("Inbox")
                                 .leading(|| {
-                                    icon(IconArgs::from(filled::inbox_icon()).size(Dp(24.0)));
+                                    icon(&IconArgs::from(filled::inbox_icon()).size(Dp(24.0)));
                                 })
                                 .trailing(|| {
                                     icon(
-                                        IconArgs::from(filled::chevron_right_icon()).size(Dp(20.0)),
+                                        &IconArgs::from(filled::chevron_right_icon())
+                                            .size(Dp(20.0)),
                                     );
                                 }),
                         );
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(12.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0)))));
 
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .text("Two-line (click to toggle selection)")
                                 .modifier(Modifier::new().padding(Padding::left(Dp(16.0))))
                                 .size(Dp(14.0)),
@@ -74,7 +73,7 @@ pub fn list_item_showcase() {
                         let is_selected = selected.get();
                         let status = if is_selected { "On" } else { "Off" };
                         list_item(
-                            ListItemArgs::new("Notifications")
+                            &ListItemArgs::new("Notifications")
                                 .supporting_text(format!("Alerts: {status}"))
                                 .selected(is_selected)
                                 .on_click(move || {
@@ -82,22 +81,24 @@ pub fn list_item_showcase() {
                                 })
                                 .leading(|| {
                                     icon(
-                                        IconArgs::from(filled::notifications_icon()).size(Dp(24.0)),
+                                        &IconArgs::from(filled::notifications_icon())
+                                            .size(Dp(24.0)),
                                     );
                                 })
                                 .trailing(|| {
                                     icon(
-                                        IconArgs::from(filled::chevron_right_icon()).size(Dp(20.0)),
+                                        &IconArgs::from(filled::chevron_right_icon())
+                                            .size(Dp(20.0)),
                                     );
                                 }),
                         );
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(12.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0)))));
 
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .text("Three-line")
                                 .modifier(Modifier::new().padding(Padding::left(Dp(16.0))))
                                 .size(Dp(14.0)),
@@ -106,20 +107,20 @@ pub fn list_item_showcase() {
 
                     scope.child(|| {
                         list_item(
-                            ListItemArgs::new("Security")
+                            &ListItemArgs::new("Security")
                                 .overline_text("Account")
                                 .supporting_text("Two-factor auth and recovery options")
                                 .leading(|| {
-                                    icon(IconArgs::from(filled::settings_icon()).size(Dp(24.0)));
+                                    icon(&IconArgs::from(filled::settings_icon()).size(Dp(24.0)));
                                 }),
                         );
                     });
 
-                    scope.child(|| spacer(Modifier::new().height(Dp(12.0))));
+                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0)))));
 
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .modifier(Modifier::new().padding(Padding::left(Dp(16.0))))
                                 .text("Disabled")
                                 .size(Dp(14.0)),
@@ -128,12 +129,13 @@ pub fn list_item_showcase() {
 
                     scope.child(|| {
                         list_item(
-                            ListItemArgs::new("Do not disturb")
+                            &ListItemArgs::new("Do not disturb")
                                 .supporting_text("Disabled item")
                                 .enabled(false)
                                 .leading(|| {
                                     icon(
-                                        IconArgs::from(filled::notifications_icon()).size(Dp(24.0)),
+                                        &IconArgs::from(filled::notifications_icon())
+                                            .size(Dp(24.0)),
                                     );
                                 }),
                         );
@@ -141,5 +143,5 @@ pub fn list_item_showcase() {
                 },
             );
         },
-    );
+    ));
 }

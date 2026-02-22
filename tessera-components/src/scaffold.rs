@@ -3,10 +3,8 @@
 //! ## Usage
 //!
 //! Layer top/bottom bars, floating buttons, and snackbars above app content.
-use std::sync::Arc;
-
 use derive_setters::Setters;
-use tessera_ui::{Dp, Modifier, tessera};
+use tessera_ui::{Dp, Modifier, RenderSlot, tessera};
 
 use crate::{
     alignment::Alignment,
@@ -15,32 +13,35 @@ use crate::{
 };
 
 /// Configuration arguments for [`scaffold`].
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct ScaffoldArgs {
     /// Modifier chain applied to the scaffold container.
     pub modifier: Modifier,
     /// Padding applied around the content area.
     pub content_padding: Padding,
+    /// Main content slot.
+    #[setters(skip)]
+    pub content: Option<RenderSlot>,
     /// Reserved height for the top bar.
     pub top_bar_height: Dp,
     /// Reserved height for the bottom bar.
     pub bottom_bar_height: Dp,
     /// Optional top bar slot.
     #[setters(skip)]
-    pub top_bar: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub top_bar: Option<RenderSlot>,
     /// Optional bottom bar slot.
     #[setters(skip)]
-    pub bottom_bar: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub bottom_bar: Option<RenderSlot>,
     /// Optional floating action button slot.
     #[setters(skip)]
-    pub floating_action_button: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub floating_action_button: Option<RenderSlot>,
     /// Alignment used for the floating action button.
     pub floating_action_button_alignment: Alignment,
     /// Additional x/y offset applied to the floating action button.
     pub floating_action_button_offset: [Dp; 2],
     /// Optional snackbar host slot.
     #[setters(skip)]
-    pub snackbar_host: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub snackbar_host: Option<RenderSlot>,
     /// Alignment used for the snackbar host.
     pub snackbar_alignment: Alignment,
     /// Additional x/y offset applied to the snackbar host.
@@ -52,6 +53,7 @@ impl Default for ScaffoldArgs {
         Self {
             modifier: Modifier::new().fill_max_size(),
             content_padding: Padding::all(Dp(0.0)),
+            content: None,
             top_bar_height: Dp(0.0),
             bottom_bar_height: Dp(0.0),
             top_bar: None,
@@ -67,18 +69,38 @@ impl Default for ScaffoldArgs {
 }
 
 impl ScaffoldArgs {
+    /// Creates props from base args and a content render function.
+    pub fn with_content(args: ScaffoldArgs, content: impl Fn() + Send + Sync + 'static) -> Self {
+        args.content(content)
+    }
+
+    /// Sets the main content slot.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.content = Some(RenderSlot::new(content));
+        self
+    }
+
+    /// Sets the main content slot using a shared callback.
+    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
+        self.content = Some(content.into());
+        self
+    }
+
     /// Sets the top bar slot content.
     pub fn top_bar<F>(mut self, top_bar: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.top_bar = Some(Arc::new(top_bar));
+        self.top_bar = Some(RenderSlot::new(top_bar));
         self
     }
 
     /// Sets the top bar slot content using a shared callback.
-    pub fn top_bar_shared(mut self, top_bar: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.top_bar = Some(top_bar);
+    pub fn top_bar_shared(mut self, top_bar: impl Into<RenderSlot>) -> Self {
+        self.top_bar = Some(top_bar.into());
         self
     }
 
@@ -87,13 +109,13 @@ impl ScaffoldArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.bottom_bar = Some(Arc::new(bottom_bar));
+        self.bottom_bar = Some(RenderSlot::new(bottom_bar));
         self
     }
 
     /// Sets the bottom bar slot content using a shared callback.
-    pub fn bottom_bar_shared(mut self, bottom_bar: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.bottom_bar = Some(bottom_bar);
+    pub fn bottom_bar_shared(mut self, bottom_bar: impl Into<RenderSlot>) -> Self {
+        self.bottom_bar = Some(bottom_bar.into());
         self
     }
 
@@ -102,16 +124,16 @@ impl ScaffoldArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.floating_action_button = Some(Arc::new(floating_action_button));
+        self.floating_action_button = Some(RenderSlot::new(floating_action_button));
         self
     }
 
     /// Sets the floating action button slot content using a shared callback.
     pub fn floating_action_button_shared(
         mut self,
-        floating_action_button: Arc<dyn Fn() + Send + Sync>,
+        floating_action_button: impl Into<RenderSlot>,
     ) -> Self {
-        self.floating_action_button = Some(floating_action_button);
+        self.floating_action_button = Some(floating_action_button.into());
         self
     }
 
@@ -120,13 +142,13 @@ impl ScaffoldArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.snackbar_host = Some(Arc::new(snackbar_host));
+        self.snackbar_host = Some(RenderSlot::new(snackbar_host));
         self
     }
 
     /// Sets the snackbar host slot content using a shared callback.
-    pub fn snackbar_host_shared(mut self, snackbar_host: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.snackbar_host = Some(snackbar_host);
+    pub fn snackbar_host_shared(mut self, snackbar_host: impl Into<RenderSlot>) -> Self {
+        self.snackbar_host = Some(snackbar_host.into());
         self
     }
 }
@@ -162,7 +184,6 @@ fn overlay_offset(alignment: Alignment, offset: [Dp; 2], bottom_bar_height: Dp) 
 /// ## Parameters
 ///
 /// - `args` — configures slots, insets, and padding; see [`ScaffoldArgs`].
-/// - `content` — closure that renders the main content.
 ///
 /// ## Examples
 ///
@@ -170,33 +191,34 @@ fn overlay_offset(alignment: Alignment, offset: [Dp; 2], bottom_bar_height: Dp) 
 /// use tessera_components::app_bar::{AppBarDefaults, TopAppBarArgs, top_app_bar};
 /// use tessera_components::scaffold::{ScaffoldArgs, scaffold};
 /// use tessera_components::text::{TextArgs, text};
-/// use tessera_components::theme::{MaterialTheme, material_theme};
+/// use tessera_components::theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
-///     material_theme(
+///     material_theme(&MaterialThemeProviderArgs::new(
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let counter = remember(|| 1u32);
 ///             scaffold(
-///                 ScaffoldArgs::default()
+///                 &ScaffoldArgs::default()
 ///                     .top_bar_height(AppBarDefaults::TOP_APP_BAR_HEIGHT)
 ///                     .top_bar(|| {
-///                         top_app_bar(TopAppBarArgs::new("Inbox"));
+///                         top_app_bar(&TopAppBarArgs::new("Inbox"));
+///                     })
+///                     .content(|| {
+///                         text(&TextArgs::default().text("Hello scaffold"));
 ///                     }),
-///                 || {
-///                     text(TextArgs::default().text("Hello scaffold"));
-///                 },
 ///             );
 ///             assert_eq!(counter.get(), 1);
 ///         },
-///     );
+///     ));
 /// }
 /// ```
 #[tessera]
-pub fn scaffold(args: impl Into<ScaffoldArgs>, content: impl FnOnce() + Send + Sync + 'static) {
-    let args: ScaffoldArgs = args.into();
+pub fn scaffold(args: &ScaffoldArgs) {
+    let args = args.clone();
+    let content = args.content.clone();
     let modifier = args.modifier;
     let content_padding = scaffold_content_padding(
         args.content_padding,
@@ -221,38 +243,50 @@ pub fn scaffold(args: impl Into<ScaffoldArgs>, content: impl FnOnce() + Send + S
     );
 
     modifier.run(move || {
+        let content = content.clone();
+        let bottom_bar = bottom_bar.clone();
+        let top_bar = top_bar.clone();
+        let snackbar_host = snackbar_host.clone();
+        let floating_action_button = floating_action_button.clone();
         boxed(BoxedArgs::default(), |scope| {
-            scope.child(move || {
-                Modifier::new()
-                    .padding(content_padding)
-                    .fill_max_size()
-                    .run(content);
-            });
-            if let Some(bottom_bar) = bottom_bar {
-                scope.child_with_alignment(Alignment::BottomCenter, move || {
-                    bottom_bar();
-                });
-            }
-            if let Some(top_bar) = top_bar {
-                scope.child_with_alignment(Alignment::TopCenter, move || {
-                    top_bar();
-                });
-            }
-            if let Some(snackbar_host) = snackbar_host {
-                scope.child_with_alignment(snackbar_alignment, move || {
+            if let Some(content) = content.clone() {
+                scope.child(move || {
+                    let content = content.clone();
                     Modifier::new()
-                        .offset(snackbar_offset[0], snackbar_offset[1])
+                        .padding(content_padding)
+                        .fill_max_size()
                         .run(move || {
-                            snackbar_host();
+                            content.render();
                         });
                 });
             }
-            if let Some(floating_action_button) = floating_action_button {
+            if let Some(bottom_bar) = bottom_bar.clone() {
+                scope.child_with_alignment(Alignment::BottomCenter, move || {
+                    bottom_bar.render();
+                });
+            }
+            if let Some(top_bar) = top_bar.clone() {
+                scope.child_with_alignment(Alignment::TopCenter, move || {
+                    top_bar.render();
+                });
+            }
+            if let Some(snackbar_host) = snackbar_host.clone() {
+                scope.child_with_alignment(snackbar_alignment, move || {
+                    let snackbar_host = snackbar_host.clone();
+                    Modifier::new()
+                        .offset(snackbar_offset[0], snackbar_offset[1])
+                        .run(move || {
+                            snackbar_host.render();
+                        });
+                });
+            }
+            if let Some(floating_action_button) = floating_action_button.clone() {
                 scope.child_with_alignment(fab_alignment, move || {
+                    let floating_action_button = floating_action_button.clone();
                     Modifier::new()
                         .offset(fab_offset[0], fab_offset[1])
                         .run(move || {
-                            floating_action_button();
+                            floating_action_button.render();
                         });
                 });
             }

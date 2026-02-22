@@ -12,21 +12,21 @@ use std::{
 
 use derive_setters::Setters;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId, ParentConstraint, Px,
-    PxPosition, State, key,
+    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId,
+    ParentConstraint, Px, PxPosition, Slot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    scrollable::{ScrollableArgs, ScrollableController, scrollable_with_controller},
+    scrollable::{ScrollableArgs, ScrollableController, scrollable},
 };
 
 const DEFAULT_VIEWPORT_LINES: usize = 8;
 
 /// Defines how grid slots are computed along the cross axis.
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum GridCells {
     /// A fixed number of slots per line.
     Fixed(usize),
@@ -107,7 +107,7 @@ impl LazyGridController {
 }
 
 /// Arguments shared between lazy vertical grids.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct LazyVerticalGridArgs {
     /// Scroll container arguments. Vertical scrolling is enforced.
     pub scrollable: ScrollableArgs,
@@ -129,6 +129,12 @@ pub struct LazyVerticalGridArgs {
     pub content_padding: Dp,
     /// Maximum viewport length reported back to parents.
     pub max_viewport_main: Option<Px>,
+    /// Optional external controller for scroll position and cache.
+    #[setters(skip)]
+    pub controller: Option<State<LazyGridController>>,
+    /// Optional slot builder for lazy grid content.
+    #[setters(skip)]
+    pub content: Option<LazyGridContentSlot>,
 }
 
 impl Default for LazyVerticalGridArgs {
@@ -144,12 +150,37 @@ impl Default for LazyVerticalGridArgs {
             estimated_item_size: Dp(48.0),
             content_padding: Dp(0.0),
             max_viewport_main: Some(Px(8192)),
+            controller: None,
+            content: None,
         }
     }
 }
 
+impl LazyVerticalGridArgs {
+    /// Sets an external lazy grid controller.
+    pub fn controller(mut self, controller: State<LazyGridController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the lazy grid content builder.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync + 'static,
+    {
+        self.content = Some(LazyGridContentSlot::new(content));
+        self
+    }
+
+    /// Sets the lazy grid content builder using a shared slot.
+    pub fn content_shared(mut self, content: impl Into<LazyGridContentSlot>) -> Self {
+        self.content = Some(content.into());
+        self
+    }
+}
+
 /// Arguments shared between lazy horizontal grids.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct LazyHorizontalGridArgs {
     /// Scroll container arguments. Horizontal scrolling is enforced.
     pub scrollable: ScrollableArgs,
@@ -171,6 +202,12 @@ pub struct LazyHorizontalGridArgs {
     pub content_padding: Dp,
     /// Maximum viewport length reported back to parents.
     pub max_viewport_main: Option<Px>,
+    /// Optional external controller for scroll position and cache.
+    #[setters(skip)]
+    pub controller: Option<State<LazyGridController>>,
+    /// Optional slot builder for lazy grid content.
+    #[setters(skip)]
+    pub content: Option<LazyGridContentSlot>,
 }
 
 impl Default for LazyHorizontalGridArgs {
@@ -186,13 +223,68 @@ impl Default for LazyHorizontalGridArgs {
             estimated_item_size: Dp(48.0),
             content_padding: Dp(0.0),
             max_viewport_main: Some(Px(8192)),
+            controller: None,
+            content: None,
         }
+    }
+}
+
+impl LazyHorizontalGridArgs {
+    /// Sets an external lazy grid controller.
+    pub fn controller(mut self, controller: State<LazyGridController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the lazy grid content builder.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync + 'static,
+    {
+        self.content = Some(LazyGridContentSlot::new(content));
+        self
+    }
+
+    /// Sets the lazy grid content builder using a shared slot.
+    pub fn content_shared(mut self, content: impl Into<LazyGridContentSlot>) -> Self {
+        self.content = Some(content.into());
+        self
     }
 }
 
 /// Scope used to add lazily generated children to a lazy grid.
 pub struct LazyGridScope<'a> {
     slots: &'a mut Vec<LazySlot>,
+}
+
+type LazyGridRenderFn = dyn for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync;
+
+/// Shared slot builder for lazy grid content.
+#[derive(Clone, PartialEq)]
+pub struct LazyGridContentSlot(Slot<LazyGridRenderFn>);
+
+impl LazyGridContentSlot {
+    /// Creates a new shared lazy grid content slot.
+    pub fn new<F>(content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync + 'static,
+    {
+        Self(Slot::from_shared(Arc::new(content)))
+    }
+
+    fn render(&self, scope: &mut LazyGridScope<'_>) {
+        let render = self.0.shared();
+        render(scope);
+    }
+}
+
+impl<F> From<F> for LazyGridContentSlot
+where
+    F: for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync + 'static,
+{
+    fn from(value: F) -> Self {
+        Self::new(value)
+    }
 }
 
 impl<'a> LazyGridScope<'a> {
@@ -211,7 +303,7 @@ impl<'a> LazyGridScope<'a> {
         KF: Fn(usize) -> K + Send + Sync + 'static,
         F: Fn(usize) + Send + Sync + 'static,
     {
-        let key_provider = Arc::new(move |idx| {
+        let key_provider = CallbackWith::new(move |idx| {
             let key = key_provider(idx);
             let mut hasher = DefaultHasher::new();
             key.hash(&mut hasher);
@@ -312,7 +404,7 @@ impl<'a> LazyGridScope<'a> {
         self.slots.push(LazySlot::items(
             count,
             slot_builder,
-            Some(Arc::new(slot_key_provider)),
+            Some(CallbackWith::new(slot_key_provider)),
         ));
     }
 
@@ -344,8 +436,6 @@ pub type LazyHorizontalGridScope<'a> = LazyGridScope<'a>;
 ///
 /// - `args` - configures the grid's layout and scrolling behavior; see
 ///   [`LazyVerticalGridArgs`].
-/// - `configure` - a closure that receives a [`LazyVerticalGridScope`] for
-///   adding items to the grid.
 ///
 /// ## Examples
 ///
@@ -360,15 +450,15 @@ pub type LazyHorizontalGridScope<'a> = LazyGridScope<'a>;
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
 ///     lazy_vertical_grid(
-///         LazyVerticalGridArgs::default()
+///         &LazyVerticalGridArgs::default()
 ///             .columns(GridCells::fixed(2))
-///             .overscan(0),
-///         |scope| {
-///             scope.items(4, move |i| {
-///                 rendered.with_mut(|count| *count += 1);
-///                 text(TextArgs::default().text(format!("Tile {i}")));
-///             });
-///         },
+///             .overscan(0)
+///             .content(move |scope| {
+///                 scope.items(4, move |i| {
+///                     rendered.with_mut(|count| *count += 1);
+///                     text(&TextArgs::default().text(format!("Tile {i}")));
+///                 });
+///             }),
 ///     );
 ///     assert_eq!(rendered.get(), 4);
 /// }
@@ -376,81 +466,38 @@ pub type LazyHorizontalGridScope<'a> = LazyGridScope<'a>;
 /// demo();
 /// ```
 #[tessera]
-pub fn lazy_vertical_grid<F>(args: LazyVerticalGridArgs, configure: F)
-where
-    F: FnOnce(&mut LazyVerticalGridScope),
-{
-    let controller = remember(LazyGridController::new);
-    lazy_vertical_grid_with_controller(args, controller, configure);
+pub fn lazy_vertical_grid(args: &LazyVerticalGridArgs) {
+    let args = args.clone();
+    let content = args
+        .content
+        .clone()
+        .unwrap_or_else(|| LazyGridContentSlot::new(|_| {}));
+    let slots = collect_vertical_grid_slots(content);
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(LazyGridController::new));
+    lazy_vertical_grid_slots(args, controller, slots);
 }
 
-/// # lazy_vertical_grid_with_controller
-///
-/// Controlled lazy vertical grid variant that accepts an explicit controller.
-///
-/// ## Usage
-///
-/// Use when you need to preserve scroll state across remounts.
-///
-/// ## Parameters
-///
-/// - `args` - configures the grid's layout and scrolling behavior; see
-///   [`LazyVerticalGridArgs`].
-/// - `controller` - a [`LazyGridController`] that holds scroll offsets and
-///   measurement cache.
-/// - `configure` - a closure that receives a [`LazyVerticalGridScope`] for
-///   adding items to the grid.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::{
-///     lazy_grid::{
-///         GridCells, LazyGridController, LazyVerticalGridArgs, lazy_vertical_grid_with_controller,
-///     },
-///     text::{TextArgs, text},
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let controller = remember(LazyGridController::new);
-///     let rendered = remember(|| 0usize);
-///     lazy_vertical_grid_with_controller(
-///         LazyVerticalGridArgs::default()
-///             .columns(GridCells::fixed(2))
-///             .overscan(0),
-///         controller,
-///         |scope| {
-///             scope.items(2, move |i| {
-///                 rendered.with_mut(|count| *count += 1);
-///                 text(TextArgs::default().text(format!("Cell {i}")));
-///             });
-///         },
-///     );
-///     assert_eq!(rendered.get(), 2);
-/// }
-///
-/// demo();
-/// ```
-#[tessera]
-pub fn lazy_vertical_grid_with_controller<F>(
-    args: LazyVerticalGridArgs,
-    controller: State<LazyGridController>,
-    configure: F,
-) where
-    F: FnOnce(&mut LazyVerticalGridScope),
-{
+fn collect_vertical_grid_slots(content: LazyGridContentSlot) -> Vec<LazySlot> {
     let mut slots = Vec::new();
     {
         let mut scope = LazyVerticalGridScope { slots: &mut slots };
-        configure(&mut scope);
+        content.render(&mut scope);
     }
+    slots
+}
 
+fn lazy_vertical_grid_slots(
+    args: LazyVerticalGridArgs,
+    controller: State<LazyGridController>,
+    slots: Vec<LazySlot>,
+) {
     let mut scrollable_args = args.scrollable.clone();
     scrollable_args.vertical = true;
     scrollable_args.horizontal = false;
 
+    let scroll_controller = remember(ScrollableController::default);
     let view_args = LazyGridViewArgs {
         axis: LazyGridAxis::Vertical,
         grid_cells: args.columns,
@@ -463,12 +510,16 @@ pub fn lazy_vertical_grid_with_controller<F>(
         max_viewport_main: args.max_viewport_main,
         padding_main: sanitize_spacing(Px::from(args.content_padding)),
         padding_cross: sanitize_spacing(Px::from(args.content_padding)),
+        controller,
+        slots,
+        scroll_controller,
     };
-
-    let scroll_controller = remember(ScrollableController::default);
-    scrollable_with_controller(scrollable_args, scroll_controller, move || {
-        lazy_grid_view(view_args, controller, slots.clone(), scroll_controller);
-    });
+    let scrollable_args = scrollable_args
+        .controller(scroll_controller)
+        .child(move || {
+            lazy_grid_view(&view_args);
+        });
+    scrollable(&scrollable_args);
 }
 /// # lazy_horizontal_grid
 ///
@@ -483,8 +534,6 @@ pub fn lazy_vertical_grid_with_controller<F>(
 ///
 /// - `args` - configures the grid's layout and scrolling behavior; see
 ///   [`LazyHorizontalGridArgs`].
-/// - `configure` - a closure that receives a [`LazyHorizontalGridScope`] for
-///   adding items to the grid.
 ///
 /// ## Examples
 ///
@@ -499,15 +548,15 @@ pub fn lazy_vertical_grid_with_controller<F>(
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
 ///     lazy_horizontal_grid(
-///         LazyHorizontalGridArgs::default()
+///         &LazyHorizontalGridArgs::default()
 ///             .rows(GridCells::fixed(2))
-///             .overscan(0),
-///         |scope| {
-///             scope.items(3, move |i| {
-///                 rendered.with_mut(|count| *count += 1);
-///                 text(TextArgs::default().text(format!("Tile {i}")));
-///             });
-///         },
+///             .overscan(0)
+///             .content(move |scope| {
+///                 scope.items(3, move |i| {
+///                     rendered.with_mut(|count| *count += 1);
+///                     text(&TextArgs::default().text(format!("Tile {i}")));
+///                 });
+///             }),
 ///     );
 ///     assert_eq!(rendered.get(), 3);
 /// }
@@ -515,83 +564,38 @@ pub fn lazy_vertical_grid_with_controller<F>(
 /// demo();
 /// ```
 #[tessera]
-pub fn lazy_horizontal_grid<F>(args: LazyHorizontalGridArgs, configure: F)
-where
-    F: FnOnce(&mut LazyHorizontalGridScope),
-{
-    let controller = remember(LazyGridController::new);
-    lazy_horizontal_grid_with_controller(args, controller, configure);
+pub fn lazy_horizontal_grid(args: &LazyHorizontalGridArgs) {
+    let args = args.clone();
+    let content = args
+        .content
+        .clone()
+        .unwrap_or_else(|| LazyGridContentSlot::new(|_| {}));
+    let slots = collect_horizontal_grid_slots(content);
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(LazyGridController::new));
+    lazy_horizontal_grid_slots(args, controller, slots);
 }
 
-/// # lazy_horizontal_grid_with_controller
-///
-/// Controlled lazy horizontal grid variant that accepts an explicit
-/// controller.
-///
-/// ## Usage
-///
-/// Use when you need to synchronize scroll state with other components.
-///
-/// ## Parameters
-///
-/// - `args` - configures the grid's layout and scrolling behavior; see
-///   [`LazyHorizontalGridArgs`].
-/// - `controller` - a [`LazyGridController`] that holds scroll offsets and
-///   measurement cache.
-/// - `configure` - a closure that receives a [`LazyHorizontalGridScope`] for
-///   adding items to the grid.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::{
-///     lazy_grid::{
-///         GridCells, LazyGridController, LazyHorizontalGridArgs,
-///         lazy_horizontal_grid_with_controller,
-///     },
-///     text::{TextArgs, text},
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let controller = remember(LazyGridController::new);
-///     let rendered = remember(|| 0usize);
-///     lazy_horizontal_grid_with_controller(
-///         LazyHorizontalGridArgs::default()
-///             .rows(GridCells::fixed(2))
-///             .overscan(0),
-///         controller,
-///         |scope| {
-///             scope.items(2, move |i| {
-///                 rendered.with_mut(|count| *count += 1);
-///                 text(TextArgs::default().text(format!("Cell {i}")));
-///             });
-///         },
-///     );
-///     assert_eq!(rendered.get(), 2);
-/// }
-///
-/// demo();
-/// ```
-#[tessera]
-pub fn lazy_horizontal_grid_with_controller<F>(
-    args: LazyHorizontalGridArgs,
-    controller: State<LazyGridController>,
-    configure: F,
-) where
-    F: FnOnce(&mut LazyHorizontalGridScope),
-{
+fn collect_horizontal_grid_slots(content: LazyGridContentSlot) -> Vec<LazySlot> {
     let mut slots = Vec::new();
     {
         let mut scope = LazyHorizontalGridScope { slots: &mut slots };
-        configure(&mut scope);
+        content.render(&mut scope);
     }
+    slots
+}
 
+fn lazy_horizontal_grid_slots(
+    args: LazyHorizontalGridArgs,
+    controller: State<LazyGridController>,
+    slots: Vec<LazySlot>,
+) {
     let mut scrollable_args = args.scrollable.clone();
     scrollable_args.vertical = false;
     scrollable_args.horizontal = true;
 
+    let scroll_controller = remember(ScrollableController::default);
     let view_args = LazyGridViewArgs {
         axis: LazyGridAxis::Horizontal,
         grid_cells: args.rows,
@@ -604,14 +608,18 @@ pub fn lazy_horizontal_grid_with_controller<F>(
         max_viewport_main: args.max_viewport_main,
         padding_main: sanitize_spacing(Px::from(args.content_padding)),
         padding_cross: sanitize_spacing(Px::from(args.content_padding)),
+        controller,
+        slots,
+        scroll_controller,
     };
-
-    let scroll_controller = remember(ScrollableController::default);
-    scrollable_with_controller(scrollable_args, scroll_controller, move || {
-        lazy_grid_view(view_args, controller, slots.clone(), scroll_controller);
-    });
+    let scrollable_args = scrollable_args
+        .controller(scroll_controller)
+        .child(move || {
+            lazy_grid_view(&view_args);
+        });
+    scrollable(&scrollable_args);
 }
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 struct LazyGridViewArgs {
     axis: LazyGridAxis,
     grid_cells: GridCells,
@@ -624,6 +632,9 @@ struct LazyGridViewArgs {
     max_viewport_main: Option<Px>,
     padding_main: Px,
     padding_cross: Px,
+    controller: State<LazyGridController>,
+    slots: Vec<LazySlot>,
+    scroll_controller: State<ScrollableController>,
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
@@ -788,54 +799,49 @@ impl LayoutSpec for LazyGridLayout {
 }
 
 #[tessera]
-fn lazy_grid_view(
-    view_args: LazyGridViewArgs,
-    controller: State<LazyGridController>,
-    slots: Vec<LazySlot>,
-    scroll_controller: State<ScrollableController>,
-) {
-    let plan = LazySlotPlan::new(slots);
+fn lazy_grid_view(args: &LazyGridViewArgs) {
+    let args = args.clone();
+    let plan = LazySlotPlan::new(args.slots.clone());
     let total_count = plan.total_count();
 
-    let visible_size = scroll_controller.with(|s| s.visible_size());
-    let available_cross = view_args.axis.visible_cross(visible_size);
-    let available_cross = (available_cross - view_args.padding_cross * 2).max(Px::ZERO);
+    let visible_size = args.scroll_controller.with(|s| s.visible_size());
+    let available_cross = args.axis.visible_cross(visible_size);
+    let available_cross = (available_cross - args.padding_cross * 2).max(Px::ZERO);
     let grid_slots = resolve_grid_slots(
         available_cross,
-        &view_args.grid_cells,
-        view_args.cross_axis_spacing,
-        view_args.cross_axis_alignment,
+        &args.grid_cells,
+        args.cross_axis_spacing,
+        args.cross_axis_alignment,
     );
     let slots_per_line = grid_slots.len();
 
-    controller.with_mut(|c| c.cache.set_item_count(total_count, slots_per_line));
-    let total_main = controller.with(|c| {
+    args.controller
+        .with_mut(|c| c.cache.set_item_count(total_count, slots_per_line));
+    let total_main = args.controller.with(|c| {
         c.cache
-            .total_main_size(view_args.estimated_line_main, view_args.main_axis_spacing)
+            .total_main_size(args.estimated_line_main, args.main_axis_spacing)
     });
-    let total_main_with_padding = total_main + view_args.padding_main + view_args.padding_main;
-    let cross_with_padding =
-        grid_slots.cross_size + view_args.padding_cross + view_args.padding_cross;
-    scroll_controller.with_mut(|c| {
+    let total_main_with_padding = total_main + args.padding_main + args.padding_main;
+    let cross_with_padding = grid_slots.cross_size + args.padding_cross + args.padding_cross;
+    args.scroll_controller.with_mut(|c| {
         c.override_child_size(
-            view_args
-                .axis
+            args.axis
                 .pack_size(total_main_with_padding, cross_with_padding),
         );
     });
 
-    let scroll_offset = view_args
+    let scroll_offset = args
         .axis
-        .scroll_offset(scroll_controller.with(|s| s.child_position()));
-    let padding_main = view_args.padding_main;
+        .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
+    let padding_main = args.padding_main;
     let viewport_span = resolve_viewport_span(
-        view_args.axis.visible_span(visible_size),
-        view_args.estimated_line_main,
-        view_args.main_axis_spacing,
+        args.axis.visible_span(visible_size),
+        args.estimated_line_main,
+        args.main_axis_spacing,
     );
     let viewport_span = (viewport_span - (padding_main * 2)).max(Px::ZERO);
 
-    let visible_plan = controller.with(|c| {
+    let visible_plan = args.controller.with(|c| {
         compute_visible_items(
             &plan,
             &c.cache,
@@ -843,9 +849,9 @@ fn lazy_grid_view(
             slots_per_line,
             scroll_offset,
             viewport_span,
-            view_args.overscan,
-            view_args.estimated_line_main,
-            view_args.main_axis_spacing,
+            args.overscan,
+            args.estimated_line_main,
+            args.main_axis_spacing,
         )
     });
 
@@ -865,27 +871,28 @@ fn lazy_grid_view(
         .collect();
 
     layout(LazyGridLayout {
-        axis: view_args.axis,
-        item_alignment: view_args.item_alignment,
-        estimated_line_main: view_args.estimated_line_main,
-        main_spacing: view_args.main_axis_spacing,
-        max_viewport_main: view_args.max_viewport_main,
+        axis: args.axis,
+        item_alignment: args.item_alignment,
+        estimated_line_main: args.estimated_line_main,
+        main_spacing: args.main_axis_spacing,
+        max_viewport_main: args.max_viewport_main,
         padding_main,
-        padding_cross: view_args.padding_cross,
+        padding_cross: args.padding_cross,
         viewport_limit,
         line_range: visible_plan.line_range.clone(),
         slots: grid_slots.clone(),
         visible_items: visible_layout_items,
-        controller,
-        scroll_controller,
+        controller: args.controller,
+        scroll_controller: args.scroll_controller,
     });
 
     for child in visible_plan.items {
         key(child.key_hash, || {
-            (child.builder)(child.local_index);
+            child.builder.call(child.local_index);
         });
     }
 }
+
 fn resolve_viewport_span(current: Px, estimated: Px, spacing: Px) -> Px {
     if current > Px::ZERO {
         current
@@ -930,7 +937,7 @@ fn compute_visible_items(
         for index in start_index..end_index {
             if let Some((slot, local_index)) = plan.resolve(index) {
                 let key_hash = if let Some(provider) = &slot.key_provider {
-                    provider(local_index)
+                    provider.call(local_index)
                 } else {
                     let mut hasher = DefaultHasher::new();
                     index.hash(&mut hasher);
@@ -1172,36 +1179,32 @@ fn calculate_alignment_offsets(
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct GridPlacement {
     child_id: NodeId,
     position: PxPosition,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct MeasuredGridItem {
     child_id: NodeId,
     line_index: usize,
     slot_index: usize,
     size: ComputedData,
 }
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 enum LazySlot {
     Items(LazyItemsSlot),
 }
 
 impl LazySlot {
-    fn items<F>(
-        count: usize,
-        builder: F,
-        key_provider: Option<Arc<dyn Fn(usize) -> u64 + Send + Sync>>,
-    ) -> Self
+    fn items<F>(count: usize, builder: F, key_provider: Option<CallbackWith<usize, u64>>) -> Self
     where
         F: Fn(usize) + Send + Sync + 'static,
     {
         Self::Items(LazyItemsSlot {
             count,
-            builder: Arc::new(builder),
+            builder: CallbackWith::new(builder),
             key_provider,
         })
     }
@@ -1213,14 +1216,14 @@ impl LazySlot {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazyItemsSlot {
     count: usize,
-    builder: Arc<dyn Fn(usize) + Send + Sync>,
-    key_provider: Option<Arc<dyn Fn(usize) -> u64 + Send + Sync>>,
+    builder: CallbackWith<usize, ()>,
+    key_provider: Option<CallbackWith<usize, u64>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazySlotPlan {
     entries: Vec<LazySlotEntry>,
     total_count: usize,
@@ -1263,23 +1266,23 @@ impl LazySlotPlan {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazySlotEntry {
     start: usize,
     len: usize,
     slot: LazySlot,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct VisibleGridItem {
     local_index: usize,
     line_index: usize,
     slot_index: usize,
-    builder: Arc<dyn Fn(usize) + Send + Sync>,
+    builder: CallbackWith<usize, ()>,
     key_hash: u64,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct VisibleGridPlan {
     items: Vec<VisibleGridItem>,
     line_range: Range<usize>,
@@ -1293,7 +1296,7 @@ impl VisibleGridPlan {
         }
     }
 }
-#[derive(Default)]
+#[derive(PartialEq, Default)]
 struct LazyGridCache {
     total_items: usize,
     slots_per_line: usize,
@@ -1373,7 +1376,7 @@ impl LazyGridCache {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 struct FenwickTree {
     data: Vec<i64>,
 }

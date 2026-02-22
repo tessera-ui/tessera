@@ -6,7 +6,7 @@
 use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, NodeId, Px, PxPosition, tessera,
+    MeasurementError, Modifier, NodeId, Px, PxPosition, RenderSlot, tessera,
 };
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Arguments for the `row` component.
-#[derive(Clone, Debug, Setters)]
+#[derive(PartialEq, Clone, Debug, Setters)]
 pub struct RowArgs {
     /// Modifier chain applied to the row subtree.
     pub modifier: Modifier,
@@ -38,7 +38,7 @@ impl Default for RowArgs {
 
 /// A scope for declaratively adding children to a `row` component.
 pub struct RowScope<'a> {
-    child_closures: &'a mut Vec<Box<dyn FnOnce() + Send + Sync>>,
+    child_closures: &'a mut Vec<RenderSlot>,
     child_weights: &'a mut Vec<Option<f32>>,
 }
 
@@ -46,9 +46,9 @@ impl<'a> RowScope<'a> {
     /// Adds a child component to the row.
     pub fn child<F>(&mut self, child_closure: F)
     where
-        F: FnOnce() + Send + Sync + 'static,
+        F: Fn() + Send + Sync + 'static,
     {
-        self.child_closures.push(Box::new(child_closure));
+        self.child_closures.push(RenderSlot::new(child_closure));
         self.child_weights.push(None);
     }
 
@@ -56,11 +56,19 @@ impl<'a> RowScope<'a> {
     /// space distribution.
     pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
     where
-        F: FnOnce() + Send + Sync + 'static,
+        F: Fn() + Send + Sync + 'static,
     {
-        self.child_closures.push(Box::new(child_closure));
+        self.child_closures.push(RenderSlot::new(child_closure));
         self.child_weights.push(Some(weight));
     }
+}
+
+#[derive(Clone, PartialEq)]
+struct RowRenderArgs {
+    main_axis_alignment: MainAxisAlignment,
+    cross_axis_alignment: CrossAxisAlignment,
+    child_closures: Vec<RenderSlot>,
+    child_weights: Vec<Option<f32>>,
 }
 
 struct PlaceChildrenArgs<'a> {
@@ -169,21 +177,23 @@ impl LayoutSpec for RowLayout {
 /// # #[tessera]
 /// # fn component() {
 /// row(RowArgs::default(), |scope| {
-///     scope.child(|| text(TextArgs::default().text("First")));
-///     scope.child_weighted(|| spacer(Modifier::new()), 1.0); // Flexible space
-///     scope.child(|| text(TextArgs::default().text("Last")));
+///     scope.child(|| text(&TextArgs::default().text("First")));
+///     scope.child_weighted(
+///         || spacer(&tessera_components::spacer::SpacerArgs::new(Modifier::new())),
+///         1.0,
+///     ); // Flexible space
+///     scope.child(|| text(&TextArgs::default().text("Last")));
 /// });
 /// # }
 /// # component();
 /// ```
-#[tessera]
 pub fn row<F>(args: RowArgs, scope_config: F)
 where
     F: FnOnce(&mut RowScope),
 {
     let modifier = args.modifier;
 
-    let mut child_closures: Vec<Box<dyn FnOnce() + Send + Sync>> = Vec::new();
+    let mut child_closures: Vec<RenderSlot> = Vec::new();
     let mut child_weights: Vec<Option<f32>> = Vec::new();
 
     {
@@ -194,23 +204,26 @@ where
         scope_config(&mut scope);
     }
 
-    modifier.run(move || row_inner(args, child_closures, child_weights));
+    let render_args = RowRenderArgs {
+        main_axis_alignment: args.main_axis_alignment,
+        cross_axis_alignment: args.cross_axis_alignment,
+        child_closures,
+        child_weights,
+    };
+
+    modifier.run(move || row_inner(&render_args));
 }
 
 #[tessera]
-fn row_inner(
-    args: RowArgs,
-    child_closures: Vec<Box<dyn FnOnce() + Send + Sync>>,
-    child_weights: Vec<Option<f32>>,
-) {
+fn row_inner(args: &RowRenderArgs) {
     layout(RowLayout {
         main_axis_alignment: args.main_axis_alignment,
         cross_axis_alignment: args.cross_axis_alignment,
-        child_weights,
+        child_weights: args.child_weights.clone(),
     });
 
-    for child_closure in child_closures {
-        child_closure();
+    for child_closure in &args.child_closures {
+        child_closure.render();
     }
 }
 

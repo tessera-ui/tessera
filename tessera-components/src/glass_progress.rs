@@ -18,7 +18,7 @@ use crate::{
 };
 
 /// Arguments for the `glass_progress` component.
-#[derive(Clone, Debug, Setters)]
+#[derive(PartialEq, Clone, Debug, Setters)]
 pub struct GlassProgressArgs {
     /// The current value of the progress bar, ranging from 0.0 to 1.0.
     pub value: f32,
@@ -71,16 +71,28 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct GlassProgressFillArgs {
+    value: f32,
+    tint_color: Color,
+    blur_radius: Dp,
+    shape: Shape,
+}
+
 #[tessera]
-fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Shape) {
-    fluid_glass(
+fn glass_progress_fill_node(args: &GlassProgressFillArgs) {
+    let value = args.value;
+    let tint_color = args.tint_color;
+    let blur_radius = args.blur_radius;
+    let shape = args.shape;
+    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
         FluidGlassArgs::default()
             .tint_color(tint_color)
             .blur_radius(blur_radius)
             .shape(shape)
             .refraction_amount(0.0),
         || {},
-    );
+    ));
 
     let value = value.clamp(0.0, 1.0);
     layout(GlassProgressFillLayout { value });
@@ -156,24 +168,28 @@ impl LayoutSpec for GlassProgressFillLayout {
 /// # #[tessera]
 /// # fn component() {
 /// // Render a progress bar at 75% completion.
-/// glass_progress(GlassProgressArgs::default().value(0.75));
+/// glass_progress(&GlassProgressArgs::default().value(0.75));
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn glass_progress(args: impl Into<GlassProgressArgs>) {
-    let args: GlassProgressArgs = args.into();
-    let modifier = args.modifier;
+pub fn glass_progress(args: &GlassProgressArgs) {
+    let args = args.clone();
+    let modifier = args.modifier.clone();
 
-    modifier.run(move || glass_progress_inner(args));
+    modifier.run(move || {
+        let inner_args = args.clone();
+        glass_progress_inner_node(&inner_args);
+    });
 }
 
 #[tessera]
-fn glass_progress_inner(args: GlassProgressArgs) {
+fn glass_progress_inner_node(args: &GlassProgressArgs) {
+    let args = args.clone();
     let effective_height = Dp((args.height.0 - (args.track_border_width.0 * 2.0)).max(0.0));
     let fill_shape = capsule_shape_for_height(effective_height);
 
-    fluid_glass(
+    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
         FluidGlassArgs::default()
             .tint_color(args.track_tint_color)
             .blur_radius(args.blur_radius)
@@ -181,14 +197,15 @@ fn glass_progress_inner(args: GlassProgressArgs) {
             .border(GlassBorder::new(args.track_border_width.into()))
             .padding(args.track_border_width),
         move || {
-            glass_progress_fill(
-                args.value,
-                args.progress_tint_color,
-                args.blur_radius,
-                fill_shape,
-            );
+            let fill_args = GlassProgressFillArgs {
+                value: args.value,
+                tint_color: args.progress_tint_color,
+                blur_radius: args.blur_radius,
+                shape: fill_shape,
+            };
+            glass_progress_fill_node(&fill_args);
         },
-    );
+    ));
 
     let height = args.height.to_px();
     layout(GlassProgressLayout { height });

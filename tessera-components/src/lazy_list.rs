@@ -12,15 +12,15 @@ use std::{
 
 use derive_setters::Setters;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, NodeId,
-    ParentConstraint, Px, PxPosition, State, key,
+    Callback, CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError,
+    Modifier, NodeId, ParentConstraint, Px, PxPosition, Slot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera,
 };
 
 use crate::{
     alignment::CrossAxisAlignment,
-    scrollable::{ScrollableArgs, ScrollableController, scrollable_with_controller},
+    scrollable::{ScrollableArgs, ScrollableController, scrollable},
 };
 
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
@@ -38,18 +38,25 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 /// # Examples
 ///
 /// ```
-/// use tessera_components::lazy_list::{
-///     LazyColumnArgs, LazyListController, lazy_column_with_controller,
-/// };
+/// use tessera_components::lazy_list::{LazyColumnArgs, LazyListController, lazy_column};
 /// use tessera_ui::{retain_with_key, tessera};
 ///
+/// #[derive(Clone, PartialEq)]
+/// struct ScrollablePageArgs {
+///     page_id: String,
+/// }
+///
 /// #[tessera]
-/// fn scrollable_page(page_id: &str) {
+/// fn scrollable_page(args: &ScrollablePageArgs) {
 ///     // Both scroll position and measurement cache persist across navigation
-///     let controller = retain_with_key(page_id, LazyListController::new);
-///     lazy_column_with_controller(LazyColumnArgs::default(), controller, |scope| {
-///         scope.items(100, |i| { /* ... */ });
-///     });
+///     let controller = retain_with_key(args.page_id.clone(), LazyListController::new);
+///     lazy_column(
+///         &LazyColumnArgs::default()
+///             .controller(controller)
+///             .content(|scope| {
+///                 scope.items(100, |i| { /* ... */ });
+///             }),
+///     );
 /// }
 /// ```
 pub struct LazyListController {
@@ -85,7 +92,7 @@ impl LazyListController {
 }
 
 /// Arguments shared between lazy lists.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct LazyColumnArgs {
     /// Modifier for the scroll container.
     pub modifier: Modifier,
@@ -103,6 +110,12 @@ pub struct LazyColumnArgs {
     /// Maximum viewport length reported back to parents. Prevents gigantic
     /// textures when nesting the list inside wrap/auto-sized surfaces.
     pub max_viewport_main: Option<Px>,
+    /// Optional external controller for scroll position and cache.
+    #[setters(skip)]
+    pub controller: Option<State<LazyListController>>,
+    /// Optional slot builder for lazy list content.
+    #[setters(skip)]
+    pub content: Option<LazyListContentSlot>,
 }
 
 impl Default for LazyColumnArgs {
@@ -115,13 +128,38 @@ impl Default for LazyColumnArgs {
             estimated_item_size: Dp(48.0),
             content_padding: Dp(0.0),
             max_viewport_main: Some(Px(8192)),
+            controller: None,
+            content: None,
         }
+    }
+}
+
+impl LazyColumnArgs {
+    /// Sets an external lazy list controller.
+    pub fn controller(mut self, controller: State<LazyListController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the lazy list content builder.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
+    {
+        self.content = Some(LazyListContentSlot::new(content));
+        self
+    }
+
+    /// Sets the lazy list content builder using a shared slot.
+    pub fn content_shared(mut self, content: impl Into<LazyListContentSlot>) -> Self {
+        self.content = Some(content.into());
+        self
     }
 }
 
 /// Arguments for `lazy_row`. Identical to [`LazyColumnArgs`] but horizontal
 /// scrolling is enforced.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct LazyRowArgs {
     /// Modifier for the scroll container.
     pub modifier: Modifier,
@@ -138,6 +176,12 @@ pub struct LazyRowArgs {
     pub content_padding: Dp,
     /// Maximum viewport length reported back to parents for horizontal lists.
     pub max_viewport_main: Option<Px>,
+    /// Optional external controller for scroll position and cache.
+    #[setters(skip)]
+    pub controller: Option<State<LazyListController>>,
+    /// Optional slot builder for lazy list content.
+    #[setters(skip)]
+    pub content: Option<LazyListContentSlot>,
 }
 
 impl Default for LazyRowArgs {
@@ -150,13 +194,68 @@ impl Default for LazyRowArgs {
             estimated_item_size: Dp(48.0),
             content_padding: Dp(0.0),
             max_viewport_main: Some(Px(8192)),
+            controller: None,
+            content: None,
         }
+    }
+}
+
+impl LazyRowArgs {
+    /// Sets an external lazy list controller.
+    pub fn controller(mut self, controller: State<LazyListController>) -> Self {
+        self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the lazy list content builder.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
+    {
+        self.content = Some(LazyListContentSlot::new(content));
+        self
+    }
+
+    /// Sets the lazy list content builder using a shared slot.
+    pub fn content_shared(mut self, content: impl Into<LazyListContentSlot>) -> Self {
+        self.content = Some(content.into());
+        self
     }
 }
 
 /// Scope used to add lazily generated children to a lazy list.
 pub struct LazyListScope<'a> {
     slots: &'a mut Vec<LazySlot>,
+}
+
+type LazyListRenderFn = dyn for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync;
+
+/// Shared slot builder for lazy list content.
+#[derive(Clone, PartialEq)]
+pub struct LazyListContentSlot(Slot<LazyListRenderFn>);
+
+impl LazyListContentSlot {
+    /// Creates a new shared lazy list content slot.
+    pub fn new<F>(content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
+    {
+        Self(Slot::from_shared(Arc::new(content)))
+    }
+
+    fn render(&self, scope: &mut LazyListScope<'_>) {
+        let render = self.0.shared();
+        render(scope);
+    }
+}
+
+impl<F> From<F> for LazyListContentSlot
+where
+    F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
+{
+    fn from(value: F) -> Self {
+        Self::new(value)
+    }
 }
 
 impl<'a> LazyListScope<'a> {
@@ -175,7 +274,7 @@ impl<'a> LazyListScope<'a> {
         KF: Fn(usize) -> K + Send + Sync + 'static,
         F: Fn(usize) + Send + Sync + 'static,
     {
-        let key_provider = Arc::new(move |idx| {
+        let key_provider = CallbackWith::new(move |idx| {
             let key = key_provider(idx);
             let mut hasher = DefaultHasher::new();
             key.hash(&mut hasher);
@@ -296,7 +395,7 @@ impl<'a> LazyListScope<'a> {
         self.slots.push(LazySlot::items(
             count,
             slot_builder,
-            Some(Arc::new(slot_key_provider)),
+            Some(CallbackWith::new(slot_key_provider)),
         ));
     }
 
@@ -329,8 +428,6 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 ///
 /// - `args` — configures the list's layout and scrolling behavior; see
 ///   [`LazyColumnArgs`].
-/// - `configure` — a closure that receives a [`LazyColumnScope`] for adding
-///   items to the list.
 ///
 /// ## Examples
 ///
@@ -343,95 +440,46 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 ///
 /// #[tessera]
 /// fn demo() {
-///     lazy_column(LazyColumnArgs::default(), |scope| {
+///     lazy_column(&LazyColumnArgs::default().content(|scope| {
 ///         scope.items(1000, |i| {
 ///             let text_content = format!("Item #{i}");
-///             text(TextArgs::default().text(text_content));
+///             text(&TextArgs::default().text(text_content));
 ///         });
-///     });
+///     }));
 /// }
 /// ```
 #[tessera]
-pub fn lazy_column<F>(args: LazyColumnArgs, configure: F)
-where
-    F: FnOnce(&mut LazyColumnScope),
-{
-    let controller = remember(LazyListController::new);
-    lazy_column_with_controller(args, controller, configure);
+pub fn lazy_column(args: &LazyColumnArgs) {
+    let args = args.clone();
+    let content = args
+        .content
+        .clone()
+        .unwrap_or_else(|| LazyListContentSlot::new(|_| {}));
+    let slots = collect_column_slots(content);
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(LazyListController::new));
+    lazy_column_slots(args, controller, slots);
 }
 
-/// # lazy_column_with_controller
-///
-/// Controlled lazy column variant that accepts an explicit controller.
-///
-/// ## Usage
-///
-/// Use when you need to preserve scroll position across navigation or share
-/// state between components. Pass a [`LazyListController`] created with
-/// [`retain`] or [`retain_with_key`] to persist both scroll position and
-/// measurement cache.
-///
-/// [`retain`]: tessera_ui::retain
-/// [`retain_with_key`]: tessera_ui::retain_with_key
-///
-/// ## Parameters
-///
-/// - `args` — configures the list's layout and scrolling behavior; see
-///   [`LazyColumnArgs`].
-/// - `controller` — a [`LazyListController`] that holds scroll position and
-///   item measurement cache.
-/// - `configure` — a closure that receives a [`LazyColumnScope`] for adding
-///   items to the list.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::{
-///     lazy_list::{LazyColumnArgs, LazyListController, lazy_column_with_controller},
-///     text::{TextArgs, text},
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let controller = remember(LazyListController::new);
-///     lazy_column_with_controller(LazyColumnArgs::default(), controller, |scope| {
-///         scope.items(5, |i| {
-///             let text_content = format!("Row #{i}");
-///             text(TextArgs::default().text(text_content));
-///         });
-///     });
-/// }
-/// ```
-#[tessera]
-pub fn lazy_column_with_controller<F>(
-    args: LazyColumnArgs,
-    controller: State<LazyListController>,
-    configure: F,
-) where
-    F: FnOnce(&mut LazyColumnScope),
-{
+fn collect_column_slots(content: LazyListContentSlot) -> Vec<LazySlot> {
     let mut slots = Vec::new();
     {
         let mut scope = LazyColumnScope { slots: &mut slots };
-        configure(&mut scope);
+        content.render(&mut scope);
     }
+    slots
+}
 
+fn lazy_column_slots(
+    args: LazyColumnArgs,
+    controller: State<LazyListController>,
+    slots: Vec<LazySlot>,
+) {
     let scrollable_args = ScrollableArgs::default()
         .modifier(args.modifier)
         .vertical(true)
         .horizontal(false);
-
-    let view_args = LazyListViewArgs {
-        axis: LazyListAxis::Vertical,
-        cross_axis_alignment: args.cross_axis_alignment,
-        item_spacing: sanitize_spacing(Px::from(args.item_spacing)),
-        estimated_item_main: ensure_positive_px(Px::from(args.estimated_item_size)),
-        overscan: args.overscan,
-        max_viewport_main: args.max_viewport_main,
-        padding_main: sanitize_spacing(Px::from(args.content_padding)),
-        padding_cross: sanitize_spacing(Px::from(args.content_padding)),
-    };
 
     // Create a proxy scroll controller that syncs with the LazyListController
     let scroll_controller = remember(ScrollableController::default);
@@ -444,13 +492,31 @@ pub fn lazy_column_with_controller<F>(
         }
     });
 
-    scrollable_with_controller(scrollable_args, scroll_controller, move || {
-        // Sync scroll position back to controller
-        let current_pos = scroll_controller.with(|sc| sc.child_position());
-        controller.with_mut(|c| c.scroll.set_scroll_position(current_pos));
+    let view_args = LazyListViewArgs {
+        axis: LazyListAxis::Vertical,
+        cross_axis_alignment: args.cross_axis_alignment,
+        item_spacing: sanitize_spacing(Px::from(args.item_spacing)),
+        estimated_item_main: ensure_positive_px(Px::from(args.estimated_item_size)),
+        overscan: args.overscan,
+        max_viewport_main: args.max_viewport_main,
+        padding_main: sanitize_spacing(Px::from(args.content_padding)),
+        padding_cross: sanitize_spacing(Px::from(args.content_padding)),
+        controller,
+        slots,
+        scroll_controller,
+    };
 
-        lazy_list_view(view_args, controller, slots.clone(), scroll_controller);
-    });
+    let scrollable_args = scrollable_args
+        .controller(view_args.scroll_controller)
+        .child(move || {
+            // Sync scroll position back to controller
+            let current_pos = view_args.scroll_controller.with(|sc| sc.child_position());
+            view_args
+                .controller
+                .with_mut(|c| c.scroll.set_scroll_position(current_pos));
+            lazy_list_view(&view_args);
+        });
+    scrollable(&scrollable_args);
 }
 
 /// # lazy_row
@@ -467,8 +533,6 @@ pub fn lazy_column_with_controller<F>(
 ///
 /// - `args` — configures the list's layout and scrolling behavior; see
 ///   [`LazyRowArgs`].
-/// - `configure` — a closure that receives a [`LazyRowScope`] for adding items
-///   to the list.
 ///
 /// ## Examples
 ///
@@ -481,95 +545,42 @@ pub fn lazy_column_with_controller<F>(
 ///
 /// #[tessera]
 /// fn demo() {
-///     lazy_row(LazyRowArgs::default(), |scope| {
+///     lazy_row(&LazyRowArgs::default().content(|scope| {
 ///         scope.items(100, |i| {
 ///             let text_content = format!("Item {i}");
-///             text(TextArgs::default().text(text_content));
+///             text(&TextArgs::default().text(text_content));
 ///         });
-///     });
+///     }));
 /// }
 /// ```
 #[tessera]
-pub fn lazy_row<F>(args: LazyRowArgs, configure: F)
-where
-    F: FnOnce(&mut LazyRowScope),
-{
-    let controller = remember(LazyListController::new);
-    lazy_row_with_controller(args, controller, configure);
+pub fn lazy_row(args: &LazyRowArgs) {
+    let args = args.clone();
+    let content = args
+        .content
+        .clone()
+        .unwrap_or_else(|| LazyListContentSlot::new(|_| {}));
+    let slots = collect_row_slots(content);
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(LazyListController::new));
+    lazy_row_slots(args, controller, slots);
 }
 
-/// # lazy_row_with_controller
-///
-/// Controlled lazy row variant that accepts an explicit controller.
-///
-/// ## Usage
-///
-/// Use when you need to preserve scroll position across navigation or share
-/// state between components. Pass a [`LazyListController`] created with
-/// [`retain`] or [`retain_with_key`] to persist both scroll position and
-/// measurement cache.
-///
-/// [`retain`]: tessera_ui::retain
-/// [`retain_with_key`]: tessera_ui::retain_with_key
-///
-/// ## Parameters
-///
-/// - `args` — configures the list's layout and scrolling behavior; see
-///   [`LazyRowArgs`].
-/// - `controller` — a [`LazyListController`] that holds scroll position and
-///   item measurement cache.
-/// - `configure` — a closure that receives a [`LazyRowScope`] for adding items
-///   to the list.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::{
-///     lazy_list::{LazyListController, LazyRowArgs, lazy_row_with_controller},
-///     text::{TextArgs, text},
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let controller = remember(LazyListController::new);
-///     lazy_row_with_controller(LazyRowArgs::default(), controller, |scope| {
-///         scope.items(3, |i| {
-///             let text_content = format!("Card {i}");
-///             text(TextArgs::default().text(text_content));
-///         });
-///     });
-/// }
-/// ```
-#[tessera]
-pub fn lazy_row_with_controller<F>(
-    args: LazyRowArgs,
-    controller: State<LazyListController>,
-    configure: F,
-) where
-    F: FnOnce(&mut LazyRowScope),
-{
+fn collect_row_slots(content: LazyListContentSlot) -> Vec<LazySlot> {
     let mut slots = Vec::new();
     {
         let mut scope = LazyRowScope { slots: &mut slots };
-        configure(&mut scope);
+        content.render(&mut scope);
     }
+    slots
+}
 
+fn lazy_row_slots(args: LazyRowArgs, controller: State<LazyListController>, slots: Vec<LazySlot>) {
     let scrollable_args = ScrollableArgs::default()
         .modifier(args.modifier)
         .vertical(false)
         .horizontal(true);
-
-    let view_args = LazyListViewArgs {
-        axis: LazyListAxis::Horizontal,
-        cross_axis_alignment: args.cross_axis_alignment,
-        item_spacing: sanitize_spacing(Px::from(args.item_spacing)),
-        estimated_item_main: ensure_positive_px(Px::from(args.estimated_item_size)),
-        overscan: args.overscan,
-        max_viewport_main: args.max_viewport_main,
-        padding_main: sanitize_spacing(Px::from(args.content_padding)),
-        padding_cross: sanitize_spacing(Px::from(args.content_padding)),
-    };
 
     // Create a proxy scroll controller that syncs with the LazyListController
     let scroll_controller = remember(ScrollableController::default);
@@ -582,16 +593,33 @@ pub fn lazy_row_with_controller<F>(
         }
     });
 
-    scrollable_with_controller(scrollable_args, scroll_controller, move || {
-        // Sync scroll position back to controller
-        let current_pos = scroll_controller.with(|sc| sc.child_position());
-        controller.with_mut(|c| c.scroll.set_scroll_position(current_pos));
+    let view_args = LazyListViewArgs {
+        axis: LazyListAxis::Horizontal,
+        cross_axis_alignment: args.cross_axis_alignment,
+        item_spacing: sanitize_spacing(Px::from(args.item_spacing)),
+        estimated_item_main: ensure_positive_px(Px::from(args.estimated_item_size)),
+        overscan: args.overscan,
+        max_viewport_main: args.max_viewport_main,
+        padding_main: sanitize_spacing(Px::from(args.content_padding)),
+        padding_cross: sanitize_spacing(Px::from(args.content_padding)),
+        controller,
+        slots,
+        scroll_controller,
+    };
 
-        lazy_list_view(view_args, controller, slots.clone(), scroll_controller);
-    });
+    let scrollable_args = scrollable_args
+        .controller(view_args.scroll_controller)
+        .child(move || {
+            // Sync scroll position back to controller
+            let current_pos = view_args.scroll_controller.with(|sc| sc.child_position());
+            view_args
+                .controller
+                .with_mut(|c| c.scroll.set_scroll_position(current_pos));
+            lazy_list_view(&view_args);
+        });
+    scrollable(&scrollable_args);
 }
-
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 struct LazyListViewArgs {
     axis: LazyListAxis,
     cross_axis_alignment: CrossAxisAlignment,
@@ -601,59 +629,57 @@ struct LazyListViewArgs {
     max_viewport_main: Option<Px>,
     padding_main: Px,
     padding_cross: Px,
-}
-
-#[tessera]
-fn lazy_list_view(
-    view_args: LazyListViewArgs,
     controller: State<LazyListController>,
     slots: Vec<LazySlot>,
     scroll_controller: State<ScrollableController>,
-) {
-    let plan = LazySlotPlan::new(slots);
+}
+
+#[tessera]
+fn lazy_list_view(args: &LazyListViewArgs) {
+    let args = args.clone();
+    let plan = LazySlotPlan::new(args.slots.clone());
     let total_count = plan.total_count();
 
-    controller.with_mut(|c| c.cache.set_item_count(total_count));
+    args.controller
+        .with_mut(|c| c.cache.set_item_count(total_count));
 
-    let scroll_offset = view_args
+    let scroll_offset = args
         .axis
-        .scroll_offset(scroll_controller.with(|s| s.child_position()));
-    let padding_main = view_args.padding_main;
+        .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
+    let padding_main = args.padding_main;
     let viewport_span = resolve_viewport_span(
-        view_args
-            .axis
-            .visible_span(scroll_controller.with(|s| s.visible_size())),
-        view_args.estimated_item_main,
-        view_args.item_spacing,
+        args.axis
+            .visible_span(args.scroll_controller.with(|s| s.visible_size())),
+        args.estimated_item_main,
+        args.item_spacing,
     );
     let viewport_span = (viewport_span - (padding_main * 2)).max(Px::ZERO);
-    let total_main = controller.with(|c| {
+    let total_main = args.controller.with(|c| {
         c.cache
-            .total_main_size(view_args.estimated_item_main, view_args.item_spacing)
+            .total_main_size(args.estimated_item_main, args.item_spacing)
     });
     let total_main_with_padding = total_main + padding_main + padding_main;
-    let visible_cross = view_args
+    let visible_cross = args
         .axis
-        .cross(&scroll_controller.with(|s| s.visible_size()));
-    let cross_with_padding = visible_cross + view_args.padding_cross + view_args.padding_cross;
-    scroll_controller.with_mut(|c| {
+        .cross(&args.scroll_controller.with(|s| s.visible_size()));
+    let cross_with_padding = visible_cross + args.padding_cross + args.padding_cross;
+    args.scroll_controller.with_mut(|c| {
         c.override_child_size(
-            view_args
-                .axis
+            args.axis
                 .pack_size(total_main_with_padding, cross_with_padding),
         );
     });
 
-    let visible_children = controller.with(|c| {
+    let visible_children = args.controller.with(|c| {
         compute_visible_children(
             &plan,
             &c.cache,
             total_count,
             scroll_offset,
             viewport_span,
-            view_args.overscan,
-            view_args.estimated_item_main,
-            view_args.item_spacing,
+            args.overscan,
+            args.estimated_item_main,
+            args.item_spacing,
         )
     });
 
@@ -669,24 +695,24 @@ fn lazy_list_view(
         .collect();
 
     layout(LazyListLayout {
-        axis: view_args.axis,
-        cross_axis_alignment: view_args.cross_axis_alignment,
-        item_spacing: view_args.item_spacing,
-        estimated_item_main: view_args.estimated_item_main,
-        max_viewport_main: view_args.max_viewport_main,
+        axis: args.axis,
+        cross_axis_alignment: args.cross_axis_alignment,
+        item_spacing: args.item_spacing,
+        estimated_item_main: args.estimated_item_main,
+        max_viewport_main: args.max_viewport_main,
         padding_main,
-        padding_cross: view_args.padding_cross,
+        padding_cross: args.padding_cross,
         viewport_limit,
         visible_item_indices,
         sticky_indices: plan.sticky_indices().to_vec(),
         scroll_offset,
-        controller,
-        scroll_controller,
+        controller: args.controller,
+        scroll_controller: args.scroll_controller,
     });
 
     for child in visible_children {
         key(child.key_hash, || {
-            (child.builder)(child.local_index);
+            child.builder.call(child.local_index);
         });
     }
 }
@@ -1004,7 +1030,7 @@ impl LazyListAxis {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct Placement {
     item_index: usize,
     child_id: NodeId,
@@ -1012,24 +1038,20 @@ struct Placement {
     size: ComputedData,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 enum LazySlot {
     Items(LazyItemsSlot),
     Sticky(LazyStickySlot),
 }
 
 impl LazySlot {
-    fn items<F>(
-        count: usize,
-        builder: F,
-        key_provider: Option<Arc<dyn Fn(usize) -> u64 + Send + Sync>>,
-    ) -> Self
+    fn items<F>(count: usize, builder: F, key_provider: Option<CallbackWith<usize, u64>>) -> Self
     where
         F: Fn(usize) + Send + Sync + 'static,
     {
         Self::Items(LazyItemsSlot {
             count,
-            builder: Arc::new(builder),
+            builder: CallbackWith::new(builder),
             key_provider,
         })
     }
@@ -1039,7 +1061,7 @@ impl LazySlot {
         F: Fn() + Send + Sync + 'static,
     {
         Self::Sticky(LazyStickySlot {
-            builder: Arc::new(builder),
+            builder: Callback::new(builder),
             key_hash,
         })
     }
@@ -1052,20 +1074,20 @@ impl LazySlot {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazyItemsSlot {
     count: usize,
-    builder: Arc<dyn Fn(usize) + Send + Sync>,
-    key_provider: Option<Arc<dyn Fn(usize) -> u64 + Send + Sync>>,
+    builder: CallbackWith<usize, ()>,
+    key_provider: Option<CallbackWith<usize, u64>>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazyStickySlot {
-    builder: Arc<dyn Fn() + Send + Sync>,
+    builder: Callback,
     key_hash: Option<u64>,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazySlotPlan {
     entries: Vec<LazySlotEntry>,
     total_count: usize,
@@ -1120,7 +1142,7 @@ impl LazySlotPlan {
         let key_hash = match resolved {
             ResolvedSlot::Items(slot, local_index) => {
                 if let Some(provider) = &slot.key_provider {
-                    provider(local_index)
+                    provider.call(local_index)
                 } else {
                     let mut hasher = DefaultHasher::new();
                     index.hash(&mut hasher);
@@ -1139,10 +1161,9 @@ impl LazySlotPlan {
                 let builder = slot.builder.clone();
                 (
                     {
-                        let wrapper: Arc<dyn Fn(usize) + Send + Sync> = Arc::new(move |_| {
-                            builder();
-                        });
-                        wrapper
+                        CallbackWith::new(move |_| {
+                            builder.call();
+                        })
                     },
                     0,
                 )
@@ -1186,22 +1207,22 @@ enum ResolvedSlot<'a> {
     Sticky(&'a LazyStickySlot),
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct LazySlotEntry {
     start: usize,
     len: usize,
     slot: LazySlot,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct VisibleChild {
     item_index: usize,
     local_index: usize,
-    builder: Arc<dyn Fn(usize) + Send + Sync>,
+    builder: CallbackWith<usize, ()>,
     key_hash: u64,
 }
 
-#[derive(Default)]
+#[derive(PartialEq, Default)]
 struct LazyListCache {
     total_items: usize,
     measured_main: Vec<Option<Px>>,
@@ -1273,7 +1294,7 @@ impl LazyListCache {
     }
 }
 
-#[derive(Default, Clone)]
+#[derive(Default, Clone, PartialEq)]
 struct FenwickTree {
     data: Vec<i64>,
 }

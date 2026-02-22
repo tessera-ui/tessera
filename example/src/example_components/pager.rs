@@ -2,41 +2,36 @@ use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     column::{ColumnArgs, column},
     modifier::ModifierExt as _,
-    pager::{
-        PagerArgs, PagerController, PagerPageSize, horizontal_pager_with_controller, vertical_pager,
-    },
+    pager::{PagerArgs, PagerController, PagerPageSize, horizontal_pager, vertical_pager},
     scrollable::{ScrollableArgs, scrollable},
     shape_def::Shape,
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{Color, Dp, Modifier, State, remember, shard, tessera, use_context};
-
-#[tessera]
+use tessera_ui::{Color, Dp, Modifier, State, remember, shard, use_context};
 #[shard]
 pub fn pager_showcase() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             scrollable(
-                ScrollableArgs::default().modifier(Modifier::new().fill_max_size()),
-                move || {
-                    surface(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0))),
-                        move || {
-                            pager_content();
-                        },
-                    );
-                },
+                &ScrollableArgs::default()
+                    .modifier(Modifier::new().fill_max_size())
+                    .child(move || {
+                        surface(&SurfaceArgs::with_child(
+                            SurfaceArgs::default()
+                                .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0))),
+                            move || {
+                                pager_content();
+                            },
+                        ));
+                    }),
             )
         },
-    );
+    ));
 }
-
-#[tessera]
 fn pager_content() {
     let horizontal_controller = remember(|| PagerController::new(0));
     let current_page = horizontal_controller.with(|c| c.current_page());
@@ -44,11 +39,11 @@ fn pager_content() {
         ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
         |scope| {
             scope.child(|| {
-                text(TextArgs::default().text("Pager").size(Dp(24.0)));
+                text(&TextArgs::default().text("Pager").size(Dp(24.0)));
             });
             scope.child(|| {
                 text(
-                    TextArgs::default()
+                    &TextArgs::default()
                         .text("Snap-scrolling pages with spacing and padding.")
                         .color(
                             use_context::<MaterialTheme>()
@@ -59,10 +54,10 @@ fn pager_content() {
                         ),
                 );
             });
-            scope.child(|| spacer(Modifier::new().height(Dp(16.0))));
+            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
             scope.child(move || {
                 text(
-                    TextArgs::default()
+                    &TextArgs::default()
                         .text(format!(
                             "Horizontal pager (page {}/{})",
                             current_page + 1,
@@ -74,76 +69,68 @@ fn pager_content() {
             scope.child(move || {
                 horizontal_demo(horizontal_controller);
             });
-            scope.child(|| spacer(Modifier::new().height(Dp(24.0))));
+            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(24.0)))));
             scope.child(|| {
-                text(TextArgs::default().text("Vertical pager").size(Dp(18.0)));
+                text(&TextArgs::default().text("Vertical pager").size(Dp(18.0)));
             });
             scope.child(vertical_demo);
         },
     );
 }
-
-#[tessera]
 fn horizontal_demo(controller: State<PagerController>) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(scheme.surface_variant.into())
             .shape(Shape::rounded_rectangle(Dp(20.0))),
         move || {
-            horizontal_pager_with_controller(
-                PagerArgs::default()
-                    .page_count(5)
-                    .page_size(PagerPageSize::Fill)
-                    .page_spacing(Dp(12.0))
-                    .content_padding(Dp(16.0))
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .modifier(Modifier::new().fill_max_width().height(Dp(220.0))),
-                controller,
-                |page| {
+            let args = PagerArgs::default()
+                .page_count(5)
+                .page_size(PagerPageSize::Fill)
+                .page_spacing(Dp(12.0))
+                .content_padding(Dp(16.0))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .modifier(Modifier::new().fill_max_width().height(Dp(220.0)))
+                .controller(controller)
+                .page_content(|page| {
                     pager_page("Page".to_string(), page);
-                },
-            );
+                });
+            horizontal_pager(&args);
         },
-    );
+    ));
 }
-
-#[tessera]
 fn vertical_demo() {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(scheme.surface_variant.into())
             .shape(Shape::rounded_rectangle(Dp(20.0))),
         move || {
-            vertical_pager(
-                PagerArgs::default()
-                    .page_count(4)
-                    .page_size(PagerPageSize::Fixed(Dp(160.0)))
-                    .page_spacing(Dp(12.0))
-                    .content_padding(Dp(16.0))
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .modifier(Modifier::new().fill_max_width().height(Dp(320.0))),
-                |page| {
+            let args = PagerArgs::default()
+                .page_count(4)
+                .page_size(PagerPageSize::Fixed(Dp(160.0)))
+                .page_spacing(Dp(12.0))
+                .content_padding(Dp(16.0))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .modifier(Modifier::new().fill_max_width().height(Dp(320.0)))
+                .page_content(|page| {
                     pager_page("Step".to_string(), page);
-                },
-            );
+                });
+            vertical_pager(&args);
         },
-    );
+    ));
 }
-
-#[tessera]
 fn pager_page(label: String, page: usize) {
     let color = pager_color(page);
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_size())
             .style(color.into())
@@ -151,13 +138,13 @@ fn pager_page(label: String, page: usize) {
             .content_alignment(Alignment::Center),
         move || {
             text(
-                TextArgs::default()
+                &TextArgs::default()
                     .text(format!("{label} {}", page + 1))
                     .size(Dp(20.0))
                     .color(Color::WHITE),
             );
         },
-    );
+    ));
 }
 
 fn pager_color(index: usize) -> Color {

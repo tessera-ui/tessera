@@ -21,7 +21,7 @@
 
 mod cursor;
 
-use std::{sync::Arc, time::Instant};
+use std::time::Instant;
 
 use glyphon::{
     Cursor, Edit,
@@ -29,10 +29,11 @@ use glyphon::{
 };
 use tessera_platform::clipboard;
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
+    CallbackWith, Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
+    current_frame_nanos,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    tessera, winit,
+    receive_frame_nanos, tessera, winit,
 };
 use winit::keyboard::NamedKey;
 
@@ -41,16 +42,16 @@ use crate::{
         command::{TextCommand, TextConstraint},
         pipeline::{TextData, write_font_system},
     },
-    selection_highlight_rect::selection_highlight_rect,
+    selection_highlight_rect::{SelectionHighlightRectArgs, selection_highlight_rect},
     text_edit_core::cursor::CURSOR_WIDRH,
 };
 
 /// Display-only text transform applied to the text content before rendering
 /// (e.g., masking or formatting without changing the underlying buffer).
-pub type DisplayTransform = Arc<dyn Fn(&str) -> String + Send + Sync>;
+pub type DisplayTransform = CallbackWith<String, String>;
 
 /// Definition of a rectangular selection highlight
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq)]
 /// Defines a rectangular region for text selection highlighting.
 ///
 /// Used internally to represent the geometry of a selection highlight in pixel
@@ -67,7 +68,7 @@ pub struct RectDef {
 }
 
 /// Types of mouse clicks
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Clone, PartialEq)]
 /// Represents the type of mouse click detected in the editor.
 ///
 /// Used for distinguishing between single, double, and triple click actions.
@@ -90,7 +91,8 @@ pub enum ClickType {
 pub struct TextEditorController {
     line_height: Px,
     pub(crate) editor: glyphon::Editor<'static>,
-    blink_timer: Instant,
+    blink_start_frame_nanos: u64,
+    current_frame_nanos: u64,
     focus_handler: Focus,
     pub(crate) selection_color: Color,
     pub(crate) text_color: Color,
@@ -133,6 +135,7 @@ impl TextEditorController {
     pub fn with_selection_color(size: Dp, line_height: Option<Dp>, selection_color: Color) -> Self {
         let final_line_height = line_height.unwrap_or(Dp(size.0 * 1.2));
         let line_height_px: Px = final_line_height.into();
+        let frame_nanos = current_frame_nanos();
         let mut buffer = glyphon::Buffer::new(
             &mut write_font_system(),
             glyphon::Metrics::new(size.to_pixels_f32(), line_height_px.to_f32()),
@@ -144,7 +147,8 @@ impl TextEditorController {
         Self {
             line_height: line_height_px,
             editor,
-            blink_timer: Instant::now(),
+            blink_start_frame_nanos: frame_nanos,
+            current_frame_nanos: frame_nanos,
             focus_handler: Focus::new(),
             selection_color,
             text_color,
@@ -182,7 +186,7 @@ impl TextEditorController {
         let text_buffer = if let Some(transform) = self.display_transform.as_ref() {
             let metrics = self.editor.with_buffer(|buffer| buffer.metrics());
             let content = editor_content(&self.editor);
-            let display_text = transform(&content);
+            let display_text = transform.call(content);
             build_display_buffer(
                 &display_text,
                 self.text_color,
@@ -229,9 +233,19 @@ impl TextEditorController {
         result
     }
 
-    // Returns the current blink timer instant (for cursor blinking).
-    fn blink_timer(&self) -> Instant {
-        self.blink_timer
+    // Returns the cursor blink start timestamp.
+    fn blink_start_frame_nanos(&self) -> u64 {
+        self.blink_start_frame_nanos
+    }
+
+    // Returns the latest frame timestamp observed by this controller.
+    fn current_frame_nanos(&self) -> u64 {
+        self.current_frame_nanos
+    }
+
+    // Updates the latest frame timestamp used by cursor blink rendering.
+    fn update_frame_nanos(&mut self, frame_nanos: u64) {
+        self.current_frame_nanos = frame_nanos;
     }
 
     /// Returns the current selection highlight color.
@@ -277,7 +291,7 @@ impl TextEditorController {
     pub fn set_display_transform(&mut self, transform: Option<DisplayTransform>) {
         let should_update = match (&self.display_transform, &transform) {
             (None, None) => false,
-            (Some(current), Some(next)) => !Arc::ptr_eq(current, next),
+            (Some(current), Some(next)) => current != next,
             _ => true,
         };
         if should_update {
@@ -787,7 +801,9 @@ impl LayoutSpec for TextEditLayout {
 ///
 /// * `controller` - Shared controller for the text editor.
 #[tessera]
-pub fn text_edit_core(controller: State<TextEditorController>) {
+pub fn text_edit_core(args: &TextEditCoreArgs) {
+    let controller = args.controller;
+
     // text rendering with constraints from parent container
     let layout_version = controller.with(|c| c.layout_version());
     layout(TextEditLayout {
@@ -801,14 +817,55 @@ pub fn text_edit_core(controller: State<TextEditorController>) {
             controller.with(|c| (c.current_selection_rects.clone(), c.selection_color));
 
         for def in rect_definitions {
-            selection_highlight_rect(def.width, def.height, color_for_selection);
+            let render_args =
+                SelectionHighlightRectArgs::new(def.width, def.height, color_for_selection);
+            selection_highlight_rect(&render_args);
         }
     }
 
     // Cursor rendering (only when focused)
     if controller.with(|c| c.focus_handler().is_focused()) {
-        let (line_height, blink_timer, cursor_color) =
-            controller.with(|c| (c.line_height(), c.blink_timer(), c.cursor_color()));
-        cursor::cursor(line_height, blink_timer, cursor_color);
+        let frame_nanos = current_frame_nanos();
+        controller.with_mut(|controller| controller.update_frame_nanos(frame_nanos));
+        let controller_for_frame = controller;
+        receive_frame_nanos(move |frame_nanos| {
+            let is_focused = controller_for_frame.with_mut(|controller| {
+                controller.update_frame_nanos(frame_nanos);
+                controller.focus_handler().is_focused()
+            });
+            if is_focused {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+        let (line_height, blink_start_frame_nanos, frame_nanos, cursor_color) =
+            controller.with(|c| {
+                (
+                    c.line_height(),
+                    c.blink_start_frame_nanos(),
+                    c.current_frame_nanos(),
+                    c.cursor_color(),
+                )
+            });
+        cursor::cursor(
+            line_height,
+            blink_start_frame_nanos,
+            frame_nanos,
+            cursor_color,
+        );
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct TextEditCoreArgs {
+    /// Shared controller for text content, cursor, and selection state.
+    pub controller: State<TextEditorController>,
+}
+
+impl TextEditCoreArgs {
+    /// Creates text editor core component props.
+    pub fn new(controller: State<TextEditorController>) -> Self {
+        Self { controller }
     }
 }

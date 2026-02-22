@@ -27,16 +27,31 @@ use crate::pipelines::shape::command::ShapeCommand;
 /// - `color`: The fill color of the rectangle, including alpha for transparency
 ///   (`Color`).
 #[tessera]
-pub fn selection_highlight_rect(
+pub fn selection_highlight_rect(args: &SelectionHighlightRectArgs) {
+    layout(SelectionHighlightLayout {
+        width: args.width,
+        height: args.height,
+        color: args.color,
+    });
+}
+
+#[derive(Clone, PartialEq)]
+/// Props for [`selection_highlight_rect`].
+pub struct SelectionHighlightRectArgs {
     width: Px,
     height: Px,
-    color: Color, // RGBA color with alpha for transparency
-) {
-    layout(SelectionHighlightLayout {
-        width,
-        height,
-        color,
-    });
+    color: Color,
+}
+
+impl SelectionHighlightRectArgs {
+    /// Creates selection highlight rectangle props.
+    pub fn new(width: Px, height: Px, color: Color) -> Self {
+        Self {
+            width,
+            height,
+            color,
+        }
+    }
 }
 #[derive(Clone, PartialEq)]
 struct SelectionHighlightLayout {

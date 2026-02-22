@@ -3,8 +3,6 @@
 //! ## Usage
 //!
 //! Show insertion point feedback inside text editing components.
-use std::time::Instant;
-
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px,
     RenderInput, tessera,
@@ -63,14 +61,41 @@ impl LayoutSpec for CursorLayout {
 ///
 /// * `height_px` - The height of the cursor in pixels, typically matching the
 ///   line height
-/// * `bink_timer` - Timer used to control the blinking animation cycle
+/// * `blink_start_frame_nanos` - Frame timestamp where the blink cycle starts
+/// * `current_frame_nanos` - Current frame timestamp used to sample visibility
 #[tessera]
-pub(super) fn cursor(height_px: Px, bink_timer: Instant, color: Color) {
-    let visible = bink_timer.elapsed().as_millis() % 1000 >= 500;
+fn cursor_node(args: &CursorArgs) {
+    let elapsed_nanos = args
+        .current_frame_nanos
+        .saturating_sub(args.blink_start_frame_nanos);
+    let visible = elapsed_nanos % 1_000_000_000 >= 500_000_000;
 
     layout(CursorLayout {
-        height: height_px,
+        height: args.height_px,
         visible,
-        color,
+        color: args.color,
     });
+}
+
+#[derive(Clone, PartialEq)]
+struct CursorArgs {
+    height_px: Px,
+    blink_start_frame_nanos: u64,
+    current_frame_nanos: u64,
+    color: Color,
+}
+
+pub(super) fn cursor(
+    height_px: Px,
+    blink_start_frame_nanos: u64,
+    current_frame_nanos: u64,
+    color: Color,
+) {
+    let args = CursorArgs {
+        height_px,
+        blink_start_frame_nanos,
+        current_frame_nanos,
+        color,
+    };
+    cursor_node(&args);
 }

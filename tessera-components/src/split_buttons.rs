@@ -4,12 +4,11 @@
 //!
 //! Pair a primary action with a related secondary action or menu.
 
-use std::sync::Arc;
-
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, Px, PxPosition, accesskit::Role, tessera, use_context,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
+    LayoutSpec, MeasurementError, Modifier, Px, PxPosition, RenderSlot, accesskit::Role, tessera,
+    use_context,
 };
 
 use crate::{
@@ -54,7 +53,7 @@ pub enum SplitButtonVariant {
 }
 
 /// Color values for split buttons in different states.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct SplitButtonColors {
     /// Container color when enabled.
     pub container_color: Color,
@@ -268,12 +267,18 @@ impl SplitButtonDefaults {
 }
 
 /// Arguments for [`split_button_layout`].
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct SplitButtonLayoutArgs {
     /// Modifier chain applied to the split button layout.
     pub modifier: Modifier,
     /// Spacing between leading and trailing buttons.
     pub spacing: Dp,
+    /// Optional leading button slot.
+    #[setters(skip)]
+    pub leading_button: Option<RenderSlot>,
+    /// Optional trailing button slot.
+    #[setters(skip)]
+    pub trailing_button: Option<RenderSlot>,
 }
 
 impl Default for SplitButtonLayoutArgs {
@@ -282,12 +287,52 @@ impl Default for SplitButtonLayoutArgs {
             modifier: Modifier::new()
                 .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
             spacing: SplitButtonDefaults::SPACING,
+            leading_button: None,
+            trailing_button: None,
         }
     }
 }
 
+impl From<&SplitButtonLayoutArgs> for SplitButtonLayoutArgs {
+    fn from(value: &SplitButtonLayoutArgs) -> Self {
+        value.clone()
+    }
+}
+
+impl SplitButtonLayoutArgs {
+    /// Sets the leading button slot.
+    pub fn leading_button<F>(mut self, leading_button: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.leading_button = Some(RenderSlot::new(leading_button));
+        self
+    }
+
+    /// Sets the leading button slot using a shared render slot.
+    pub fn leading_button_shared(mut self, leading_button: impl Into<RenderSlot>) -> Self {
+        self.leading_button = Some(leading_button.into());
+        self
+    }
+
+    /// Sets the trailing button slot.
+    pub fn trailing_button<F>(mut self, trailing_button: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.trailing_button = Some(RenderSlot::new(trailing_button));
+        self
+    }
+
+    /// Sets the trailing button slot using a shared render slot.
+    pub fn trailing_button_shared(mut self, trailing_button: impl Into<RenderSlot>) -> Self {
+        self.trailing_button = Some(trailing_button.into());
+        self
+    }
+}
+
 /// Arguments for [`split_leading_button`].
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct SplitButtonLeadingArgs {
     /// Whether the button is enabled.
     pub enabled: bool,
@@ -312,13 +357,16 @@ pub struct SplitButtonLeadingArgs {
     pub tonal_elevation: Dp,
     /// Click handler for the button.
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// Optional accessibility label.
     #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional content rendered inside the leading button.
+    #[setters(skip)]
+    pub content: Option<RenderSlot>,
 }
 
 impl SplitButtonLeadingArgs {
@@ -338,6 +386,7 @@ impl SplitButtonLeadingArgs {
             on_click: None,
             accessibility_label: None,
             accessibility_description: None,
+            content: None,
         }
     }
 
@@ -380,13 +429,28 @@ impl SplitButtonLeadingArgs {
 
     /// Set the click handler.
     pub fn on_click(mut self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
+        self
+    }
+
+    /// Sets the leading button content.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.content = Some(RenderSlot::new(content));
+        self
+    }
+
+    /// Sets the leading button content using a shared render slot.
+    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
+        self.content = Some(content.into());
         self
     }
 }
@@ -397,8 +461,14 @@ impl Default for SplitButtonLeadingArgs {
     }
 }
 
+impl From<&SplitButtonLeadingArgs> for SplitButtonLeadingArgs {
+    fn from(value: &SplitButtonLeadingArgs) -> Self {
+        value.clone()
+    }
+}
+
 /// Arguments for [`split_trailing_button`].
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct SplitButtonTrailingArgs {
     /// Whether the button is enabled.
     pub enabled: bool,
@@ -423,13 +493,16 @@ pub struct SplitButtonTrailingArgs {
     pub tonal_elevation: Dp,
     /// Click handler for the button.
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// Optional accessibility label.
     #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
     #[setters(strip_option, into)]
     pub accessibility_description: Option<String>,
+    /// Optional content rendered inside the trailing button.
+    #[setters(skip)]
+    pub content: Option<RenderSlot>,
 }
 
 impl SplitButtonTrailingArgs {
@@ -449,6 +522,7 @@ impl SplitButtonTrailingArgs {
             on_click: None,
             accessibility_label: None,
             accessibility_description: None,
+            content: None,
         }
     }
 
@@ -491,13 +565,28 @@ impl SplitButtonTrailingArgs {
 
     /// Set the click handler.
     pub fn on_click(mut self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
+        self
+    }
+
+    /// Sets the trailing button content.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.content = Some(RenderSlot::new(content));
+        self
+    }
+
+    /// Sets the trailing button content using a shared render slot.
+    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
+        self.content = Some(content.into());
         self
     }
 }
@@ -505,6 +594,12 @@ impl SplitButtonTrailingArgs {
 impl Default for SplitButtonTrailingArgs {
     fn default() -> Self {
         Self::with_variant(SplitButtonVariant::Filled)
+    }
+}
+
+impl From<&SplitButtonTrailingArgs> for SplitButtonTrailingArgs {
+    fn from(value: &SplitButtonTrailingArgs) -> Self {
+        value.clone()
     }
 }
 
@@ -518,87 +613,62 @@ impl Default for SplitButtonTrailingArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures spacing and modifier; see [`SplitButtonLayoutArgs`].
-/// - `leading_button` — renders the primary button content.
-/// - `trailing_button` — renders the secondary button content.
+/// - `args` — props for this component; see [`SplitButtonLayoutArgs`].
 ///
 /// ## Examples
 ///
 /// ```
-/// # use std::sync::Arc;
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
 ///     split_buttons::{
 ///         SplitButtonLayoutArgs, SplitButtonLeadingArgs, SplitButtonTrailingArgs,
-///         SplitButtonVariant, split_button_layout, split_leading_button, split_trailing_button,
+///         split_button_layout, split_leading_button, split_trailing_button,
 ///     },
 ///     text::text,
 ///     theme::{MaterialTheme, material_theme},
 /// };
-/// use tessera_ui::remember;
 ///
-/// material_theme(
+/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 ///     || MaterialTheme::default(),
 ///     || {
-///         let primary_clicked = remember(|| false);
-///         let secondary_clicked = remember(|| false);
-///         let primary = Arc::new(move || primary_clicked.set(true));
-///         let secondary = Arc::new(move || secondary_clicked.set(true));
-///         let primary_for_layout = primary.clone();
-///         let secondary_for_layout = secondary.clone();
-///
-///         split_button_layout(
-///             SplitButtonLayoutArgs::default(),
-///             move || {
-///                 split_leading_button(
-///                     SplitButtonLeadingArgs::default()
-///                         .variant(SplitButtonVariant::Filled)
-///                         .on_click_shared(primary_for_layout.clone()),
-///                     || text("Create"),
-///                 );
-///             },
-///             move || {
-///                 split_trailing_button(
-///                     SplitButtonTrailingArgs::default()
-///                         .variant(SplitButtonVariant::Filled)
-///                         .on_click_shared(secondary_for_layout.clone()),
-///                     || text("More"),
-///                 );
-///             },
-///         );
-///
-///         primary();
-///         secondary();
-///         assert!(primary_clicked.get());
-///         assert!(secondary_clicked.get());
+///         let render_args = SplitButtonLayoutArgs::default()
+///             .leading_button(|| {
+///                 let leading_args = SplitButtonLeadingArgs::default().content(|| {
+///                     text(&tessera_components::text::TextArgs::default().text("Create"))
+///                 });
+///                 split_leading_button(&leading_args);
+///             })
+///             .trailing_button(|| {
+///                 let trailing_args = SplitButtonTrailingArgs::default().content(|| {
+///                     text(&tessera_components::text::TextArgs::default().text("More"))
+///                 });
+///                 split_trailing_button(&trailing_args);
+///             });
+///         split_button_layout(&render_args);
 ///     },
 /// );
+/// material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn split_button_layout(
-    args: impl Into<SplitButtonLayoutArgs>,
-    leading_button: impl FnOnce() + Send + Sync + 'static,
-    trailing_button: impl FnOnce() + Send + Sync + 'static,
-) {
-    let args: SplitButtonLayoutArgs = args.into();
+pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
+    let args = args.clone();
     let modifier = args.modifier;
-    modifier.run(move || split_button_layout_inner(args, leading_button, trailing_button));
-}
-
-#[tessera]
-fn split_button_layout_inner(
-    args: SplitButtonLayoutArgs,
-    leading_button: impl FnOnce() + Send + Sync + 'static,
-    trailing_button: impl FnOnce() + Send + Sync + 'static,
-) {
-    let spacing = Px::from(args.spacing).max(Px::ZERO);
-    layout(SplitButtonLayoutSpec { spacing });
-    leading_button();
-    trailing_button();
+    let leading_button = args
+        .leading_button
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let trailing_button = args
+        .trailing_button
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    modifier.run(move || {
+        let spacing = Px::from(args.spacing).max(Px::ZERO);
+        layout(SplitButtonLayoutSpec { spacing });
+        leading_button.render();
+        trailing_button.render();
+    });
 }
 
 /// # split_leading_button
@@ -611,50 +681,40 @@ fn split_button_layout_inner(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures appearance, sizing, and interaction; see
-///   [`SplitButtonLeadingArgs`].
-/// - `content` — renders the leading button content.
+/// - `args` — props for this component; see [`SplitButtonLeadingArgs`].
 ///
 /// ## Examples
 ///
 /// ```
-/// # use std::sync::Arc;
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     split_buttons::{SplitButtonLeadingArgs, SplitButtonVariant, split_leading_button},
+///     split_buttons::{SplitButtonLeadingArgs, split_leading_button},
 ///     text::text,
 ///     theme::{MaterialTheme, material_theme},
 /// };
-/// use tessera_ui::remember;
 ///
-/// material_theme(
+/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 ///     || MaterialTheme::default(),
 ///     || {
-///         let invoked = remember(|| false);
-///         let action = Arc::new(move || invoked.set(true));
-///
-///         split_leading_button(
-///             SplitButtonLeadingArgs::default()
-///                 .variant(SplitButtonVariant::Filled)
-///                 .on_click_shared(action.clone()),
-///             || text("Create"),
-///         );
-///
-///         action();
-///         assert!(invoked.get());
+///         let render_args = SplitButtonLeadingArgs::default()
+///             .content(|| text(&tessera_components::text::TextArgs::default().text("Create")));
+///         split_leading_button(&render_args);
 ///     },
 /// );
+/// material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn split_leading_button(
-    args: impl Into<SplitButtonLeadingArgs>,
-    content: impl FnOnce() + Send + Sync + 'static,
-) {
-    render_split_button(args.into().into(), content);
+pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
+    let args = args.clone();
+    let content = args
+        .content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    render_split_button(args.into(), content);
 }
 
 /// # split_trailing_button
@@ -667,53 +727,42 @@ pub fn split_leading_button(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures appearance, sizing, and interaction; see
-///   [`SplitButtonTrailingArgs`].
-/// - `content` — renders the trailing button content.
+/// - `args` — props for this component; see [`SplitButtonTrailingArgs`].
 ///
 /// ## Examples
 ///
 /// ```
-/// # use std::sync::Arc;
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     split_buttons::{SplitButtonTrailingArgs, SplitButtonVariant, split_trailing_button},
+///     split_buttons::{SplitButtonTrailingArgs, split_trailing_button},
 ///     text::text,
 ///     theme::{MaterialTheme, material_theme},
 /// };
-/// use tessera_ui::remember;
 ///
-/// material_theme(
+/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 ///     || MaterialTheme::default(),
 ///     || {
-///         let invoked = remember(|| false);
-///         let action = Arc::new(move || invoked.set(true));
-///
-///         split_trailing_button(
-///             SplitButtonTrailingArgs::default()
-///                 .variant(SplitButtonVariant::Filled)
-///                 .on_click_shared(action.clone()),
-///             || text("More"),
-///         );
-///
-///         action();
-///         assert!(invoked.get());
+///         let render_args = SplitButtonTrailingArgs::default()
+///             .content(|| text(&tessera_components::text::TextArgs::default().text("More")));
+///         split_trailing_button(&render_args);
 ///     },
 /// );
+/// material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn split_trailing_button(
-    args: impl Into<SplitButtonTrailingArgs>,
-    content: impl FnOnce() + Send + Sync + 'static,
-) {
-    render_split_button(args.into().into(), content);
+pub fn split_trailing_button(args: &SplitButtonTrailingArgs) {
+    let args = args.clone();
+    let content = args
+        .content
+        .clone()
+        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    render_split_button(args.into(), content);
 }
-
-#[derive(Clone)]
+#[derive(PartialEq, Clone)]
 struct SplitButtonItemArgs {
     enabled: bool,
     modifier: Modifier,
@@ -725,7 +774,7 @@ struct SplitButtonItemArgs {
     container_height: Dp,
     elevation: Option<Dp>,
     tonal_elevation: Dp,
-    on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    on_click: Option<Callback>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
 }
@@ -889,7 +938,7 @@ fn center_offset(child: Px, container: Px) -> Px {
     }
 }
 
-fn render_split_button(args: SplitButtonItemArgs, content: impl FnOnce() + Send + Sync + 'static) {
+fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -960,9 +1009,15 @@ fn render_split_button(args: SplitButtonItemArgs, content: impl FnOnce() + Send 
         surface_args = surface_args.accessibility_description(description);
     }
 
-    surface(surface_args, move || {
-        provide_text_style(typography.label_large, move || {
-            Modifier::new().padding(content_padding).run(content);
-        });
-    });
+    surface(&crate::surface::SurfaceArgs::with_child(
+        surface_args,
+        move || {
+            let content = content.clone();
+            provide_text_style(typography.label_large, move || {
+                Modifier::new().padding(content_padding).run(move || {
+                    content.render();
+                });
+            });
+        },
+    ));
 }

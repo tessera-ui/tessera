@@ -3,10 +3,8 @@
 //! ## Usage
 //!
 //! Present compact actions, filters, or input tokens in dense UIs.
-use std::sync::Arc;
-
 use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, accesskit::Role, tessera, use_context};
+use tessera_ui::{Callback, Color, Dp, Modifier, accesskit::Role, tessera, use_context};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
@@ -21,7 +19,7 @@ use crate::{
 };
 
 /// Visual variants supported by [`chip`].
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, PartialEq, Copy, Debug, Default)]
 pub enum ChipVariant {
     /// A compact action chip for context-aware suggestions.
     #[default]
@@ -35,7 +33,7 @@ pub enum ChipVariant {
 }
 
 /// Container styles for chips.
-#[derive(Clone, Copy, Debug, Default)]
+#[derive(Clone, PartialEq, Copy, Debug, Default)]
 pub enum ChipStyle {
     /// Flat, outlined style.
     #[default]
@@ -46,7 +44,7 @@ pub enum ChipStyle {
 
 /// Represents the container and content colors used in a chip in different
 /// states.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct ChipColors {
     /// Container color when enabled and not selected.
     pub container_color: Color,
@@ -141,7 +139,7 @@ impl ChipColors {
 }
 
 /// Represents a border stroke for chip containers.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 pub struct ChipBorder {
     /// Border width when enabled and not selected.
     pub width: Dp,
@@ -379,7 +377,7 @@ impl ChipDefaults {
 }
 
 /// Arguments for the [`chip`] component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct ChipArgs {
     /// Variant of the chip.
     pub variant: ChipVariant,
@@ -413,7 +411,7 @@ pub struct ChipArgs {
     pub elevation: Option<Dp>,
     /// Optional click handler for the chip.
     #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    pub on_click: Option<Callback>,
     /// Optional accessibility label announced by assistive technologies.
     #[setters(strip_option, into)]
     pub accessibility_label: Option<String>,
@@ -428,13 +426,13 @@ impl ChipArgs {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Sets the on_click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
         self
     }
 }
@@ -513,22 +511,23 @@ impl Default for ChipArgs {
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # material_theme(
+/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
 /// #     || {
 /// let selected = remember(|| false);
 /// selected.with_mut(|value| *value = true);
 /// let args = ChipArgs::filter("Favorites").selected(selected.with(|value| *value));
 /// assert!(args.selected);
-/// chip(args);
+/// chip(&args);
 /// #     },
 /// # );
+/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn chip(args: impl Into<ChipArgs>) {
-    let args: ChipArgs = args.into();
+pub fn chip(args: &ChipArgs) {
+    let args = args.clone();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -577,7 +576,7 @@ pub fn chip(args: impl Into<ChipArgs>) {
         && let Some(elevation) = elevation
     {
         modifier = modifier.shadow(
-            ShadowArgs::new(elevation)
+            &ShadowArgs::new(elevation)
                 .shape(args.shape)
                 .ambient_color(theme.color_scheme.shadow.with_alpha(0.12))
                 .spot_color(Color::TRANSPARENT),
@@ -617,48 +616,80 @@ pub fn chip(args: impl Into<ChipArgs>) {
     let trailing_icon = args.trailing_icon;
     let has_label = !label.is_empty();
 
-    surface(surface_args, move || {
-        provide_text_style(typography.label_large, move || {
-            Modifier::new().padding(padding).run(move || {
-                row(
-                    RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
-                    move |scope| {
-                        let spacing = ChipDefaults::ELEMENT_SPACING;
-                        let mut item_count = 0;
+    surface(&crate::surface::SurfaceArgs::with_child(
+        surface_args,
+        move || {
+            let leading_icon = leading_icon.clone();
+            let trailing_icon = trailing_icon.clone();
+            let label = label.clone();
+            provide_text_style(typography.label_large, move || {
+                Modifier::new().padding(padding).run(move || {
+                    let leading_icon = leading_icon.clone();
+                    let trailing_icon = trailing_icon.clone();
+                    let label = label.clone();
+                    row(
+                        RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
+                        move |scope| {
+                            let spacing = ChipDefaults::ELEMENT_SPACING;
+                            let mut item_count = 0;
 
-                        if let Some(mut icon_args) = leading_icon {
-                            if item_count > 0 {
-                                scope.child(move || spacer(Modifier::new().width(spacing)));
+                            if let Some(mut icon_args) = leading_icon.clone() {
+                                if item_count > 0 {
+                                    scope.child(move || {
+                                        spacer(&crate::spacer::SpacerArgs::new(
+                                            Modifier::new().width(spacing),
+                                        ));
+                                    });
+                                }
+                                item_count += 1;
+                                icon_args.size = ChipDefaults::ICON_SIZE;
+                                icon_args.tint = leading_icon_color;
+                                scope.child({
+                                    let icon_args = icon_args.clone();
+                                    move || icon(&icon_args.clone())
+                                });
                             }
-                            item_count += 1;
-                            icon_args.size = ChipDefaults::ICON_SIZE;
-                            icon_args.tint = leading_icon_color;
-                            scope.child(move || icon(icon_args));
-                        }
 
-                        if has_label {
-                            if item_count > 0 {
-                                scope.child(move || spacer(Modifier::new().width(spacing)));
+                            if has_label {
+                                if item_count > 0 {
+                                    scope.child(move || {
+                                        spacer(&crate::spacer::SpacerArgs::new(
+                                            Modifier::new().width(spacing),
+                                        ));
+                                    });
+                                }
+                                item_count += 1;
+                                scope.child({
+                                    let label = label.clone();
+                                    move || {
+                                        text(&crate::text::TextArgs::from(
+                                            &TextArgs::default().text(label.clone()),
+                                        ));
+                                    }
+                                });
                             }
-                            item_count += 1;
-                            scope.child(move || {
-                                text(TextArgs::default().text(label));
-                            });
-                        }
 
-                        if let Some(mut icon_args) = trailing_icon {
-                            if item_count > 0 {
-                                scope.child(move || spacer(Modifier::new().width(spacing)));
+                            if let Some(mut icon_args) = trailing_icon.clone() {
+                                if item_count > 0 {
+                                    scope.child(move || {
+                                        spacer(&crate::spacer::SpacerArgs::new(
+                                            Modifier::new().width(spacing),
+                                        ));
+                                    });
+                                }
+                                icon_args.size = ChipDefaults::ICON_SIZE;
+                                icon_args.tint = trailing_icon_color;
+                                scope.child({
+                                    let icon_args = icon_args.clone();
+                                    move || icon(&icon_args.clone())
+                                });
                             }
-                            icon_args.size = ChipDefaults::ICON_SIZE;
-                            icon_args.tint = trailing_icon_color;
-                            scope.child(move || icon(icon_args));
-                        }
-                    },
-                );
+                        },
+                    );
+                });
             });
-        });
-    });
+        },
+    ));
 }
 
 fn chip_padding(variant: ChipVariant, has_leading_icon: bool, has_trailing_icon: bool) -> Padding {

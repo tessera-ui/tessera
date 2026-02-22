@@ -1,5 +1,5 @@
 use tessera_ui::{
-    Color, ComputedData, Dp, MeasurementError, Modifier, PxPosition, PxSize,
+    Color, ComputedData, Dp, MeasurementError, Modifier, PxPosition, PxSize, RenderSlot,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera, use_context,
 };
@@ -15,7 +15,7 @@ use crate::{
 use super::ModifierExt;
 
 /// Arguments for the `shadow` modifier.
-#[derive(Clone, Debug)]
+#[derive(PartialEq, Clone, Debug)]
 pub struct ShadowArgs {
     /// The elevation of the shadow.
     pub elevation: Dp,
@@ -101,10 +101,9 @@ pub(super) fn apply_shadow_modifier(base: Modifier, args: ShadowArgs) -> Modifie
 
     let mut modifier = base.push_wrapper(move |child| {
         let shape = args.shape;
+        let child = RenderSlot::new(child);
         move || {
-            modifier_shadow_layers(layers, shape, || {
-                child();
-            });
+            modifier_shadow_layers(layers, shape, child.clone());
         }
     });
 
@@ -155,14 +154,29 @@ impl LayoutSpec for ShadowLayout {
     }
 }
 
-#[tessera]
-pub(super) fn modifier_shadow_layers<F>(shadow: ShadowLayers, shape: Shape, child: F)
-where
-    F: FnOnce(),
-{
-    layout(ShadowLayout { shadow, shape });
+#[derive(Clone, PartialEq)]
+struct ModifierShadowLayersArgs {
+    shadow: ShadowLayers,
+    shape: Shape,
+    child: RenderSlot,
+}
 
-    child();
+pub(super) fn modifier_shadow_layers(shadow: ShadowLayers, shape: Shape, child: RenderSlot) {
+    let args = ModifierShadowLayersArgs {
+        shadow,
+        shape,
+        child,
+    };
+    modifier_shadow_layers_node(&args);
+}
+
+#[tessera]
+fn modifier_shadow_layers_node(args: &ModifierShadowLayersArgs) {
+    layout(ShadowLayout {
+        shadow: args.shadow,
+        shape: args.shape,
+    });
+    args.child.render();
 }
 
 fn record_md3_shadow(

@@ -10,7 +10,9 @@ mod semantics;
 mod shadow;
 mod visual;
 
-use tessera_ui::{Color, DimensionValue, Dp, Modifier, Px, WindowAction, use_context};
+use tessera_ui::{
+    Color, DimensionValue, Dp, Modifier, ModifierChild, Px, RenderSlot, WindowAction, use_context,
+};
 
 use crate::shape_def::Shape;
 
@@ -29,6 +31,10 @@ pub use interaction::{
 pub use layout::{MinimumInteractiveComponentEnforcement, Padding};
 pub use semantics::SemanticsArgs;
 pub use shadow::ShadowArgs;
+
+fn replayable_modifier_child(child: ModifierChild) -> RenderSlot {
+    RenderSlot::new(child)
+}
 
 /// Extensions for composing reusable wrapper behavior around component
 /// subtrees.
@@ -64,7 +70,7 @@ pub trait ModifierExt {
     fn border_with_shape(self, width: Dp, color: Color, shape: Shape) -> Modifier;
 
     /// Adds a shadow with advanced configuration options.
-    fn shadow(self, args: impl Into<ShadowArgs>) -> Modifier;
+    fn shadow(self, args: &ShadowArgs) -> Modifier;
 
     /// Constrains the content to an exact size when possible.
     fn size(self, width: Dp, height: Dp) -> Modifier;
@@ -129,10 +135,9 @@ pub trait ModifierExt {
 impl ModifierExt for Modifier {
     fn padding(self, padding: Padding) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_padding(padding, || {
-                    child();
-                });
+                modifier_padding(padding, child.clone());
             }
         })
     }
@@ -147,10 +152,9 @@ impl ModifierExt for Modifier {
 
     fn offset(self, x: Dp, y: Dp) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_offset(x, y, || {
-                    child();
-                });
+                modifier_offset(x, y, child.clone());
             }
         })
     }
@@ -162,20 +166,18 @@ impl ModifierExt for Modifier {
         }
 
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_alpha(alpha, || {
-                    child();
-                });
+                modifier_alpha(alpha, child.clone());
             }
         })
     }
 
     fn clip_to_bounds(self) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_clip_to_bounds(|| {
-                    child();
-                });
+                modifier_clip_to_bounds(child.clone());
             }
         })
     }
@@ -190,10 +192,9 @@ impl ModifierExt for Modifier {
         }
 
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_background(color, shape, || {
-                    child();
-                });
+                modifier_background(color, shape, child.clone());
             }
         })
     }
@@ -208,22 +209,22 @@ impl ModifierExt for Modifier {
         }
 
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_border(width, color, shape, || {
-                    child();
-                });
+                modifier_border(width, color, shape, child.clone());
             }
         })
     }
 
-    fn shadow(self, args: impl Into<ShadowArgs>) -> Modifier {
-        shadow::apply_shadow_modifier(self, args.into())
+    fn shadow(self, args: &ShadowArgs) -> Modifier {
+        shadow::apply_shadow_modifier(self, args.clone())
     }
 
     fn size(self, width: Dp, height: Dp) -> Modifier {
         let width_px: Px = width.into();
         let height_px: Px = height.into();
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
                 modifier_constraints(
                     Some(DimensionValue::Wrap {
@@ -234,9 +235,7 @@ impl ModifierExt for Modifier {
                         min: Some(height_px),
                         max: Some(height_px),
                     }),
-                    || {
-                        child();
-                    },
+                    child.clone(),
                 );
             }
         })
@@ -245,6 +244,7 @@ impl ModifierExt for Modifier {
     fn width(self, width: Dp) -> Modifier {
         let width_px: Px = width.into();
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
                 modifier_constraints(
                     Some(DimensionValue::Wrap {
@@ -252,9 +252,7 @@ impl ModifierExt for Modifier {
                         max: Some(width_px),
                     }),
                     None,
-                    || {
-                        child();
-                    },
+                    child.clone(),
                 );
             }
         })
@@ -263,6 +261,7 @@ impl ModifierExt for Modifier {
     fn height(self, height: Dp) -> Modifier {
         let height_px: Px = height.into();
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
                 modifier_constraints(
                     None,
@@ -270,9 +269,7 @@ impl ModifierExt for Modifier {
                         min: Some(height_px),
                         max: Some(height_px),
                     }),
-                    || {
-                        child();
-                    },
+                    child.clone(),
                 );
             }
         })
@@ -294,53 +291,48 @@ impl ModifierExt for Modifier {
             max: max_height.map(Into::into),
         };
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_constraints(Some(width), Some(height), || {
-                    child();
-                });
+                modifier_constraints(Some(width), Some(height), child.clone());
             }
         })
     }
 
     fn constrain(self, width: Option<DimensionValue>, height: Option<DimensionValue>) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_constraints(width, height, || {
-                    child();
-                });
+                modifier_constraints(width, height, child.clone());
             }
         })
     }
 
     fn fill_max_width(self) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_constraints(Some(DimensionValue::FILLED), None, || {
-                    child();
-                });
+                modifier_constraints(Some(DimensionValue::FILLED), None, child.clone());
             }
         })
     }
 
     fn fill_max_height(self) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_constraints(None, Some(DimensionValue::FILLED), || {
-                    child();
-                });
+                modifier_constraints(None, Some(DimensionValue::FILLED), child.clone());
             }
         })
     }
 
     fn fill_max_size(self) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
                 modifier_constraints(
                     Some(DimensionValue::FILLED),
                     Some(DimensionValue::FILLED),
-                    || {
-                        child();
-                    },
+                    child.clone(),
                 );
             }
         })
@@ -355,20 +347,18 @@ impl ModifierExt for Modifier {
         }
 
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_minimum_interactive_size(|| {
-                    child();
-                });
+                modifier_minimum_interactive_size(child.clone());
             }
         })
     }
 
     fn block_touch_propagation(self) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_block_touch_propagation(|| {
-                    child();
-                });
+                modifier_block_touch_propagation(child.clone());
             }
         })
     }
@@ -376,10 +366,9 @@ impl ModifierExt for Modifier {
     fn semantics(self, args: SemanticsArgs) -> Modifier {
         self.push_wrapper(move |child| {
             let args = args.clone();
+            let child = replayable_modifier_child(child);
             move || {
-                semantics::modifier_semantics(args.clone(), || {
-                    child();
-                });
+                semantics::modifier_semantics(args.clone(), child.clone());
             }
         })
     }
@@ -392,10 +381,9 @@ impl ModifierExt for Modifier {
     fn clickable(self, args: ClickableArgs) -> Modifier {
         self.push_wrapper(move |child| {
             let args = args.clone();
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_clickable(args, || {
-                    child();
-                });
+                modifier_clickable(args.clone(), child.clone());
             }
         })
     }
@@ -403,10 +391,9 @@ impl ModifierExt for Modifier {
     fn toggleable(self, args: ToggleableArgs) -> Modifier {
         self.push_wrapper(move |child| {
             let args = args.clone();
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_toggleable(args, || {
-                    child();
-                });
+                modifier_toggleable(args.clone(), child.clone());
             }
         })
     }
@@ -414,30 +401,27 @@ impl ModifierExt for Modifier {
     fn selectable(self, args: SelectableArgs) -> Modifier {
         self.push_wrapper(move |child| {
             let args = args.clone();
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_selectable(args, || {
-                    child();
-                });
+                modifier_selectable(args.clone(), child.clone());
             }
         })
     }
 
     fn window_drag_region(self) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_window_drag_region(|| {
-                    child();
-                });
+                modifier_window_drag_region(child.clone());
             }
         })
     }
 
     fn window_action(self, action: WindowAction) -> Modifier {
         self.push_wrapper(move |child| {
+            let child = replayable_modifier_child(child);
             move || {
-                modifier_window_action(action, || {
-                    child();
-                });
+                modifier_window_action(action, child.clone());
             }
         })
     }

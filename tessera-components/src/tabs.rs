@@ -3,14 +3,12 @@
 //! ## Usage
 //!
 //! Use to organize content into separate pages that can be switched between.
-use std::time::Instant;
-
 use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, Px, PxPosition, State,
+    CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    remember, tessera, use_context,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -77,7 +75,7 @@ impl TabsDefaults {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, PartialEq, Copy, Debug)]
 struct Spring1D {
     value: f32,
     velocity: f32,
@@ -127,6 +125,10 @@ impl Spring1D {
     fn value_px(self) -> Px {
         Px::saturating_from_f32(self.value)
     }
+
+    fn is_animating(self) -> bool {
+        (self.value - self.target).abs() >= 0.5 || self.velocity.abs() >= 0.5
+    }
 }
 
 fn clamp_wrap(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
@@ -158,7 +160,7 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
 ///
 /// Tracks the active tab index, previous index, animation progress and cached
 /// values used to animate the indicator and content scrolling.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub struct TabsController {
     active_tab: usize,
     indicator_x: Spring1D,
@@ -168,10 +170,11 @@ pub struct TabsController {
     tab_row_scroll_max: Px,
     tab_row_scroll_user_overridden: bool,
     tab_bar_height: Px,
-    last_frame_time: Option<Instant>,
+    last_frame_nanos: Option<u64>,
     indicator_initialized: bool,
     content_scroll_initialized: bool,
     tab_row_scroll_initialized: bool,
+    pending_retarget_frame: bool,
 }
 
 impl TabsController {
@@ -186,10 +189,11 @@ impl TabsController {
             tab_row_scroll_max: Px(0),
             tab_row_scroll_user_overridden: false,
             tab_bar_height: Px(0),
-            last_frame_time: None,
+            last_frame_nanos: None,
             indicator_initialized: false,
             content_scroll_initialized: false,
             tab_row_scroll_initialized: false,
+            pending_retarget_frame: false,
         }
     }
 
@@ -200,6 +204,7 @@ impl TabsController {
         if index != self.active_tab {
             self.active_tab = index;
             self.tab_row_scroll_user_overridden = false;
+            self.pending_retarget_frame = true;
         }
     }
 
@@ -237,6 +242,7 @@ impl TabsController {
     }
 
     fn set_tab_row_scroll_target(&mut self, target: Px) {
+        self.pending_retarget_frame = false;
         let target = target.max(Px(0)).min(self.tab_row_scroll_max);
         if !self.tab_row_scroll_initialized {
             self.tab_row_scroll_offset.snap_to(target.to_f32());
@@ -251,6 +257,7 @@ impl TabsController {
     }
 
     fn set_content_scroll_target(&mut self, target: Px) {
+        self.pending_retarget_frame = false;
         if !self.content_scroll_initialized {
             self.content_scroll_offset.snap_to(target.to_f32());
             self.content_scroll_initialized = true;
@@ -264,6 +271,7 @@ impl TabsController {
     }
 
     fn set_indicator_targets(&mut self, width: Px, x: Px) {
+        self.pending_retarget_frame = false;
         let width = width.max(Px(0)).to_f32();
         let x = x.to_f32();
         if !self.indicator_initialized {
@@ -284,13 +292,13 @@ impl TabsController {
         self.indicator_x.value_px()
     }
 
-    fn tick(&mut self, now: Instant) {
-        let dt = if let Some(last) = self.last_frame_time {
-            now.saturating_duration_since(last).as_secs_f32()
+    fn tick(&mut self, frame_nanos: u64) {
+        let dt = if let Some(last_frame_nanos) = self.last_frame_nanos {
+            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
         } else {
             1.0 / 60.0
         };
-        self.last_frame_time = Some(now);
+        self.last_frame_nanos = Some(frame_nanos);
 
         self.indicator_x
             .update(dt, DEFAULT_SPATIAL_STIFFNESS, DEFAULT_SPATIAL_DAMPING_RATIO);
@@ -307,6 +315,14 @@ impl TabsController {
             DEFAULT_SPATIAL_DAMPING_RATIO,
         );
     }
+
+    fn has_pending_animation_frame(&self) -> bool {
+        self.pending_retarget_frame
+            || self.indicator_x.is_animating()
+            || self.indicator_width.is_animating()
+            || self.content_scroll_offset.is_animating()
+            || self.tab_row_scroll_offset.is_animating()
+    }
 }
 
 impl Default for TabsController {
@@ -316,7 +332,7 @@ impl Default for TabsController {
 }
 
 /// Configuration arguments for the [`tabs`] component.
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct TabsArgs {
     /// Optional modifier chain applied to the tabs subtree.
     pub modifier: Modifier,
@@ -400,14 +416,16 @@ impl Default for TabsArgs {
     }
 }
 
+#[derive(Clone, PartialEq)]
 struct TabDef {
     title: TabTitle,
-    content: Box<dyn FnOnce() + Send + Sync>,
+    content: RenderSlot,
 }
 
+#[derive(Clone, PartialEq)]
 enum TabTitle {
-    Custom(Box<dyn FnOnce() + Send + Sync>),
-    Themed(Box<dyn FnOnce(Color) + Send + Sync>),
+    Custom(RenderSlot),
+    Themed(CallbackWith<Color>),
     Label {
         text: String,
         icon: Option<IconContent>,
@@ -423,12 +441,12 @@ impl<'a> TabsScope<'a> {
     /// Adds a tab with its title and content builders.
     pub fn child<F1, F2>(&mut self, title: F1, content: F2)
     where
-        F1: FnOnce() + Send + Sync + 'static,
-        F2: FnOnce() + Send + Sync + 'static,
+        F1: Fn() + Send + Sync + 'static,
+        F2: Fn() + Send + Sync + 'static,
     {
         self.tabs.push(TabDef {
-            title: TabTitle::Custom(Box::new(title)),
-            content: Box::new(content),
+            title: TabTitle::Custom(RenderSlot::new(title)),
+            content: RenderSlot::new(content),
         });
     }
 
@@ -436,12 +454,12 @@ impl<'a> TabsScope<'a> {
     /// (active/inactive).
     pub fn child_with_color<F1, F2>(&mut self, title: F1, content: F2)
     where
-        F1: FnOnce(Color) + Send + Sync + 'static,
-        F2: FnOnce() + Send + Sync + 'static,
+        F1: Fn(Color) + Send + Sync + 'static,
+        F2: Fn() + Send + Sync + 'static,
     {
         self.tabs.push(TabDef {
-            title: TabTitle::Themed(Box::new(title)),
-            content: Box::new(content),
+            title: TabTitle::Themed(CallbackWith::new(title)),
+            content: RenderSlot::new(content),
         });
     }
 
@@ -449,14 +467,14 @@ impl<'a> TabsScope<'a> {
     /// layout.
     pub fn child_label<F>(&mut self, text: impl Into<String>, content: F)
     where
-        F: FnOnce() + Send + Sync + 'static,
+        F: Fn() + Send + Sync + 'static,
     {
         self.tabs.push(TabDef {
             title: TabTitle::Label {
                 text: text.into(),
                 icon: None,
             },
-            content: Box::new(content),
+            content: RenderSlot::new(content),
         });
     }
 
@@ -468,20 +486,20 @@ impl<'a> TabsScope<'a> {
         icon: impl Into<IconContent>,
         content: F,
     ) where
-        F: FnOnce() + Send + Sync + 'static,
+        F: Fn() + Send + Sync + 'static,
     {
         self.tabs.push(TabDef {
             title: TabTitle::Label {
                 text: text.into(),
                 icon: Some(icon.into()),
             },
-            content: Box::new(content),
+            content: RenderSlot::new(content),
         });
     }
 }
 
 /// Arguments for [`tab_label`].
-#[derive(Clone, Setters)]
+#[derive(PartialEq, Clone, Setters)]
 pub struct TabLabelArgs {
     /// Text shown in the tab.
     #[setters(into)]
@@ -509,6 +527,19 @@ impl Default for TabLabelArgs {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct TabsContentContainerArgs {
+    scroll_offset: Px,
+    children: Vec<RenderSlot>,
+}
+
+#[derive(Clone, PartialEq)]
+struct TabsRenderArgs {
+    tabs: TabsArgs,
+    controller: State<TabsController>,
+    items: Vec<TabDef>,
+}
+
 /// # tab_label
 ///
 /// Renders a standard Material tab label with optional icon and text.
@@ -531,16 +562,18 @@ impl Default for TabLabelArgs {
 ///
 /// #[tessera]
 /// fn demo() {
-/// #     material_theme(
+/// #     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #         || MaterialTheme::default(),
 /// #         || {
-///     tab_label(TabLabelArgs::default().text("Home"));
+///     tab_label(&TabLabelArgs::default().text("Home"));
 /// #         },
 /// #     );
+/// #     material_theme(&args);
 /// }
 /// ```
 #[tessera]
-pub fn tab_label(args: TabLabelArgs) {
+pub fn tab_label(args: &TabLabelArgs) {
+    let args = args.clone();
     let typography = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -587,6 +620,8 @@ pub fn tab_label(args: TabLabelArgs) {
             scope.child(move || {
                 if has_icon && has_text {
                     // Vertical layout with icon above text
+                    let icon_content_for_column = icon_content.clone();
+                    let text_content_for_column = text_content.clone();
                     column(
                         ColumnArgs::default()
                             .main_axis_alignment(MainAxisAlignment::Center)
@@ -598,45 +633,45 @@ pub fn tab_label(args: TabLabelArgs) {
                                 ),
                             ),
                         move |col| {
-                            let icon_content = icon_content.clone();
+                            let icon_content = icon_content_for_column.clone();
                             col.child(move || {
-                                if let Some(ic) = icon_content {
-                                    icon(IconArgs::from(ic).size(icon_size));
+                                if let Some(ic) = icon_content.clone() {
+                                    icon(&IconArgs::from(ic).size(icon_size));
                                 }
                             });
                             // Spacing between icon and text
                             col.child(|| {
-                                spacer(Modifier::new().constrain(
+                                spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
                                     Some(DimensionValue::Fixed(Px(0))),
                                     Some(DimensionValue::Fixed(Dp(2.0).into())),
-                                ));
+                                )));
                             });
-                            let text_content = text_content.clone();
+                            let text_content = text_content_for_column.clone();
                             col.child(move || {
-                                text(
-                                    TextArgs::default()
-                                        .text(text_content)
+                                text(&crate::text::TextArgs::from(
+                                    &TextArgs::default()
+                                        .text(text_content.clone())
                                         .color(content_color)
                                         .size(font_size)
                                         .line_height(line_height),
-                                );
+                                ));
                             });
                         },
                     );
                 } else if has_icon {
                     // Icon only
-                    if let Some(ic) = icon_content {
-                        icon(IconArgs::from(ic).size(icon_size));
+                    if let Some(ic) = icon_content.clone() {
+                        icon(&IconArgs::from(ic).size(icon_size));
                     }
                 } else if has_text {
                     // Text only
-                    text(
-                        TextArgs::default()
-                            .text(text_content)
+                    text(&crate::text::TextArgs::from(
+                        &TextArgs::default()
+                            .text(text_content.clone())
                             .color(content_color)
                             .size(font_size)
                             .line_height(line_height),
-                    );
+                    ));
                 }
             });
         },
@@ -693,12 +728,14 @@ impl LayoutSpec for TabsContentLayout {
 }
 
 #[tessera]
-fn tabs_content_container(scroll_offset: Px, children: Vec<Box<dyn FnOnce() + Send + Sync>>) {
-    for child in children {
-        child();
+fn tabs_content_container_node(args: &TabsContentContainerArgs) {
+    for child in &args.children {
+        child.render();
     }
 
-    layout(TabsContentLayout { scroll_offset });
+    layout(TabsContentLayout {
+        scroll_offset: args.scroll_offset,
+    });
 }
 
 #[derive(Clone)]
@@ -1118,87 +1155,49 @@ impl LayoutSpec for TabsLayout {
 ///         scope.child_with_color(
 ///             |color| {
 ///                 text(
-///                     TextArgs::default()
+///                     &TextArgs::default()
 ///                         .text("Flights")
 ///                         .color(color)
 ///                         .size(Dp(14.0)),
 ///                 )
 ///             },
-///             || text(TextArgs::default().text("Content for Flights")),
+///             || text(&TextArgs::default().text("Content for Flights")),
 ///         );
 ///         scope.child_with_color(
 ///             |color| {
 ///                 text(
-///                     TextArgs::default()
+///                     &TextArgs::default()
 ///                         .text("Hotel")
 ///                         .color(color)
 ///                         .size(Dp(14.0)),
 ///                 )
 ///             },
-///             || text(TextArgs::default().text("Content for Hotel")),
+///             || text(&TextArgs::default().text("Content for Hotel")),
 ///         );
 ///     });
 /// }
 /// ```
-#[tessera]
 pub fn tabs<F>(args: TabsArgs, scope_config: F)
 where
-    F: FnOnce(&mut TabsScope),
+    F: Fn(&mut TabsScope),
 {
     let controller = remember(|| TabsController::new(args.initial_active_tab));
-    tabs_with_controller(args, controller, scope_config);
-}
-
-/// # tabs_with_controller
-///
-/// Controlled variant that accepts an explicit controller.
-///
-/// ## Usage
-///
-/// Use when you need to synchronize active tab selection across components or
-/// restore selection after remounts.
-///
-/// ## Parameters
-///
-/// - `args` — configures the tabs' layout and indicator color; see
-///   [`TabsArgs`].
-/// - `controller` — a [`TabsController`] storing the active tab index and
-///   animation progress.
-/// - `scope_config` — a closure that receives a [`TabsScope`] for defining each
-///   tab's title and content.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::{
-///     tabs::{TabsArgs, TabsController, tabs_with_controller},
-///     text::{TextArgs, text},
-/// };
-/// use tessera_ui::{remember, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     let controller = remember(|| TabsController::new(0));
-///     tabs_with_controller(TabsArgs::default(), controller, |scope| {
-///         scope.child_with_color(
-///             |color| text(TextArgs::default().text("A").color(color)),
-///             || text(TextArgs::default().text("Tab A")),
-///         );
-///         scope.child_with_color(
-///             |color| text(TextArgs::default().text("B").color(color)),
-///             || text(TextArgs::default().text("Tab B")),
-///         );
-///     });
-/// }
-/// ```
-#[tessera]
-pub fn tabs_with_controller<F>(args: TabsArgs, controller: State<TabsController>, scope_config: F)
-where
-    F: FnOnce(&mut TabsScope),
-{
     let mut tabs = Vec::new();
     let mut scope = TabsScope { tabs: &mut tabs };
     scope_config(&mut scope);
+    let render_args = TabsRenderArgs {
+        tabs: args,
+        controller,
+        items: tabs,
+    };
+    tabs_render_node(&render_args);
+}
+
+#[tessera]
+fn tabs_render_node(args: &TabsRenderArgs) {
+    let controller = args.controller;
+    let tabs = args.items.clone();
+    let args = args.tabs.clone();
 
     let num_tabs = tabs.len();
     if num_tabs == 0 {
@@ -1211,34 +1210,34 @@ where
     let (title_closures, content_closures): (Vec<_>, Vec<_>) =
         tabs.into_iter().map(|def| (def.title, def.content)).unzip();
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(args.container_color.into())
             .modifier(Modifier::new().fill_max_size())
             .shape(Shape::RECTANGLE),
         || {},
-    );
+    ));
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(args.divider_color.into())
             .modifier(Modifier::new().fill_max_size())
             .shape(Shape::RECTANGLE),
         || {},
-    );
+    ));
 
     let indicator_shape = match args.variant {
         TabsVariant::Primary => Shape::rounded_rectangle(Dp(3.0)),
         TabsVariant::Secondary => Shape::RECTANGLE,
     };
 
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(args.indicator_color.into())
             .modifier(Modifier::new().fill_max_size())
             .shape(indicator_shape),
         || {},
-    );
+    ));
 
     let ripple_color = TabsDefaults::ripple_color(args.active_content_color);
 
@@ -1282,29 +1281,53 @@ where
             });
         }
 
-        surface(tab_surface, move || match child {
-            TabTitle::Custom(render) => render(),
-            TabTitle::Themed(render) => render(label_color),
-            TabTitle::Label { text, icon } => {
-                let mut label_args = TabLabelArgs::default()
-                    .text(text)
-                    .horizontal_text_padding(args.tab_padding)
-                    .indicator_height(args.indicator_height);
-                if let Some(icon) = icon {
-                    label_args = label_args.icon(icon);
+        surface(&crate::surface::SurfaceArgs::with_child(
+            tab_surface,
+            move || {
+                let child = child.clone();
+                match child {
+                    TabTitle::Custom(render) => render.render(),
+                    TabTitle::Themed(render) => render.call(label_color),
+                    TabTitle::Label { text, icon } => {
+                        let mut label_args = TabLabelArgs::default()
+                            .text(&text)
+                            .horizontal_text_padding(args.tab_padding)
+                            .indicator_height(args.indicator_height);
+                        if let Some(icon) = icon {
+                            label_args = label_args.icon(icon.clone());
+                        }
+                        tab_label(&label_args);
+                    }
                 }
-                tab_label(label_args);
+            },
+        ));
+    }
+
+    controller.with_mut(|c| c.tick(current_frame_nanos()));
+    if controller.with(|c| c.has_pending_animation_frame()) {
+        let controller_for_frame = controller;
+        receive_frame_nanos(move |frame_nanos| {
+            let has_pending_animation_frame = controller_for_frame.with_mut(|controller| {
+                controller.tick(frame_nanos);
+                controller.has_pending_animation_frame()
+            });
+            if has_pending_animation_frame {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
             }
         });
     }
-
-    controller.with_mut(|c| c.tick(Instant::now()));
     let scroll_offset = controller.with(|c| c.content_scroll_px());
     let tab_row_scroll_px = controller.with(|c| c.tab_row_scroll_px());
     let indicator_x_px = controller.with(|c| c.indicator_x_px());
     let indicator_width_px = controller.with(|c| c.indicator_width_px());
 
-    tabs_content_container(scroll_offset, content_closures);
+    let content_container_args = TabsContentContainerArgs {
+        scroll_offset,
+        children: content_closures,
+    };
+    tabs_content_container_node(&content_container_args);
 
     let layout_args = args.clone();
     input_handler(move |input| {
