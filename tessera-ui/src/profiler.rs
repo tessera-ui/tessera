@@ -13,7 +13,7 @@
 //! processing and parsing.
 //!
 //! ```jsonl
-//! {"version":3,"format":"tessera-profiler","generated_at":"1767008877"}
+//! {"version":1,"format":"tessera-profiler","generated_at":"1767008877"}
 //! {
 //!   "type": "frame",
 //!   "frame": 0,
@@ -457,7 +457,7 @@ impl FrameHeader {
             .map(|d| format!("{}", d.as_secs()))
             .unwrap_or_else(|_| String::from("unknown"));
         Self {
-            version: 3,
+            version: 1,
             format: "tessera-profiler",
             generated_at,
         }

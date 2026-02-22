@@ -354,9 +354,9 @@ pub fn analyze(
     if header.format != "tessera-profiler" {
         bail!("unsupported profiler format `{}`", header.format);
     }
-    if header.version != 3 {
+    if header.version != 1 {
         bail!(
-            "unsupported profiler version {}; expected version 3",
+            "unsupported profiler version {}; expected version 1",
             header.version
         );
     }
