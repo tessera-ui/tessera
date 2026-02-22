@@ -123,9 +123,49 @@ struct SlotEntry {
 }
 
 #[derive(Default)]
+struct InstanceSlotCursor {
+    previous_order: Vec<SlotHandle>,
+    current_order: Vec<SlotHandle>,
+    cursor: usize,
+    epoch: u64,
+}
+
+impl InstanceSlotCursor {
+    fn begin_epoch(&mut self, epoch: u64) {
+        if self.epoch == epoch {
+            return;
+        }
+        self.previous_order = std::mem::take(&mut self.current_order);
+        self.cursor = 0;
+        self.epoch = epoch;
+    }
+
+    fn fast_candidate(&self) -> Option<SlotHandle> {
+        self.previous_order.get(self.cursor).copied()
+    }
+
+    fn record_fast_match(&mut self, slot: SlotHandle) {
+        self.cursor = self.cursor.saturating_add(1);
+        self.current_order.push(slot);
+    }
+
+    fn record_slow_match(&mut self, slot: SlotHandle) {
+        if self.cursor < self.previous_order.len()
+            && let Some(offset) = self.previous_order[self.cursor..]
+                .iter()
+                .position(|candidate| *candidate == slot)
+        {
+            self.cursor += offset + 1;
+        }
+        self.current_order.push(slot);
+    }
+}
+
+#[derive(Default)]
 struct SlotTable {
     entries: SlotMap<SlotHandle, SlotEntry>,
     key_to_slot: HashMap<SlotKey, SlotHandle>,
+    cursors_by_instance_logic_id: HashMap<u64, InstanceSlotCursor>,
     epoch: u64,
 }
 
@@ -137,7 +177,46 @@ impl SlotTable {
     fn reset(&mut self) {
         self.entries.clear();
         self.key_to_slot.clear();
+        self.cursors_by_instance_logic_id.clear();
         self.epoch = 0;
+    }
+
+    fn try_fast_slot_lookup(&mut self, key: SlotKey) -> Option<SlotHandle> {
+        let epoch = self.epoch;
+        let candidate = {
+            let cursor = self
+                .cursors_by_instance_logic_id
+                .entry(key.instance_logic_id)
+                .or_default();
+            cursor.begin_epoch(epoch);
+            cursor.fast_candidate()
+        }?;
+
+        let is_match = self
+            .entries
+            .get(candidate)
+            .is_some_and(|entry| entry.key == key);
+
+        if !is_match {
+            return None;
+        }
+
+        let cursor = self
+            .cursors_by_instance_logic_id
+            .get_mut(&key.instance_logic_id)
+            .expect("cursor entry should exist");
+        cursor.record_fast_match(candidate);
+        Some(candidate)
+    }
+
+    fn record_slot_usage_slow(&mut self, instance_logic_id: u64, slot: SlotHandle) {
+        let epoch = self.epoch;
+        let cursor = self
+            .cursors_by_instance_logic_id
+            .entry(instance_logic_id)
+            .or_default();
+        cursor.begin_epoch(epoch);
+        cursor.record_slow_match(slot);
     }
 }
 
@@ -686,6 +765,9 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
     for (slot, key) in freed {
         table.entries.remove(slot);
         table.key_to_slot.remove(&key);
+    }
+    for instance_logic_id in instance_logic_ids {
+        table.cursors_by_instance_logic_id.remove(instance_logic_id);
     }
 }
 
@@ -1665,8 +1747,36 @@ where
 
     let mut table = slot_table().write();
     let mut init_opt = Some(init);
+    if let Some(slot) = table.try_fast_slot_lookup(slot_key) {
+        let epoch = table.epoch;
+        let generation = {
+            let entry = table
+                .entries
+                .get_mut(slot)
+                .expect("slot entry should exist");
 
-    if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+            if entry.key.type_id != slot_key.type_id {
+                panic!(
+                    "remember_with_key type mismatch: expected {}, found {:?}",
+                    std::any::type_name::<T>(),
+                    entry.key.type_id
+                );
+            }
+
+            entry.last_alive_epoch = epoch;
+            if entry.value.is_none() {
+                let init_fn = init_opt
+                    .take()
+                    .expect("remember_with_key init called more than once");
+                entry.value = Some(Arc::new(RwLock::new(init_fn())));
+                entry.generation = entry.generation.wrapping_add(1);
+            }
+            entry.generation
+        };
+
+        State::new(slot, generation)
+    } else if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+        table.record_slot_usage_slow(instance_logic_id, slot);
         let epoch = table.epoch;
         let generation = {
             let entry = table
@@ -1709,6 +1819,7 @@ where
         });
 
         table.key_to_slot.insert(slot_key, slot);
+        table.record_slot_usage_slow(instance_logic_id, slot);
         State::new(slot, generation)
     }
 }
@@ -1800,8 +1911,38 @@ where
 
     let mut table = slot_table().write();
     let mut init_opt = Some(init);
+    if let Some(slot) = table.try_fast_slot_lookup(slot_key) {
+        let epoch = table.epoch;
+        let generation = {
+            let entry = table
+                .entries
+                .get_mut(slot)
+                .expect("slot entry should exist");
 
-    if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+            if entry.key.type_id != slot_key.type_id {
+                panic!(
+                    "retain_with_key type mismatch: expected {}, found {:?}",
+                    std::any::type_name::<T>(),
+                    entry.key.type_id
+                );
+            }
+
+            entry.last_alive_epoch = epoch;
+            entry.retained = true;
+            if entry.value.is_none() {
+                let init_fn = init_opt
+                    .take()
+                    .expect("retain_with_key init called more than once");
+                entry.value = Some(Arc::new(RwLock::new(init_fn())));
+                entry.generation = entry.generation.wrapping_add(1);
+            }
+
+            entry.generation
+        };
+
+        State::new(slot, generation)
+    } else if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+        table.record_slot_usage_slow(instance_logic_id, slot);
         let epoch = table.epoch;
         let generation = {
             let entry = table
@@ -1846,6 +1987,7 @@ where
         });
 
         table.key_to_slot.insert(slot_key, slot);
+        table.record_slot_usage_slow(instance_logic_id, slot);
         State::new(slot, generation)
     }
 }
