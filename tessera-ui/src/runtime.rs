@@ -2250,8 +2250,8 @@ mod tests {
 
         let table = slot_table().read();
         assert!(table.entries.get(keep_slot).is_some());
-        assert!(table.key_to_slot.get(&keep_key).is_some());
+        assert!(table.key_to_slot.contains_key(&keep_key));
         assert!(table.entries.get(drop_slot).is_none());
-        assert!(table.key_to_slot.get(&drop_key).is_none());
+        assert!(!table.key_to_slot.contains_key(&drop_key));
     }
 }
