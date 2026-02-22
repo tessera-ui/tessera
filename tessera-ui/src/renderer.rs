@@ -37,7 +37,7 @@ use crate::{
         clear_layout_snapshots,
     },
     context::{
-        begin_frame_component_context_tracking, begin_frame_context_slots,
+        begin_frame_component_context_tracking, begin_recompose_context_slot_epoch,
         drop_context_slots_for_instance_logic_ids, finalize_frame_component_context_tracking,
         finalize_frame_component_context_tracking_partial, previous_component_context_snapshots,
         remove_context_read_dependencies, remove_previous_component_context_snapshots,
@@ -53,7 +53,7 @@ use crate::{
     render_module::RenderModule,
     runtime::{
         TesseraRuntime, begin_frame_clock, begin_frame_component_replay_tracking,
-        begin_frame_layout_dirty_tracking, begin_frame_slots, clear_frame_nanos_receivers,
+        begin_frame_layout_dirty_tracking, begin_recompose_slot_epoch, clear_frame_nanos_receivers,
         clear_redraw_waker, consume_scheduled_redraw, drop_slots_for_instance_logic_ids,
         finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
         finalize_frame_layout_dirty_tracking, has_pending_build_invalidations,
@@ -917,8 +917,8 @@ impl<F: Fn()> Renderer<F> {
         begin_frame_component_replay_tracking();
         begin_frame_component_context_tracking();
         begin_frame_layout_dirty_tracking();
-        begin_frame_slots();
-        begin_frame_context_slots();
+        begin_recompose_slot_epoch();
+        begin_recompose_context_slot_epoch();
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
         entry_wrapper();
         finalize_frame_component_replay_tracking();
@@ -1037,8 +1037,8 @@ impl<F: Fn()> Renderer<F> {
         begin_frame_component_replay_tracking();
         begin_frame_component_context_tracking();
         begin_frame_layout_dirty_tracking();
-        begin_frame_slots();
-        begin_frame_context_slots();
+        begin_recompose_slot_epoch();
+        begin_recompose_context_slot_epoch();
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
         let mut stale_instance_keys = HashSet::default();
         let mut stale_instance_logic_ids = HashSet::default();

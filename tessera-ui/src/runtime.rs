@@ -170,7 +170,7 @@ struct SlotTable {
 }
 
 impl SlotTable {
-    fn begin_frame(&mut self) {
+    fn begin_epoch(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
     }
 
@@ -1659,8 +1659,8 @@ pub(crate) fn ensure_build_phase() {
 }
 
 /// Start a new state-slot epoch for the current recomposition pass.
-pub fn begin_frame_slots() {
-    slot_table().write().begin_frame();
+pub fn begin_recompose_slot_epoch() {
+    slot_table().write().begin_epoch();
 }
 
 /// Reset all slot buffers (used on suspension).

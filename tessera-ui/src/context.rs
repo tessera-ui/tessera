@@ -56,7 +56,7 @@ struct SlotTable {
 }
 
 impl SlotTable {
-    fn begin_frame(&mut self) {
+    fn begin_epoch(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
     }
 }
@@ -293,9 +293,9 @@ fn context_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
         .unwrap_or_default()
 }
 
-pub(crate) fn begin_frame_context_slots() {
+pub(crate) fn begin_recompose_context_slot_epoch() {
     // Start a new context-slot epoch for the current recomposition pass.
-    slot_table().write().begin_frame();
+    slot_table().write().begin_epoch();
     CONTEXT_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
         stack.clear();
