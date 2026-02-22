@@ -9,6 +9,7 @@ use dashmap::DashMap;
 use indextree::NodeId;
 use parking_lot::RwLock;
 use rayon::prelude::*;
+use rustc_hash::FxBuildHasher;
 use tracing::debug;
 use winit::window::CursorIcon;
 
@@ -350,7 +351,7 @@ impl Default for ComponentNodeMetaData {
 /// A tree of component nodes, using `indextree::Arena` for storage.
 pub type ComponentNodeTree = indextree::Arena<ComponentNode>;
 /// Contains all component nodes' metadatas, using a thread-safe `DashMap`.
-pub type ComponentNodeMetaDatas = DashMap<NodeId, ComponentNodeMetaData>;
+pub type ComponentNodeMetaDatas = DashMap<NodeId, ComponentNodeMetaData, FxBuildHasher>;
 
 /// Represents errors that can occur during node measurement.
 #[derive(Debug, Clone, PartialEq)]

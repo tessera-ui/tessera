@@ -252,7 +252,7 @@ impl ComponentTree {
     pub fn new() -> Self {
         let tree = indextree::Arena::new();
         let node_queue = Vec::new();
-        let metadatas = ComponentNodeMetaDatas::new();
+        let metadatas = ComponentNodeMetaDatas::with_hasher(FxBuildHasher::default());
         Self {
             tree,
             node_queue,

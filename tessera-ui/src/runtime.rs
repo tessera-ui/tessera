@@ -12,7 +12,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use parking_lot::{Mutex, RwLock};
+use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use slotmap::{SlotMap, new_key_type};
 use smallvec::SmallVec;
@@ -503,7 +503,15 @@ fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
     };
 
     let key = StateReadDependencyKey { slot, generation };
-    let mut tracker = state_read_dependency_tracker().write();
+    let tracker = state_read_dependency_tracker().upgradable_read();
+    if tracker
+        .readers_by_state
+        .get(&key)
+        .is_some_and(|readers| readers.contains(&reader_instance_key))
+    {
+        return;
+    }
+    let mut tracker = RwLockUpgradableReadGuard::upgrade(tracker);
     tracker
         .readers_by_state
         .entry(key)
@@ -787,16 +795,23 @@ fn record_layout_spec_dirty(instance_key: u64, layout_spec: &dyn LayoutSpecDyn) 
         return;
     }
     let mut tracker = layout_dirty_tracker().write();
-    let changed = match tracker.previous_layout_specs_by_node.get(&instance_key) {
-        Some(previous) => !previous.dyn_eq(layout_spec),
-        None => true,
-    };
+    let (changed, next_layout_spec) =
+        match tracker.previous_layout_specs_by_node.remove(&instance_key) {
+            Some(previous) => {
+                if previous.dyn_eq(layout_spec) {
+                    (false, previous)
+                } else {
+                    (true, layout_spec.clone_box())
+                }
+            }
+            None => (true, layout_spec.clone_box()),
+        };
     if changed {
         tracker.pending_self_dirty_nodes.insert(instance_key);
     }
     tracker
         .frame_layout_specs_by_node
-        .insert(instance_key, layout_spec.clone_box());
+        .insert(instance_key, next_layout_spec);
 }
 
 pub(crate) fn begin_frame_layout_dirty_tracking() {
@@ -1543,8 +1558,10 @@ fn current_group_path() -> Vec<u64> {
 }
 
 fn current_group_path_hash() -> u64 {
-    let group_path = current_group_path();
-    hash_components(&[&group_path])
+    GROUP_PATH_STACK.with(|stack| {
+        let stack = stack.borrow();
+        hash_components(&[&stack[..]])
+    })
 }
 
 fn current_instance_key_override() -> Option<u64> {
@@ -1609,7 +1626,7 @@ impl Drop for InstanceKeyGuard {
     }
 }
 
-fn hash_components<H: Hash>(parts: &[&H]) -> u64 {
+fn hash_components<H: Hash + ?Sized>(parts: &[&H]) -> u64 {
     let mut hasher = rustc_hash::FxHasher::default();
     for part in parts {
         part.hash(&mut hasher);
@@ -1619,8 +1636,7 @@ fn hash_components<H: Hash>(parts: &[&H]) -> u64 {
 
 fn compute_slot_key<K: Hash>(key: &K) -> (u64, u64) {
     let instance_logic_id = current_instance_logic_id();
-    let group_path = current_group_path();
-    let group_path_hash = hash_components(&[&group_path]);
+    let group_path_hash = current_group_path_hash();
     let key_hash = hash_components(&[key]);
 
     // Get the call counter to distinguish multiple remember calls within the same
