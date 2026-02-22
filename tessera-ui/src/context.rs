@@ -35,7 +35,7 @@ thread_local! {
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 struct SlotKey {
-    logic_id: u64,
+    instance_logic_id: u64,
     slot_hash: u64,
     type_id: TypeId,
 }
@@ -303,8 +303,10 @@ pub(crate) fn begin_frame_context_slots() {
     });
 }
 
-pub(crate) fn recycle_recomposed_context_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
-    if logic_ids.is_empty() {
+pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
+    instance_logic_ids: &HashSet<u64>,
+) {
+    if instance_logic_ids.is_empty() {
         return;
     }
 
@@ -313,7 +315,7 @@ pub(crate) fn recycle_recomposed_context_slots_for_logic_ids(logic_ids: &HashSet
     let epoch = table.epoch;
     let mut freed: Vec<(u32, SlotKey)> = Vec::new();
     for (slot, entry) in table.entries.iter_mut().enumerate() {
-        if !logic_ids.contains(&entry.key.logic_id) {
+        if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
             continue;
         }
         if entry.value.is_none() {
@@ -335,18 +337,18 @@ pub(crate) fn recycle_recomposed_context_slots_for_logic_ids(logic_ids: &HashSet
     }
 }
 
-pub(crate) fn live_context_slot_logic_ids() -> HashSet<u64> {
+pub(crate) fn live_context_slot_instance_logic_ids() -> HashSet<u64> {
     let table = slot_table().read();
     table
         .entries
         .iter()
         .filter(|entry| entry.value.is_some())
-        .map(|entry| entry.key.logic_id)
+        .map(|entry| entry.key.instance_logic_id)
         .collect()
 }
 
-pub(crate) fn drop_context_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
-    if logic_ids.is_empty() {
+pub(crate) fn drop_context_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64>) {
+    if instance_logic_ids.is_empty() {
         return;
     }
 
@@ -356,7 +358,7 @@ pub(crate) fn drop_context_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
         if entry.value.is_none() {
             continue;
         }
-        if !logic_ids.contains(&entry.key.logic_id) {
+        if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
             continue;
         }
         freed.push((slot as u32, entry.key));
@@ -580,10 +582,10 @@ where
 {
     ensure_build_phase();
 
-    let (logic_id, slot_hash) = compute_context_slot_key();
+    let (instance_logic_id, slot_hash) = compute_context_slot_key();
     let type_id = TypeId::of::<T>();
     let slot_key = SlotKey {
-        logic_id,
+        instance_logic_id,
         slot_hash,
         type_id,
     };
@@ -725,7 +727,7 @@ mod tests {
                 slot: 1,
                 generation: 2,
                 key: SlotKey {
-                    logic_id: 7,
+                    instance_logic_id: 7,
                     slot_hash: 11,
                     type_id: TypeId::of::<u8>(),
                 },
@@ -742,7 +744,7 @@ mod tests {
                 slot: 3,
                 generation: 4,
                 key: SlotKey {
-                    logic_id: 17,
+                    instance_logic_id: 17,
                     slot_hash: 19,
                     type_id: TypeId::of::<u32>(),
                 },
@@ -771,7 +773,7 @@ mod tests {
         reset_test_state();
 
         let key = SlotKey {
-            logic_id: 31,
+            instance_logic_id: 31,
             slot_hash: 37,
             type_id: TypeId::of::<u8>(),
         };
@@ -809,12 +811,12 @@ mod tests {
         reset_test_state();
 
         let key = SlotKey {
-            logic_id: 41,
+            instance_logic_id: 41,
             slot_hash: 43,
             type_id: TypeId::of::<u16>(),
         };
         let old_key = SlotKey {
-            logic_id: 47,
+            instance_logic_id: 47,
             slot_hash: 53,
             type_id: TypeId::of::<u16>(),
         };

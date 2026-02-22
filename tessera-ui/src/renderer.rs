@@ -38,7 +38,7 @@ use crate::{
     },
     context::{
         begin_frame_component_context_tracking, begin_frame_context_slots,
-        drop_context_slots_for_logic_ids, finalize_frame_component_context_tracking,
+        drop_context_slots_for_instance_logic_ids, finalize_frame_component_context_tracking,
         finalize_frame_component_context_tracking_partial, previous_component_context_snapshots,
         remove_context_read_dependencies, remove_previous_component_context_snapshots,
         reset_component_context_tracking, reset_context_read_dependencies, with_context_snapshot,
@@ -54,7 +54,7 @@ use crate::{
     runtime::{
         TesseraRuntime, begin_frame_clock, begin_frame_component_replay_tracking,
         begin_frame_layout_dirty_tracking, begin_frame_slots, clear_frame_nanos_receivers,
-        clear_redraw_waker, consume_scheduled_redraw, drop_slots_for_logic_ids,
+        clear_redraw_waker, consume_scheduled_redraw, drop_slots_for_instance_logic_ids,
         finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
         finalize_frame_layout_dirty_tracking, has_pending_build_invalidations,
         has_pending_frame_nanos_receivers, install_redraw_waker, previous_component_replay_nodes,
@@ -904,8 +904,9 @@ impl<F: Fn()> Renderer<F> {
     /// for component tree processing and resource management.
     #[instrument(level = "debug")]
     fn build_component_tree_full() -> std::time::Duration {
-        let recomposed_state_logic_ids = crate::runtime::live_slot_logic_ids();
-        let recomposed_context_logic_ids = crate::context::live_context_slot_logic_ids();
+        let recomposed_state_instance_logic_ids = crate::runtime::live_slot_instance_logic_ids();
+        let recomposed_context_instance_logic_ids =
+            crate::context::live_context_slot_instance_logic_ids();
         let tree_timer = Instant::now();
         debug!("Building component tree...");
         clear_frame_nanos_receivers();
@@ -924,9 +925,11 @@ impl<F: Fn()> Renderer<F> {
         finalize_frame_component_replay_tracking();
         finalize_frame_component_context_tracking();
         finalize_frame_layout_dirty_tracking();
-        crate::runtime::recycle_recomposed_slots_for_logic_ids(&recomposed_state_logic_ids);
-        crate::context::recycle_recomposed_context_slots_for_logic_ids(
-            &recomposed_context_logic_ids,
+        crate::runtime::recycle_recomposed_slots_for_instance_logic_ids(
+            &recomposed_state_instance_logic_ids,
+        );
+        crate::context::recycle_recomposed_context_slots_for_instance_logic_ids(
+            &recomposed_context_instance_logic_ids,
         );
         let build_tree_cost = tree_timer.elapsed();
         debug!("Component tree built in {build_tree_cost:?}");
@@ -1039,8 +1042,8 @@ impl<F: Fn()> Renderer<F> {
         begin_frame_context_slots();
         let _phase_guard = crate::runtime::push_phase(crate::runtime::RuntimePhase::Build);
         let mut stale_instance_keys = HashSet::new();
-        let mut stale_logic_ids = HashSet::new();
-        let mut recomposed_logic_ids = HashSet::new();
+        let mut stale_instance_logic_ids = HashSet::new();
+        let mut recomposed_instance_logic_ids = HashSet::new();
         #[cfg(feature = "profiling")]
         let mut replayed_nodes = 0_u64;
 
@@ -1061,7 +1064,7 @@ impl<F: Fn()> Renderer<F> {
                 )
             });
             let replay = replay_snapshot.replay.clone();
-            let replay_logic_id = replay_snapshot.logic_id;
+            let replay_instance_logic_id = replay_snapshot.instance_logic_id;
             let replay_group_path = replay_snapshot.group_path.clone();
 
             let replace_context = TesseraRuntime::with_mut(|runtime| {
@@ -1083,7 +1086,7 @@ impl<F: Fn()> Renderer<F> {
             };
 
             with_context_snapshot(context_snapshot, || {
-                with_replay_scope(replay_logic_id, &replay_group_path, || {
+                with_replay_scope(replay_instance_logic_id, &replay_group_path, || {
                     replay.runner.run(replay.props.as_ref());
                 });
             });
@@ -1096,10 +1099,10 @@ impl<F: Fn()> Renderer<F> {
             let replace_result = replace_result.unwrap_or_else(|_| {
                 panic!("finish_replace_subtree failed for instance key {instance_key}")
             });
-            recomposed_logic_ids.extend(
+            recomposed_instance_logic_ids.extend(
                 replace_result
-                    .inserted_logic_ids
-                    .difference(&replace_result.reused_logic_ids)
+                    .inserted_instance_logic_ids
+                    .difference(&replace_result.reused_instance_logic_ids)
                     .copied(),
             );
 
@@ -1108,9 +1111,9 @@ impl<F: Fn()> Renderer<F> {
                     stale_instance_keys.insert(*removed);
                 }
             }
-            for removed in &replace_result.removed_logic_ids {
-                if !replace_result.inserted_logic_ids.contains(removed) {
-                    stale_logic_ids.insert(*removed);
+            for removed in &replace_result.removed_instance_logic_ids {
+                if !replace_result.inserted_instance_logic_ids.contains(removed) {
+                    stale_instance_logic_ids.insert(*removed);
                 }
             }
         }
@@ -1124,10 +1127,14 @@ impl<F: Fn()> Renderer<F> {
         crate::runtime::remove_build_invalidations(&stale_instance_keys);
         remove_previous_component_context_snapshots(&stale_instance_keys);
         remove_context_read_dependencies(&stale_instance_keys);
-        drop_slots_for_logic_ids(&stale_logic_ids);
-        drop_context_slots_for_logic_ids(&stale_logic_ids);
-        crate::runtime::recycle_recomposed_slots_for_logic_ids(&recomposed_logic_ids);
-        crate::context::recycle_recomposed_context_slots_for_logic_ids(&recomposed_logic_ids);
+        drop_slots_for_instance_logic_ids(&stale_instance_logic_ids);
+        drop_context_slots_for_instance_logic_ids(&stale_instance_logic_ids);
+        crate::runtime::recycle_recomposed_slots_for_instance_logic_ids(
+            &recomposed_instance_logic_ids,
+        );
+        crate::context::recycle_recomposed_context_slots_for_instance_logic_ids(
+            &recomposed_instance_logic_ids,
+        );
         let build_tree_cost = tree_timer.elapsed();
         debug!("Dirty subtree replay finished in {build_tree_cost:?}");
         PartialReplayBuildResult {

@@ -23,7 +23,7 @@ use crate::{
     render_graph::{RenderGraph, RenderGraphBuilder},
     runtime::{
         RuntimePhase, StructureReconcileResult, push_current_component_instance_key,
-        push_current_node, push_phase,
+        push_current_node_with_instance_logic_id, push_phase,
     },
 };
 
@@ -222,10 +222,10 @@ pub(crate) enum ReplayReplaceError {
 #[derive(Default)]
 pub(crate) struct ReplayReplaceResult {
     pub removed_instance_keys: HashSet<u64>,
-    pub removed_logic_ids: HashSet<u64>,
+    pub removed_instance_logic_ids: HashSet<u64>,
     pub inserted_instance_keys: HashSet<u64>,
-    pub inserted_logic_ids: HashSet<u64>,
-    pub reused_logic_ids: HashSet<u64>,
+    pub inserted_instance_logic_ids: HashSet<u64>,
+    pub reused_instance_logic_ids: HashSet<u64>,
 }
 
 pub(crate) struct ReplayReplaceContext {
@@ -236,7 +236,7 @@ pub(crate) struct ReplayReplaceContext {
     detached_root_id: indextree::NodeId,
     detached_node_ids: HashSet<indextree::NodeId>,
     removed_instance_keys: HashSet<u64>,
-    removed_logic_ids: HashSet<u64>,
+    removed_instance_logic_ids: HashSet<u64>,
 }
 
 impl Default for ComponentTree {
@@ -333,11 +333,11 @@ impl ComponentTree {
             .collect();
         let detached_node_ids = removed_node_ids.iter().copied().collect::<HashSet<_>>();
         let mut removed_instance_keys = HashSet::new();
-        let mut removed_logic_ids = HashSet::new();
+        let mut removed_instance_logic_ids = HashSet::new();
         for id in &removed_node_ids {
             if let Some(node) = self.tree.get(*id) {
                 removed_instance_keys.insert(node.get().instance_key);
-                removed_logic_ids.insert(node.get().logic_id);
+                removed_instance_logic_ids.insert(node.get().instance_logic_id);
                 self.replay_reuse_candidates
                     .insert(node.get().instance_key, *id);
             }
@@ -355,7 +355,7 @@ impl ComponentTree {
             detached_root_id: target_node_id,
             detached_node_ids,
             removed_instance_keys,
-            removed_logic_ids,
+            removed_instance_logic_ids,
         })
     }
 
@@ -371,7 +371,7 @@ impl ComponentTree {
             detached_root_id,
             detached_node_ids,
             removed_instance_keys,
-            removed_logic_ids,
+            removed_instance_logic_ids,
         } = context;
 
         let mut inserted_root_ids = parent_id
@@ -398,8 +398,8 @@ impl ComponentTree {
         let detached_root_reused = inserted_root_ids.contains(&detached_root_id);
 
         let mut inserted_instance_keys = HashSet::new();
-        let mut inserted_logic_ids = HashSet::new();
-        let mut reused_logic_ids = HashSet::new();
+        let mut inserted_instance_logic_ids = HashSet::new();
+        let mut reused_instance_logic_ids = HashSet::new();
         for inserted_root_id in &inserted_root_ids {
             for edge in inserted_root_id.traverse(&self.tree) {
                 let indextree::NodeEdge::Start(id) = edge else {
@@ -407,9 +407,9 @@ impl ComponentTree {
                 };
                 if let Some(node) = self.tree.get(id) {
                     inserted_instance_keys.insert(node.get().instance_key);
-                    inserted_logic_ids.insert(node.get().logic_id);
+                    inserted_instance_logic_ids.insert(node.get().instance_logic_id);
                     if detached_node_ids.contains(&id) {
-                        reused_logic_ids.insert(node.get().logic_id);
+                        reused_instance_logic_ids.insert(node.get().instance_logic_id);
                     }
                 }
             }
@@ -419,8 +419,8 @@ impl ComponentTree {
             .difference(&inserted_instance_keys)
             .copied()
             .collect::<HashSet<_>>();
-        let removed_logic_ids = removed_logic_ids
-            .difference(&inserted_logic_ids)
+        let removed_instance_logic_ids = removed_instance_logic_ids
+            .difference(&inserted_instance_logic_ids)
             .copied()
             .collect::<HashSet<_>>();
 
@@ -442,10 +442,10 @@ impl ComponentTree {
         self.node_queue = previous_queue;
         Ok(ReplayReplaceResult {
             removed_instance_keys,
-            removed_logic_ids,
+            removed_instance_logic_ids,
             inserted_instance_keys,
-            inserted_logic_ids,
-            reused_logic_ids,
+            inserted_instance_logic_ids,
+            reused_instance_logic_ids,
         })
     }
 
@@ -462,19 +462,23 @@ impl ComponentTree {
         self.get_mut(*node_id)
     }
 
-    pub(crate) fn try_reuse_current_subtree(&mut self, instance_key: u64, logic_id: u64) -> bool {
+    pub(crate) fn try_reuse_current_subtree(
+        &mut self,
+        instance_key: u64,
+        instance_logic_id: u64,
+    ) -> bool {
         let Some(&candidate_node_id) = self.replay_reuse_candidates.get(&instance_key) else {
             return false;
         };
-        let Some(candidate_logic_id) = self
+        let Some(candidate_instance_logic_id) = self
             .tree
             .get(candidate_node_id)
-            .map(|node| node.get().logic_id)
+            .map(|node| node.get().instance_logic_id)
         else {
             self.replay_reuse_candidates.remove(&instance_key);
             return false;
         };
-        if candidate_logic_id != logic_id {
+        if candidate_instance_logic_id != instance_logic_id {
             return false;
         }
 
@@ -736,13 +740,13 @@ impl ComponentTree {
             let current_cursor_position = cursor_position_ref.map(|pos| pos - abs_pos);
 
             if let Some(node_computed_data) = node_computed_data {
-                let (logic_id, instance_key, fn_name) = self
+                let (instance_logic_id, instance_key, fn_name) = self
                     .tree
                     .get(node_id)
                     .map(|n| {
                         let node = n.get();
                         (
-                            node.logic_id,
+                            node.instance_logic_id,
                             node.instance_key,
                             node.fn_name.as_str().to_owned(),
                         )
@@ -759,7 +763,11 @@ impl ComponentTree {
                         fn_name.as_deref(),
                     ))
                 };
-                let _node_ctx_guard = push_current_node(node_id, logic_id, fn_name.as_str());
+                let _node_ctx_guard = push_current_node_with_instance_logic_id(
+                    node_id,
+                    instance_logic_id,
+                    fn_name.as_str(),
+                );
                 let _instance_ctx_guard = push_current_component_instance_key(instance_key);
                 let _phase_guard = push_phase(RuntimePhase::Input);
                 let input = InputHandlerInput {
@@ -1040,10 +1048,11 @@ mod tests {
 
     use crate::{component_tree::ComponentNode, layout::DefaultLayoutSpec};
 
-    fn node(name: &str, logic_id: u64, instance_key: u64) -> ComponentNode {
+    fn node(name: &str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
         ComponentNode {
             fn_name: name.to_string(),
-            logic_id,
+            component_type_id: instance_logic_id,
+            instance_logic_id,
             instance_key,
             input_handler_fn: None,
             layout_spec: Box::new(DefaultLayoutSpec),
@@ -1113,11 +1122,11 @@ mod tests {
         assert!(replace_result.inserted_instance_keys.contains(&5));
         assert!(replace_result.inserted_instance_keys.contains(&6));
         assert!(replace_result.inserted_instance_keys.contains(&7));
-        assert!(replace_result.removed_logic_ids.contains(&2));
-        assert!(replace_result.removed_logic_ids.contains(&3));
-        assert!(replace_result.inserted_logic_ids.contains(&5));
-        assert!(replace_result.inserted_logic_ids.contains(&6));
-        assert!(replace_result.inserted_logic_ids.contains(&7));
+        assert!(replace_result.removed_instance_logic_ids.contains(&2));
+        assert!(replace_result.removed_instance_logic_ids.contains(&3));
+        assert!(replace_result.inserted_instance_logic_ids.contains(&5));
+        assert!(replace_result.inserted_instance_logic_ids.contains(&6));
+        assert!(replace_result.inserted_instance_logic_ids.contains(&7));
 
         assert!(tree.get(second).is_some());
     }
@@ -1161,11 +1170,11 @@ mod tests {
 
         assert!(replace_result.inserted_instance_keys.contains(&2));
         assert!(replace_result.inserted_instance_keys.contains(&3));
-        assert!(replace_result.reused_logic_ids.contains(&2));
-        assert!(replace_result.reused_logic_ids.contains(&3));
+        assert!(replace_result.reused_instance_logic_ids.contains(&2));
+        assert!(replace_result.reused_instance_logic_ids.contains(&3));
         assert!(!replace_result.removed_instance_keys.contains(&2));
         assert!(!replace_result.removed_instance_keys.contains(&3));
-        assert!(!replace_result.removed_logic_ids.contains(&2));
-        assert!(!replace_result.removed_logic_ids.contains(&3));
+        assert!(!replace_result.removed_instance_logic_ids.contains(&2));
+        assert!(!replace_result.removed_instance_logic_ids.contains(&3));
     }
 }

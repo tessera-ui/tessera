@@ -27,8 +27,8 @@ thread_local! {
     static NODE_CONTEXT_STACK: RefCell<Vec<NodeId>> = const { RefCell::new(Vec::new()) };
     /// Control-flow grouping path for the current thread.
     static GROUP_PATH_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
-    /// Component logic identifier stack (one per component invocation).
-    static LOGIC_ID_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    /// Component-instance logic identifier stack (one per component invocation).
+    static INSTANCE_LOGIC_ID_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
     /// Current execution phase stack for the thread.
     static PHASE_STACK: RefCell<Vec<RuntimePhase>> = const { RefCell::new(Vec::new()) };
     /// Call counter stack: tracks sequential remember calls within each group.
@@ -58,19 +58,18 @@ thread_local! {
     /// component body even when nested control-flow groups are entered.
     static CURRENT_COMPONENT_INSTANCE_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
 
-    /// One-shot logic-id override used by subtree replay.
+    /// One-shot instance-logic-id override used by subtree replay.
     ///
     /// When set, the next `push_current_node` call will consume this value as
-    /// the component logic id instead of deriving it from parent stacks.
-    static NEXT_NODE_LOGIC_ID_OVERRIDE: RefCell<Option<u64>> = const { RefCell::new(None) };
+    /// the component instance logic id instead of deriving it from parent stacks.
+    static NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE: RefCell<Option<u64>> = const { RefCell::new(None) };
 
     /// Active reactive-dirty instance-key set for the current build pass.
     static BUILD_DIRTY_INSTANCE_KEYS_STACK: RefCell<Vec<Arc<HashSet<u64>>>> = const { RefCell::new(Vec::new()) };
 }
 
 pub(crate) fn compute_context_slot_key() -> (u64, u64) {
-    let logic_id =
-        current_logic_id().expect("provide_context must be called inside a tessera component");
+    let instance_logic_id = current_instance_logic_id();
     let group_path_hash = current_group_path_hash();
 
     let call_counter = CONTEXT_CALL_COUNTER_STACK.with(|stack| {
@@ -89,12 +88,12 @@ pub(crate) fn compute_context_slot_key() -> (u64, u64) {
     });
 
     let slot_hash = hash_components(&[&group_path_hash, &call_counter]);
-    (logic_id, slot_hash)
+    (instance_logic_id, slot_hash)
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct SlotKey {
-    logic_id: u64,
+    instance_logic_id: u64,
     slot_hash: u64,
     type_id: TypeId,
 }
@@ -102,7 +101,7 @@ struct SlotKey {
 impl Default for SlotKey {
     fn default() -> Self {
         Self {
-            logic_id: 0,
+            instance_logic_id: 0,
             slot_hash: 0,
             type_id: TypeId::of::<()>(),
         }
@@ -166,7 +165,7 @@ pub(crate) struct StructureReconcileResult {
 pub(crate) struct ReplayNodeSnapshot {
     pub instance_key: u64,
     pub parent_instance_key: Option<u64>,
-    pub logic_id: u64,
+    pub instance_logic_id: u64,
     pub group_path: Vec<u64>,
     pub fn_name: String,
     pub replay: ComponentReplayData,
@@ -302,8 +301,8 @@ fn current_component_instance_key_from_scope() -> Option<u64> {
     CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| stack.borrow().last().copied())
 }
 
-fn take_next_node_logic_id_override() -> Option<u64> {
-    NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| slot.borrow_mut().take())
+fn take_next_node_instance_logic_id_override() -> Option<u64> {
+    NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| slot.borrow_mut().take())
 }
 
 /// Runs `f` inside a replay scope restored from a previously recorded component
@@ -311,11 +310,15 @@ fn take_next_node_logic_id_override() -> Option<u64> {
 ///
 /// The replay scope restores:
 /// - the control-flow group path active at the original call site
-/// - a one-shot logic-id override for the replayed component root
-pub(crate) fn with_replay_scope<R>(logic_id: u64, group_path: &[u64], f: impl FnOnce() -> R) -> R {
+/// - a one-shot instance-logic-id override for the replayed component root
+pub(crate) fn with_replay_scope<R>(
+    instance_logic_id: u64,
+    group_path: &[u64],
+    f: impl FnOnce() -> R,
+) -> R {
     struct ReplayScopeGuard {
         previous_group_path: Option<Vec<u64>>,
-        previous_logic_id_override: Option<Option<u64>>,
+        previous_instance_logic_id_override: Option<Option<u64>>,
     }
 
     impl Drop for ReplayScopeGuard {
@@ -325,9 +328,11 @@ pub(crate) fn with_replay_scope<R>(logic_id: u64, group_path: &[u64], f: impl Fn
                     *stack.borrow_mut() = previous_group_path;
                 });
             }
-            if let Some(previous_logic_id_override) = self.previous_logic_id_override.take() {
-                NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| {
-                    *slot.borrow_mut() = previous_logic_id_override;
+            if let Some(previous_instance_logic_id_override) =
+                self.previous_instance_logic_id_override.take()
+            {
+                NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
+                    *slot.borrow_mut() = previous_instance_logic_id_override;
                 });
             }
         }
@@ -337,13 +342,13 @@ pub(crate) fn with_replay_scope<R>(logic_id: u64, group_path: &[u64], f: impl Fn
         let mut stack = stack.borrow_mut();
         std::mem::replace(&mut *stack, group_path.to_vec())
     });
-    let previous_logic_id_override = NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| {
+    let previous_instance_logic_id_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
         let mut slot = slot.borrow_mut();
-        (*slot).replace(logic_id)
+        (*slot).replace(instance_logic_id)
     });
     let _guard = ReplayScopeGuard {
         previous_group_path: Some(previous_group_path),
-        previous_logic_id_override: Some(previous_logic_id_override),
+        previous_instance_logic_id_override: Some(previous_instance_logic_id_override),
     };
 
     f()
@@ -504,7 +509,7 @@ struct FrameClockTracker {
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
 struct FrameNanosReceiverKey {
-    logic_id: u64,
+    instance_logic_id: u64,
     receiver_hash: u64,
 }
 
@@ -612,8 +617,7 @@ fn current_component_instance_key_for_receiver() -> Option<u64> {
 }
 
 fn compute_frame_nanos_receiver_key() -> FrameNanosReceiverKey {
-    let logic_id =
-        current_logic_id().expect("receive_frame_nanos must be called inside a tessera component");
+    let instance_logic_id = current_instance_logic_id();
     let group_path_hash = current_group_path_hash();
 
     let call_counter = FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| {
@@ -633,7 +637,7 @@ fn compute_frame_nanos_receiver_key() -> FrameNanosReceiverKey {
 
     let receiver_hash = hash_components(&[&group_path_hash, &call_counter]);
     FrameNanosReceiverKey {
-        logic_id,
+        instance_logic_id,
         receiver_hash,
     }
 }
@@ -663,8 +667,8 @@ where
         });
 }
 
-pub(crate) fn drop_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
-    if logic_ids.is_empty() {
+pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64>) {
+    if instance_logic_ids.is_empty() {
         return;
     }
 
@@ -674,7 +678,7 @@ pub(crate) fn drop_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
         if entry.value.is_none() {
             continue;
         }
-        if !logic_ids.contains(&entry.key.logic_id) {
+        if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
             continue;
         }
         freed.push((slot as u32, entry.key));
@@ -750,7 +754,7 @@ fn record_component_replay_snapshot(runtime: &TesseraRuntime, node_id: NodeId) {
     let snapshot = ReplayNodeSnapshot {
         instance_key: node.instance_key,
         parent_instance_key,
-        logic_id: node.logic_id,
+        instance_logic_id: node.instance_logic_id,
         group_path: current_group_path(),
         fn_name: node.fn_name.clone(),
         replay,
@@ -975,15 +979,16 @@ impl TesseraRuntime {
         self.window_size
     }
 
-    /// Sets the instance key for the current component node.
+    /// Sets identity fields for the current component node.
     #[doc(hidden)]
-    pub fn set_current_instance_key(&mut self, instance_key: u64) {
+    pub fn set_current_node_identity(&mut self, instance_key: u64, instance_logic_id: u64) {
         if let Some(node) = self.component_tree.current_node_mut() {
             node.instance_key = instance_key;
+            node.instance_logic_id = instance_logic_id;
         } else {
             debug_assert!(
                 false,
-                "set_current_instance_key must be called inside a component build"
+                "set_current_node_identity must be called inside a component build"
             );
         }
     }
@@ -1001,11 +1006,11 @@ impl TesseraRuntime {
         let current_node_info = self
             .component_tree
             .current_node()
-            .map(|node| (node.instance_key, node.logic_id));
-        let previous_replay = current_node_info.and_then(|(instance_key, logic_id)| {
+            .map(|node| (node.instance_key, node.instance_logic_id));
+        let previous_replay = current_node_info.and_then(|(instance_key, instance_logic_id)| {
             let tracker = component_replay_tracker().read();
             let previous = tracker.previous_nodes.get(&instance_key)?;
-            if previous.logic_id != logic_id {
+            if previous.instance_logic_id != instance_logic_id {
                 return None;
             }
             if previous.replay.props.equals(props) {
@@ -1015,12 +1020,12 @@ impl TesseraRuntime {
             }
         });
 
-        if let Some((instance_key, logic_id)) = current_node_info
+        if let Some((instance_key, instance_logic_id)) = current_node_info
             && let Some(replay) = previous_replay.clone()
             && !is_instance_key_build_dirty(instance_key)
             && self
                 .component_tree
-                .try_reuse_current_subtree(instance_key, logic_id)
+                .try_reuse_current_subtree(instance_key, instance_logic_id)
         {
             if let Some(node) = self.component_tree.current_node_mut() {
                 node.replay = Some(replay);
@@ -1084,7 +1089,7 @@ impl TesseraRuntime {
 /// Nested components push their id and pop on drop, forming a stack.
 pub struct NodeContextGuard {
     popped: bool,
-    logic_id_popped: bool,
+    instance_logic_id_popped: bool,
     #[cfg(feature = "profiling")]
     profiling_guard: Option<crate::profiler::ScopeGuard>,
 }
@@ -1135,9 +1140,9 @@ impl NodeContextGuard {
             pop_current_node();
             self.popped = true;
         }
-        if !self.logic_id_popped {
-            pop_logic_id();
-            self.logic_id_popped = true;
+        if !self.instance_logic_id_popped {
+            pop_instance_logic_id();
+            self.instance_logic_id_popped = true;
         }
     }
 }
@@ -1152,9 +1157,9 @@ impl Drop for NodeContextGuard {
             pop_current_node();
             self.popped = true;
         }
-        if !self.logic_id_popped {
-            pop_logic_id();
-            self.logic_id_popped = true;
+        if !self.instance_logic_id_popped {
+            pop_instance_logic_id();
+            self.instance_logic_id_popped = true;
         }
     }
 }
@@ -1180,7 +1185,11 @@ impl Drop for CurrentComponentInstanceGuard {
 }
 
 /// Push the given node id as the current executing component for this thread.
-pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> NodeContextGuard {
+pub fn push_current_node(
+    node_id: NodeId,
+    component_type_id: u64,
+    fn_name: &str,
+) -> NodeContextGuard {
     #[cfg(not(feature = "profiling"))]
     let _ = fn_name;
     #[allow(unused_variables)]
@@ -1194,39 +1203,44 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
     // Get the parent's call index and increment it
     // This distinguishes multiple calls to the same component (e.g., foo(1);
     // foo(2);)
-    let (parent_call_index, parent_logic_id) = INSTANCE_CALL_COUNTER_STACK.with(|stack| {
+    let (parent_call_index, parent_instance_logic_id) = INSTANCE_CALL_COUNTER_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
         let index = stack.last().copied().unwrap_or(0);
         if let Some(last) = stack.last_mut() {
             *last += 1;
         }
-        let parent_id = LOGIC_ID_STACK.with(|s| s.borrow().last().copied().unwrap_or(0));
+        let parent_id = INSTANCE_LOGIC_ID_STACK.with(|s| s.borrow().last().copied().unwrap_or(0));
         (index, parent_id)
     });
 
-    // Combine base_logic_id with parent_logic_id and parent_call_index to create a
-    // unique instance ID This ensures:
+    // Combine component_type_id with parent_instance_logic_id and
+    // parent_call_index to create a stable instance logic id. This ensures:
     // 1. foo(1) and foo(2) get different logic_ids (via parent_call_index)
     // 2. Components in different container instances get different logic_ids (via
-    //    parent_logic_id)
+    //    parent_instance_logic_id)
     let instance_salt = if let Some(key_hash) = current_instance_key_override() {
         hash_components(&[&key_hash, &parent_call_index])
     } else {
         parent_call_index
     };
 
-    let instance_logic_id = if let Some(logic_id_override) = take_next_node_logic_id_override() {
-        logic_id_override
-    } else if parent_call_index == 0
-        && parent_logic_id == 0
-        && current_instance_key_override().is_none()
-    {
-        base_logic_id
-    } else {
-        hash_components(&[&base_logic_id, &parent_logic_id, &instance_salt])
-    };
+    let instance_logic_id =
+        if let Some(instance_logic_id_override) = take_next_node_instance_logic_id_override() {
+            instance_logic_id_override
+        } else if parent_call_index == 0
+            && parent_instance_logic_id == 0
+            && current_instance_key_override().is_none()
+        {
+            component_type_id
+        } else {
+            hash_components(&[
+                &component_type_id,
+                &parent_instance_logic_id,
+                &instance_salt,
+            ])
+        };
 
-    LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
+    INSTANCE_LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
 
     // Push a new call counter layer for this component's internal remember calls
     CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
@@ -1250,7 +1264,57 @@ pub fn push_current_node(node_id: NodeId, base_logic_id: u64, fn_name: &str) -> 
 
     NodeContextGuard {
         popped: false,
-        logic_id_popped: false,
+        instance_logic_id_popped: false,
+        #[cfg(feature = "profiling")]
+        profiling_guard,
+    }
+}
+
+/// Push the given node id with an already resolved instance logic id.
+///
+/// This is used outside build (for example input/measure), where component
+/// identity must be restored from the recorded tree node rather than derived
+/// from call order.
+pub fn push_current_node_with_instance_logic_id(
+    node_id: NodeId,
+    instance_logic_id: u64,
+    fn_name: &str,
+) -> NodeContextGuard {
+    #[cfg(not(feature = "profiling"))]
+    let _ = fn_name;
+    #[allow(unused_variables)]
+    let parent_node_id = NODE_CONTEXT_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        let parent = stack.last().copied();
+        stack.push(node_id);
+        parent
+    });
+
+    // Keep child call counters balanced with push/pop semantics even when we
+    // restore an explicit instance logic id.
+    INSTANCE_CALL_COUNTER_STACK.with(|stack| {
+        if let Some(last) = stack.borrow_mut().last_mut() {
+            *last += 1;
+        }
+    });
+
+    INSTANCE_LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
+    CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+    CONTEXT_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+    INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+    FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+
+    #[cfg(feature = "profiling")]
+    let profiling_guard = match current_phase() {
+        Some(RuntimePhase::Build) => {
+            crate::profiler::make_build_scope_guard(node_id, parent_node_id, fn_name)
+        }
+        _ => None,
+    };
+
+    NodeContextGuard {
+        popped: false,
+        instance_logic_id_popped: false,
         #[cfg(feature = "profiling")]
         profiling_guard,
     }
@@ -1321,21 +1385,28 @@ pub fn current_node_id() -> Option<NodeId> {
     NODE_CONTEXT_STACK.with(|stack| stack.borrow().last().copied())
 }
 
-fn current_logic_id() -> Option<u64> {
-    LOGIC_ID_STACK.with(|stack| stack.borrow().last().copied())
+fn current_instance_logic_id_opt() -> Option<u64> {
+    INSTANCE_LOGIC_ID_STACK.with(|stack| stack.borrow().last().copied())
+}
+
+/// Returns the current component instance logic id.
+#[doc(hidden)]
+pub fn current_instance_logic_id() -> u64 {
+    current_instance_logic_id_opt()
+        .expect("current_instance_logic_id must be called inside a component")
 }
 
 /// Returns the instance key for the current component call site.
 #[doc(hidden)]
 pub fn current_instance_key() -> u64 {
-    let logic_id =
-        current_logic_id().expect("current_instance_key must be called inside a component");
+    let instance_logic_id = current_instance_logic_id_opt()
+        .expect("current_instance_key must be called inside a component");
     let group_path_hash = current_group_path_hash();
-    hash_components(&[&logic_id, &group_path_hash])
+    hash_components(&[&instance_logic_id, &group_path_hash])
 }
 
-fn pop_logic_id() {
-    LOGIC_ID_STACK.with(|stack| {
+fn pop_instance_logic_id() {
+    INSTANCE_LOGIC_ID_STACK.with(|stack| {
         let mut stack = stack.borrow_mut();
         let _ = stack.pop();
     });
@@ -1464,13 +1535,13 @@ fn hash_components<H: Hash>(parts: &[&H]) -> u64 {
 }
 
 fn compute_slot_key<K: Hash>(key: &K) -> (u64, u64) {
-    let logic_id = current_logic_id().expect("remember must be called inside a tessera component");
+    let instance_logic_id = current_instance_logic_id();
     let group_path = current_group_path();
     let group_path_hash = hash_components(&[&group_path]);
     let key_hash = hash_components(&[key]);
 
     // Get the call counter to distinguish multiple remember calls within the same
-    // component Note: logic_id already distinguishes different component
+    // component Note: instance_logic_id already distinguishes different component
     // instances (foo(1) vs foo(2)) and group_path_hash handles nested control
     // flow (if/loop)
     let call_counter = CALL_COUNTER_STACK.with(|stack| {
@@ -1489,7 +1560,7 @@ fn compute_slot_key<K: Hash>(key: &K) -> (u64, u64) {
     });
 
     let slot_hash = hash_components(&[&group_path_hash, &key_hash, &call_counter]);
-    (logic_id, slot_hash)
+    (instance_logic_id, slot_hash)
 }
 
 pub(crate) fn ensure_build_phase() {
@@ -1519,8 +1590,8 @@ pub fn reset_slots() {
     slot_table().write().reset();
 }
 
-pub(crate) fn recycle_recomposed_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
-    if logic_ids.is_empty() {
+pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64>) {
+    if instance_logic_ids.is_empty() {
         return;
     }
 
@@ -1529,7 +1600,7 @@ pub(crate) fn recycle_recomposed_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
     let mut freed: Vec<(u32, SlotKey)> = Vec::new();
 
     for (slot, entry) in table.entries.iter_mut().enumerate() {
-        if !logic_ids.contains(&entry.key.logic_id) {
+        if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
             continue;
         }
         // Skip if touched in this recomposition pass, already empty, or marked
@@ -1549,13 +1620,13 @@ pub(crate) fn recycle_recomposed_slots_for_logic_ids(logic_ids: &HashSet<u64>) {
     }
 }
 
-pub(crate) fn live_slot_logic_ids() -> HashSet<u64> {
+pub(crate) fn live_slot_instance_logic_ids() -> HashSet<u64> {
     let table = slot_table().read();
     table
         .entries
         .iter()
         .filter(|entry| entry.value.is_some())
-        .map(|entry| entry.key.logic_id)
+        .map(|entry| entry.key.instance_logic_id)
         .collect()
 }
 
@@ -1593,10 +1664,10 @@ where
     T: Send + Sync + 'static,
 {
     ensure_build_phase();
-    let (logic_id, slot_hash) = compute_slot_key(&key);
+    let (instance_logic_id, slot_hash) = compute_slot_key(&key);
     let type_id = TypeId::of::<T>();
     let slot_key = SlotKey {
-        logic_id,
+        instance_logic_id,
         slot_hash,
         type_id,
     };
@@ -1744,10 +1815,10 @@ where
     T: Send + Sync + 'static,
 {
     ensure_build_phase();
-    let (logic_id, slot_hash) = compute_slot_key(&key);
+    let (instance_logic_id, slot_hash) = compute_slot_key(&key);
     let type_id = TypeId::of::<T>();
     let slot_key = SlotKey {
-        logic_id,
+        instance_logic_id,
         slot_hash,
         type_id,
     };
@@ -1927,7 +1998,7 @@ mod tests {
 
         frame_clock_tracker().lock().receivers.insert(
             FrameNanosReceiverKey {
-                logic_id: 1,
+                instance_logic_id: 1,
                 receiver_hash: 1,
             },
             FrameNanosReceiver {
@@ -1983,18 +2054,18 @@ mod tests {
         GROUP_PATH_STACK.with(|stack| {
             *stack.borrow_mut() = vec![1, 2, 3];
         });
-        NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| {
+        NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
             *slot.borrow_mut() = Some(9);
         });
 
         with_replay_scope(42, &[7, 8], || {
             assert_eq!(current_group_path(), vec![7, 8]);
-            assert_eq!(take_next_node_logic_id_override(), Some(42));
-            assert_eq!(take_next_node_logic_id_override(), None);
+            assert_eq!(take_next_node_instance_logic_id_override(), Some(42));
+            assert_eq!(take_next_node_instance_logic_id_override(), None);
         });
 
         assert_eq!(current_group_path(), vec![1, 2, 3]);
-        let restored_override = NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
+        let restored_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
         assert_eq!(restored_override, Some(9));
     }
 
@@ -2003,7 +2074,7 @@ mod tests {
         GROUP_PATH_STACK.with(|stack| {
             *stack.borrow_mut() = vec![5];
         });
-        NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| {
+        NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
             *slot.borrow_mut() = None;
         });
 
@@ -2016,7 +2087,7 @@ mod tests {
         assert!(result.is_err());
 
         assert_eq!(current_group_path(), vec![5]);
-        let restored_override = NEXT_NODE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
+        let restored_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
         assert_eq!(restored_override, None);
     }
 }

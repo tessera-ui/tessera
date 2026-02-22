@@ -20,7 +20,10 @@ use crate::{
     layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
-    runtime::{RuntimePhase, push_current_component_instance_key, push_current_node, push_phase},
+    runtime::{
+        RuntimePhase, push_current_component_instance_key,
+        push_current_node_with_instance_logic_id, push_phase,
+    },
 };
 
 use super::{
@@ -261,8 +264,10 @@ impl Drop for AccessibilityBuilderGuard<'_> {
 pub struct ComponentNode {
     /// Component function's name, for debugging purposes.
     pub fn_name: String,
-    /// Stable logic identifier for the component function.
-    pub logic_id: u64,
+    /// Stable identifier of the component function/type.
+    pub component_type_id: u64,
+    /// Stable logic identifier of this concrete component instance.
+    pub instance_logic_id: u64,
     /// Stable instance identifier for this node in the current frame.
     pub instance_key: u64,
     /// Describes the input handler for the component.
@@ -679,8 +684,11 @@ pub(crate) fn measure_node(
 
     // Ensure thread-local current node context for nested control-flow
     // instrumentation.
-    let _node_ctx_guard =
-        push_current_node(node_id, node_data.logic_id, node_data.fn_name.as_str());
+    let _node_ctx_guard = push_current_node_with_instance_logic_id(
+        node_id,
+        node_data.instance_logic_id,
+        node_data.fn_name.as_str(),
+    );
     let _instance_ctx_guard = push_current_component_instance_key(node_data.instance_key);
     let _phase_guard = push_phase(RuntimePhase::Measure);
 

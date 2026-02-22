@@ -35,7 +35,8 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
                 runtime.component_tree.add_node(
                     ComponentNode {
                         fn_name: stringify!(#fn_name).to_string(),
-                        logic_id: __tessera_logic_id,
+                        component_type_id: __tessera_component_type_id,
+                        instance_logic_id: 0,
                         instance_key: 0,
                         input_handler_fn: None,
                         layout_spec: Box::new(DefaultLayoutSpec::default()),
@@ -228,9 +229,9 @@ fn callback_helpers_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenS
     }
 }
 
-/// Helper: tokens to compute a stable logic id based on module path + function
-/// name.
-fn logic_id_tokens(fn_name: &syn::Ident) -> proc_macro2::TokenStream {
+/// Helper: tokens to compute a stable component type id based on module path +
+/// function name.
+fn component_type_id_tokens(fn_name: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
         {
             use std::hash::{Hash, Hasher};
@@ -410,13 +411,13 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let callback_helper_tokens = callback_helpers_inject_tokens(&crate_path);
     let replay_tokens = replay_register_tokens(&crate_path, fn_name, &prop_signature);
     let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
-    let logic_id_tokens = logic_id_tokens(fn_name);
+    let component_type_id_tokens = component_type_id_tokens(fn_name);
 
     // Generate the transformed function with Tessera runtime integration
     let expanded = quote! {
         #(#fn_attrs)*
         #fn_vis #fn_sig {
-            let __tessera_logic_id: u64 = #logic_id_tokens;
+            let __tessera_component_type_id: u64 = #component_type_id_tokens;
             let __tessera_phase_guard = {
                 use #crate_path::runtime::{RuntimePhase, push_phase};
                 push_phase(RuntimePhase::Build)
@@ -442,10 +443,16 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             // Track current node for control-flow instrumentation
             let _node_ctx_guard = {
                 use #crate_path::runtime::push_current_node;
-                push_current_node(__tessera_node_id, __tessera_logic_id, __tessera_fn_name)
+                push_current_node(
+                    __tessera_node_id,
+                    __tessera_component_type_id,
+                    __tessera_fn_name,
+                )
             };
 
             let __tessera_instance_key: u64 = #crate_path::runtime::current_instance_key();
+            let __tessera_instance_logic_id: u64 =
+                #crate_path::runtime::current_instance_logic_id();
             let _instance_ctx_guard = {
                 use #crate_path::runtime::push_current_component_instance_key;
                 push_current_component_instance_key(__tessera_instance_key)
@@ -453,7 +460,10 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             {
                 use #crate_path::runtime::TesseraRuntime;
                 TesseraRuntime::with_mut(|runtime| {
-                    runtime.set_current_instance_key(__tessera_instance_key);
+                    runtime.set_current_node_identity(
+                        __tessera_instance_key,
+                        __tessera_instance_logic_id,
+                    );
                 });
             }
             #prop_assert_tokens
