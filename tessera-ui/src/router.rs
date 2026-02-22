@@ -12,8 +12,6 @@
 //!   `router_view` will panic.
 //! - There is no automatic root re-initialization.
 
-use std::sync::Arc;
-
 use tessera_shard::router::{Router as ShardRouter, RouterScopeId};
 
 pub use tessera_shard::router::RouterDestination;
@@ -57,8 +55,8 @@ pub fn with_current_router_shard_state<T, F, R>(
     f: F,
 ) -> R
 where
-    T: tessera_shard::ShardState + Default + 'static,
-    F: FnOnce(Arc<T>) -> R,
+    T: Default + Send + Sync + 'static,
+    F: FnOnce(tessera_shard::ShardState<T>) -> R,
 {
     let state = resolve_router_state();
     state.with(|router| router.init_or_get_with_lifecycle(shard_id, life_cycle, f))

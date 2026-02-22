@@ -17,7 +17,10 @@ use std::{
 
 use dashmap::DashMap;
 
-use crate::{ShardState, ShardStateLifeCycle, ShardStateMap, init_or_get_shard_state_in_map};
+use crate::{
+    ShardState, ShardStateLifeCycle, ShardStateMap, init_or_get_shard_state_in_map,
+    recycle_shard_state_slot,
+};
 
 static NEXT_ROUTER_SCOPE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_ROUTE_ID: AtomicU64 = AtomicU64::new(1);
@@ -165,8 +168,8 @@ impl Router {
     /// Get or initialize route-scoped state and provide it to `f`.
     pub fn init_or_get<T, F, R>(&self, id: &str, f: F) -> R
     where
-        T: ShardState + Default + 'static,
-        F: FnOnce(std::sync::Arc<T>) -> R,
+        T: Default + Send + Sync + 'static,
+        F: FnOnce(ShardState<T>) -> R,
     {
         self.init_or_get_with_lifecycle(id, ShardStateLifeCycle::Shard, f)
     }
@@ -179,8 +182,8 @@ impl Router {
         f: F,
     ) -> R
     where
-        T: ShardState + Default + 'static,
-        F: FnOnce(std::sync::Arc<T>) -> R,
+        T: Default + Send + Sync + 'static,
+        F: FnOnce(ShardState<T>) -> R,
     {
         match life_cycle {
             ShardStateLifeCycle::Scope => {
@@ -214,8 +217,17 @@ impl Router {
             .drain(..)
             .map(|entry| entry.route_id)
             .collect();
-        self.route_shards
-            .retain(|key, _| !removed_route_ids.contains(&key.route_id));
+        let keys: Vec<_> = self
+            .route_shards
+            .iter()
+            .filter(|entry| removed_route_ids.contains(&entry.key().route_id))
+            .map(|entry| entry.key().clone())
+            .collect();
+        for key in keys {
+            if let Some((_, slot)) = self.route_shards.remove(&key) {
+                recycle_shard_state_slot(slot);
+            }
+        }
         self.bump_version();
     }
 
@@ -230,7 +242,39 @@ impl Router {
     }
 
     fn prune_route_shards(&self, route_id: RouteId) {
-        self.route_shards.retain(|key, _| key.route_id != route_id);
+        let keys: Vec<_> = self
+            .route_shards
+            .iter()
+            .filter(|entry| entry.key().route_id == route_id)
+            .map(|entry| entry.key().clone())
+            .collect();
+        for key in keys {
+            if let Some((_, slot)) = self.route_shards.remove(&key) {
+                recycle_shard_state_slot(slot);
+            }
+        }
+    }
+}
+
+impl Drop for Router {
+    fn drop(&mut self) {
+        let scope_slots: Vec<_> = self
+            .scope_shards
+            .iter()
+            .map(|entry| *entry.value())
+            .collect();
+        let route_slots: Vec<_> = self
+            .route_shards
+            .iter()
+            .map(|entry| *entry.value())
+            .collect();
+
+        self.scope_shards.clear();
+        self.route_shards.clear();
+
+        for slot in scope_slots.into_iter().chain(route_slots) {
+            recycle_shard_state_slot(slot);
+        }
     }
 }
 
@@ -277,7 +321,7 @@ mod tests {
 
     fn increment_state(router: &Router, shard_id: &str, life_cycle: ShardStateLifeCycle) -> usize {
         router.init_or_get_with_lifecycle::<CounterState, _, _>(shard_id, life_cycle, |state| {
-            state.value.fetch_add(1, Ordering::SeqCst) + 1
+            state.with(|value| value.value.fetch_add(1, Ordering::SeqCst) + 1)
         })
     }
 

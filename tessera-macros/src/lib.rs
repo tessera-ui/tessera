@@ -9,7 +9,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    Block, Expr, FnArg, ItemFn, Pat, Type, parse_macro_input, parse_quote, visit_mut::VisitMut,
+    Block, Expr, FnArg, Ident, ItemFn, Pat, Path, Token, Type, parse::Parse, parse_macro_input,
+    parse_quote, visit_mut::VisitMut,
 };
 
 /// Helper: parse crate path from attribute TokenStream
@@ -20,6 +21,62 @@ fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Path {
     } else {
         // Parse the provided path, e.g., `crate` or `tessera_ui`
         syn::parse(attr).expect("Expected a valid path like `crate` or `tessera_ui`")
+    }
+}
+
+#[cfg(feature = "shard")]
+#[derive(Default)]
+struct ShardMacroArgs {
+    crate_path: Option<Path>,
+    state_type: Option<Type>,
+    lifecycle: Option<Ident>,
+}
+
+#[cfg(feature = "shard")]
+impl Parse for ShardMacroArgs {
+    fn parse(input: syn::parse::ParseStream<'_>) -> syn::Result<Self> {
+        let mut args = ShardMacroArgs::default();
+        while !input.is_empty() {
+            let key: Ident = input.parse()?;
+            input.parse::<Token![=]>()?;
+            match key.to_string().as_str() {
+                "crate_path" => {
+                    if args.crate_path.is_some() {
+                        return Err(syn::Error::new(
+                            key.span(),
+                            "duplicate `crate_path` argument",
+                        ));
+                    }
+                    args.crate_path = Some(input.parse::<Path>()?);
+                }
+                "state" => {
+                    if args.state_type.is_some() {
+                        return Err(syn::Error::new(key.span(), "duplicate `state` argument"));
+                    }
+                    args.state_type = Some(input.parse::<Type>()?);
+                }
+                "lifecycle" => {
+                    if args.lifecycle.is_some() {
+                        return Err(syn::Error::new(
+                            key.span(),
+                            "duplicate `lifecycle` argument",
+                        ));
+                    }
+                    args.lifecycle = Some(input.parse::<Ident>()?);
+                }
+                _ => {
+                    return Err(syn::Error::new(
+                        key.span(),
+                        "unsupported #[shard(...)] argument; expected `state`, `lifecycle`, or `crate_path`",
+                    ));
+                }
+            }
+
+            if input.peek(Token![,]) {
+                input.parse::<Token![,]>()?;
+            }
+        }
+        Ok(args)
     }
 }
 
@@ -529,28 +586,27 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`)
 ///   implementing `tessera_shard::router::RouterDestination`
-/// * (Optional) Injects a single `#[state]` parameter whose type:
+/// * Optional state injection via `#[shard(state = T)]`, where `T`:
 ///   - Must implement `Default + Send + Sync + 'static`
-///   - Is constructed (or reused) and passed to your function body
+///   - Is constructed (or reused) and exposed as local variable `state` with
+///     type `tessera_shard::ShardState<T>`
 /// * Produces a stable shard ID: `module_path!()::function_name`
 ///
 /// # Lifecycle
 ///
-/// Controlled by the generated state injection (via `#[state(...)]`).
+/// Controlled by the `lifecycle` shard attribute argument.
 /// * Default: `Shard` – state is removed when the destination is `pop()`‑ed
-/// * Override: `#[state(scope)]` – persist for the lifetime of current
-///   `router_scope`
+/// * Override: `#[shard(lifecycle = scope)]` to persist for the lifetime of
+///   current `router_scope`
 ///
 /// Route-scoped state is removed on route pop/clear. Scope-scoped state is
 /// removed when the router scope is dropped.
 ///
 /// # Parameter Transformation
 ///
-/// * At most one parameter may be annotated with `#[state]`.
-/// * That parameter is removed from the *generated* function signature and
-///   supplied implicitly.
-/// * All other parameters remain explicit and become public fields on the
-///   generated `*Destination` struct.
+/// * Function parameters are treated as explicit destination props.
+/// * When `state = T` is configured, shard state is injected as local variable
+///   `state` and does not appear in the function signature.
 ///
 /// # Generated Destination (Conceptual)
 ///
@@ -564,7 +620,6 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Limitations
 ///
-/// * No support for multiple `#[state]` params (compile panic if violated)
 /// * Do not manually implement `RouterDestination` for these pages; rely on
 ///   generation
 ///
@@ -575,21 +630,26 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Errors / Panics
 ///
-/// * Panics at compile time if multiple `#[state]` parameters are used or
-///   unsupported pattern forms are encountered.
+/// * Panics at compile time if unsupported `lifecycle` is provided, or if
+///   `lifecycle` is used without `state`.
 #[cfg(feature = "shard")]
 #[proc_macro_attribute]
 pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     use heck::ToUpperCamelCase;
-    use syn::Pat;
-
-    let crate_path: syn::Path = if attr.is_empty() {
-        syn::parse_quote!(::tessera_ui)
+    let shard_args = if attr.is_empty() {
+        ShardMacroArgs::default()
     } else {
-        syn::parse(attr).expect("Expected a valid path like `crate` or `tessera_ui`")
+        match syn::parse::<ShardMacroArgs>(attr) {
+            Ok(value) => value,
+            Err(err) => return err.to_compile_error().into(),
+        }
     };
 
-    let mut func = parse_macro_input!(input as ItemFn);
+    let crate_path: syn::Path = shard_args
+        .crate_path
+        .unwrap_or_else(|| syn::parse_quote!(::tessera_ui));
+
+    let func = parse_macro_input!(input as ItemFn);
     if let Some(conflicting_attr) = func
         .attrs
         .iter()
@@ -603,65 +663,22 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         .into();
     }
 
-    // Handle #[state] parameters, ensuring it's unique and removing it from
-    // the signature. Also parse optional lifecycle argument:
-    // #[state(scope)] or #[state(shard)].
-    let mut state_param = None;
-    let mut state_lifecycle: Option<proc_macro2::TokenStream> = None;
-    let mut new_inputs = syn::punctuated::Punctuated::new();
-    for arg in func.sig.inputs.iter() {
-        if let syn::FnArg::Typed(pat_type) = arg {
-            // Detect #[state] and parse optional argument
-            let mut is_state = false;
-            let mut lifecycle_override: Option<proc_macro2::TokenStream> = None;
-            for attr in &pat_type.attrs {
-                if attr.path().is_ident("state") {
-                    is_state = true;
-                    // Try parse an optional argument: #[state(scope)] /
-                    // #[state(shard)]
-                    if let Ok(arg_ident) = attr.parse_args::<syn::Ident>() {
-                        let s = arg_ident.to_string().to_lowercase();
-                        if s == "scope" {
-                            lifecycle_override = Some(
-                                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Scope },
-                            );
-                        } else if s == "shard" {
-                            lifecycle_override = Some(
-                                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard },
-                            );
-                        } else {
-                            panic!(
-                                "Unsupported #[state(...)] argument in #[shard]: expected `scope` or `shard`"
-                            );
-                        }
-                    }
-                }
+    let state_type = shard_args.state_type;
+    let state_lifecycle_tokens = match shard_args.lifecycle {
+        Some(lifecycle) => {
+            let lifecycle_name = lifecycle.to_string().to_lowercase();
+            if state_type.is_none() {
+                panic!("`lifecycle` requires `state` in #[shard(...)]");
             }
-            if is_state {
-                if state_param.is_some() {
-                    panic!(
-                        "#[shard] function must have at most one parameter marked with #[state]."
-                    );
-                }
-                state_param = Some(pat_type.clone());
-                state_lifecycle = lifecycle_override;
-                continue;
+            if lifecycle_name == "scope" {
+                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Scope }
+            } else if lifecycle_name == "shard" {
+                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard }
+            } else {
+                panic!("Unsupported `lifecycle` in #[shard(...)]: expected `scope` or `shard`");
             }
         }
-        new_inputs.push(arg.clone());
-    }
-    func.sig.inputs = new_inputs;
-
-    let (state_name, state_type) = if let Some(state_param) = state_param {
-        let name = match *state_param.pat {
-            Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
-            _ => panic!(
-                "Unsupported parameter pattern in #[shard] function. Please use a simple identifier like `state`."
-            ),
-        };
-        (Some(name), Some(state_param.ty))
-    } else {
-        (None, None)
+        None => quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard },
     };
 
     let func_body = func.block;
@@ -696,7 +713,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         _ => panic!("Unsupported parameter type in #[shard] function."),
     });
 
-    // Only keep the parameters that are not marked with #[state]
+    // Keep all explicit function parameters as destination props.
     let param_idents: Vec<_> = func
         .sig
         .inputs
@@ -722,12 +739,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         _ => panic!("Unsupported parameter type in #[shard] function."),
     });
 
-    let state_lifecycle_tokens = state_lifecycle.clone().unwrap_or_else(|| {
-        quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard }
-    });
-
     let expanded = {
-        // `exec_component` only passes struct fields (unmarked parameters).
+        // `exec_component` only passes destination prop fields.
         let exec_args = param_idents
             .iter()
             .map(|ident| quote! { self.#ident.clone() });
@@ -739,7 +752,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         });
 
         if let Some(state_type) = state_type {
-            let state_name = state_name.as_ref().unwrap();
             quote! {
                 #func_vis struct #struct_name {
                     #(#dest_fields),*
@@ -780,7 +792,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                         #crate_path::router::with_current_router_shard_state::<#state_type, _, _>(
                             SHARD_ID,
                             #state_lifecycle_tokens,
-                            |#state_name| {
+                            |state| {
                                 #func_body
                             },
                         )

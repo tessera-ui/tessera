@@ -41,20 +41,18 @@ impl Default for ButtonShowcaseState {
         Self::new()
     }
 }
-#[shard]
-pub fn button_showcase(#[state] state: ButtonShowcaseState) {
+#[shard(state = ButtonShowcaseState)]
+pub fn button_showcase() {
     let counter = remember(|| 0i32);
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
-            let state = state.clone();
             let controller = retain(LazyListController::new);
             lazy_column(
                 &LazyColumnArgs::default()
                     .content_padding(Dp(16.0))
                     .controller(controller)
                     .content(move |scope| {
-                        let state = state.clone();
                         scope.item(|| {
                             text(&TextArgs::default().text("Button Showcase").size(Dp(20.0)))
                         });
@@ -63,7 +61,8 @@ pub fn button_showcase(#[state] state: ButtonShowcaseState) {
                             .item(|| text(&TextArgs::default().text("Icon Button").size(Dp(16.0))));
 
                         scope.item(move || {
-                            let icon = IconArgs::from(state.icon_data.clone()).size(Dp(24.0));
+                            let icon_data = state.with(|value| value.icon_data.clone());
+                            let icon = IconArgs::from(icon_data).size(Dp(24.0));
 
                             let button_args = IconButtonArgs::new(icon)
                                 .variant(IconButtonVariant::Filled)
