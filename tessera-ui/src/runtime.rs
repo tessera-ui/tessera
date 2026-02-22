@@ -760,6 +760,10 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
         if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
             continue;
         }
+        // `retain` state must survive subtree removal and route switches.
+        if entry.retained {
+            continue;
+        }
         freed.push((slot, entry.key));
     }
     for (slot, key) in freed {
@@ -2189,5 +2193,48 @@ mod tests {
         assert_eq!(current_group_path(), vec![5]);
         let restored_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
         assert_eq!(restored_override, None);
+    }
+
+    #[test]
+    fn drop_slots_for_instance_logic_ids_keeps_retained_entries() {
+        let mut table = SlotTable::default();
+        let keep_key = SlotKey {
+            instance_logic_id: 7,
+            slot_hash: 11,
+            type_id: TypeId::of::<i32>(),
+        };
+        let drop_key = SlotKey {
+            instance_logic_id: 7,
+            slot_hash: 12,
+            type_id: TypeId::of::<i32>(),
+        };
+
+        let keep_slot = table.entries.insert(SlotEntry {
+            key: keep_key,
+            generation: 1,
+            value: Some(Arc::new(RwLock::new(10_i32))),
+            last_alive_epoch: 0,
+            retained: true,
+        });
+        let drop_slot = table.entries.insert(SlotEntry {
+            key: drop_key,
+            generation: 1,
+            value: Some(Arc::new(RwLock::new(20_i32))),
+            last_alive_epoch: 0,
+            retained: false,
+        });
+        table.key_to_slot.insert(keep_key, keep_slot);
+        table.key_to_slot.insert(drop_key, drop_slot);
+        *slot_table().write() = table;
+
+        let mut stale = HashSet::default();
+        stale.insert(7_u64);
+        drop_slots_for_instance_logic_ids(&stale);
+
+        let table = slot_table().read();
+        assert!(table.entries.get(keep_slot).is_some());
+        assert!(table.key_to_slot.get(&keep_key).is_some());
+        assert!(table.entries.get(drop_slot).is_none());
+        assert!(table.key_to_slot.get(&drop_key).is_none());
     }
 }
