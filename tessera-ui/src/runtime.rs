@@ -15,6 +15,7 @@ use std::{
 use parking_lot::{Mutex, RwLock};
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use slotmap::{SlotMap, new_key_type};
+use smallvec::SmallVec;
 
 use crate::{
     NodeId,
@@ -124,8 +125,8 @@ struct SlotEntry {
 
 #[derive(Default)]
 struct InstanceSlotCursor {
-    previous_order: Vec<SlotHandle>,
-    current_order: Vec<SlotHandle>,
+    previous_order: SmallVec<[SlotHandle; 4]>,
+    current_order: SmallVec<[SlotHandle; 4]>,
     cursor: usize,
     epoch: u64,
 }
