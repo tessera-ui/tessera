@@ -14,13 +14,16 @@ use syn::{
 };
 
 /// Helper: parse crate path from attribute TokenStream
-fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Path {
+fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Result<syn::Path> {
     if attr.is_empty() {
         // Default to `tessera_ui` if no path is provided
-        syn::parse_quote!(::tessera_ui)
+        Ok(syn::parse_quote!(::tessera_ui))
     } else {
         // Parse the provided path, e.g., `crate` or `tessera_ui`
-        syn::parse(attr).expect("Expected a valid path like `crate` or `tessera_ui`")
+        let tokens: proc_macro2::TokenStream = attr.clone().into();
+        syn::parse(attr).map_err(|_| {
+            syn::Error::new_spanned(tokens, "expected a crate path like `crate` or `tessera_ui`")
+        })
     }
 }
 
@@ -30,6 +33,40 @@ struct ShardMacroArgs {
     crate_path: Option<Path>,
     state_type: Option<Type>,
     lifecycle: Option<Ident>,
+}
+
+#[cfg(feature = "shard")]
+struct ShardParam {
+    ident: Ident,
+    ty: Type,
+}
+
+#[cfg(feature = "shard")]
+fn parse_shard_params(sig: &syn::Signature) -> syn::Result<Vec<ShardParam>> {
+    let mut params = Vec::with_capacity(sig.inputs.len());
+    for arg in &sig.inputs {
+        match arg {
+            FnArg::Receiver(receiver) => {
+                return Err(syn::Error::new_spanned(
+                    receiver,
+                    "#[shard] does not support methods; use a free function",
+                ));
+            }
+            FnArg::Typed(pat_type) => {
+                let Pat::Ident(pat_ident) = pat_type.pat.as_ref() else {
+                    return Err(syn::Error::new_spanned(
+                        &pat_type.pat,
+                        "#[shard] parameters must be simple named bindings like `foo: T`",
+                    ));
+                };
+                params.push(ShardParam {
+                    ident: pat_ident.ident.clone(),
+                    ty: (*pat_type.ty).clone(),
+                });
+            }
+        }
+    }
+    Ok(params)
 }
 
 #[cfg(feature = "shard")]
@@ -137,7 +174,12 @@ fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature,
         ));
     }
 
-    let arg = sig.inputs.first().expect("single input already validated");
+    let Some(arg) = sig.inputs.first() else {
+        return Err(syn::Error::new_spanned(
+            &sig.inputs,
+            "#[tessera] components must have signature `fn name()` or `fn name(<prop>: &T)`",
+        ));
+    };
     let FnArg::Typed(arg) = arg else {
         return Err(syn::Error::new_spanned(
             arg,
@@ -424,7 +466,10 @@ impl VisitMut for ControlFlowInstrumenter {
 ///   shard state.
 #[proc_macro_attribute]
 pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let crate_path: syn::Path = parse_crate_path(attr);
+    let crate_path: syn::Path = match parse_crate_path(attr) {
+        Ok(path) => path,
+        Err(err) => return err.to_compile_error().into(),
+    };
 
     // Parse the input function that will be transformed into a component
     let mut input_fn = parse_macro_input!(item as ItemFn);
@@ -548,7 +593,10 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// Annotate a public zero-argument function that returns [`EntryPoint`].
 #[proc_macro_attribute]
 pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
-    let crate_path: syn::Path = parse_crate_path(attr);
+    let crate_path: syn::Path = match parse_crate_path(attr) {
+        Ok(path) => path,
+        Err(err) => return err.to_compile_error().into(),
+    };
     let mut input_fn = parse_macro_input!(item as ItemFn);
 
     if !input_fn.sig.inputs.is_empty() {
@@ -628,10 +676,10 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// * Routing helpers: `tessera_ui::router::{Router, router_root}`
 /// * Scoped router internals: `tessera_shard::router::Router`
 ///
-/// # Errors / Panics
+/// # Errors
 ///
-/// * Panics at compile time if unsupported `lifecycle` is provided, or if
-///   `lifecycle` is used without `state`.
+/// Emits a compile error if unsupported `lifecycle` is provided, or if
+/// `lifecycle` is used without `state`.
 #[cfg(feature = "shard")]
 #[proc_macro_attribute]
 pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
@@ -663,19 +711,34 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         .into();
     }
 
+    let shard_params = match parse_shard_params(&func.sig) {
+        Ok(params) => params,
+        Err(err) => return err.to_compile_error().into(),
+    };
+
     let state_type = shard_args.state_type;
     let state_lifecycle_tokens = match shard_args.lifecycle {
         Some(lifecycle) => {
             let lifecycle_name = lifecycle.to_string().to_lowercase();
             if state_type.is_none() {
-                panic!("`lifecycle` requires `state` in #[shard(...)]");
+                return syn::Error::new_spanned(
+                    lifecycle,
+                    "`lifecycle` requires `state` in #[shard(...)]",
+                )
+                .to_compile_error()
+                .into();
             }
             if lifecycle_name == "scope" {
                 quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Scope }
             } else if lifecycle_name == "shard" {
                 quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard }
             } else {
-                panic!("Unsupported `lifecycle` in #[shard(...)]: expected `scope` or `shard`");
+                return syn::Error::new_spanned(
+                    lifecycle,
+                    "unsupported `lifecycle` in #[shard(...)]: expected `scope` or `shard`",
+                )
+                .to_compile_error()
+                .into();
             }
         }
         None => quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard },
@@ -701,42 +764,22 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
     );
 
     // Generate fields for the new struct that will implement `RouterDestination`
-    let dest_fields = func.sig.inputs.iter().map(|arg| match arg {
-        syn::FnArg::Typed(pat_type) => {
-            let ident = match *pat_type.pat {
-                syn::Pat::Ident(ref pat_ident) => &pat_ident.ident,
-                _ => panic!("Unsupported parameter pattern in #[shard] function."),
-            };
-            let ty = &pat_type.ty;
-            quote! { pub #ident: #ty }
-        }
-        _ => panic!("Unsupported parameter type in #[shard] function."),
+    let dest_fields = shard_params.iter().map(|param| {
+        let ident = &param.ident;
+        let ty = &param.ty;
+        quote! { pub #ident: #ty }
     });
 
     // Keep all explicit function parameters as destination props.
-    let param_idents: Vec<_> = func
-        .sig
-        .inputs
+    let param_idents: Vec<_> = shard_params
         .iter()
-        .map(|arg| match arg {
-            syn::FnArg::Typed(pat_type) => match *pat_type.pat {
-                syn::Pat::Ident(ref pat_ident) => pat_ident.ident.clone(),
-                _ => panic!("Unsupported parameter pattern in #[shard] function."),
-            },
-            _ => panic!("Unsupported parameter type in #[shard] function."),
-        })
+        .map(|param| param.ident.clone())
         .collect();
 
-    let shard_prop_fields = func.sig.inputs.iter().map(|arg| match arg {
-        syn::FnArg::Typed(pat_type) => {
-            let ident = match *pat_type.pat {
-                syn::Pat::Ident(ref pat_ident) => &pat_ident.ident,
-                _ => panic!("Unsupported parameter pattern in #[shard] function."),
-            };
-            let ty = &pat_type.ty;
-            quote! { #ident: #ty }
-        }
-        _ => panic!("Unsupported parameter type in #[shard] function."),
+    let shard_prop_fields = shard_params.iter().map(|param| {
+        let ident = &param.ident;
+        let ty = &param.ty;
+        quote! { #ident: #ty }
     });
 
     let expanded = {
