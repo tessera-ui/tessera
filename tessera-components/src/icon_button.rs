@@ -3,10 +3,7 @@
 //! ## Usage
 //!
 //! Use for compact actions where an icon is sufficient to convey the meaning.
-use std::sync::Arc;
-
-use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, tessera, use_context};
+use tessera_ui::{Callback, Color, Dp, Modifier, Prop, tessera, use_context};
 
 use crate::{
     button::{ButtonArgs, ButtonDefaults, button},
@@ -32,23 +29,21 @@ pub enum IconButtonVariant {
 }
 
 /// Arguments for [`icon_button`].
-#[derive(Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct IconButtonArgs {
     /// The variant of the icon button.
     pub variant: IconButtonVariant,
     /// Icon that will be rendered at the center of the button.
-    #[setters(into)]
+    #[prop(into)]
     pub icon: IconArgs,
     /// The click callback function.
-    #[setters(skip)]
-    pub on_click: Option<Arc<dyn Fn() + Send + Sync>>,
+    #[prop(skip_setter)]
+    pub on_click: Option<Callback>,
     /// Whether the button is enabled.
     pub enabled: bool,
     /// Optional override for the container color.
-    #[setters(strip_option)]
     pub color: Option<Color>,
     /// Optional override for the content (icon) color.
-    #[setters(strip_option)]
     pub content_color: Option<Color>,
 }
 
@@ -67,25 +62,25 @@ impl IconButtonArgs {
 
     /// Sets the on_click handler.
     pub fn on_click(mut self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_click = Some(Arc::new(on_click));
+        self.on_click = Some(Callback::new(on_click));
         self
     }
 
     /// Sets the on_click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: Arc<dyn Fn() + Send + Sync>) -> Self {
-        self.on_click = Some(on_click);
+    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
+        self.on_click = Some(on_click.into());
         self
     }
 }
 
 /// Lifted [`glass_button`] counterpart for icon buttons.
-#[derive(Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct GlassIconButtonArgs {
     /// Appearance/behavior settings for the underlying [`glass_button`].
-    #[setters(into)]
+    #[prop(into)]
     pub button: GlassButtonArgs,
     /// Icon rendered at the center of the glass button.
-    #[setters(into)]
+    #[prop(into)]
     pub icon: IconArgs,
 }
 
@@ -129,14 +124,15 @@ impl GlassIconButtonArgs {
 ///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
 /// icon_button(
-///     IconButtonArgs::new(IconArgs::from(vector_data.clone()))
+///     &IconButtonArgs::new(IconArgs::from(vector_data.clone()))
 ///         .variant(IconButtonVariant::Filled)
 ///         .on_click(|| println!("Clicked!")),
 /// );
 /// ```
+/// Render an icon button.
 #[tessera]
-pub fn icon_button(args: impl Into<IconButtonArgs>) {
-    let args: IconButtonArgs = args.into();
+pub fn icon_button(args: &IconButtonArgs) {
+    let args: IconButtonArgs = args.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -190,7 +186,7 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
         .border_width(border_width);
 
     if let Some(bc) = border_color {
-        button_args = button_args.border_color(Some(bc));
+        button_args = button_args.border_color(bc);
     }
 
     if let Some(on_click) = args.on_click {
@@ -202,9 +198,12 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
     icon_args.size = Dp(24.0);
     icon_args.tint = content_color;
 
-    button(button_args, move || {
-        icon(icon_args);
-    });
+    button(&crate::button::ButtonArgs::with_child(
+        button_args,
+        move || {
+            icon(&icon_args.clone());
+        },
+    ));
 }
 
 /// # glass_icon_button
@@ -235,16 +234,18 @@ pub fn icon_button(args: impl Into<IconButtonArgs>) {
 ///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
 /// glass_icon_button(
-///     GlassIconButtonArgs::new(IconArgs::from(vector_data))
+///     &GlassIconButtonArgs::new(IconArgs::from(vector_data))
 ///         .button(GlassButtonArgs::default().on_click(|| {})),
 /// );
 /// ```
+/// Render a glass icon button.
 #[tessera]
-pub fn glass_icon_button(args: impl Into<GlassIconButtonArgs>) {
-    let args: GlassIconButtonArgs = args.into();
-    let icon_args = args.icon.clone();
+pub fn glass_icon_button(args: &GlassIconButtonArgs) {
+    let args: GlassIconButtonArgs = args.clone();
+    let icon_args = args.icon;
 
-    glass_button(args.button, move || {
-        icon(icon_args.clone());
+    let button_args = args.button.child(move || {
+        icon(&icon_args.clone());
     });
+    glass_button(&button_args);
 }

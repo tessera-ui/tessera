@@ -20,7 +20,7 @@ const SDF_CACHE_HEAT_THRESHOLD: u32 = 3;
 /// Number of frames to keep SDF heat tracking data before cleanup.
 const SDF_HEAT_TRACKING_WINDOW: u32 = 10;
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct SdfUniforms {
     size: Vec2,
     corner_radii: Vec4,
@@ -229,7 +229,7 @@ impl FluidGlassSdfGenerator {
     }
 }
 
-#[derive(ShaderType, Clone, Copy, Debug, Default)]
+#[derive(ShaderType, Clone, PartialEq, Copy, Debug, Default)]
 struct GlassUniforms {
     tint_color: Vec4,
     rect_uv_bounds: Vec4,
@@ -257,14 +257,14 @@ struct GlassUniforms {
     light_scale: f32,   // Light intensity scale factor
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct GlassInstances {
     #[shader(size(runtime))]
     instances: Vec<GlassUniforms>,
 }
 
 /// Tracks how frequently an SDF is requested to decide if it should be cached.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq)]
 struct SdfHeatTracker {
     /// Number of frames this SDF has been requested
     hit_count: u32,

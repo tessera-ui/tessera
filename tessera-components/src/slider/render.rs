@@ -9,7 +9,7 @@ use crate::{
 use super::{SliderColors, SliderLayout};
 
 pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::FILLED),
@@ -23,11 +23,11 @@ pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors)
                 bottom_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
             }),
         || {},
-    );
+    ));
 }
 
 pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColors) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::FILLED),
@@ -41,11 +41,11 @@ pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColor
                 bottom_left: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
             }),
         || {},
-    );
+    ));
 }
 
 pub(super) fn render_handle(layout: SliderLayout, width: tessera_ui::Px, colors: &SliderColors) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(width)),
@@ -54,11 +54,11 @@ pub(super) fn render_handle(layout: SliderLayout, width: tessera_ui::Px, colors:
             .style(colors.thumb.into())
             .shape(Shape::capsule()),
         || {},
-    );
+    ));
 }
 
 pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(layout.stop_indicator_diameter)),
@@ -67,11 +67,11 @@ pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors)
             .style(colors.active_track.into())
             .shape(Shape::Ellipse),
         || {},
-    );
+    ));
 }
 
 pub(super) fn render_tick(diameter: Px, color: Color) {
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(diameter)),
@@ -80,7 +80,7 @@ pub(super) fn render_tick(diameter: Px, color: Color) {
             .style(color.into())
             .shape(Shape::Ellipse),
         || {},
-    );
+    ));
 }
 
 pub(super) fn render_centered_tracks(
@@ -88,7 +88,7 @@ pub(super) fn render_centered_tracks(
     colors: &SliderColors,
 ) {
     // Left Inactive
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::FILLED),
@@ -102,10 +102,10 @@ pub(super) fn render_centered_tracks(
                 bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             }),
         || {},
-    );
+    ));
 
     // Active (Middle)
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::FILLED),
@@ -119,10 +119,10 @@ pub(super) fn render_centered_tracks(
                 bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             }),
         || {},
-    );
+    ));
 
     // Right Inactive
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::FILLED),
@@ -136,7 +136,7 @@ pub(super) fn render_centered_tracks(
                 bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             }),
         || {},
-    );
+    ));
 }
 
 pub(super) fn render_centered_stops(
@@ -144,7 +144,7 @@ pub(super) fn render_centered_stops(
     colors: &SliderColors,
 ) {
     // Left Stop
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
@@ -153,10 +153,10 @@ pub(super) fn render_centered_stops(
             .style(colors.active_track.into())
             .shape(Shape::Ellipse),
         || {},
-    );
+    ));
 
     // Right Stop
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
@@ -165,7 +165,7 @@ pub(super) fn render_centered_stops(
             .style(colors.active_track.into())
             .shape(Shape::Ellipse),
         || {},
-    );
+    ));
 }
 
 pub(super) fn render_range_stops(
@@ -173,7 +173,7 @@ pub(super) fn render_range_stops(
     colors: &SliderColors,
 ) {
     // Left Stop
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
@@ -182,10 +182,10 @@ pub(super) fn render_range_stops(
             .style(colors.active_track.into())
             .shape(Shape::Ellipse),
         || {},
-    );
+    ));
 
     // Right Stop
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
@@ -194,7 +194,7 @@ pub(super) fn render_range_stops(
             .style(colors.active_track.into())
             .shape(Shape::Ellipse),
         || {},
-    );
+    ));
 }
 
 pub(super) fn render_range_tracks(
@@ -202,7 +202,7 @@ pub(super) fn render_range_tracks(
     colors: &SliderColors,
 ) {
     // Left Inactive
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::FILLED),
@@ -216,10 +216,10 @@ pub(super) fn render_range_tracks(
                 bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             }),
         || {},
-    );
+    ));
 
     // Active (Middle)
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::FILLED),
@@ -233,10 +233,10 @@ pub(super) fn render_range_tracks(
                 bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             }),
         || {},
-    );
+    ));
 
     // Right Inactive
-    surface(
+    surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::FILLED),
@@ -250,5 +250,5 @@ pub(super) fn render_range_tracks(
                 bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             }),
         || {},
-    );
+    ));
 }

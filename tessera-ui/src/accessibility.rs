@@ -10,10 +10,16 @@
 //!
 //! ```
 //! use accesskit::{Action, Role};
-//! use tessera_ui::tessera;
+//! use tessera_ui::{Prop, tessera};
+//!
+//! #[derive(Clone, Prop)]
+//! struct MyButtonArgs {
+//!     label: String,
+//! }
 //!
 //! #[tessera]
-//! fn my_button(label: String) {
+//! fn my_button(args: &MyButtonArgs) {
+//!     let label = args.label.clone();
 //!     input_handler(move |input| {
 //!         // Set accessibility information
 //!         input

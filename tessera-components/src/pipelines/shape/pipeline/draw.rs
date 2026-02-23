@@ -17,7 +17,7 @@ struct CachedRectUniform {
     padding: Vec2,
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct CachedRectInstances {
     #[shader(size(runtime))]
     rects: Vec<CachedRectUniform>,

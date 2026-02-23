@@ -6,7 +6,7 @@ use tessera_ui::{
 use super::command::ContrastCommand;
 
 #[repr(C)]
-#[derive(Debug, Copy, Clone, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Debug, Copy, Clone, PartialEq, bytemuck::Pod, bytemuck::Zeroable)]
 struct Uniforms {
     contrast: f32,
     area_x: u32,

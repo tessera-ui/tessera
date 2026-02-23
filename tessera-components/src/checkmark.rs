@@ -21,16 +21,15 @@
 //!
 //! See [`CheckmarkArgs`] for configuration options and usage examples in the
 //! [`checkmark`] function documentation.
-use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px,
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Prop, Px,
     RenderInput, tessera,
 };
 
 use crate::pipelines::checkmark::command::CheckmarkCommand;
 
 /// Arguments for the `checkmark` component.
-#[derive(Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct CheckmarkArgs {
     /// Color of the checkmark stroke
     pub color: Color,
@@ -127,11 +126,8 @@ impl LayoutSpec for CheckmarkLayout {
 ///   within its bounds. Defaults to `[2.0, 2.0]`.
 /// * `size`: The size of the checkmark area as a `Dp` value. Defaults to
 ///   `Dp(20.0)`.
-
 #[tessera]
-pub fn checkmark(args: impl Into<CheckmarkArgs>) {
-    let args: CheckmarkArgs = args.into();
-
+pub fn checkmark(args: &CheckmarkArgs) {
     let size_px = args.size.to_px();
     layout(CheckmarkLayout {
         size: Px::new(size_px.to_f32() as i32),

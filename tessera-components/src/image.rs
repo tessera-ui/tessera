@@ -5,10 +5,9 @@
 //! Use to display static or dynamically loaded images.
 use std::sync::Arc;
 
-use derive_setters::Setters;
 use image::GenericImageView;
 use tessera_ui::{
-    ComputedData, DimensionValue, MeasurementError, Modifier, Px,
+    ComputedData, DimensionValue, MeasurementError, Modifier, Prop, Px,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera,
 };
@@ -22,7 +21,7 @@ pub use crate::pipelines::image::command::ImageData;
 ///
 /// This enum is used by [`load_image_from_source`] to load image data from
 /// different sources.
-#[derive(Clone, Debug)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum ImageSource {
     /// Load image from a file path.
     Path(String),
@@ -62,13 +61,13 @@ pub fn load_image_from_source(source: &ImageSource) -> Result<ImageData, image::
 /// Arguments for the `image` component.
 ///
 /// This struct holds the data and layout properties for an `image` component.
-/// It is typically created using fluent setters or by converting from
+/// It is typically created using fluent Prop or by converting from
 /// [`ImageData`].
-#[derive(Debug, Setters, Clone)]
+#[derive(Debug, Prop, Clone)]
 pub struct ImageArgs {
     /// The decoded image data, represented by [`ImageData`]. This contains the
     /// raw pixel buffer and the image's dimensions.
-    #[setters(into)]
+    #[prop(into)]
     pub data: Arc<ImageData>,
 
     /// Optional modifier chain applied to the image node.
@@ -170,15 +169,14 @@ impl LayoutSpec for ImageLayout {
 /// image(image_data);
 /// ```
 #[tessera]
-pub fn image(args: impl Into<ImageArgs>) {
-    let image_args: ImageArgs = args.into();
-
-    let modifier = image_args.modifier;
-    modifier.run(move || image_inner(image_args));
+pub fn image(args: &ImageArgs) {
+    let modifier = args.modifier.clone();
+    let inner_args = args.clone();
+    modifier.run(move || image_inner(&inner_args));
 }
 
 #[tessera]
-fn image_inner(args: ImageArgs) {
-    let data = args.data;
+fn image_inner(args: &ImageArgs) {
+    let data = args.data.clone();
     layout(ImageLayout { data });
 }

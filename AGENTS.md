@@ -36,6 +36,18 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 **Automatic Injection**: `layout` and `input_handler` are injected by the macro and do not require manual import.
 
+### Component API Pattern
+
+- Truly zero-config components may use `#[tessera] pub fn component()` with no `Args`.
+- Any configurable component must use a single public entrypoint with one argument: `#[tessera] pub fn component(args: &ComponentArgs)`.
+- Do not introduce public wrapper variants (`*_with_controller`, `*_impl`, or extra public forwarding layers).
+- For optional external controllers, use `Option<State<...>>` in `Args`; when `None`, create internal state with `remember`.
+- Callback fields in `Args` should use `Callback` / `CallbackWith<...>`.
+- Slot fields in `Args` should use `RenderSlot` / slot wrappers as needed by signature.
+- `Callback`/`RenderSlot` are immutable handles in practice; do not rely on closure hot-swap semantics.
+- If callback behavior depends on changing values, capture `State<T>` (or other stable handles) and read latest values at call time.
+- Do not add runtime callback/slot helper wrappers (`callback`, `callback_with`, `render_slot`, `render_slot_with`); construct handles directly via `Callback::new`, `CallbackWith::new`, `RenderSlot::new`, and `RenderSlotWith::new`.
+
 ### Component Tree & Node Metadata
 
 - The component tree is managed via structures like `ComponentNode` and `ComponentNodeMetaData`, supporting parallel measurement and rendering.

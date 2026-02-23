@@ -46,7 +46,7 @@ fn get_slider_specs(size: SliderSize) -> SliderSpecs {
 
 const INNER_CORNER_RADIUS: Dp = Dp(2.0);
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(super) struct SliderLayout {
     pub component_width: Px,
     pub component_height: Px,

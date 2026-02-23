@@ -42,7 +42,7 @@ Tessera uses a declarative programming paradigm inspired by modern UI frameworks
 We start by declaring a UI component:
 
 ```rust
-use tessera::tessera;
+use tessera_ui::tessera;
 
 #[tessera]
 fn app() {
@@ -53,47 +53,74 @@ fn app() {
 Then we write its UI logic:
 
 ```rust
+use tessera_components::{
+    button::{ButtonArgs, button},
+    column::{ColumnArgs, column},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
+};
+use tessera_ui::Modifier;
+
 #[tessera]
 fn app() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         || {
             column(ColumnArgs::default(), |scope| {
-                scope.child(|| button(ButtonArgs::filled(|| {}), || text("+")));
-                scope.child(|| text("count: 0"));
-                scope.child(|| button(ButtonArgs::filled(|| {}), || text("-")));
+                scope.child(|| {
+                    button(&ButtonArgs::with_child(ButtonArgs::filled(|| {}), || {
+                        text(&TextArgs::from("+"));
+                    }));
+                });
+                scope.child(|| text(&TextArgs::from("Count: 0")));
+                scope.child(|| {
+                    button(&ButtonArgs::with_child(ButtonArgs::filled(|| {}), || {
+                        text(&TextArgs::from("-"));
+                    }));
+                });
             });
         },
-    );
+    ));
 }
 ```
 
 Next, to actually implement the counter we need to use `remember` to store the counter state:
 
 ```rust
+use tessera_components::{
+    button::{ButtonArgs, button},
+    column::{ColumnArgs, column},
+    surface::{SurfaceArgs, surface},
+    text::{TextArgs, text},
+};
+use tessera_ui::{Modifier, remember};
+
 #[tessera]
 fn app() {
-    surface(
+    let count = remember(|| 0i32);
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-        || {
-            let count = remember(|| 0);
+        move || {
             column(ColumnArgs::default(), move |scope| {
                 scope.child(move || {
-                    button(
+                    button(&ButtonArgs::with_child(
                         ButtonArgs::filled(move || count.with_mut(|c| *c += 1)),
-                        || text("+"),
-                    )
+                        || text(&TextArgs::from("+")),
+                    ));
                 });
-                scope.child(move || text(format!("Count: {}", count.get())));
                 scope.child(move || {
-                    button(
+                    let label = format!("Count: {}", count.get());
+                    text(&TextArgs::from(label));
+                });
+                scope.child(move || {
+                    button(&ButtonArgs::with_child(
                         ButtonArgs::filled(move || count.with_mut(|c| *c -= 1)),
-                        || text("-"),
-                    )
+                        || text(&TextArgs::from("-")),
+                    ));
                 });
             });
         },
-    );
+    ));
 }
 ```
 

@@ -2,33 +2,31 @@ use tessera_components::{
     button_groups::{ButtonGroupsArgs, ButtonGroupsStyle, button_groups},
     lazy_list::{LazyColumnArgs, lazy_column},
     modifier::ModifierExt as _,
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, shard, tessera};
-
-#[tessera]
+use tessera_ui::{Dp, Modifier, shard};
 #[shard]
 pub fn button_group_showcase() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             lazy_column(
-                LazyColumnArgs {
+                &LazyColumnArgs {
                     content_padding: Dp::new(16.0),
                     ..Default::default()
-                },
-                move |scope| {
+                }
+                .content(move |scope| {
                     scope.item(move || {
-                        text("Button Groups");
+                        text(&TextArgs::from("Button Groups"));
                     });
 
                     scope.item(move || {
-                        button_groups(ButtonGroupsArgs::default(), |scope| {
+                        button_groups(&ButtonGroupsArgs::default(), |scope| {
                             scope.child(
                                 |color| {
-                                    text(TextArgs {
+                                    text(&TextArgs {
                                         text: "Button 1".to_string(),
                                         color,
                                         ..Default::default()
@@ -41,7 +39,7 @@ pub fn button_group_showcase() {
 
                             scope.child(
                                 |color| {
-                                    text(TextArgs {
+                                    text(&TextArgs {
                                         text: "Button 2".to_string(),
                                         color,
                                         ..Default::default()
@@ -54,7 +52,7 @@ pub fn button_group_showcase() {
 
                             scope.child(
                                 |color| {
-                                    text(TextArgs {
+                                    text(&TextArgs {
                                         text: "Button 3".to_string(),
                                         color,
                                         ..Default::default()
@@ -67,18 +65,18 @@ pub fn button_group_showcase() {
                         });
                     });
 
-                    scope.item(|| spacer(Modifier::new().height(Dp(5.0))));
+                    scope.item(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(5.0)))));
 
                     scope.item(move || {
                         button_groups(
-                            ButtonGroupsArgs {
+                            &ButtonGroupsArgs {
                                 style: ButtonGroupsStyle::Connected,
                                 ..Default::default()
                             },
                             |scope| {
                                 scope.child(
                                     |color| {
-                                        text(TextArgs {
+                                        text(&TextArgs {
                                             text: "Button 1".to_string(),
                                             color,
                                             ..Default::default()
@@ -91,7 +89,7 @@ pub fn button_group_showcase() {
 
                                 scope.child(
                                     |color| {
-                                        text(TextArgs {
+                                        text(&TextArgs {
                                             text: "Button 2".to_string(),
                                             color,
                                             ..Default::default()
@@ -104,7 +102,7 @@ pub fn button_group_showcase() {
 
                                 scope.child(
                                     |color| {
-                                        text(TextArgs {
+                                        text(&TextArgs {
                                             text: "Button 3".to_string(),
                                             color,
                                             ..Default::default()
@@ -117,8 +115,8 @@ pub fn button_group_showcase() {
                             },
                         );
                     });
-                },
+                }),
             );
         },
-    );
+    ));
 }

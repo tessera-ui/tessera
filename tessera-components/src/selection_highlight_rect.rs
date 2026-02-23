@@ -4,8 +4,8 @@
 //!
 //! Highlight selected text ranges or focusable regions inside editors.
 use tessera_ui::{
-    Color, ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px, RenderInput,
-    tessera,
+    Color, ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Prop, Px,
+    RenderInput, tessera,
 };
 
 use crate::pipelines::shape::command::ShapeCommand;
@@ -27,16 +27,31 @@ use crate::pipelines::shape::command::ShapeCommand;
 /// - `color`: The fill color of the rectangle, including alpha for transparency
 ///   (`Color`).
 #[tessera]
-pub fn selection_highlight_rect(
+pub fn selection_highlight_rect(args: &SelectionHighlightRectArgs) {
+    layout(SelectionHighlightLayout {
+        width: args.width,
+        height: args.height,
+        color: args.color,
+    });
+}
+
+#[derive(Clone, Prop)]
+/// Props for [`selection_highlight_rect`].
+pub struct SelectionHighlightRectArgs {
     width: Px,
     height: Px,
-    color: Color, // RGBA color with alpha for transparency
-) {
-    layout(SelectionHighlightLayout {
-        width,
-        height,
-        color,
-    });
+    color: Color,
+}
+
+impl SelectionHighlightRectArgs {
+    /// Creates selection highlight rectangle props.
+    pub fn new(width: Px, height: Px, color: Color) -> Self {
+        Self {
+            width,
+            height,
+            color,
+        }
+    }
 }
 #[derive(Clone, PartialEq)]
 struct SelectionHighlightLayout {

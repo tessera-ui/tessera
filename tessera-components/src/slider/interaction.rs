@@ -1,7 +1,6 @@
-use std::sync::Arc;
-
 use tessera_ui::{
-    ComputedData, CursorEventContent, Focus, InputHandlerInput, Px, PxPosition, State,
+    CallbackWith, ComputedData, CursorEventContent, Focus, InputHandlerInput, Px, PxPosition,
+    State,
     accesskit::{Action, Role},
     winit::window::CursorIcon,
 };
@@ -18,7 +17,7 @@ pub(super) fn snap_fraction(value: f32, steps: usize) -> f32 {
 }
 
 /// Helper: check if a cursor position is within the bounds of a component.
-pub(super) fn cursor_within_component(
+pub(super) fn cursor_within_bounds(
     cursor_pos: Option<PxPosition>,
     computed: &ComputedData,
 ) -> bool {
@@ -99,7 +98,7 @@ pub(super) fn handle_slider_state(
         return;
     }
 
-    let is_in_component = cursor_within_component(input.cursor_position_rel, &input.computed_data);
+    let is_in_component = cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
 
     state.with_mut(|inner| {
         inner.is_hovered = is_in_component;
@@ -164,7 +163,7 @@ fn notify_on_change(new_value: Option<f32>, args: &SliderArgs) {
     if let Some(v) = new_value
         && (v - args.value).abs() > f32::EPSILON
     {
-        (args.on_change)(v);
+        args.on_change.call(v);
     }
 }
 
@@ -172,7 +171,7 @@ pub(super) fn apply_slider_accessibility(
     input: &mut InputHandlerInput<'_>,
     args: &SliderArgs,
     current_value: f32,
-    on_change: &Arc<dyn Fn(f32) + Send + Sync>,
+    on_change: &CallbackWith<f32>,
 ) {
     let mut builder = input.accessibility().role(Role::Slider);
 
@@ -219,7 +218,7 @@ pub(super) fn apply_slider_accessibility(
         if let Some(new_value) = new_value
             && (new_value - current_value).abs() > f32::EPSILON
         {
-            on_change(new_value);
+            on_change.call(new_value);
         }
     });
 }
@@ -269,7 +268,7 @@ pub(super) fn handle_range_slider_state(
         return;
     }
 
-    let is_in_component = cursor_within_component(input.cursor_position_rel, &input.computed_data);
+    let is_in_component = cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
 
     state.with_mut(|inner| {
         inner.is_hovered = is_in_component;
@@ -364,12 +363,12 @@ pub(super) fn handle_range_slider_state(
     if let Some(ns) = new_start
         && (ns - args.value.0).abs() > f32::EPSILON
     {
-        (args.on_change)((ns, args.value.1));
+        args.on_change.call((ns, args.value.1));
     }
     if let Some(ne) = new_end
         && (ne - args.value.1).abs() > f32::EPSILON
     {
-        (args.on_change)((args.value.0, ne));
+        args.on_change.call((args.value.0, ne));
     }
 }
 
@@ -378,7 +377,7 @@ pub(super) fn apply_range_slider_accessibility(
     args: &super::RangeSliderArgs,
     _current_start: f32,
     _current_end: f32,
-    _on_change: &Arc<dyn Fn((f32, f32)) + Send + Sync>,
+    _on_change: &CallbackWith<(f32, f32)>,
 ) {
     let mut builder = input.accessibility().hidden();
     if args.disabled {

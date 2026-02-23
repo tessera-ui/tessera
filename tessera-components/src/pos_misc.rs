@@ -8,7 +8,7 @@ use tessera_ui::{ComputedData, Px, PxPosition};
 /// The component is assumed to be located at the origin (0, 0).
 ///
 /// This is a small convenience wrapper around [`is_position_in_rect`].
-pub fn is_position_in_component(size: ComputedData, position: PxPosition) -> bool {
+pub fn is_position_inside_bounds(size: ComputedData, position: PxPosition) -> bool {
     is_position_in_rect(position, PxPosition::ZERO, size.width, size.height)
 }
 
@@ -40,20 +40,20 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_is_position_in_component() {
+    fn test_is_position_inside_bounds() {
         let size = ComputedData {
             width: Px(100),
             height: Px(50),
         };
-        assert!(is_position_in_component(
+        assert!(is_position_inside_bounds(
             size,
             PxPosition::new(Px(50), Px(25))
         ));
-        assert!(!is_position_in_component(
+        assert!(!is_position_inside_bounds(
             size,
             PxPosition::new(Px(150), Px(25))
         ));
-        assert!(!is_position_in_component(
+        assert!(!is_position_inside_bounds(
             size,
             PxPosition::new(Px(50), Px(75))
         ));

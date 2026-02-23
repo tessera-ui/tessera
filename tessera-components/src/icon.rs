@@ -5,9 +5,8 @@
 //! Use to display a scalable icon from image or vector data.
 use std::sync::Arc;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Prop, Px,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera, use_context,
 };
@@ -55,10 +54,10 @@ impl From<Arc<ImageData>> for IconContent {
 }
 
 /// Arguments for the [`icon`] component.
-#[derive(Debug, Setters, Clone)]
+#[derive(Debug, Prop, Clone)]
 pub struct IconArgs {
     /// Icon content, provided as either raster pixels or vector geometry.
-    #[setters(into)]
+    #[prop(into)]
     pub content: IconContent,
     /// Logical size of the icon. Applied to both width and height unless
     /// explicit overrides are provided through [`width`](IconArgs::width) /
@@ -66,11 +65,9 @@ pub struct IconArgs {
     pub size: Dp,
     /// Optional width override. Handy when the icon should `Fill` or `Wrap`
     /// differently from the default square sizing.
-    #[setters(strip_option)]
     pub width: Option<DimensionValue>,
     /// Optional height override. Handy when the icon should `Fill` or `Wrap`
     /// differently from the default square sizing.
-    #[setters(strip_option)]
     pub height: Option<DimensionValue>,
     /// Tint color applied to vector icons. Defaults to white so it preserves
     /// the original colors (multiplying by white is a no-op). Raster icons
@@ -241,20 +238,18 @@ impl LayoutSpec for IconLayout {
 /// let vector_data =
 ///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
 ///
-/// icon(IconArgs::from(vector_data).tint(Color::new(0.2, 0.5, 0.8, 1.0)));
+/// icon(&IconArgs::from(vector_data).tint(Color::new(0.2, 0.5, 0.8, 1.0)));
 /// ```
 #[tessera]
-pub fn icon(args: impl Into<IconArgs>) {
-    let icon_args: IconArgs = args.into();
-
+pub fn icon(args: &IconArgs) {
     layout(IconLayout {
-        content: icon_args.content,
-        size: icon_args.size,
-        width: icon_args.width,
-        height: icon_args.height,
-        tint: icon_args.tint,
-        tint_mode: icon_args.tint_mode,
-        rotation: icon_args.rotation,
+        content: args.content.clone(),
+        size: args.size,
+        width: args.width,
+        height: args.height,
+        tint: args.tint,
+        tint_mode: args.tint_mode,
+        rotation: args.rotation,
     });
 }
 

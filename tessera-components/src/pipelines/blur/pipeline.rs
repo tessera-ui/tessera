@@ -112,14 +112,14 @@ fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct WeightCacheEntry {
     weights: [f32; MAX_SAMPLES],
     offsets: [f32; MAX_SAMPLES],
     sample_count: u32,
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct BlurUniforms {
     radius: f32,
     direction_x: f32,
@@ -131,13 +131,13 @@ struct BlurUniforms {
     sample_count: u32,
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct WeightsAndOffsets {
     weights: [glam::Vec4; 16],
     offsets: [glam::Vec4; 16],
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct DownsampleUniforms {
     area_x: u32,
     area_y: u32,
@@ -146,7 +146,7 @@ struct DownsampleUniforms {
     scale: u32,
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct UpsampleUniforms {
     area_x: u32,
     area_y: u32,

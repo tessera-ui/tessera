@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Separate sections in lists, menus, and settings screens.
-use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Px, RenderInput, tessera, use_context,
+    MeasurementError, Prop, Px, RenderInput, tessera, use_context,
 };
 
 use crate::{pipelines::simple_rect::command::SimpleRectCommand, theme::MaterialTheme};
@@ -57,7 +56,7 @@ impl DividerDefaults {
 }
 
 /// Arguments for [`horizontal_divider`] and [`vertical_divider`].
-#[derive(Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct DividerArgs {
     /// Thickness of the divider line.
     ///
@@ -154,8 +153,7 @@ impl LayoutSpec for DividerLayout {
 /// assert_eq!(args.thickness, Dp::ZERO);
 /// ```
 #[tessera]
-pub fn horizontal_divider(args: impl Into<DividerArgs>) {
-    let args: DividerArgs = args.into();
+pub fn horizontal_divider(args: &DividerArgs) {
     let thickness_px = resolve_thickness_px(args.thickness);
     let color = args.color;
 
@@ -191,8 +189,7 @@ pub fn horizontal_divider(args: impl Into<DividerArgs>) {
 /// assert_eq!(args.thickness, Dp(2.0));
 /// ```
 #[tessera]
-pub fn vertical_divider(args: impl Into<DividerArgs>) {
-    let args: DividerArgs = args.into();
+pub fn vertical_divider(args: &DividerArgs) {
     let thickness_px = resolve_thickness_px(args.thickness);
     let color = args.color;
 

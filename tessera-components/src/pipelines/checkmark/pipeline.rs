@@ -10,7 +10,7 @@ use crate::pipelines::pos_misc::pixel_to_ndc;
 
 use super::command::CheckmarkCommand;
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 pub struct CheckmarkUniforms {
     pub size: Vec2,
     pub color: Vec4,
@@ -20,7 +20,7 @@ pub struct CheckmarkUniforms {
 }
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, Pod, Zeroable)]
+#[derive(Copy, Clone, PartialEq, Debug, Pod, Zeroable)]
 struct CheckmarkVertex {
     /// Position of the vertex (x, y, z)
     position: [f32; 3],

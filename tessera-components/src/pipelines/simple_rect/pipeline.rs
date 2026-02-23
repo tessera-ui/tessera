@@ -10,7 +10,7 @@ use tessera_ui::{
 use super::command::SimpleRectCommand;
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, PartialEq, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 2],
 }
@@ -22,7 +22,7 @@ struct RectUniform {
     screen_size: Vec2,
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct RectInstances {
     #[shader(size(runtime))]
     instances: Vec<RectUniform>,

@@ -304,7 +304,7 @@ pub struct TextData {
 }
 
 /// Measurement result returned by `TextData::measure()`.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, PartialEq, Copy)]
 #[allow(dead_code)]
 pub struct TextMeasureInfo {
     /// The computed size of the text area.

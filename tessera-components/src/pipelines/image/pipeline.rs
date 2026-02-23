@@ -10,7 +10,7 @@ use tessera_ui::{
 
 use super::command::{ImageCommand, ImageData};
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct ImageUniforms {
     rect: Vec4,
     is_bgra: u32,

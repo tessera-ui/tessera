@@ -4,10 +4,12 @@
 //!
 //! Highlight counts or status markers on top of icons and other UI elements.
 
-use derive_setters::Setters;
+use std::sync::Arc;
+
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Px, PxPosition, PxSize, RenderInput, provide_context, tessera, use_context,
+    MeasurementError, Prop, Px, PxPosition, PxSize, RenderInput, RenderSlot, provide_context,
+    tessera, use_context,
 };
 
 use crate::{
@@ -307,14 +309,13 @@ impl BadgeDefaults {
 }
 
 /// Arguments for [`badge`] and [`badge_with_content`].
-#[derive(Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct BadgeArgs {
     /// Background color of the badge.
     pub container_color: Color,
     /// Preferred content color for badge descendants.
     ///
     /// When `None`, the badge derives a matching content color from the theme.
-    #[setters(strip_option)]
     pub content_color: Option<Color>,
 }
 
@@ -349,16 +350,30 @@ impl Default for BadgeArgs {
 /// use tessera_ui::Dp;
 /// assert_eq!(BadgeDefaults::OFFSET, Dp(6.0));
 /// ```
-#[tessera]
 pub fn badged_box<F1, F2>(badge: F1, content: F2)
 where
-    F1: FnOnce() + Send + Sync + 'static,
-    F2: FnOnce() + Send + Sync + 'static,
+    F1: Fn() + Send + Sync + 'static,
+    F2: Fn() + Send + Sync + 'static,
 {
+    let render_args = BadgedBoxRenderArgs {
+        badge: RenderSlot::new(badge),
+        content: RenderSlot::new(content),
+    };
+    badged_box_node(&render_args);
+}
+
+#[tessera]
+fn badged_box_node(args: &BadgedBoxRenderArgs) {
     layout(BadgedBoxLayout);
 
-    content();
-    badge();
+    args.content.render();
+    args.badge.render();
+}
+
+#[derive(Clone, Prop)]
+struct BadgedBoxRenderArgs {
+    badge: RenderSlot,
+    content: RenderSlot,
 }
 
 /// # badge
@@ -387,8 +402,8 @@ where
 /// assert_eq!(args.content_color, Some(Color::WHITE));
 /// ```
 #[tessera]
-pub fn badge(args: impl Into<BadgeArgs>) {
-    let args: BadgeArgs = args.into();
+pub fn badge(args: &BadgeArgs) {
+    let args = args.clone();
     let container_color = args.container_color;
 
     layout(BadgeLayout { container_color });
@@ -421,12 +436,21 @@ pub fn badge(args: impl Into<BadgeArgs>) {
 /// .content_color(Color::WHITE);
 /// assert_eq!(args.container_color, Color::RED);
 /// ```
-#[tessera]
-pub fn badge_with_content<F>(args: impl Into<BadgeArgs>, content: F)
+pub fn badge_with_content<F>(args: &BadgeArgs, content: F)
 where
-    F: FnOnce(&mut RowScope),
+    F: for<'a> Fn(&mut RowScope<'a>) + Send + Sync + 'static,
 {
-    let args: BadgeArgs = args.into();
+    let render_args = BadgeWithContentRenderArgs {
+        container_color: args.container_color,
+        content_color: args.content_color,
+        content: Arc::new(content),
+    };
+    badge_with_content_node(&render_args);
+}
+
+#[tessera]
+fn badge_with_content_node(args: &BadgeWithContentRenderArgs) {
+    let content = Arc::clone(&args.content);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -458,9 +482,20 @@ where
                     RowArgs::default()
                         .main_axis_alignment(MainAxisAlignment::Center)
                         .cross_axis_alignment(CrossAxisAlignment::Center),
-                    content,
+                    move |scope| {
+                        (content)(scope);
+                    },
                 );
             });
         },
     );
+}
+
+type BadgeContentBuilder = dyn for<'a> Fn(&mut RowScope<'a>) + Send + Sync;
+
+#[derive(Clone, Prop)]
+struct BadgeWithContentRenderArgs {
+    container_color: Color,
+    content_color: Option<Color>,
+    content: Arc<BadgeContentBuilder>,
 }

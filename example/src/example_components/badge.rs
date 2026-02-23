@@ -5,16 +5,14 @@ use tessera_components::{
     material_icons::filled,
     modifier::ModifierExt as _,
     row::{RowArgs, row},
-    spacer::spacer,
+    spacer::{SpacerArgs, spacer},
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, shard, tessera};
-
-#[tessera]
+use tessera_ui::{Dp, Modifier, shard};
 #[shard]
 pub fn badge_showcase() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             column(
@@ -22,15 +20,15 @@ pub fn badge_showcase() {
                     .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0))),
                 |scope| {
                     scope.child(|| {
-                        text(TextArgs::default().text("Badge Showcase").size(Dp(20.0)));
+                        text(&TextArgs::default().text("Badge Showcase").size(Dp(20.0)));
                     });
 
                     scope.child(|| {
-                        spacer(Modifier::new().height(Dp(16.0)));
+                        spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
                     });
 
                     scope.child(|| {
-                        text(TextArgs::default().text("Dot badge").size(Dp(14.0)));
+                        text(&TextArgs::default().text("Dot badge").size(Dp(14.0)));
                     });
 
                     scope.child(|| {
@@ -41,10 +39,10 @@ pub fn badge_showcase() {
                                     let icon_content = filled::home_icon();
                                     badged_box(
                                         || {
-                                            badge(BadgeArgs::default());
+                                            badge(&BadgeArgs::default());
                                         },
-                                        || {
-                                            icon(IconArgs::from(icon_content));
+                                        move || {
+                                            icon(&IconArgs::from(icon_content.clone()));
                                         },
                                     );
                                 });
@@ -53,12 +51,12 @@ pub fn badge_showcase() {
                     });
 
                     scope.child(|| {
-                        spacer(Modifier::new().height(Dp(16.0)));
+                        spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
                     });
 
                     scope.child(|| {
                         text(
-                            TextArgs::default()
+                            &TextArgs::default()
                                 .text("Badge with content")
                                 .size(Dp(14.0)),
                         );
@@ -73,19 +71,19 @@ pub fn badge_showcase() {
                                     badged_box(
                                         || {
                                             badge_with_content(
-                                                BadgeArgs::default(),
+                                                &BadgeArgs::default(),
                                                 |badge_scope| {
                                                     badge_scope.child(|| {
                                                         text(
-                                                            TextArgs::default()
+                                                            &TextArgs::default()
                                                                 .text("12".to_string()),
                                                         );
                                                     });
                                                 },
                                             );
                                         },
-                                        || {
-                                            icon(IconArgs::from(icon_content));
+                                        move || {
+                                            icon(&IconArgs::from(icon_content.clone()));
                                         },
                                     );
                                 });
@@ -95,5 +93,5 @@ pub fn badge_showcase() {
                 },
             );
         },
-    );
+    ));
 }

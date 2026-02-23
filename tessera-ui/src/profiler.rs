@@ -15,7 +15,11 @@
 //! ```jsonl
 //! {"version":1,"format":"tessera-profiler","generated_at":"1767008877"}
 //! {
+//!   "type": "frame",
 //!   "frame": 0,
+//!   "build_mode": "partial_replay",
+//!   "redraw_reasons": ["mouse_input"],
+//!   "inter_frame_wait_ns": 16564000,
 //!   "render_time_ns": 1349800,
 //!   "frame_total_ns": 57486200,
 //!   "components": [
@@ -84,16 +88,16 @@
 //!
 //! See [`FrameHeader`] for equivalent Rust structure.
 //!
-//! ### Frame Record
+//! ### Trace Events
 //!
-//! Each subsequent line is a frame record containing timing data for a single
-//! frame.
+//! Each subsequent line is a tagged event record.
 //!
 //! `layout_cache_hit` is an optional boolean on each component record. When
 //! present, it indicates whether the layout cache was hit for that node in the
 //! current frame.
 //!
-//! See [`FrameRecord`] and [`ComponentRecord`] for equivalent Rust structures.
+//! See [`FrameEventRecord`] and [`ComponentRecord`] for equivalent Rust
+//! structures.
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions, create_dir_all},
@@ -130,6 +134,74 @@ pub enum Phase {
     RenderFrame,
 }
 
+/// Component tree build strategy used for a frame.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildMode {
+    /// Recompose from the tree root.
+    RootRecompose,
+    /// Partial dirty-subtree replay succeeded.
+    PartialReplay,
+    /// Build stage skipped because there were no invalidations.
+    SkipNoInvalidation,
+}
+
+/// Reason that caused a redraw request.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Ord, PartialOrd, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RedrawReason {
+    /// Initial frame request during startup/resume.
+    Startup,
+    /// Window resize event.
+    WindowResized,
+    /// Cursor move event.
+    CursorMoved,
+    /// Cursor leave event.
+    CursorLeft,
+    /// Mouse button input event.
+    MouseInput,
+    /// Mouse wheel event.
+    MouseWheel,
+    /// Touch event.
+    TouchInput,
+    /// Scale factor change event.
+    ScaleFactorChanged,
+    /// Keyboard input event.
+    KeyboardInput,
+    /// Keyboard modifier state change event.
+    ModifiersChanged,
+    /// IME event.
+    ImeEvent,
+    /// Focus change event.
+    FocusChanged,
+    /// Runtime state invalidation requires next frame.
+    RuntimeInvalidation,
+    /// Frame awaiter callback requires next frame.
+    RuntimeFrameAwaiter,
+}
+
+/// Source category for redraw wake events.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WakeSource {
+    /// Triggered by the renderer lifecycle.
+    Lifecycle,
+    /// Triggered by a window/input event.
+    WindowEvent,
+    /// Triggered by runtime pending work.
+    Runtime,
+}
+
+/// Runtime lifecycle event kind emitted by profiler.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Hash, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RuntimeEventKind {
+    /// Renderer resumed and resources were created.
+    Resumed,
+    /// Renderer suspended and resources were released.
+    Suspended,
+}
+
 #[derive(Clone)]
 struct Sample {
     phase: Phase,
@@ -164,6 +236,16 @@ pub struct NodeMeta {
 pub struct FrameMeta {
     /// Frame index.
     pub frame_idx: u64,
+    /// Component tree build strategy.
+    pub build_mode: BuildMode,
+    /// Redraw reasons that woke this frame.
+    pub redraw_reasons: Vec<RedrawReason>,
+    /// Time spent waiting between this and the previous frame.
+    pub inter_frame_wait_ns: Option<u128>,
+    /// Number of nodes replayed by partial build in this frame.
+    pub partial_replay_nodes: Option<u64>,
+    /// Total component nodes before the build pass in this frame.
+    pub total_nodes_before_build: Option<u64>,
     /// Render duration for the frame.
     pub render_time_ns: Option<u128>,
     /// Component tree build duration for the frame (wall time).
@@ -180,16 +262,34 @@ pub struct FrameMeta {
     pub nodes: Vec<NodeMeta>,
 }
 
+/// Redraw wake metadata emitted when the renderer requests a frame.
+pub struct WakeMeta {
+    /// Frame index associated with the wake request.
+    pub frame_idx: u64,
+    /// Source category that requested the redraw.
+    pub source: WakeSource,
+    /// Reasons associated with this wake request.
+    pub reasons: Vec<RedrawReason>,
+}
+
+/// Runtime lifecycle metadata emitted by the renderer.
+pub struct RuntimeMeta {
+    /// Runtime event kind.
+    pub kind: RuntimeEventKind,
+}
+
 /// # Examples
-/// A minimal frame record written to the profiler output:
+/// A minimal frame event written to the profiler output:
 ///
 /// ```json
-/// {"frame":1,"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"layout_cache_hit":true,"phases":{"build_ns":5000},"children":[]}]}
+/// {"type":"frame","frame":1,"build_mode":"root_recompose","redraw_reasons":["startup"],"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"layout_cache_hit":true,"phases":{"build_ns":5000},"children":[]}]}
 /// ```
 
 enum Message {
     Sample(Sample),
     FrameMeta(FrameMeta),
+    WakeMeta(WakeMeta),
+    RuntimeMeta(RuntimeMeta),
 }
 
 struct ProfilerRuntime {
@@ -276,22 +376,46 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
                     .unwrap_or_default();
                 flush_frame(&mut state, frame_meta, samples);
             }
+            Message::WakeMeta(wake_meta) => {
+                let event = TraceEvent::Wake(WakeEventRecord {
+                    frame: wake_meta.frame_idx,
+                    source: wake_meta.source,
+                    reasons: wake_meta.reasons,
+                });
+                write_event(&mut state, &event);
+            }
+            Message::RuntimeMeta(runtime_meta) => {
+                let event = TraceEvent::Runtime(RuntimeEventRecord {
+                    kind: runtime_meta.kind,
+                });
+                write_event(&mut state, &event);
+            }
         };
     }
 }
 
 fn flush_frame(state: &mut WorkerState, frame_meta: FrameMeta, samples: Vec<Sample>) {
-    if !state.header_written {
-        let header = FrameHeader::new();
-        if serde_json::to_writer(&mut state.writer, &header).is_ok() {
-            let _ = state.writer.write_all(b"\n");
-            state.header_written = true;
-        }
+    if let Some(record) = build_frame_record(frame_meta, samples) {
+        let event = TraceEvent::Frame(record);
+        write_event(state, &event);
+    }
+}
+
+fn write_header_if_needed(state: &mut WorkerState) {
+    if state.header_written {
+        return;
     }
 
-    if let Some(record) = build_frame_record(frame_meta, samples)
-        && serde_json::to_writer(&mut state.writer, &record).is_ok()
-    {
+    let header = FrameHeader::new();
+    if serde_json::to_writer(&mut state.writer, &header).is_ok() {
+        let _ = state.writer.write_all(b"\n");
+        state.header_written = true;
+    }
+}
+
+fn write_event(state: &mut WorkerState, event: &TraceEvent) {
+    write_header_if_needed(state);
+    if serde_json::to_writer(&mut state.writer, event).is_ok() {
         let _ = state.writer.write_all(b"\n");
     }
     let _ = state.writer.flush();
@@ -340,11 +464,33 @@ impl FrameHeader {
     }
 }
 
-/// Profiler output frame record.
+/// Profiler output event stream record.
 #[derive(Serialize)]
-pub struct FrameRecord {
+#[serde(tag = "type", rename_all = "snake_case")]
+enum TraceEvent {
+    Frame(FrameEventRecord),
+    Wake(WakeEventRecord),
+    Runtime(RuntimeEventRecord),
+}
+
+/// Profiler output frame event record.
+#[derive(Serialize)]
+pub struct FrameEventRecord {
     /// Frame index.
     frame: u64,
+    /// Build strategy used in this frame.
+    build_mode: BuildMode,
+    /// Redraw reasons that woke this frame.
+    redraw_reasons: Vec<RedrawReason>,
+    /// Time spent waiting between this and the previous frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    inter_frame_wait_ns: Option<u128>,
+    /// Number of nodes replayed by partial build in this frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    partial_replay_nodes: Option<u64>,
+    /// Total component nodes before the build pass in this frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    total_nodes_before_build: Option<u64>,
     /// Render duration for the frame.
     render_time_ns: Option<u128>,
     /// Component tree build duration for the frame (wall time).
@@ -360,6 +506,22 @@ pub struct FrameRecord {
     layout_diagnostics: Option<LayoutDiagnosticsRecord>,
     /// Component tree records.
     components: Vec<ComponentRecord>,
+}
+
+#[derive(Serialize)]
+struct WakeEventRecord {
+    /// Frame index associated with this wake request.
+    frame: u64,
+    /// Source category that requested the redraw.
+    source: WakeSource,
+    /// Wake reasons for this request.
+    reasons: Vec<RedrawReason>,
+}
+
+#[derive(Serialize)]
+struct RuntimeEventRecord {
+    /// Runtime lifecycle event kind.
+    kind: RuntimeEventKind,
 }
 
 #[derive(Serialize, Clone, Copy)]
@@ -454,18 +616,31 @@ struct ComponentRecordBuilder {
     children: Vec<String>,
 }
 
-fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<FrameRecord> {
+fn mangle_component_fn_name(name: &str) -> String {
+    name.strip_prefix("__")
+        .and_then(|rest| rest.strip_suffix("_shard_component"))
+        .filter(|inner| !inner.is_empty())
+        .map(ToOwned::to_owned)
+        .unwrap_or_else(|| name.to_owned())
+}
+
+fn mangle_component_fn_name_opt(name: Option<&str>) -> Option<String> {
+    name.map(mangle_component_fn_name)
+}
+
+fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<FrameEventRecord> {
     let mut nodes: HashMap<String, ComponentRecordBuilder> = HashMap::new();
 
     for node in frame_meta.nodes {
         let id = node.node_id.clone();
         let parent = node.parent.clone();
+        let node_fn_name = mangle_component_fn_name_opt(node.fn_name.as_deref());
         let entry = nodes
             .entry(id.clone())
             .or_insert_with(|| ComponentRecordBuilder {
                 id: id.clone(),
                 parent: parent.clone(),
-                fn_name: node.fn_name.clone(),
+                fn_name: node_fn_name.clone(),
                 abs_pos: node.abs_pos.map(|(x, y)| Pos { x, y }),
                 size: node.size.map(|(w, h)| Size { w, h }),
                 layout_cache_hit: node.layout_cache_hit,
@@ -474,7 +649,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             });
 
         if entry.fn_name.is_none() {
-            entry.fn_name = node.fn_name.clone();
+            entry.fn_name = node_fn_name.clone();
         }
         if entry.abs_pos.is_none() {
             entry.abs_pos = node.abs_pos.map(|(x, y)| Pos { x, y });
@@ -512,13 +687,14 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             continue;
         };
         let node_key = node_id.to_string();
+        let sample_fn_name = mangle_component_fn_name_opt(sample.fn_name.as_deref());
 
         let entry = nodes
             .entry(node_key.clone())
             .or_insert_with(|| ComponentRecordBuilder {
                 id: node_key.clone(),
                 parent: sample.parent_node_id.map(|p| p.to_string()),
-                fn_name: sample.fn_name.clone(),
+                fn_name: sample_fn_name.clone(),
                 abs_pos: sample.abs_pos.map(|(x, y)| Pos { x, y }),
                 size: sample.computed_size.map(|(w, h)| Size { w, h }),
                 layout_cache_hit: None,
@@ -527,7 +703,7 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             });
 
         if entry.fn_name.is_none() {
-            entry.fn_name = sample.fn_name.clone();
+            entry.fn_name = sample_fn_name.clone();
         }
         if entry.abs_pos.is_none() {
             entry.abs_pos = sample.abs_pos.map(|(x, y)| Pos { x, y });
@@ -554,8 +730,13 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
     }
 
     if nodes.is_empty() {
-        return Some(FrameRecord {
+        return Some(FrameEventRecord {
             frame: frame_meta.frame_idx,
+            build_mode: frame_meta.build_mode,
+            redraw_reasons: frame_meta.redraw_reasons,
+            inter_frame_wait_ns: frame_meta.inter_frame_wait_ns,
+            partial_replay_nodes: frame_meta.partial_replay_nodes,
+            total_nodes_before_build: frame_meta.total_nodes_before_build,
             render_time_ns: frame_meta.render_time_ns,
             build_tree_time_ns: frame_meta.build_tree_time_ns,
             draw_time_ns: frame_meta.draw_time_ns,
@@ -612,8 +793,13 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
         .map(|id| build_tree(id, &mut map_for_build))
         .collect();
 
-    Some(FrameRecord {
+    Some(FrameEventRecord {
         frame: frame_meta.frame_idx,
+        build_mode: frame_meta.build_mode,
+        redraw_reasons: frame_meta.redraw_reasons,
+        inter_frame_wait_ns: frame_meta.inter_frame_wait_ns,
+        partial_replay_nodes: frame_meta.partial_replay_nodes,
+        total_nodes_before_build: frame_meta.total_nodes_before_build,
         render_time_ns: frame_meta.render_time_ns,
         build_tree_time_ns: frame_meta.build_tree_time_ns,
         draw_time_ns: frame_meta.draw_time_ns,
@@ -636,6 +822,23 @@ pub fn submit_frame_meta(frame_meta: FrameMeta) {
         .send(Message::FrameMeta(frame_meta))
     {
         eprintln!("tessera profiler frame meta send failed: {err}");
+    }
+}
+
+/// Submit redraw wake metadata.
+pub fn submit_wake_meta(wake_meta: WakeMeta) {
+    if let Err(err) = profiler_runtime().sender.send(Message::WakeMeta(wake_meta)) {
+        eprintln!("tessera profiler wake meta send failed: {err}");
+    }
+}
+
+/// Submit runtime lifecycle metadata.
+pub fn submit_runtime_meta(runtime_meta: RuntimeMeta) {
+    if let Err(err) = profiler_runtime()
+        .sender
+        .send(Message::RuntimeMeta(runtime_meta))
+    {
+        eprintln!("tessera profiler runtime meta send failed: {err}");
     }
 }
 
@@ -700,5 +903,31 @@ impl Drop for ScopeGuard {
             sample.end = Instant::now();
             push_sample(sample);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{mangle_component_fn_name, mangle_component_fn_name_opt};
+
+    #[test]
+    fn mangle_shard_component_name() {
+        assert_eq!(
+            mangle_component_fn_name("__home_shard_component"),
+            "home".to_string()
+        );
+    }
+
+    #[test]
+    fn keep_regular_component_name() {
+        assert_eq!(mangle_component_fn_name("button"), "button".to_string());
+        assert_eq!(
+            mangle_component_fn_name_opt(Some("__settings_shard_component")),
+            Some("settings".to_string())
+        );
+        assert_eq!(
+            mangle_component_fn_name_opt(Some("text_input")),
+            Some("text_input".to_string())
+        );
     }
 }

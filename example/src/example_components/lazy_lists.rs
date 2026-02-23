@@ -8,35 +8,30 @@ use tessera_components::{
     text::{TextArgs, text},
     theme::MaterialTheme,
 };
-use tessera_ui::{Color, Dp, Modifier, shard, tessera, use_context};
-
-#[tessera]
+use tessera_ui::{Color, Dp, Modifier, shard, use_context};
 #[shard]
 pub fn lazy_lists_showcase() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             lazy_column(
-                LazyColumnArgs {
+                &LazyColumnArgs {
                     content_padding: Dp(24.0),
                     ..Default::default()
-                },
-                move |scope| {
+                }
+                .content(move |scope| {
                     scope.item(move || {
                         column(
                             ColumnArgs::default()
                                 .modifier(Modifier::new().fill_max_width()),
                             move |scope| {
                                 scope.child(|| {
-                                    text(
-                                        TextArgs::default()
+                                    text(&TextArgs::default()
                                             .text("Lazy Lists")
-                                            .size(Dp(24.0))
-                                    );
+                                            .size(Dp(24.0)));
                                 });
                                 scope.child(|| {
-                                    text(
-                                        TextArgs::default()
+                                    text(&TextArgs::default()
                                             .text("Virtualized column/row that only mounts what is visible in the viewport.")
                                             .color(
                                                 use_context::<MaterialTheme>()
@@ -44,37 +39,30 @@ pub fn lazy_lists_showcase() {
                                                     .get()
                                                     .color_scheme
                                                     .on_surface_variant,
-                                            )
-                                    );
+                                            ));
                                 });
                                 scope.child(|| {
-                                    text(
-                                        TextArgs::default()
+                                    text(&TextArgs::default()
                                             .text("Virtual contacts (lazy_column)")
-                                            .size(Dp(18.0))
-                                    );
+                                            .size(Dp(18.0)));
                                 });
                                 scope.child(vertical_list);
                                 scope.child(|| {
-                                    text(
-                                        TextArgs::default()
+                                    text(&TextArgs::default()
                                             .text("Horizontal gallery (lazy_row)")
-                                            .size(Dp(18.0))
-                                    );
+                                            .size(Dp(18.0)));
                                 });
                                 scope.child(horizontal_gallery);
                             }
                         );
                     });
-                },
+                }),
             );
         },
-    );
+    ));
 }
-
-#[tessera]
 fn vertical_list() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
@@ -88,26 +76,24 @@ fn vertical_list() {
             .shape(Shape::rounded_rectangle(Dp(18.0))),
         move || {
             lazy_column(
-                LazyColumnArgs::default()
+                &LazyColumnArgs::default()
                     .modifier(Modifier::new().fill_max_width().height(Dp(360.0)))
                     .item_spacing(Dp(12.0))
                     .estimated_item_size(Dp(68.0))
                     .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                    .overscan(3),
-                |scope| {
-                    let indices: Vec<usize> = (0..500).collect();
-                    scope.items_from_iter(indices, |_, idx| {
-                        contact_card(*idx);
-                    });
-                },
+                    .overscan(3)
+                    .content(|scope| {
+                        let indices: Vec<usize> = (0..500).collect();
+                        scope.items_from_iter(indices, |_, idx| {
+                            contact_card(*idx);
+                        });
+                    }),
             );
         },
-    );
+    ));
 }
-
-#[tessera]
 fn horizontal_gallery() {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .style(
@@ -121,25 +107,23 @@ fn horizontal_gallery() {
             .shape(Shape::rounded_rectangle(Dp(18.0))),
         move || {
             lazy_row(
-                LazyRowArgs::default()
+                &LazyRowArgs::default()
                     .modifier(Modifier::new().fill_max_width().height(Dp(180.0)))
                     .item_spacing(Dp(16.0))
                     .estimated_item_size(Dp(160.0))
                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .overscan(4),
-                |scope| {
-                    scope.items(240, |index| {
-                        gallery_card(index);
-                    });
-                },
+                    .overscan(4)
+                    .content(|scope| {
+                        scope.items(240, |index| {
+                            gallery_card(index);
+                        });
+                    }),
             );
         },
-    );
+    ));
 }
-
-#[tessera]
 fn contact_card(index: usize) {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
             .shape(Shape::rounded_rectangle(Dp(16.0)))
@@ -152,7 +136,7 @@ fn contact_card(index: usize) {
                         let contact_number = index + 1;
                         move || {
                             text(
-                                TextArgs::default()
+                                &TextArgs::default()
                                     .text(format!("Contact {}", contact_number))
                                     .size(Dp(16.0)),
                             );
@@ -162,7 +146,7 @@ fn contact_card(index: usize) {
                         let unread_count = (index * 3) % 7;
                         move || {
                             text(
-                                TextArgs::default()
+                                &TextArgs::default()
                                     .text(format!("{unread_count} unread messages"))
                                     .color(
                                         use_context::<MaterialTheme>()
@@ -177,12 +161,10 @@ fn contact_card(index: usize) {
                 },
             );
         },
-    );
+    ));
 }
-
-#[tessera]
 fn gallery_card(index: usize) {
-    surface(
+    surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(
                 Modifier::new()
@@ -193,13 +175,13 @@ fn gallery_card(index: usize) {
             .style(color_for_index(index).into()),
         move || {
             text(
-                TextArgs::default()
+                &TextArgs::default()
                     .text(format!("Card {}", index + 1))
                     .size(Dp(16.0))
                     .color(Color::WHITE),
             );
         },
-    );
+    ));
 }
 
 fn color_for_index(index: usize) -> Color {

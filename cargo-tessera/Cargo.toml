@@ -31,7 +31,7 @@ notify = "8.2.0"
 inquire = { version = "0.9.3", default-features = false, features = ["crossterm", "editor"] }
 cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", default-features = false, features = ["native-tls"] }
 handlebars = "6"
-serde_json = "1"
+serde_json = { version = "1", features = ["unbounded_depth"] }
 cargo_metadata = "0.23"
 comfy-table = "7.1"
 owo-colors = "4.1"

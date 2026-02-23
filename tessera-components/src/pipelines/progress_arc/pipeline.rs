@@ -10,7 +10,7 @@ use tessera_ui::{
 use super::command::{ProgressArcCap, ProgressArcCommand};
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, PartialEq, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 2],
 }
@@ -27,7 +27,7 @@ struct ArcUniform {
     _pad: u32,
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct ArcInstances {
     #[shader(size(runtime))]
     instances: Vec<ArcUniform>,

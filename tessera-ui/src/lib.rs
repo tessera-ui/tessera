@@ -104,11 +104,16 @@
 //! Or use the `key` function to influence the `remember` calls inside it.
 //!
 //! ```
-//! use tessera_ui::{key, remember, tessera};
+//! use tessera_ui::{Prop, key, remember, tessera};
+//!
+//! #[derive(Clone, Prop)]
+//! struct MyListArgs {
+//!     items: Vec<String>,
+//! }
 //!
 //! #[tessera]
-//! fn my_list(items: Vec<String>) {
-//!     for item in items {
+//! fn my_list(args: &MyListArgs) {
+//!     for item in args.items.iter() {
 //!         key(item.clone(), || {
 //!             let state = remember(|| 0);
 //!         });
@@ -133,10 +138,15 @@
 //! is retained across the entire lifetime of the process.
 //!
 //! ```
-//! use tessera_ui::{retain, tessera};
+//! use tessera_ui::{Prop, retain, tessera};
+//!
+//! #[derive(Clone, Prop)]
+//! struct ScrollablePageArgs {
+//!     page_id: String,
+//! }
 //!
 //! #[tessera]
-//! fn scrollable_page(page_id: &str) {
+//! fn scrollable_page(_args: &ScrollablePageArgs) {
 //!     // Scroll position persists even when navigating away and returning
 //!     let scroll_offset = retain(|| 0.0f32);
 //!
@@ -175,11 +185,16 @@
 //! Or use the `key` function to influence the `retain` calls inside it.
 //!
 //! ```
-//! use tessera_ui::{key, retain, tessera};
+//! use tessera_ui::{Prop, key, retain, tessera};
+//!
+//! #[derive(Clone, Prop)]
+//! struct MyListArgs {
+//!     items: Vec<String>,
+//! }
 //!
 //! #[tessera]
-//! fn my_list(items: Vec<String>) {
-//!     for item in items {
+//! fn my_list(args: &MyListArgs) {
+//!     for item in args.items.iter() {
 //!         key(item.clone(), || {
 //!             let state = retain(|| 0);
 //!         });
@@ -195,7 +210,7 @@
 //! ```
 //! use tessera_ui::{Color, provide_context, tessera, use_context};
 //!
-//! #[derive(Default, Clone)]
+//! #[derive(Clone, PartialEq)]
 //! struct Theme {
 //!     color: Color,
 //! }
@@ -222,7 +237,7 @@
 //! ```
 //! use tessera_ui::{Color, provide_context, tessera, use_context};
 //!
-//! #[derive(Default, Clone)]
+//! #[derive(Clone, PartialEq)]
 //! struct Theme {
 //!     color: Color,
 //! }
@@ -334,6 +349,8 @@ pub mod pipeline_context;
 pub mod plugin;
 #[cfg(feature = "profiling")]
 pub mod profiler;
+#[doc(hidden)]
+pub mod prop;
 pub mod px;
 mod render_graph;
 pub mod render_module;
@@ -349,7 +366,7 @@ pub mod router;
 
 pub use accesskit;
 pub use indextree::{Arena, NodeId};
-pub use tessera_macros::{entry, tessera};
+pub use tessera_macros::{Prop, entry, tessera};
 pub use wgpu;
 pub use winit;
 
@@ -363,7 +380,7 @@ pub use crate::{
     },
     context::{Context, provide_context, use_context},
     cursor::{
-        CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventConent,
+        CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventContent,
         ScrollEventSource,
     },
     dp::Dp,
@@ -377,6 +394,7 @@ pub use crate::{
         Plugin, PluginContext, PluginResult, register_plugin, register_plugin_boxed, with_plugin,
         with_plugin_mut,
     },
+    prop::{Callback, CallbackWith, Prop, RenderSlot, RenderSlotWith, Slot},
     px::{Px, PxPosition, PxRect, PxSize},
     render_graph::{
         ExternalTextureDesc, RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp,
@@ -397,7 +415,10 @@ pub use crate::{
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
         external::{ExternalTextureHandle, ExternalTextureRegistry},
     },
-    runtime::{State, key, remember, remember_with_key, retain, retain_with_key},
+    runtime::{
+        FrameNanosControl, State, current_frame_nanos, current_frame_time, frame_delta, key,
+        receive_frame_nanos, remember, remember_with_key, retain, retain_with_key,
+    },
 };
 
 use ime_state::ImeState;

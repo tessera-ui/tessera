@@ -20,12 +20,12 @@ use crate::pipelines::shape::{
 use super::command::{ShadowCompositeCommand, ShadowMaskCommand};
 
 #[repr(C)]
-#[derive(Copy, Clone, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Copy, Clone, PartialEq, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 struct Vertex {
     position: [f32; 2],
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct MaskInstances {
     #[shader(size(runtime))]
     instances: Vec<ShapeUniforms>,
@@ -226,7 +226,7 @@ impl DrawablePipeline<ShadowMaskCommand> for ShadowMaskPipeline {
     }
 }
 
-#[derive(ShaderType)]
+#[derive(PartialEq, ShaderType)]
 struct CompositeUniforms {
     rect: Vec4,
     color: Vec4,

@@ -7,7 +7,7 @@ use tessera_ui::{Color, DrawCommand};
 
 /// Vertex attributes for tessellated vector geometry.
 #[repr(C)]
-#[derive(Clone, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
+#[derive(Clone, PartialEq, Copy, Debug, bytemuck::Pod, bytemuck::Zeroable)]
 pub struct ImageVectorVertex {
     /// 2D position in normalized SVG viewport coordinates.
     pub position: [f32; 2],
