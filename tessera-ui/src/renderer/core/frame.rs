@@ -376,6 +376,7 @@ impl RenderCore {
     pub(crate) fn render(
         &mut self,
         execution: RenderGraphExecution,
+        #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
     ) -> Result<(), wgpu::SurfaceError> {
         let render_start = Instant::now();
         let current_frame = self.frame_index;
@@ -487,6 +488,14 @@ impl RenderCore {
             target_size,
             scissor_rect: None,
         });
+        #[cfg(feature = "debug-dirty-overlay")]
+        Self::render_dirty_overlay(
+            &mut encoder,
+            &output_view,
+            &blit.dirty_overlay_pipeline,
+            target_size,
+            dirty_overlay_rects,
+        );
 
         // Frame-level end for all pipelines
         frame_state
@@ -821,6 +830,45 @@ impl RenderCore {
             );
         }
         rpass.draw(0..3, 0..1);
+    }
+
+    #[cfg(feature = "debug-dirty-overlay")]
+    fn render_dirty_overlay(
+        encoder: &mut wgpu::CommandEncoder,
+        target: &wgpu::TextureView,
+        pipeline: &wgpu::RenderPipeline,
+        target_size: PxSize,
+        dirty_rects: &[PxRect],
+    ) {
+        if dirty_rects.is_empty() {
+            return;
+        }
+
+        let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+            label: Some("Dirty Overlay Pass"),
+            color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                view: target,
+                resolve_target: None,
+                depth_slice: None,
+                ops: wgpu::Operations {
+                    load: wgpu::LoadOp::Load,
+                    store: wgpu::StoreOp::Store,
+                },
+            })],
+            depth_stencil_attachment: None,
+            ..Default::default()
+        });
+        rpass.set_pipeline(pipeline);
+        for rect in dirty_rects {
+            let Some(clamped) = clamp_rect_to_target(*rect, target_size) else {
+                continue;
+            };
+            if clamped.width <= Px::ZERO || clamped.height <= Px::ZERO {
+                continue;
+            }
+            set_scissor_rect_from_pxrect(&mut rpass, clamped);
+            rpass.draw(0..3, 0..1);
+        }
     }
 }
 

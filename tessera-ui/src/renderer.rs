@@ -77,6 +77,9 @@ pub use compute::{
 pub use drawer::{DrawCommand, DrawablePipeline, PipelineRegistry};
 pub use external::{ExternalTextureHandle, ExternalTextureRegistry};
 
+#[cfg(feature = "debug-dirty-overlay")]
+use crate::PxRect;
+
 #[cfg(feature = "profiling")]
 use crate::profiler::{
     BuildMode, FrameMeta, Phase as ProfilerPhase, RedrawReason, RuntimeEventKind, RuntimeMeta,
@@ -110,7 +113,7 @@ enum BuildTreeMode {
     SkipNoInvalidation,
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 struct BuildTreeResult {
     duration: Duration,
     mode: BuildTreeMode,
@@ -118,6 +121,10 @@ struct BuildTreeResult {
     partial_replay_nodes: Option<u64>,
     #[cfg(feature = "profiling")]
     total_nodes_before_build: Option<u64>,
+    #[cfg(feature = "debug-dirty-overlay")]
+    had_invalidations: bool,
+    #[cfg(feature = "debug-dirty-overlay")]
+    dirty_replay_roots: Vec<u64>,
 }
 
 impl BuildTreeResult {
@@ -129,6 +136,10 @@ impl BuildTreeResult {
             partial_replay_nodes: None,
             #[cfg(feature = "profiling")]
             total_nodes_before_build: None,
+            #[cfg(feature = "debug-dirty-overlay")]
+            had_invalidations: false,
+            #[cfg(feature = "debug-dirty-overlay")]
+            dirty_replay_roots: Vec::new(),
         }
     }
 
@@ -137,6 +148,10 @@ impl BuildTreeResult {
         Self {
             duration,
             mode: BuildTreeMode::PartialReplay,
+            #[cfg(feature = "debug-dirty-overlay")]
+            had_invalidations: false,
+            #[cfg(feature = "debug-dirty-overlay")]
+            dirty_replay_roots: Vec::new(),
         }
     }
 
@@ -151,6 +166,10 @@ impl BuildTreeResult {
             mode: BuildTreeMode::PartialReplay,
             partial_replay_nodes: Some(partial_replay_nodes),
             total_nodes_before_build: Some(total_nodes_before_build),
+            #[cfg(feature = "debug-dirty-overlay")]
+            had_invalidations: false,
+            #[cfg(feature = "debug-dirty-overlay")]
+            dirty_replay_roots: Vec::new(),
         }
     }
 
@@ -162,13 +181,28 @@ impl BuildTreeResult {
             partial_replay_nodes: None,
             #[cfg(feature = "profiling")]
             total_nodes_before_build: None,
+            #[cfg(feature = "debug-dirty-overlay")]
+            had_invalidations: false,
+            #[cfg(feature = "debug-dirty-overlay")]
+            dirty_replay_roots: Vec::new(),
         }
+    }
+
+    #[cfg(feature = "debug-dirty-overlay")]
+    fn with_dirty_replay_info(
+        mut self,
+        had_invalidations: bool,
+        dirty_replay_roots: Vec<u64>,
+    ) -> Self {
+        self.had_invalidations = had_invalidations;
+        self.dirty_replay_roots = dirty_replay_roots;
+        self
     }
 }
 
 #[cfg(feature = "profiling")]
 impl BuildTreeResult {
-    fn profiler_build_mode(self) -> BuildMode {
+    fn profiler_build_mode(&self) -> BuildMode {
         match self.mode {
             BuildTreeMode::RootRecompose => BuildMode::RootRecompose,
             BuildTreeMode::PartialReplay => BuildMode::PartialReplay,
@@ -1016,24 +1050,38 @@ impl<F: Fn()> Renderer<F> {
 
             let tree_is_empty = TesseraRuntime::with(|rt| rt.component_tree.tree().count() == 0);
             let invalidations = take_build_invalidations();
+            #[cfg(feature = "debug-dirty-overlay")]
+            let had_invalidations = !invalidations.dirty_instance_keys.is_empty();
             with_build_dirty_instance_keys(&invalidations.dirty_instance_keys, || {
                 if tree_is_empty {
-                    return run_root_recompose();
+                    let result = run_root_recompose();
+                    #[cfg(feature = "debug-dirty-overlay")]
+                    let result = result.with_dirty_replay_info(had_invalidations, Vec::new());
+                    return result;
                 }
 
                 if invalidations.dirty_instance_keys.is_empty() {
                     debug!("Skipping component tree build: no invalidations");
-                    return BuildTreeResult::skip_no_invalidation();
+                    let result = BuildTreeResult::skip_no_invalidation();
+                    #[cfg(feature = "debug-dirty-overlay")]
+                    let result = result.with_dirty_replay_info(false, Vec::new());
+                    return result;
                 }
 
                 let dirty_roots =
                     Self::collect_dirty_replay_roots(&invalidations.dirty_instance_keys);
                 if Self::dirty_roots_include_tree_root(&dirty_roots) {
-                    return run_root_recompose();
+                    let result = run_root_recompose();
+                    #[cfg(feature = "debug-dirty-overlay")]
+                    let result = result.with_dirty_replay_info(had_invalidations, Vec::new());
+                    return result;
                 }
                 if dirty_roots.is_empty() {
                     debug!("Skipping component tree build: no dirty replay roots");
-                    return BuildTreeResult::skip_no_invalidation();
+                    let result = BuildTreeResult::skip_no_invalidation();
+                    #[cfg(feature = "debug-dirty-overlay")]
+                    let result = result.with_dirty_replay_info(had_invalidations, Vec::new());
+                    return result;
                 }
 
                 let replay_snapshots = previous_component_replay_nodes();
@@ -1148,15 +1196,23 @@ impl<F: Fn()> Renderer<F> {
                 debug!("Dirty subtree replay finished in {build_tree_cost:?}");
                 #[cfg(feature = "profiling")]
                 {
-                    BuildTreeResult::partial_replay(
+                    let result = BuildTreeResult::partial_replay(
                         build_tree_cost,
                         replayed_nodes,
                         total_nodes_before_build,
-                    )
+                    );
+                    #[cfg(feature = "debug-dirty-overlay")]
+                    let result =
+                        result.with_dirty_replay_info(had_invalidations, dirty_roots.clone());
+                    result
                 }
                 #[cfg(not(feature = "profiling"))]
                 {
-                    BuildTreeResult::partial_replay(build_tree_cost)
+                    let result = BuildTreeResult::partial_replay(build_tree_cost);
+                    #[cfg(feature = "debug-dirty-overlay")]
+                    let result =
+                        result.with_dirty_replay_info(had_invalidations, dirty_roots.clone());
+                    result
                 }
             })
         })
@@ -1262,8 +1318,52 @@ Fps: {:.2}
         )
     }
 
+    #[cfg(feature = "debug-dirty-overlay")]
+    fn collect_dirty_overlay_rects(
+        screen_size: PxSize,
+        build_tree_result: &BuildTreeResult,
+    ) -> Vec<PxRect> {
+        if matches!(build_tree_result.mode, BuildTreeMode::SkipNoInvalidation) {
+            return Vec::new();
+        }
+        if matches!(build_tree_result.mode, BuildTreeMode::RootRecompose) {
+            if build_tree_result.had_invalidations {
+                return vec![PxRect::from_position_size(PxPosition::ZERO, screen_size)];
+            }
+            return Vec::new();
+        }
+        TesseraRuntime::with(|rt| {
+            let mut rects = Vec::with_capacity(build_tree_result.dirty_replay_roots.len());
+            for instance_key in &build_tree_result.dirty_replay_roots {
+                let Some(node_id) = rt
+                    .component_tree
+                    .find_node_id_by_instance_key(*instance_key)
+                else {
+                    continue;
+                };
+                let Some(metadata) = rt.component_tree.metadatas().get(&node_id) else {
+                    continue;
+                };
+                let (Some(abs_position), Some(size)) =
+                    (metadata.abs_position, metadata.computed_data)
+                else {
+                    continue;
+                };
+                if size.width.0 <= 0 || size.height.0 <= 0 {
+                    continue;
+                }
+                rects.push(PxRect::from_position_size(
+                    abs_position,
+                    PxSize::new(size.width, size.height),
+                ));
+            }
+            rects
+        })
+    }
+
     /// Perform the actual GPU rendering for the provided commands and return
     /// the render duration.
+    #[cfg(not(feature = "debug-dirty-overlay"))]
     #[instrument(level = "debug", skip(args, execution))]
     fn perform_render<'a>(
         args: &mut RenderFrameArgs<'a>,
@@ -1281,6 +1381,45 @@ Fps: {:.2}
 
         debug!("Rendering draw commands...");
         if let Err(e) = args.app.render(execution) {
+            match e {
+                wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost => {
+                    debug!("Surface outdated/lost, resizing...");
+                    args.app.resize_surface();
+                }
+                wgpu::SurfaceError::Timeout => warn!("Surface timeout. Frame will be dropped."),
+                wgpu::SurfaceError::OutOfMemory => {
+                    error!("Surface out of memory. Panicking.");
+                    panic!("Surface out of memory");
+                }
+                _ => {
+                    error!("Surface error: {e}. Attempting to continue.");
+                }
+            }
+        }
+        let render_cost = render_timer.elapsed();
+        debug!("Rendered to surface in {render_cost:?}");
+        render_cost
+    }
+
+    #[cfg(feature = "debug-dirty-overlay")]
+    #[instrument(level = "debug", skip(args, execution, dirty_overlay_rects))]
+    fn perform_render<'a>(
+        args: &mut RenderFrameArgs<'a>,
+        execution: RenderGraphExecution,
+        dirty_overlay_rects: &[PxRect],
+    ) -> std::time::Duration {
+        #[cfg(feature = "profiling")]
+        let _profiler_guard =
+            ProfilerScopeGuard::new(ProfilerPhase::RenderFrame, None, None, Some("render_frame"));
+        let render_timer = Instant::now();
+
+        // skip actual rendering if window is minimized
+        if TesseraRuntime::with(|rt| rt.window_minimized) {
+            return render_timer.elapsed();
+        }
+
+        debug!("Rendering draw commands...");
+        if let Err(e) = args.app.render(execution, dirty_overlay_rects) {
             match e {
                 wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost => {
                     debug!("Surface outdated/lost, resizing...");
@@ -1337,6 +1476,9 @@ Fps: {:.2}
             Self::compute_draw_commands(args, screen_size, frame_idx);
         #[cfg(not(feature = "profiling"))]
         let _ = (layout_diagnostics, record_cost);
+        #[cfg(feature = "debug-dirty-overlay")]
+        let dirty_overlay_rects =
+            Self::collect_dirty_overlay_rects(screen_size, &build_tree_result);
         let (composite_context, composite_registry) =
             args.app.composite_context_parts(screen_size, frame_idx);
         let new_graph =
@@ -1354,6 +1496,8 @@ Fps: {:.2}
                 resources,
                 external_resources,
             },
+            #[cfg(feature = "debug-dirty-overlay")]
+            &dirty_overlay_rects,
         );
         // Log frame statistics
         let render_breakdown = args.app.last_render_breakdown();

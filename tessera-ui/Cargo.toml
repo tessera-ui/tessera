@@ -13,6 +13,7 @@ readme = "../README.md"
 default = ["shard"]
 shard = ["tessera-shard"]
 profiling = ["serde", "serde_json"]
+debug-dirty-overlay = []
 
 [dependencies]
 bytemuck = { version = "1.24.0", features = ["derive"] }

@@ -276,6 +276,54 @@ impl RenderCore {
             multiview_mask: None,
             cache: pipeline_cache.as_ref(),
         });
+        #[cfg(feature = "debug-dirty-overlay")]
+        let dirty_overlay_shader =
+            device.create_shader_module(wgpu::include_wgsl!("../shaders/dirty_overlay.wgsl"));
+        #[cfg(feature = "debug-dirty-overlay")]
+        let dirty_overlay_pipeline_layout =
+            device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+                label: Some("Dirty Overlay Pipeline Layout"),
+                bind_group_layouts: &[],
+                immediate_size: 0,
+            });
+        #[cfg(feature = "debug-dirty-overlay")]
+        let dirty_overlay_pipeline =
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("Dirty Overlay Pipeline"),
+                layout: Some(&dirty_overlay_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &dirty_overlay_shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &dirty_overlay_shader,
+                    entry_point: Some("fs_main"),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: config.format,
+                        blend: Some(wgpu::BlendState {
+                            color: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::SrcAlpha,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                            alpha: wgpu::BlendComponent {
+                                src_factor: wgpu::BlendFactor::One,
+                                dst_factor: wgpu::BlendFactor::OneMinusSrcAlpha,
+                                operation: wgpu::BlendOperation::Add,
+                            },
+                        }),
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: pipeline_cache.as_ref(),
+            });
 
         let pipelines = RenderPipelines {
             drawer,
@@ -302,6 +350,8 @@ impl RenderCore {
             pipeline_rgba: blit_pipeline_rgba,
             bind_group_layout: blit_bind_group_layout,
             sampler: blit_sampler,
+            #[cfg(feature = "debug-dirty-overlay")]
+            dirty_overlay_pipeline,
         };
 
         Self {

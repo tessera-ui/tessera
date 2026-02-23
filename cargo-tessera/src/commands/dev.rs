@@ -17,6 +17,7 @@ pub fn execute(
     package: Option<&str>,
     release: bool,
     profiling_output: Option<&Path>,
+    debug_dirty_overlay: bool,
 ) -> Result<()> {
     output::status("Starting", "dev server (auto rebuild/restart)");
     if let Some(pkg) = package {
@@ -24,6 +25,9 @@ pub fn execute(
     }
     if let Some(path) = profiling_output {
         output::status("Profiling", format!("enabled ({})", path.display()));
+    }
+    if debug_dirty_overlay {
+        output::status("Debug Dirty Overlay", "enabled");
     }
     output::status("Watching", "for file changes");
 
@@ -110,9 +114,7 @@ pub fn execute(
             if let Some(pkg) = package {
                 build_cmd.arg("-p").arg(pkg);
             }
-            if let Some(path) = profiling_output {
-                enable_profiling(&mut build_cmd, path);
-            }
+            configure_tessera_ui_features(&mut build_cmd, profiling_output, debug_dirty_overlay);
 
             match build_cmd.spawn() {
                 Ok(c) => {
@@ -142,9 +144,11 @@ pub fn execute(
                         if let Some(pkg) = package {
                             run_cmd.arg("-p").arg(pkg);
                         }
-                        if let Some(path) = profiling_output {
-                            enable_profiling(&mut run_cmd, path);
-                        }
+                        configure_tessera_ui_features(
+                            &mut run_cmd,
+                            profiling_output,
+                            debug_dirty_overlay,
+                        );
 
                         match run_cmd.spawn() {
                             Ok(c) => {
@@ -205,7 +209,22 @@ pub fn execute(
     Ok(())
 }
 
-fn enable_profiling(cmd: &mut Command, output_path: &Path) {
-    cmd.arg("--features").arg("tessera-ui/profiling");
-    cmd.env("TESSERA_PROFILING_OUTPUT", output_path);
+fn configure_tessera_ui_features(
+    cmd: &mut Command,
+    profiling_output: Option<&Path>,
+    debug_dirty_overlay: bool,
+) {
+    let mut features = Vec::new();
+    if profiling_output.is_some() {
+        features.push("tessera-ui/profiling");
+    }
+    if debug_dirty_overlay {
+        features.push("tessera-ui/debug-dirty-overlay");
+    }
+    if !features.is_empty() {
+        cmd.arg("--features").arg(features.join(","));
+    }
+    if let Some(output_path) = profiling_output {
+        cmd.env("TESSERA_PROFILING_OUTPUT", output_path);
+    }
 }

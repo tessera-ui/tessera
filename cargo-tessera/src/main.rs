@@ -59,6 +59,9 @@ enum TesseraCommands {
         /// (desktop only)
         #[arg(long, value_name = "FILE")]
         profiling_output: Option<PathBuf>,
+        /// Overlay dirty replay regions with a translucent debug color
+        #[arg(long)]
+        debug_dirty_overlay: bool,
     },
     /// Build the project for release (native targets)
     Build {
@@ -75,6 +78,9 @@ enum TesseraCommands {
         /// (desktop only)
         #[arg(long, value_name = "FILE")]
         profiling_output: Option<PathBuf>,
+        /// Overlay dirty replay regions with a translucent debug color
+        #[arg(long)]
+        debug_dirty_overlay: bool,
     },
     /// Profiling utilities
     Profiling {
@@ -186,6 +192,9 @@ struct AndroidBuildArgs {
     /// Enable profiling and write JSONL inside app sandbox at this path
     #[arg(long, value_name = "REMOTE_PATH")]
     profiling_output: Option<String>,
+    /// Overlay dirty replay regions with a translucent debug color
+    #[arg(long)]
+    debug_dirty_overlay: bool,
 }
 
 #[derive(Args)]
@@ -205,6 +214,9 @@ struct AndroidDevArgs {
     /// Enable profiling and write JSONL inside app sandbox at this path
     #[arg(long, value_name = "REMOTE_PATH")]
     profiling_output: Option<String>,
+    /// Overlay dirty replay regions with a translucent debug color
+    #[arg(long)]
+    debug_dirty_overlay: bool,
 }
 
 #[derive(Args)]
@@ -220,6 +232,9 @@ struct AndroidRustBuildArgs {
     /// Enable profiling and write JSONL inside app sandbox at this path
     #[arg(long, value_name = "REMOTE_PATH")]
     profiling_output: Option<String>,
+    /// Overlay dirty replay regions with a translucent debug color
+    #[arg(long)]
+    debug_dirty_overlay: bool,
 }
 
 fn main() -> ExitCode {
@@ -264,12 +279,14 @@ fn run() -> Result<()> {
                 package,
                 release,
                 profiling_output,
+                debug_dirty_overlay,
             } => {
                 commands::dev::execute(
                     verbose,
                     package.as_deref(),
                     release,
                     profiling_output.as_deref(),
+                    debug_dirty_overlay,
                 )?;
             }
             TesseraCommands::Build {
@@ -277,12 +294,14 @@ fn run() -> Result<()> {
                 target,
                 package,
                 profiling_output,
+                debug_dirty_overlay,
             } => {
                 commands::build::execute(
                     release,
                     target.as_deref(),
                     package.as_deref(),
                     profiling_output.as_deref(),
+                    debug_dirty_overlay,
                 )?;
             }
             TesseraCommands::Profiling { command } => match command {
@@ -338,6 +357,7 @@ fn run() -> Result<()> {
                         package: build_args.package.clone(),
                         format: build_args.format,
                         profiling_output: build_args.profiling_output.clone(),
+                        debug_dirty_overlay: build_args.debug_dirty_overlay,
                     })?;
                 }
                 AndroidCommands::Dev(dev_args) => {
@@ -347,6 +367,7 @@ fn run() -> Result<()> {
                         package: dev_args.package.clone(),
                         device: dev_args.device.clone(),
                         profiling_output: dev_args.profiling_output.clone(),
+                        debug_dirty_overlay: dev_args.debug_dirty_overlay,
                     })?;
                 }
                 AndroidCommands::RustBuild(build_args) => {
@@ -355,6 +376,7 @@ fn run() -> Result<()> {
                         target: build_args.target.clone(),
                         package: build_args.package.clone(),
                         profiling_output: build_args.profiling_output.clone(),
+                        debug_dirty_overlay: build_args.debug_dirty_overlay,
                     })?;
                 }
             },

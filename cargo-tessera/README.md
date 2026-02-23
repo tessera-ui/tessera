@@ -30,6 +30,12 @@ Enable profiler output during desktop dev:
 cargo tessera dev -p example --profiling-output profiles/dev.jsonl
 ```
 
+Enable dirty replay overlay during desktop dev:
+
+```bash
+cargo tessera dev -p example --debug-dirty-overlay
+```
+
 ### Build for release
 
 ```bash
@@ -46,6 +52,12 @@ Enable profiler instrumentation in desktop build artifacts:
 
 ```bash
 cargo tessera build -p example --profiling-output profiles/build.jsonl
+```
+
+Enable dirty replay overlay in desktop build artifacts:
+
+```bash
+cargo tessera build -p example --debug-dirty-overlay
 ```
 
 ### Analyze profiler output
@@ -95,6 +107,14 @@ Enable profiler data on Android builds by passing a sandbox path:
 cargo tessera android dev \
   --device 8cd1353b \
   --profiling-output files/tessera-profiler.jsonl
+```
+
+Enable dirty replay overlay on Android:
+
+```bash
+cargo tessera android dev \
+  --device 8cd1353b \
+  --debug-dirty-overlay
 ```
 
 Then pull and analyze:

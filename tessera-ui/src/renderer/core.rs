@@ -67,6 +67,8 @@ struct BlitState {
     pipeline_rgba: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,
+    #[cfg(feature = "debug-dirty-overlay")]
+    dirty_overlay_pipeline: wgpu::RenderPipeline,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]

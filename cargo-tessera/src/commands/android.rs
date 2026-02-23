@@ -70,6 +70,7 @@ pub struct BuildOptions {
     pub package: Option<String>,
     pub format: Option<AndroidFormat>,
     pub profiling_output: Option<String>,
+    pub debug_dirty_overlay: bool,
 }
 
 #[derive(Debug)]
@@ -79,6 +80,7 @@ pub struct DevOptions {
     pub package: Option<String>,
     pub device: Option<String>,
     pub profiling_output: Option<String>,
+    pub debug_dirty_overlay: bool,
 }
 
 pub struct RustBuildOptions {
@@ -86,6 +88,7 @@ pub struct RustBuildOptions {
     pub target: String,
     pub package: Option<String>,
     pub profiling_output: Option<String>,
+    pub debug_dirty_overlay: bool,
 }
 
 struct AndroidContext {
@@ -96,6 +99,7 @@ struct AndroidContext {
     arch: Option<String>,
     device: Option<String>,
     profiling_output: Option<String>,
+    debug_dirty_overlay: bool,
     activity: String,
     config: AndroidConfig,
     metadata: AndroidMetadata,
@@ -109,7 +113,7 @@ struct AndroidPlugin {
 
 impl AndroidContext {
     fn from_init() -> Result<Self> {
-        Self::from_opts(false, None, None, None, None, None)
+        Self::from_opts(false, None, None, None, None, None, false)
     }
     fn from_build_opts(opts: BuildOptions) -> Result<Self> {
         Self::from_opts(
@@ -119,6 +123,7 @@ impl AndroidContext {
             None,
             opts.format,
             opts.profiling_output,
+            opts.debug_dirty_overlay,
         )
     }
 
@@ -130,6 +135,7 @@ impl AndroidContext {
             opts.device,
             None,
             opts.profiling_output,
+            opts.debug_dirty_overlay,
         )
     }
 
@@ -141,6 +147,7 @@ impl AndroidContext {
             None,
             None,
             opts.profiling_output,
+            opts.debug_dirty_overlay,
         )
     }
 
@@ -151,6 +158,7 @@ impl AndroidContext {
         device: Option<String>,
         format: Option<AndroidFormat>,
         profiling_output: Option<String>,
+        debug_dirty_overlay: bool,
     ) -> Result<Self> {
         let package_dir = package
             .as_deref()
@@ -243,24 +251,27 @@ package.metadata.tessera.android.package in Cargo.toml"
         merged_permissions.sort();
         merged_permissions.dedup();
 
-        let mut profiling_cargo_args = Vec::new();
-        let mut profiling_features = Vec::new();
-        let mut profiling_env_vars = HashMap::new();
+        let mut cargo_args = Vec::new();
+        let mut cargo_features = Vec::new();
+        let mut env_vars = HashMap::new();
         if let Some(path) = profiling_output.as_ref() {
-            profiling_features.push("tessera-ui/profiling".to_string());
-            profiling_env_vars.insert("TESSERA_PROFILING_OUTPUT".to_string(), path.clone());
-            profiling_cargo_args.push("--config".to_string());
-            profiling_cargo_args.push(format!(
+            cargo_features.push("tessera-ui/profiling".to_string());
+            env_vars.insert("TESSERA_PROFILING_OUTPUT".to_string(), path.clone());
+            cargo_args.push("--config".to_string());
+            cargo_args.push(format!(
                 "env.TESSERA_PROFILING_OUTPUT={}",
                 toml::Value::String(path.clone())
             ));
+        }
+        if debug_dirty_overlay {
+            cargo_features.push("tessera-ui/debug-dirty-overlay".to_string());
         }
 
         let metadata = AndroidMetadata {
             supported: true,
             no_default_features: false,
-            cargo_args: (!profiling_cargo_args.is_empty()).then_some(profiling_cargo_args),
-            features: (!profiling_features.is_empty()).then_some(profiling_features),
+            cargo_args: (!cargo_args.is_empty()).then_some(cargo_args),
+            features: (!cargo_features.is_empty()).then_some(cargo_features),
             app_sources: None,
             app_plugins: manifest_cfg.app_plugins.clone(),
             project_dependencies: manifest_cfg.project_dependencies.clone(),
@@ -270,7 +281,7 @@ package.metadata.tessera.android.package in Cargo.toml"
             app_activity_name: Some(DEFAULT_ANDROID_ACTIVITY.to_string()),
             app_permissions: Some(merged_permissions),
             app_theme_parent: Some(DEFAULT_ANDROID_THEME_PARENT.to_string()),
-            env_vars: (!profiling_env_vars.is_empty()).then_some(profiling_env_vars),
+            env_vars: (!env_vars.is_empty()).then_some(env_vars),
             vulkan_validation: None,
         };
 
@@ -282,6 +293,7 @@ package.metadata.tessera.android.package in Cargo.toml"
             arch,
             device,
             profiling_output,
+            debug_dirty_overlay,
             activity: DEFAULT_ANDROID_ACTIVITY.to_string(),
             config,
             metadata,
@@ -529,6 +541,9 @@ pub fn build(opts: BuildOptions) -> Result<()> {
     if let Some(path) = &ctx.profiling_output {
         output::status("Profiling", format!("enabled ({path})"));
     }
+    if ctx.debug_dirty_overlay {
+        output::status("Debug Dirty Overlay", "enabled");
+    }
 
     for target in &targets {
         target.build(
@@ -591,6 +606,9 @@ pub fn dev(opts: DevOptions) -> Result<()> {
     );
     if let Some(path) = &ctx.profiling_output {
         output::status("Profiling", format!("enabled ({path})"));
+    }
+    if ctx.debug_dirty_overlay {
+        output::status("Debug Dirty Overlay", "enabled");
     }
 
     let env = AndroidEnv::new()?;
@@ -708,6 +726,9 @@ pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
     let profile = ctx.profile();
     if let Some(path) = &ctx.profiling_output {
         output::status("Profiling", format!("enabled ({path})"));
+    }
+    if ctx.debug_dirty_overlay {
+        output::status("Debug Dirty Overlay", "enabled");
     }
 
     target.build(
