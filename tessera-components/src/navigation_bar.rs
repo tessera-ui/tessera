@@ -5,10 +5,9 @@
 //! Use for bottom navigation between a small set of top-level destinations.
 use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, PxSize, RenderSlot, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Prop, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -38,7 +37,7 @@ const ITEM_HORIZONTAL_SPACING: Dp = Dp(8.0);
 const INDICATOR_TO_LABEL_PADDING: Dp = Dp(4.0);
 const INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct NavigationBarItemContentArgs {
     item: NavigationBarItem,
     is_selected: bool,
@@ -48,7 +47,7 @@ struct NavigationBarItemContentArgs {
     ripple_state: State<RippleState>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct NavigationBarItemArgs {
     controller: State<NavigationBarController>,
     index: usize,
@@ -58,12 +57,12 @@ struct NavigationBarItemArgs {
     animation_progress: f32,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct NavigationBarComposeArgs {
     items: Vec<NavigationBarItem>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct NavigationBarRenderArgs {
     controller: State<NavigationBarController>,
     items: Vec<NavigationBarItem>,
@@ -439,16 +438,16 @@ pub enum NavigationBarLabelBehavior {
 }
 
 /// Item configuration for [`navigation_bar`].
-#[derive(Clone, PartialEq, Setters)]
+#[derive(Clone, Prop)]
 pub struct NavigationBarItem {
     /// Text label shown under the icon.
-    #[setters(into)]
+    #[prop(into)]
     pub label: String,
     /// Optional icon rendered above the label.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub icon: Option<RenderSlot>,
     /// Callback invoked after selection changes to this item.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Callback,
     /// Whether the label is always visible or only appears when selected.
     pub label_behavior: NavigationBarLabelBehavior,

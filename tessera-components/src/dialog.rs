@@ -4,12 +4,11 @@
 //!
 //! Used to show modal dialogs such as alerts, confirmations, wizards and forms;
 //! dialogs block interaction with underlying content while active.
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, ComputedData, DimensionValue, Dp, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot, State, current_frame_nanos,
+    Callback, Color, ComputedData, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px,
+    PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -19,7 +18,7 @@ use crate::{
     animation,
     boxed::{BoxedArgs, boxed},
     column::{ColumnArgs, column},
-    fluid_glass::{FluidGlassArgs, fluid_glass},
+    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
     modifier::ModifierExt,
     row::{RowArgs, row},
     shape_def::{RoundedCorner, Shape},
@@ -75,11 +74,11 @@ pub enum DialogStyle {
 }
 
 /// Arguments for the [`dialog_provider`] component.
-#[derive(Clone, PartialEq, Setters)]
+#[derive(Clone, Prop)]
 pub struct DialogProviderArgs {
     /// Callback function triggered when a close request is made, for example by
     /// clicking the scrim or pressing the `ESC` key.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_close_request: Callback,
     /// Padding around the dialog content.
     pub padding: Dp,
@@ -88,13 +87,13 @@ pub struct DialogProviderArgs {
     /// Whether the dialog is initially open (for declarative usage).
     pub is_open: bool,
     /// Optional external controller for dialog visibility and animation state.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<DialogController>>,
     /// Optional main content rendered behind the dialog.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub main_content: Option<RenderSlot>,
     /// Optional dialog content rendered above the scrim.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub dialog_content: Option<RenderSlot>,
 }
 
@@ -241,44 +240,22 @@ impl Default for DialogController {
     }
 }
 
-type DialogRenderFn = dyn Fn() + Send + Sync;
-
-#[derive(Clone)]
+#[derive(Clone, Prop)]
 struct DialogContentWrapperArgs {
     style: DialogStyle,
     alpha: f32,
     padding: Dp,
-    content: Arc<DialogRenderFn>,
+    content: RenderSlot,
 }
 
-impl PartialEq for DialogContentWrapperArgs {
-    fn eq(&self, other: &Self) -> bool {
-        self.style == other.style
-            && self.alpha == other.alpha
-            && self.padding == other.padding
-            && Arc::ptr_eq(&self.content, &other.content)
-    }
-}
-
-#[derive(Clone)]
+#[derive(Clone, Prop)]
 struct DialogProviderRenderArgs {
     on_close_request: Callback,
     padding: Dp,
     style: DialogStyle,
     controller: State<DialogController>,
-    main_content: Arc<DialogRenderFn>,
-    dialog_content: Arc<DialogRenderFn>,
-}
-
-impl PartialEq for DialogProviderRenderArgs {
-    fn eq(&self, other: &Self) -> bool {
-        self.on_close_request == other.on_close_request
-            && self.padding == other.padding
-            && self.style == other.style
-            && self.controller == other.controller
-            && Arc::ptr_eq(&self.main_content, &other.main_content)
-            && Arc::ptr_eq(&self.dialog_content, &other.dialog_content)
-    }
+    main_content: RenderSlot,
+    dialog_content: RenderSlot,
 }
 
 fn render_scrim(style: DialogStyle, on_close_request: &Callback, is_open: bool, progress: f32) {
@@ -294,7 +271,7 @@ fn render_scrim(style: DialogStyle, on_close_request: &Callback, is_open: bool, 
                     .refraction_height(Dp(0.0))
                     .block_input(true)
                     .blur_radius(Dp(blur_radius as f64))
-                    .border(None)
+                    .border(GlassBorder::new(Px(0)))
                     .shape(Shape::RoundedRectangle {
                         top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                         top_right: RoundedCorner::manual(Dp(0.0), 3.0),
@@ -379,7 +356,7 @@ fn dialog_content_wrapper_node(args: &DialogContentWrapperArgs) {
                                     .block_input(true)
                                     .padding(padding),
                                 move || {
-                                    content_for_glass();
+                                    content_for_glass.render();
                                 },
                             ));
                         }
@@ -406,7 +383,7 @@ fn dialog_content_wrapper_node(args: &DialogContentWrapperArgs) {
                                 move || {
                                     let content_for_material = content_for_material.clone();
                                     Modifier::new().padding_all(padding).run(move || {
-                                        content_for_material();
+                                        content_for_material.render();
                                     });
                                 },
                             ));
@@ -494,20 +471,10 @@ impl LayoutSpec for DialogContentLayout {
 #[tessera]
 pub fn dialog_provider(args: &DialogProviderArgs) {
     let args = args.clone();
-    let main_content_slot = args
-        .main_content
-        .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
-    let dialog_content_slot = args
+    let main_content = args.main_content.unwrap_or_else(|| RenderSlot::new(|| {}));
+    let dialog_content = args
         .dialog_content
-        .clone()
         .unwrap_or_else(|| RenderSlot::new(|| {}));
-    let main_content: Arc<DialogRenderFn> = Arc::new(move || {
-        main_content_slot.render();
-    });
-    let dialog_content: Arc<DialogRenderFn> = Arc::new(move || {
-        dialog_content_slot.render();
-    });
     let controller = args
         .controller
         .unwrap_or_else(|| remember(|| DialogController::new(args.is_open)));
@@ -544,7 +511,7 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
     let dialog_content = args.dialog_content;
 
     // Render the main application content unconditionally.
-    main_content();
+    main_content.render();
 
     // If the dialog is open, render the modal overlay.
     // Sample state once to avoid repeated locks and improve readability.
@@ -589,31 +556,31 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
             style: args.style,
             alpha: content_alpha,
             padding: args.padding,
-            content: dialog_content.clone(),
+            content: dialog_content,
         };
         dialog_content_wrapper_node(&content_wrapper_args);
     }
 }
 
 /// Arguments for the [`basic_dialog`] component.
-#[derive(Clone, PartialEq, Setters)]
+#[derive(Clone, Prop)]
 pub struct BasicDialogArgs {
     /// Optional icon to display at the top of the dialog.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub icon: Option<RenderSlot>,
     /// Optional headline text.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub headline: Option<String>,
     /// The supporting text of the dialog.
-    #[setters(into)]
+    #[prop(into)]
     pub supporting_text: String,
     /// The button used to confirm a proposed action, thus resolving what
     /// triggered the dialog.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub confirm_button: Option<RenderSlot>,
     /// The button used to dismiss a proposed action, thus resolving what
     /// triggered the dialog.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub dismiss_button: Option<RenderSlot>,
 }
 

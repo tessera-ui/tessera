@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Use to allow users to select a value from a continuous range.
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, InputHandlerInput,
-    MeasurementError, Modifier, Px, PxPosition, State,
+    MeasurementError, Modifier, Prop, Px, PxPosition, State,
     accesskit::{Action, Role},
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -51,7 +50,7 @@ fn tick_fractions(steps: usize) -> Vec<f32> {
     (0..=steps + 1).map(|i| i as f32 / denom).collect()
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct RangeThumbAccessibilityArgs {
     key: &'static str,
     label: Option<String>,
@@ -65,7 +64,7 @@ struct RangeThumbAccessibilityArgs {
     on_change: CallbackWith<f32>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct RangeSliderThumbArgs {
     thumb_layout: SliderLayout,
     handle_width: Px,
@@ -339,14 +338,14 @@ pub enum SliderSize {
 }
 
 /// Arguments for the `slider` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SliderArgs {
     /// Modifier chain applied to the slider subtree.
     pub modifier: Modifier,
     /// The current value of the slider, ranging from 0.0 to 1.0.
     pub value: f32,
     /// Callback function triggered when the slider's value changes.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_change: CallbackWith<f32>,
     /// Size variant of the slider.
     pub size: SliderSize,
@@ -361,10 +360,10 @@ pub struct SliderArgs {
     /// Disable interaction.
     pub disabled: bool,
     /// Optional accessibility label read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Whether to show the stop indicators at the ends of the track.
     pub show_stop_indicator: bool,
@@ -375,13 +374,13 @@ pub struct SliderArgs {
     pub steps: usize,
     /// Optional icon content to display at the start of the slider (only for
     /// Medium sizes and above).
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub inset_icon: Option<crate::icon::IconContent>,
     /// Optional external controller for drag and focus state.
     ///
     /// When this is `None`, `slider` and `centered_slider` create and own an
     /// internal controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<SliderController>>,
 }
 
@@ -434,7 +433,7 @@ impl Default for SliderArgs {
     }
 }
 /// Arguments for the `range_slider` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct RangeSliderArgs {
     /// Modifier chain applied to the range slider subtree.
     pub modifier: Modifier,
@@ -442,7 +441,7 @@ pub struct RangeSliderArgs {
     pub value: (f32, f32),
 
     /// Callback function triggered when the range values change.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_change: CallbackWith<(f32, f32)>,
 
     /// Size variant of the slider.
@@ -463,10 +462,10 @@ pub struct RangeSliderArgs {
     /// Disable interaction.
     pub disabled: bool,
     /// Optional accessibility label.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
 
     /// Whether to show the stop indicators at the ends of the track.
@@ -480,7 +479,7 @@ pub struct RangeSliderArgs {
     ///
     /// When this is `None`, `range_slider` creates and owns an internal
     /// controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<RangeSliderController>>,
 }
 

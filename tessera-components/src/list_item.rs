@@ -4,9 +4,8 @@
 //!
 //! Present rows of content in settings, inboxes, or selection lists.
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, DimensionValue, Dp, Modifier, Px, RenderSlot, State, accesskit::Role,
+    Callback, Color, DimensionValue, Dp, Modifier, Prop, Px, RenderSlot, State, accesskit::Role,
     provide_context, tessera, use_context,
 };
 
@@ -198,7 +197,7 @@ impl ListItemDefaults {
 }
 
 /// Arguments for the [`list_item`] component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct ListItemArgs {
     /// Modifier chain applied to the list item container.
     pub modifier: Modifier,
@@ -207,19 +206,19 @@ pub struct ListItemArgs {
     /// Whether the list item is selected.
     pub selected: bool,
     /// Headline text displayed as the primary label.
-    #[setters(into)]
+    #[prop(into)]
     pub headline: String,
     /// Optional overline text displayed above the headline.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub overline_text: Option<String>,
     /// Optional supporting text displayed below the headline.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub supporting_text: Option<String>,
     /// Optional leading slot content (icon/avatar/etc.).
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub leading: Option<RenderSlot>,
     /// Optional trailing slot content (icon/switch/etc.).
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub trailing: Option<RenderSlot>,
     /// Colors used to render the list item.
     pub colors: ListItemColors,
@@ -232,19 +231,17 @@ pub struct ListItemArgs {
     /// Shadow elevation applied to the list item surface.
     pub shadow_elevation: Dp,
     /// Optional minimum height override for the container.
-    #[setters(strip_option)]
     pub min_height: Option<Dp>,
     /// Optional click handler for the list item.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Optional shared interaction state for hover/press feedback.
-    #[setters(strip_option)]
     pub interaction_state: Option<State<InteractionState>>,
     /// Optional accessibility label announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
 }
 

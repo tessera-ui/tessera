@@ -3,10 +3,10 @@
 //! ## Usage
 //!
 //! Display labels, headings, and other text content.
-use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, Px, PxPosition, RenderInput, accesskit::Role, tessera, use_context,
+    MeasurementError, Modifier, Prop, Px, PxPosition, RenderInput, accesskit::Role, tessera,
+    use_context,
 };
 
 use crate::{
@@ -21,13 +21,13 @@ use crate::{
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 
 /// Configuration arguments for the `text` component.
-#[derive(PartialEq, Debug, Setters, Clone)]
+#[derive(Debug, Prop, Clone)]
 pub struct TextArgs {
     /// Optional modifier chain applied to the text.
     pub modifier: Modifier,
 
     /// The text content to be rendered.
-    #[setters(into)]
+    #[prop(into)]
     pub text: String,
 
     /// The color of the text.
@@ -37,16 +37,15 @@ pub struct TextArgs {
     pub size: Dp,
 
     /// Optional override for line height in density-independent pixels (dp).
-    #[setters(strip_option)]
     pub line_height: Option<Dp>,
 
     /// Optional label announced by assistive technologies. Defaults to the text
     /// content.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
 
     /// Optional description announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
 }
 

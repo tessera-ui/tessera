@@ -6,11 +6,10 @@
 
 use std::sync::{Arc, Mutex};
 
-use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
-    LayoutSpec, MeasurementError, Modifier, Px, PxPosition, RenderSlot, accesskit::Role, tessera,
-    use_context,
+    LayoutSpec, MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, accesskit::Role,
+    tessera, use_context,
 };
 
 use crate::{
@@ -175,37 +174,35 @@ impl SegmentedButtonDefaults {
 }
 
 /// Arguments for [`segmented_button`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SegmentedButtonArgs {
     /// Whether the button is selected.
     pub selected: bool,
     /// Whether the button is enabled.
     pub enabled: bool,
     /// Text label for the segment.
-    #[setters(into)]
+    #[prop(into)]
     pub label: String,
     /// Optional icon displayed before the label.
-    #[setters(strip_option)]
     pub icon: Option<IconArgs>,
     /// Modifier chain applied to the button.
     pub modifier: Modifier,
     /// Shape of the segment.
     pub shape: Shape,
     /// Optional color overrides.
-    #[setters(strip_option)]
     pub colors: Option<SegmentedButtonColors>,
     /// Border width for the segment.
     pub border_width: Dp,
     /// Padding inside the segment.
     pub content_padding: Padding,
     /// Click handler for the segment.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Optional accessibility label.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
 }
 
@@ -251,7 +248,7 @@ impl Default for SegmentedButtonArgs {
 }
 
 /// Arguments for segmented button rows.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SegmentedButtonRowArgs {
     /// Modifier chain applied to the row.
     pub modifier: Modifier,
@@ -620,7 +617,7 @@ fn segmented_button_row_inner_node(args: &SegmentedButtonRowInnerArgs) {
     content.render();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct SegmentedButtonRowInnerArgs {
     overlap: Dp,
     cross_axis_alignment: CrossAxisAlignment,

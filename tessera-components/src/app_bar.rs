@@ -6,8 +6,7 @@
 //! top of a view.
 use std::sync::Arc;
 
-use derive_setters::Setters;
-use tessera_ui::{Color, Dp, Modifier, RenderSlot, provide_context, tessera, use_context};
+use tessera_ui::{Color, Dp, Modifier, Prop, RenderSlot, provide_context, tessera, use_context};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
@@ -58,7 +57,7 @@ impl AppBarDefaults {
 }
 
 /// Configuration arguments for [`app_bar`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct AppBarArgs {
     /// Modifier chain applied to the app bar container.
     pub modifier: Modifier,
@@ -174,20 +173,20 @@ where
 }
 
 /// Configuration arguments for [`top_app_bar`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct TopAppBarArgs {
     /// Base container configuration for the app bar; see [`AppBarArgs`].
     pub app_bar: AppBarArgs,
     /// Title text displayed in the bar.
-    #[setters(into)]
+    #[prop(into)]
     pub title: String,
     /// Modifier chain applied to the title text.
     pub title_modifier: Modifier,
     /// Optional navigation icon rendered at the leading edge.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub navigation_icon: Option<RenderSlot>,
     /// Actions rendered at the trailing edge.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub actions: Vec<RenderSlot>,
     /// Color applied to the navigation icon slot.
     pub navigation_icon_color: Color,

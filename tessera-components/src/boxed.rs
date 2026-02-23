@@ -3,16 +3,15 @@
 //! ## Usage
 //!
 //! Use to create layered UIs, overlays, or composite controls.
-use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, tessera,
+    MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, tessera,
 };
 
 use crate::alignment::Alignment;
 
 /// Arguments for the `Boxed` component.
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct BoxedArgs {
     /// The alignment of children within the `Boxed` container.
     pub alignment: Alignment,
@@ -56,7 +55,7 @@ impl<'a> BoxedScope<'a> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct BoxedRenderArgs {
     alignment: Alignment,
     child_alignments: Vec<Option<Alignment>>,

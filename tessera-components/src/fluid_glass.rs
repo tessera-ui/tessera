@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Use as a background for buttons, panels, or other UI elements.
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, RenderSlot, SampleRegion, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Prop, Px, PxPosition, RenderSlot, SampleRegion, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
@@ -52,9 +51,8 @@ impl GlassBorder {
 /// Arguments for the `fluid_glass` component, providing extensive control over
 /// its appearance.
 ///
-/// This struct uses fluent setters for easy construction.
-#[derive(Clone, Setters)]
-#[setters(into)]
+/// This struct uses fluent Prop for easy construction.
+#[derive(Clone, Prop)]
 pub struct FluidGlassArgs {
     /// The tint color of the glass.
     /// The alpha channel uniquely and directly controls the tint strength.
@@ -86,28 +84,22 @@ pub struct FluidGlassArgs {
     /// A time value, typically used to animate the noise or other effects.
     pub time: f32,
     /// The contrast adjustment factor.
-    #[setters(strip_option)]
     pub contrast: Option<f32>,
     /// Optional modifier chain applied to the glass node.
     pub modifier: Modifier,
     /// Padding inside the glass component.
     pub padding: Dp,
     /// Optional normalized center (x, y) for the ripple animation on click.
-    #[setters(strip_option)]
     pub ripple_center: Option<[f32; 2]>,
     /// Optional ripple radius, expressed in normalized coordinates relative to
     /// the surface.
-    #[setters(strip_option)]
     pub ripple_radius: Option<f32>,
     /// Optional ripple tint alpha (0.0 = transparent, 1.0 = opaque).
-    #[setters(strip_option)]
     pub ripple_alpha: Option<f32>,
     /// Strength multiplier for the ripple distortion.
-    #[setters(strip_option)]
     pub ripple_strength: Option<f32>,
 
     /// Optional click callback for interactive glass surfaces.
-    #[setters(skip)]
     pub on_click: Option<Callback>,
 
     /// Optional border defining the outline thickness for the glass.
@@ -119,44 +111,17 @@ pub struct FluidGlassArgs {
     pub block_input: bool,
     /// Optional accessibility role override; defaults to `Role::Button` when
     /// interactive.
-    #[setters(strip_option)]
     pub accessibility_role: Option<Role>,
     /// Optional label announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional description announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Whether the surface should be focusable even when not interactive.
     pub accessibility_focusable: bool,
     /// Optional child render slot.
-    #[setters(skip)]
     pub child: Option<RenderSlot>,
-}
-
-impl PartialEq for FluidGlassArgs {
-    fn eq(&self, other: &Self) -> bool {
-        self.tint_color == other.tint_color
-            && self.shape == other.shape
-            && self.blur_radius == other.blur_radius
-            && self.dispersion_height == other.dispersion_height
-            && self.chroma_multiplier == other.chroma_multiplier
-            && self.refraction_height == other.refraction_height
-            && self.refraction_amount == other.refraction_amount
-            && self.eccentric_factor == other.eccentric_factor
-            && self.noise_amount == other.noise_amount
-            && self.noise_scale == other.noise_scale
-            && self.time == other.time
-            && self.contrast == other.contrast
-            && self.padding == other.padding
-            && self.ripple_center == other.ripple_center
-            && self.ripple_radius == other.ripple_radius
-            && self.ripple_alpha == other.ripple_alpha
-            && self.ripple_strength == other.ripple_strength
-            && self.border == other.border
-            && self.block_input == other.block_input
-            && self.child == other.child
-    }
 }
 
 impl FluidGlassArgs {
@@ -166,36 +131,6 @@ impl FluidGlassArgs {
         child: impl Fn() + Send + Sync + 'static,
     ) -> Self {
         args.into().child(child)
-    }
-
-    /// Set the click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Some(Callback::new(on_click));
-        self
-    }
-
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
-        self
-    }
-
-    /// Sets the child render slot.
-    pub fn child<F>(mut self, child: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child = Some(RenderSlot::new(child));
-        self
-    }
-
-    /// Sets the child render slot using a shared callback.
-    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
-        self.child = Some(child.into());
-        self
     }
 }
 
@@ -283,7 +218,7 @@ fn handle_block_input(input: &mut tessera_ui::InputHandlerInput) {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct FluidGlassInnerArgs {
     fluid: FluidGlassArgs,
     ripple_state: Option<State<RippleState>>,

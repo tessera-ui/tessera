@@ -5,11 +5,11 @@
 //! Present anchored overflow or context actions as surfaced menus.
 use std::sync::Arc;
 
-use derive_setters::Setters;
 use parking_lot::RwLock;
 use tessera_ui::{
     Callback, Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, ParentConstraint, Px, PxPosition, PxSize, RenderSlot, Slot, State,
+    MeasurementError, Modifier, ParentConstraint, Prop, Px, PxPosition, PxSize, RenderSlot, Slot,
+    State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera, use_context, winit,
@@ -222,7 +222,7 @@ pub enum MenuPlacement {
 }
 
 /// Configuration for the menu overlay/provider.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct MenuProviderArgs {
     /// How the menu is aligned relative to the provided anchor.
     pub placement: MenuPlacement,
@@ -232,7 +232,6 @@ pub struct MenuProviderArgs {
     /// 112–280 dp width range.
     pub modifier: Modifier,
     /// Maximum height of the menu before scrolling is required.
-    #[setters(strip_option)]
     pub max_height: Option<Px>,
     /// Shape of the menu container.
     pub shape: Shape,
@@ -248,18 +247,18 @@ pub struct MenuProviderArgs {
     /// Whether pressing Escape dismisses the menu.
     pub close_on_escape: bool,
     /// Optional callback invoked before the menu closes (background or Escape).
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_dismiss: Option<Callback>,
     /// Whether the menu is currently open.
     pub is_open: bool,
     /// Optional external controller for open/close and anchor state.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<MenuController>>,
     /// Optional main content rendered behind the menu.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub main_content: Option<RenderSlot>,
     /// Optional menu content builder.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub menu_content: Option<MenuContentSlot>,
 }
 
@@ -686,22 +685,22 @@ pub fn menu_provider(args: &MenuProviderArgs) {
 }
 
 /// Defines the configuration for an individual menu item.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct MenuItemArgs {
     /// Primary label text for the item.
-    #[setters(into)]
+    #[prop(into)]
     pub label: String,
     /// Optional supporting text displayed under the label.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub supporting_text: Option<String>,
     /// Optional trailing text (e.g., keyboard shortcut).
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub trailing_text: Option<String>,
     /// Leading icon displayed when the item is not selected.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub leading_icon: Option<crate::icon::IconArgs>,
     /// Trailing icon displayed on the right edge.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub trailing_icon: Option<crate::icon::IconArgs>,
     /// Whether the item is currently selected (renders a checkmark instead of a
     /// leading icon).
@@ -719,7 +718,7 @@ pub struct MenuItemArgs {
     /// Tint applied when the item is disabled.
     pub disabled_color: Color,
     /// Callback invoked when the item is activated.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
 }
 

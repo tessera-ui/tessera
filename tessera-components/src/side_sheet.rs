@@ -6,10 +6,9 @@
 //! screen.
 use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, RenderSlot, State, current_frame_nanos,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -30,7 +29,7 @@ const MODAL_ELEVATION: Dp = Dp(1.0);
 
 type SharedContent = RenderSlot;
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct SideSheetProviderInnerArgs {
     sheet_type: SideSheetType,
     on_close_request: Callback,
@@ -41,7 +40,7 @@ struct SideSheetProviderInnerArgs {
     side_sheet_content: SharedContent,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct SideSheetProviderRenderArgs {
     sheet_type: SideSheetType,
     on_close_request: Callback,
@@ -51,7 +50,7 @@ struct SideSheetProviderRenderArgs {
     side_sheet_content: SharedContent,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct SideSheetContentWrapperArgs {
     sheet_type: SideSheetType,
     position: SideSheetPosition,
@@ -79,26 +78,26 @@ pub enum SideSheetPosition {
 }
 
 /// Configuration arguments for side sheet providers.
-#[derive(Clone, PartialEq, Setters)]
+#[derive(Clone, Prop)]
 pub struct SideSheetProviderArgs {
     /// A callback invoked when the user requests to close the sheet.
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape`
     /// key. The callback is responsible for closing the sheet.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_close_request: Callback,
     /// Which edge the sheet is attached to. See [`SideSheetPosition`].
     pub position: SideSheetPosition,
     /// Whether the sheet is initially open (for declarative usage).
     pub is_open: bool,
     /// Optional external controller for open/close state.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<SideSheetController>>,
     /// Optional main content rendered behind the side sheet.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub main_content: Option<RenderSlot>,
     /// Optional content rendered inside the side sheet.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub side_sheet_content: Option<RenderSlot>,
 }
 

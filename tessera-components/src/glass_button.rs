@@ -3,8 +3,7 @@
 //! ## Usage
 //!
 //! Use for visually distinctive actions in layered or modern UIs.
-use derive_setters::Setters;
-use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, tessera};
+use tessera_ui::{Callback, Color, Dp, Modifier, Prop, RenderSlot, tessera};
 
 use crate::{
     fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
@@ -12,13 +11,12 @@ use crate::{
 };
 
 /// Arguments for the `glass_button` component.
-#[derive(PartialEq, Clone, Setters)]
-#[setters(into)]
+#[derive(Clone, Prop)]
 pub struct GlassButtonArgs {
     /// Optional modifier chain applied to the button node.
     pub modifier: Modifier,
     /// The click callback function
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// The ripple color (RGB) for the button.
     pub ripple_color: Color,
@@ -45,22 +43,20 @@ pub struct GlassButtonArgs {
     /// Time value for animating noise or other procedural effects.
     pub time: f32,
     /// Optional contrast adjustment applied to the glass rendering.
-    #[setters(strip_option)]
     pub contrast: Option<f32>,
     /// Optional outline configuration for the glass shape.
-    #[setters(strip_option)]
     pub border: Option<GlassBorder>,
     /// Optional label announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional longer description for assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Whether the button should remain focusable even when no click handler is
     /// provided.
     pub accessibility_focusable: bool,
     /// Content rendered inside the glass button.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub child: RenderSlot,
 }
 

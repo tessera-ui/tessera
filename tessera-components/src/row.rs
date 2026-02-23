@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Use to stack children horizontally.
-use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, NodeId, Px, PxPosition, RenderSlot, tessera,
+    MeasurementError, Modifier, NodeId, Prop, Px, PxPosition, RenderSlot, tessera,
 };
 
 use crate::{
@@ -15,7 +14,7 @@ use crate::{
 };
 
 /// Arguments for the `row` component.
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct RowArgs {
     /// Modifier chain applied to the row subtree.
     pub modifier: Modifier,
@@ -63,7 +62,7 @@ impl<'a> RowScope<'a> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct RowRenderArgs {
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,

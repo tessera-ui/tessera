@@ -8,7 +8,7 @@ use material_color_utilities::{
     dynamiccolor::{DynamicSchemeBuilder, MaterialDynamicColors, SpecVersion, Variant},
     hct::Hct,
 };
-use tessera_ui::{CallbackWith, Color, Dp, RenderSlot, provide_context, tessera};
+use tessera_ui::{CallbackWith, Color, Dp, Prop, RenderSlot, provide_context, tessera};
 
 use crate::shape_def::Shape;
 
@@ -100,7 +100,7 @@ pub fn provide_text_style(style: TextStyle, child: impl FnOnce()) {
     provide_context(|| style, child);
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 /// Props for [`material_theme`].
 pub struct MaterialThemeProviderArgs {
     theme: CallbackWith<(), MaterialTheme>,

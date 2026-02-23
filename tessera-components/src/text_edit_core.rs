@@ -29,8 +29,8 @@ use glyphon::{
 };
 use tessera_platform::clipboard;
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, DimensionValue, Dp, MeasurementError, Px, PxPosition, State,
-    current_frame_nanos,
+    CallbackWith, Color, ComputedData, DimensionValue, Dp, MeasurementError, Prop, Px, PxPosition,
+    State, current_frame_nanos,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, tessera, winit,
@@ -857,7 +857,7 @@ pub fn text_edit_core(args: &TextEditCoreArgs) {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 pub struct TextEditCoreArgs {
     /// Shared controller for text content, cursor, and selection state.
     pub controller: State<TextEditorController>,

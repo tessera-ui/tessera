@@ -10,10 +10,9 @@ use std::{
     sync::Arc,
 };
 
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId,
-    ParentConstraint, Px, PxPosition, Slot, State, key,
+    ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera,
 };
@@ -107,7 +106,7 @@ impl LazyGridController {
 }
 
 /// Arguments shared between lazy vertical grids.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct LazyVerticalGridArgs {
     /// Scroll container arguments. Vertical scrolling is enforced.
     pub scrollable: ScrollableArgs,
@@ -130,10 +129,10 @@ pub struct LazyVerticalGridArgs {
     /// Maximum viewport length reported back to parents.
     pub max_viewport_main: Option<Px>,
     /// Optional external controller for scroll position and cache.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<LazyGridController>>,
     /// Optional slot builder for lazy grid content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<LazyGridContentSlot>,
 }
 
@@ -180,7 +179,7 @@ impl LazyVerticalGridArgs {
 }
 
 /// Arguments shared between lazy horizontal grids.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct LazyHorizontalGridArgs {
     /// Scroll container arguments. Horizontal scrolling is enforced.
     pub scrollable: ScrollableArgs,
@@ -203,10 +202,10 @@ pub struct LazyHorizontalGridArgs {
     /// Maximum viewport length reported back to parents.
     pub max_viewport_main: Option<Px>,
     /// Optional external controller for scroll position and cache.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<LazyGridController>>,
     /// Optional slot builder for lazy grid content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<LazyGridContentSlot>,
 }
 
@@ -619,7 +618,7 @@ fn lazy_horizontal_grid_slots(
         });
     scrollable(&scrollable_args);
 }
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
 struct LazyGridViewArgs {
     axis: LazyGridAxis,
     grid_cells: GridCells,

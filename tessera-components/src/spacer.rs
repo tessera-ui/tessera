@@ -5,7 +5,7 @@
 //! Use to add gaps between components or to create flexible, expanding regions.
 use tessera_ui::{
     ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier,
-    tessera,
+    Prop, tessera,
 };
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -25,7 +25,7 @@ impl LayoutSpec for SpacerLayout {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 /// Props for [`spacer`].
 pub struct SpacerArgs {
     modifier: Modifier,

@@ -21,16 +21,15 @@
 //!
 //! See [`CheckmarkArgs`] for configuration options and usage examples in the
 //! [`checkmark`] function documentation.
-use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px,
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Prop, Px,
     RenderInput, tessera,
 };
 
 use crate::pipelines::checkmark::command::CheckmarkCommand;
 
 /// Arguments for the `checkmark` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct CheckmarkArgs {
     /// Color of the checkmark stroke
     pub color: Color,

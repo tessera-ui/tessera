@@ -8,10 +8,9 @@ use std::{
     time::Duration,
 };
 
-use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
+    MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     receive_frame_nanos, remember, tessera, use_context, winit,
@@ -21,7 +20,7 @@ use crate::{
     alignment::CrossAxisAlignment,
     animation,
     column::{ColumnArgs, column},
-    fluid_glass::{FluidGlassArgs, fluid_glass},
+    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
     modifier::ModifierExt,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -47,26 +46,26 @@ pub enum BottomSheetStyle {
 }
 
 /// Configuration arguments for the [`bottom_sheet_provider`].
-#[derive(Clone, PartialEq, Setters)]
+#[derive(Clone, Prop)]
 pub struct BottomSheetProviderArgs {
     /// A callback that is invoked when the user requests to close the sheet.
     ///
     /// This can be triggered by clicking the scrim or pressing the `Escape`
     /// key. The callback is responsible for closing the sheet.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_close_request: Callback,
     /// The visual style of the scrim. See [`BottomSheetStyle`].
     pub style: BottomSheetStyle,
     /// Whether the sheet is initially open (for declarative usage).
     pub is_open: bool,
     /// Optional external controller for programmatic open/close.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<BottomSheetController>>,
     /// Optional main content rendered behind the sheet.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub main_content: Option<RenderSlot>,
     /// Optional content rendered inside the bottom sheet.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub bottom_sheet_content: Option<RenderSlot>,
 }
 
@@ -330,7 +329,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
             .refraction_height(Dp(0.0))
             .block_input(true)
             .blur_radius(Dp(blur_radius as f64))
-            .border(None)
+            .border(GlassBorder::new(Px(0)))
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                 top_right: RoundedCorner::manual(Dp(0.0), 3.0),
@@ -504,7 +503,7 @@ fn place_bottom_sheet_if_present(
 
     output.place_child(bottom_sheet_id, PxPosition::new(x, Px(y)));
 }
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
 struct DragHandlerArgs {
     controller: State<BottomSheetController>,
     on_close: Callback,

@@ -4,10 +4,9 @@
 //!
 //! Use to collect search queries and show suggestions or results as the user
 //! types.
-use derive_setters::Setters;
 use tessera_ui::{
-    CallbackWith, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, RenderSlot, State,
-    remember, tessera, use_context, winit,
+    CallbackWith, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Prop, RenderSlot,
+    State, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -82,7 +81,7 @@ impl SearchBarDefaults {
 }
 
 /// Configuration arguments for search bars.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SearchBarArgs {
     /// Modifier chain applied to the search bar container.
     pub modifier: Modifier,
@@ -93,22 +92,22 @@ pub struct SearchBarArgs {
     /// Whether the bar is active (expanded) for declarative usage.
     pub is_active: bool,
     /// Optional placeholder text shown when the query is empty.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub placeholder: Option<String>,
     /// Optional leading icon shown before the input text.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub leading_icon: Option<RenderSlot>,
     /// Optional trailing icon shown after the input text.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub trailing_icon: Option<RenderSlot>,
     /// Called when the query changes. Return value is the text to keep.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_query_change: CallbackWith<String, String>,
     /// Called when the user submits the query.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_search: CallbackWith<String, ()>,
     /// Called when the active state changes due to user interaction.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_active_change: CallbackWith<bool, ()>,
     /// Shape used for the input field.
     pub shape: Shape,
@@ -125,10 +124,10 @@ pub struct SearchBarArgs {
     /// Padding inside the results container.
     pub content_padding: Dp,
     /// Optional external controller for active/query state.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<SearchBarController>>,
     /// Optional results content slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<RenderSlot>,
 }
 
@@ -443,7 +442,7 @@ fn search_bar_node(args: SearchBarRenderArgs) {
     });
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct SearchBarRenderArgs {
     kind: SearchBarLayoutKind,
     modifier: Modifier,
@@ -466,7 +465,7 @@ struct SearchBarRenderArgs {
     content: RenderSlot,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct SearchResultsSurfaceArgs {
     kind: SearchBarLayoutKind,
     container_color: Color,

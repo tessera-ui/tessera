@@ -3,10 +3,10 @@
 //! ## Usage
 //!
 //! Show onboarding steps or media carousels that snap between pages.
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, State, current_frame_nanos, key,
+    MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition, State,
+    current_frame_nanos, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera,
 };
@@ -30,7 +30,7 @@ pub enum PagerPageSize {
 }
 
 /// Configuration arguments shared by pager variants.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct PagerArgs {
     /// Modifier chain applied to the pager subtree.
     pub modifier: Modifier,
@@ -55,12 +55,12 @@ pub struct PagerArgs {
     /// Smoothing factor for snapping animations.
     pub scroll_smoothing: f32,
     /// Optional page-rendering callback.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub page_content: CallbackWith<usize>,
     /// Optional external pager controller.
     ///
     /// When this is `None`, the pager creates and owns an internal controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<PagerController>>,
 }
 
@@ -683,7 +683,7 @@ fn px_from_i64(value: i64) -> Px {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct PagerRenderArgs {
     page_count: usize,
     page_size: PagerPageSize,

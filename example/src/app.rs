@@ -31,7 +31,7 @@ use tessera_components::{
     theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme, provide_text_style},
 };
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, remember, retain,
+    Callback, Color, Dp, Modifier, Prop, RenderSlot, State, remember, retain,
     router::{Router, router_scope, router_view},
     shard, tessera, use_context,
 };
@@ -77,7 +77,7 @@ use crate::example_components::{
 
 const NAVIGATION_RAIL_BREAKPOINT: Dp = Dp(600.0);
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct MeasureParentWidthArgs {
     width_state: State<Dp>,
     child: RenderSlot,
@@ -408,7 +408,7 @@ impl ComponentExampleDesc {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct HomeArgs {
     bottom_sheet_controller: State<BottomSheetController>,
     side_sheet_controller: State<SideSheetController>,
@@ -765,7 +765,7 @@ fn home_node(args: &HomeArgs) {
         },
     ));
 }
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ComponentCardArgs {
     title: String,
     description: String,
@@ -833,7 +833,7 @@ fn component_card_node(args: &ComponentCardArgs) {
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct WindowControlButtonArgs {
     icon_args: IconArgs,
     action: tessera_ui::WindowAction,

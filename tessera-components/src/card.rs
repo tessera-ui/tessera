@@ -6,9 +6,8 @@
 
 use std::sync::Arc;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, State, current_frame_nanos, receive_frame_nanos, remember,
+    Callback, Color, Dp, Modifier, Prop, State, current_frame_nanos, receive_frame_nanos, remember,
     tessera, use_context,
 };
 
@@ -378,7 +377,7 @@ impl CardDefaults {
 }
 
 /// Arguments for the [`card`] component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct CardArgs {
     /// Optional modifier chain applied to the card subtree.
     pub modifier: Modifier,
@@ -387,22 +386,17 @@ pub struct CardArgs {
     /// Whether the card is enabled for user interaction.
     pub enabled: bool,
     /// Optional click handler for a clickable card.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Optional shared interaction state for elevation and state layers.
-    #[setters(strip_option)]
     pub interaction_state: Option<State<InteractionState>>,
     /// Optional container shape override.
-    #[setters(strip_option)]
     pub shape: Option<Shape>,
     /// Optional colors override.
-    #[setters(strip_option)]
     pub colors: Option<CardColors>,
     /// Optional elevation override.
-    #[setters(strip_option)]
     pub elevation: Option<CardElevation>,
     /// Optional border stroke for the card container.
-    #[setters(strip_option)]
     pub border: Option<CardBorder>,
 }
 
@@ -514,7 +508,7 @@ where
 
 type CardContentBuilder = dyn for<'a> Fn(&mut ColumnScope<'a>) + Send + Sync;
 
-#[derive(Clone)]
+#[derive(Clone, Prop)]
 struct CardRenderArgs {
     modifier: Modifier,
     on_click: Option<Callback>,
@@ -526,21 +520,6 @@ struct CardRenderArgs {
     elevation: Option<CardElevation>,
     border: Option<CardBorder>,
     content: Arc<CardContentBuilder>,
-}
-
-impl PartialEq for CardRenderArgs {
-    fn eq(&self, other: &Self) -> bool {
-        self.modifier == other.modifier
-            && self.on_click == other.on_click
-            && self.enabled == other.enabled
-            && self.variant == other.variant
-            && self.interaction_state == other.interaction_state
-            && self.shape == other.shape
-            && self.colors == other.colors
-            && self.elevation == other.elevation
-            && self.border == other.border
-            && Arc::ptr_eq(&self.content, &other.content)
-    }
 }
 
 #[tessera]

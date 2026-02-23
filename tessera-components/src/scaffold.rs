@@ -3,8 +3,7 @@
 //! ## Usage
 //!
 //! Layer top/bottom bars, floating buttons, and snackbars above app content.
-use derive_setters::Setters;
-use tessera_ui::{Dp, Modifier, RenderSlot, tessera};
+use tessera_ui::{Dp, Modifier, Prop, RenderSlot, tessera};
 
 use crate::{
     alignment::Alignment,
@@ -13,34 +12,34 @@ use crate::{
 };
 
 /// Configuration arguments for [`scaffold`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct ScaffoldArgs {
     /// Modifier chain applied to the scaffold container.
     pub modifier: Modifier,
     /// Padding applied around the content area.
     pub content_padding: Padding,
     /// Main content slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<RenderSlot>,
     /// Reserved height for the top bar.
     pub top_bar_height: Dp,
     /// Reserved height for the bottom bar.
     pub bottom_bar_height: Dp,
     /// Optional top bar slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub top_bar: Option<RenderSlot>,
     /// Optional bottom bar slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub bottom_bar: Option<RenderSlot>,
     /// Optional floating action button slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub floating_action_button: Option<RenderSlot>,
     /// Alignment used for the floating action button.
     pub floating_action_button_alignment: Alignment,
     /// Additional x/y offset applied to the floating action button.
     pub floating_action_button_offset: [Dp; 2],
     /// Optional snackbar host slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub snackbar_host: Option<RenderSlot>,
     /// Alignment used for the snackbar host.
     pub snackbar_alignment: Alignment,

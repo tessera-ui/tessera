@@ -4,7 +4,7 @@
 //!
 //! Show insertion point feedback inside text editing components.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px,
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Prop, Px,
     RenderInput, tessera,
 };
 
@@ -77,7 +77,7 @@ fn cursor_node(args: &CursorArgs) {
     });
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct CursorArgs {
     height_px: Px,
     blink_start_frame_nanos: u64,

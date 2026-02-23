@@ -5,10 +5,9 @@
 //! Use in settings, forms, or toolbars to control a boolean state.
 use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Px, PxPosition, State,
+    Prop, Px, PxPosition, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -95,12 +94,12 @@ impl Default for GlassSwitchController {
 }
 
 /// Arguments for the `glass_switch` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct GlassSwitchArgs {
     /// Optional modifier chain applied to the switch subtree.
     pub modifier: Modifier,
     /// Optional callback invoked when the switch toggles.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_toggle: Option<CallbackWith<bool, ()>>,
     /// Initial checked state.
     pub checked: bool,
@@ -122,26 +121,24 @@ pub struct GlassSwitchArgs {
     pub thumb_off_alpha: f32,
 
     /// Border for the thumb
-    #[setters(strip_option)]
     pub thumb_border: Option<GlassBorder>,
 
     /// Border for the track
-    #[setters(strip_option)]
     pub track_border: Option<GlassBorder>,
 
     /// Padding around the thumb
     pub thumb_padding: Dp,
     /// Optional accessibility label read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional external controller for checked state and animation.
     ///
     /// When this is `None`, `glass_switch` creates and owns an internal
     /// controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<GlassSwitchController>>,
 }
 
@@ -314,7 +311,7 @@ fn glass_switch_node(args: &GlassSwitchArgs) {
             ))
             .tint_color(track_color)
             .shape(Shape::capsule())
-            .blur_radius(8.0);
+            .blur_radius(Dp(8.0));
         if let Some(border) = args.track_border {
             track_args = track_args.border(border);
         }
@@ -333,7 +330,7 @@ fn glass_switch_node(args: &GlassSwitchArgs) {
                 Some(DimensionValue::Fixed(thumb_px)),
             ))
             .tint_color(thumb_color)
-            .refraction_height(1.0)
+            .refraction_height(Dp(1.0))
             .shape(Shape::Ellipse);
         if let Some(border) = args.thumb_border {
             thumb_args = thumb_args.border(border);

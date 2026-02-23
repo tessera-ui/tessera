@@ -5,9 +5,8 @@
 //! Use in forms, settings, or lists to enable boolean selections.
 use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    CallbackWith, Color, Dp, Modifier, PxSize, RenderSlot, State, accesskit::Role,
+    CallbackWith, Color, Dp, Modifier, Prop, PxSize, RenderSlot, State, accesskit::Role,
     current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -97,12 +96,12 @@ impl CheckboxController {
 }
 
 /// Arguments for the `checkbox` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct CheckboxArgs {
     /// Optional modifier chain applied to the checkbox subtree.
     pub modifier: Modifier,
     /// Callback invoked when the checkbox is toggled.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_toggle: CallbackWith<bool, ()>,
     /// Initial checked state for the checkbox.
     pub checked: bool,
@@ -152,18 +151,18 @@ pub struct CheckboxArgs {
     ///
     /// The label should be a short, human-readable string describing the
     /// purpose of the checkbox (for example "Enable auto-save").
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description read by assistive technologies.
     ///
     /// A longer description or contextual helper text that augments the
     /// `accessibility_label` for users of assistive technology.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional external controller for checked state and animation progress.
     ///
     /// When this is `None`, `checkbox` creates and owns an internal controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<CheckboxController>>,
 }
 

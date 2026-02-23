@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Embed as a bare text input surface when you need to build custom styling.
-use derive_setters::Setters;
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
-    CallbackWith, Color, CursorEventContent, Dp, ImeRequest, Modifier, Px, PxPosition, State,
+    CallbackWith, Color, CursorEventContent, Dp, ImeRequest, Modifier, Prop, Px, PxPosition, State,
     accesskit::Role, remember, tessera, use_context, winit,
 };
 
@@ -25,7 +24,7 @@ use crate::{
 pub use crate::text_edit_core::{DisplayTransform, TextEditorController as TextInputController};
 
 /// Arguments for configuring the [`text_input`] component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct TextInputArgs {
     /// Whether the editor is enabled for user input.
     pub enabled: bool,
@@ -35,72 +34,61 @@ pub struct TextInputArgs {
     pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
     /// content and returns the updated content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_change: CallbackWith<String, String>,
     /// Minimum width in density-independent pixels. Defaults to 120dp if not
     /// specified.
-    #[setters(strip_option)]
     pub min_width: Option<Dp>,
     /// Minimum height in density-independent pixels. Defaults to line height +
     /// padding if not specified.
-    #[setters(strip_option)]
     pub min_height: Option<Dp>,
     /// Background color of the text input (RGBA). Defaults to light gray.
-    #[setters(strip_option)]
     pub background_color: Option<Color>,
     /// Border width in Dp. Defaults to 1.0 Dp.
     pub border_width: Dp,
     /// Border color (RGBA). Defaults to gray.
-    #[setters(strip_option)]
     pub border_color: Option<Color>,
     /// The shape of the text input container.
     pub shape: Shape,
     /// Padding inside the text input. Defaults to 5.0 Dp.
     pub padding: Dp,
     /// Border color when focused (RGBA). Defaults to blue.
-    #[setters(strip_option)]
     pub focus_border_color: Option<Color>,
     /// Border width when focused. Defaults to the unfocused border width.
-    #[setters(strip_option)]
     pub focus_border_width: Option<Dp>,
     /// Background color when focused (RGBA). Defaults to white.
-    #[setters(strip_option)]
     pub focus_background_color: Option<Color>,
     /// Color for text selection highlight (RGBA). Defaults to light blue with
     /// transparency.
-    #[setters(strip_option)]
     pub selection_color: Option<Color>,
     /// Color of the text content. Defaults to the theme on-surface color.
-    #[setters(strip_option)]
     pub text_color: Option<Color>,
     /// Color of the text cursor. Defaults to the theme primary color.
-    #[setters(strip_option)]
     pub cursor_color: Option<Color>,
     /// Optional label announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional description announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Initial text content.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub initial_text: Option<String>,
     /// Font size in Dp. Defaults to 14.0.
     pub font_size: Dp,
     /// Line height in Dp. Defaults to None (1.2x font size).
-    #[setters(strip_option)]
     pub line_height: Option<Dp>,
     /// Optional transform applied to text changes before on_change.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub input_transform: Option<CallbackWith<String, String>>,
     /// Optional transform applied only for display.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub display_transform: Option<DisplayTransform>,
     /// Optional external controller for text, cursor, and selection state.
     ///
     /// When this is `None`, `text_input` creates and owns an internal
     /// controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<TextInputController>>,
 }
 

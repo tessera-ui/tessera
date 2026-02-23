@@ -5,10 +5,9 @@
 //! Use to indicate the completion of a task or a specific value in a range.
 use std::time::Instant;
 
-use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    ParentConstraint, Px, PxPosition,
+    ParentConstraint, Prop, Px, PxPosition,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera, use_context,
@@ -519,12 +518,11 @@ fn stop_indicator_bounds(width: Px, height: Px) -> (PxPosition, Px) {
 }
 
 /// Arguments for configuring a Material Design linear progress indicator.
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct LinearProgressIndicatorArgs {
     /// Current progress in the range 0.0..=1.0.
     ///
     /// When omitted, the indicator renders in an indeterminate mode.
-    #[setters(strip_option)]
     pub progress: Option<f32>,
 
     /// Modifier chain applied to the indicator subtree.
@@ -546,11 +544,11 @@ pub struct LinearProgressIndicatorArgs {
     pub draw_stop_indicator: bool,
 
     /// Optional accessibility label read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
 
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
 }
 
@@ -728,12 +726,11 @@ pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
 }
 
 /// Arguments for configuring a Material Design circular progress indicator.
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct CircularProgressIndicatorArgs {
     /// Current progress in the range 0.0..=1.0.
     ///
     /// When omitted, the indicator renders in an indeterminate mode.
-    #[setters(strip_option)]
     pub progress: Option<f32>,
 
     /// Diameter of the indicator.
@@ -755,11 +752,11 @@ pub struct CircularProgressIndicatorArgs {
     pub gap_size: Dp,
 
     /// Optional accessibility label read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
 
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
 }
 
@@ -933,7 +930,7 @@ pub fn circular_progress_indicator(args: &CircularProgressIndicatorArgs) {
 }
 
 /// Arguments for the `progress` component.
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct ProgressArgs {
     /// The current value of the progress bar, ranging from 0.0 to 1.0.
     pub value: f32,

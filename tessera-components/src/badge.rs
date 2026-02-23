@@ -6,11 +6,10 @@
 
 use std::sync::Arc;
 
-use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Px, PxPosition, PxSize, RenderInput, RenderSlot, provide_context, tessera,
-    use_context,
+    MeasurementError, Prop, Px, PxPosition, PxSize, RenderInput, RenderSlot, provide_context,
+    tessera, use_context,
 };
 
 use crate::{
@@ -310,14 +309,13 @@ impl BadgeDefaults {
 }
 
 /// Arguments for [`badge`] and [`badge_with_content`].
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct BadgeArgs {
     /// Background color of the badge.
     pub container_color: Color,
     /// Preferred content color for badge descendants.
     ///
     /// When `None`, the badge derives a matching content color from the theme.
-    #[setters(strip_option)]
     pub content_color: Option<Color>,
 }
 
@@ -372,7 +370,7 @@ fn badged_box_node(args: &BadgedBoxRenderArgs) {
     args.badge.render();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct BadgedBoxRenderArgs {
     badge: RenderSlot,
     content: RenderSlot,
@@ -495,17 +493,9 @@ fn badge_with_content_node(args: &BadgeWithContentRenderArgs) {
 
 type BadgeContentBuilder = dyn for<'a> Fn(&mut RowScope<'a>) + Send + Sync;
 
-#[derive(Clone)]
+#[derive(Clone, Prop)]
 struct BadgeWithContentRenderArgs {
     container_color: Color,
     content_color: Option<Color>,
     content: Arc<BadgeContentBuilder>,
-}
-
-impl PartialEq for BadgeWithContentRenderArgs {
-    fn eq(&self, other: &Self) -> bool {
-        self.container_color == other.container_color
-            && self.content_color == other.content_color
-            && Arc::ptr_eq(&self.content, &other.content)
-    }
 }

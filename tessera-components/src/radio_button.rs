@@ -6,9 +6,8 @@
 
 use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    CallbackWith, Color, DimensionValue, Dp, Modifier, Px, PxSize, State, accesskit::Role,
+    CallbackWith, Color, DimensionValue, Dp, Modifier, Prop, Px, PxSize, State, accesskit::Role,
     current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -116,12 +115,12 @@ impl RadioButtonController {
 }
 
 /// Arguments for configuring the `radio_button` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct RadioButtonArgs {
     /// Optional modifier chain applied to the radio button subtree.
     pub modifier: Modifier,
     /// Callback invoked when the radio transitions to the selected state.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_select: CallbackWith<bool, ()>,
     /// Whether the radio button is currently selected.
     pub selected: bool,
@@ -145,16 +144,16 @@ pub struct RadioButtonArgs {
     /// Whether the control is interactive.
     pub enabled: bool,
     /// Optional accessibility label read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional external controller for selection state and animation.
     ///
     /// When this is `None`, `radio_button` creates and owns an internal
     /// controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<RadioButtonController>>,
 }
 

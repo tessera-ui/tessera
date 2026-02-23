@@ -3,9 +3,8 @@
 //! ## Usage
 //!
 //! Trigger actions, submit forms, or navigate.
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, accesskit::Role, tessera, use_context,
+    Callback, Color, Dp, Modifier, Prop, RenderSlot, accesskit::Role, tessera, use_context,
 };
 
 use crate::{
@@ -65,7 +64,7 @@ impl ButtonDefaults {
 }
 
 /// Arguments for the `button` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct ButtonArgs {
     /// Whether the button is enabled for user interaction.
     pub enabled: bool,
@@ -76,14 +75,13 @@ pub struct ButtonArgs {
     /// Optional explicit content color override for descendants.
     ///
     /// When `None`, the button derives its content color from the theme.
-    #[setters(strip_option)]
     pub content_color: Option<Color>,
     /// The shape of the button.
     pub shape: Shape,
     /// The padding of the button.
     pub padding: Dp,
     /// The click callback function
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// The ripple color (RGB) for the button.
     pub ripple_color: Color,
@@ -93,7 +91,6 @@ pub struct ButtonArgs {
     /// `color` will be used.
     pub border_color: Option<Color>,
     /// Optional shadow elevation hint forwarded to the underlying surface.
-    #[setters(strip_option)]
     pub elevation: Option<Dp>,
     /// Tonal elevation forwarded to the underlying surface.
     pub tonal_elevation: Dp,
@@ -105,13 +102,13 @@ pub struct ButtonArgs {
     pub disabled_border_color: Color,
     /// Optional label announced by assistive technologies (e.g., screen
     /// readers).
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional longer description or hint for assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional child render slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub child: Option<RenderSlot>,
 }
 
@@ -408,7 +405,7 @@ impl ButtonArgs {
             .disabled_container_color(Color::TRANSPARENT)
             .ripple_color(scheme.on_surface_variant)
             .border_width(Dp(1.0))
-            .border_color(Some(scheme.outline_variant))
+            .border_color(scheme.outline_variant)
             .disabled_border_color(
                 scheme
                     .outline_variant

@@ -1,5 +1,5 @@
 use tessera_ui::{
-    Color, ComputedData, Dp, MeasurementError, Modifier, PxPosition, PxSize, RenderSlot,
+    Color, ComputedData, Dp, MeasurementError, Modifier, Prop, PxPosition, PxSize, RenderSlot,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera, use_context,
 };
@@ -15,7 +15,8 @@ use crate::{
 use super::ModifierExt;
 
 /// Arguments for the `shadow` modifier.
-#[derive(PartialEq, Clone, Debug)]
+#[derive(Clone, Debug, Prop)]
+#[prop(skip_setter)]
 pub struct ShadowArgs {
     /// The elevation of the shadow.
     pub elevation: Dp,
@@ -154,7 +155,7 @@ impl LayoutSpec for ShadowLayout {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierShadowLayersArgs {
     shadow: ShadowLayers,
     shape: Shape,

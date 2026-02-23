@@ -3,8 +3,7 @@
 //! ## Usage
 //!
 //! Present compact actions, filters, or input tokens in dense UIs.
-use derive_setters::Setters;
-use tessera_ui::{Callback, Color, Dp, Modifier, accesskit::Role, tessera, use_context};
+use tessera_ui::{Callback, Color, Dp, Modifier, Prop, accesskit::Role, tessera, use_context};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
@@ -377,20 +376,20 @@ impl ChipDefaults {
 }
 
 /// Arguments for the [`chip`] component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct ChipArgs {
     /// Variant of the chip.
     pub variant: ChipVariant,
     /// Visual style of the chip.
     pub style: ChipStyle,
     /// Text label rendered inside the chip.
-    #[setters(into)]
+    #[prop(into)]
     pub label: String,
     /// Optional leading icon shown before the label.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub leading_icon: Option<IconArgs>,
     /// Optional trailing icon shown after the label.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub trailing_icon: Option<IconArgs>,
     /// Whether the chip is selected (used by selectable variants).
     pub selected: bool,
@@ -399,24 +398,21 @@ pub struct ChipArgs {
     /// Optional modifier chain applied to the chip subtree.
     pub modifier: Modifier,
     /// Optional colors override.
-    #[setters(strip_option)]
     pub colors: Option<ChipColors>,
     /// Optional border override.
-    #[setters(strip_option)]
     pub border: Option<ChipBorder>,
     /// Shape of the chip container.
     pub shape: Shape,
     /// Optional elevation override.
-    #[setters(strip_option)]
     pub elevation: Option<Dp>,
     /// Optional click handler for the chip.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Optional accessibility label announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
 }
 

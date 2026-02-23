@@ -3,9 +3,8 @@
 //! ## Usage
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
-use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px,
     PxPosition,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     tessera,
@@ -18,7 +17,7 @@ use crate::{
 };
 
 /// Arguments for the `glass_progress` component.
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct GlassProgressArgs {
     /// The current value of the progress bar, ranging from 0.0 to 1.0.
     pub value: f32,
@@ -71,7 +70,7 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct GlassProgressFillArgs {
     value: f32,
     tint_color: Color,

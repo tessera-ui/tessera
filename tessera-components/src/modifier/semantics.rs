@@ -5,7 +5,7 @@
 //! Attach accessibility roles, labels, and testing tags to component subtrees.
 
 use tessera_ui::{
-    RenderSlot,
+    Prop, RenderSlot,
     accesskit::{Action, Live, Role, Toggled},
     tessera,
 };
@@ -13,7 +13,8 @@ use tessera_ui::{
 use super::layout::Padding;
 
 /// Arguments for the `semantics` modifier.
-#[derive(PartialEq, Clone, Default)]
+#[derive(Clone, Default, Prop)]
+#[prop(skip_setter)]
 pub struct SemanticsArgs {
     /// Optional accessibility role.
     pub role: Option<Role>,
@@ -254,7 +255,7 @@ impl SemanticsArgs {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierSemanticsArgs {
     semantics: SemanticsArgs,
     child: RenderSlot,

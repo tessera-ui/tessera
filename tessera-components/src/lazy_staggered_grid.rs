@@ -10,10 +10,9 @@ use std::{
     sync::Arc,
 };
 
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId,
-    ParentConstraint, Px, PxPosition, Slot, State, key,
+    ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera,
 };
@@ -50,7 +49,7 @@ impl LazyStaggeredGridController {
 }
 
 /// Arguments shared between lazy vertical staggered grids.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct LazyVerticalStaggeredGridArgs {
     /// Scroll container arguments. Vertical scrolling is enforced.
     pub scrollable: ScrollableArgs,
@@ -73,10 +72,10 @@ pub struct LazyVerticalStaggeredGridArgs {
     /// Maximum viewport length reported back to parents.
     pub max_viewport_main: Option<Px>,
     /// Optional external controller for scroll position and cache.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<LazyStaggeredGridController>>,
     /// Optional slot builder for lazy staggered grid content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<LazyStaggeredGridContentSlot>,
 }
 
@@ -123,7 +122,7 @@ impl LazyVerticalStaggeredGridArgs {
 }
 
 /// Arguments shared between lazy horizontal staggered grids.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct LazyHorizontalStaggeredGridArgs {
     /// Scroll container arguments. Horizontal scrolling is enforced.
     pub scrollable: ScrollableArgs,
@@ -146,10 +145,10 @@ pub struct LazyHorizontalStaggeredGridArgs {
     /// Maximum viewport length reported back to parents.
     pub max_viewport_main: Option<Px>,
     /// Optional external controller for scroll position and cache.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<LazyStaggeredGridController>>,
     /// Optional slot builder for lazy staggered grid content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<LazyStaggeredGridContentSlot>,
 }
 
@@ -565,7 +564,7 @@ fn lazy_horizontal_staggered_grid_slots(
         });
     scrollable(&scrollable_args);
 }
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
 struct LazyStaggeredGridViewArgs {
     axis: StaggeredGridAxis,
     grid_cells: StaggeredGridCells,

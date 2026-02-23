@@ -6,7 +6,7 @@
 
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, PxPosition, PxSize, RenderInput, RenderSlot, tessera,
+    MeasurementError, Prop, PxPosition, PxSize, RenderInput, RenderSlot, tessera,
 };
 
 use crate::{
@@ -14,7 +14,7 @@ use crate::{
     shape_def::{ResolvedShape, Shape},
 };
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierAlphaArgs {
     alpha: f32,
     child: RenderSlot,
@@ -64,7 +64,7 @@ fn shape_border_command(color: Color, width: Dp, shape: Shape, size: PxSize) -> 
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierClipToBoundsArgs {
     child: RenderSlot,
 }
@@ -80,7 +80,7 @@ fn modifier_clip_to_bounds_node(args: &ModifierClipToBoundsArgs) {
     args.child.render();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierBackgroundArgs {
     color: Color,
     shape: Shape,
@@ -105,7 +105,7 @@ fn modifier_background_node(args: &ModifierBackgroundArgs) {
     args.child.render();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierBorderOverlayArgs {
     width: Dp,
     color: Color,
@@ -121,7 +121,7 @@ fn modifier_border_overlay_node(args: &ModifierBorderOverlayArgs) {
     });
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierBorderArgs {
     width: Dp,
     color: Color,

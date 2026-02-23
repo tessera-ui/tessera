@@ -7,7 +7,7 @@
 
 use tessera_ui::{
     Callback, CallbackWith, ComputedData, CursorEventContent, GestureState, PressKeyEventType,
-    PxPosition, PxSize, RenderSlot, State, WindowAction,
+    Prop, PxPosition, PxSize, RenderSlot, State, WindowAction,
     accesskit::{self, Action, Toggled},
     tessera,
     winit::window::CursorIcon,
@@ -27,7 +27,8 @@ pub struct PointerEventContext {
 type PressCallback = CallbackWith<PointerEventContext, ()>;
 
 /// Arguments for the `clickable` modifier.
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
+#[prop(skip_setter)]
 pub struct ClickableArgs {
     /// Callback invoked when the element is clicked.
     pub on_click: Callback,
@@ -116,7 +117,8 @@ impl ClickableArgs {
 }
 
 /// Arguments for the `toggleable` modifier.
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
+#[prop(skip_setter)]
 pub struct ToggleableArgs {
     /// Current boolean value.
     pub value: bool,
@@ -199,7 +201,8 @@ impl ToggleableArgs {
 }
 
 /// Arguments for the `selectable` modifier.
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
+#[prop(skip_setter)]
 pub struct SelectableArgs {
     /// Whether the item is selected.
     pub selected: bool,
@@ -298,7 +301,7 @@ fn pointer_context(position: Option<PxPosition>, size: ComputedData) -> PointerE
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierClickableArgs {
     clickable: ClickableArgs,
     child: RenderSlot,
@@ -463,7 +466,7 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
     });
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierWindowDragRegionArgs {
     child: RenderSlot,
 }
@@ -512,7 +515,7 @@ fn modifier_window_drag_region_node(args: &ModifierWindowDragRegionArgs) {
     });
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierWindowActionArgs {
     action: WindowAction,
     child: RenderSlot,
@@ -576,7 +579,7 @@ fn modifier_window_action_node(args: &ModifierWindowActionArgs) {
     });
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierBlockTouchPropagationArgs {
     child: RenderSlot,
 }
@@ -609,7 +612,7 @@ fn modifier_block_touch_propagation_node(args: &ModifierBlockTouchPropagationArg
     });
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierToggleableArgs {
     toggleable: ToggleableArgs,
     child: RenderSlot,
@@ -754,7 +757,7 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
     });
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierSelectableArgs {
     selectable: SelectableArgs,
     child: RenderSlot,

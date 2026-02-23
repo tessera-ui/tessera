@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Use to select a value from a continuous range.
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Px, PxPosition, State,
+    MeasurementError, Modifier, Prop, Px, PxPosition, State,
     accesskit::Role,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -70,7 +69,7 @@ impl Default for GlassSliderController {
 }
 
 /// Arguments for the `glass_slider` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct GlassSliderArgs {
     /// The current value of the slider, ranging from 0.0 to 1.0.
     pub value: f32,
@@ -79,7 +78,7 @@ pub struct GlassSliderArgs {
     pub modifier: Modifier,
 
     /// Callback function triggered when the slider's value changes.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_change: CallbackWith<f32>,
 
     /// The height of the slider track.
@@ -100,16 +99,16 @@ pub struct GlassSliderArgs {
     /// Disable interaction.
     pub disabled: bool,
     /// Optional accessibility label read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional external controller for drag and focus state.
     ///
     /// When this is `None`, `glass_slider` creates and owns an internal
     /// controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<GlassSliderController>>,
 }
 
@@ -155,7 +154,7 @@ impl Default for GlassSliderArgs {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct GlassSliderProgressFillArgs {
     value: f32,
     tint_color: Color,

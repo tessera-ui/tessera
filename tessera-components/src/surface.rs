@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, PxSize, RenderSlot, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Prop, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
@@ -125,7 +124,7 @@ impl From<Color> for SurfaceStyle {
 }
 
 /// Arguments for the `surface` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SurfaceArgs {
     /// Optional modifier chain applied to the surface subtree.
     pub modifier: Modifier,
@@ -138,7 +137,6 @@ pub struct SurfaceArgs {
     ///
     /// This value determines the shadow cast by the surface and its tonal
     /// elevation (if the color is `surface`).
-    #[setters(strip_option)]
     pub elevation: Option<Dp>,
     /// Tonal elevation for surfaces that use the theme `surface` color.
     ///
@@ -149,7 +147,6 @@ pub struct SurfaceArgs {
     ///
     /// When `None`, the surface derives its content color from the theme using
     /// [`content_color_for`].
-    #[setters(strip_option)]
     pub content_color: Option<Color>,
     /// Aligns child content within the surface bounds.
     pub content_alignment: Alignment,
@@ -164,45 +161,41 @@ pub struct SurfaceArgs {
     /// * Cursor changes to pointer when hovered
     /// * Press / release events are captured
     /// * Ripple animation starts on press
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Color of the ripple effect (used when interactive).
     pub ripple_color: Color,
     /// Whether ripples are bounded to the surface shape.
     pub ripple_bounded: bool,
     /// Optional explicit ripple radius for this surface.
-    #[setters(strip_option)]
     pub ripple_radius: Option<Dp>,
     /// Optional shared interaction state used to render state layers.
     ///
     /// This can be used to render visual feedback in one place while driving
     /// interactions from another.
-    #[setters(strip_option)]
     pub interaction_state: Option<State<InteractionState>>,
     /// Whether to render the state-layer overlay for this surface.
     pub show_state_layer: bool,
     /// Whether to render ripple animations for this surface.
     pub show_ripple: bool,
     /// Optional ripple animation state used for rendering ripples.
-    #[setters(strip_option)]
     pub ripple_state: Option<State<RippleState>>,
     /// If true, all input events inside the surface bounds are blocked (stop
     /// propagation), after (optionally) handling its own click logic.
     pub block_input: bool,
     /// Optional explicit accessibility role. Defaults to `Role::Button` when
     /// interactive.
-    #[setters(strip_option)]
     pub accessibility_role: Option<Role>,
     /// Optional label read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional description read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Whether this surface should be focusable even when not interactive.
     pub accessibility_focusable: bool,
     /// Optional child render slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub child: Option<RenderSlot>,
 }
 
@@ -397,7 +390,6 @@ fn apply_state_layer_to_style(style: &SurfaceStyle, color: Color, alpha: f32) ->
 }
 
 fn build_rounded_rectangle_command(
-    _args: &SurfaceArgs,
     style: &SurfaceStyle,
     ripple_props: RippleProps,
     corner_radii: [f32; 4],
@@ -530,7 +522,6 @@ fn build_shape_command(
             corner_radii,
             corner_g2,
         } => build_rounded_rectangle_command(
-            args,
             style,
             ripple_props,
             corner_radii,
@@ -1029,7 +1020,7 @@ fn surface_inner(args: &SurfaceInnerArgs) {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct SurfaceInnerArgs {
     surface: SurfaceArgs,
     interaction_state: Option<State<InteractionState>>,

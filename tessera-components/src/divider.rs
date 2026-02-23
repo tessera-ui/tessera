@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Separate sections in lists, menus, and settings screens.
-use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Px, RenderInput, tessera, use_context,
+    MeasurementError, Prop, Px, RenderInput, tessera, use_context,
 };
 
 use crate::{pipelines::simple_rect::command::SimpleRectCommand, theme::MaterialTheme};
@@ -57,7 +56,7 @@ impl DividerDefaults {
 }
 
 /// Arguments for [`horizontal_divider`] and [`vertical_divider`].
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct DividerArgs {
     /// Thickness of the divider line.
     ///

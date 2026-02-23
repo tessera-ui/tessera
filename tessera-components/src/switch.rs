@@ -5,10 +5,9 @@
 //! Use to control a boolean on/off state.
 use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Px, PxPosition, PxSize, RenderSlot, State,
+    Prop, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -303,12 +302,12 @@ impl Default for SwitchController {
 }
 
 /// Arguments for configuring the `switch` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SwitchArgs {
     /// Optional modifier chain applied to the switch subtree.
     pub modifier: Modifier,
     /// Optional callback invoked when the switch toggles.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_toggle: Option<CallbackWith<bool, ()>>,
     /// Whether the control is enabled for user interaction.
     ///
@@ -338,18 +337,18 @@ pub struct SwitchArgs {
     /// Icon color when the switch is off.
     pub thumb_icon_color: Color,
     /// Optional accessibility label read by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional external controller for checked state and animation.
     ///
     /// When this is `None`, `switch` creates and owns an internal controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<SwitchController>>,
     /// Optional content rendered at the thumb center.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub child: Option<RenderSlot>,
 }
 

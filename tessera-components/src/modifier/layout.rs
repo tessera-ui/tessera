@@ -7,7 +7,7 @@
 
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Px, PxPosition, RenderSlot, tessera,
+    MeasurementError, Prop, Px, PxPosition, RenderSlot, tessera,
 };
 
 /// Controls whether minimum interactive size wrappers are enforced.
@@ -146,7 +146,7 @@ fn modifier_padding_node(args: &ModifierPaddingArgs) {
     args.child.render();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierPaddingArgs {
     padding: Padding,
     child: RenderSlot,
@@ -166,7 +166,7 @@ fn modifier_offset_node(args: &ModifierOffsetArgs) {
     args.child.render();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierOffsetArgs {
     x: Dp,
     y: Dp,
@@ -187,7 +187,7 @@ fn modifier_constraints_node(args: &ModifierConstraintsArgs) {
     args.child.render();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierConstraintsArgs {
     width_override: Option<DimensionValue>,
     height_override: Option<DimensionValue>,
@@ -213,7 +213,7 @@ fn modifier_minimum_interactive_size_node(args: &ModifierMinimumInteractiveArgs)
     args.child.render();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ModifierMinimumInteractiveArgs {
     child: RenderSlot,
 }

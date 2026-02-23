@@ -9,10 +9,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-use derive_setters::Setters;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, ScrollEventSource, State,
+    MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, ScrollEventSource, State,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera,
@@ -27,7 +26,7 @@ use crate::{
 };
 
 /// Arguments for the `scrollable` container.
-#[derive(PartialEq, Setters, Clone)]
+#[derive(Prop, Clone)]
 pub struct ScrollableArgs {
     /// Modifier chain applied to the scrollable subtree.
     pub modifier: Modifier,
@@ -54,10 +53,10 @@ pub struct ScrollableArgs {
     ///
     /// When this is `None`, `scrollable` creates and owns an internal
     /// controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<ScrollableController>>,
     /// Optional child content rendered inside the scroll container.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub child: Option<RenderSlot>,
 }
 
@@ -634,7 +633,7 @@ impl LayoutSpec for ScrollableInnerLayout {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ScrollableAlongsideArgs {
     controller: State<ScrollableController>,
     vertical: bool,
@@ -646,7 +645,7 @@ struct ScrollableAlongsideArgs {
     child: RenderSlot,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ScrollableOverlayArgs {
     controller: State<ScrollableController>,
     vertical: bool,
@@ -658,7 +657,7 @@ struct ScrollableOverlayArgs {
     child: RenderSlot,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ScrollableInnerArgs {
     vertical: bool,
     horizontal: bool,

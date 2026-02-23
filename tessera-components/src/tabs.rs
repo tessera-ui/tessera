@@ -3,10 +3,9 @@
 //! ## Usage
 //!
 //! Use to organize content into separate pages that can be switched between.
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos,
+    MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -332,7 +331,7 @@ impl Default for TabsController {
 }
 
 /// Configuration arguments for the [`tabs`] component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct TabsArgs {
     /// Optional modifier chain applied to the tabs subtree.
     pub modifier: Modifier,
@@ -354,7 +353,6 @@ pub struct TabsArgs {
     /// Minimum width for the indicator bar.
     pub indicator_min_width: Dp,
     /// Optional maximum width for the indicator bar.
-    #[setters(strip_option)]
     pub indicator_max_width: Option<Dp>,
     /// Minimum height for a tab (Material spec uses 48dp).
     pub min_tab_height: Dp,
@@ -499,13 +497,13 @@ impl<'a> TabsScope<'a> {
 }
 
 /// Arguments for [`tab_label`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct TabLabelArgs {
     /// Text shown in the tab.
-    #[setters(into)]
+    #[prop(into)]
     pub text: String,
     /// Optional icon shown above the text.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub icon: Option<IconContent>,
     /// Horizontal padding applied to the text area.
     pub horizontal_text_padding: Dp,
@@ -527,13 +525,13 @@ impl Default for TabLabelArgs {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct TabsContentContainerArgs {
     scroll_offset: Px,
     children: Vec<RenderSlot>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct TabsRenderArgs {
     tabs: TabsArgs,
     controller: State<TabsController>,

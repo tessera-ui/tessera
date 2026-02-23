@@ -5,10 +5,9 @@
 //! Trigger data reloads when users pull down at the top of a scrollable view.
 use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Px, RenderSlot, State,
-    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
+    Callback, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Prop, Px, RenderSlot,
+    State, current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -231,12 +230,12 @@ impl PullRefreshController {
 }
 
 /// Arguments for the `pull_refresh` component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct PullRefreshArgs {
     /// Modifier chain applied to the pull-refresh container.
     pub modifier: Modifier,
     /// Callback invoked when a refresh is triggered.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_refresh: Callback,
     /// Whether a refresh is currently in progress.
     pub refreshing: bool,
@@ -262,10 +261,10 @@ pub struct PullRefreshArgs {
     ///
     /// When this is `None`, `pull_refresh` creates and owns an internal
     /// controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<PullRefreshController>>,
     /// Optional child content rendered inside the pull-refresh container.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub child: Option<RenderSlot>,
 }
 
@@ -325,7 +324,7 @@ impl PullRefreshArgs {
 }
 
 /// Arguments for the pull-refresh indicator.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct PullRefreshIndicatorArgs {
     /// Modifier chain applied to the indicator.
     pub modifier: Modifier,
@@ -345,7 +344,7 @@ pub struct PullRefreshIndicatorArgs {
     ///
     /// When this is `None`, `pull_refresh_indicator` creates and owns an
     /// internal controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<PullRefreshController>>,
 }
 

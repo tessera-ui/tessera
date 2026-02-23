@@ -3,9 +3,8 @@
 //! ## Usage
 //!
 //! Emphasize a primary action with a prominent floating button.
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera,
+    Callback, Color, Dp, Modifier, Prop, RenderSlot, State, accesskit::Role, remember, tessera,
     use_context,
 };
 
@@ -185,7 +184,7 @@ impl FloatingActionButtonDefaults {
 }
 
 /// Arguments for configuring [`floating_action_button`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct FloatingActionButtonArgs {
     /// The size variant of the floating action button.
     pub size: FloatingActionButtonSize,
@@ -196,34 +195,30 @@ pub struct FloatingActionButtonArgs {
     /// Container color when enabled.
     pub container_color: Color,
     /// Optional explicit content color override.
-    #[setters(strip_option)]
     pub content_color: Option<Color>,
     /// Optional shape override for the button container.
-    #[setters(strip_option)]
     pub shape: Option<Shape>,
     /// Elevation profile used for interaction states.
     pub elevation: FloatingActionButtonElevation,
     /// Optional click handler for the button.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Container color when disabled.
     pub disabled_container_color: Color,
     /// Content color when disabled.
     pub disabled_content_color: Color,
     /// Optional shared interaction state for hover/press feedback.
-    #[setters(strip_option)]
     pub interaction_state: Option<State<InteractionState>>,
     /// Optional ripple color override.
-    #[setters(strip_option)]
     pub ripple_color: Option<Color>,
     /// Optional accessibility label announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional child render slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<RenderSlot>,
 }
 

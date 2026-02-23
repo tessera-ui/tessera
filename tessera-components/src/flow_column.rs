@@ -3,9 +3,8 @@
 //! ## Usage
 //!
 //! Wrap tall lists or cards into multiple columns.
-use derive_setters::Setters;
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px, PxPosition,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px, PxPosition,
     RenderSlot,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     tessera,
@@ -17,7 +16,7 @@ use crate::{
 };
 
 /// Arguments for the `flow_column` component.
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct FlowColumnArgs {
     /// Modifier chain applied to the flow column subtree.
     pub modifier: Modifier,
@@ -79,7 +78,7 @@ impl<'a> FlowColumnScope<'a> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct FlowColumnRenderArgs {
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,

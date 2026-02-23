@@ -9,10 +9,9 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, DimensionValue, Dp, Modifier, RenderSlot, State, provide_context, remember,
-    tessera, use_context,
+    Callback, Color, DimensionValue, Dp, Modifier, Prop, RenderSlot, State, provide_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -192,12 +191,14 @@ pub enum DatePickerDisplayMode {
 /// Controls which dates are selectable in the date picker.
 pub trait SelectableDates: Send + Sync {
     /// Returns true when the date can be selected.
-    fn is_selectable_date(&self, _date: CalendarDate) -> bool {
+    fn is_selectable_date(&self, date: CalendarDate) -> bool {
+        let _ = date;
         true
     }
 
     /// Returns true when the year can be selected.
-    fn is_selectable_year(&self, _year: i32) -> bool {
+    fn is_selectable_year(&self, year: i32) -> bool {
+        let _ = year;
         true
     }
 }
@@ -397,15 +398,13 @@ impl PartialEq for DatePickerSnapshot {
 /// Configuration options for [`date_picker`].
 ///
 /// Initial-state fields are applied only when `date_picker` owns the state.
-#[derive(Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct DatePickerArgs {
     /// Optional modifier chain applied to the date picker.
     pub modifier: Modifier,
     /// Initial selected date for the internal state.
-    #[setters(strip_option)]
     pub initial_selected_date: Option<CalendarDate>,
     /// Initial displayed month for the internal state.
-    #[setters(strip_option)]
     pub initial_displayed_month: Option<YearMonth>,
     /// Year range allowed in the internal state.
     pub year_range: RangeInclusive<i32>,
@@ -420,33 +419,16 @@ pub struct DatePickerArgs {
     /// Whether the display mode toggle is shown.
     pub show_mode_toggle: bool,
     /// Optional override for the title text.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub title: Option<String>,
     /// Optional override for the headline text.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub headline: Option<String>,
     /// Optional external state for selection, month navigation, and mode.
     ///
     /// When this is `None`, `date_picker` creates and owns an internal state.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub state: Option<State<DatePickerState>>,
-}
-
-impl PartialEq for DatePickerArgs {
-    fn eq(&self, other: &Self) -> bool {
-        self.modifier == other.modifier
-            && self.initial_selected_date == other.initial_selected_date
-            && self.initial_displayed_month == other.initial_displayed_month
-            && self.year_range == other.year_range
-            && Arc::ptr_eq(&self.selectable_dates, &other.selectable_dates)
-            && self.display_mode == other.display_mode
-            && self.first_day_of_week == other.first_day_of_week
-            && self.show_weekday_labels == other.show_weekday_labels
-            && self.show_mode_toggle == other.show_mode_toggle
-            && self.title == other.title
-            && self.headline == other.headline
-            && self.state == other.state
-    }
 }
 
 impl Default for DatePickerArgs {
@@ -478,19 +460,19 @@ impl DatePickerArgs {
 }
 
 /// Configuration for [`date_picker_dialog`].
-#[derive(Clone, PartialEq, Setters)]
+#[derive(Clone, Prop)]
 pub struct DatePickerDialogArgs {
     /// State handle used by the embedded date picker.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub state: State<DatePickerState>,
     /// Optional override for the dialog title.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub title: Option<String>,
     /// Optional confirm button content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub confirm_button: Option<RenderSlot>,
     /// Optional dismiss button content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub dismiss_button: Option<RenderSlot>,
     /// Picker configuration forwarded to [`date_picker`].
     pub picker: DatePickerArgs,

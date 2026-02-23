@@ -254,17 +254,17 @@ impl<T, R> PartialEq for RenderSlotWith<T, R> {
 impl<T, R> Eq for RenderSlotWith<T, R> {}
 
 /// Component props that can be snapshotted and compared for replay.
+///
+/// Prefer `#[derive(Prop)]` on args structs.
+/// The derive also generates fluent setters and callback/slot helper setters.
 pub trait Prop: Clone + Send + Sync + 'static {
     /// Compare current props with another props value.
     fn prop_eq(&self, other: &Self) -> bool;
 }
 
-impl<T> Prop for T
-where
-    T: Clone + PartialEq + Send + Sync + 'static,
-{
-    fn prop_eq(&self, other: &Self) -> bool {
-        self == other
+impl Prop for () {
+    fn prop_eq(&self, _other: &Self) -> bool {
+        true
     }
 }
 

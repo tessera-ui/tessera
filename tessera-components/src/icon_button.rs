@@ -3,8 +3,7 @@
 //! ## Usage
 //!
 //! Use for compact actions where an icon is sufficient to convey the meaning.
-use derive_setters::Setters;
-use tessera_ui::{Callback, Color, Dp, Modifier, tessera, use_context};
+use tessera_ui::{Callback, Color, Dp, Modifier, Prop, tessera, use_context};
 
 use crate::{
     button::{ButtonArgs, ButtonDefaults, button},
@@ -30,23 +29,21 @@ pub enum IconButtonVariant {
 }
 
 /// Arguments for [`icon_button`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct IconButtonArgs {
     /// The variant of the icon button.
     pub variant: IconButtonVariant,
     /// Icon that will be rendered at the center of the button.
-    #[setters(into)]
+    #[prop(into)]
     pub icon: IconArgs,
     /// The click callback function.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Whether the button is enabled.
     pub enabled: bool,
     /// Optional override for the container color.
-    #[setters(strip_option)]
     pub color: Option<Color>,
     /// Optional override for the content (icon) color.
-    #[setters(strip_option)]
     pub content_color: Option<Color>,
 }
 
@@ -77,13 +74,13 @@ impl IconButtonArgs {
 }
 
 /// Lifted [`glass_button`] counterpart for icon buttons.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct GlassIconButtonArgs {
     /// Appearance/behavior settings for the underlying [`glass_button`].
-    #[setters(into)]
+    #[prop(into)]
     pub button: GlassButtonArgs,
     /// Icon rendered at the center of the glass button.
-    #[setters(into)]
+    #[prop(into)]
     pub icon: IconArgs,
 }
 
@@ -189,7 +186,7 @@ pub fn icon_button(args: &IconButtonArgs) {
         .border_width(border_width);
 
     if let Some(bc) = border_color {
-        button_args = button_args.border_color(Some(bc));
+        button_args = button_args.border_color(bc);
     }
 
     if let Some(on_click) = args.on_click {

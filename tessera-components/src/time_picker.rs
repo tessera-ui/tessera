@@ -5,10 +5,9 @@
 //! Use to let users choose a time for alarms, reminders, or schedules.
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, DimensionValue, Dp, Modifier, RenderSlot, State, provide_context, remember, tessera,
-    use_context,
+    Callback, DimensionValue, Dp, Modifier, Prop, RenderSlot, State, provide_context, remember,
+    tessera, use_context,
 };
 
 use crate::{
@@ -208,7 +207,7 @@ struct TimePickerSnapshot {
 /// Configuration options for [`time_picker`].
 ///
 /// Initial-state fields are applied only when `time_picker` owns the state.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct TimePickerArgs {
     /// Optional modifier chain applied to the time picker.
     pub modifier: Modifier,
@@ -227,7 +226,7 @@ pub struct TimePickerArgs {
     /// Optional external state for selected time and display mode.
     ///
     /// When this is `None`, `time_picker` creates and owns an internal state.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub state: Option<State<TimePickerState>>,
 }
 
@@ -257,19 +256,19 @@ impl TimePickerArgs {
 }
 
 /// Configuration for [`time_picker_dialog`].
-#[derive(Clone, PartialEq, Setters)]
+#[derive(Clone, Prop)]
 pub struct TimePickerDialogArgs {
     /// State handle used by the embedded time picker.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub state: State<TimePickerState>,
     /// Optional override for the dialog title.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub title: Option<String>,
     /// Optional confirm button content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub confirm_button: Option<RenderSlot>,
     /// Optional dismiss button content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub dismiss_button: Option<RenderSlot>,
     /// Whether the display mode toggle is shown.
     pub show_mode_toggle: bool,

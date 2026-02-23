@@ -5,7 +5,7 @@
 [readme-cn-badge]: https://img.shields.io/badge/README-简体中文-blue.svg?style=for-the-badge&logo=readme
 [readme-cn-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-macros/docs/README_zh-CN.md
 
-The `tessera_macros` crate provides procedural macros for the [Tessera UI framework](https://github.com/tessera-ui/tessera). Currently, it contains the `#[tessera]` attribute macro, which is essential for creating components in the Tessera framework.
+The `tessera_macros` crate provides procedural macros for the [Tessera UI framework](https://github.com/tessera-ui/tessera). It includes `#[tessera]`, `#[derive(Prop)]`, and entry/shard-related macros used by Tessera components.
 
 ## Overview
 
@@ -17,6 +17,7 @@ The `#[tessera]` macro transforms regular Rust functions into Tessera UI compone
 - **Runtime Injection**: Provides access to `layout` and `input_handler` functions within component functions
 - **Clean Syntax**: Enables declarative component definition with minimal boilerplate
 - **Tree Management**: Handles component tree node creation and cleanup automatically
+- **Prop Derive**: Generates `Prop` implementation and ergonomic setters for component args structs
 
 ## Usage
 
@@ -40,16 +41,10 @@ fn my_component() {
 use tessera_macros::tessera;
 use tessera_ui::{Callback, Prop};
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq, Prop)]
 struct ButtonArgs {
     label: String,
     on_click: Callback,
-}
-
-impl Prop for ButtonArgs {
-    fn prop_eq(&self, _other: &Self) -> bool {
-        false
-    }
 }
 
 #[tessera]
@@ -59,6 +54,51 @@ fn button_component(args: &ButtonArgs) {
     // The macro handles component tree integration
 }
 ```
+
+## `#[derive(Prop)]` Usage
+
+Use `#[derive(Prop)]` on named-field args structs. It implements `tessera_ui::Prop` and
+generates fluent setters.
+
+### Basic derive
+
+```rust
+use tessera_ui::{Callback, Prop, RenderSlot};
+
+#[derive(Clone, PartialEq, Prop)]
+pub struct CardArgs {
+    pub title: String,
+    pub subtitle: Option<String>,
+    pub on_click: Option<Callback>,
+    pub child: Option<RenderSlot>,
+}
+
+// Generated examples:
+// CardArgs::default().title("Hello".to_string())
+// CardArgs::default().subtitle("Optional text".to_string())   // Option<T> auto-wraps to Some(...)
+// CardArgs::default().on_click(|| {})                         // closure helper for Callback
+// CardArgs::default().on_click_shared(Callback::new(|| {}))   // shared handle helper
+// CardArgs::default().child(|| {})                            // closure helper for RenderSlot
+```
+
+### Supported `#[prop(...)]` options
+
+Struct-level:
+
+- `crate_path = ...`
+- `skip_setter`
+
+Field-level:
+
+- `into`
+- `skip_setter`
+- `skip_eq`
+
+### Equality behavior
+
+- `prop_eq` compares fields directly.
+- Fields marked with `#[prop(skip_eq)]` are excluded from comparison.
+- `Arc<T>`/`Rc<T>` fields (and `Option<Arc<T>>`/`Option<Rc<T>>`) are compared by pointer identity (`ptr_eq`).
 
 ### Using Layout and Input Handler
 

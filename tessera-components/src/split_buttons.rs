@@ -4,11 +4,10 @@
 //!
 //! Pair a primary action with a related secondary action or menu.
 
-use derive_setters::Setters;
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
-    LayoutSpec, MeasurementError, Modifier, Px, PxPosition, RenderSlot, accesskit::Role, tessera,
-    use_context,
+    LayoutSpec, MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, accesskit::Role,
+    tessera, use_context,
 };
 
 use crate::{
@@ -267,17 +266,17 @@ impl SplitButtonDefaults {
 }
 
 /// Arguments for [`split_button_layout`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SplitButtonLayoutArgs {
     /// Modifier chain applied to the split button layout.
     pub modifier: Modifier,
     /// Spacing between leading and trailing buttons.
     pub spacing: Dp,
     /// Optional leading button slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub leading_button: Option<RenderSlot>,
     /// Optional trailing button slot.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub trailing_button: Option<RenderSlot>,
 }
 
@@ -332,7 +331,7 @@ impl SplitButtonLayoutArgs {
 }
 
 /// Arguments for [`split_leading_button`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SplitButtonLeadingArgs {
     /// Whether the button is enabled.
     pub enabled: bool,
@@ -351,21 +350,20 @@ pub struct SplitButtonLeadingArgs {
     /// Container height for the leading button.
     pub container_height: Dp,
     /// Optional shadow elevation.
-    #[setters(strip_option)]
     pub elevation: Option<Dp>,
     /// Tonal elevation applied to the surface.
     pub tonal_elevation: Dp,
     /// Click handler for the button.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Optional accessibility label.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional content rendered inside the leading button.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<RenderSlot>,
 }
 
@@ -468,7 +466,7 @@ impl From<&SplitButtonLeadingArgs> for SplitButtonLeadingArgs {
 }
 
 /// Arguments for [`split_trailing_button`].
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SplitButtonTrailingArgs {
     /// Whether the button is enabled.
     pub enabled: bool,
@@ -487,21 +485,20 @@ pub struct SplitButtonTrailingArgs {
     /// Container height for the trailing button.
     pub container_height: Dp,
     /// Optional shadow elevation.
-    #[setters(strip_option)]
     pub elevation: Option<Dp>,
     /// Tonal elevation applied to the surface.
     pub tonal_elevation: Dp,
     /// Click handler for the button.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
     /// Optional accessibility label.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional content rendered inside the trailing button.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<RenderSlot>,
 }
 
@@ -762,7 +759,7 @@ pub fn split_trailing_button(args: &SplitButtonTrailingArgs) {
         .unwrap_or_else(|| RenderSlot::new(|| {}));
     render_split_button(args.into(), content);
 }
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
 struct SplitButtonItemArgs {
     enabled: bool,
     modifier: Modifier,

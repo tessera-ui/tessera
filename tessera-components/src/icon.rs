@@ -5,9 +5,8 @@
 //! Use to display a scalable icon from image or vector data.
 use std::sync::Arc;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Prop, Px,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera, use_context,
 };
@@ -55,10 +54,10 @@ impl From<Arc<ImageData>> for IconContent {
 }
 
 /// Arguments for the [`icon`] component.
-#[derive(PartialEq, Debug, Setters, Clone)]
+#[derive(Debug, Prop, Clone)]
 pub struct IconArgs {
     /// Icon content, provided as either raster pixels or vector geometry.
-    #[setters(into)]
+    #[prop(into)]
     pub content: IconContent,
     /// Logical size of the icon. Applied to both width and height unless
     /// explicit overrides are provided through [`width`](IconArgs::width) /
@@ -66,11 +65,9 @@ pub struct IconArgs {
     pub size: Dp,
     /// Optional width override. Handy when the icon should `Fill` or `Wrap`
     /// differently from the default square sizing.
-    #[setters(strip_option)]
     pub width: Option<DimensionValue>,
     /// Optional height override. Handy when the icon should `Fill` or `Wrap`
     /// differently from the default square sizing.
-    #[setters(strip_option)]
     pub height: Option<DimensionValue>,
     /// Tint color applied to vector icons. Defaults to white so it preserves
     /// the original colors (multiplying by white is a no-op). Raster icons

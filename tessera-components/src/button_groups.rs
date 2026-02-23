@@ -6,10 +6,9 @@
 
 use std::collections::HashMap;
 
-use derive_setters::Setters;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, current_frame_nanos, receive_frame_nanos, remember,
+    Modifier, Prop, Px, PxPosition, RenderSlot, current_frame_nanos, receive_frame_nanos, remember,
     tessera, use_context,
 };
 
@@ -112,7 +111,7 @@ impl ButtonGroupsScope<'_> {
 }
 
 /// Arguments for the [`button_groups`] component.
-#[derive(Clone, PartialEq, Default, Setters)]
+#[derive(Clone, Default, Prop)]
 pub struct ButtonGroupsArgs {
     /// Size of the button group.
     pub size: ButtonGroupsSize,
@@ -301,7 +300,7 @@ where
     button_groups_node(&render_args);
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ButtonGroupsRenderArgs {
     size: ButtonGroupsSize,
     style: ButtonGroupsStyle,
@@ -522,7 +521,7 @@ fn elastic_container(args: &ElasticContainerArgs) {
     layout(ElasticContainerLayout { progress })
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ElasticContainerArgs {
     state: tessera_ui::State<ButtonGroupsState>,
     index: usize,

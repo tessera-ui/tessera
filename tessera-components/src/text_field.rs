@@ -3,7 +3,6 @@
 //! ## Usage
 //!
 //! Collect short-form inputs like names, passwords, or search queries.
-use derive_setters::Setters;
 use glyphon::{
     Action as GlyphonAction, Cursor, Edit,
     cosmic_text::{self, Selection},
@@ -11,7 +10,7 @@ use glyphon::{
 use tessera_platform::clipboard;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Px,
+    LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Prop, Px,
     PxPosition, RenderSlot, State, provide_context, remember, tessera, use_context, winit,
 };
 
@@ -133,7 +132,7 @@ impl Default for TextFieldContextMenu {
 }
 
 /// Arguments for configuring a Material text field.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct TextFieldArgs {
     /// Whether the text field is enabled for user input.
     pub enabled: bool,
@@ -143,100 +142,89 @@ pub struct TextFieldArgs {
     pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
     /// content and returns the updated content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_change: CallbackWith<String, String>,
     /// Minimum width in density-independent pixels.
-    #[setters(strip_option)]
     pub min_width: Option<Dp>,
     /// Minimum height in density-independent pixels.
-    #[setters(strip_option)]
     pub min_height: Option<Dp>,
     /// Background color of the text field.
-    #[setters(strip_option)]
     pub background_color: Option<Color>,
     /// Border width in Dp.
     pub border_width: Dp,
     /// Border color of the text field.
-    #[setters(strip_option)]
     pub border_color: Option<Color>,
     /// The shape of the text field container.
     pub shape: Shape,
     /// Padding inside the text field.
     pub padding: Dp,
     /// Border color when focused.
-    #[setters(strip_option)]
     pub focus_border_color: Option<Color>,
     /// Border width when focused.
-    #[setters(strip_option)]
     pub focus_border_width: Option<Dp>,
     /// Background color when focused.
-    #[setters(strip_option)]
     pub focus_background_color: Option<Color>,
     /// Color for text selection highlight.
-    #[setters(strip_option)]
     pub selection_color: Option<Color>,
     /// Color of the text content.
-    #[setters(strip_option)]
     pub text_color: Option<Color>,
     /// Color of the text cursor.
-    #[setters(strip_option)]
     pub cursor_color: Option<Color>,
     /// Optional label announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional description announced by assistive technologies.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Initial text content.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub initial_text: Option<String>,
     /// Font size in Dp.
     pub font_size: Dp,
     /// Line height in Dp.
-    #[setters(strip_option)]
     pub line_height: Option<Dp>,
     /// Optional label text shown inside the field and floated when focused or
     /// non-empty.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub label: Option<String>,
     /// Optional placeholder text shown when input is empty (and the label is
     /// floating, if any).
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub placeholder: Option<String>,
     /// Optional leading icon shown before the input text.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub leading_icon: Option<RenderSlot>,
     /// Optional trailing icon shown after the input text.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub trailing_icon: Option<RenderSlot>,
     /// Optional prefix content shown before the input text.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub prefix: Option<RenderSlot>,
     /// Optional suffix content shown after the input text.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub suffix: Option<RenderSlot>,
     /// Whether to show the filled-style indicator line.
     pub show_indicator: bool,
     /// Input line limit policy.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub line_limit: TextFieldLineLimit,
     /// Context menu configuration.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub context_menu: TextFieldContextMenu,
     /// Optional transform applied to text changes before on_change.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub input_transform: Option<CallbackWith<String, String>>,
     /// Optional obfuscation character for secure fields.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub obfuscation_char: Option<char>,
     /// Optional transform applied only for display.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub display_transform: Option<DisplayTransform>,
     /// Optional external controller for text, cursor, and selection state.
     ///
     /// When this is `None`, `text_field` creates and owns an internal
     /// controller.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<TextInputController>>,
 }
 
@@ -630,7 +618,7 @@ fn resolve_text_field_menu_policy(
     }
     menu
 }
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
 struct OutlinedFloatingLabelArgs {
     label_text: String,
     label_color: Color,

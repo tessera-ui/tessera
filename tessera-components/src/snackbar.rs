@@ -6,10 +6,9 @@
 
 use std::{collections::VecDeque, time::Duration};
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, State, current_frame_nanos, receive_frame_nanos,
-    tessera, use_context,
+    Callback, CallbackWith, Color, Dp, Modifier, Prop, State, current_frame_nanos,
+    receive_frame_nanos, tessera, use_context,
 };
 
 use crate::{
@@ -72,18 +71,17 @@ impl SnackbarDuration {
 }
 
 /// Request data for showing a snackbar with default behavior.
-#[derive(Clone, PartialEq, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct SnackbarRequest {
     /// Primary message shown in the snackbar.
-    #[setters(into)]
+    #[prop(into)]
     pub message: String,
     /// Optional label for the action button.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub action_label: Option<String>,
     /// Whether a dismiss action should be shown.
     pub with_dismiss_action: bool,
     /// Optional duration override for the snackbar.
-    #[setters(strip_option)]
     pub duration: Option<SnackbarDuration>,
 }
 
@@ -401,15 +399,15 @@ impl SnackbarDefaults {
 }
 
 /// Arguments for the [`snackbar`] component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SnackbarArgs {
     /// Modifier chain applied to the snackbar container.
     pub modifier: Modifier,
     /// Message shown in the snackbar.
-    #[setters(into)]
+    #[prop(into)]
     pub message: String,
     /// Optional label for the action button.
-    #[setters(strip_option, into)]
+    #[prop(into)]
     pub action_label: Option<String>,
     /// Whether to show a dismiss action icon.
     pub with_dismiss_action: bool,
@@ -428,10 +426,10 @@ pub struct SnackbarArgs {
     /// Padding applied to the content inside the snackbar.
     pub content_padding: Padding,
     /// Optional action callback.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_action: Option<Callback>,
     /// Optional dismiss callback.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_dismiss: Option<Callback>,
 }
 
@@ -531,14 +529,14 @@ impl From<SnackbarData> for SnackbarArgs {
 }
 
 /// Arguments for the [`snackbar_host`] component.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct SnackbarHostArgs {
     /// Modifier chain applied to the snackbar host container.
     pub modifier: Modifier,
     /// State that provides snackbar queue data.
     pub state: State<SnackbarHostState>,
     /// Optional custom snackbar slot for rendering.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub snackbar: Option<CallbackWith<SnackbarData>>,
 }
 

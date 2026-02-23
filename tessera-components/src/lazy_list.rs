@@ -10,10 +10,9 @@ use std::{
     sync::Arc,
 };
 
-use derive_setters::Setters;
 use tessera_ui::{
     Callback, CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError,
-    Modifier, NodeId, ParentConstraint, Px, PxPosition, Slot, State, key,
+    Modifier, NodeId, ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera,
 };
@@ -92,7 +91,7 @@ impl LazyListController {
 }
 
 /// Arguments shared between lazy lists.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct LazyColumnArgs {
     /// Modifier for the scroll container.
     pub modifier: Modifier,
@@ -111,10 +110,10 @@ pub struct LazyColumnArgs {
     /// textures when nesting the list inside wrap/auto-sized surfaces.
     pub max_viewport_main: Option<Px>,
     /// Optional external controller for scroll position and cache.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<LazyListController>>,
     /// Optional slot builder for lazy list content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<LazyListContentSlot>,
 }
 
@@ -159,7 +158,7 @@ impl LazyColumnArgs {
 
 /// Arguments for `lazy_row`. Identical to [`LazyColumnArgs`] but horizontal
 /// scrolling is enforced.
-#[derive(PartialEq, Clone, Setters)]
+#[derive(Clone, Prop)]
 pub struct LazyRowArgs {
     /// Modifier for the scroll container.
     pub modifier: Modifier,
@@ -177,10 +176,10 @@ pub struct LazyRowArgs {
     /// Maximum viewport length reported back to parents for horizontal lists.
     pub max_viewport_main: Option<Px>,
     /// Optional external controller for scroll position and cache.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub controller: Option<State<LazyListController>>,
     /// Optional slot builder for lazy list content.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub content: Option<LazyListContentSlot>,
 }
 
@@ -619,7 +618,7 @@ fn lazy_row_slots(args: LazyRowArgs, controller: State<LazyListController>, slot
         });
     scrollable(&scrollable_args);
 }
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
 struct LazyListViewArgs {
     axis: LazyListAxis,
     cross_axis_alignment: CrossAxisAlignment,

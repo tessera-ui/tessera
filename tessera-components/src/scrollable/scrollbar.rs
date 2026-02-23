@@ -3,7 +3,7 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tessera_ui::{
     Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, PressKeyEventType, Px, PxPosition, State,
+    Modifier, PressKeyEventType, Prop, Px, PxPosition, State,
     accesskit::{Action, Role},
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -75,7 +75,7 @@ impl LayoutSpec for ScrollBarHLayout {
         Ok(size)
     }
 }
-#[derive(PartialEq, Clone)]
+#[derive(Clone, Prop)]
 pub struct ScrollBarArgs {
     /// The total size of the scrollable content.
     pub total: Px,

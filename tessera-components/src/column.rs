@@ -3,10 +3,10 @@
 //! ## Usage
 //!
 //! Use to stack children vertically.
-use derive_setters::Setters;
 use tessera_ui::{
     ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot, tessera,
+    MeasurementError, Modifier, NodeId, ParentConstraint, Prop, Px, PxPosition, RenderSlot,
+    tessera,
 };
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
 };
 
 /// Arguments for the `column` component.
-#[derive(PartialEq, Clone, Debug, Setters)]
+#[derive(Clone, Debug, Prop)]
 pub struct ColumnArgs {
     /// Modifier chain applied to the column subtree.
     pub modifier: Modifier,
@@ -63,7 +63,7 @@ impl<'a> ColumnScope<'a> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct ColumnRenderArgs {
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,

@@ -5,10 +5,9 @@
 //! Use for primary destinations on wide layouts with a collapsible side rail.
 use std::time::Duration;
 
-use derive_setters::Setters;
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
-    PxPosition, PxSize, RenderSlot, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Prop, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -67,7 +66,7 @@ enum NavigationRailIconPosition {
     Start,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct NavigationRailItemContentArgs {
     item: NavigationRailItem,
     icon_position: NavigationRailIconPosition,
@@ -379,7 +378,7 @@ impl LayoutSpec for NavigationRailItemLayout {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct NavigationRailItemArgs {
     controller: State<NavigationRailController>,
     index: usize,
@@ -392,14 +391,14 @@ struct NavigationRailItemArgs {
     item_min_height: Dp,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct NavigationRailComposeArgs {
     controller: State<NavigationRailController>,
     items: Vec<NavigationRailItem>,
     header: Option<RenderSlot>,
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, Prop)]
 struct NavigationRailRenderArgs {
     controller: State<NavigationRailController>,
     items: Vec<NavigationRailItem>,
@@ -504,16 +503,16 @@ impl NavigationRailValue {
 }
 
 /// Item configuration for [`navigation_rail`].
-#[derive(Clone, PartialEq, Setters)]
+#[derive(Clone, Prop)]
 pub struct NavigationRailItem {
     /// Text label shown next to or below the icon.
-    #[setters(into)]
+    #[prop(into)]
     pub label: String,
     /// Optional icon rendered for the item.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub icon: Option<RenderSlot>,
     /// Callback invoked after selection changes to this item.
-    #[setters(skip)]
+    #[prop(skip_setter)]
     pub on_click: Callback,
 }
 
