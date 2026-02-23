@@ -27,7 +27,7 @@ pub fn execute(
         output::status("Profiling", format!("enabled ({})", path.display()));
     }
     if debug_dirty_overlay {
-        output::status("Debug Dirty Overlay", "enabled");
+        output::status("DirtyOverlay", "enabled");
     }
     output::status("Watching", "for file changes");
 

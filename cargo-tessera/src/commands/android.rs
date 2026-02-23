@@ -542,7 +542,7 @@ pub fn build(opts: BuildOptions) -> Result<()> {
         output::status("Profiling", format!("enabled ({path})"));
     }
     if ctx.debug_dirty_overlay {
-        output::status("Debug Dirty Overlay", "enabled");
+        output::status("DirtyOverlay", "enabled");
     }
 
     for target in &targets {
@@ -608,7 +608,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
         output::status("Profiling", format!("enabled ({path})"));
     }
     if ctx.debug_dirty_overlay {
-        output::status("Debug Dirty Overlay", "enabled");
+        output::status("DirtyOverlay", "enabled");
     }
 
     let env = AndroidEnv::new()?;
@@ -728,7 +728,7 @@ pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
         output::status("Profiling", format!("enabled ({path})"));
     }
     if ctx.debug_dirty_overlay {
-        output::status("Debug Dirty Overlay", "enabled");
+        output::status("DirtyOverlay", "enabled");
     }
 
     target.build(
