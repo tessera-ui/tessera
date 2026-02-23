@@ -643,19 +643,16 @@ fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
         .color_scheme;
     let frame_nanos = current_frame_nanos();
     let selection_progress = controller
-        .with_mut(|c| c.selection_animation_progress(frame_nanos))
+        .with(|c| c.selection_animation_progress(frame_nanos))
         .unwrap_or(1.0);
     let selected_index = controller.with(|c| c.selected());
     let previous_index = controller.with(|c| c.previous_selected());
-    let expand_fraction = controller.with_mut(|c| c.expand_fraction(frame_nanos));
+    let expand_fraction = controller.with(|c| c.expand_fraction(frame_nanos));
     if controller.with(|c| c.is_animating(frame_nanos)) {
         let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller_for_frame.with_mut(|controller| {
-                let _ = controller.selection_animation_progress(frame_nanos);
-                let _ = controller.expand_fraction(frame_nanos);
-                controller.is_animating(frame_nanos)
-            });
+            let is_animating =
+                controller_for_frame.with(|controller| controller.is_animating(frame_nanos));
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -853,7 +850,7 @@ impl NavigationRailController {
         }
     }
 
-    fn selection_animation_progress(&mut self, frame_nanos: u64) -> Option<f32> {
+    fn selection_animation_progress(&self, frame_nanos: u64) -> Option<f32> {
         if let Some(start_frame_nanos) = self.selection_start_frame_nanos {
             let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
             let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
@@ -862,7 +859,6 @@ impl NavigationRailController {
                     elapsed_nanos as f32 / animation_nanos as f32,
                 ))
             } else {
-                self.selection_start_frame_nanos = None;
                 None
             }
         } else {
@@ -870,7 +866,7 @@ impl NavigationRailController {
         }
     }
 
-    fn expand_fraction(&mut self, frame_nanos: u64) -> f32 {
+    fn expand_fraction(&self, frame_nanos: u64) -> f32 {
         let progress = calc_progress_from_timer(self.expand_start_frame_nanos, frame_nanos);
         if self.expanded {
             progress
