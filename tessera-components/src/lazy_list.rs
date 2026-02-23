@@ -38,9 +38,9 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 ///
 /// ```
 /// use tessera_components::lazy_list::{LazyColumnArgs, LazyListController, lazy_column};
-/// use tessera_ui::{retain_with_key, tessera};
+/// use tessera_ui::{Prop, retain_with_key, tessera};
 ///
-/// #[derive(Clone, PartialEq)]
+/// #[derive(Clone, Prop)]
 /// struct ScrollablePageArgs {
 ///     page_id: String,
 /// }

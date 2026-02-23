@@ -104,9 +104,9 @@
 //! Or use the `key` function to influence the `remember` calls inside it.
 //!
 //! ```
-//! use tessera_ui::{key, remember, tessera};
+//! use tessera_ui::{Prop, key, remember, tessera};
 //!
-//! #[derive(Clone, PartialEq)]
+//! #[derive(Clone, Prop)]
 //! struct MyListArgs {
 //!     items: Vec<String>,
 //! }
@@ -138,9 +138,9 @@
 //! is retained across the entire lifetime of the process.
 //!
 //! ```
-//! use tessera_ui::{retain, tessera};
+//! use tessera_ui::{Prop, retain, tessera};
 //!
-//! #[derive(Clone, PartialEq)]
+//! #[derive(Clone, Prop)]
 //! struct ScrollablePageArgs {
 //!     page_id: String,
 //! }
@@ -185,9 +185,9 @@
 //! Or use the `key` function to influence the `retain` calls inside it.
 //!
 //! ```
-//! use tessera_ui::{key, retain, tessera};
+//! use tessera_ui::{Prop, key, retain, tessera};
 //!
-//! #[derive(Clone, PartialEq)]
+//! #[derive(Clone, Prop)]
 //! struct MyListArgs {
 //!     items: Vec<String>,
 //! }

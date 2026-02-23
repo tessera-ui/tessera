@@ -10,9 +10,9 @@
 //!
 //! ```
 //! use accesskit::{Action, Role};
-//! use tessera_ui::tessera;
+//! use tessera_ui::{Prop, tessera};
 //!
-//! #[derive(Clone, PartialEq)]
+//! #[derive(Clone, Prop)]
 //! struct MyButtonArgs {
 //!     label: String,
 //! }

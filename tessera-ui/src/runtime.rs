@@ -2064,9 +2064,9 @@ where
 /// # Examples
 ///
 /// ```
-/// use tessera_ui::{key, remember, tessera};
+/// use tessera_ui::{Prop, key, remember, tessera};
 ///
-/// #[derive(Clone, PartialEq)]
+/// #[derive(Clone, Prop)]
 /// struct MyListArgs {
 ///     items: Vec<String>,
 /// }
