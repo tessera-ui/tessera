@@ -561,15 +561,13 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
     let frame_nanos = current_frame_nanos();
 
     let animation_progress = controller
-        .with_mut(|c| c.animation_progress(frame_nanos))
+        .with(|c| c.animation_progress(frame_nanos))
         .unwrap_or(1.0);
     if controller.with(|c| c.is_animating(frame_nanos)) {
         let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller_for_frame.with_mut(|controller| {
-                let _ = controller.animation_progress(frame_nanos);
-                controller.is_animating(frame_nanos)
-            });
+            let is_animating =
+                controller_for_frame.with(|controller| controller.is_animating(frame_nanos));
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -689,7 +687,7 @@ impl NavigationBarController {
         }
     }
 
-    fn animation_progress(&mut self, frame_nanos: u64) -> Option<f32> {
+    fn animation_progress(&self, frame_nanos: u64) -> Option<f32> {
         if let Some(start_frame_nanos) = self.animation_start_frame_nanos {
             let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
             let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
@@ -698,7 +696,6 @@ impl NavigationBarController {
                     elapsed_nanos as f32 / animation_nanos as f32,
                 ))
             } else {
-                self.animation_start_frame_nanos = None;
                 None
             }
         } else {
