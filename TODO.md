@@ -44,4 +44,4 @@
   - [x] Development server (`cargo tessera dev`)
   - [x] Build automation (`cargo tessera build`)
   - [x] Documentation of cargo-tessera commands
-  - [ ] Performance profiling tools integration
+  - [x] Performance profiling tools integration
