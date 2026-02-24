@@ -43,7 +43,6 @@ android {
 
 rust {
     rootDirRel = "../../../"
-    profilingOutput = "/data/user/0/com.example.example/files/tessera-profiler.jsonl"
 }
 
 dependencies {

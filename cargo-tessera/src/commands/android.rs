@@ -377,6 +377,21 @@ fn normalize_android_profiling_output_path(path: &str, app_identifier: &str) -> 
     format!("/data/user/0/{app_identifier}/{path}")
 }
 
+fn apply_android_runtime_env(ctx: &AndroidContext) {
+    if let Some(path) = &ctx.profiling_output {
+        // SAFETY: This CLI mutates process env only on the main thread before
+        // spawning child processes that should inherit the variable.
+        unsafe {
+            std::env::set_var("TESSERA_PROFILING_OUTPUT", path);
+        }
+    } else {
+        // SAFETY: Same reasoning as above; remove stale value for non-profiling runs.
+        unsafe {
+            std::env::remove_var("TESSERA_PROFILING_OUTPUT");
+        }
+    }
+}
+
 pub fn init(skip_targets_install: bool) -> Result<()> {
     let ctx = AndroidContext::from_init()?;
     let android_plugins = collect_android_plugins(&ctx)?;
@@ -515,6 +530,7 @@ fn register_helpers(handlebars: &mut Handlebars<'static>) {
 
 pub fn build(opts: BuildOptions) -> Result<()> {
     let ctx = AndroidContext::from_build_opts(opts)?;
+    apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
@@ -585,6 +601,7 @@ pub fn build(opts: BuildOptions) -> Result<()> {
 
 pub fn dev(opts: DevOptions) -> Result<()> {
     let ctx = AndroidContext::from_dev_opts(opts)?;
+    apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
@@ -716,6 +733,7 @@ pub fn dev(opts: DevOptions) -> Result<()> {
 pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
     let target_name = opts.target.clone();
     let ctx = AndroidContext::from_rust_build_opts(opts)?;
+    apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
             "Android project not initialized. Run `cargo tessera android init` first."
@@ -859,7 +877,6 @@ fn build_android_template_data(
         "android": {
             "min-sdk-version": ctx.config.min_sdk_version(),
         },
-        "android-profiling-output": ctx.profiling_output,
         "root-dir-rel": root_dir_rel,
         "android-app-plugins": ctx.metadata.app_plugins.clone().unwrap_or_default(),
         "android-project-dependencies": project_dependencies,

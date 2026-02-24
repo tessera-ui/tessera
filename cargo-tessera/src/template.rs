@@ -4,6 +4,19 @@ use anyhow::{Context, Result, anyhow};
 use handlebars::Handlebars;
 use include_dir::{Dir, DirEntry};
 
+fn write_if_changed(path: &Path, new_bytes: &[u8]) -> Result<()> {
+    match fs::read(path) {
+        Ok(existing) if existing == new_bytes => return Ok(()),
+        Ok(_) => {}
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => {}
+        Err(err) => {
+            return Err(err).with_context(|| format!("Failed to read {}", path.display()));
+        }
+    }
+
+    fs::write(path, new_bytes).with_context(|| format!("Failed to write {}", path.display()))
+}
+
 pub fn write_template_dir(
     dir: &Dir<'_>,
     out_root: &Path,
@@ -59,11 +72,9 @@ pub fn write_template_dir_at(
                     let rendered = handlebars
                         .render_template(contents, data)
                         .with_context(|| format!("Failed to render {}", file.path().display()))?;
-                    fs::write(&out_path, rendered)
-                        .with_context(|| format!("Failed to write {}", out_path.display()))?;
+                    write_if_changed(&out_path, rendered.as_bytes())?;
                 } else {
-                    fs::write(&out_path, file.contents())
-                        .with_context(|| format!("Failed to write {}", out_path.display()))?;
+                    write_if_changed(&out_path, file.contents())?;
                 }
 
                 #[cfg(unix)]
@@ -113,11 +124,9 @@ pub fn write_template_file(
         let rendered = handlebars
             .render_template(contents, data)
             .with_context(|| format!("Failed to render {}", template_path.display()))?;
-        fs::write(&out_path, rendered)
-            .with_context(|| format!("Failed to write {}", out_path.display()))?;
+        write_if_changed(&out_path, rendered.as_bytes())?;
     } else {
-        fs::write(&out_path, file.contents())
-            .with_context(|| format!("Failed to write {}", out_path.display()))?;
+        write_if_changed(&out_path, file.contents())?;
     }
 
     #[cfg(unix)]
