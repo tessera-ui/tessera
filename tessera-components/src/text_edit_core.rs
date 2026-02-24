@@ -305,6 +305,12 @@ impl TextEditorController {
         self.display_transform.is_some()
     }
 
+    // Returns the current display transform handle for equality checks before
+    // mutating state.
+    pub(crate) fn display_transform(&self) -> Option<DisplayTransform> {
+        self.display_transform.clone()
+    }
+
     // Handles a mouse click event and determines the click type (single,
     // double, triple).
     pub(crate) fn handle_click(&mut self, position: PxPosition, timestamp: Instant) -> ClickType {

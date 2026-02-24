@@ -316,15 +316,29 @@ pub(crate) fn text_input_core(args: &TextInputArgs, controller: State<TextInputC
 
 fn sync_text_input_controller(controller: &State<TextInputController>, args: &TextInputArgs) {
     if let Some(selection_color) = args.selection_color {
-        controller.with_mut(|c| c.set_selection_color(selection_color));
+        let needs_update = controller.with(|c| c.selection_color() != selection_color);
+        if needs_update {
+            controller.with_mut(|c| c.set_selection_color(selection_color));
+        }
     }
     if let Some(text_color) = args.text_color {
-        controller.with_mut(|c| c.set_text_color(text_color));
+        let needs_update = controller.with(|c| c.text_color() != text_color);
+        if needs_update {
+            controller.with_mut(|c| c.set_text_color(text_color));
+        }
     }
     if let Some(cursor_color) = args.cursor_color {
-        controller.with_mut(|c| c.set_cursor_color(cursor_color));
+        let needs_update = controller.with(|c| c.cursor_color() != cursor_color);
+        if needs_update {
+            controller.with_mut(|c| c.set_cursor_color(cursor_color));
+        }
     }
-    controller.with_mut(|c| c.set_display_transform(args.display_transform.clone()));
+    let display_transform = args.display_transform.clone();
+    let needs_display_transform_update =
+        controller.with(|c| c.display_transform() != display_transform);
+    if needs_display_transform_update {
+        controller.with_mut(|c| c.set_display_transform(display_transform));
+    }
 }
 
 fn handle_text_input(
