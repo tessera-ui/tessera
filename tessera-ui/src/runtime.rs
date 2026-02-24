@@ -757,6 +757,9 @@ where
         FrameNanosReceiver {
             owner_instance_key,
             callback: Box::new(move |frame_nanos| {
+                if !frame_nanos_state.is_alive() {
+                    return FrameNanosControl::Stop;
+                }
                 frame_nanos_state.set(frame_nanos);
                 callback(frame_nanos)
             }),
@@ -965,6 +968,17 @@ impl<T> State<T>
 where
     T: Send + Sync + 'static,
 {
+    fn is_alive(&self) -> bool {
+        let table = slot_table().read();
+        let Some(entry) = table.entries.get(self.slot) else {
+            return false;
+        };
+
+        entry.generation == self.generation
+            && entry.key.type_id == TypeId::of::<T>()
+            && entry.value.is_some()
+    }
+
     fn load_entry(&self) -> Arc<dyn Any + Send + Sync> {
         let table = slot_table().read();
         let entry = table
