@@ -674,10 +674,20 @@ fn lazy_list_view(args: &LazyListViewArgs) {
     let visible_cross = args
         .axis
         .cross(&args.scroll_controller.with(|s| s.visible_size()));
-    let cross_with_padding = visible_cross + args.padding_cross + args.padding_cross;
+    // Only the main axis affects lazy-list scroll extents. Cross-axis size is
+    // finalized during measurement (with real child sizes), so keep the
+    // existing cross value here to avoid view/measure override oscillation.
+    let current_child_cross = args
+        .axis
+        .cross(&args.scroll_controller.with(|s| s.child_size()));
+    let estimated_cross = if current_child_cross > Px::ZERO {
+        current_child_cross
+    } else {
+        visible_cross
+    };
     let scroll_child_size = args
         .axis
-        .pack_size(total_main_with_padding, cross_with_padding);
+        .pack_size(total_main_with_padding, estimated_cross);
     let needs_scroll_child_size_update = args
         .scroll_controller
         .with(|c| c.child_size() != scroll_child_size);

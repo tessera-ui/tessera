@@ -280,7 +280,7 @@ impl ScrollableController {
         let diff_y = self.target_position.y.to_f32() - self.child_position.y.to_f32();
 
         // If we're close enough to target, snap to it
-        if diff_x.abs() < 1.0 && diff_y.abs() < 1.0 {
+        if diff_x.abs() <= 1.0 && diff_y.abs() <= 1.0 {
             if self.child_position != self.target_position {
                 self.child_position = self.target_position;
                 return true;
@@ -302,6 +302,13 @@ impl ScrollableController {
             x: Px::saturating_from_f32(self.child_position.x.to_f32() + diff_x * movement_factor),
             y: Px::saturating_from_f32(self.child_position.y.to_f32() + diff_y * movement_factor),
         };
+
+        // If interpolation rounds back to the same pixel, snap to target to
+        // avoid an endless pending-animation loop.
+        if old_position == self.child_position && self.child_position != self.target_position {
+            self.child_position = self.target_position;
+            return true;
+        }
 
         // Return true if position changed significantly
         old_position != self.child_position
