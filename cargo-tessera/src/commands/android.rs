@@ -173,15 +173,11 @@ impl AndroidContext {
         let manifest_package = manifest.package_name();
         let manifest_cfg = manifest.android().unwrap_or_default();
 
-        let package_name = package
-            .or_else(|| manifest_cfg.package.clone())
-            .or(manifest_package)
-            .ok_or_else(|| {
-                anyhow!(
-                    "Unable to determine package name. Provide --package or set \
-package.metadata.tessera.android.package in Cargo.toml"
-                )
-            })?;
+        let package_name = package.or(manifest_package).ok_or_else(|| {
+            anyhow!(
+                "Unable to determine workspace package. Provide --package or run in a package directory."
+            )
+        })?;
 
         let format = format
             .or_else(|| {
@@ -201,6 +197,7 @@ package.metadata.tessera.android.package in Cargo.toml"
             .unwrap_or_else(|| PathBuf::from("."))
             .canonicalize()
             .with_context(|| "Failed to resolve project root")?;
+        let app_toml = load_app_toml(&root_dir)?;
         let target_dir = MetadataCommand::new()
             .manifest_path(root_dir.join("Cargo.toml"))
             .exec()
@@ -209,8 +206,8 @@ package.metadata.tessera.android.package in Cargo.toml"
             .into_std_path_buf();
 
         let plugin_permissions = collect_plugin_permissions(&root_dir, package_dir.as_ref())?;
-        let identifier = manifest_cfg
-            .package
+        let identifier = app_toml
+            .identifier
             .clone()
             .unwrap_or_else(|| default_identifier(&package_name));
         let lib_name = manifest
@@ -242,7 +239,6 @@ package.metadata.tessera.android.package in Cargo.toml"
         let profiling_output = profiling_output
             .map(|path| normalize_android_profiling_output_path(&path, config.app().identifier()));
 
-        let app_toml = load_app_toml(config.app().root_dir())?;
         let mut tessera_permissions = app_toml.permissions.unwrap_or_default();
         tessera_permissions.extend(plugin_permissions);
         let app_permissions = map_tessera_permissions(&tessera_permissions)?;
@@ -1247,7 +1243,6 @@ struct TesseraMetadata {
 
 #[derive(Debug, Deserialize, Default, Clone)]
 struct AndroidManifestConfig {
-    package: Option<String>,
     arch: Option<String>,
     format: Option<String>,
     min_sdk: Option<u32>,
@@ -1260,6 +1255,7 @@ struct AndroidManifestConfig {
 
 #[derive(Debug, Deserialize, Default)]
 struct AppToml {
+    identifier: Option<String>,
     permissions: Option<Vec<String>>,
 }
 
