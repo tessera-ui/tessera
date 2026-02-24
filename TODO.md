@@ -11,7 +11,7 @@
   - [ ] Windows Package Support
   - [ ] macOS Package Support
   - [ ] Linux Package Support
-
+- [ ] Asset management system
 - [x] lazy_column
 - [x] lazy_row
 - [ ] [material design components](https://m3.material.io/components)
