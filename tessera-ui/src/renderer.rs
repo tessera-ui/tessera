@@ -759,6 +759,8 @@ struct RenderFrameOutcome {
     accessibility_update: Option<TreeUpdate>,
     window_action: Option<WindowAction>,
     runtime_pending_work: RuntimePendingWork,
+    #[cfg(feature = "debug-dirty-overlay")]
+    overlay_clear_pending: bool,
 }
 
 impl<F: Fn()> Renderer<F> {
@@ -1479,6 +1481,8 @@ Fps: {:.2}
         #[cfg(feature = "debug-dirty-overlay")]
         let dirty_overlay_rects =
             Self::collect_dirty_overlay_rects(screen_size, &build_tree_result);
+        #[cfg(feature = "debug-dirty-overlay")]
+        let overlay_clear_pending = !dirty_overlay_rects.is_empty();
         let (composite_context, composite_registry) =
             args.app.composite_context_parts(screen_size, frame_idx);
         let new_graph =
@@ -1616,6 +1620,8 @@ Fps: {:.2}
             accessibility_update,
             window_action,
             runtime_pending_work,
+            #[cfg(feature = "debug-dirty-overlay")]
+            overlay_clear_pending,
         }
     }
 }
@@ -1904,6 +1910,8 @@ impl<F: Fn()> Renderer<F> {
             accessibility_update,
             window_action,
             runtime_pending_work,
+            #[cfg(feature = "debug-dirty-overlay")]
+            overlay_clear_pending,
         } = {
             let mut args = RenderFrameArgs {
                 cursor_state: &mut self.cursor_state,
@@ -1946,6 +1954,10 @@ impl<F: Fn()> Renderer<F> {
                 runtime_pending_work.redraw_reasons(),
             );
             #[cfg(not(feature = "profiling"))]
+            self.request_redraw_now();
+        }
+        #[cfg(feature = "debug-dirty-overlay")]
+        if overlay_clear_pending {
             self.request_redraw_now();
         }
     }
