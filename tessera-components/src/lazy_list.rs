@@ -483,13 +483,13 @@ fn lazy_column_slots(
     // Create a proxy scroll controller that syncs with the LazyListController
     let scroll_controller = remember(ScrollableController::default);
 
-    // Restore saved position from controller on first mount
+    // Restore saved position from controller on first mount.
     let saved_position = controller.with(|c| c.scroll.child_position());
-    scroll_controller.with_mut(|sc| {
-        if sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO {
-            sc.set_scroll_position(saved_position);
-        }
-    });
+    let should_restore_position = scroll_controller
+        .with(|sc| sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO);
+    if should_restore_position {
+        scroll_controller.with_mut(|sc| sc.set_scroll_position(saved_position));
+    }
 
     let view_args = LazyListViewArgs {
         axis: LazyListAxis::Vertical,
@@ -510,9 +510,14 @@ fn lazy_column_slots(
         .child(move || {
             // Sync scroll position back to controller
             let current_pos = view_args.scroll_controller.with(|sc| sc.child_position());
-            view_args
+            let should_sync_position = view_args
                 .controller
-                .with_mut(|c| c.scroll.set_scroll_position(current_pos));
+                .with(|c| c.scroll.child_position() != current_pos);
+            if should_sync_position {
+                view_args
+                    .controller
+                    .with_mut(|c| c.scroll.set_scroll_position(current_pos));
+            }
             lazy_list_view(&view_args);
         });
     scrollable(&scrollable_args);
@@ -584,13 +589,13 @@ fn lazy_row_slots(args: LazyRowArgs, controller: State<LazyListController>, slot
     // Create a proxy scroll controller that syncs with the LazyListController
     let scroll_controller = remember(ScrollableController::default);
 
-    // Restore saved position from controller on first mount
+    // Restore saved position from controller on first mount.
     let saved_position = controller.with(|c| c.scroll.child_position());
-    scroll_controller.with_mut(|sc| {
-        if sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO {
-            sc.set_scroll_position(saved_position);
-        }
-    });
+    let should_restore_position = scroll_controller
+        .with(|sc| sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO);
+    if should_restore_position {
+        scroll_controller.with_mut(|sc| sc.set_scroll_position(saved_position));
+    }
 
     let view_args = LazyListViewArgs {
         axis: LazyListAxis::Horizontal,
@@ -611,9 +616,14 @@ fn lazy_row_slots(args: LazyRowArgs, controller: State<LazyListController>, slot
         .child(move || {
             // Sync scroll position back to controller
             let current_pos = view_args.scroll_controller.with(|sc| sc.child_position());
-            view_args
+            let should_sync_position = view_args
                 .controller
-                .with_mut(|c| c.scroll.set_scroll_position(current_pos));
+                .with(|c| c.scroll.child_position() != current_pos);
+            if should_sync_position {
+                view_args
+                    .controller
+                    .with_mut(|c| c.scroll.set_scroll_position(current_pos));
+            }
             lazy_list_view(&view_args);
         });
     scrollable(&scrollable_args);
@@ -639,8 +649,11 @@ fn lazy_list_view(args: &LazyListViewArgs) {
     let plan = LazySlotPlan::new(args.slots.clone());
     let total_count = plan.total_count();
 
-    args.controller
-        .with_mut(|c| c.cache.set_item_count(total_count));
+    let item_count_changed = args.controller.with(|c| c.cache.total_items != total_count);
+    if item_count_changed {
+        args.controller
+            .with_mut(|c| c.cache.set_item_count(total_count));
+    }
 
     let scroll_offset = args
         .axis
@@ -662,12 +675,16 @@ fn lazy_list_view(args: &LazyListViewArgs) {
         .axis
         .cross(&args.scroll_controller.with(|s| s.visible_size()));
     let cross_with_padding = visible_cross + args.padding_cross + args.padding_cross;
-    args.scroll_controller.with_mut(|c| {
-        c.override_child_size(
-            args.axis
-                .pack_size(total_main_with_padding, cross_with_padding),
-        );
-    });
+    let scroll_child_size = args
+        .axis
+        .pack_size(total_main_with_padding, cross_with_padding);
+    let needs_scroll_child_size_update = args
+        .scroll_controller
+        .with(|c| c.child_size() != scroll_child_size);
+    if needs_scroll_child_size_update {
+        args.scroll_controller
+            .with_mut(|c| c.override_child_size(scroll_child_size));
+    }
 
     let visible_children = args.controller.with(|c| {
         compute_visible_children(
@@ -784,44 +801,71 @@ impl LayoutSpec for LazyListLayout {
 
         let mut child_constraint = self.axis.child_constraint(input.parent_constraint());
         apply_cross_padding(&mut child_constraint, self.axis, self.padding_cross);
-        let (placements, inner_cross, total_main) = self.controller.with_mut(|c| {
-            let mut placements = Vec::with_capacity(self.visible_item_indices.len());
-            let mut max_cross = Px::ZERO;
+        let mut measured_entries = Vec::with_capacity(self.visible_item_indices.len());
+        let mut inner_cross = Px::ZERO;
+        for (item_index, child_id) in &measured_children {
+            let child_size = input.measure_child(*child_id, &child_constraint)?;
+            let measured_main = self.axis.main(&child_size);
+            inner_cross = inner_cross.max(self.axis.cross(&child_size));
+            measured_entries.push((*item_index, *child_id, child_size, measured_main));
+        }
 
-            for (item_index, child_id) in &measured_children {
-                let item_offset =
+        let has_cache_updates = self.controller.with(|c| {
+            measured_entries
+                .iter()
+                .any(|(item_index, _, _, measured_main)| {
+                    c.cache.measured_main.get(*item_index).copied().flatten()
+                        != Some(*measured_main)
+                })
+        });
+        if has_cache_updates {
+            self.controller.with_mut(|c| {
+                for (item_index, _, _, measured_main) in &measured_entries {
+                    c.cache.record_measurement(
+                        *item_index,
+                        *measured_main,
+                        self.estimated_item_main,
+                    );
+                }
+            });
+        }
+
+        let (item_offsets, total_main) = self.controller.with(|c| {
+            let item_offsets = measured_entries
+                .iter()
+                .map(|(item_index, _, _, _)| {
                     c.cache
-                        .offset_for(*item_index, self.estimated_item_main, self.item_spacing);
-                let child_size = input.measure_child(*child_id, &child_constraint)?;
-
-                c.cache.record_measurement(
-                    *item_index,
-                    self.axis.main(&child_size),
-                    self.estimated_item_main,
-                );
-
-                max_cross = max_cross.max(self.axis.cross(&child_size));
-                placements.push(Placement {
-                    item_index: *item_index,
-                    child_id: *child_id,
-                    offset_main: item_offset,
-                    size: child_size,
-                });
-            }
-
+                        .offset_for(*item_index, self.estimated_item_main, self.item_spacing)
+                })
+                .collect::<Vec<_>>();
             let total_main = c
                 .cache
                 .total_main_size(self.estimated_item_main, self.item_spacing);
-            Ok::<_, MeasurementError>((placements, max_cross, total_main))
-        })?;
+            (item_offsets, total_main)
+        });
+        let mut placements = Vec::with_capacity(measured_entries.len());
+        for ((item_index, child_id, child_size, _), offset_main) in
+            measured_entries.into_iter().zip(item_offsets.into_iter())
+        {
+            placements.push(Placement {
+                item_index,
+                child_id,
+                offset_main,
+                size: child_size,
+            });
+        }
 
         let total_main_with_padding = total_main + self.padding_main + self.padding_main;
         let cross_with_padding = inner_cross + self.padding_cross + self.padding_cross;
         let size = self
             .axis
             .pack_size(total_main_with_padding, cross_with_padding);
-        self.scroll_controller
-            .with_mut(|c| c.override_child_size(size));
+        let needs_scroll_child_size_update =
+            self.scroll_controller.with(|c| c.child_size() != size);
+        if needs_scroll_child_size_update {
+            self.scroll_controller
+                .with_mut(|c| c.override_child_size(size));
+        }
 
         let reported_main = clamp_reported_main(
             self.axis,
