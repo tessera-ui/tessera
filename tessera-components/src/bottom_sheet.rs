@@ -534,43 +534,43 @@ fn render_content(
         let bottom_sheet_content = bottom_sheet_content.clone();
         let child_once: Box<dyn FnOnce() + Send + Sync> = Box::new(move || {
             column(
-                ColumnArgs::default()
+                &ColumnArgs::default()
                     .modifier(Modifier::new().fill_max_width())
-                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                |scope| {
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(22.0)),
-                        ));
-                    });
-                    scope.child(|| {
-                        surface(&crate::surface::SurfaceArgs::with_child(
-                            SurfaceArgs::default()
-                                .style(
-                                    use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .color_scheme
-                                        .on_surface_variant
-                                        .with_alpha(0.4)
-                                        .into(),
-                                )
-                                .shape(Shape::capsule())
-                                .modifier(Modifier::new().size(Dp(32.0), Dp(4.0))),
-                            || {},
-                        ));
-                    });
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(22.0)),
-                        ));
-                    });
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(|scope| {
+                        scope.child(|| {
+                            spacer(&crate::spacer::SpacerArgs::new(
+                                Modifier::new().height(Dp(22.0)),
+                            ));
+                        });
+                        scope.child(|| {
+                            surface(&crate::surface::SurfaceArgs::with_child(
+                                SurfaceArgs::default()
+                                    .style(
+                                        use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
+                                            .get()
+                                            .color_scheme
+                                            .on_surface_variant
+                                            .with_alpha(0.4)
+                                            .into(),
+                                    )
+                                    .shape(Shape::capsule())
+                                    .modifier(Modifier::new().size(Dp(32.0), Dp(4.0))),
+                                || {},
+                            ));
+                        });
+                        scope.child(|| {
+                            spacer(&crate::spacer::SpacerArgs::new(
+                                Modifier::new().height(Dp(22.0)),
+                            ));
+                        });
 
-                    let bottom_sheet_content = bottom_sheet_content.clone();
-                    scope.child(move || {
-                        bottom_sheet_content.render();
-                    });
-                },
+                        let bottom_sheet_content = bottom_sheet_content.clone();
+                        scope.child(move || {
+                            bottom_sheet_content.render();
+                        });
+                    }),
             );
         });
         let child_slot = Arc::new(Mutex::new(Some(child_once)));

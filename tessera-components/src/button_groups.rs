@@ -119,6 +119,55 @@ pub struct ButtonGroupsArgs {
     pub style: ButtonGroupsStyle,
     /// Selection mode of the button group.
     pub selection_mode: ButtonGroupsSelectionMode,
+    /// Per-item content builders that receive resolved label color.
+    #[prop(skip_setter)]
+    pub child_closures: Vec<CallbackWith<Color>>,
+    /// Per-item click handlers receiving new active state.
+    #[prop(skip_setter)]
+    pub on_click_closures: Vec<CallbackWith<bool>>,
+}
+
+impl ButtonGroupsArgs {
+    /// Add a child item and click callback.
+    pub fn child<F, C>(mut self, child: F, on_click: C) -> Self
+    where
+        F: Fn(Color) + Send + Sync + 'static,
+        C: Fn(bool) + Send + Sync + 'static,
+    {
+        self.child_closures.push(CallbackWith::new(child));
+        self.on_click_closures.push(CallbackWith::new(on_click));
+        self
+    }
+
+    /// Add a child item and click callback using shared callbacks.
+    pub fn child_shared(
+        mut self,
+        child: impl Into<CallbackWith<Color>>,
+        on_click: impl Into<CallbackWith<bool>>,
+    ) -> Self {
+        self.child_closures.push(child.into());
+        self.on_click_closures.push(on_click.into());
+        self
+    }
+
+    /// Build children using the scope DSL.
+    pub fn children<F>(mut self, scope_config: F) -> Self
+    where
+        F: FnOnce(&mut ButtonGroupsScope),
+    {
+        let mut child_closures = Vec::new();
+        let mut on_click_closures = Vec::new();
+        {
+            let mut scope = ButtonGroupsScope {
+                child_closures: &mut child_closures,
+                on_click_closures: &mut on_click_closures,
+            };
+            scope_config(&mut scope);
+        }
+        self.child_closures = child_closures;
+        self.on_click_closures = on_click_closures;
+        self
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -219,8 +268,6 @@ impl ButtonGroupsState {
 ///
 /// - `args` — configures size, style, and selection mode; see
 ///   [`ButtonGroupsArgs`].
-/// - `scope_config` — closure that configures the children of the button group
-///   using a [`ButtonGroupsScope`].
 ///
 /// # Example
 ///
@@ -232,7 +279,7 @@ impl ButtonGroupsState {
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-/// button_groups(&ButtonGroupsArgs::default(), |scope| {
+/// button_groups(&ButtonGroupsArgs::default().children(|scope| {
 ///     scope.child(
 ///         |color| {
 ///             text(&TextArgs {
@@ -271,46 +318,13 @@ impl ButtonGroupsState {
 ///             println!("Button 3 clicked");
 ///         },
 ///     );
-/// });
+/// }));
 /// # });
 /// # material_theme(&args);
 /// ```
-pub fn button_groups<F>(args: &ButtonGroupsArgs, scope_config: F)
-where
-    F: FnOnce(&mut ButtonGroupsScope),
-{
-    let args = args.clone();
-    let mut child_closures = Vec::new();
-    let mut on_click_closures = Vec::new();
-    {
-        let mut scope = ButtonGroupsScope {
-            child_closures: &mut child_closures,
-            on_click_closures: &mut on_click_closures,
-        };
-        scope_config(&mut scope);
-    }
-    let render_args = ButtonGroupsRenderArgs {
-        size: args.size,
-        style: args.style,
-        selection_mode: args.selection_mode,
-        child_closures,
-        on_click_closures,
-    };
-
-    button_groups_node(&render_args);
-}
-
-#[derive(Clone, Prop)]
-struct ButtonGroupsRenderArgs {
-    size: ButtonGroupsSize,
-    style: ButtonGroupsStyle,
-    selection_mode: ButtonGroupsSelectionMode,
-    child_closures: Vec<CallbackWith<Color>>,
-    on_click_closures: Vec<CallbackWith<bool>>,
-}
-
 #[tessera]
-fn button_groups_node(args: &ButtonGroupsRenderArgs) {
+pub fn button_groups(args: &ButtonGroupsArgs) {
+    let args = args.clone();
     let state = remember(ButtonGroupsState::default);
     let child_closures = args.child_closures.clone();
     let on_click_closures = args.on_click_closures.clone();
@@ -318,11 +332,10 @@ fn button_groups_node(args: &ButtonGroupsRenderArgs) {
     let child_len = child_closures.len();
     let selection_mode = args.selection_mode;
     let row_modifier = RowArgs::default().modifier.height(layout.container_height);
-    row(
-        RowArgs::default()
-            .modifier(row_modifier)
-            .main_axis_alignment(MainAxisAlignment::Start),
-        move |scope| {
+    row(&RowArgs::default()
+        .modifier(row_modifier)
+        .main_axis_alignment(MainAxisAlignment::Start)
+        .children(move |scope| {
             for (index, child_closure) in child_closures.iter().cloned().enumerate() {
                 let on_click_closure = on_click_closures[index].clone();
                 let item_layout = layout.clone();
@@ -418,8 +431,7 @@ fn button_groups_node(args: &ButtonGroupsRenderArgs) {
                     })
                 }
             }
-        },
-    )
+        }))
 }
 
 #[derive(PartialEq)]

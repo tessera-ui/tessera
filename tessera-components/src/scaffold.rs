@@ -247,7 +247,7 @@ pub fn scaffold(args: &ScaffoldArgs) {
         let top_bar = top_bar.clone();
         let snackbar_host = snackbar_host.clone();
         let floating_action_button = floating_action_button.clone();
-        boxed(BoxedArgs::default(), |scope| {
+        boxed(&BoxedArgs::default().children(|scope| {
             if let Some(content) = content.clone() {
                 scope.child(move || {
                     let content = content.clone();
@@ -289,6 +289,6 @@ pub fn scaffold(args: &ScaffoldArgs) {
                         });
                 });
             }
-        });
+        }));
     });
 }

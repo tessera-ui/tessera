@@ -595,7 +595,7 @@ fn search_bar_inner_node(args: &SearchBarRenderArgs) {
         content_padding: args.content_padding,
         content: content.clone(),
     };
-    column(ColumnArgs::default(), move |scope| {
+    column(&ColumnArgs::default().children(move |scope| {
         scope.child(move || {
             let field_args = field_args.clone().controller(input_controller);
             text_field(&field_args);
@@ -614,7 +614,7 @@ fn search_bar_inner_node(args: &SearchBarRenderArgs) {
                 render_results_surface(&results_surface_args);
             });
         }
-    });
+    }));
 }
 
 fn render_results_surface(args: &SearchResultsSurfaceArgs) {
@@ -647,7 +647,7 @@ fn render_results_surface(args: &SearchResultsSurfaceArgs) {
             .elevation(shadow_elevation),
         move || {
             let content = content.clone();
-            column(ColumnArgs::default(), |scope| {
+            column(&ColumnArgs::default().children(|scope| {
                 scope.child(move || {
                     horizontal_divider(&DividerArgs::default().color(divider_color));
                 });
@@ -657,7 +657,7 @@ fn render_results_surface(args: &SearchResultsSurfaceArgs) {
                         content.render();
                     });
                 });
-            });
+            }));
         },
     ));
 }

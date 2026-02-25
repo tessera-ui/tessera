@@ -16,7 +16,7 @@ use crate::{
 };
 
 /// Arguments for the `flow_column` component.
-#[derive(Clone, Debug, Prop)]
+#[derive(Clone, Prop)]
 pub struct FlowColumnArgs {
     /// Modifier chain applied to the flow column subtree.
     pub modifier: Modifier,
@@ -34,6 +34,11 @@ pub struct FlowColumnArgs {
     pub max_items_per_line: usize,
     /// Maximum number of columns.
     pub max_lines: usize,
+    /// Child slots rendered by the flow column.
+    #[prop(skip_setter)]
+    pub children: Vec<RenderSlot>,
+    /// Optional weight per child (same index as `children`).
+    pub child_weights: Vec<Option<f32>>,
 }
 
 impl Default for FlowColumnArgs {
@@ -48,7 +53,68 @@ impl Default for FlowColumnArgs {
             line_spacing: Dp::ZERO,
             max_items_per_line: usize::MAX,
             max_lines: usize::MAX,
+            children: Vec::new(),
+            child_weights: Vec::new(),
         }
+    }
+}
+
+impl FlowColumnArgs {
+    /// Adds a child without weight.
+    pub fn child<F>(mut self, child_closure: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.children.push(RenderSlot::new(child_closure));
+        self.child_weights.push(None);
+        self
+    }
+
+    /// Adds a child without weight using a shared slot.
+    pub fn child_shared(mut self, child_closure: impl Into<RenderSlot>) -> Self {
+        self.children.push(child_closure.into());
+        self.child_weights.push(None);
+        self
+    }
+
+    /// Adds a child with weight.
+    pub fn child_weighted<F>(mut self, child_closure: F, weight: f32) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.children.push(RenderSlot::new(child_closure));
+        self.child_weights.push(Some(weight));
+        self
+    }
+
+    /// Adds a child with weight using a shared slot.
+    pub fn child_weighted_shared(
+        mut self,
+        child_closure: impl Into<RenderSlot>,
+        weight: f32,
+    ) -> Self {
+        self.children.push(child_closure.into());
+        self.child_weights.push(Some(weight));
+        self
+    }
+
+    /// Builds children using the scope DSL.
+    pub fn children<F>(mut self, scope_config: F) -> Self
+    where
+        F: FnOnce(&mut FlowColumnScope),
+    {
+        let mut child_closures: Vec<RenderSlot> = Vec::new();
+        let mut child_weights: Vec<Option<f32>> = Vec::new();
+        {
+            let mut scope = FlowColumnScope {
+                child_closures: &mut child_closures,
+                child_weights: &mut child_weights,
+            };
+            scope_config(&mut scope);
+        }
+        self.children = child_closures;
+        self.child_weights = child_weights;
+        self
     }
 }
 
@@ -78,19 +144,6 @@ impl<'a> FlowColumnScope<'a> {
     }
 }
 
-#[derive(Clone, Prop)]
-struct FlowColumnRenderArgs {
-    main_axis_alignment: MainAxisAlignment,
-    cross_axis_alignment: CrossAxisAlignment,
-    line_alignment: MainAxisAlignment,
-    item_spacing: Dp,
-    line_spacing: Dp,
-    max_items_per_line: usize,
-    max_lines: usize,
-    child_closures: Vec<RenderSlot>,
-    child_weights: Vec<Option<f32>>,
-}
-
 /// # flow_column
 ///
 /// A layout component that wraps children into multiple vertical columns.
@@ -103,8 +156,6 @@ struct FlowColumnRenderArgs {
 ///
 /// - `args` — configures alignment, spacing, and wrapping; see
 ///   [`FlowColumnArgs`].
-/// - `scope_config` — a closure that receives a [`FlowColumnScope`] for adding
-///   children.
 ///
 /// ## Examples
 ///
@@ -116,7 +167,7 @@ struct FlowColumnRenderArgs {
 /// #[tessera]
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
-///     flow_column(FlowColumnArgs::default(), move |scope| {
+///     flow_column(&FlowColumnArgs::default().children(move |scope| {
 ///         scope.child(move || {
 ///             rendered.with_mut(|count| *count += 1);
 ///             text(&tessera_components::text::TextArgs::default().text("Alpha"));
@@ -125,62 +176,47 @@ struct FlowColumnRenderArgs {
 ///             rendered.with_mut(|count| *count += 1);
 ///             text(&tessera_components::text::TextArgs::default().text("Beta"));
 ///         });
-///     });
+///     }));
 ///     assert_eq!(rendered.get(), 2);
 /// }
 ///
 /// demo();
 /// ```
-pub fn flow_column<F>(args: FlowColumnArgs, scope_config: F)
-where
-    F: FnOnce(&mut FlowColumnScope),
-{
-    let modifier = args.modifier;
-
-    let mut child_closures: Vec<RenderSlot> = Vec::new();
-    let mut child_weights: Vec<Option<f32>> = Vec::new();
-
-    {
-        let mut scope = FlowColumnScope {
-            child_closures: &mut child_closures,
-            child_weights: &mut child_weights,
-        };
-        scope_config(&mut scope);
-    }
-
-    let render_args = FlowColumnRenderArgs {
-        main_axis_alignment: args.main_axis_alignment,
-        cross_axis_alignment: args.cross_axis_alignment,
-        line_alignment: args.line_alignment,
-        item_spacing: args.item_spacing,
-        line_spacing: args.line_spacing,
-        max_items_per_line: args.max_items_per_line,
-        max_lines: args.max_lines,
-        child_closures,
-        child_weights,
-    };
-
-    modifier.run(move || flow_column_inner(&render_args));
-}
-
 #[tessera]
-fn flow_column_inner(args: &FlowColumnRenderArgs) {
+pub fn flow_column(args: &FlowColumnArgs) {
+    let args = args.clone();
+    let child_len = args.children.len();
+    let mut child_weights = args.child_weights;
+    if child_weights.len() < child_len {
+        child_weights.resize(child_len, None);
+    } else if child_weights.len() > child_len {
+        child_weights.truncate(child_len);
+    }
+    let children = args.children;
+    let modifier = args.modifier;
+    let main_axis_alignment = args.main_axis_alignment;
+    let cross_axis_alignment = args.cross_axis_alignment;
+    let line_alignment = args.line_alignment;
     let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
     let line_spacing = sanitize_spacing(Px::from(args.line_spacing));
-    layout(FlowColumnLayout {
-        main_axis_alignment: args.main_axis_alignment,
-        cross_axis_alignment: args.cross_axis_alignment,
-        line_alignment: args.line_alignment,
-        item_spacing,
-        line_spacing,
-        max_items_per_line: args.max_items_per_line,
-        max_lines: args.max_lines,
-        child_weights: args.child_weights.clone(),
-    });
+    let max_items_per_line = args.max_items_per_line;
+    let max_lines = args.max_lines;
+    modifier.run(move || {
+        layout(FlowColumnLayout {
+            main_axis_alignment,
+            cross_axis_alignment,
+            line_alignment,
+            item_spacing,
+            line_spacing,
+            max_items_per_line,
+            max_lines,
+            child_weights: child_weights.clone(),
+        });
 
-    for child_closure in &args.child_closures {
-        child_closure.render();
-    }
+        for child_closure in &children {
+            child_closure.render();
+        }
+    });
 }
 
 #[derive(Clone, PartialEq)]

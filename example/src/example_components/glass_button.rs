@@ -60,8 +60,7 @@ fn test_content() {
                     spacer(&SpacerArgs::new(Modifier::new().height(Dp(20.0))));
                 });
                 scope.item(move || {
-                    boxed(
-                        BoxedArgs::default().alignment(Alignment::Center),
+                    boxed(&BoxedArgs::default().alignment(Alignment::Center).children(
                         move |scope| {
                             scope.child(move || {
                                 image(&ImageArgs {
@@ -72,11 +71,11 @@ fn test_content() {
 
                             scope.child(move || {
                                 column(
-                                    ColumnArgs {
+                                    &ColumnArgs {
                                         cross_axis_alignment: CrossAxisAlignment::Center,
                                         ..Default::default()
-                                    },
-                                    move |scope| {
+                                    }
+                                    .children(move |scope| {
                                         let on_click = Callback::new(move || {
                                             counter.with_mut(|c| *c += 1);
                                         });
@@ -112,11 +111,11 @@ fn test_content() {
 
                                             glass_icon_button(&args);
                                         });
-                                    },
+                                    }),
                                 );
                             });
                         },
-                    );
+                    ));
                 });
 
                 scope.item(|| {

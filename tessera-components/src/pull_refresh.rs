@@ -480,8 +480,6 @@ pub fn pull_refresh_indicator(args: &PullRefreshIndicatorArgs) {
 ///
 /// - `args` — configures indicator visuals and refresh behavior; see
 ///   [`PullRefreshArgs`].
-/// - `child` — closure that renders the scrollable content (e.g., `scrollable`
-///   or `lazy_column`).
 ///
 /// ## Examples
 ///
@@ -506,11 +504,11 @@ pub fn pull_refresh_indicator(args: &PullRefreshIndicatorArgs) {
 ///                 .controller(refresh_controller)
 ///                 .child(|| {
 ///                     scrollable(&ScrollableArgs::default().child(|| {
-///                         column(ColumnArgs::default(), |scope| {
+///                         column(&ColumnArgs::default().children(|scope| {
 ///                             scope.child(|| {
 ///                                 text(&TextArgs::default().text("Pull down to refresh"));
 ///                             });
-///                         });
+///                         }));
 ///                     }));
 ///                 });
 ///             pull_refresh(&pull_args);
@@ -647,19 +645,23 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
         let child = child.clone();
         let indicator_args = render_args.clone();
         boxed(
-            BoxedArgs::default()
+            &BoxedArgs::default()
                 .modifier(Modifier::new().fill_max_size())
-                .alignment(Alignment::TopCenter),
-            |scope| {
-                let child = child.clone();
-                scope.child(move || {
-                    child.render();
-                });
-                scope.child_with_alignment(Alignment::TopCenter, move || {
-                    let offset = indicator_offset_dp(controller, indicator_args.indicator_size);
-                    pull_refresh_indicator_with_offset(indicator_args.clone(), controller, offset);
-                });
-            },
+                .alignment(Alignment::TopCenter)
+                .children(|scope| {
+                    let child = child.clone();
+                    scope.child(move || {
+                        child.render();
+                    });
+                    scope.child_with_alignment(Alignment::TopCenter, move || {
+                        let offset = indicator_offset_dp(controller, indicator_args.indicator_size);
+                        pull_refresh_indicator_with_offset(
+                            indicator_args.clone(),
+                            controller,
+                            offset,
+                        );
+                    });
+                }),
         );
     });
 }

@@ -25,13 +25,13 @@ fn test_content() {
                 scope.item(|| text(&TextArgs::default().text("Spacer Showcase").size(Dp(20.0))));
                 scope.item(|| text(&TextArgs::from("Horizontal Spacer (in a Row):")));
                 scope.item(|| {
-                    row(RowArgs::default(), |scope| {
+                    row(&RowArgs::default().children(|scope| {
                         scope.child(|| colored_box(Color::RED));
                         scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(20.0)))));
                         scope.child(|| colored_box(Color::GREEN));
                         scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(20.0)))));
                         scope.child(|| colored_box(Color::BLUE));
-                    })
+                    }))
                 });
 
                 scope.item(|| text(&TextArgs::from("Vertical Spacer (in a Column):")));

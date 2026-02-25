@@ -4,8 +4,6 @@
 //!
 //! Use for screen titles, navigation affordances, and primary actions at the
 //! top of a view.
-use std::sync::Arc;
-
 use tessera_ui::{Color, Dp, Modifier, Prop, RenderSlot, provide_context, tessera, use_context};
 
 use crate::{
@@ -73,6 +71,8 @@ pub struct AppBarArgs {
     pub main_axis_alignment: MainAxisAlignment,
     /// Cross axis alignment for the content row.
     pub cross_axis_alignment: CrossAxisAlignment,
+    /// Row content rendered inside the app bar.
+    pub content: Option<RowArgs>,
 }
 
 impl Default for AppBarArgs {
@@ -91,7 +91,19 @@ impl Default for AppBarArgs {
             content_padding: AppBarDefaults::CONTENT_PADDING,
             main_axis_alignment: MainAxisAlignment::Start,
             cross_axis_alignment: CrossAxisAlignment::Center,
+            content: None,
         }
+    }
+}
+
+impl AppBarArgs {
+    /// Build row content using a [`RowScope`] closure.
+    pub fn content_children<F>(mut self, scope_config: F) -> Self
+    where
+        F: FnOnce(&mut RowScope),
+    {
+        self.content = Some(RowArgs::default().children(scope_config));
+        self
     }
 }
 
@@ -106,7 +118,6 @@ impl Default for AppBarArgs {
 /// ## Parameters
 ///
 /// - `args` — configures container appearance and layout; see [`AppBarArgs`].
-/// - `content` — closure that receives a [`RowScope`] to build the bar content.
 ///
 /// ## Examples
 ///
@@ -129,21 +140,19 @@ impl Default for AppBarArgs {
 ///     AppBarDefaults::HORIZONTAL_PADDING
 /// );
 ///
-/// app_bar(&args, |scope| {
+/// app_bar(&args.content_children(|scope| {
 ///     scope.child(|| text(&TextArgs::default().text("Inbox")));
-/// });
+/// }));
 /// #     },
 /// # );
 /// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
-pub fn app_bar<F>(args: &AppBarArgs, content: F)
-where
-    F: Fn(&mut RowScope) + Send + Sync + 'static,
-{
+#[tessera]
+pub fn app_bar(args: &AppBarArgs) {
     let args: AppBarArgs = args.clone();
-    let content = Arc::new(content);
+    let content_row = args.content.unwrap_or_default();
 
     surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
@@ -154,20 +163,15 @@ where
             .tonal_elevation(args.elevation)
             .modifier(args.modifier),
         move || {
-            let content = Arc::clone(&content);
-            row(
-                RowArgs::default()
-                    .modifier(
-                        Modifier::new()
-                            .fill_max_size()
-                            .padding(args.content_padding),
-                    )
-                    .main_axis_alignment(args.main_axis_alignment)
-                    .cross_axis_alignment(args.cross_axis_alignment),
-                move |scope| {
-                    content(scope);
-                },
-            );
+            row(&content_row
+                .clone()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_size()
+                        .padding(args.content_padding),
+                )
+                .main_axis_alignment(args.main_axis_alignment)
+                .cross_axis_alignment(args.cross_axis_alignment));
         },
     ));
 }
@@ -328,7 +332,7 @@ pub fn top_app_bar(args: &TopAppBarArgs) {
     let extra_inset = Dp((title_inset.0 - start_padding.0).max(0.0));
     let title_style = typography.title_large;
 
-    app_bar(&app_bar_args, move |scope| {
+    let app_bar_args = app_bar_args.content(RowArgs::default().children(move |scope| {
         let navigation_icon = navigation_icon.clone();
         let actions = actions.clone();
         if let Some(navigation_icon) = navigation_icon {
@@ -384,9 +388,9 @@ pub fn top_app_bar(args: &TopAppBarArgs) {
                         current: action_color,
                     },
                     || {
-                        row(
-                            RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
-                            move |row_scope| {
+                        row(&RowArgs::default()
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move |row_scope| {
                                 for (index, action) in actions.iter().cloned().enumerate() {
                                     row_scope.child(move || {
                                         action.render();
@@ -400,11 +404,12 @@ pub fn top_app_bar(args: &TopAppBarArgs) {
                                         });
                                     }
                                 }
-                            },
-                        );
+                            }));
                     },
                 );
             });
         }
-    });
+    }));
+
+    app_bar(&app_bar_args);
 }

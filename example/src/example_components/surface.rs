@@ -86,159 +86,160 @@ pub fn surface_showcase() {
 }
 fn test_content(state: State<ExampleSurfaceState>) {
     column(
-        ColumnArgs::default()
+        &ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width())
-            .cross_axis_alignment(CrossAxisAlignment::Center),
-        move |scope| {
-            scope.child(move || {
-                let (corner_radius, width, height, border_width, state_string) = state.with(|s| {
-                    (
-                        Dp(s.corner_radius.value.0 as f64),
-                        s.width.value,
-                        s.height.value,
-                        s.border_width.value,
-                        s.to_string(),
-                    )
-                });
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .children(move |scope| {
+                scope.child(move || {
+                    let (corner_radius, width, height, border_width, state_string) =
+                        state.with(|s| {
+                            (
+                                Dp(s.corner_radius.value.0 as f64),
+                                s.width.value,
+                                s.height.value,
+                                s.border_width.value,
+                                s.to_string(),
+                            )
+                        });
 
-                row(
-                    RowArgs::default()
+                    row(&RowArgs::default()
                         .modifier(Modifier::new().fill_max_width())
                         .main_axis_alignment(MainAxisAlignment::Center)
-                        .cross_axis_alignment(CrossAxisAlignment::Center),
-                    move |scope| {
-                        scope.child(move || {
-                            let style = if border_width.to_pixels_f32() > 0.1 {
-                                SurfaceStyle::FilledOutlined {
-                                    fill_color: use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .color_scheme
-                                        .primary_container,
-                                    border_color: use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .color_scheme
-                                        .outline,
-                                    border_width,
-                                }
-                            } else {
-                                SurfaceStyle::Filled {
-                                    color: use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .color_scheme
-                                        .primary_container,
-                                }
-                            };
-                            surface(&SurfaceArgs::with_child(
-                                SurfaceArgs::default()
-                                    .modifier(Modifier::new().size(width, height))
-                                    .shape(Shape::RoundedRectangle {
-                                        top_left: RoundedCorner::manual(corner_radius, 3.0),
-                                        top_right: RoundedCorner::manual(corner_radius, 3.0),
-                                        bottom_left: RoundedCorner::manual(corner_radius, 3.0),
-                                        bottom_right: RoundedCorner::manual(corner_radius, 3.0),
-                                    })
-                                    .style(style)
-                                    .on_click(|| {
-                                        println!("Surface clicked");
-                                    }),
-                                || {},
-                            ));
-                        });
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |scope| {
+                            scope.child(move || {
+                                let style = if border_width.to_pixels_f32() > 0.1 {
+                                    SurfaceStyle::FilledOutlined {
+                                        fill_color: use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
+                                            .get()
+                                            .color_scheme
+                                            .primary_container,
+                                        border_color: use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
+                                            .get()
+                                            .color_scheme
+                                            .outline,
+                                        border_width,
+                                    }
+                                } else {
+                                    SurfaceStyle::Filled {
+                                        color: use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
+                                            .get()
+                                            .color_scheme
+                                            .primary_container,
+                                    }
+                                };
+                                surface(&SurfaceArgs::with_child(
+                                    SurfaceArgs::default()
+                                        .modifier(Modifier::new().size(width, height))
+                                        .shape(Shape::RoundedRectangle {
+                                            top_left: RoundedCorner::manual(corner_radius, 3.0),
+                                            top_right: RoundedCorner::manual(corner_radius, 3.0),
+                                            bottom_left: RoundedCorner::manual(corner_radius, 3.0),
+                                            bottom_right: RoundedCorner::manual(corner_radius, 3.0),
+                                        })
+                                        .style(style)
+                                        .on_click(|| {
+                                            println!("Surface clicked");
+                                        }),
+                                    || {},
+                                ));
+                            });
 
-                        scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
+                            scope.child(|| {
+                                spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))))
+                            });
 
-                        scope.child(move || {
-                            text(
-                                &TextArgs::default()
-                                    .text(state_string.clone())
-                                    .size(Dp(16.0)),
-                            );
-                        });
-                    },
-                );
-            });
+                            scope.child(move || {
+                                text(
+                                    &TextArgs::default()
+                                        .text(state_string.clone())
+                                        .size(Dp(16.0)),
+                                );
+                            });
+                        }));
+                });
 
-            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
+                scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
-            scope.child(move || {
-                surface_config_slider(
-                    "Width",
-                    state.with(|s| s.width.value.0 as f32 / 500.0),
-                    CallbackWith::new(move |value| {
-                        state.with_mut(|s| s.width.value = Dp(f64::from(value) * 500.0));
-                    }),
-                );
-            });
+                scope.child(move || {
+                    surface_config_slider(
+                        "Width",
+                        state.with(|s| s.width.value.0 as f32 / 500.0),
+                        CallbackWith::new(move |value| {
+                            state.with_mut(|s| s.width.value = Dp(f64::from(value) * 500.0));
+                        }),
+                    );
+                });
 
-            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
+                scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
-            scope.child(move || {
-                surface_config_slider(
-                    "Height",
-                    state.with(|s| s.height.value.0 as f32 / 500.0),
-                    CallbackWith::new(move |value| {
-                        state.with_mut(|s| s.height.value = Dp(f64::from(value) * 500.0));
-                    }),
-                );
-            });
+                scope.child(move || {
+                    surface_config_slider(
+                        "Height",
+                        state.with(|s| s.height.value.0 as f32 / 500.0),
+                        CallbackWith::new(move |value| {
+                            state.with_mut(|s| s.height.value = Dp(f64::from(value) * 500.0));
+                        }),
+                    );
+                });
 
-            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
+                scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
-            scope.child(move || {
-                surface_config_slider(
-                    "Corner Radius",
-                    state.with(|s| s.corner_radius.value.0 / 100.0),
-                    CallbackWith::new(move |value| {
-                        state.with_mut(|s| s.corner_radius.value = CornerRadius(value * 100.0));
-                    }),
-                );
-            });
+                scope.child(move || {
+                    surface_config_slider(
+                        "Corner Radius",
+                        state.with(|s| s.corner_radius.value.0 / 100.0),
+                        CallbackWith::new(move |value| {
+                            state.with_mut(|s| s.corner_radius.value = CornerRadius(value * 100.0));
+                        }),
+                    );
+                });
 
-            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
+                scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
-            scope.child(move || {
-                surface_config_slider(
-                    "Border Width",
-                    state.with(|s| s.border_width.value.0 as f32 / 20.0),
-                    CallbackWith::new(move |value| {
-                        state.with_mut(|s| s.border_width.value = Dp(f64::from(value) * 20.0));
-                    }),
-                );
-            });
-        },
+                scope.child(move || {
+                    surface_config_slider(
+                        "Border Width",
+                        state.with(|s| s.border_width.value.0 as f32 / 20.0),
+                        CallbackWith::new(move |value| {
+                            state.with_mut(|s| s.border_width.value = Dp(f64::from(value) * 20.0));
+                        }),
+                    );
+                });
+            }),
     );
 }
 fn surface_config_slider(label: &str, value: f32, on_change: CallbackWith<f32>) {
     let label = label.to_string();
     column(
-        ColumnArgs::default()
+        &ColumnArgs::default()
             .main_axis_alignment(MainAxisAlignment::Center)
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .modifier(Modifier::new().fill_max_width()),
-        move |scope| {
-            scope.child(move || {
-                let label = label.clone();
-                let on_change = on_change.clone();
-                column(ColumnArgs::default(), |scope| {
-                    scope.child(move || {
-                        text(&TextArgs::default().text(label.clone()).size(Dp(16.0)));
-                    });
+            .modifier(Modifier::new().fill_max_width())
+            .children(move |scope| {
+                scope.child(move || {
+                    let label = label.clone();
+                    let on_change = on_change.clone();
+                    column(&ColumnArgs::default().children(|scope| {
+                        scope.child(move || {
+                            text(&TextArgs::default().text(label.clone()).size(Dp(16.0)));
+                        });
 
-                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
+                        scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
 
-                    scope.child(move || {
-                        slider(
-                            &SliderArgs::default()
-                                .value(value)
-                                .on_change_shared(on_change.clone())
-                                .modifier(Modifier::new().width(Dp(300.0))),
-                        );
-                    });
+                        scope.child(move || {
+                            slider(
+                                &SliderArgs::default()
+                                    .value(value)
+                                    .on_change_shared(on_change.clone())
+                                    .modifier(Modifier::new().width(Dp(300.0))),
+                            );
+                        });
+                    }));
                 });
-            });
-        },
+            }),
     );
 }

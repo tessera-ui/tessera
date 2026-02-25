@@ -460,12 +460,11 @@ pub fn list_item(args: &ListItemArgs) {
                 .padding(content_padding)
                 .fill_max_width();
 
-            row(
-                RowArgs::default()
-                    .modifier(row_modifier)
-                    .main_axis_alignment(MainAxisAlignment::Start)
-                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                move |row_scope| {
+            row(&RowArgs::default()
+                .modifier(row_modifier)
+                .main_axis_alignment(MainAxisAlignment::Start)
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move |row_scope| {
                     if let Some(leading) = leading.clone() {
                         let color = leading_color;
                         row_scope.child(move || {
@@ -487,48 +486,48 @@ pub fn list_item(args: &ListItemArgs) {
                             let supporting_text = supporting_text.clone();
                             let headline_text = headline_text.clone();
                             column(
-                                ColumnArgs::default()
+                                &ColumnArgs::default()
                                     .modifier(Modifier::new().fill_max_width())
                                     .main_axis_alignment(MainAxisAlignment::Start)
-                                    .cross_axis_alignment(CrossAxisAlignment::Start),
-                                move |column_scope| {
-                                    if let Some(overline) = overline_text.clone() {
-                                        let color = overline_color;
-                                        column_scope.child(move || {
-                                            render_text_line(
-                                                overline.clone(),
-                                                typography.label_small,
-                                                color,
-                                            );
-                                        });
-                                    }
-
-                                    let color = headline_color;
-                                    column_scope.child(move || {
-                                        if headline_text.is_empty() {
-                                            spacer(
-                                                &crate::spacer::SpacerArgs::new(Modifier::new()),
-                                            );
-                                        } else {
-                                            render_text_line(
-                                                headline_text.clone(),
-                                                typography.body_large,
-                                                color,
-                                            );
+                                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                                    .children(move |column_scope| {
+                                        if let Some(overline) = overline_text.clone() {
+                                            let color = overline_color;
+                                            column_scope.child(move || {
+                                                render_text_line(
+                                                    overline.clone(),
+                                                    typography.label_small,
+                                                    color,
+                                                );
+                                            });
                                         }
-                                    });
 
-                                    if let Some(supporting) = supporting_text.clone() {
-                                        let color = supporting_color;
+                                        let color = headline_color;
                                         column_scope.child(move || {
-                                            render_text_line(
-                                                supporting.clone(),
-                                                typography.body_medium,
-                                                color,
-                                            );
+                                            if headline_text.is_empty() {
+                                                spacer(&crate::spacer::SpacerArgs::new(
+                                                    Modifier::new(),
+                                                ));
+                                            } else {
+                                                render_text_line(
+                                                    headline_text.clone(),
+                                                    typography.body_large,
+                                                    color,
+                                                );
+                                            }
                                         });
-                                    }
-                                },
+
+                                        if let Some(supporting) = supporting_text.clone() {
+                                            let color = supporting_color;
+                                            column_scope.child(move || {
+                                                render_text_line(
+                                                    supporting.clone(),
+                                                    typography.body_medium,
+                                                    color,
+                                                );
+                                            });
+                                        }
+                                    }),
                             );
                         },
                         1.0,
@@ -549,8 +548,7 @@ pub fn list_item(args: &ListItemArgs) {
                             );
                         });
                     }
-                },
-            );
+                }));
         },
     ));
 }
@@ -568,14 +566,14 @@ fn render_slot(content: RenderSlot, color: Color, min_size: Dp) {
         || ContentColor { current: color },
         move || {
             boxed(
-                BoxedArgs::default()
+                &BoxedArgs::default()
                     .alignment(Alignment::Center)
-                    .modifier(Modifier::new().size_in(Some(min_size), None, Some(min_size), None)),
-                move |scope| {
-                    scope.child(move || {
-                        content.render();
-                    });
-                },
+                    .modifier(Modifier::new().size_in(Some(min_size), None, Some(min_size), None))
+                    .children(move |scope| {
+                        scope.child(move || {
+                            content.render();
+                        });
+                    }),
             );
         },
     );

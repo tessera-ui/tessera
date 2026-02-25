@@ -624,15 +624,15 @@ pub fn switch(args: &SwitchArgs) {
                 let child = child.clone();
                 if let Some(child) = child {
                     boxed(
-                        BoxedArgs::default()
+                        &BoxedArgs::default()
                             .modifier(Modifier::new().constrain(
                                 Some(DimensionValue::Fixed(thumb_size_px)),
                                 Some(DimensionValue::Fixed(thumb_size_px)),
                             ))
-                            .alignment(Alignment::Center),
-                        |scope| {
-                            scope.child(move || child.render());
-                        },
+                            .alignment(Alignment::Center)
+                            .children(|scope| {
+                                scope.child(move || child.render());
+                            }),
                     );
                 }
             },

@@ -22,130 +22,128 @@ pub fn floating_action_button_showcase() {
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             column(
-                ColumnArgs::default()
-                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0))),
-                |scope| {
-                    scope.child(|| {
-                        text(
-                            &TextArgs::default()
-                                .text("Floating Action Button Showcase")
-                                .size(Dp(20.0)),
-                        );
-                    });
+                &ColumnArgs::default()
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
+                    .children(|scope| {
+                        scope.child(|| {
+                            text(
+                                &TextArgs::default()
+                                    .text("Floating Action Button Showcase")
+                                    .size(Dp(20.0)),
+                            );
+                        });
 
-                    scope.child(|| {
-                        spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
-                    });
+                        scope.child(|| {
+                            spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
+                        });
 
-                    scope.child(|| {
-                        text(&TextArgs::default().text("Sizes").size(Dp(14.0)));
-                    });
+                        scope.child(|| {
+                            text(&TextArgs::default().text("Sizes").size(Dp(14.0)));
+                        });
 
-                    scope.child(move || {
-                        row(
-                            RowArgs::default()
+                        scope.child(move || {
+                            row(&RowArgs::default()
                                 .modifier(Modifier::new().fill_max_width())
-                                .cross_axis_alignment(CrossAxisAlignment::Center),
-                            |row_scope| {
-                                row_scope.child(move || {
-                                    let component_args = FloatingActionButtonArgs::with_content(
-                                        FloatingActionButtonArgs::default()
-                                            .size(FloatingActionButtonSize::Small)
-                                            .on_click(move || {
-                                                clicks.with_mut(|value| *value += 1);
-                                            }),
-                                        || {
-                                            icon(&IconArgs::from(filled::home_icon()).size(
-                                                FloatingActionButtonDefaults::icon_size(
-                                                    FloatingActionButtonSize::Small,
-                                                ),
-                                            ));
-                                        },
-                                    );
-                                    floating_action_button(&component_args);
-                                });
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(|row_scope| {
+                                    row_scope.child(move || {
+                                        let component_args = FloatingActionButtonArgs::with_content(
+                                            FloatingActionButtonArgs::default()
+                                                .size(FloatingActionButtonSize::Small)
+                                                .on_click(move || {
+                                                    clicks.with_mut(|value| *value += 1);
+                                                }),
+                                            || {
+                                                icon(&IconArgs::from(filled::home_icon()).size(
+                                                    FloatingActionButtonDefaults::icon_size(
+                                                        FloatingActionButtonSize::Small,
+                                                    ),
+                                                ));
+                                            },
+                                        );
+                                        floating_action_button(&component_args);
+                                    });
 
-                                row_scope.child(|| {
-                                    spacer(&SpacerArgs::new(Modifier::new().width(Dp(16.0))));
-                                });
+                                    row_scope.child(|| {
+                                        spacer(&SpacerArgs::new(Modifier::new().width(Dp(16.0))));
+                                    });
 
-                                row_scope.child(move || {
-                                    let component_args = FloatingActionButtonArgs::with_content(
-                                        FloatingActionButtonArgs::default()
-                                            .size(FloatingActionButtonSize::Standard)
-                                            .on_click(move || {
-                                                clicks.with_mut(|value| *value += 1);
-                                            }),
-                                        || {
-                                            icon(&IconArgs::from(filled::home_icon()).size(
-                                                FloatingActionButtonDefaults::icon_size(
-                                                    FloatingActionButtonSize::Standard,
-                                                ),
-                                            ));
-                                        },
-                                    );
-                                    floating_action_button(&component_args);
-                                });
+                                    row_scope.child(move || {
+                                        let component_args = FloatingActionButtonArgs::with_content(
+                                            FloatingActionButtonArgs::default()
+                                                .size(FloatingActionButtonSize::Standard)
+                                                .on_click(move || {
+                                                    clicks.with_mut(|value| *value += 1);
+                                                }),
+                                            || {
+                                                icon(&IconArgs::from(filled::home_icon()).size(
+                                                    FloatingActionButtonDefaults::icon_size(
+                                                        FloatingActionButtonSize::Standard,
+                                                    ),
+                                                ));
+                                            },
+                                        );
+                                        floating_action_button(&component_args);
+                                    });
 
-                                row_scope.child(|| {
-                                    spacer(&SpacerArgs::new(Modifier::new().width(Dp(16.0))));
-                                });
+                                    row_scope.child(|| {
+                                        spacer(&SpacerArgs::new(Modifier::new().width(Dp(16.0))));
+                                    });
 
-                                row_scope.child(move || {
-                                    let component_args = FloatingActionButtonArgs::with_content(
-                                        FloatingActionButtonArgs::default()
-                                            .size(FloatingActionButtonSize::Large)
-                                            .on_click(move || {
-                                                clicks.with_mut(|value| *value += 1);
-                                            }),
-                                        || {
-                                            icon(&IconArgs::from(filled::home_icon()).size(
-                                                FloatingActionButtonDefaults::icon_size(
-                                                    FloatingActionButtonSize::Large,
-                                                ),
-                                            ));
-                                        },
-                                    );
-                                    floating_action_button(&component_args);
-                                });
-                            },
-                        );
-                    });
+                                    row_scope.child(move || {
+                                        let component_args = FloatingActionButtonArgs::with_content(
+                                            FloatingActionButtonArgs::default()
+                                                .size(FloatingActionButtonSize::Large)
+                                                .on_click(move || {
+                                                    clicks.with_mut(|value| *value += 1);
+                                                }),
+                                            || {
+                                                icon(&IconArgs::from(filled::home_icon()).size(
+                                                    FloatingActionButtonDefaults::icon_size(
+                                                        FloatingActionButtonSize::Large,
+                                                    ),
+                                                ));
+                                            },
+                                        );
+                                        floating_action_button(&component_args);
+                                    });
+                                }));
+                        });
 
-                    scope.child(|| {
-                        spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
-                    });
+                        scope.child(|| {
+                            spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
+                        });
 
-                    scope.child(move || {
-                        text(
-                            &TextArgs::default()
-                                .text(format!("Clicks: {}", clicks.get()))
-                                .size(Dp(14.0)),
-                        )
-                    });
+                        scope.child(move || {
+                            text(
+                                &TextArgs::default()
+                                    .text(format!("Clicks: {}", clicks.get()))
+                                    .size(Dp(14.0)),
+                            )
+                        });
 
-                    scope.child(|| {
-                        spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
-                    });
+                        scope.child(|| {
+                            spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
+                        });
 
-                    scope.child(|| {
-                        text(&TextArgs::default().text("Disabled").size(Dp(14.0)));
-                    });
+                        scope.child(|| {
+                            text(&TextArgs::default().text("Disabled").size(Dp(14.0)));
+                        });
 
-                    scope.child(|| {
-                        let component_args = FloatingActionButtonArgs::with_content(
-                            FloatingActionButtonArgs::default().enabled(false),
-                            || {
-                                icon(&IconArgs::from(filled::home_icon()).size(
-                                    FloatingActionButtonDefaults::icon_size(
-                                        FloatingActionButtonSize::Standard,
-                                    ),
-                                ));
-                            },
-                        );
-                        floating_action_button(&component_args);
-                    });
-                },
+                        scope.child(|| {
+                            let component_args = FloatingActionButtonArgs::with_content(
+                                FloatingActionButtonArgs::default().enabled(false),
+                                || {
+                                    icon(&IconArgs::from(filled::home_icon()).size(
+                                        FloatingActionButtonDefaults::icon_size(
+                                            FloatingActionButtonSize::Standard,
+                                        ),
+                                    ));
+                                },
+                            );
+                            floating_action_button(&component_args);
+                        });
+                    }),
             );
         },
     ));

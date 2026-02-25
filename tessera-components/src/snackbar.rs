@@ -799,22 +799,26 @@ fn render_snackbar_row(args: SnackbarLayoutArgs) {
         on_dismiss,
         padding,
     } = args;
-    row(
-        RowArgs::default()
-            .modifier(Modifier::new().fill_max_width().padding(padding))
-            .cross_axis_alignment(CrossAxisAlignment::Center),
-        |scope| {
+    row(&RowArgs::default()
+        .modifier(Modifier::new().fill_max_width().padding(padding))
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(|scope| {
             let message_text = message.clone();
             scope.child_weighted(
                 move || {
                     boxed(
-                        BoxedArgs::default().alignment(Alignment::CenterStart),
-                        |boxed_scope| {
-                            let message_text = message_text.clone();
-                            boxed_scope.child(move || {
-                                render_message(message_text.clone(), message_style, message_color);
-                            });
-                        },
+                        &BoxedArgs::default()
+                            .alignment(Alignment::CenterStart)
+                            .children(|boxed_scope| {
+                                let message_text = message_text.clone();
+                                boxed_scope.child(move || {
+                                    render_message(
+                                        message_text.clone(),
+                                        message_style,
+                                        message_color,
+                                    );
+                                });
+                            }),
                     );
                 },
                 1.0,
@@ -841,8 +845,7 @@ fn render_snackbar_row(args: SnackbarLayoutArgs) {
                     render_dismiss_button(dismiss_action_color, on_dismiss.clone());
                 });
             }
-        },
-    );
+        }));
 }
 
 fn render_snackbar_column(args: SnackbarLayoutArgs) {
@@ -858,61 +861,62 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
         padding,
     } = args;
     column(
-        ColumnArgs::default()
+        &ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width().padding(padding))
-            .cross_axis_alignment(CrossAxisAlignment::Start),
-        |scope| {
-            let message_text = message.clone();
-            scope.child(move || {
-                render_message(message_text.clone(), message_style, message_color);
-            });
-
-            if action_label.is_some() || on_dismiss.is_some() {
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(SnackbarDefaults::ACTION_VERTICAL_SPACING),
-                    ))
-                });
-                let action_label_for_row = action_label.clone();
-                let on_action_for_row = on_action.clone();
-                let on_dismiss_for_row = on_dismiss.clone();
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .children(|scope| {
+                let message_text = message.clone();
                 scope.child(move || {
-                    let action_label_for_row = action_label_for_row.clone();
-                    let on_action_for_row = on_action_for_row.clone();
-                    let on_dismiss_for_row = on_dismiss_for_row.clone();
-                    row(
-                        RowArgs::default()
+                    render_message(message_text.clone(), message_style, message_color);
+                });
+
+                if action_label.is_some() || on_dismiss.is_some() {
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(SnackbarDefaults::ACTION_VERTICAL_SPACING),
+                        ))
+                    });
+                    let action_label_for_row = action_label.clone();
+                    let on_action_for_row = on_action.clone();
+                    let on_dismiss_for_row = on_dismiss.clone();
+                    scope.child(move || {
+                        let action_label_for_row = action_label_for_row.clone();
+                        let on_action_for_row = on_action_for_row.clone();
+                        let on_dismiss_for_row = on_dismiss_for_row.clone();
+                        row(&RowArgs::default()
                             .modifier(Modifier::new().fill_max_width())
                             .main_axis_alignment(MainAxisAlignment::End)
-                            .cross_axis_alignment(CrossAxisAlignment::Center),
-                        move |row_scope| {
-                            if let Some(label) = action_label_for_row.clone() {
-                                let on_action = on_action_for_row.clone();
-                                row_scope.child(move || {
-                                    render_action_button(
-                                        label.clone(),
-                                        action_color,
-                                        on_action.clone(),
-                                    );
-                                });
-                            }
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move |row_scope| {
+                                if let Some(label) = action_label_for_row.clone() {
+                                    let on_action = on_action_for_row.clone();
+                                    row_scope.child(move || {
+                                        render_action_button(
+                                            label.clone(),
+                                            action_color,
+                                            on_action.clone(),
+                                        );
+                                    });
+                                }
 
-                            if on_dismiss_for_row.is_some() {
-                                row_scope.child(|| {
-                                    spacer(&crate::spacer::SpacerArgs::new(
-                                        Modifier::new().width(SnackbarDefaults::ACTION_SPACING),
-                                    ));
-                                });
-                                let on_dismiss = on_dismiss_for_row.clone();
-                                row_scope.child(move || {
-                                    render_dismiss_button(dismiss_action_color, on_dismiss.clone());
-                                });
-                            }
-                        },
-                    );
-                });
-            }
-        },
+                                if on_dismiss_for_row.is_some() {
+                                    row_scope.child(|| {
+                                        spacer(&crate::spacer::SpacerArgs::new(
+                                            Modifier::new().width(SnackbarDefaults::ACTION_SPACING),
+                                        ));
+                                    });
+                                    let on_dismiss = on_dismiss_for_row.clone();
+                                    row_scope.child(move || {
+                                        render_dismiss_button(
+                                            dismiss_action_color,
+                                            on_dismiss.clone(),
+                                        );
+                                    });
+                                }
+                            }));
+                    });
+                }
+            }),
     );
 }
 

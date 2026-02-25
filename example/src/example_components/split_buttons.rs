@@ -24,11 +24,9 @@ pub fn split_buttons_showcase() {
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
-            column(
-                ColumnArgs::default()
+            column(&ColumnArgs::default()
                     .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
-                    .cross_axis_alignment(CrossAxisAlignment::Start),
-                |scope| {
+                    .cross_axis_alignment(CrossAxisAlignment::Start).children(|scope| {
                     scope.child(|| {
                         text(
                             &TextArgs::default()
@@ -88,11 +86,9 @@ pub fn split_buttons_showcase() {
                                         .variant(SplitButtonVariant::Outlined)
                                         .size(medium)
                                         .content(|| {
-                                            row(
-                                                RowArgs::default()
+                                            row(&RowArgs::default()
                                                     .main_axis_alignment(MainAxisAlignment::Center)
-                                                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                                                |row_scope| {
+                                                    .cross_axis_alignment(CrossAxisAlignment::Center).children(|row_scope| {
                                                     row_scope.child(|| {
                                                         icon(
                                                             &IconArgs::from(filled::inbox_icon())
@@ -105,8 +101,7 @@ pub fn split_buttons_showcase() {
                                                     row_scope.child(|| {
                                                         text(&TextArgs::from("Archive"))
                                                     });
-                                                },
-                                            );
+                                                }));
                                         }),
                                 );
                             })
@@ -126,8 +121,7 @@ pub fn split_buttons_showcase() {
                             });
                         split_button_layout(&args);
                     });
-                },
-            );
+                }));
         },
     ));
 }

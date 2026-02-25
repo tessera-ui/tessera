@@ -604,79 +604,83 @@ fn date_picker_node(args: &DatePickerArgs) {
         .headline
         .unwrap_or_else(|| default_headline(snapshot.selected_date));
 
-    column(ColumnArgs::default().modifier(modifier), move |scope| {
-        scope.child(move || {
-            let title_text = title_text.clone();
-            let headline_text = headline_text.clone();
-            row(
-                RowArgs::default()
-                    .modifier(
-                        Modifier::new()
-                            .fill_max_width()
-                            .padding_all(HEADER_VERTICAL_PADDING),
-                    )
-                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                move |row_scope| {
+    column(
+        &ColumnArgs::default()
+            .modifier(modifier)
+            .children(move |scope| {
+                scope.child(move || {
                     let title_text = title_text.clone();
                     let headline_text = headline_text.clone();
-                    row_scope.child(move || {
-                        let title_text = title_text.clone();
-                        let headline_text = headline_text.clone();
-                        column(
-                            ColumnArgs::default()
-                                .modifier(Modifier::new().padding_all(HEADER_HORIZONTAL_PADDING)),
-                            move |column_scope| {
+                    row(&RowArgs::default()
+                        .modifier(
+                            Modifier::new()
+                                .fill_max_width()
+                                .padding_all(HEADER_VERTICAL_PADDING),
+                        )
+                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |row_scope| {
+                            let title_text = title_text.clone();
+                            let headline_text = headline_text.clone();
+                            row_scope.child(move || {
                                 let title_text = title_text.clone();
-                                column_scope.child(move || {
-                                    text(&crate::text::TextArgs::from(
-                                        &TextArgs::default()
-                                            .text(title_text.clone())
-                                            .size(typography.title_small.font_size)
-                                            .color(scheme.on_surface_variant),
-                                    ));
-                                });
-
                                 let headline_text = headline_text.clone();
-                                column_scope.child(move || {
-                                    text(&crate::text::TextArgs::from(
-                                        &TextArgs::default()
-                                            .text(headline_text.clone())
-                                            .size(typography.headline_small.font_size)
-                                            .color(scheme.on_surface),
-                                    ));
-                                });
-                            },
-                        );
-                    });
+                                column(
+                                    &ColumnArgs::default()
+                                        .modifier(
+                                            Modifier::new().padding_all(HEADER_HORIZONTAL_PADDING),
+                                        )
+                                        .children(move |column_scope| {
+                                            let title_text = title_text.clone();
+                                            column_scope.child(move || {
+                                                text(&crate::text::TextArgs::from(
+                                                    &TextArgs::default()
+                                                        .text(title_text.clone())
+                                                        .size(typography.title_small.font_size)
+                                                        .color(scheme.on_surface_variant),
+                                                ));
+                                            });
 
-                    if show_mode_toggle {
-                        row_scope.child(move || {
-                            display_mode_toggle(state);
+                                            let headline_text = headline_text.clone();
+                                            column_scope.child(move || {
+                                                text(&crate::text::TextArgs::from(
+                                                    &TextArgs::default()
+                                                        .text(headline_text.clone())
+                                                        .size(typography.headline_small.font_size)
+                                                        .color(scheme.on_surface),
+                                                ));
+                                            });
+                                        }),
+                                );
+                            });
+
+                            if show_mode_toggle {
+                                row_scope.child(move || {
+                                    display_mode_toggle(state);
+                                });
+                            }
+                        }));
+                });
+
+                match snapshot.display_mode {
+                    DatePickerDisplayMode::Picker => {
+                        scope.child(move || {
+                            calendar_view(
+                                snapshot.clone(),
+                                first_day_of_week,
+                                show_weekday_labels,
+                                state,
+                            );
                         });
                     }
-                },
-            );
-        });
-
-        match snapshot.display_mode {
-            DatePickerDisplayMode::Picker => {
-                scope.child(move || {
-                    calendar_view(
-                        snapshot.clone(),
-                        first_day_of_week,
-                        show_weekday_labels,
-                        state,
-                    );
-                });
-            }
-            DatePickerDisplayMode::Input => {
-                scope.child(move || {
-                    input_view(snapshot.clone(), state);
-                });
-            }
-        }
-    });
+                    DatePickerDisplayMode::Input => {
+                        scope.child(move || {
+                            input_view(snapshot.clone(), state);
+                        });
+                    }
+                }
+            }),
+    );
 }
 
 /// # date_picker_dialog
@@ -731,85 +735,84 @@ pub fn date_picker_dialog(args: &DatePickerDialogArgs) {
     let has_dismiss = dismiss_button.is_some();
 
     column(
-        ColumnArgs::default().modifier(Modifier::new().constrain(
-            Some(DimensionValue::Wrap {
-                min: Some(Dp(320.0).into()),
-                max: Some(Dp(560.0).into()),
-            }),
-            Some(DimensionValue::WRAP),
-        )),
-        move |scope| {
-            if let Some(title) = title.as_ref() {
-                let title = title.clone();
-                scope.child(move || {
-                    text(&crate::text::TextArgs::from(
-                        &TextArgs::default()
-                            .text(title.clone())
-                            .size(
-                                use_context::<MaterialTheme>()
-                                    .expect("MaterialTheme must be provided")
-                                    .get()
-                                    .typography
-                                    .title_medium
-                                    .font_size,
-                            )
-                            .color(scheme.on_surface),
-                    ));
-                });
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(8.0)),
-                    ))
-                });
-            }
+        &ColumnArgs::default()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Wrap {
+                    min: Some(Dp(320.0).into()),
+                    max: Some(Dp(560.0).into()),
+                }),
+                Some(DimensionValue::WRAP),
+            ))
+            .children(move |scope| {
+                if let Some(title) = title.as_ref() {
+                    let title = title.clone();
+                    scope.child(move || {
+                        text(&crate::text::TextArgs::from(
+                            &TextArgs::default()
+                                .text(title.clone())
+                                .size(
+                                    use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
+                                        .get()
+                                        .typography
+                                        .title_medium
+                                        .font_size,
+                                )
+                                .color(scheme.on_surface),
+                        ));
+                    });
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(8.0)),
+                        ))
+                    });
+                }
 
-            scope.child(move || {
-                date_picker(&picker.clone().state(state));
-            });
-
-            if has_confirm || has_dismiss {
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(16.0)),
-                    ))
-                });
-                let action_color = scheme.primary;
                 scope.child(move || {
-                    provide_context(
-                        || ContentColor {
-                            current: action_color,
-                        },
-                        || {
-                            let dismiss_button = dismiss_button.clone();
-                            let confirm_button = confirm_button.clone();
-                            row(
-                                RowArgs::default()
+                    date_picker(&picker.clone().state(state));
+                });
+
+                if has_confirm || has_dismiss {
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(16.0)),
+                        ))
+                    });
+                    let action_color = scheme.primary;
+                    scope.child(move || {
+                        provide_context(
+                            || ContentColor {
+                                current: action_color,
+                            },
+                            || {
+                                let dismiss_button = dismiss_button.clone();
+                                let confirm_button = confirm_button.clone();
+                                row(&RowArgs::default()
                                     .modifier(Modifier::new().fill_max_width())
                                     .main_axis_alignment(MainAxisAlignment::End)
-                                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                                move |row_scope| {
-                                    if let Some(dismiss) = dismiss_button.as_ref() {
-                                        let dismiss = dismiss.clone();
-                                        row_scope.child(move || dismiss.render());
-                                    }
-                                    if has_confirm && has_dismiss {
-                                        row_scope.child(|| {
-                                            spacer(&crate::spacer::SpacerArgs::new(
-                                                Modifier::new().width(Dp(8.0)),
-                                            ))
-                                        });
-                                    }
-                                    if let Some(confirm) = confirm_button.as_ref() {
-                                        let confirm = confirm.clone();
-                                        row_scope.child(move || confirm.render());
-                                    }
-                                },
-                            );
-                        },
-                    );
-                });
-            }
-        },
+                                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                                    .children(move |row_scope| {
+                                        if let Some(dismiss) = dismiss_button.as_ref() {
+                                            let dismiss = dismiss.clone();
+                                            row_scope.child(move || dismiss.render());
+                                        }
+                                        if has_confirm && has_dismiss {
+                                            row_scope.child(|| {
+                                                spacer(&crate::spacer::SpacerArgs::new(
+                                                    Modifier::new().width(Dp(8.0)),
+                                                ))
+                                            });
+                                        }
+                                        if let Some(confirm) = confirm_button.as_ref() {
+                                            let confirm = confirm.clone();
+                                            row_scope.child(move || confirm.render());
+                                        }
+                                    }));
+                            },
+                        );
+                    });
+                }
+            }),
     );
 }
 
@@ -820,24 +823,25 @@ fn calendar_view(
     state: State<DatePickerState>,
 ) {
     column(
-        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
-        move |scope| {
-            let nav_snapshot = snapshot.clone();
-            scope.child(move || {
-                month_navigation(nav_snapshot.clone(), state);
-            });
-
-            if show_weekday_labels {
+        &ColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .children(move |scope| {
+                let nav_snapshot = snapshot.clone();
                 scope.child(move || {
-                    weekday_labels_row(first_day_of_week);
+                    month_navigation(nav_snapshot.clone(), state);
                 });
-            }
 
-            let grid_snapshot = snapshot.clone();
-            scope.child(move || {
-                date_grid(grid_snapshot.clone(), first_day_of_week, state);
-            });
-        },
+                if show_weekday_labels {
+                    scope.child(move || {
+                        weekday_labels_row(first_day_of_week);
+                    });
+                }
+
+                let grid_snapshot = snapshot.clone();
+                scope.child(move || {
+                    date_grid(grid_snapshot.clone(), first_day_of_week, state);
+                });
+            }),
     );
 }
 
@@ -856,12 +860,11 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
         state.with_mut(|s| s.next_month());
     });
 
-    row(
-        RowArgs::default()
-            .modifier(Modifier::new().fill_max_width())
-            .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-            .cross_axis_alignment(CrossAxisAlignment::Center),
-        move |scope| {
+    row(&RowArgs::default()
+        .modifier(Modifier::new().fill_max_width())
+        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move |scope| {
             let on_prev = on_prev.clone();
             scope.child(move || {
                 nav_button("<", can_prev, on_prev.clone());
@@ -887,8 +890,7 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
             scope.child(move || {
                 nav_button(">", can_next, on_next.clone());
             });
-        },
-    );
+        }));
 }
 
 fn weekday_labels_row(first_day_of_week: Weekday) {
@@ -899,37 +901,37 @@ fn weekday_labels_row(first_day_of_week: Weekday) {
     let labels = weekday_sequence(first_day_of_week);
 
     flow_row(
-        FlowRowArgs::default()
+        &FlowRowArgs::default()
             .max_items_per_line(DATE_COLUMNS)
-            .item_spacing(DATE_GRID_SPACING),
-        move |scope| {
-            for weekday in labels {
-                let label = weekday_short_label(weekday);
-                scope.child(move || {
-                    surface(&crate::surface::SurfaceArgs::with_child(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                            .style(Color::TRANSPARENT.into())
-                            .content_alignment(Alignment::Center),
-                        move || {
-                            text(&crate::text::TextArgs::from(
-                                &TextArgs::default()
-                                    .text(label)
-                                    .size(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .typography
-                                            .label_small
-                                            .font_size,
-                                    )
-                                    .color(scheme.on_surface_variant),
-                            ));
-                        },
-                    ));
-                });
-            }
-        },
+            .item_spacing(DATE_GRID_SPACING)
+            .children(move |scope| {
+                for weekday in labels {
+                    let label = weekday_short_label(weekday);
+                    scope.child(move || {
+                        surface(&crate::surface::SurfaceArgs::with_child(
+                            SurfaceArgs::default()
+                                .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                                .style(Color::TRANSPARENT.into())
+                                .content_alignment(Alignment::Center),
+                            move || {
+                                text(&crate::text::TextArgs::from(
+                                    &TextArgs::default()
+                                        .text(label)
+                                        .size(
+                                            use_context::<MaterialTheme>()
+                                                .expect("MaterialTheme must be provided")
+                                                .get()
+                                                .typography
+                                                .label_small
+                                                .font_size,
+                                        )
+                                        .color(scheme.on_surface_variant),
+                                ));
+                            },
+                        ));
+                    });
+                }
+            }),
     );
 }
 
@@ -946,92 +948,92 @@ fn date_grid(
     let grid = build_month_grid(snapshot.displayed_month, first_day_of_week);
 
     flow_row(
-        FlowRowArgs::default()
+        &FlowRowArgs::default()
             .max_items_per_line(DATE_COLUMNS)
             .max_lines(DATE_ROWS)
             .item_spacing(DATE_GRID_SPACING)
-            .line_spacing(DATE_GRID_SPACING),
-        move |scope| {
-            for cell in grid {
-                let snapshot = snapshot.clone();
-                scope.child(move || {
-                    if let Some(date) = cell {
-                        let is_selected = snapshot.selected_date == Some(date);
-                        let is_today = date == today;
-                        let is_enabled = is_date_selectable(
-                            date,
-                            &snapshot.year_range,
-                            &snapshot.selectable_dates,
-                        );
-                        let text_color = if is_selected {
-                            scheme.on_primary
-                        } else if is_enabled {
-                            scheme.on_surface
-                        } else {
-                            scheme
-                                .on_surface_variant
-                                .with_alpha(MaterialAlpha::DISABLED_CONTENT)
-                        };
-                        let style = if is_selected {
-                            SurfaceStyle::Filled {
-                                color: scheme.primary,
-                            }
-                        } else if is_today {
-                            SurfaceStyle::Outlined {
-                                color: scheme.primary,
-                                width: Dp(1.0),
-                            }
-                        } else {
-                            SurfaceStyle::Filled {
-                                color: Color::TRANSPARENT,
-                            }
-                        };
+            .line_spacing(DATE_GRID_SPACING)
+            .children(move |scope| {
+                for cell in grid {
+                    let snapshot = snapshot.clone();
+                    scope.child(move || {
+                        if let Some(date) = cell {
+                            let is_selected = snapshot.selected_date == Some(date);
+                            let is_today = date == today;
+                            let is_enabled = is_date_selectable(
+                                date,
+                                &snapshot.year_range,
+                                &snapshot.selectable_dates,
+                            );
+                            let text_color = if is_selected {
+                                scheme.on_primary
+                            } else if is_enabled {
+                                scheme.on_surface
+                            } else {
+                                scheme
+                                    .on_surface_variant
+                                    .with_alpha(MaterialAlpha::DISABLED_CONTENT)
+                            };
+                            let style = if is_selected {
+                                SurfaceStyle::Filled {
+                                    color: scheme.primary,
+                                }
+                            } else if is_today {
+                                SurfaceStyle::Outlined {
+                                    color: scheme.primary,
+                                    width: Dp(1.0),
+                                }
+                            } else {
+                                SurfaceStyle::Filled {
+                                    color: Color::TRANSPARENT,
+                                }
+                            };
 
-                        let on_click = if is_enabled {
-                            Some(Callback::new(move || {
-                                state.with_mut(|s| {
-                                    s.set_selected_date(date);
-                                });
-                            }))
-                        } else {
-                            None
-                        };
+                            let on_click = if is_enabled {
+                                Some(Callback::new(move || {
+                                    state.with_mut(|s| {
+                                        s.set_selected_date(date);
+                                    });
+                                }))
+                            } else {
+                                None
+                            };
 
-                        let mut surface_args = SurfaceArgs::default()
-                            .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                            .style(style)
-                            .shape(Shape::rounded_rectangle(DATE_CELL_RADIUS))
-                            .content_alignment(Alignment::Center)
-                            .enabled(is_enabled);
-                        if let Some(on_click) = on_click {
-                            surface_args = surface_args.on_click_shared(on_click);
+                            let mut surface_args = SurfaceArgs::default()
+                                .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                                .style(style)
+                                .shape(Shape::rounded_rectangle(DATE_CELL_RADIUS))
+                                .content_alignment(Alignment::Center)
+                                .enabled(is_enabled);
+                            if let Some(on_click) = on_click {
+                                surface_args = surface_args.on_click_shared(on_click);
+                            }
+                            surface(&crate::surface::SurfaceArgs::with_child(
+                                surface_args,
+                                move || {
+                                    text(&crate::text::TextArgs::from(
+                                        &TextArgs::default()
+                                            .text(format!("{}", date.day()))
+                                            .size(
+                                                use_context::<MaterialTheme>()
+                                                    .expect("MaterialTheme must be provided")
+                                                    .get()
+                                                    .typography
+                                                    .body_medium
+                                                    .font_size,
+                                            )
+                                            .color(text_color),
+                                    ));
+                                },
+                            ));
+                        } else {
+                            spacer(&crate::spacer::SpacerArgs::new(
+                                Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE),
+                            ));
                         }
-                        surface(&crate::surface::SurfaceArgs::with_child(
-                            surface_args,
-                            move || {
-                                text(&crate::text::TextArgs::from(
-                                    &TextArgs::default()
-                                        .text(format!("{}", date.day()))
-                                        .size(
-                                            use_context::<MaterialTheme>()
-                                                .expect("MaterialTheme must be provided")
-                                                .get()
-                                                .typography
-                                                .body_medium
-                                                .font_size,
-                                        )
-                                        .color(text_color),
-                                ));
-                            },
-                        ));
-                    } else {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE),
-                        ));
-                    }
-                });
-            }
-        },
+                    });
+                }
+            }),
     );
 }
 
@@ -1050,86 +1052,117 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
     let snapshot_desc = snapshot.clone();
 
     column(
-        ColumnArgs::default().modifier(Modifier::new().padding_all(HEADER_HORIZONTAL_PADDING)),
-        move |scope| {
-            scope.child(move || {
-                let decrement_snapshot = snapshot_year.clone();
-                let increment_snapshot = snapshot_year.clone();
-                input_row(
-                    "Year",
-                    format!("{}", current_date.year()),
-                    Callback::new(move || {
-                        adjust_input_date(state, decrement_snapshot.clone(), InputField::Year, -1);
-                    }),
-                    Callback::new(move || {
-                        adjust_input_date(state, increment_snapshot.clone(), InputField::Year, 1);
-                    }),
-                );
-            });
-            scope.child(|| {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().height(INPUT_ROW_GAP),
-                ))
-            });
-            scope.child(move || {
-                let decrement_snapshot = snapshot_month.clone();
-                let increment_snapshot = snapshot_month.clone();
-                input_row(
-                    "Month",
-                    format_month_name(current_date.month()).to_string(),
-                    Callback::new(move || {
-                        adjust_input_date(state, decrement_snapshot.clone(), InputField::Month, -1);
-                    }),
-                    Callback::new(move || {
-                        adjust_input_date(state, increment_snapshot.clone(), InputField::Month, 1);
-                    }),
-                );
-            });
-            scope.child(|| {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().height(INPUT_ROW_GAP),
-                ))
-            });
-            scope.child(move || {
-                let decrement_snapshot = snapshot_day.clone();
-                let increment_snapshot = snapshot_day.clone();
-                input_row(
-                    "Day",
-                    format!("{}", current_date.day()),
-                    Callback::new(move || {
-                        adjust_input_date(state, decrement_snapshot.clone(), InputField::Day, -1);
-                    }),
-                    Callback::new(move || {
-                        adjust_input_date(state, increment_snapshot.clone(), InputField::Day, 1);
-                    }),
-                );
-            });
-            scope.child(|| {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().height(INPUT_ROW_GAP),
-                ))
-            });
-            scope.child(move || {
-                let description = if snapshot_desc.selected_date.is_some() {
-                    "Use the steppers to adjust the selected date."
-                } else {
-                    "Use the steppers to pick a date."
-                };
-                text(&crate::text::TextArgs::from(
-                    &TextArgs::default()
-                        .text(description)
-                        .size(
-                            use_context::<MaterialTheme>()
-                                .expect("MaterialTheme must be provided")
-                                .get()
-                                .typography
-                                .body_small
-                                .font_size,
-                        )
-                        .color(scheme.on_surface_variant),
-                ));
-            });
-        },
+        &ColumnArgs::default()
+            .modifier(Modifier::new().padding_all(HEADER_HORIZONTAL_PADDING))
+            .children(move |scope| {
+                scope.child(move || {
+                    let decrement_snapshot = snapshot_year.clone();
+                    let increment_snapshot = snapshot_year.clone();
+                    input_row(
+                        "Year",
+                        format!("{}", current_date.year()),
+                        Callback::new(move || {
+                            adjust_input_date(
+                                state,
+                                decrement_snapshot.clone(),
+                                InputField::Year,
+                                -1,
+                            );
+                        }),
+                        Callback::new(move || {
+                            adjust_input_date(
+                                state,
+                                increment_snapshot.clone(),
+                                InputField::Year,
+                                1,
+                            );
+                        }),
+                    );
+                });
+                scope.child(|| {
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().height(INPUT_ROW_GAP),
+                    ))
+                });
+                scope.child(move || {
+                    let decrement_snapshot = snapshot_month.clone();
+                    let increment_snapshot = snapshot_month.clone();
+                    input_row(
+                        "Month",
+                        format_month_name(current_date.month()).to_string(),
+                        Callback::new(move || {
+                            adjust_input_date(
+                                state,
+                                decrement_snapshot.clone(),
+                                InputField::Month,
+                                -1,
+                            );
+                        }),
+                        Callback::new(move || {
+                            adjust_input_date(
+                                state,
+                                increment_snapshot.clone(),
+                                InputField::Month,
+                                1,
+                            );
+                        }),
+                    );
+                });
+                scope.child(|| {
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().height(INPUT_ROW_GAP),
+                    ))
+                });
+                scope.child(move || {
+                    let decrement_snapshot = snapshot_day.clone();
+                    let increment_snapshot = snapshot_day.clone();
+                    input_row(
+                        "Day",
+                        format!("{}", current_date.day()),
+                        Callback::new(move || {
+                            adjust_input_date(
+                                state,
+                                decrement_snapshot.clone(),
+                                InputField::Day,
+                                -1,
+                            );
+                        }),
+                        Callback::new(move || {
+                            adjust_input_date(
+                                state,
+                                increment_snapshot.clone(),
+                                InputField::Day,
+                                1,
+                            );
+                        }),
+                    );
+                });
+                scope.child(|| {
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().height(INPUT_ROW_GAP),
+                    ))
+                });
+                scope.child(move || {
+                    let description = if snapshot_desc.selected_date.is_some() {
+                        "Use the steppers to adjust the selected date."
+                    } else {
+                        "Use the steppers to pick a date."
+                    };
+                    text(&crate::text::TextArgs::from(
+                        &TextArgs::default()
+                            .text(description)
+                            .size(
+                                use_context::<MaterialTheme>()
+                                    .expect("MaterialTheme must be provided")
+                                    .get()
+                                    .typography
+                                    .body_small
+                                    .font_size,
+                            )
+                            .color(scheme.on_surface_variant),
+                    ));
+                });
+            }),
     );
 }
 
@@ -1138,12 +1171,11 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    row(
-        RowArgs::default()
-            .modifier(Modifier::new().fill_max_width())
-            .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-            .cross_axis_alignment(CrossAxisAlignment::Center),
-        move |scope| {
+    row(&RowArgs::default()
+        .modifier(Modifier::new().fill_max_width())
+        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move |scope| {
             scope.child(move || {
                 text(&crate::text::TextArgs::from(
                     &TextArgs::default()
@@ -1163,11 +1195,10 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
                 let on_decrement = on_decrement.clone();
                 let on_increment = on_increment.clone();
                 let value = value.clone();
-                row(
-                    RowArgs::default()
-                        .main_axis_alignment(MainAxisAlignment::Center)
-                        .cross_axis_alignment(CrossAxisAlignment::Center),
-                    move |row_scope| {
+                row(&RowArgs::default()
+                    .main_axis_alignment(MainAxisAlignment::Center)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move |row_scope| {
                         let on_decrement = on_decrement.clone();
                         row_scope.child(move || {
                             nav_button("-", true, on_decrement.clone());
@@ -1201,11 +1232,9 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
                         row_scope.child(move || {
                             nav_button("+", true, on_increment.clone());
                         });
-                    },
-                );
+                    }));
             });
-        },
-    );
+        }));
 }
 
 fn display_mode_toggle(state: State<DatePickerState>) {

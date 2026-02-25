@@ -23,7 +23,7 @@ pub fn button_group_showcase() {
                     });
 
                     scope.item(move || {
-                        button_groups(&ButtonGroupsArgs::default(), |scope| {
+                        button_groups(&ButtonGroupsArgs::default().children(|scope| {
                             scope.child(
                                 |color| {
                                     text(&TextArgs {
@@ -62,7 +62,7 @@ pub fn button_group_showcase() {
                                     println!("Button 3 clicked");
                                 },
                             );
-                        });
+                        }));
                     });
 
                     scope.item(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(5.0)))));
@@ -72,8 +72,8 @@ pub fn button_group_showcase() {
                             &ButtonGroupsArgs {
                                 style: ButtonGroupsStyle::Connected,
                                 ..Default::default()
-                            },
-                            |scope| {
+                            }
+                            .children(|scope| {
                                 scope.child(
                                     |color| {
                                         text(&TextArgs {
@@ -112,7 +112,7 @@ pub fn button_group_showcase() {
                                         println!("Button 3 clicked");
                                     },
                                 );
-                            },
+                            }),
                         );
                     });
                 }),

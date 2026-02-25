@@ -90,7 +90,7 @@ pub fn button_showcase() {
                         });
 
                         scope.item(|| {
-                            row(RowArgs::default(), |scope| {
+                            row(&RowArgs::default().children(|scope| {
                                 scope.child(|| {
                                     button(&ButtonArgs::with_child(
                                         ButtonArgs::filled(|| println!("Filled clicked")),
@@ -147,13 +147,13 @@ pub fn button_showcase() {
                                         },
                                     ));
                                 });
-                            });
+                            }));
                         });
 
                         scope.item(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(8.0)))));
 
                         scope.item(|| {
-                            row(RowArgs::default(), move |scope| {
+                            row(&RowArgs::default().children(move |scope| {
                                 scope.child(|| {
                                     button(&ButtonArgs::with_child(
                                         ButtonArgs::outlined(|| println!("Outlined clicked")),
@@ -190,7 +190,7 @@ pub fn button_showcase() {
                                         },
                                     ));
                                 });
-                            });
+                            }));
                         });
                     }),
             );

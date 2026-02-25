@@ -4,8 +4,6 @@
 //!
 //! Highlight counts or status markers on top of icons and other UI elements.
 
-use std::sync::Arc;
-
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
     MeasurementError, Prop, Px, PxPosition, PxSize, RenderInput, RenderSlot, provide_context,
@@ -15,7 +13,7 @@ use tessera_ui::{
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     pipelines::shape::command::ShapeCommand,
-    row::{RowArgs, RowScope, row},
+    row::{RowArgs, row},
     shape_def::{ResolvedShape, Shape},
     theme::{ContentColor, MaterialTheme, content_color_for, provide_text_style},
 };
@@ -309,7 +307,7 @@ impl BadgeDefaults {
 }
 
 /// Arguments for [`badge`] and [`badge_with_content`].
-#[derive(Clone, Debug, Prop)]
+#[derive(Clone, Prop)]
 pub struct BadgeArgs {
     /// Background color of the badge.
     pub container_color: Color,
@@ -317,6 +315,26 @@ pub struct BadgeArgs {
     ///
     /// When `None`, the badge derives a matching content color from the theme.
     pub content_color: Option<Color>,
+    /// Optional content rendered by [`badge_with_content`].
+    #[prop(skip_setter)]
+    pub content: Option<RenderSlot>,
+}
+
+impl BadgeArgs {
+    /// Set the content slot used by [`badge_with_content`].
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.content = Some(RenderSlot::new(content));
+        self
+    }
+
+    /// Set the content slot used by [`badge_with_content`] with a shared slot.
+    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
+        self.content = Some(content.into());
+        self
+    }
 }
 
 impl Default for BadgeArgs {
@@ -324,6 +342,59 @@ impl Default for BadgeArgs {
         Self {
             container_color: BadgeDefaults::container_color(),
             content_color: None,
+            content: None,
+        }
+    }
+}
+
+/// Arguments for [`badged_box`].
+#[derive(Clone, Prop)]
+pub struct BadgedBoxArgs {
+    /// Badge slot rendered on top of content.
+    #[prop(skip_setter)]
+    pub badge: RenderSlot,
+    /// Anchor content slot.
+    #[prop(skip_setter)]
+    pub content: RenderSlot,
+}
+
+impl BadgedBoxArgs {
+    /// Set the badge slot.
+    pub fn badge<F>(mut self, badge: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.badge = RenderSlot::new(badge);
+        self
+    }
+
+    /// Set the badge slot using a shared slot.
+    pub fn badge_shared(mut self, badge: impl Into<RenderSlot>) -> Self {
+        self.badge = badge.into();
+        self
+    }
+
+    /// Set the content slot.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.content = RenderSlot::new(content);
+        self
+    }
+
+    /// Set the content slot using a shared slot.
+    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
+        self.content = content.into();
+        self
+    }
+}
+
+impl Default for BadgedBoxArgs {
+    fn default() -> Self {
+        Self {
+            badge: RenderSlot::new(|| {}),
+            content: RenderSlot::new(|| {}),
         }
     }
 }
@@ -339,9 +410,7 @@ impl Default for BadgeArgs {
 ///
 /// ## Parameters
 ///
-/// - `badge` — draws the badge content, typically [`badge`] or
-///   [`badge_with_content`].
-/// - `content` — draws the anchor the badge should be positioned against.
+/// - `args` — configures badge and anchor slots; see [`BadgedBoxArgs`].
 ///
 /// ## Examples
 ///
@@ -350,30 +419,12 @@ impl Default for BadgeArgs {
 /// use tessera_ui::Dp;
 /// assert_eq!(BadgeDefaults::OFFSET, Dp(6.0));
 /// ```
-pub fn badged_box<F1, F2>(badge: F1, content: F2)
-where
-    F1: Fn() + Send + Sync + 'static,
-    F2: Fn() + Send + Sync + 'static,
-{
-    let render_args = BadgedBoxRenderArgs {
-        badge: RenderSlot::new(badge),
-        content: RenderSlot::new(content),
-    };
-    badged_box_node(&render_args);
-}
-
 #[tessera]
-fn badged_box_node(args: &BadgedBoxRenderArgs) {
+pub fn badged_box(args: &BadgedBoxArgs) {
+    let args = args.clone();
     layout(BadgedBoxLayout);
-
     args.content.render();
     args.badge.render();
-}
-
-#[derive(Clone, Prop)]
-struct BadgedBoxRenderArgs {
-    badge: RenderSlot,
-    content: RenderSlot,
 }
 
 /// # badge
@@ -397,6 +448,7 @@ struct BadgedBoxRenderArgs {
 /// let args = BadgeArgs {
 ///     container_color: Color::RED,
 ///     content_color: None,
+///     content: None,
 /// }
 /// .content_color(Color::WHITE);
 /// assert_eq!(args.content_color, Some(Color::WHITE));
@@ -405,7 +457,6 @@ struct BadgedBoxRenderArgs {
 pub fn badge(args: &BadgeArgs) {
     let args = args.clone();
     let container_color = args.container_color;
-
     layout(BadgeLayout { container_color });
 }
 
@@ -420,8 +471,7 @@ pub fn badge(args: &BadgeArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures badge colors; see [`BadgeArgs`].
-/// - `content` — adds children inside the badge using a [`RowScope`].
+/// - `args` — configures badge colors and content slot; see [`BadgeArgs`].
 ///
 /// ## Examples
 ///
@@ -432,25 +482,15 @@ pub fn badge(args: &BadgeArgs) {
 /// let args = BadgeArgs {
 ///     container_color: Color::RED,
 ///     content_color: None,
+///     content: None,
 /// }
 /// .content_color(Color::WHITE);
 /// assert_eq!(args.container_color, Color::RED);
 /// ```
-pub fn badge_with_content<F>(args: &BadgeArgs, content: F)
-where
-    F: for<'a> Fn(&mut RowScope<'a>) + Send + Sync + 'static,
-{
-    let render_args = BadgeWithContentRenderArgs {
-        container_color: args.container_color,
-        content_color: args.content_color,
-        content: Arc::new(content),
-    };
-    badge_with_content_node(&render_args);
-}
-
 #[tessera]
-fn badge_with_content_node(args: &BadgeWithContentRenderArgs) {
-    let content = Arc::clone(&args.content);
+pub fn badge_with_content(args: &BadgeArgs) {
+    let args = args.clone();
+    let content = args.content.unwrap_or_else(|| RenderSlot::new(|| {}));
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -478,24 +518,11 @@ fn badge_with_content_node(args: &BadgeWithContentRenderArgs) {
         },
         || {
             provide_text_style(typography.label_small, || {
-                row(
-                    RowArgs::default()
-                        .main_axis_alignment(MainAxisAlignment::Center)
-                        .cross_axis_alignment(CrossAxisAlignment::Center),
-                    move |scope| {
-                        (content)(scope);
-                    },
-                );
+                row(&RowArgs::default()
+                    .main_axis_alignment(MainAxisAlignment::Center)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .child_shared(content));
             });
         },
     );
-}
-
-type BadgeContentBuilder = dyn for<'a> Fn(&mut RowScope<'a>) + Send + Sync;
-
-#[derive(Clone, Prop)]
-struct BadgeWithContentRenderArgs {
-    container_color: Color,
-    content_color: Option<Color>,
-    content: Arc<BadgeContentBuilder>,
 }

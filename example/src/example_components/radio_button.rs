@@ -134,9 +134,9 @@ fn option_row(
     on_select: impl Fn(bool) + Clone + Send + Sync + 'static,
     enabled: bool,
 ) {
-    row(
-        RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
-        move |scope| {
+    row(&RowArgs::default()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move |scope| {
             let on_select = CallbackWith::new(on_select);
             scope.child({
                 let on_select = on_select.clone();
@@ -154,6 +154,5 @@ fn option_row(
                     format!("{label} {status}").trim().to_string(),
                 ));
             });
-        },
-    );
+        }));
 }

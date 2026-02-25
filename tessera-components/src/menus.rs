@@ -628,15 +628,15 @@ pub fn menu_provider(args: &MenuProviderArgs) {
         move || {
             let menu_content = menu_content.clone();
             column(
-                ColumnArgs::default()
+                &ColumnArgs::default()
                     .modifier(Modifier::new().fill_max_width())
-                    .cross_axis_alignment(CrossAxisAlignment::Start),
-                {
-                    move |scope| {
-                        let mut menu_scope = MenuScope { scope, controller };
-                        menu_content.render(&mut menu_scope);
-                    }
-                },
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .children({
+                        move |scope| {
+                            let mut menu_scope = MenuScope { scope, controller };
+                            menu_content.render(&mut menu_scope);
+                        }
+                    }),
             );
         },
     ));
@@ -816,33 +816,33 @@ fn render_labels(args: &MenuItemArgs, enabled: bool) {
     let supporting_text = args.supporting_text.clone();
 
     column(
-        ColumnArgs::default()
+        &ColumnArgs::default()
             .modifier(Modifier::new().constrain(Some(DimensionValue::WRAP), None))
-            .cross_axis_alignment(CrossAxisAlignment::Start),
-        |scope| {
-            scope.child(move || {
-                let text_value = label_text.clone();
-                let color = label_color;
-                text(&crate::text::TextArgs::from(
-                    &TextArgs::default()
-                        .text(&text_value)
-                        .size(Dp(16.0))
-                        .color(color),
-                ));
-            });
-            if let Some(supporting) = supporting_text {
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .children(|scope| {
                 scope.child(move || {
-                    let supporting_value = supporting.clone();
-                    let color = supporting_color;
+                    let text_value = label_text.clone();
+                    let color = label_color;
                     text(&crate::text::TextArgs::from(
                         &TextArgs::default()
-                            .text(&supporting_value)
-                            .size(Dp(14.0))
+                            .text(&text_value)
+                            .size(Dp(16.0))
                             .color(color),
                     ));
                 });
-            }
-        },
+                if let Some(supporting) = supporting_text {
+                    scope.child(move || {
+                        let supporting_value = supporting.clone();
+                        let color = supporting_color;
+                        text(&crate::text::TextArgs::from(
+                            &TextArgs::default()
+                                .text(&supporting_value)
+                                .size(Dp(14.0))
+                                .color(color),
+                        ));
+                    });
+                }
+            }),
     );
 }
 
@@ -909,17 +909,16 @@ fn menu_item_node(args: &MenuItemArgs) {
     surface(&crate::surface::SurfaceArgs::with_child(
         surface_args,
         move || {
-            row(
-                RowArgs::default()
-                    .modifier(Modifier::new().constrain(
-                        Some(DimensionValue::FILLED),
-                        Some(DimensionValue::Wrap {
-                            min: Some(Px::from(args.height)),
-                            max: None,
-                        }),
-                    ))
-                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                |row_scope| {
+            row(&RowArgs::default()
+                .modifier(Modifier::new().constrain(
+                    Some(DimensionValue::FILLED),
+                    Some(DimensionValue::Wrap {
+                        min: Some(Px::from(args.height)),
+                        max: None,
+                    }),
+                ))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(|row_scope| {
                     // Leading padding
                     row_scope.child(|| {
                         spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
@@ -979,8 +978,7 @@ fn menu_item_node(args: &MenuItemArgs) {
                             )));
                         });
                     }
-                },
-            );
+                }));
         },
     ));
 }

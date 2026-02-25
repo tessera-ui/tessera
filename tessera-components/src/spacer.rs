@@ -64,12 +64,12 @@ impl SpacerArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// row(RowArgs::default(), |scope| {
+/// row(&RowArgs::default().children(|scope| {
 ///     scope.child(|| text(&TextArgs::default().text("Left")));
 ///     // Use weight to let the spacer expand and push the trailing content.
 ///     scope.child_weighted(|| spacer(&SpacerArgs::new(Modifier::new())), 1.0);
 ///     scope.child(|| text(&TextArgs::default().text("Right")));
-/// });
+/// }));
 /// # }
 /// # component();
 /// ```

@@ -325,73 +325,76 @@ fn dialog_content_wrapper_node(args: &DialogContentWrapperArgs) {
     layout(DialogContentLayout { alpha });
 
     boxed(
-        BoxedArgs::default()
+        &BoxedArgs::default()
             .modifier(Modifier::new().fill_max_size())
-            .alignment(Alignment::Center),
-        |scope| {
-            scope.child(move || {
-                let content = content.clone();
-                surface(&crate::surface::SurfaceArgs::with_child(
-                    SurfaceArgs::default()
-                        .style(Color::TRANSPARENT.into())
-                        .modifier(
-                            Modifier::new()
-                                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
-                                .padding_all(Dp(24.0)),
-                        ),
-                    move || match style {
-                        DialogStyle::Glass => {
-                            let content_for_glass = content.clone();
-                            fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-                                FluidGlassArgs::default()
-                                    .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
-                                    .blur_radius(Dp(5.0 * alpha as f64))
-                                    .shape(Shape::RoundedRectangle {
-                                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                        bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                        bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                    })
-                                    .refraction_amount(32.0 * alpha)
-                                    .block_input(true)
-                                    .padding(padding),
-                                move || {
-                                    content_for_glass.render();
-                                },
-                            ));
-                        }
-                        DialogStyle::Material => {
-                            let content_for_material = content.clone();
-                            surface(&crate::surface::SurfaceArgs::with_child(
-                                SurfaceArgs::default()
-                                    .style(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .color_scheme
-                                            .surface_container_high
-                                            .into(),
+            .alignment(Alignment::Center)
+            .children(|scope| {
+                scope.child(move || {
+                    let content = content.clone();
+                    surface(&crate::surface::SurfaceArgs::with_child(
+                        SurfaceArgs::default()
+                            .style(Color::TRANSPARENT.into())
+                            .modifier(
+                                Modifier::new()
+                                    .constrain(
+                                        Some(DimensionValue::WRAP),
+                                        Some(DimensionValue::WRAP),
                                     )
-                                    .elevation(Dp(6.0))
-                                    .shape(Shape::RoundedRectangle {
-                                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                        bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                        bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                    })
-                                    .block_input(true),
-                                move || {
-                                    let content_for_material = content_for_material.clone();
-                                    Modifier::new().padding_all(padding).run(move || {
-                                        content_for_material.render();
-                                    });
-                                },
-                            ));
-                        }
-                    },
-                ));
-            });
-        },
+                                    .padding_all(Dp(24.0)),
+                            ),
+                        move || match style {
+                            DialogStyle::Glass => {
+                                let content_for_glass = content.clone();
+                                fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
+                                    FluidGlassArgs::default()
+                                        .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
+                                        .blur_radius(Dp(5.0 * alpha as f64))
+                                        .shape(Shape::RoundedRectangle {
+                                            top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                            top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                            bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                            bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        })
+                                        .refraction_amount(32.0 * alpha)
+                                        .block_input(true)
+                                        .padding(padding),
+                                    move || {
+                                        content_for_glass.render();
+                                    },
+                                ));
+                            }
+                            DialogStyle::Material => {
+                                let content_for_material = content.clone();
+                                surface(&crate::surface::SurfaceArgs::with_child(
+                                    SurfaceArgs::default()
+                                        .style(
+                                            use_context::<MaterialTheme>()
+                                                .expect("MaterialTheme must be provided")
+                                                .get()
+                                                .color_scheme
+                                                .surface_container_high
+                                                .into(),
+                                        )
+                                        .elevation(Dp(6.0))
+                                        .shape(Shape::RoundedRectangle {
+                                            top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                            top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                            bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                            bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        })
+                                        .block_input(true),
+                                    move || {
+                                        let content_for_material = content_for_material.clone();
+                                        Modifier::new().padding_all(padding).run(move || {
+                                            content_for_material.render();
+                                        });
+                                    },
+                                ));
+                            }
+                        },
+                    ));
+                });
+            }),
     );
 }
 
@@ -704,7 +707,7 @@ pub fn basic_dialog(args: &BasicDialogArgs) {
     let dismiss_button = args.dismiss_button.clone();
 
     column(
-        ColumnArgs::default()
+        &ColumnArgs::default()
             .modifier(Modifier::new().constrain(
                 Some(DimensionValue::Wrap {
                     min: Some(Dp(280.0).into()),
@@ -712,103 +715,101 @@ pub fn basic_dialog(args: &BasicDialogArgs) {
                 }),
                 Some(DimensionValue::WRAP),
             ))
-            .cross_axis_alignment(alignment),
-        move |scope| {
-            // Icon
-            if let Some(icon) = icon.as_ref() {
-                let icon = icon.clone();
-                let icon_color = scheme.secondary;
-                scope.child(move || {
-                    provide_context(
-                        || ContentColor {
-                            current: icon_color,
-                        },
-                        || {
-                            icon.render();
-                        },
-                    );
-                });
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(16.0)),
-                    ));
-                });
-            }
+            .cross_axis_alignment(alignment)
+            .children(move |scope| {
+                // Icon
+                if let Some(icon) = icon.as_ref() {
+                    let icon = icon.clone();
+                    let icon_color = scheme.secondary;
+                    scope.child(move || {
+                        provide_context(
+                            || ContentColor {
+                                current: icon_color,
+                            },
+                            || {
+                                icon.render();
+                            },
+                        );
+                    });
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(16.0)),
+                        ));
+                    });
+                }
 
-            // Headline
-            if let Some(headline) = headline.as_ref() {
-                let headline = headline.clone();
+                // Headline
+                if let Some(headline) = headline.as_ref() {
+                    let headline = headline.clone();
+                    scope.child(move || {
+                        text(&crate::text::TextArgs::from(
+                            &TextArgs::default()
+                                .text(headline.clone())
+                                .size(Dp(24.0))
+                                .color(scheme.on_surface),
+                        ));
+                    });
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(16.0)),
+                        ));
+                    });
+                }
+
+                // Supporting Text
                 scope.child(move || {
                     text(&crate::text::TextArgs::from(
                         &TextArgs::default()
-                            .text(headline.clone())
-                            .size(Dp(24.0))
-                            .color(scheme.on_surface),
+                            .text(supporting_text.clone())
+                            .size(Dp(14.0))
+                            .color(scheme.on_surface_variant),
                     ));
                 });
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(16.0)),
-                    ));
-                });
-            }
 
-            // Supporting Text
-            scope.child(move || {
-                text(&crate::text::TextArgs::from(
-                    &TextArgs::default()
-                        .text(supporting_text.clone())
-                        .size(Dp(14.0))
-                        .color(scheme.on_surface_variant),
-                ));
-            });
-
-            if confirm_button.is_some() || dismiss_button.is_some() {
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(24.0)),
-                    ));
-                });
-                let action_color = scheme.primary;
-                scope.child(move || {
-                    provide_context(
-                        || ContentColor {
-                            current: action_color,
-                        },
-                        || {
-                            let dismiss_button = dismiss_button.clone();
-                            let confirm_button = confirm_button.clone();
-                            row(
-                                RowArgs::default()
+                if confirm_button.is_some() || dismiss_button.is_some() {
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(24.0)),
+                        ));
+                    });
+                    let action_color = scheme.primary;
+                    scope.child(move || {
+                        provide_context(
+                            || ContentColor {
+                                current: action_color,
+                            },
+                            || {
+                                let dismiss_button = dismiss_button.clone();
+                                let confirm_button = confirm_button.clone();
+                                row(&RowArgs::default()
                                     .modifier(Modifier::new().fill_max_width())
-                                    .main_axis_alignment(MainAxisAlignment::End),
-                                |s| {
-                                    let has_dismiss = dismiss_button.is_some();
-                                    let has_confirm = confirm_button.is_some();
+                                    .main_axis_alignment(MainAxisAlignment::End)
+                                    .children(|s| {
+                                        let has_dismiss = dismiss_button.is_some();
+                                        let has_confirm = confirm_button.is_some();
 
-                                    if let Some(dismiss) = dismiss_button.as_ref() {
-                                        let dismiss = dismiss.clone();
-                                        s.child(move || dismiss.render());
-                                    }
+                                        if let Some(dismiss) = dismiss_button.as_ref() {
+                                            let dismiss = dismiss.clone();
+                                            s.child(move || dismiss.render());
+                                        }
 
-                                    if has_dismiss && has_confirm {
-                                        s.child(|| {
-                                            spacer(&crate::spacer::SpacerArgs::new(
-                                                Modifier::new().width(Dp(8.0)),
-                                            ));
-                                        });
-                                    }
+                                        if has_dismiss && has_confirm {
+                                            s.child(|| {
+                                                spacer(&crate::spacer::SpacerArgs::new(
+                                                    Modifier::new().width(Dp(8.0)),
+                                                ));
+                                            });
+                                        }
 
-                                    if let Some(confirm) = confirm_button.as_ref() {
-                                        let confirm = confirm.clone();
-                                        s.child(move || confirm.render());
-                                    }
-                                },
-                            );
-                        },
-                    );
-                });
-            }
-        },
+                                        if let Some(confirm) = confirm_button.as_ref() {
+                                            let confirm = confirm.clone();
+                                            s.child(move || confirm.render());
+                                        }
+                                    }));
+                            },
+                        );
+                    });
+                }
+            }),
     );
 }

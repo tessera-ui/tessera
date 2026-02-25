@@ -202,7 +202,7 @@ fn date_time_picker_content(
                         scope.item(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(8.0)))));
 
                         scope.item(move || {
-                            row(RowArgs::default(), move |row_scope| {
+                            row(&RowArgs::default().children(move |row_scope| {
                                 row_scope.child(move || {
                                     button(&ButtonArgs::with_child(
                                         ButtonArgs::filled(move || {
@@ -226,7 +226,7 @@ fn date_time_picker_content(
                                         || text(&TextArgs::from("Open time dialog")),
                                     ));
                                 });
-                            });
+                            }));
                         });
                     }),
             );

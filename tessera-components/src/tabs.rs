@@ -381,6 +381,9 @@ pub struct TabsArgs {
     pub edge_padding: Dp,
     /// Minimum tab width for scrollable tab rows.
     pub min_scrollable_tab_width: Dp,
+    /// Tab definitions rendered by this component.
+    #[prop(skip_setter)]
+    items: Vec<TabDef>,
 }
 
 impl Default for TabsArgs {
@@ -410,7 +413,22 @@ impl Default for TabsArgs {
             scrollable: false,
             edge_padding: TabsDefaults::SCROLLABLE_EDGE_PADDING,
             min_scrollable_tab_width: TabsDefaults::SCROLLABLE_MIN_TAB_WIDTH,
+            items: Vec::new(),
         }
+    }
+}
+
+impl TabsArgs {
+    /// Build tab items using the scope DSL.
+    pub fn children<F>(mut self, scope_config: F) -> Self
+    where
+        F: Fn(&mut TabsScope),
+    {
+        let mut scope = TabsScope {
+            tabs: &mut self.items,
+        };
+        scope_config(&mut scope);
+        self
     }
 }
 
@@ -611,68 +629,68 @@ pub fn tab_label(args: &TabLabelArgs) {
         .padding_symmetric(horizontal_padding, Dp(0.0));
 
     boxed(
-        BoxedArgs::default()
+        &BoxedArgs::default()
             .alignment(Alignment::Center)
-            .modifier(modifier),
-        move |scope| {
-            scope.child(move || {
-                if has_icon && has_text {
-                    // Vertical layout with icon above text
-                    let icon_content_for_column = icon_content.clone();
-                    let text_content_for_column = text_content.clone();
-                    column(
-                        ColumnArgs::default()
-                            .main_axis_alignment(MainAxisAlignment::Center)
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .modifier(
-                                Modifier::new().constrain(
+            .modifier(modifier)
+            .children(move |scope| {
+                scope.child(move || {
+                    if has_icon && has_text {
+                        // Vertical layout with icon above text
+                        let icon_content_for_column = icon_content.clone();
+                        let text_content_for_column = text_content.clone();
+                        column(
+                            &ColumnArgs::default()
+                                .main_axis_alignment(MainAxisAlignment::Center)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .modifier(Modifier::new().constrain(
                                     Some(DimensionValue::WRAP),
                                     Some(DimensionValue::WRAP),
-                                ),
-                            ),
-                        move |col| {
-                            let icon_content = icon_content_for_column.clone();
-                            col.child(move || {
-                                if let Some(ic) = icon_content.clone() {
-                                    icon(&IconArgs::from(ic).size(icon_size));
-                                }
-                            });
-                            // Spacing between icon and text
-                            col.child(|| {
-                                spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
-                                    Some(DimensionValue::Fixed(Px(0))),
-                                    Some(DimensionValue::Fixed(Dp(2.0).into())),
-                                )));
-                            });
-                            let text_content = text_content_for_column.clone();
-                            col.child(move || {
-                                text(&crate::text::TextArgs::from(
-                                    &TextArgs::default()
-                                        .text(text_content.clone())
-                                        .color(content_color)
-                                        .size(font_size)
-                                        .line_height(line_height),
-                                ));
-                            });
-                        },
-                    );
-                } else if has_icon {
-                    // Icon only
-                    if let Some(ic) = icon_content.clone() {
-                        icon(&IconArgs::from(ic).size(icon_size));
+                                ))
+                                .children(move |col| {
+                                    let icon_content = icon_content_for_column.clone();
+                                    col.child(move || {
+                                        if let Some(ic) = icon_content.clone() {
+                                            icon(&IconArgs::from(ic).size(icon_size));
+                                        }
+                                    });
+                                    // Spacing between icon and text
+                                    col.child(|| {
+                                        spacer(&crate::spacer::SpacerArgs::new(
+                                            Modifier::new().constrain(
+                                                Some(DimensionValue::Fixed(Px(0))),
+                                                Some(DimensionValue::Fixed(Dp(2.0).into())),
+                                            ),
+                                        ));
+                                    });
+                                    let text_content = text_content_for_column.clone();
+                                    col.child(move || {
+                                        text(&crate::text::TextArgs::from(
+                                            &TextArgs::default()
+                                                .text(text_content.clone())
+                                                .color(content_color)
+                                                .size(font_size)
+                                                .line_height(line_height),
+                                        ));
+                                    });
+                                }),
+                        );
+                    } else if has_icon {
+                        // Icon only
+                        if let Some(ic) = icon_content.clone() {
+                            icon(&IconArgs::from(ic).size(icon_size));
+                        }
+                    } else if has_text {
+                        // Text only
+                        text(&crate::text::TextArgs::from(
+                            &TextArgs::default()
+                                .text(text_content.clone())
+                                .color(content_color)
+                                .size(font_size)
+                                .line_height(line_height),
+                        ));
                     }
-                } else if has_text {
-                    // Text only
-                    text(&crate::text::TextArgs::from(
-                        &TextArgs::default()
-                            .text(text_content.clone())
-                            .color(content_color)
-                            .size(font_size)
-                            .line_height(line_height),
-                    ));
-                }
-            });
-        },
+                });
+            }),
     );
 }
 
@@ -1134,9 +1152,6 @@ impl LayoutSpec for TabsLayout {
 ///
 /// - `args` — configures the tabs' layout, initial active tab, and indicator
 ///   color; see [`TabsArgs`].
-/// - `scope_config` — a closure that receives a [`TabsScope`] for defining each
-///   tab's title and content. Use [`TabsScope::child_with_color`] to let the
-///   component supply Material-compliant active/inactive colors.
 ///
 /// ## Examples
 ///
@@ -1149,44 +1164,42 @@ impl LayoutSpec for TabsLayout {
 ///
 /// #[tessera]
 /// fn demo() {
-///     tabs(TabsArgs::default().initial_active_tab(1), |scope| {
-///         scope.child_with_color(
-///             |color| {
-///                 text(
-///                     &TextArgs::default()
-///                         .text("Flights")
-///                         .color(color)
-///                         .size(Dp(14.0)),
-///                 )
-///             },
-///             || text(&TextArgs::default().text("Content for Flights")),
-///         );
-///         scope.child_with_color(
-///             |color| {
-///                 text(
-///                     &TextArgs::default()
-///                         .text("Hotel")
-///                         .color(color)
-///                         .size(Dp(14.0)),
-///                 )
-///             },
-///             || text(&TextArgs::default().text("Content for Hotel")),
-///         );
-///     });
+///     tabs(
+///         &TabsArgs::default().initial_active_tab(1).children(|scope| {
+///             scope.child_with_color(
+///                 |color| {
+///                     text(
+///                         &TextArgs::default()
+///                             .text("Flights")
+///                             .color(color)
+///                             .size(Dp(14.0)),
+///                     )
+///                 },
+///                 || text(&TextArgs::default().text("Content for Flights")),
+///             );
+///             scope.child_with_color(
+///                 |color| {
+///                     text(
+///                         &TextArgs::default()
+///                             .text("Hotel")
+///                             .color(color)
+///                             .size(Dp(14.0)),
+///                     )
+///                 },
+///                 || text(&TextArgs::default().text("Content for Hotel")),
+///             );
+///         }),
+///     );
 /// }
 /// ```
-pub fn tabs<F>(args: TabsArgs, scope_config: F)
-where
-    F: Fn(&mut TabsScope),
-{
+#[tessera]
+pub fn tabs(args: &TabsArgs) {
+    let args = args.clone();
     let controller = remember(|| TabsController::new(args.initial_active_tab));
-    let mut tabs = Vec::new();
-    let mut scope = TabsScope { tabs: &mut tabs };
-    scope_config(&mut scope);
     let render_args = TabsRenderArgs {
-        tabs: args,
+        tabs: args.clone(),
         controller,
-        items: tabs,
+        items: args.items,
     };
     tabs_render_node(&render_args);
 }

@@ -391,79 +391,81 @@ fn time_picker_node(args: &TimePickerArgs) {
     let minute_display = format_two_digit(snapshot.minute);
     let show_labels = snapshot.display_mode == TimePickerDisplayMode::Input;
 
-    column(ColumnArgs::default().modifier(modifier), move |scope| {
-        scope.child(move || {
-            let hour_display = hour_display.clone();
-            let minute_display = minute_display.clone();
-            row(
-                RowArgs::default()
-                    .main_axis_alignment(MainAxisAlignment::Center)
-                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                move |row_scope| {
+    column(
+        &ColumnArgs::default()
+            .modifier(modifier)
+            .children(move |scope| {
+                scope.child(move || {
                     let hour_display = hour_display.clone();
-                    row_scope.child(move || {
-                        time_stepper_column(
-                            "Hour",
-                            hour_display.clone(),
-                            show_labels,
-                            Callback::new(move || {
-                                state.with_mut(|s| s.increment_hour(hour_step));
-                            }),
-                            Callback::new(move || {
-                                state.with_mut(|s| s.decrement_hour(hour_step));
-                            }),
-                        );
-                    });
+                    let minute_display = minute_display.clone();
+                    row(&RowArgs::default()
+                        .main_axis_alignment(MainAxisAlignment::Center)
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |row_scope| {
+                            let hour_display = hour_display.clone();
+                            row_scope.child(move || {
+                                time_stepper_column(
+                                    "Hour",
+                                    hour_display.clone(),
+                                    show_labels,
+                                    Callback::new(move || {
+                                        state.with_mut(|s| s.increment_hour(hour_step));
+                                    }),
+                                    Callback::new(move || {
+                                        state.with_mut(|s| s.decrement_hour(hour_step));
+                                    }),
+                                );
+                            });
 
-                    row_scope.child(|| {
+                            row_scope.child(|| {
+                                spacer(&crate::spacer::SpacerArgs::new(
+                                    Modifier::new().width(Dp(6.0)),
+                                ))
+                            });
+                            row_scope.child(move || {
+                                text(&crate::text::TextArgs::from(
+                                    &TextArgs::default()
+                                        .text(":")
+                                        .size(typography.headline_small.font_size)
+                                        .color(scheme.on_surface_variant),
+                                ));
+                            });
+                            row_scope.child(|| {
+                                spacer(&crate::spacer::SpacerArgs::new(
+                                    Modifier::new().width(Dp(6.0)),
+                                ))
+                            });
+
+                            row_scope.child(move || {
+                                let minute_display = minute_display.clone();
+                                time_stepper_column(
+                                    "Minute",
+                                    minute_display,
+                                    show_labels,
+                                    Callback::new(move || {
+                                        state.with_mut(|s| s.increment_minute(minute_step));
+                                    }),
+                                    Callback::new(move || {
+                                        state.with_mut(|s| s.decrement_minute(minute_step));
+                                    }),
+                                );
+                            });
+                        }));
+                });
+
+                if !snapshot.is_24_hour {
+                    scope.child(|| {
                         spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().width(Dp(6.0)),
+                            Modifier::new().height(TIME_ROW_GAP),
                         ))
                     });
-                    row_scope.child(move || {
-                        text(&crate::text::TextArgs::from(
-                            &TextArgs::default()
-                                .text(":")
-                                .size(typography.headline_small.font_size)
-                                .color(scheme.on_surface_variant),
-                        ));
+                    let is_pm = snapshot.hour >= 12;
+                    scope.child(move || {
+                        period_toggle(is_pm, state);
                     });
-                    row_scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().width(Dp(6.0)),
-                        ))
-                    });
-
-                    row_scope.child(move || {
-                        let minute_display = minute_display.clone();
-                        time_stepper_column(
-                            "Minute",
-                            minute_display,
-                            show_labels,
-                            Callback::new(move || {
-                                state.with_mut(|s| s.increment_minute(minute_step));
-                            }),
-                            Callback::new(move || {
-                                state.with_mut(|s| s.decrement_minute(minute_step));
-                            }),
-                        );
-                    });
-                },
-            );
-        });
-
-        if !snapshot.is_24_hour {
-            scope.child(|| {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().height(TIME_ROW_GAP),
-                ))
-            });
-            let is_pm = snapshot.hour >= 12;
-            scope.child(move || {
-                period_toggle(is_pm, state);
-            });
-        }
-    });
+                }
+            }),
+    );
 }
 
 /// # time_picker_dialog
@@ -519,98 +521,95 @@ pub fn time_picker_dialog(args: &TimePickerDialogArgs) {
     let has_dismiss = dismiss_button.is_some();
 
     column(
-        ColumnArgs::default().modifier(Modifier::new().constrain(
-            Some(DimensionValue::Wrap {
-                min: Some(Dp(280.0).into()),
-                max: Some(Dp(520.0).into()),
-            }),
-            Some(DimensionValue::WRAP),
-        )),
-        move |scope| {
-            scope.child(move || {
-                let title = title.clone();
-                row(
-                    RowArgs::default()
+        &ColumnArgs::default()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Wrap {
+                    min: Some(Dp(280.0).into()),
+                    max: Some(Dp(520.0).into()),
+                }),
+                Some(DimensionValue::WRAP),
+            ))
+            .children(move |scope| {
+                scope.child(move || {
+                    let title = title.clone();
+                    row(&RowArgs::default()
                         .modifier(Modifier::new().fill_max_width())
                         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                        .cross_axis_alignment(CrossAxisAlignment::Center),
-                    move |row_scope| {
-                        row_scope.child(move || {
-                            let title_text = title.as_deref().unwrap_or("Select time");
-                            text(&crate::text::TextArgs::from(
-                                &TextArgs::default()
-                                    .text(title_text)
-                                    .size(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .typography
-                                            .title_medium
-                                            .font_size,
-                                    )
-                                    .color(scheme.on_surface),
-                            ));
-                        });
-                        if show_mode_toggle {
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |row_scope| {
                             row_scope.child(move || {
-                                time_display_mode_toggle(state);
+                                let title_text = title.as_deref().unwrap_or("Select time");
+                                text(&crate::text::TextArgs::from(
+                                    &TextArgs::default()
+                                        .text(title_text)
+                                        .size(
+                                            use_context::<MaterialTheme>()
+                                                .expect("MaterialTheme must be provided")
+                                                .get()
+                                                .typography
+                                                .title_medium
+                                                .font_size,
+                                        )
+                                        .color(scheme.on_surface),
+                                ));
                             });
-                        }
-                    },
-                );
-            });
+                            if show_mode_toggle {
+                                row_scope.child(move || {
+                                    time_display_mode_toggle(state);
+                                });
+                            }
+                        }));
+                });
 
-            scope.child(|| {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().height(Dp(12.0)),
-                ))
-            });
-
-            scope.child(move || {
-                time_picker(&picker.clone().state(state));
-            });
-
-            if has_confirm || has_dismiss {
                 scope.child(|| {
                     spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(16.0)),
+                        Modifier::new().height(Dp(12.0)),
                     ))
                 });
-                let action_color = scheme.primary;
+
                 scope.child(move || {
-                    let dismiss_button = dismiss_button.clone();
-                    let confirm_button = confirm_button.clone();
-                    provide_context(
-                        || ContentColor {
-                            current: action_color,
-                        },
-                        || {
-                            row(
-                                RowArgs::default()
+                    time_picker(&picker.clone().state(state));
+                });
+
+                if has_confirm || has_dismiss {
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(16.0)),
+                        ))
+                    });
+                    let action_color = scheme.primary;
+                    scope.child(move || {
+                        let dismiss_button = dismiss_button.clone();
+                        let confirm_button = confirm_button.clone();
+                        provide_context(
+                            || ContentColor {
+                                current: action_color,
+                            },
+                            || {
+                                row(&RowArgs::default()
                                     .modifier(Modifier::new().fill_max_width())
                                     .main_axis_alignment(MainAxisAlignment::End)
-                                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                                move |row_scope| {
-                                    if let Some(dismiss) = dismiss_button.clone() {
-                                        row_scope.child(move || dismiss.render());
-                                    }
-                                    if has_confirm && has_dismiss {
-                                        row_scope.child(|| {
-                                            spacer(&crate::spacer::SpacerArgs::new(
-                                                Modifier::new().width(Dp(8.0)),
-                                            ))
-                                        });
-                                    }
-                                    if let Some(confirm) = confirm_button.clone() {
-                                        row_scope.child(move || confirm.render());
-                                    }
-                                },
-                            );
-                        },
-                    );
-                });
-            }
-        },
+                                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                                    .children(move |row_scope| {
+                                        if let Some(dismiss) = dismiss_button.clone() {
+                                            row_scope.child(move || dismiss.render());
+                                        }
+                                        if has_confirm && has_dismiss {
+                                            row_scope.child(|| {
+                                                spacer(&crate::spacer::SpacerArgs::new(
+                                                    Modifier::new().width(Dp(8.0)),
+                                                ))
+                                            });
+                                        }
+                                        if let Some(confirm) = confirm_button.clone() {
+                                            row_scope.child(move || confirm.render());
+                                        }
+                                    }));
+                            },
+                        );
+                    });
+                }
+            }),
     );
 }
 
@@ -628,48 +627,49 @@ fn time_stepper_column(
     let typography = theme.typography;
 
     column(
-        ColumnArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
-        move |scope| {
-            let on_increment = on_increment.clone();
-            scope.child(move || {
+        &ColumnArgs::default()
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .children(move |scope| {
                 let on_increment = on_increment.clone();
-                step_button("+", move || on_increment.call());
-            });
-            scope.child(|| {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().height(Dp(6.0)),
-                ))
-            });
-            let value_text = value.clone();
-            scope.child(move || {
-                time_value_cell(value_text.clone());
-            });
-            scope.child(|| {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().height(Dp(6.0)),
-                ))
-            });
-            let on_decrement = on_decrement.clone();
-            scope.child(move || {
-                let on_decrement = on_decrement.clone();
-                step_button("-", move || on_decrement.call());
-            });
-            if show_label {
+                scope.child(move || {
+                    let on_increment = on_increment.clone();
+                    step_button("+", move || on_increment.call());
+                });
                 scope.child(|| {
                     spacer(&crate::spacer::SpacerArgs::new(
                         Modifier::new().height(Dp(6.0)),
                     ))
                 });
+                let value_text = value.clone();
                 scope.child(move || {
-                    text(&crate::text::TextArgs::from(
-                        &TextArgs::default()
-                            .text(label)
-                            .size(typography.label_small.font_size)
-                            .color(scheme.on_surface_variant),
-                    ));
+                    time_value_cell(value_text.clone());
                 });
-            }
-        },
+                scope.child(|| {
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().height(Dp(6.0)),
+                    ))
+                });
+                let on_decrement = on_decrement.clone();
+                scope.child(move || {
+                    let on_decrement = on_decrement.clone();
+                    step_button("-", move || on_decrement.call());
+                });
+                if show_label {
+                    scope.child(|| {
+                        spacer(&crate::spacer::SpacerArgs::new(
+                            Modifier::new().height(Dp(6.0)),
+                        ))
+                    });
+                    scope.child(move || {
+                        text(&crate::text::TextArgs::from(
+                            &TextArgs::default()
+                                .text(label)
+                                .size(typography.label_small.font_size)
+                                .color(scheme.on_surface_variant),
+                        ));
+                    });
+                }
+            }),
     );
 }
 
@@ -742,11 +742,10 @@ fn step_button(label: &'static str, on_click: impl Fn() + Send + Sync + 'static)
 }
 
 fn period_toggle(is_pm: bool, state: State<TimePickerState>) {
-    row(
-        RowArgs::default()
-            .main_axis_alignment(MainAxisAlignment::Center)
-            .cross_axis_alignment(CrossAxisAlignment::Center),
-        move |scope| {
+    row(&RowArgs::default()
+        .main_axis_alignment(MainAxisAlignment::Center)
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move |scope| {
             scope.child(move || {
                 period_button("AM", !is_pm, DayPeriod::Am, state);
             });
@@ -758,8 +757,7 @@ fn period_toggle(is_pm: bool, state: State<TimePickerState>) {
             scope.child(move || {
                 period_button("PM", is_pm, DayPeriod::Pm, state);
             });
-        },
-    );
+        }));
 }
 
 fn period_button(

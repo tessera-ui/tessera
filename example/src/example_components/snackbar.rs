@@ -20,97 +20,112 @@ pub fn snackbar_showcase() {
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
             boxed(
-                BoxedArgs::default().modifier(Modifier::new().fill_max_size()),
-                move |scope| {
-                    scope.child(move || {
-                        column(
-                            ColumnArgs::default()
-                                .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
-                                .cross_axis_alignment(CrossAxisAlignment::Start),
-                            |column_scope| {
-                                column_scope.child(|| {
-                                    text(
-                                        &TextArgs::default()
-                                            .text("Snackbar Showcase")
-                                            .size(Dp(20.0)),
-                                    );
-                                });
+                &BoxedArgs::default()
+                    .modifier(Modifier::new().fill_max_size())
+                    .children(move |scope| {
+                        scope.child(move || {
+                            column(
+                                &ColumnArgs::default()
+                                    .modifier(
+                                        Modifier::new().fill_max_width().padding_all(Dp(16.0)),
+                                    )
+                                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                                    .children(|column_scope| {
+                                        column_scope.child(|| {
+                                            text(
+                                                &TextArgs::default()
+                                                    .text("Snackbar Showcase")
+                                                    .size(Dp(20.0)),
+                                            );
+                                        });
 
-                                column_scope.child(|| {
-                                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))))
-                                });
+                                        column_scope.child(|| {
+                                            spacer(&SpacerArgs::new(
+                                                Modifier::new().height(Dp(16.0)),
+                                            ))
+                                        });
 
-                                column_scope.child(move || {
-                                    button(&ButtonArgs::with_child(
-                                        ButtonArgs::filled(move || {
-                                            host_state.with_mut(|state| {
-                                                state.show_snackbar(
-                                                    SnackbarRequest::new("Saved")
-                                                        .duration(SnackbarDuration::Short),
-                                                );
-                                            });
-                                        })
-                                        .modifier(Modifier::new().fill_max_width()),
-                                        || {
-                                            text(&TextArgs::from("Show short message"));
-                                        },
-                                    ));
-                                });
+                                        column_scope.child(move || {
+                                            button(&ButtonArgs::with_child(
+                                                ButtonArgs::filled(move || {
+                                                    host_state.with_mut(|state| {
+                                                        state.show_snackbar(
+                                                            SnackbarRequest::new("Saved")
+                                                                .duration(SnackbarDuration::Short),
+                                                        );
+                                                    });
+                                                })
+                                                .modifier(Modifier::new().fill_max_width()),
+                                                || {
+                                                    text(&TextArgs::from("Show short message"));
+                                                },
+                                            ));
+                                        });
 
-                                column_scope.child(|| {
-                                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))))
-                                });
+                                        column_scope.child(|| {
+                                            spacer(&SpacerArgs::new(
+                                                Modifier::new().height(Dp(12.0)),
+                                            ))
+                                        });
 
-                                column_scope.child(move || {
-                                    let host_state = host_state;
-                                    button(&ButtonArgs::with_child(
-                                        ButtonArgs::filled(move || {
-                                            host_state.with_mut(|state| {
-                                                state.show_snackbar(
-                                                    SnackbarRequest::new("Message archived")
-                                                        .action_label("Undo")
-                                                        .with_dismiss_action(true),
-                                                );
-                                            });
-                                        })
-                                        .modifier(Modifier::new().fill_max_width()),
-                                        || {
-                                            text(&TextArgs::from("Show action snackbar"));
-                                        },
-                                    ));
-                                });
+                                        column_scope.child(move || {
+                                            let host_state = host_state;
+                                            button(&ButtonArgs::with_child(
+                                                ButtonArgs::filled(move || {
+                                                    host_state.with_mut(|state| {
+                                                        state.show_snackbar(
+                                                            SnackbarRequest::new(
+                                                                "Message archived",
+                                                            )
+                                                            .action_label("Undo")
+                                                            .with_dismiss_action(true),
+                                                        );
+                                                    });
+                                                })
+                                                .modifier(Modifier::new().fill_max_width()),
+                                                || {
+                                                    text(&TextArgs::from("Show action snackbar"));
+                                                },
+                                            ));
+                                        });
 
-                                column_scope.child(|| {
-                                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))))
-                                });
+                                        column_scope.child(|| {
+                                            spacer(&SpacerArgs::new(
+                                                Modifier::new().height(Dp(12.0)),
+                                            ))
+                                        });
 
-                                column_scope.child(move || {
-                                    let host_state = host_state;
-                                    button(&ButtonArgs::with_child(
-                                        ButtonArgs::filled(move || {
-                                            host_state.with_mut(|state| {
-                                                state.show_snackbar(
-                                                    SnackbarRequest::new("Sync paused")
-                                                        .action_label("Resume")
-                                                        .with_dismiss_action(true)
-                                                        .duration(SnackbarDuration::Indefinite),
-                                                );
-                                            });
-                                        })
-                                        .modifier(Modifier::new().fill_max_width()),
-                                        || {
-                                            text(&TextArgs::from("Show indefinite snackbar"));
-                                        },
-                                    ));
-                                });
-                            },
-                        );
-                    });
+                                        column_scope.child(move || {
+                                            let host_state = host_state;
+                                            button(&ButtonArgs::with_child(
+                                                ButtonArgs::filled(move || {
+                                                    host_state.with_mut(|state| {
+                                                        state.show_snackbar(
+                                                            SnackbarRequest::new("Sync paused")
+                                                                .action_label("Resume")
+                                                                .with_dismiss_action(true)
+                                                                .duration(
+                                                                    SnackbarDuration::Indefinite,
+                                                                ),
+                                                        );
+                                                    });
+                                                })
+                                                .modifier(Modifier::new().fill_max_width()),
+                                                || {
+                                                    text(&TextArgs::from(
+                                                        "Show indefinite snackbar",
+                                                    ));
+                                                },
+                                            ));
+                                        });
+                                    }),
+                            );
+                        });
 
-                    scope.child_with_alignment(Alignment::BottomCenter, move || {
-                        snackbar_host(&SnackbarHostArgs::new(host_state));
-                    });
-                },
+                        scope.child_with_alignment(Alignment::BottomCenter, move || {
+                            snackbar_host(&SnackbarHostArgs::new(host_state));
+                        });
+                    }),
             );
         },
     ));

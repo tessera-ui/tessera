@@ -31,10 +31,8 @@ pub fn staggered_grids_showcase() {
                 }
                 .content(move |scope| {
                     scope.item(move || {
-                        column(
-                            ColumnArgs::default()
-                                .modifier(Modifier::new().fill_max_width()),
-                            move |scope| {
+                        column(&ColumnArgs::default()
+                                .modifier(Modifier::new().fill_max_width()).children(move |scope| {
                                 scope.child(|| {
                                     text(&TextArgs::default()
                                             .text("Staggered Grids")
@@ -65,8 +63,7 @@ pub fn staggered_grids_showcase() {
                                             .size(Dp(18.0)));
                                 });
                                 scope.child(horizontal_staggered_grid);
-                            },
-                        );
+                            }));
                     });
                 }),
             );

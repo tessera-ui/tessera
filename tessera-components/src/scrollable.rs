@@ -710,14 +710,14 @@ struct ScrollableInnerArgs {
 ///         ..Default::default()
 ///     }
 ///     .child(|| {
-///         column(ColumnArgs::default(), |scope| {
+///         column(&ColumnArgs::default().children(|scope| {
 ///             for i in 0..20 {
 ///                 let text_content = format!("Item #{}", i + 1);
 ///                 scope.child(move || {
 ///                     text(&TextArgs::default().text(text_content.clone()));
 ///                 });
 ///             }
-///         });
+///         }));
 ///     });
 ///     scrollable(&render_args);
 /// }
@@ -851,52 +851,52 @@ fn scrollable_with_overlay_scrollbar(args: &ScrollableOverlayArgs) {
     let scrollbar_behavior = args.scrollbar_behavior;
 
     boxed(
-        BoxedArgs::default()
+        &BoxedArgs::default()
             .modifier(Modifier::new().fill_max_size())
-            .alignment(Alignment::BottomEnd),
-        move |scope| {
-            scope.child({
-                let child = child.clone();
-                let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
-                let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
-                let scrollbar_behavior = scrollbar_behavior.clone();
-                move || {
-                    let inner_args = ScrollableInnerArgs {
-                        vertical,
-                        horizontal,
-                        scroll_smoothing,
-                        scrollbar_behavior: scrollbar_behavior.clone(),
-                        controller,
-                        scrollbar_state_v: scrollbar_v_state.clone(),
-                        scrollbar_state_h: scrollbar_h_state.clone(),
-                        child: child.clone(),
-                    };
-                    scrollable_inner(&inner_args);
-                }
-            });
-            scope.child({
-                let scrollbar_args_v = scrollbar_args_v.clone();
-                let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
-                move || {
-                    if vertical {
-                        let mut scrollbar_args = scrollbar_args_v.clone();
-                        scrollbar_args.scrollbar_state = Some(scrollbar_v_state.clone());
-                        scrollbar_v(&scrollbar_args);
+            .alignment(Alignment::BottomEnd)
+            .children(move |scope| {
+                scope.child({
+                    let child = child.clone();
+                    let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
+                    let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
+                    let scrollbar_behavior = scrollbar_behavior.clone();
+                    move || {
+                        let inner_args = ScrollableInnerArgs {
+                            vertical,
+                            horizontal,
+                            scroll_smoothing,
+                            scrollbar_behavior: scrollbar_behavior.clone(),
+                            controller,
+                            scrollbar_state_v: scrollbar_v_state.clone(),
+                            scrollbar_state_h: scrollbar_h_state.clone(),
+                            child: child.clone(),
+                        };
+                        scrollable_inner(&inner_args);
                     }
-                }
-            });
-            scope.child({
-                let scrollbar_args_h = scrollbar_args_h.clone();
-                let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
-                move || {
-                    if horizontal {
-                        let mut scrollbar_args = scrollbar_args_h.clone();
-                        scrollbar_args.scrollbar_state = Some(scrollbar_h_state.clone());
-                        scrollbar_h(&scrollbar_args);
+                });
+                scope.child({
+                    let scrollbar_args_v = scrollbar_args_v.clone();
+                    let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
+                    move || {
+                        if vertical {
+                            let mut scrollbar_args = scrollbar_args_v.clone();
+                            scrollbar_args.scrollbar_state = Some(scrollbar_v_state.clone());
+                            scrollbar_v(&scrollbar_args);
+                        }
                     }
-                }
-            });
-        },
+                });
+                scope.child({
+                    let scrollbar_args_h = scrollbar_args_h.clone();
+                    let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
+                    move || {
+                        if horizontal {
+                            let mut scrollbar_args = scrollbar_args_h.clone();
+                            scrollbar_args.scrollbar_state = Some(scrollbar_h_state.clone());
+                            scrollbar_h(&scrollbar_args);
+                        }
+                    }
+                });
+            }),
     );
 }
 

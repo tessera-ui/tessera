@@ -4,8 +4,6 @@
 //!
 //! Switch between views or filters with a connected control.
 
-use std::sync::{Arc, Mutex};
-
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
     LayoutSpec, MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, accesskit::Role,
@@ -258,6 +256,8 @@ pub struct SegmentedButtonRowArgs {
     pub cross_axis_alignment: CrossAxisAlignment,
     /// Whether segments should be forced to equal width.
     pub equal_width: bool,
+    /// Segments rendered within the row.
+    pub content: Option<RenderSlot>,
 }
 
 impl Default for SegmentedButtonRowArgs {
@@ -268,6 +268,7 @@ impl Default for SegmentedButtonRowArgs {
             overlap: SegmentedButtonDefaults::BORDER_WIDTH,
             cross_axis_alignment: CrossAxisAlignment::Center,
             equal_width: true,
+            content: None,
         }
     }
 }
@@ -301,28 +302,30 @@ impl Default for SegmentedButtonRowArgs {
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let selected = remember(|| 0usize);
-///             single_choice_segmented_button_row(&SegmentedButtonRowArgs::default(), move || {
-///                 segmented_button(
-///                     &SegmentedButtonArgs::new("List")
-///                         .selected(selected.get() == 0)
-///                         .shape(SegmentedButtonDefaults::item_shape(
-///                             0,
-///                             2,
-///                             SegmentedButtonDefaults::shape(),
-///                         ))
-///                         .on_click(|| {}),
-///                 );
-///                 segmented_button(
-///                     &SegmentedButtonArgs::new("Grid")
-///                         .selected(selected.get() == 1)
-///                         .shape(SegmentedButtonDefaults::item_shape(
-///                             1,
-///                             2,
-///                             SegmentedButtonDefaults::shape(),
-///                         ))
-///                         .on_click(|| {}),
-///                 );
-///             });
+///             single_choice_segmented_button_row(&SegmentedButtonRowArgs::default().content(
+///                 move || {
+///                     segmented_button(
+///                         &SegmentedButtonArgs::new("List")
+///                             .selected(selected.get() == 0)
+///                             .shape(SegmentedButtonDefaults::item_shape(
+///                                 0,
+///                                 2,
+///                                 SegmentedButtonDefaults::shape(),
+///                             ))
+///                             .on_click(|| {}),
+///                     );
+///                     segmented_button(
+///                         &SegmentedButtonArgs::new("Grid")
+///                             .selected(selected.get() == 1)
+///                             .shape(SegmentedButtonDefaults::item_shape(
+///                                 1,
+///                                 2,
+///                                 SegmentedButtonDefaults::shape(),
+///                             ))
+///                             .on_click(|| {}),
+///                     );
+///                 },
+///             ));
 ///             selected.with_mut(|value| *value = 1);
 ///             assert_eq!(selected.get(), 1);
 ///         },
@@ -403,9 +406,9 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
                 Modifier::new().padding(args.content_padding).run(move || {
                     let icon_args = icon_args.clone();
                     let label = label.clone();
-                    row(
-                        RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
-                        move |scope| {
+                    row(&RowArgs::default()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |scope| {
                             let mut has_content = false;
 
                             if let Some(icon_args) = icon_args.clone() {
@@ -429,8 +432,7 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
                                     ));
                                 });
                             }
-                        },
-                    );
+                        }));
                 });
             });
         },
@@ -447,8 +449,8 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures overlap and sizing; see [`SegmentedButtonRowArgs`].
-/// - `content` — renders the segmented buttons within the row.
+/// - `args` — configures overlap, sizing, and slot content; see
+///   [`SegmentedButtonRowArgs`].
 ///
 /// ## Examples
 ///
@@ -466,28 +468,30 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let selected = remember(|| 0usize);
-///             single_choice_segmented_button_row(&SegmentedButtonRowArgs::default(), move || {
-///                 segmented_button(
-///                     &SegmentedButtonArgs::new("Day")
-///                         .selected(selected.get() == 0)
-///                         .shape(SegmentedButtonDefaults::item_shape(
-///                             0,
-///                             2,
-///                             SegmentedButtonDefaults::shape(),
-///                         ))
-///                         .on_click(|| {}),
-///                 );
-///                 segmented_button(
-///                     &SegmentedButtonArgs::new("Week")
-///                         .selected(selected.get() == 1)
-///                         .shape(SegmentedButtonDefaults::item_shape(
-///                             1,
-///                             2,
-///                             SegmentedButtonDefaults::shape(),
-///                         ))
-///                         .on_click(|| {}),
-///                 );
-///             });
+///             single_choice_segmented_button_row(&SegmentedButtonRowArgs::default().content(
+///                 move || {
+///                     segmented_button(
+///                         &SegmentedButtonArgs::new("Day")
+///                             .selected(selected.get() == 0)
+///                             .shape(SegmentedButtonDefaults::item_shape(
+///                                 0,
+///                                 2,
+///                                 SegmentedButtonDefaults::shape(),
+///                             ))
+///                             .on_click(|| {}),
+///                     );
+///                     segmented_button(
+///                         &SegmentedButtonArgs::new("Week")
+///                             .selected(selected.get() == 1)
+///                             .shape(SegmentedButtonDefaults::item_shape(
+///                                 1,
+///                                 2,
+///                                 SegmentedButtonDefaults::shape(),
+///                             ))
+///                             .on_click(|| {}),
+///                     );
+///                 },
+///             ));
 ///             selected.with_mut(|value| *value = 0);
 ///             assert_eq!(selected.get(), 0);
 ///         },
@@ -497,11 +501,13 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
 ///
 /// demo();
 /// ```
-pub fn single_choice_segmented_button_row(
-    args: &SegmentedButtonRowArgs,
-    content: impl FnOnce() + Send + Sync + 'static,
-) {
-    segmented_button_row_impl(args.clone(), content);
+#[tessera]
+pub fn single_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {
+    let (modifier, layout_spec, content) = segmented_button_row_parts(args.clone());
+    modifier.run(move || {
+        layout(layout_spec.clone());
+        content.render();
+    });
 }
 
 /// # multi_choice_segmented_button_row
@@ -514,8 +520,8 @@ pub fn single_choice_segmented_button_row(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures overlap and sizing; see [`SegmentedButtonRowArgs`].
-/// - `content` — renders the segmented buttons within the row.
+/// - `args` — configures overlap, sizing, and slot content; see
+///   [`SegmentedButtonRowArgs`].
 ///
 /// ## Examples
 ///
@@ -533,28 +539,30 @@ pub fn single_choice_segmented_button_row(
 ///         || MaterialTheme::default(),
 ///         || {
 ///             let selected = remember(|| [true, false]);
-///             multi_choice_segmented_button_row(&SegmentedButtonRowArgs::default(), move || {
-///                 segmented_button(
-///                     &SegmentedButtonArgs::new("Email")
-///                         .selected(selected.get()[0])
-///                         .shape(SegmentedButtonDefaults::item_shape(
-///                             0,
-///                             2,
-///                             SegmentedButtonDefaults::shape(),
-///                         ))
-///                         .on_click(|| {}),
-///                 );
-///                 segmented_button(
-///                     &SegmentedButtonArgs::new("Push")
-///                         .selected(selected.get()[1])
-///                         .shape(SegmentedButtonDefaults::item_shape(
-///                             1,
-///                             2,
-///                             SegmentedButtonDefaults::shape(),
-///                         ))
-///                         .on_click(|| {}),
-///                 );
-///             });
+///             multi_choice_segmented_button_row(&SegmentedButtonRowArgs::default().content(
+///                 move || {
+///                     segmented_button(
+///                         &SegmentedButtonArgs::new("Email")
+///                             .selected(selected.get()[0])
+///                             .shape(SegmentedButtonDefaults::item_shape(
+///                                 0,
+///                                 2,
+///                                 SegmentedButtonDefaults::shape(),
+///                             ))
+///                             .on_click(|| {}),
+///                     );
+///                     segmented_button(
+///                         &SegmentedButtonArgs::new("Push")
+///                             .selected(selected.get()[1])
+///                             .shape(SegmentedButtonDefaults::item_shape(
+///                                 1,
+///                                 2,
+///                                 SegmentedButtonDefaults::shape(),
+///                             ))
+///                             .on_click(|| {}),
+///                     );
+///                 },
+///             ));
 ///             selected.with_mut(|value| value[1] = true);
 ///             assert!(selected.get()[1]);
 ///         },
@@ -564,65 +572,34 @@ pub fn single_choice_segmented_button_row(
 ///
 /// demo();
 /// ```
-pub fn multi_choice_segmented_button_row(
-    args: &SegmentedButtonRowArgs,
-    content: impl FnOnce() + Send + Sync + 'static,
-) {
-    segmented_button_row_impl(args.clone(), content);
-}
-
-fn segmented_button_row_impl(
-    args: SegmentedButtonRowArgs,
-    content: impl FnOnce() + Send + Sync + 'static,
-) {
-    let content_once: Box<dyn FnOnce() + Send + Sync> = Box::new(content);
-    let content_slot = Arc::new(Mutex::new(Some(content_once)));
-    let replayable_content = {
-        let content_slot = Arc::clone(&content_slot);
-        RenderSlot::new(move || {
-            if let Some(content_once) = content_slot
-                .lock()
-                .expect("segmented button row content mutex poisoned")
-                .take()
-            {
-                content_once();
-            }
-        })
-    };
-
-    let modifier =
-        args.modifier
-            .clone()
-            .size_in(None, None, Some(SegmentedButtonDefaults::HEIGHT), None);
-    modifier.run(move || {
-        let inner_args = SegmentedButtonRowInnerArgs {
-            overlap: args.overlap,
-            cross_axis_alignment: args.cross_axis_alignment,
-            equal_width: args.equal_width,
-            content: replayable_content.clone(),
-        };
-        segmented_button_row_inner_node(&inner_args);
-    });
-}
-
 #[tessera]
-fn segmented_button_row_inner_node(args: &SegmentedButtonRowInnerArgs) {
-    let content = args.content.clone();
-    let overlap = Px::from(args.overlap).max(Px::ZERO);
-    layout(SegmentedButtonRowLayout {
-        overlap,
-        cross_axis_alignment: args.cross_axis_alignment,
-        equal_width: args.equal_width,
+pub fn multi_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {
+    let (modifier, layout_spec, content) = segmented_button_row_parts(args.clone());
+    modifier.run(move || {
+        layout(layout_spec.clone());
+        content.render();
     });
-    content.render();
 }
 
-#[derive(Clone, Prop)]
-struct SegmentedButtonRowInnerArgs {
-    overlap: Dp,
-    cross_axis_alignment: CrossAxisAlignment,
-    equal_width: bool,
-    content: RenderSlot,
+fn segmented_button_row_parts(
+    args: SegmentedButtonRowArgs,
+) -> (Modifier, SegmentedButtonRowLayout, RenderSlot) {
+    let SegmentedButtonRowArgs {
+        modifier,
+        overlap,
+        cross_axis_alignment,
+        equal_width,
+        content,
+    } = args;
+    let content = content.unwrap_or_else(|| RenderSlot::new(|| {}));
+    let overlap = Px::from(overlap).max(Px::ZERO);
+    let modifier = modifier.size_in(None, None, Some(SegmentedButtonDefaults::HEIGHT), None);
+    let layout_spec = SegmentedButtonRowLayout {
+        overlap,
+        cross_axis_alignment,
+        equal_width,
+    };
+    (modifier, layout_spec, content)
 }
 
 #[derive(Clone, PartialEq)]

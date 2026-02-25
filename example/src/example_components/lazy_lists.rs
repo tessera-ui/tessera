@@ -21,10 +21,8 @@ pub fn lazy_lists_showcase() {
                 }
                 .content(move |scope| {
                     scope.item(move || {
-                        column(
-                            ColumnArgs::default()
-                                .modifier(Modifier::new().fill_max_width()),
-                            move |scope| {
+                        column(&ColumnArgs::default()
+                                .modifier(Modifier::new().fill_max_width()).children(move |scope| {
                                 scope.child(|| {
                                     text(&TextArgs::default()
                                             .text("Lazy Lists")
@@ -53,8 +51,7 @@ pub fn lazy_lists_showcase() {
                                             .size(Dp(18.0)));
                                 });
                                 scope.child(horizontal_gallery);
-                            }
-                        );
+                            }));
                     });
                 }),
             );
@@ -130,35 +127,36 @@ fn contact_card(index: usize) {
             .style(color_for_index(index).with_alpha(0.15).into()),
         move || {
             column(
-                ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
-                |scope| {
-                    scope.child({
-                        let contact_number = index + 1;
-                        move || {
-                            text(
-                                &TextArgs::default()
-                                    .text(format!("Contact {}", contact_number))
-                                    .size(Dp(16.0)),
-                            );
-                        }
-                    });
-                    scope.child({
-                        let unread_count = (index * 3) % 7;
-                        move || {
-                            text(
-                                &TextArgs::default()
-                                    .text(format!("{unread_count} unread messages"))
-                                    .color(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .color_scheme
-                                            .on_surface_variant,
-                                    ),
-                            );
-                        }
-                    });
-                },
+                &ColumnArgs::default()
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(|scope| {
+                        scope.child({
+                            let contact_number = index + 1;
+                            move || {
+                                text(
+                                    &TextArgs::default()
+                                        .text(format!("Contact {}", contact_number))
+                                        .size(Dp(16.0)),
+                                );
+                            }
+                        });
+                        scope.child({
+                            let unread_count = (index * 3) % 7;
+                            move || {
+                                text(
+                                    &TextArgs::default()
+                                        .text(format!("{unread_count} unread messages"))
+                                        .color(
+                                            use_context::<MaterialTheme>()
+                                                .expect("MaterialTheme must be provided")
+                                                .get()
+                                                .color_scheme
+                                                .on_surface_variant,
+                                        ),
+                                );
+                            }
+                        });
+                    }),
             );
         },
     ));

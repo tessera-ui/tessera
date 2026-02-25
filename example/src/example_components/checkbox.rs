@@ -27,9 +27,9 @@ pub fn checkbox_showcase() {
                         // Interactive Checkbox,
                         scope.item(move || {
                             let is_checked = remember(|| true);
-                            row(
-                                RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
-                                |scope| {
+                            row(&RowArgs::default()
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(|scope| {
                                     scope.child(move || {
                                         checkbox(&CheckboxArgs::default().checked(true).on_toggle(
                                             move |new_value| {
@@ -45,8 +45,7 @@ pub fn checkbox_showcase() {
                                         };
                                         text(&TextArgs::from(format!("State: {}", checked_str)));
                                     });
-                                },
-                            );
+                                }));
                         });
                     }),
             )

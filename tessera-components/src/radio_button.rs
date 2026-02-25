@@ -386,11 +386,9 @@ fn radio_button_node(args: &RadioButtonArgs) {
         modifier = modifier.selectable(selectable_args);
     }
 
-    boxed(
-        BoxedArgs::default()
+    boxed(&BoxedArgs::default()
             .modifier(modifier)
-            .alignment(Alignment::Center),
-        move |scope| {
+            .alignment(Alignment::Center).children(move |scope| {
             let args = args.clone();
             let ring_style = ring_style.clone();
             scope.child(move || {
@@ -400,11 +398,9 @@ fn radio_button_node(args: &RadioButtonArgs) {
                 surface(&crate::surface::SurfaceArgs::with_child(state_layer_args, move || {
                     let args = args.clone();
                     let ring_style = ring_style.clone();
-                    boxed(
-                        BoxedArgs::default()
+                    boxed(&BoxedArgs::default()
                             .alignment(Alignment::Center)
-                            .modifier(Modifier::new().fill_max_size()),
-                        move |center| {
+                            .modifier(Modifier::new().fill_max_size()).children(move |center| {
                             let args = args.clone();
                             let ring_style = ring_style.clone();
                             center.child(move || {
@@ -421,14 +417,12 @@ fn radio_button_node(args: &RadioButtonArgs) {
                                                 (dot_size_px.0 as f32 * eased_progress).round()
                                                     as i32;
                                             if animated_size > 0 {
-                                                boxed(
-                                                    BoxedArgs::default()
+                                                boxed(&BoxedArgs::default()
                                                         .alignment(Alignment::Center)
                                                         .modifier(Modifier::new().size(
                                                             args.size,
                                                             args.size,
-                                                        )),
-                                                    |dot_scope| {
+                                                        )).children(|dot_scope| {
                                                         dot_scope.child({
                                                             let dot_color = active_dot_color;
                                                             move || {
@@ -458,17 +452,14 @@ fn radio_button_node(args: &RadioButtonArgs) {
                                                                 ));
                                                             }
                                                         });
-                                                    },
-                                                );
+                                                    }));
                                             }
                                         }
                                     },
                                 ));
                             });
-                        },
-                    );
+                        }));
                 }));
             });
-        },
-    );
+        }));
 }

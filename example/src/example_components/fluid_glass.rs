@@ -125,56 +125,59 @@ fn test_content() {
                         )
                     });
 
-                    row(
-                        RowArgs::default()
-                            .modifier(Modifier::new().fill_max_width())
-                            .main_axis_alignment(MainAxisAlignment::Center)
-                            .cross_axis_alignment(CrossAxisAlignment::Center),
-                        move |scope| {
+                    row(&RowArgs::default()
+                        .modifier(Modifier::new().fill_max_width())
+                        .main_axis_alignment(MainAxisAlignment::Center)
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |scope| {
                             scope.child(move || {
-                                boxed(BoxedArgs::default().alignment(Alignment::Center), |scope| {
-                                    scope.child(move || {
-                                        image(&ImageArgs {
-                                            data: state.with(|s| s.background_image_data.clone()),
-                                            modifier: Modifier::new().size(Dp(250.0), Dp(250.0)),
+                                boxed(&BoxedArgs::default().alignment(Alignment::Center).children(
+                                    |scope| {
+                                        scope.child(move || {
+                                            image(&ImageArgs {
+                                                data: state
+                                                    .with(|s| s.background_image_data.clone()),
+                                                modifier: Modifier::new()
+                                                    .size(Dp(250.0), Dp(250.0)),
+                                            });
                                         });
-                                    });
 
-                                    scope.child(move || {
-                                        fluid_glass(&FluidGlassArgs::with_child(
-                                            FluidGlassArgs::default()
-                                                .modifier(Modifier::new().size(width, height))
-                                                .blur_radius(blur_radius)
-                                                .shape(Shape::RoundedRectangle {
-                                                    top_left: RoundedCorner::manual(
-                                                        corner_radius,
-                                                        3.0,
-                                                    ),
-                                                    top_right: RoundedCorner::manual(
-                                                        corner_radius,
-                                                        3.0,
-                                                    ),
-                                                    bottom_left: RoundedCorner::manual(
-                                                        corner_radius,
-                                                        3.0,
-                                                    ),
-                                                    bottom_right: RoundedCorner::manual(
-                                                        corner_radius,
-                                                        3.0,
-                                                    ),
-                                                })
-                                                .border(GlassBorder {
-                                                    width: border_width.into(),
-                                                })
-                                                .on_click(|| {
-                                                    println!("Glass clicked");
-                                                })
-                                                .refraction_amount(refraction_amount)
-                                                .refraction_height(refraction_height),
-                                            || {},
-                                        ));
-                                    });
-                                });
+                                        scope.child(move || {
+                                            fluid_glass(&FluidGlassArgs::with_child(
+                                                FluidGlassArgs::default()
+                                                    .modifier(Modifier::new().size(width, height))
+                                                    .blur_radius(blur_radius)
+                                                    .shape(Shape::RoundedRectangle {
+                                                        top_left: RoundedCorner::manual(
+                                                            corner_radius,
+                                                            3.0,
+                                                        ),
+                                                        top_right: RoundedCorner::manual(
+                                                            corner_radius,
+                                                            3.0,
+                                                        ),
+                                                        bottom_left: RoundedCorner::manual(
+                                                            corner_radius,
+                                                            3.0,
+                                                        ),
+                                                        bottom_right: RoundedCorner::manual(
+                                                            corner_radius,
+                                                            3.0,
+                                                        ),
+                                                    })
+                                                    .border(GlassBorder {
+                                                        width: border_width.into(),
+                                                    })
+                                                    .on_click(|| {
+                                                        println!("Glass clicked");
+                                                    })
+                                                    .refraction_amount(refraction_amount)
+                                                    .refraction_height(refraction_height),
+                                                || {},
+                                            ));
+                                        });
+                                    },
+                                ));
                             });
 
                             scope.child(|| {
@@ -188,8 +191,7 @@ fn test_content() {
                                         .size(Dp(16.0)),
                                 );
                             });
-                        },
-                    );
+                        }));
                 });
 
                 scope.item(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
@@ -283,33 +285,33 @@ fn test_content() {
 fn glass_config_slider(label: &str, value: f32, on_change: CallbackWith<f32>) {
     let label = label.to_string();
     column(
-        ColumnArgs::default()
+        &ColumnArgs::default()
             .main_axis_alignment(MainAxisAlignment::Center)
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .modifier(Modifier::new().fill_max_width()),
-        move |scope| {
-            scope.child(move || {
-                let label = label.clone();
-                let on_change = on_change.clone();
-                column(ColumnArgs::default(), |scope| {
-                    scope.child(move || {
-                        text(&TextArgs::default().text(label.clone()).size(Dp(16.0)));
-                    });
+            .modifier(Modifier::new().fill_max_width())
+            .children(move |scope| {
+                scope.child(move || {
+                    let label = label.clone();
+                    let on_change = on_change.clone();
+                    column(&ColumnArgs::default().children(|scope| {
+                        scope.child(move || {
+                            text(&TextArgs::default().text(label.clone()).size(Dp(16.0)));
+                        });
 
-                    scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(16.0)))));
+                        scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(16.0)))));
 
-                    scope.child({
-                        move || {
-                            glass_slider(
-                                &GlassSliderArgs::default()
-                                    .value(value)
-                                    .on_change_shared(on_change.clone())
-                                    .modifier(Modifier::new().width(Dp(300.0))),
-                            );
-                        }
-                    });
+                        scope.child({
+                            move || {
+                                glass_slider(
+                                    &GlassSliderArgs::default()
+                                        .value(value)
+                                        .on_change_shared(on_change.clone())
+                                        .modifier(Modifier::new().width(Dp(300.0))),
+                                );
+                            }
+                        });
+                    }));
                 });
-            });
-        },
+            }),
     );
 }

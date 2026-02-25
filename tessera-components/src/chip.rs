@@ -623,9 +623,9 @@ pub fn chip(args: &ChipArgs) {
                     let leading_icon = leading_icon.clone();
                     let trailing_icon = trailing_icon.clone();
                     let label = label.clone();
-                    row(
-                        RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
-                        move |scope| {
+                    row(&RowArgs::default()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |scope| {
                             let spacing = ChipDefaults::ELEMENT_SPACING;
                             let mut item_count = 0;
 
@@ -680,8 +680,7 @@ pub fn chip(args: &ChipArgs) {
                                     move || icon(&icon_args.clone())
                                 });
                             }
-                        },
-                    );
+                        }));
                 });
             });
         },

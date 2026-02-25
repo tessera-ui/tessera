@@ -779,7 +779,7 @@ fn render_text_field(
                 let label_text = label_text.clone();
                 let suffix = suffix.clone();
                 let trailing_icon = trailing_icon.clone();
-                boxed(BoxedArgs::default(), move |scope| {
+                boxed(&BoxedArgs::default().children(move |scope| {
                     scope.child(move || {
                         let leading_icon = leading_icon.clone();
                         let prefix = prefix.clone();
@@ -791,11 +791,10 @@ fn render_text_field(
                         let row_modifier = RowArgs::default()
                             .modifier
                             .padding(Padding::all(content_padding));
-                        row(
-                            RowArgs::default()
-                                .modifier(row_modifier)
-                                .cross_axis_alignment(CrossAxisAlignment::Center),
-                            move |row_scope| {
+                        row(&RowArgs::default()
+                            .modifier(row_modifier)
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move |row_scope| {
                                 if let Some(leading_icon) = leading_icon.as_ref() {
                                     let leading_icon = leading_icon.clone();
                                     row_scope.child(move || {
@@ -841,7 +840,7 @@ fn render_text_field(
                                         let core_args = core_args.clone();
                                         let placeholder_text = placeholder_text.clone();
                                         let label_text = label_text.clone();
-                                        boxed(BoxedArgs::default(), move |box_scope| {
+                                        boxed(&BoxedArgs::default().children(move |box_scope| {
                                             box_scope.child(move || {
                                                 text_input_core(&core_args.clone(), controller);
                                             });
@@ -936,7 +935,7 @@ fn render_text_field(
                                                     );
                                                 }
                                             }
-                                        });
+                                        }));
                                     },
                                     1.0,
                                 );
@@ -980,8 +979,7 @@ fn render_text_field(
                                         );
                                     });
                                 }
-                            },
-                        );
+                            }));
                     });
 
                     if show_indicator {
@@ -993,7 +991,7 @@ fn render_text_field(
                             );
                         });
                     }
-                });
+                }));
             },
         ));
     };

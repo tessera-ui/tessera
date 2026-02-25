@@ -30,11 +30,9 @@ pub fn menus_showcase() {
                 .controller(menu_controller)
                 .main_content({
                     move || {
-                        column(
-                            ColumnArgs::default()
+                        column(&ColumnArgs::default()
                                 .modifier(Modifier::new().fill_max_size().padding_all(Dp(20.0)))
-                                .cross_axis_alignment(CrossAxisAlignment::Start),
-                            |scope| {
+                                .cross_axis_alignment(CrossAxisAlignment::Start).children(|scope| {
                                 scope.child(|| {
                                     text(&TextArgs::default().text("Menus Showcase").size(Dp(20.0)));
                                 });
@@ -63,10 +61,8 @@ pub fn menus_showcase() {
                                 });
 
                                 scope.child(move || {
-                                    row(
-                                        RowArgs::default()
-                                            .modifier(Modifier::new().fill_max_width()),
-                                        |row_scope| {
+                                    row(&RowArgs::default()
+                                            .modifier(Modifier::new().fill_max_width()).children(|row_scope| {
                                             row_scope.child(move || {
                                                 button(&ButtonArgs::with_child(
                                                     ButtonArgs::default()
@@ -97,11 +93,9 @@ pub fn menus_showcase() {
                                                                 .on_surface_variant,
                                                         ));
                                             });
-                                        },
-                                    );
+                                        }));
                                 });
-                            },
-                        );
+                            }));
                     }
                 })
                 .menu_content(move |menu_scope| {

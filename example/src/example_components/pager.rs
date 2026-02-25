@@ -36,45 +36,46 @@ fn pager_content() {
     let horizontal_controller = remember(|| PagerController::new(0));
     let current_page = horizontal_controller.with(|c| c.current_page());
     column(
-        ColumnArgs::default().modifier(Modifier::new().fill_max_width()),
-        |scope| {
-            scope.child(|| {
-                text(&TextArgs::default().text("Pager").size(Dp(24.0)));
-            });
-            scope.child(|| {
-                text(
-                    &TextArgs::default()
-                        .text("Snap-scrolling pages with spacing and padding.")
-                        .color(
-                            use_context::<MaterialTheme>()
-                                .expect("MaterialTheme must be provided")
-                                .get()
-                                .color_scheme
-                                .on_surface_variant,
-                        ),
-                );
-            });
-            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-            scope.child(move || {
-                text(
-                    &TextArgs::default()
-                        .text(format!(
-                            "Horizontal pager (page {}/{})",
-                            current_page + 1,
-                            5
-                        ))
-                        .size(Dp(18.0)),
-                );
-            });
-            scope.child(move || {
-                horizontal_demo(horizontal_controller);
-            });
-            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(24.0)))));
-            scope.child(|| {
-                text(&TextArgs::default().text("Vertical pager").size(Dp(18.0)));
-            });
-            scope.child(vertical_demo);
-        },
+        &ColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .children(|scope| {
+                scope.child(|| {
+                    text(&TextArgs::default().text("Pager").size(Dp(24.0)));
+                });
+                scope.child(|| {
+                    text(
+                        &TextArgs::default()
+                            .text("Snap-scrolling pages with spacing and padding.")
+                            .color(
+                                use_context::<MaterialTheme>()
+                                    .expect("MaterialTheme must be provided")
+                                    .get()
+                                    .color_scheme
+                                    .on_surface_variant,
+                            ),
+                    );
+                });
+                scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
+                scope.child(move || {
+                    text(
+                        &TextArgs::default()
+                            .text(format!(
+                                "Horizontal pager (page {}/{})",
+                                current_page + 1,
+                                5
+                            ))
+                            .size(Dp(18.0)),
+                    );
+                });
+                scope.child(move || {
+                    horizontal_demo(horizontal_controller);
+                });
+                scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(24.0)))));
+                scope.child(|| {
+                    text(&TextArgs::default().text("Vertical pager").size(Dp(18.0)));
+                });
+                scope.child(vertical_demo);
+            }),
     );
 }
 fn horizontal_demo(controller: State<PagerController>) {

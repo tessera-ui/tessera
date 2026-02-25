@@ -57,9 +57,21 @@ struct NavigationBarItemArgs {
     animation_progress: f32,
 }
 
-#[derive(Clone, Prop)]
-struct NavigationBarComposeArgs {
-    items: Vec<NavigationBarItem>,
+/// Arguments for [`navigation_bar`].
+#[derive(Clone, Default, Prop)]
+pub struct NavigationBarArgs {
+    /// Optional external controller.
+    pub controller: Option<State<NavigationBarController>>,
+    /// Navigation items rendered in order.
+    pub items: Vec<NavigationBarItem>,
+}
+
+impl NavigationBarArgs {
+    /// Append a navigation item.
+    pub fn item(mut self, item: impl Into<NavigationBarItem>) -> Self {
+        self.items.push(item.into());
+        self
+    }
 }
 
 #[derive(Clone, Prop)]
@@ -511,41 +523,34 @@ impl Default for NavigationBarItem {
 ///
 /// ## Parameters
 ///
-/// - `scope_config` — closure that registers items via [`NavigationBarScope`].
+/// - `args` — configures controller and items; see [`NavigationBarArgs`].
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::navigation_bar::{NavigationBarItem, navigation_bar};
+/// use tessera_components::navigation_bar::{
+///     NavigationBarArgs, NavigationBarItem, navigation_bar,
+/// };
 /// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn demo() {
-///     navigation_bar(|scope| {
-///         scope.item(NavigationBarItem::new("Home"));
-///         scope.item(NavigationBarItem::new("Search"));
-///     });
+///     navigation_bar(
+///         &NavigationBarArgs::default()
+///             .item(NavigationBarItem::new("Home"))
+///             .item(NavigationBarItem::new("Search")),
+///     );
 /// }
 /// ```
-pub fn navigation_bar<F>(scope_config: F)
-where
-    F: FnOnce(&mut NavigationBarScope),
-{
-    let mut items = Vec::new();
-    {
-        let mut scope = NavigationBarScope { items: &mut items };
-        scope_config(&mut scope);
-    }
-    let render_args = NavigationBarComposeArgs { items };
-    navigation_bar_node(&render_args);
-}
-
 #[tessera]
-fn navigation_bar_node(args: &NavigationBarComposeArgs) {
-    let controller = remember(|| NavigationBarController::new(0));
+pub fn navigation_bar(args: &NavigationBarArgs) {
+    let args = args.clone();
+    let controller = args
+        .controller
+        .unwrap_or_else(|| remember(|| NavigationBarController::new(0)));
     let render_args = NavigationBarRenderArgs {
         controller,
-        items: args.items.clone(),
+        items: args.items,
     };
     navigation_bar_render_node(&render_args);
 }
@@ -588,59 +593,60 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
             let items = items.clone();
             let separator_color = scheme.outline_variant.with_alpha(0.12);
             column(
-                ColumnArgs::default()
+                &ColumnArgs::default()
                     .modifier(Modifier::new().fill_max_size())
-                    .cross_axis_alignment(CrossAxisAlignment::Stretch),
-                move |column_scope| {
-                    column_scope.child(move || {
-                        surface(&crate::surface::SurfaceArgs::with_child(
-                            SurfaceArgs::default()
-                                .modifier(Modifier::new().fill_max_width().height(DIVIDER_HEIGHT))
-                                .style(separator_color.into()),
-                            || {},
-                        ));
-                    });
+                    .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                    .children(move |column_scope| {
+                        column_scope.child(move || {
+                            surface(&crate::surface::SurfaceArgs::with_child(
+                                SurfaceArgs::default()
+                                    .modifier(
+                                        Modifier::new().fill_max_width().height(DIVIDER_HEIGHT),
+                                    )
+                                    .style(separator_color.into()),
+                                || {},
+                            ));
+                        });
 
-                    column_scope.child_weighted(
-                        move || {
-                            let items = items.clone();
-                            row(
-                                RowArgs::default()
+                        column_scope.child_weighted(
+                            move || {
+                                let items = items.clone();
+                                row(&RowArgs::default()
                                     .modifier(Modifier::new().fill_max_size())
                                     .main_axis_alignment(MainAxisAlignment::Start)
-                                    .cross_axis_alignment(CrossAxisAlignment::Center),
-                                move |row_scope| {
-                                    let last_index = items.len().saturating_sub(1);
-                                    for (index, item) in items.iter().cloned().enumerate() {
-                                        row_scope.child_weighted(
-                                            move || {
-                                                let item_args = NavigationBarItemArgs {
-                                                    controller,
-                                                    index,
-                                                    item: item.clone(),
-                                                    selected_index,
-                                                    previous_index,
-                                                    animation_progress,
-                                                };
-                                                navigation_bar_item_node(&item_args);
-                                            },
-                                            1.0,
-                                        );
+                                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                                    .children(move |row_scope| {
+                                        let last_index = items.len().saturating_sub(1);
+                                        for (index, item) in items.iter().cloned().enumerate() {
+                                            row_scope.child_weighted(
+                                                move || {
+                                                    let item_args = NavigationBarItemArgs {
+                                                        controller,
+                                                        index,
+                                                        item: item.clone(),
+                                                        selected_index,
+                                                        previous_index,
+                                                        animation_progress,
+                                                    };
+                                                    navigation_bar_item_node(&item_args);
+                                                },
+                                                1.0,
+                                            );
 
-                                        if index != last_index {
-                                            row_scope.child(|| {
-                                                spacer(&crate::spacer::SpacerArgs::new(
-                                                    Modifier::new().width(ITEM_HORIZONTAL_SPACING),
-                                                ));
-                                            });
+                                            if index != last_index {
+                                                row_scope.child(|| {
+                                                    spacer(&crate::spacer::SpacerArgs::new(
+                                                        Modifier::new()
+                                                            .width(ITEM_HORIZONTAL_SPACING),
+                                                    ));
+                                                });
+                                            }
                                         }
-                                    }
-                                },
-                            );
-                        },
-                        1.0,
-                    );
-                },
+                                    }));
+                            },
+                            1.0,
+                        );
+                    }),
             );
         },
     ));
@@ -716,20 +722,5 @@ impl NavigationBarController {
 impl Default for NavigationBarController {
     fn default() -> Self {
         Self::new(0)
-    }
-}
-
-/// Scope passed to the closure for defining children of the NavigationBar.
-pub struct NavigationBarScope<'a> {
-    items: &'a mut Vec<NavigationBarItem>,
-}
-
-impl<'a> NavigationBarScope<'a> {
-    /// Add a navigation item to the bar.
-    pub fn item<I>(&mut self, item: I)
-    where
-        I: Into<NavigationBarItem>,
-    {
-        self.items.push(item.into());
     }
 }

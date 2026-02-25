@@ -25,13 +25,13 @@ pub fn layouts_showcase() {
                             SurfaceArgs::default()
                                 .modifier(Modifier::new().fill_max_width().padding_all(Dp(25.0))),
                             || {
-                                column(ColumnArgs::default(), |scope| {
+                                column(&ColumnArgs::default().children(|scope| {
                                     scope.child(row_showcase);
                                     scope.child(column_showcase);
                                     scope.child(flow_row_showcase);
                                     scope.child(flow_column_showcase);
                                     scope.child(boxed_showcase);
-                                })
+                                }))
                             },
                         ));
                     }),
@@ -48,7 +48,7 @@ fn showcase_box(color: Color) {
     ));
 }
 fn row_showcase() {
-    column(ColumnArgs::default(), |scope| {
+    column(&ColumnArgs::default().children(|scope| {
         scope.child(|| text(&TextArgs::from("Row Showcase".to_string())));
         scope.child(|| {
             text(
@@ -70,21 +70,20 @@ fn row_showcase() {
                             .into(),
                     ),
                 || {
-                    row(
-                        RowArgs::default().main_axis_alignment(MainAxisAlignment::Center),
-                        |scope| {
+                    row(&RowArgs::default()
+                        .main_axis_alignment(MainAxisAlignment::Center)
+                        .children(|scope| {
                             scope.child(|| showcase_box(Color::new(0.8, 0.2, 0.2, 1.0)));
                             scope.child(|| showcase_box(Color::new(0.2, 0.8, 0.2, 1.0)));
                             scope.child(|| showcase_box(Color::new(0.2, 0.2, 0.8, 1.0)));
-                        },
-                    )
+                        }))
                 },
             ))
         });
-    });
+    }));
 }
 fn column_showcase() {
-    column(ColumnArgs::default(), |scope| {
+    column(&ColumnArgs::default().children(|scope| {
         scope.child(|| text(&TextArgs::from("Column Showcase")));
         scope.child(|| {
             text(
@@ -107,20 +106,21 @@ fn column_showcase() {
                     ),
                 || {
                     column(
-                        ColumnArgs::default().cross_axis_alignment(CrossAxisAlignment::Center),
-                        |scope| {
-                            scope.child(|| showcase_box(Color::new(0.8, 0.2, 0.2, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.2, 0.8, 0.2, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.2, 0.2, 0.8, 1.0)));
-                        },
+                        &ColumnArgs::default()
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(|scope| {
+                                scope.child(|| showcase_box(Color::new(0.8, 0.2, 0.2, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.2, 0.8, 0.2, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.2, 0.2, 0.8, 1.0)));
+                            }),
                     )
                 },
             ))
         });
-    });
+    }));
 }
 fn boxed_showcase() {
-    column(ColumnArgs::default(), |scope| {
+    column(&ColumnArgs::default().children(|scope| {
         scope.child(|| text(&TextArgs::from("Boxed Showcase")));
         scope.child(|| {
             text(
@@ -142,16 +142,20 @@ fn boxed_showcase() {
                             .into(),
                     ),
                 || {
-                    boxed(BoxedArgs::default().alignment(Alignment::Center), |scope| {
-                        scope.child(|| showcase_box(Color::new(0.8, 0.5, 0.2, 1.0)));
-                    })
+                    boxed(
+                        &BoxedArgs::default()
+                            .alignment(Alignment::Center)
+                            .children(|scope| {
+                                scope.child(|| showcase_box(Color::new(0.8, 0.5, 0.2, 1.0)));
+                            }),
+                    )
                 },
             ))
         });
-    });
+    }));
 }
 fn flow_row_showcase() {
-    column(ColumnArgs::default(), |scope| {
+    column(&ColumnArgs::default().children(|scope| {
         scope.child(|| text(&TextArgs::from("FlowRow Showcase")));
         scope.child(|| {
             text(
@@ -174,29 +178,29 @@ fn flow_row_showcase() {
                     ),
                 || {
                     flow_row(
-                        FlowRowArgs::default()
+                        &FlowRowArgs::default()
                             .modifier(Modifier::new().width(Dp(240.0)))
                             .item_spacing(Dp(8.0))
                             .line_spacing(Dp(8.0))
-                            .cross_axis_alignment(CrossAxisAlignment::Center),
-                        |scope| {
-                            scope.child(|| showcase_box(Color::new(0.8, 0.2, 0.2, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.2, 0.8, 0.2, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.2, 0.2, 0.8, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.9, 0.6, 0.2, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.6, 0.2, 0.8, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.2, 0.7, 0.7, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.8, 0.4, 0.4, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.3, 0.5, 0.9, 1.0)));
-                        },
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(|scope| {
+                                scope.child(|| showcase_box(Color::new(0.8, 0.2, 0.2, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.2, 0.8, 0.2, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.2, 0.2, 0.8, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.9, 0.6, 0.2, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.6, 0.2, 0.8, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.2, 0.7, 0.7, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.8, 0.4, 0.4, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.3, 0.5, 0.9, 1.0)));
+                            }),
                     )
                 },
             ))
         });
-    });
+    }));
 }
 fn flow_column_showcase() {
-    column(ColumnArgs::default(), |scope| {
+    column(&ColumnArgs::default().children(|scope| {
         scope.child(|| text(&TextArgs::from("FlowColumn Showcase")));
         scope.child(|| {
             text(
@@ -219,24 +223,24 @@ fn flow_column_showcase() {
                     ),
                 || {
                     flow_column(
-                        FlowColumnArgs::default()
+                        &FlowColumnArgs::default()
                             .modifier(Modifier::new().height(Dp(200.0)))
                             .item_spacing(Dp(8.0))
                             .line_spacing(Dp(8.0))
-                            .cross_axis_alignment(CrossAxisAlignment::Center),
-                        |scope| {
-                            scope.child(|| showcase_box(Color::new(0.8, 0.2, 0.2, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.2, 0.8, 0.2, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.2, 0.2, 0.8, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.9, 0.6, 0.2, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.6, 0.2, 0.8, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.2, 0.7, 0.7, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.8, 0.4, 0.4, 1.0)));
-                            scope.child(|| showcase_box(Color::new(0.3, 0.5, 0.9, 1.0)));
-                        },
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(|scope| {
+                                scope.child(|| showcase_box(Color::new(0.8, 0.2, 0.2, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.2, 0.8, 0.2, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.2, 0.2, 0.8, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.9, 0.6, 0.2, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.6, 0.2, 0.8, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.2, 0.7, 0.7, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.8, 0.4, 0.4, 1.0)));
+                                scope.child(|| showcase_box(Color::new(0.3, 0.5, 0.9, 1.0)));
+                            }),
                     )
                 },
             ))
         });
-    });
+    }));
 }
