@@ -13,3 +13,4 @@ build
 jniLibs
 .cxx
 local.properties
+/app/src/main/assets/tessera/
