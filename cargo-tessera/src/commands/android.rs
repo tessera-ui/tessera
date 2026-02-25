@@ -429,6 +429,19 @@ fn apply_android_runtime_env(ctx: &AndroidContext) {
             std::env::remove_var("TESSERA_PROFILING_OUTPUT");
         }
     }
+
+    if ctx.debug_dirty_overlay {
+        // SAFETY: This CLI mutates process env only on the main thread before
+        // spawning child processes that should inherit the variable.
+        unsafe {
+            std::env::set_var("TESSERA_DEBUG_DIRTY_OVERLAY", "1");
+        }
+    } else {
+        // SAFETY: Same reasoning as above; remove stale value when disabled.
+        unsafe {
+            std::env::remove_var("TESSERA_DEBUG_DIRTY_OVERLAY");
+        }
+    }
 }
 
 pub fn init(skip_targets_install: bool) -> Result<()> {
