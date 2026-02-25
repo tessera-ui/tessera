@@ -5,6 +5,7 @@ members = [
     "tessera-ui",
     "tessera-platform",
     "tessera-components",
+    "tessera-build",
     "tessera-macros",
     "tessera-shard",
     "cargo-tessera",

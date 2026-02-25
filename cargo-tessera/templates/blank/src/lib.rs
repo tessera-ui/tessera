@@ -1,4 +1,5 @@
 mod app;
+pub mod res;
 
 use tessera_ui::EntryPoint;
 

@@ -1,0 +1,13 @@
+[package]
+name = "tessera-build"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+description = "Build-time utilities for Tessera projects"
+
+[dependencies]
+anyhow = "1.0.102"
+serde = { version = "1.0.228", features = ["derive"] }
+toml = "0.9.8"

@@ -9,22 +9,6 @@
       "type": "string",
       "description": "Application identifier/package name used for mobile platform manifests (for Android this is the applicationId).",
       "pattern": "^[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z][A-Za-z0-9_]*)*$"
-    },
-    "permissions": {
-      "type": "array",
-      "description": "Tessera permissions mapped to platform-specific permissions.",
-      "items": {
-        "type": "string",
-        "enum": [
-          "notifications",
-          "camera",
-          "microphone",
-          "location",
-          "bluetooth"
-        ]
-      },
-      "uniqueItems": true,
-      "default": []
     }
   }
 }

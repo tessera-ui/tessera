@@ -1,5 +1,6 @@
 mod app;
 mod example_components;
+pub mod res;
 
 use tessera_ui::{
     EntryPoint,

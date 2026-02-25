@@ -32,6 +32,9 @@ use include_dir::{Dir, include_dir};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use serde::Deserialize;
 use serde_json::{Value, json};
+use tessera_build::{
+    AssetBackend, asset_namespace, load_tessera_config_from_dir, resolve_assets_dir,
+};
 
 use crate::{
     output,
@@ -71,6 +74,7 @@ pub struct BuildOptions {
     pub format: Option<AndroidFormat>,
     pub profiling_output: Option<String>,
     pub debug_dirty_overlay: bool,
+    pub asset_backend: Option<AssetBackend>,
 }
 
 #[derive(Debug)]
@@ -81,6 +85,7 @@ pub struct DevOptions {
     pub device: Option<String>,
     pub profiling_output: Option<String>,
     pub debug_dirty_overlay: bool,
+    pub asset_backend: Option<AssetBackend>,
 }
 
 pub struct RustBuildOptions {
@@ -89,6 +94,7 @@ pub struct RustBuildOptions {
     pub package: Option<String>,
     pub profiling_output: Option<String>,
     pub debug_dirty_overlay: bool,
+    pub asset_backend: Option<AssetBackend>,
 }
 
 struct AndroidContext {
@@ -100,6 +106,7 @@ struct AndroidContext {
     device: Option<String>,
     profiling_output: Option<String>,
     debug_dirty_overlay: bool,
+    asset_backend: AssetBackend,
     activity: String,
     config: AndroidConfig,
     metadata: AndroidMetadata,
@@ -111,55 +118,81 @@ struct AndroidPlugin {
     source_dir: PathBuf,
 }
 
+struct AndroidContextOpts {
+    release: bool,
+    arch: Option<String>,
+    package: Option<String>,
+    device: Option<String>,
+    format: Option<AndroidFormat>,
+    profiling_output: Option<String>,
+    debug_dirty_overlay: bool,
+    asset_backend_override: Option<AssetBackend>,
+}
+
 impl AndroidContext {
     fn from_init() -> Result<Self> {
-        Self::from_opts(false, None, None, None, None, None, false)
+        Self::from_opts(AndroidContextOpts {
+            release: false,
+            arch: None,
+            package: None,
+            device: None,
+            format: None,
+            profiling_output: None,
+            debug_dirty_overlay: false,
+            asset_backend_override: None,
+        })
     }
     fn from_build_opts(opts: BuildOptions) -> Result<Self> {
-        Self::from_opts(
-            opts.release,
-            opts.arch,
-            opts.package,
-            None,
-            opts.format,
-            opts.profiling_output,
-            opts.debug_dirty_overlay,
-        )
+        Self::from_opts(AndroidContextOpts {
+            release: opts.release,
+            arch: opts.arch,
+            package: opts.package,
+            device: None,
+            format: opts.format,
+            profiling_output: opts.profiling_output,
+            debug_dirty_overlay: opts.debug_dirty_overlay,
+            asset_backend_override: opts.asset_backend,
+        })
     }
 
     fn from_dev_opts(opts: DevOptions) -> Result<Self> {
-        Self::from_opts(
-            opts.release,
-            opts.arch,
-            opts.package,
-            opts.device,
-            None,
-            opts.profiling_output,
-            opts.debug_dirty_overlay,
-        )
+        Self::from_opts(AndroidContextOpts {
+            release: opts.release,
+            arch: opts.arch,
+            package: opts.package,
+            device: opts.device,
+            format: None,
+            profiling_output: opts.profiling_output,
+            debug_dirty_overlay: opts.debug_dirty_overlay,
+            asset_backend_override: opts.asset_backend,
+        })
     }
 
     fn from_rust_build_opts(opts: RustBuildOptions) -> Result<Self> {
-        Self::from_opts(
-            opts.release,
-            None,
-            opts.package,
-            None,
-            None,
-            opts.profiling_output,
-            opts.debug_dirty_overlay,
-        )
+        Self::from_opts(AndroidContextOpts {
+            release: opts.release,
+            arch: None,
+            package: opts.package,
+            device: None,
+            format: None,
+            profiling_output: opts.profiling_output,
+            debug_dirty_overlay: opts.debug_dirty_overlay,
+            asset_backend_override: opts.asset_backend,
+        })
     }
 
-    fn from_opts(
-        release: bool,
-        arch: Option<String>,
-        package: Option<String>,
-        device: Option<String>,
-        format: Option<AndroidFormat>,
-        profiling_output: Option<String>,
-        debug_dirty_overlay: bool,
-    ) -> Result<Self> {
+    fn from_opts(opts: AndroidContextOpts) -> Result<Self> {
+        let AndroidContextOpts {
+            release,
+            arch,
+            package,
+            device,
+            format,
+            profiling_output,
+            debug_dirty_overlay,
+            asset_backend_override,
+        } = opts;
+
         let package_dir = package
             .as_deref()
             .and_then(|pkg| find_package_dir(pkg).ok());
@@ -198,6 +231,7 @@ impl AndroidContext {
             .canonicalize()
             .with_context(|| "Failed to resolve project root")?;
         let app_toml = load_app_toml(&root_dir)?;
+        let asset_backend = asset_backend_override.unwrap_or(AssetBackend::Platform);
         let target_dir = MetadataCommand::new()
             .manifest_path(root_dir.join("Cargo.toml"))
             .exec()
@@ -205,7 +239,7 @@ impl AndroidContext {
             .target_directory
             .into_std_path_buf();
 
-        let plugin_permissions = collect_plugin_permissions(&root_dir, package_dir.as_ref())?;
+        let tessera_permissions = collect_tessera_permissions(&root_dir, package_dir.as_ref())?;
         let identifier = app_toml
             .identifier
             .clone()
@@ -239,8 +273,6 @@ impl AndroidContext {
         let profiling_output = profiling_output
             .map(|path| normalize_android_profiling_output_path(&path, config.app().identifier()));
 
-        let mut tessera_permissions = app_toml.permissions.unwrap_or_default();
-        tessera_permissions.extend(plugin_permissions);
         let app_permissions = map_tessera_permissions(&tessera_permissions)?;
         let mut merged_permissions = manifest_cfg.permissions.clone().unwrap_or_default();
         merged_permissions.extend(app_permissions);
@@ -262,6 +294,10 @@ impl AndroidContext {
         if debug_dirty_overlay {
             cargo_features.push("tessera-ui/debug-dirty-overlay".to_string());
         }
+        env_vars.insert(
+            "TESSERA_ASSET_BACKEND".to_string(),
+            asset_backend.as_str().to_string(),
+        );
 
         let metadata = AndroidMetadata {
             supported: true,
@@ -290,6 +326,7 @@ impl AndroidContext {
             device,
             profiling_output,
             debug_dirty_overlay,
+            asset_backend,
             activity: DEFAULT_ANDROID_ACTIVITY.to_string(),
             config,
             metadata,
@@ -374,6 +411,12 @@ fn normalize_android_profiling_output_path(path: &str, app_identifier: &str) -> 
 }
 
 fn apply_android_runtime_env(ctx: &AndroidContext) {
+    // SAFETY: This CLI mutates process env only on the main thread before
+    // spawning child processes that should inherit the variable.
+    unsafe {
+        std::env::set_var("TESSERA_ASSET_BACKEND", ctx.asset_backend.as_str());
+    }
+
     if let Some(path) = &ctx.profiling_output {
         // SAFETY: This CLI mutates process env only on the main thread before
         // spawning child processes that should inherit the variable.
@@ -464,9 +507,17 @@ pub fn init(skip_targets_install: bool) -> Result<()> {
             &handlebars,
             &data,
         )?;
+        write_template_file(
+            &ANDROID_TEMPLATE_DIR,
+            Path::new("app/src/main/java/TesseraGameActivity.java.hbs"),
+            ctx.config.project_dir().as_path(),
+            &handlebars,
+            &data,
+        )?;
     }
 
     sync_android_plugins(&ctx.config.project_dir(), &android_plugins)?;
+    sync_android_assets(&ctx)?;
 
     if !project_exists {
         output::status(
@@ -556,6 +607,10 @@ pub fn build(opts: BuildOptions) -> Result<()> {
     if ctx.debug_dirty_overlay {
         output::status("DirtyOverlay", "enabled");
     }
+    output::status(
+        "Assets",
+        format!("backend `{}`", ctx.asset_backend.as_str()),
+    );
 
     for target in &targets {
         target.build(
@@ -623,6 +678,10 @@ pub fn dev(opts: DevOptions) -> Result<()> {
     if ctx.debug_dirty_overlay {
         output::status("DirtyOverlay", "enabled");
     }
+    output::status(
+        "Assets",
+        format!("backend `{}`", ctx.asset_backend.as_str()),
+    );
 
     let env = AndroidEnv::new()?;
     let profile = ctx.profile();
@@ -655,10 +714,20 @@ pub fn dev(opts: DevOptions) -> Result<()> {
         ));
     }
 
-    for file in ["Cargo.toml", "build.rs"] {
+    for file in [
+        "Cargo.toml",
+        "build.rs",
+        "tessera-app.toml",
+        "tessera-config.toml",
+    ] {
         let path = watch_dir.join(file);
         if path.exists() {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
+        }
+    }
+    for assets_dir in collect_asset_dirs(ctx.config.app().root_dir(), ctx.package_dir.as_ref())? {
+        if assets_dir.exists() {
+            watcher.watch(&assets_dir, RecursiveMode::Recursive)?;
         }
     }
 
@@ -744,6 +813,10 @@ pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
     if ctx.debug_dirty_overlay {
         output::status("DirtyOverlay", "enabled");
     }
+    output::status(
+        "Assets",
+        format!("backend `{}`", ctx.asset_backend.as_str()),
+    );
 
     target.build(
         &ctx.config,
@@ -958,95 +1031,56 @@ fn sync_android_project(ctx: &AndroidContext) -> Result<()> {
         &handlebars,
         &data,
     )?;
+    write_template_file(
+        &ANDROID_TEMPLATE_DIR,
+        Path::new("app/src/main/java/TesseraGameActivity.java.hbs"),
+        project_dir.as_path(),
+        &handlebars,
+        &data,
+    )?;
 
     sync_android_plugins(&project_dir, &android_plugins)?;
+    sync_android_assets(ctx)?;
     Ok(())
 }
 
+#[derive(Debug)]
+struct ResolvedPackage {
+    name: String,
+    version: String,
+    dir: PathBuf,
+    is_root: bool,
+}
+
 fn collect_android_plugins(ctx: &AndroidContext) -> Result<Vec<AndroidPlugin>> {
-    let manifest_path = ctx.config.app().root_dir().join("Cargo.toml");
-    let metadata = MetadataCommand::new()
-        .manifest_path(&manifest_path)
-        .exec()
-        .context("Failed to run cargo metadata")?;
-
-    let root_manifest = ctx
-        .package_dir
-        .as_ref()
-        .map(|dir| dir.join("Cargo.toml"))
-        .unwrap_or_else(|| manifest_path.clone())
-        .canonicalize()
-        .with_context(|| "Failed to resolve root Cargo.toml")?;
-
-    let root_pkg = metadata
-        .packages
-        .iter()
-        .find(|pkg| {
-            pkg.manifest_path
-                .clone()
-                .into_std_path_buf()
-                .canonicalize()
-                .map(|path| path == root_manifest)
-                .unwrap_or(false)
-        })
-        .ok_or_else(|| anyhow!("Failed to resolve the root package from cargo metadata"))?;
-
-    let resolve = metadata
-        .resolve
-        .as_ref()
-        .ok_or_else(|| anyhow!("cargo metadata missing dependency graph"))?;
-
-    let mut nodes = HashMap::new();
-    for node in &resolve.nodes {
-        nodes.insert(node.id.clone(), node);
-    }
-
-    let mut visited = HashSet::new();
-    let mut stack = vec![root_pkg.id.clone()];
-    while let Some(id) = stack.pop() {
-        if visited.insert(id.clone())
-            && let Some(node) = nodes.get(&id)
-        {
-            for dep in &node.deps {
-                stack.push(dep.pkg.clone());
-            }
-        }
-    }
-
+    let packages =
+        collect_resolved_packages(ctx.config.app().root_dir(), ctx.package_dir.as_ref())?;
     let mut plugins = Vec::new();
     let mut modules = HashSet::new();
-    for pkg in metadata
-        .packages
-        .iter()
-        .filter(|pkg| visited.contains(&pkg.id) && pkg.id != root_pkg.id)
-    {
-        let pkg_dir = pkg
-            .manifest_path
-            .clone()
-            .into_std_path_buf()
-            .parent()
-            .map(Path::to_path_buf)
-            .ok_or_else(|| anyhow!("Failed to locate plugin root for {}", pkg.manifest_path))?;
-        let plugin_manifest_path = pkg_dir.join("tessera-plugin.toml");
-        if !plugin_manifest_path.exists() {
-            continue;
-        }
-        let contents = fs::read_to_string(&plugin_manifest_path)
-            .with_context(|| format!("Failed to read {}", plugin_manifest_path.display()))?;
-        let manifest: PluginManifest = toml::from_str(&contents)
-            .with_context(|| format!("Failed to parse {}", plugin_manifest_path.display()))?;
-        let Some(android) = manifest.android else {
+
+    for package in packages.into_iter().filter(|package| !package.is_root) {
+        let Some(config) = load_tessera_config_from_dir(&package.dir)? else {
             continue;
         };
-        let module = android.module;
+        let module = config
+            .plugin
+            .as_ref()
+            .and_then(|plugin| plugin.android.as_ref())
+            .and_then(|android| android.module.as_ref())
+            .cloned();
+        let Some(module) = module else {
+            continue;
+        };
+
         if !modules.insert(module.clone()) {
             return Err(anyhow!(
-                "Duplicate Android plugin module '{}' found in {}",
+                "Duplicate Android plugin module '{}' found in package `{}`",
                 module,
-                plugin_manifest_path.display()
+                package.name
             ));
         }
-        let source_dir = pkg_dir.join("android");
+
+        let source_dir = package.dir.join("android");
         if !source_dir.is_dir() {
             return Err(anyhow!(
                 "Android module directory not found for plugin '{}': {}",
@@ -1061,10 +1095,102 @@ fn collect_android_plugins(ctx: &AndroidContext) -> Result<Vec<AndroidPlugin>> {
     Ok(plugins)
 }
 
-fn collect_plugin_permissions(
+fn collect_tessera_permissions(
     root_dir: &Path,
     package_dir: Option<&PathBuf>,
 ) -> Result<Vec<String>> {
+    let packages = collect_resolved_packages(root_dir, package_dir)?;
+    let mut permissions = Vec::new();
+    for package in packages {
+        let Some(config) = load_tessera_config_from_dir(&package.dir)? else {
+            continue;
+        };
+        permissions.extend(config.permissions);
+    }
+    permissions.sort();
+    permissions.dedup();
+    Ok(permissions)
+}
+
+fn collect_asset_dirs(root_dir: &Path, package_dir: Option<&PathBuf>) -> Result<Vec<PathBuf>> {
+    let packages = collect_resolved_packages(root_dir, package_dir)?;
+    let mut dirs = Vec::new();
+    for package in packages {
+        let Some(config) = load_tessera_config_from_dir(&package.dir)? else {
+            continue;
+        };
+        let Some(assets_dir) = resolve_assets_dir(&package.dir, Some(&config)) else {
+            continue;
+        };
+        if assets_dir.is_dir() {
+            dirs.push(assets_dir);
+        }
+    }
+    dirs.sort();
+    dirs.dedup();
+    Ok(dirs)
+}
+
+fn sync_android_assets(ctx: &AndroidContext) -> Result<()> {
+    let tessera_assets_root = ctx.config.project_dir().join("app/src/main/assets/tessera");
+    if tessera_assets_root.exists() {
+        fs::remove_dir_all(&tessera_assets_root)
+            .with_context(|| format!("Failed to remove {}", tessera_assets_root.display()))?;
+    }
+
+    if ctx.asset_backend != AssetBackend::Platform {
+        return Ok(());
+    }
+
+    let packages =
+        collect_resolved_packages(ctx.config.app().root_dir(), ctx.package_dir.as_ref())?;
+    let mut copied_any = false;
+
+    for package in packages {
+        let Some(config) = load_tessera_config_from_dir(&package.dir)? else {
+            continue;
+        };
+        let Some(assets_dir) = resolve_assets_dir(&package.dir, Some(&config)) else {
+            continue;
+        };
+        if !assets_dir.is_dir() {
+            return Err(anyhow!(
+                "Configured assets directory not found for package `{}`: {}",
+                package.name,
+                assets_dir.display()
+            ));
+        }
+
+        let namespace = asset_namespace(&package.name, &package.version);
+        let target_dir = tessera_assets_root.join(&namespace);
+        copy_dir_all(&assets_dir, &target_dir).with_context(|| {
+            format!(
+                "Failed to copy assets for package `{}` from {} to {}",
+                package.name,
+                assets_dir.display(),
+                target_dir.display()
+            )
+        })?;
+        copied_any = true;
+    }
+
+    if copied_any {
+        output::status(
+            "Assets",
+            format!(
+                "synced platform assets to {}",
+                display_path(&tessera_assets_root)
+            ),
+        );
+    }
+
+    Ok(())
+}
+
+fn collect_resolved_packages(
+    root_dir: &Path,
+    package_dir: Option<&PathBuf>,
+) -> Result<Vec<ResolvedPackage>> {
     let manifest_path = root_dir.join("Cargo.toml");
     let metadata = MetadataCommand::new()
         .manifest_path(&manifest_path)
@@ -1112,33 +1238,32 @@ fn collect_plugin_permissions(
         }
     }
 
-    let mut permissions = Vec::new();
+    let mut packages = Vec::new();
     for pkg in metadata
         .packages
         .iter()
-        .filter(|pkg| visited.contains(&pkg.id) && pkg.id != root_pkg.id)
+        .filter(|pkg| visited.contains(&pkg.id))
     {
-        let pkg_dir = pkg
+        let dir = pkg
             .manifest_path
             .clone()
             .into_std_path_buf()
             .parent()
             .map(Path::to_path_buf)
-            .ok_or_else(|| anyhow!("Failed to locate plugin root for {}", pkg.manifest_path))?;
-        let plugin_manifest_path = pkg_dir.join("tessera-plugin.toml");
-        if !plugin_manifest_path.exists() {
-            continue;
-        }
-        let contents = fs::read_to_string(&plugin_manifest_path)
-            .with_context(|| format!("Failed to read {}", plugin_manifest_path.display()))?;
-        let manifest: PluginManifest = toml::from_str(&contents)
-            .with_context(|| format!("Failed to parse {}", plugin_manifest_path.display()))?;
-        if let Some(mut plugin_permissions) = manifest.permissions {
-            permissions.append(&mut plugin_permissions);
-        }
+            .ok_or_else(|| anyhow!("Failed to locate package root for {}", pkg.manifest_path))?;
+        packages.push(ResolvedPackage {
+            name: pkg.name.to_string(),
+            version: pkg.version.to_string(),
+            dir,
+            is_root: pkg.id == root_pkg.id,
+        });
     }
-
-    Ok(permissions)
+    packages.sort_by(|left, right| {
+        left.name
+            .cmp(&right.name)
+            .then(left.version.cmp(&right.version))
+    });
+    Ok(packages)
 }
 
 fn sync_android_plugins(project_dir: &Path, plugins: &[AndroidPlugin]) -> Result<()> {
@@ -1256,20 +1381,6 @@ struct AndroidManifestConfig {
 #[derive(Debug, Deserialize, Default)]
 struct AppToml {
     identifier: Option<String>,
-    permissions: Option<Vec<String>>,
-}
-
-#[derive(Debug, Deserialize)]
-struct PluginManifest {
-    permissions: Option<Vec<String>>,
-    android: Option<PluginAndroid>,
-}
-
-#[derive(Debug, Deserialize)]
-struct PluginAndroid {
-    module: String,
-    #[allow(dead_code)]
-    package: Option<String>,
 }
 
 fn load_app_toml(root: &Path) -> Result<AppToml> {
@@ -1299,7 +1410,7 @@ fn map_tessera_permissions(perms: &[String]) -> Result<Vec<String>> {
             }
             other => {
                 return Err(anyhow!(
-                    "Unknown tessera permission '{other}' in tessera-app.toml or tessera-plugin.toml"
+                    "Unknown tessera permission '{other}' in tessera-config.toml"
                 ));
             }
         }

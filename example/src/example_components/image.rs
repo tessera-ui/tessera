@@ -8,12 +8,8 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Dp, Modifier, remember, retain, shard};
+use tessera_ui::{AssetExt, Dp, Modifier, remember, retain, shard};
 
-const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/assets/scarlet_ut.jpg",
-));
 const VECTOR_BYTES: &[u8] = include_bytes!(concat!(
     env!("CARGO_MANIFEST_DIR"),
     "/../assets/emoji_u1f416.svg"
@@ -25,10 +21,13 @@ pub fn image_showcase() {
         test_content,
     ));
 }
+
 fn test_content() {
     let image_data = remember(|| {
-        load_image_from_source(&ImageSource::Bytes(IMAGE_BYTES.into()))
-            .expect("Failed to load image data")
+        let image_bytes = crate::res::SCARLET_UT_JPG
+            .read()
+            .expect("Failed to read raster asset bytes");
+        load_image_from_source(&ImageSource::Bytes(image_bytes)).expect("Failed to load image data")
     });
     let image_vector_data = remember(|| {
         load_image_vector_from_source(&ImageVectorSource::Bytes(VECTOR_BYTES.into()))

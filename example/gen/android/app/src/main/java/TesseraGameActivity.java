@@ -1,4 +1,4 @@
-package com.example.example;
+package com.tessera.example;
 
 import android.os.Build;
 import android.graphics.Color;

@@ -7,6 +7,7 @@ use std::{
 
 use anyhow::{Result, anyhow};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
+use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_assets_dir};
 
 use crate::output;
 
@@ -18,6 +19,7 @@ pub fn execute(
     release: bool,
     profiling_output: Option<&Path>,
     debug_dirty_overlay: bool,
+    asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
     output::status("Starting", "dev server (auto rebuild/restart)");
     if let Some(pkg) = package {
@@ -49,6 +51,8 @@ pub fn execute(
     } else {
         PathBuf::from(".")
     };
+    let asset_backend = resolve_asset_backend(asset_backend_override)?;
+    output::status("Assets", format!("backend `{}`", asset_backend.as_str()));
 
     // Watch the src directory
     let src_path = package_dir.join("src");
@@ -62,11 +66,22 @@ pub fn execute(
     }
 
     // Watch Cargo.toml and build.rs in the package directory
-    for file in ["Cargo.toml", "build.rs"] {
+    for file in [
+        "Cargo.toml",
+        "build.rs",
+        "tessera-app.toml",
+        "tessera-config.toml",
+    ] {
         let path = package_dir.join(file);
         if path.exists() {
             watcher.watch(&path, RecursiveMode::NonRecursive)?;
         }
+    }
+    if let Some(config) = load_tessera_config_from_dir(&package_dir)?
+        && let Some(assets_dir) = resolve_assets_dir(&package_dir, Some(&config))
+        && assets_dir.exists()
+    {
+        watcher.watch(&assets_dir, RecursiveMode::Recursive)?;
     }
 
     let mut child: Option<Child> = None;
@@ -115,6 +130,7 @@ pub fn execute(
                 build_cmd.arg("-p").arg(pkg);
             }
             configure_tessera_ui_features(&mut build_cmd, profiling_output, debug_dirty_overlay);
+            build_cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
 
             match build_cmd.spawn() {
                 Ok(c) => {
@@ -149,6 +165,7 @@ pub fn execute(
                             profiling_output,
                             debug_dirty_overlay,
                         );
+                        run_cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
 
                         match run_cmd.spawn() {
                             Ok(c) => {
@@ -227,4 +244,17 @@ fn configure_tessera_ui_features(
     if let Some(output_path) = profiling_output {
         cmd.env("TESSERA_PROFILING_OUTPUT", output_path);
     }
+}
+
+fn resolve_asset_backend(asset_backend_override: Option<AssetBackend>) -> Result<AssetBackend> {
+    if let Some(backend) = asset_backend_override {
+        if backend == AssetBackend::Platform {
+            return Err(anyhow!(
+                "Requested platform asset backend is not supported for `cargo tessera dev`; use `cargo tessera android dev` for platform assets"
+            ));
+        }
+        return Ok(backend);
+    }
+
+    Ok(AssetBackend::Embed)
 }

@@ -332,6 +332,7 @@
 pub mod accessibility;
 #[cfg(target_os = "android")]
 pub mod android;
+pub mod asset;
 pub mod color;
 mod component_tree;
 pub mod context;
@@ -372,6 +373,7 @@ pub use winit;
 
 pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
+    asset::AssetExt,
     color::Color,
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
@@ -427,3 +429,6 @@ use ime_state::ImeState;
 pub use tessera_macros::shard;
 #[cfg(feature = "shard")]
 pub use tessera_shard;
+
+#[cfg(target_os = "android")]
+pub use {jni, ndk_context, ndk_sys};

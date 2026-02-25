@@ -15,12 +15,7 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{CallbackWith, Dp, Modifier, remember, retain, shard};
-
-const IMAGE_BYTES: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/assets/grid_background.png",
-));
+use tessera_ui::{AssetExt, CallbackWith, Dp, Modifier, remember, retain, shard};
 
 struct CornerRadius(f32);
 
@@ -71,8 +66,11 @@ impl Display for ExampleGlassState {
 
 impl Default for ExampleGlassState {
     fn default() -> Self {
+        let image_bytes = crate::res::GRID_BACKGROUND_PNG
+            .read()
+            .expect("Failed to read image asset bytes");
         let image_data = Arc::new(
-            load_image_from_source(&ImageSource::Bytes(Arc::from(IMAGE_BYTES)))
+            load_image_from_source(&ImageSource::Bytes(image_bytes))
                 .expect("Failed to load image from embedded bytes"),
         );
 

@@ -1,6 +1,7 @@
 use std::{path::Path, process::Command};
 
 use anyhow::{Context, Result, bail};
+use tessera_build::AssetBackend;
 
 use crate::output;
 
@@ -10,6 +11,7 @@ pub fn execute(
     package: Option<&str>,
     profiling_output: Option<&Path>,
     debug_dirty_overlay: bool,
+    asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
     if profiling_output.is_some() && target_is_android(target) {
         bail!("--profiling-output is not supported for Android targets");
@@ -37,6 +39,8 @@ pub fn execute(
         format!("project ({})", details.join(", "))
     };
     output::status("Building", message);
+    let asset_backend = resolve_asset_backend(target, asset_backend_override)?;
+    output::status("Assets", format!("backend `{}`", asset_backend.as_str()));
 
     let mut cmd = Command::new("cargo");
     cmd.arg("build");
@@ -53,6 +57,7 @@ pub fn execute(
         cmd.arg("-p").arg(package);
     }
     configure_tessera_ui_features(&mut cmd, profiling_output, debug_dirty_overlay);
+    cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
 
     let status = cmd.status().context("Failed to run cargo build")?;
 
@@ -93,7 +98,32 @@ fn configure_tessera_ui_features(
 }
 
 fn target_is_android(target: Option<&str>) -> bool {
-    target
-        .map(|triple| triple.to_ascii_lowercase().contains("android"))
-        .unwrap_or(false)
+    target.map(is_platform_backend_target).unwrap_or(false)
+}
+
+fn resolve_asset_backend(
+    target: Option<&str>,
+    asset_backend_override: Option<AssetBackend>,
+) -> Result<AssetBackend> {
+    let supports_platform = target.map(is_platform_backend_target).unwrap_or(false);
+
+    if let Some(backend) = asset_backend_override {
+        if backend == AssetBackend::Platform && !supports_platform {
+            bail!(
+                "Requested platform asset backend is not supported for target `{}`",
+                target.unwrap_or("host-default")
+            );
+        }
+        return Ok(backend);
+    }
+
+    if supports_platform {
+        Ok(AssetBackend::Platform)
+    } else {
+        Ok(AssetBackend::Embed)
+    }
+}
+
+fn is_platform_backend_target(target: &str) -> bool {
+    target.to_ascii_lowercase().contains("android")
 }

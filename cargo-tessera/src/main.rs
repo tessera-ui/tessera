@@ -1,7 +1,8 @@
 use std::{path::PathBuf, process::ExitCode};
 
 use anyhow::Result;
-use clap::{Args, Parser, Subcommand};
+use clap::{Args, Parser, Subcommand, ValueEnum};
+use tessera_build::AssetBackend;
 
 use commands::{
     android::{self, AndroidFormat},
@@ -62,6 +63,9 @@ enum TesseraCommands {
         /// Overlay dirty replay regions with a translucent debug color
         #[arg(long)]
         debug_dirty_overlay: bool,
+        /// Override asset backend
+        #[arg(long, value_enum)]
+        asset_backend: Option<AssetBackendArg>,
     },
     /// Build the project for release (native targets)
     Build {
@@ -81,13 +85,16 @@ enum TesseraCommands {
         /// Overlay dirty replay regions with a translucent debug color
         #[arg(long)]
         debug_dirty_overlay: bool,
+        /// Override asset backend
+        #[arg(long, value_enum)]
+        asset_backend: Option<AssetBackendArg>,
     },
     /// Profiling utilities
     Profiling {
         #[command(subcommand)]
         command: ProfilingCommands,
     },
-    /// Android-specific helpers (build/dev)
+    /// Android-specific build and development commands
     Android {
         #[command(subcommand)]
         command: AndroidCommands,
@@ -175,6 +182,21 @@ enum ProfilingCommands {
     },
 }
 
+#[derive(Debug, Copy, Clone, PartialEq, Eq, ValueEnum)]
+enum AssetBackendArg {
+    Embed,
+    Platform,
+}
+
+impl AssetBackendArg {
+    fn to_backend(self) -> AssetBackend {
+        match self {
+            Self::Embed => AssetBackend::Embed,
+            Self::Platform => AssetBackend::Platform,
+        }
+    }
+}
+
 #[derive(Args)]
 struct AndroidBuildArgs {
     /// Build in release mode
@@ -195,6 +217,9 @@ struct AndroidBuildArgs {
     /// Overlay dirty replay regions with a translucent debug color
     #[arg(long)]
     debug_dirty_overlay: bool,
+    /// Override asset backend
+    #[arg(long, value_enum)]
+    asset_backend: Option<AssetBackendArg>,
 }
 
 #[derive(Args)]
@@ -217,6 +242,9 @@ struct AndroidDevArgs {
     /// Overlay dirty replay regions with a translucent debug color
     #[arg(long)]
     debug_dirty_overlay: bool,
+    /// Override asset backend
+    #[arg(long, value_enum)]
+    asset_backend: Option<AssetBackendArg>,
 }
 
 #[derive(Args)]
@@ -235,6 +263,9 @@ struct AndroidRustBuildArgs {
     /// Overlay dirty replay regions with a translucent debug color
     #[arg(long)]
     debug_dirty_overlay: bool,
+    /// Override asset backend
+    #[arg(long, value_enum)]
+    asset_backend: Option<AssetBackendArg>,
 }
 
 fn main() -> ExitCode {
@@ -280,6 +311,7 @@ fn run() -> Result<()> {
                 release,
                 profiling_output,
                 debug_dirty_overlay,
+                asset_backend,
             } => {
                 commands::dev::execute(
                     verbose,
@@ -287,6 +319,7 @@ fn run() -> Result<()> {
                     release,
                     profiling_output.as_deref(),
                     debug_dirty_overlay,
+                    asset_backend.map(AssetBackendArg::to_backend),
                 )?;
             }
             TesseraCommands::Build {
@@ -295,6 +328,7 @@ fn run() -> Result<()> {
                 package,
                 profiling_output,
                 debug_dirty_overlay,
+                asset_backend,
             } => {
                 commands::build::execute(
                     release,
@@ -302,6 +336,7 @@ fn run() -> Result<()> {
                     package.as_deref(),
                     profiling_output.as_deref(),
                     debug_dirty_overlay,
+                    asset_backend.map(AssetBackendArg::to_backend),
                 )?;
             }
             TesseraCommands::Profiling { command } => match command {
@@ -358,6 +393,7 @@ fn run() -> Result<()> {
                         format: build_args.format,
                         profiling_output: build_args.profiling_output.clone(),
                         debug_dirty_overlay: build_args.debug_dirty_overlay,
+                        asset_backend: build_args.asset_backend.map(AssetBackendArg::to_backend),
                     })?;
                 }
                 AndroidCommands::Dev(dev_args) => {
@@ -368,6 +404,7 @@ fn run() -> Result<()> {
                         device: dev_args.device.clone(),
                         profiling_output: dev_args.profiling_output.clone(),
                         debug_dirty_overlay: dev_args.debug_dirty_overlay,
+                        asset_backend: dev_args.asset_backend.map(AssetBackendArg::to_backend),
                     })?;
                 }
                 AndroidCommands::RustBuild(build_args) => {
@@ -377,6 +414,7 @@ fn run() -> Result<()> {
                         package: build_args.package.clone(),
                         profiling_output: build_args.profiling_output.clone(),
                         debug_dirty_overlay: build_args.debug_dirty_overlay,
+                        asset_backend: build_args.asset_backend.map(AssetBackendArg::to_backend),
                     })?;
                 }
             },

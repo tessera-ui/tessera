@@ -1,0 +1,56 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera-config.schema.json",
+  "title": "Tessera Shared Configuration",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "permissions": {
+      "type": "array",
+      "description": "Tessera permissions mapped to platform-specific permissions.",
+      "items": {
+        "type": "string",
+        "enum": [
+          "notifications",
+          "camera",
+          "microphone",
+          "location",
+          "bluetooth"
+        ]
+      },
+      "uniqueItems": true,
+      "default": []
+    },
+    "assets": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "dir": {
+          "type": "string",
+          "description": "Asset directory path relative to the crate root."
+        }
+      }
+    },
+    "plugin": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "android": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "module": {
+              "type": "string"
+            },
+            "package": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "module"
+          ]
+        }
+      }
+    }
+  }
+}

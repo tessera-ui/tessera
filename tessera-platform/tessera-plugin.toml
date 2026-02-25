@@ -1,5 +1,0 @@
-#:schema https://raw.githubusercontent.com/tessera-ui/tessera/main/docs/schemas/tessera-plugin.schema.json
-permissions = []
-
-[android]
-module = "tessera_platform"
