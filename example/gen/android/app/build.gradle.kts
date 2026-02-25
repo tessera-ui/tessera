@@ -4,10 +4,10 @@ plugins {
 }
 
 android {
-    namespace="com.example.example"
+    namespace="com.tessera.example"
     compileSdk = 34
     defaultConfig {
-        applicationId = "com.example.example"
+        applicationId = "com.tessera.example"
         minSdk = 24
         targetSdk = 34
         versionCode = 1
@@ -43,6 +43,7 @@ android {
 
 rust {
     rootDirRel = "../../../"
+    profilingOutput = System.getenv("TESSERA_PROFILING_OUTPUT")
 }
 
 dependencies {
