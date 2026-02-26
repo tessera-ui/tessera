@@ -10,6 +10,7 @@ const val TASK_GROUP = "rust"
 open class Config {
     lateinit var rootDirRel: String
     var profilingOutput: String? = null
+    var debugDirtyOverlay: Boolean = false
 }
 
 open class RustPlugin : Plugin<Project> {
@@ -74,6 +75,7 @@ open class RustPlugin : Plugin<Project> {
                         target = targetName
                         release = profile == "release"
                         profilingOutput = config.profilingOutput
+                        debugDirtyOverlay = config.debugDirtyOverlay
                     }
 
                     buildTask.dependsOn(targetBuildTask)

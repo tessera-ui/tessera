@@ -16,6 +16,8 @@ open class BuildTask : DefaultTask() {
     @Input
     @Optional
     var profilingOutput: String? = null
+    @Input
+    var debugDirtyOverlay: Boolean = false
 
     @TaskAction
     fun build() {
@@ -37,6 +39,9 @@ open class BuildTask : DefaultTask() {
             }
             profilingOutput?.takeIf { it.isNotBlank() }?.let { outputPath ->
                 args("--profiling-output", outputPath)
+            }
+            if (debugDirtyOverlay) {
+                args("--debug-dirty-overlay")
             }
             args(target)
         }.assertNormalExitValue()

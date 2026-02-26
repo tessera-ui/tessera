@@ -44,6 +44,7 @@ android {
 rust {
     rootDirRel = "../../../"
     profilingOutput = System.getenv("TESSERA_PROFILING_OUTPUT")
+    debugDirtyOverlay = System.getenv("TESSERA_DEBUG_DIRTY_OVERLAY") == "1"
 }
 
 dependencies {
