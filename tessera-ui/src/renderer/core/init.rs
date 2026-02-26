@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use tracing::{error, info};
+use tracing::{error, info, warn};
 use wgpu::TextureFormat;
 use winit::window::Window;
 
@@ -73,27 +73,52 @@ impl RenderCore {
     async fn request_device_and_queue_for_adapter(
         adapter: &wgpu::Adapter,
     ) -> (wgpu::Device, wgpu::Queue) {
+        let required_limits = if cfg!(target_arch = "wasm32") {
+            wgpu::Limits::downlevel_webgl2_defaults()
+        } else {
+            wgpu::Limits::default()
+        };
+        let base_features = wgpu::Features::CLEAR_TEXTURE;
+        let supports_pipeline_cache = adapter.features().contains(wgpu::Features::PIPELINE_CACHE);
+        let requested_features = if supports_pipeline_cache {
+            base_features | wgpu::Features::PIPELINE_CACHE
+        } else {
+            info!("Adapter does not support PIPELINE_CACHE; continuing without it");
+            base_features
+        };
+
+        let make_descriptor = |required_features| wgpu::DeviceDescriptor {
+            required_features,
+            required_limits: required_limits.clone(),
+            label: None,
+            memory_hints: wgpu::MemoryHints::MemoryUsage,
+            trace: wgpu::Trace::Off,
+            experimental_features: wgpu::ExperimentalFeatures::default(),
+        };
+
         match adapter
-            .request_device(&wgpu::DeviceDescriptor {
-                required_features: wgpu::Features::empty()
-                    | wgpu::Features::CLEAR_TEXTURE
-                    | wgpu::Features::PIPELINE_CACHE,
-                required_limits: if cfg!(target_arch = "wasm32") {
-                    wgpu::Limits::downlevel_webgl2_defaults()
-                } else {
-                    wgpu::Limits::default()
-                },
-                label: None,
-                memory_hints: wgpu::MemoryHints::MemoryUsage,
-                trace: wgpu::Trace::Off,
-                experimental_features: wgpu::ExperimentalFeatures::default(),
-            })
+            .request_device(&make_descriptor(requested_features))
             .await
         {
             Ok((device, queue)) => (device, queue),
-            Err(e) => {
-                error!("Failed to create device: {e:?}");
-                panic!("Failed to create device: {e:?}");
+            Err(first_err) if requested_features.contains(wgpu::Features::PIPELINE_CACHE) => {
+                warn!(
+                    "Failed to create device with PIPELINE_CACHE enabled: {first_err:?}; retrying without PIPELINE_CACHE"
+                );
+                match adapter
+                    .request_device(&make_descriptor(base_features))
+                    .await
+                {
+                    Ok((device, queue)) => (device, queue),
+                    Err(second_err) => {
+                        error!("Failed to create device: {second_err:?}");
+                        panic!("Failed to create device: {second_err:?}");
+                    }
+                }
+            }
+            Err(err) => {
+                error!("Failed to create device: {err:?}");
+                panic!("Failed to create device: {err:?}");
             }
         }
     }

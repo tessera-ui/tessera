@@ -9,6 +9,9 @@ pub fn initialize_cache(
     device: &wgpu::Device,
     adapter_info: &wgpu::AdapterInfo,
 ) -> Option<wgpu::PipelineCache> {
+    if !device.features().contains(wgpu::Features::PIPELINE_CACHE) {
+        return None;
+    }
     let cache_dir = get_cache_dir()?;
     let cache_path = cache_dir.join(wgpu::util::pipeline_cache_key(adapter_info)?);
     let cache_data = std::fs::read(&cache_path).ok();
