@@ -5,10 +5,7 @@ use std::{
     cell::RefCell,
     hash::{Hash, Hasher},
     marker::PhantomData,
-    sync::{
-        Arc, OnceLock,
-        atomic::{AtomicBool, Ordering},
-    },
+    sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
 
@@ -331,7 +328,6 @@ static STATE_READ_DEPENDENCY_TRACKER: OnceLock<RwLock<StateReadDependencyTracker
     OnceLock::new();
 type RedrawWaker = Arc<dyn Fn() + Send + Sync + 'static>;
 static REDRAW_WAKER: OnceLock<RwLock<Option<RedrawWaker>>> = OnceLock::new();
-static REDRAW_REQUEST_PENDING: AtomicBool = AtomicBool::new(false);
 
 fn build_invalidation_tracker() -> &'static RwLock<BuildInvalidationTracker> {
     BUILD_INVALIDATION_TRACKER.get_or_init(|| RwLock::new(BuildInvalidationTracker::default()))
@@ -346,38 +342,18 @@ fn redraw_waker() -> &'static RwLock<Option<RedrawWaker>> {
 }
 
 fn schedule_runtime_redraw() {
-    if REDRAW_REQUEST_PENDING
-        .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-        .is_err()
-    {
-        return;
-    }
-
     let callback = redraw_waker().read().clone();
     if let Some(callback) = callback {
         callback();
-    } else {
-        REDRAW_REQUEST_PENDING.store(false, Ordering::Release);
     }
 }
 
 pub(crate) fn install_redraw_waker(callback: RedrawWaker) {
     *redraw_waker().write() = Some(callback);
-    if REDRAW_REQUEST_PENDING.load(Ordering::Acquire) {
-        let callback = redraw_waker().read().clone();
-        if let Some(callback) = callback {
-            callback();
-        }
-    }
 }
 
 pub(crate) fn clear_redraw_waker() {
     *redraw_waker().write() = None;
-    REDRAW_REQUEST_PENDING.store(false, Ordering::Release);
-}
-
-pub(crate) fn consume_scheduled_redraw() {
-    REDRAW_REQUEST_PENDING.store(false, Ordering::Release);
 }
 
 fn current_component_instance_key_from_scope() -> Option<u64> {

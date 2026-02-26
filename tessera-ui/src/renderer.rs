@@ -10,7 +10,10 @@ pub mod external;
 
 use std::{
     cell::RefCell,
-    sync::Arc,
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+    },
     time::{Duration, Instant},
 };
 
@@ -54,7 +57,7 @@ use crate::{
     runtime::{
         TesseraRuntime, begin_frame_clock, begin_frame_component_replay_tracking,
         begin_frame_layout_dirty_tracking, begin_recompose_slot_epoch, clear_frame_nanos_receivers,
-        clear_redraw_waker, consume_scheduled_redraw, drop_slots_for_instance_logic_ids,
+        clear_redraw_waker, drop_slots_for_instance_logic_ids,
         finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
         finalize_frame_layout_dirty_tracking, has_pending_build_invalidations,
         has_pending_frame_nanos_receivers, install_redraw_waker, previous_component_replay_nodes,
@@ -97,6 +100,18 @@ use std::path::PathBuf;
 use winit::platform::android::{
     ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
 };
+
+#[derive(Debug)]
+enum RendererUserEvent {
+    AccessKit(AccessKitEvent),
+    RuntimeRedrawWake,
+}
+
+impl From<AccessKitEvent> for RendererUserEvent {
+    fn from(event: AccessKitEvent) -> Self {
+        Self::AccessKit(event)
+    }
+}
 
 type RenderComputationOutput = (
     RenderGraph,
@@ -457,10 +472,13 @@ pub struct Renderer<F: Fn()> {
     config: TesseraConfig,
     /// AccessKit adapter for accessibility support
     accessibility_adapter: Option<AccessKitAdapter>,
-    /// Event loop proxy for sending accessibility events
-    event_loop_proxy: Option<winit::event_loop::EventLoopProxy<AccessKitEvent>>,
+    /// Event loop proxy for posting user events (accessibility/runtime wakeups)
+    event_loop_proxy: Option<winit::event_loop::EventLoopProxy<RendererUserEvent>>,
     /// Incrementing frame index for profiling and debugging.
     frame_index: u64,
+    /// Global redraw gate. While `true`, redraw requests are coalesced until
+    /// the pending `RedrawRequested` event is consumed.
+    redraw_request_pending: Arc<AtomicBool>,
     /// Whether a window close was requested during the last frame.
     pending_close_requested: bool,
     /// Tracks whether a native border resize drag is currently in progress.
@@ -572,7 +590,7 @@ impl<F: Fn()> Renderer<F> {
         modules: Vec<Box<dyn RenderModule>>,
         config: TesseraConfig,
     ) -> Result<(), EventLoopError> {
-        let event_loop = EventLoop::<AccessKitEvent>::with_user_event().build()?;
+        let event_loop = EventLoop::<RendererUserEvent>::with_user_event().build()?;
         let event_loop_proxy = event_loop.create_proxy();
         let app = None;
         let cursor_state = CursorState::default();
@@ -592,6 +610,7 @@ impl<F: Fn()> Renderer<F> {
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
             frame_index: 0,
+            redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
             resize_in_progress: false,
             #[cfg(feature = "profiling")]
@@ -697,7 +716,7 @@ impl<F: Fn()> Renderer<F> {
         android_app: AndroidApp,
         config: TesseraConfig,
     ) -> Result<(), EventLoopError> {
-        let event_loop = EventLoop::<AccessKitEvent>::with_user_event()
+        let event_loop = EventLoop::<RendererUserEvent>::with_user_event()
             .with_android_app(android_app.clone())
             .build()
             .unwrap();
@@ -721,6 +740,7 @@ impl<F: Fn()> Renderer<F> {
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
             frame_index: 0,
+            redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
             resize_in_progress: false,
             #[cfg(feature = "profiling")]
@@ -1642,19 +1662,29 @@ impl<F: Fn()> Renderer<F> {
         Some(PluginContext::new(app.window_arc()))
     }
 
+    fn try_request_redraw(window: &Window, redraw_pending: &AtomicBool) {
+        if redraw_pending
+            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
+            .is_ok()
+        {
+            window.request_redraw();
+        }
+    }
+
     fn request_redraw_now(&self) {
         if let Some(app) = self.app.as_ref() {
-            app.window().request_redraw();
+            Self::try_request_redraw(app.window(), self.redraw_request_pending.as_ref());
         }
     }
 
     fn install_runtime_redraw_waker(&self) {
-        if let Some(app) = self.app.as_ref() {
-            let window = app.window_arc();
-            install_redraw_waker(Arc::new(move || {
-                window.request_redraw();
-            }));
-        }
+        let Some(proxy) = self.event_loop_proxy.clone() else {
+            clear_redraw_waker();
+            return;
+        };
+        install_redraw_waker(Arc::new(move || {
+            let _ = proxy.send_event(RendererUserEvent::RuntimeRedrawWake);
+        }));
     }
 
     #[cfg(feature = "profiling")]
@@ -1893,7 +1923,7 @@ impl<F: Fn()> Renderer<F> {
         &mut self,
         #[cfg(target_os = "android")] event_loop: &ActiveEventLoop,
     ) {
-        consume_scheduled_redraw();
+        self.redraw_request_pending.store(false, Ordering::Release);
         let mut app = match self.app.take() {
             Some(app) => app,
             None => return,
@@ -1970,7 +2000,7 @@ impl<F: Fn()> Renderer<F> {
 /// including window creation, suspension/resumption, and various window events.
 /// It bridges the gap between winit's event system and Tessera's
 /// component-based UI framework.
-impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
+impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
     /// Called when the application is resumed or started.
     ///
     /// This method is responsible for:
@@ -2095,6 +2125,7 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         self.keyboard_state = KeyboardState::default();
         self.ime_state = ImeState::default();
         self.resize_in_progress = false;
+        self.redraw_request_pending.store(false, Ordering::Release);
         #[cfg(target_os = "android")]
         {
             self.android_ime_opened = false;
@@ -2252,32 +2283,44 @@ impl<F: Fn()> ApplicationHandler<AccessKitEvent> for Renderer<F> {
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: AccessKitEvent) {
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: RendererUserEvent) {
         use accesskit_winit::WindowEvent as AccessKitWindowEvent;
 
-        if self.accessibility_adapter.is_none() {
-            return;
-        }
-
-        match event.window_event {
-            AccessKitWindowEvent::InitialTreeRequested => {
-                self.send_accessibility_update();
+        match event {
+            RendererUserEvent::RuntimeRedrawWake => {
+                #[cfg(feature = "profiling")]
+                self.request_redraw_with_reasons(
+                    WakeSource::Runtime,
+                    vec![RedrawReason::RuntimeInvalidation],
+                );
+                #[cfg(not(feature = "profiling"))]
+                self.request_redraw_now();
             }
-            AccessKitWindowEvent::ActionRequested(action_request) => {
-                // Dispatch action to the appropriate component handler
-                let handled = TesseraRuntime::with(|runtime| {
-                    let tree = runtime.component_tree.tree();
-                    let metadatas = runtime.component_tree.metadatas();
-
-                    crate::accessibility::dispatch_action(tree, metadatas, action_request)
-                });
-
-                if !handled {
-                    debug!("Action was not handled by any component");
+            RendererUserEvent::AccessKit(event) => {
+                if self.accessibility_adapter.is_none() {
+                    return;
                 }
-            }
-            AccessKitWindowEvent::AccessibilityDeactivated => {
-                debug!("AccessKit deactivated");
+                match event.window_event {
+                    AccessKitWindowEvent::InitialTreeRequested => {
+                        self.send_accessibility_update();
+                    }
+                    AccessKitWindowEvent::ActionRequested(action_request) => {
+                        // Dispatch action to the appropriate component handler
+                        let handled = TesseraRuntime::with(|runtime| {
+                            let tree = runtime.component_tree.tree();
+                            let metadatas = runtime.component_tree.metadatas();
+
+                            crate::accessibility::dispatch_action(tree, metadatas, action_request)
+                        });
+
+                        if !handled {
+                            debug!("Action was not handled by any component");
+                        }
+                    }
+                    AccessKitWindowEvent::AccessibilityDeactivated => {
+                        debug!("AccessKit deactivated");
+                    }
+                }
             }
         }
     }
