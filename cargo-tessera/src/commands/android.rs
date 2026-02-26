@@ -625,17 +625,6 @@ pub fn build(opts: BuildOptions) -> Result<()> {
         format!("backend `{}`", ctx.asset_backend.as_str()),
     );
 
-    for target in &targets {
-        target.build(
-            &ctx.config,
-            &ctx.metadata,
-            &env,
-            NoiseLevel::Polite,
-            true,
-            profile,
-        )?;
-    }
-
     let outputs = match ctx.format {
         AndroidFormat::Apk => android::apk::build(
             &ctx.config,
@@ -851,9 +840,6 @@ fn run_once(
     noise_level: NoiseLevel,
 ) -> Result<ChildHandle> {
     let device = find_device(env, device_id)?;
-    let target = device.target();
-
-    target.build(&ctx.config, &ctx.metadata, env, noise_level, true, profile)?;
 
     let filter = Some(match noise_level {
         NoiseLevel::Polite => FilterLevel::Info,
