@@ -61,8 +61,8 @@ impl GlassSwitchController {
         self.last_toggle_frame_nanos = Some(current_frame_nanos());
     }
 
-    /// Returns the current animation progress (0.0..1.0).
-    pub fn animation_progress(&mut self, frame_nanos: u64) -> f32 {
+    /// Advances the animation timeline based on elapsed time.
+    pub fn update_progress(&mut self, frame_nanos: u64) {
         if let Some(start_frame_nanos) = self.last_toggle_frame_nanos {
             let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
             let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
@@ -78,6 +78,10 @@ impl GlassSwitchController {
                 self.progress = target;
             }
         }
+    }
+
+    /// Returns the current animation progress (0.0..1.0).
+    pub fn animation_progress(&self) -> f32 {
         self.progress
     }
 
@@ -285,12 +289,11 @@ fn glass_switch_node(args: &GlassSwitchArgs) {
     let thumb_px = thumb_dp.to_px();
 
     // Track tint color interpolation based on progress
-    let progress = controller.with_mut(|c| c.animation_progress(current_frame_nanos()));
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
-                let _ = controller.animation_progress(frame_nanos);
+                controller.update_progress(frame_nanos);
                 controller.is_animating()
             });
             if is_animating {
@@ -300,6 +303,7 @@ fn glass_switch_node(args: &GlassSwitchArgs) {
             }
         });
     }
+    let progress = controller.with(|c| c.animation_progress());
     let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);
 
     modifier.run(move || {
