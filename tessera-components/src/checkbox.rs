@@ -331,7 +331,6 @@ fn checkbox_node(args: &CheckboxArgs) {
         .controller
         .expect("checkbox_node requires controller to be set");
     let enabled = !args.disabled;
-    controller.with_mut(|c| c.update_progress(current_frame_nanos()));
     if controller.with(|c| c.is_animating()) {
         let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
