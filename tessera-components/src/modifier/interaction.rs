@@ -408,12 +408,18 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
         };
 
         if enabled {
-            interaction_state.with_mut(|s| s.set_hovered(within_bounds));
+            let hover_changed = interaction_state.with(|s| s.is_hovered() != within_bounds);
+            if hover_changed {
+                interaction_state.with_mut(|s| s.set_hovered(within_bounds));
+            }
         } else {
-            interaction_state.with_mut(|s| {
-                s.release();
-                s.set_hovered(false);
-            });
+            let should_reset = interaction_state.with(|s| s.is_pressed() || s.is_hovered());
+            if should_reset {
+                interaction_state.with_mut(|s| {
+                    s.release();
+                    s.set_hovered(false);
+                });
+            }
             return;
         }
 
@@ -429,14 +435,20 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
                 if let Some(on_press) = on_press.as_ref() {
                     on_press.call(context);
                 }
-                interaction_state.with_mut(|s| s.set_pressed(true));
+                let press_changed = interaction_state.with(|s| !s.is_pressed());
+                if press_changed {
+                    interaction_state.with_mut(|s| s.set_pressed(true));
+                }
             }
 
             if matches!(
                 event.content,
                 CursorEventContent::Released(PressKeyEventType::Left)
             ) {
-                interaction_state.with_mut(|s| s.release());
+                let was_pressed = interaction_state.with(|s| s.is_pressed());
+                if was_pressed {
+                    interaction_state.with_mut(|s| s.release());
+                }
                 if let Some(on_release) = on_release.as_ref() {
                     on_release.call(context);
                 }
@@ -454,10 +466,13 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
         }
 
         if !within_bounds {
-            interaction_state.with_mut(|s| {
-                s.release();
-                s.set_hovered(false);
-            });
+            let should_reset = interaction_state.with(|s| s.is_pressed() || s.is_hovered());
+            if should_reset {
+                interaction_state.with_mut(|s| {
+                    s.release();
+                    s.set_hovered(false);
+                });
+            }
         }
 
         if block_input && within_bounds {
@@ -703,12 +718,18 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
         };
 
         if enabled {
-            interaction_state.with_mut(|s| s.set_hovered(within_bounds));
+            let hover_changed = interaction_state.with(|s| s.is_hovered() != within_bounds);
+            if hover_changed {
+                interaction_state.with_mut(|s| s.set_hovered(within_bounds));
+            }
         } else {
-            interaction_state.with_mut(|s| {
-                s.release();
-                s.set_hovered(false);
-            });
+            let should_reset = interaction_state.with(|s| s.is_pressed() || s.is_hovered());
+            if should_reset {
+                interaction_state.with_mut(|s| {
+                    s.release();
+                    s.set_hovered(false);
+                });
+            }
             return;
         }
 
@@ -724,14 +745,20 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
                 if let Some(on_press) = on_press.as_ref() {
                     on_press.call(context);
                 }
-                interaction_state.with_mut(|s| s.set_pressed(true));
+                let press_changed = interaction_state.with(|s| !s.is_pressed());
+                if press_changed {
+                    interaction_state.with_mut(|s| s.set_pressed(true));
+                }
             }
 
             if matches!(
                 event.content,
                 CursorEventContent::Released(PressKeyEventType::Left)
             ) {
-                interaction_state.with_mut(|s| s.release());
+                let was_pressed = interaction_state.with(|s| s.is_pressed());
+                if was_pressed {
+                    interaction_state.with_mut(|s| s.release());
+                }
                 if let Some(on_release) = on_release.as_ref() {
                     on_release.call(context);
                 }
@@ -749,10 +776,13 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
         }
 
         if !within_bounds {
-            interaction_state.with_mut(|s| {
-                s.release();
-                s.set_hovered(false);
-            });
+            let should_reset = interaction_state.with(|s| s.is_pressed() || s.is_hovered());
+            if should_reset {
+                interaction_state.with_mut(|s| {
+                    s.release();
+                    s.set_hovered(false);
+                });
+            }
         }
     });
 }
@@ -852,12 +882,18 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
         };
 
         if enabled {
-            interaction_state.with_mut(|s| s.set_hovered(within_bounds));
+            let hover_changed = interaction_state.with(|s| s.is_hovered() != within_bounds);
+            if hover_changed {
+                interaction_state.with_mut(|s| s.set_hovered(within_bounds));
+            }
         } else {
-            interaction_state.with_mut(|s| {
-                s.release();
-                s.set_hovered(false);
-            });
+            let should_reset = interaction_state.with(|s| s.is_pressed() || s.is_hovered());
+            if should_reset {
+                interaction_state.with_mut(|s| {
+                    s.release();
+                    s.set_hovered(false);
+                });
+            }
             return;
         }
 
@@ -873,14 +909,20 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
                 if let Some(on_press) = on_press.as_ref() {
                     on_press.call(context);
                 }
-                interaction_state.with_mut(|s| s.set_pressed(true));
+                let press_changed = interaction_state.with(|s| !s.is_pressed());
+                if press_changed {
+                    interaction_state.with_mut(|s| s.set_pressed(true));
+                }
             }
 
             if matches!(
                 event.content,
                 CursorEventContent::Released(PressKeyEventType::Left)
             ) {
-                interaction_state.with_mut(|s| s.release());
+                let was_pressed = interaction_state.with(|s| s.is_pressed());
+                if was_pressed {
+                    interaction_state.with_mut(|s| s.release());
+                }
                 if let Some(on_release) = on_release.as_ref() {
                     on_release.call(context);
                 }
@@ -898,10 +940,13 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
         }
 
         if !within_bounds {
-            interaction_state.with_mut(|s| {
-                s.release();
-                s.set_hovered(false);
-            });
+            let should_reset = interaction_state.with(|s| s.is_pressed() || s.is_hovered());
+            if should_reset {
+                interaction_state.with_mut(|s| {
+                    s.release();
+                    s.set_hovered(false);
+                });
+            }
         }
     });
 }
