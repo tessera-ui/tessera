@@ -5,7 +5,7 @@
 //! Use to organize content into separate pages that can be switched between.
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
+    MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -291,7 +291,7 @@ impl TabsController {
         self.indicator_x.value_px()
     }
 
-    fn tick(&mut self, frame_nanos: u64) {
+    fn advance_from_frame_nanos(&mut self, frame_nanos: u64) {
         let dt = if let Some(last_frame_nanos) = self.last_frame_nanos {
             frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
         } else {
@@ -978,8 +978,20 @@ impl LayoutSpec for TabsLayout {
             let final_width = available_width.unwrap_or(strip_width_total);
 
             let max_scroll = (strip_width_total - final_width).max(Px(0));
-            self.controller
-                .with_mut(|c| c.set_tab_row_scroll_bounds(max_scroll));
+            let should_update_scroll_bounds = self.controller.with(|c| {
+                if c.tab_row_scroll_max != max_scroll {
+                    return true;
+                }
+                let clamped = c
+                    .tab_row_scroll_offset
+                    .value
+                    .clamp(0.0, max_scroll.to_f32());
+                (c.tab_row_scroll_offset.value - clamped).abs() > f32::EPSILON
+            });
+            if should_update_scroll_bounds {
+                self.controller
+                    .with_mut(|c| c.set_tab_row_scroll_bounds(max_scroll));
+            }
 
             let selected_left = tab_lefts
                 .get(self.active_tab)
@@ -1014,15 +1026,26 @@ impl LayoutSpec for TabsLayout {
 
         let page_width = content_container_size.width;
         let target_offset = -Px(self.active_tab as i32 * page_width.0);
-        self.controller
-            .with_mut(|c| c.set_content_scroll_target(target_offset));
+        let should_update_content_scroll = self.controller.with(|c| {
+            !c.content_scroll_initialized
+                || (c.content_scroll_offset.target - target_offset.to_f32()).abs() > f32::EPSILON
+        });
+        if should_update_content_scroll {
+            self.controller
+                .with_mut(|c| c.set_content_scroll_target(target_offset));
+        }
 
         if is_scrollable {
-            self.controller.with_mut(|c| {
-                if !c.tab_row_scroll_user_overridden {
-                    c.set_tab_row_scroll_target(scroll_target);
-                }
+            let should_update_tab_row_scroll_target = self.controller.with(|c| {
+                !c.tab_row_scroll_user_overridden
+                    && (!c.tab_row_scroll_initialized
+                        || (c.tab_row_scroll_offset.target - scroll_target.to_f32()).abs()
+                            > f32::EPSILON)
             });
+            if should_update_tab_row_scroll_target {
+                self.controller
+                    .with_mut(|c| c.set_tab_row_scroll_target(scroll_target));
+            }
         }
 
         let current_scroll_px = if is_scrollable {
@@ -1047,8 +1070,15 @@ impl LayoutSpec for TabsLayout {
 
             let centered_x = tab_left + Px((tab_width.0 - clamped_width.0) / 2);
 
-            self.controller
-                .with_mut(|c| c.set_indicator_targets(clamped_width, centered_x));
+            let should_update_indicator_targets = self.controller.with(|c| {
+                !c.indicator_initialized
+                    || (c.indicator_width.target - clamped_width.to_f32()).abs() > f32::EPSILON
+                    || (c.indicator_x.target - centered_x.to_f32()).abs() > f32::EPSILON
+            });
+            if should_update_indicator_targets {
+                self.controller
+                    .with_mut(|c| c.set_indicator_targets(clamped_width, centered_x));
+            }
             (
                 self.controller.with(|c| c.indicator_width_px()),
                 self.controller.with(|c| c.indicator_x_px()),
@@ -1075,8 +1105,12 @@ impl LayoutSpec for TabsLayout {
         let _ = input.measure_child(divider_id, &divider_constraint)?;
 
         let tab_bar_height = titles_max_height.max(self.args.min_tab_height.into());
-        self.controller
-            .with_mut(|c| c.set_tab_bar_height(tab_bar_height));
+        let should_update_tab_bar_height =
+            self.controller.with(|c| c.tab_bar_height != tab_bar_height);
+        if should_update_tab_bar_height {
+            self.controller
+                .with_mut(|c| c.set_tab_bar_height(tab_bar_height));
+        }
         let final_height = tab_bar_height + content_container_size.height;
         let title_offset_y = Px((tab_bar_height.0 - titles_max_height.0) / 2).max(Px(0));
 
@@ -1314,12 +1348,11 @@ fn tabs_render_node(args: &TabsRenderArgs) {
         ));
     }
 
-    controller.with_mut(|c| c.tick(current_frame_nanos()));
     if controller.with(|c| c.has_pending_animation_frame()) {
         let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
             let has_pending_animation_frame = controller_for_frame.with_mut(|controller| {
-                controller.tick(frame_nanos);
+                controller.advance_from_frame_nanos(frame_nanos);
                 controller.has_pending_animation_frame()
             });
             if has_pending_animation_frame {
