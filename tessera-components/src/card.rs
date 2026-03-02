@@ -5,8 +5,8 @@
 //! Group related content into a single, elevated or outlined container.
 
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, Prop, RenderSlot, State, current_frame_nanos,
-    receive_frame_nanos, remember, tessera, use_context,
+    Callback, Color, Dp, Modifier, Prop, RenderSlot, State, receive_frame_nanos, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -546,16 +546,25 @@ pub fn card(args: &CardArgs) {
     let elevation_spring = remember(|| CardElevationSpring::new(elevation.default_elevation()));
 
     let enabled = args.enabled;
-    let frame_nanos = current_frame_nanos();
     let target = elevation.target(enabled, interaction_state);
-    let should_schedule_frame = elevation_spring.with_mut(|spring| {
-        spring.set_target(target);
+    let should_update_spring = elevation_spring.with(|spring| {
+        let mut next = spring.clone();
+        next.set_target(target);
         if !enabled {
-            spring.snap_to(target);
+            next.snap_to(target);
         }
-        spring.tick(frame_nanos);
-        spring.is_animating()
+        next != *spring
     });
+    if should_update_spring {
+        elevation_spring.with_mut(|spring| {
+            spring.set_target(target);
+            if !enabled {
+                spring.snap_to(target);
+            }
+        });
+    }
+
+    let should_schedule_frame = elevation_spring.with(|spring| spring.is_animating());
 
     if should_schedule_frame {
         let elevation_spring_for_frame = elevation_spring;
