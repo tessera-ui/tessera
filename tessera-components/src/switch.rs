@@ -462,7 +462,6 @@ pub fn switch(args: &SwitchArgs) {
     let mut modifier = args.modifier.clone();
 
     if controller.with(|c| c.is_animating()) {
-        controller.with_mut(|c| c.update_progress(current_frame_nanos()));
         let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
