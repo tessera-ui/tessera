@@ -91,18 +91,24 @@ pub(super) fn handle_slider_state(
     layout: &SliderLayout,
 ) {
     if args.disabled {
-        state.with_mut(|inner| {
-            inner.is_hovered = false;
-            inner.is_dragging = false;
-        });
+        let should_reset = state.with(|inner| inner.is_hovered || inner.is_dragging);
+        if should_reset {
+            state.with_mut(|inner| {
+                inner.is_hovered = false;
+                inner.is_dragging = false;
+            });
+        }
         return;
     }
 
     let is_in_component = cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
 
-    state.with_mut(|inner| {
-        inner.is_hovered = is_in_component;
-    });
+    let hover_changed = state.with(|inner| inner.is_hovered != is_in_component);
+    if hover_changed {
+        state.with_mut(|inner| {
+            inner.is_hovered = is_in_component;
+        });
+    }
 
     if is_in_component {
         input.requests.cursor_icon = CursorIcon::Pointer;
@@ -260,19 +266,26 @@ pub(super) fn handle_range_slider_state(
     end_handle_width: Px,
 ) {
     if args.disabled {
-        state.with_mut(|inner| {
-            inner.is_hovered = false;
-            inner.is_dragging_start = false;
-            inner.is_dragging_end = false;
-        });
+        let should_reset = state
+            .with(|inner| inner.is_hovered || inner.is_dragging_start || inner.is_dragging_end);
+        if should_reset {
+            state.with_mut(|inner| {
+                inner.is_hovered = false;
+                inner.is_dragging_start = false;
+                inner.is_dragging_end = false;
+            });
+        }
         return;
     }
 
     let is_in_component = cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
 
-    state.with_mut(|inner| {
-        inner.is_hovered = is_in_component;
-    });
+    let hover_changed = state.with(|inner| inner.is_hovered != is_in_component);
+    if hover_changed {
+        state.with_mut(|inner| {
+            inner.is_hovered = is_in_component;
+        });
+    }
 
     if is_in_component {
         input.requests.cursor_icon = CursorIcon::Pointer;
