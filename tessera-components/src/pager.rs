@@ -5,8 +5,7 @@
 //! Show onboarding steps or media carousels that snap between pages.
 use tessera_ui::{
     CallbackWith, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition, State,
-    current_frame_nanos, key,
+    MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera,
 };
@@ -542,8 +541,16 @@ impl LayoutSpec for PagerLayout {
         }
         let container_cross = resolve_dimension(cross_dimension, max_cross, "pager cross axis");
 
-        self.controller
-            .with_mut(|c| c.update_layout(page_main, page_spacing, self.page_count));
+        let should_update_layout = self.controller.with(|controller| {
+            let mut next = controller.clone();
+            next.update_layout(page_main, page_spacing, self.page_count);
+            next != *controller
+        });
+        if should_update_layout {
+            self.controller.with_mut(|controller| {
+                controller.update_layout(page_main, page_spacing, self.page_count);
+            });
+        }
 
         let scroll_offset = self.controller.with(|c| c.scroll_offset_px());
         let page_step = page_main + page_spacing;
@@ -818,11 +825,15 @@ fn pager_inner_node(args: &PagerRenderArgs) {
     let controller = args.controller;
     let axis = args.axis;
     let page_content = args.page_content;
-    let frame_nanos = current_frame_nanos();
-    controller.with_mut(|c| c.set_page_count(args.page_count));
-    controller.with_mut(|c| {
-        c.tick(frame_nanos, args.snap_threshold, args.scroll_smoothing);
+    let should_set_page_count = controller.with(|controller| {
+        let mut next = controller.clone();
+        next.set_page_count(args.page_count);
+        next != *controller
     });
+    if should_set_page_count {
+        controller.with_mut(|controller| controller.set_page_count(args.page_count));
+    }
+    let frame_nanos = tessera_ui::current_frame_nanos();
     if controller.with(|c| c.has_pending_animation_frame(frame_nanos)) {
         let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
@@ -880,7 +891,7 @@ fn pager_inner_node(args: &PagerRenderArgs) {
             return;
         }
 
-        let frame_nanos = current_frame_nanos();
+        let frame_nanos = tessera_ui::current_frame_nanos();
         let mut scroll_delta = 0.0;
         for event in input.cursor_events.iter() {
             if let CursorEventContent::Scroll(scroll_event) = &event.content {
@@ -918,6 +929,13 @@ fn pager_inner_node(args: &PagerRenderArgs) {
             }
         }
 
+        let should_process_drag = drag_start_pos.is_some()
+            || should_end_drag
+            || (is_dragging && input.cursor_position_rel.is_some());
+        if !should_process_drag {
+            return;
+        }
+
         controller.with_mut(|c| {
             if let Some(pos) = drag_start_pos {
                 c.start_drag(pos, frame_nanos);
@@ -928,6 +946,7 @@ fn pager_inner_node(args: &PagerRenderArgs) {
             if c.is_dragging()
                 && let Some(pos) = input.cursor_position_rel
                 && let Some(delta) = c.drag_delta(pos, axis)
+                && delta.abs() >= 0.01
             {
                 c.apply_scroll_delta(delta, frame_nanos);
             }
