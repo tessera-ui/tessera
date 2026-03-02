@@ -251,6 +251,10 @@ impl ButtonGroupsState {
     fn item_state_mut(&mut self, index: usize) -> &mut ButtonItemState {
         self.item_states.entry(index).or_default()
     }
+
+    fn item_state(&self, index: usize) -> Option<&ButtonItemState> {
+        self.item_states.get(&index)
+    }
 }
 
 /// # button_groups
@@ -460,7 +464,7 @@ impl ElasticState {
         self.start_progress = current_visual_progress;
     }
 
-    fn update(&mut self, frame_nanos: u64) -> f32 {
+    fn update(&self, frame_nanos: u64) -> f32 {
         let current_progress = self.calculate_current_progress(frame_nanos);
         if self.expended {
             animation::spring(current_progress, 15.0, 0.35)
@@ -499,10 +503,10 @@ fn elastic_container(args: &ElasticContainerArgs) {
     let frame_nanos = current_frame_nanos();
 
     args.child.render();
-    let progress = args.state.with_mut(|s| {
-        s.item_state_mut(args.index)
-            .elastic_state
-            .update(frame_nanos)
+    let progress = args.state.with(|state| {
+        state
+            .item_state(args.index)
+            .map_or(0.0, |item| item.elastic_state.update(frame_nanos))
     });
 
     let should_schedule_frame = args.state.with(|s| {
