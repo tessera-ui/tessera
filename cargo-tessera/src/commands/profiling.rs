@@ -83,6 +83,11 @@ struct FrameRecord {
     partial_replay_nodes: Option<u64>,
     total_nodes_before_build: Option<u64>,
     render_time_ns: Option<u64>,
+    render_acquire_ns: Option<u64>,
+    render_build_passes_ns: Option<u64>,
+    render_encode_ns: Option<u64>,
+    render_submit_ns: Option<u64>,
+    render_present_ns: Option<u64>,
     build_tree_time_ns: Option<u64>,
     draw_time_ns: Option<u64>,
     record_time_ns: Option<u64>,
@@ -246,6 +251,11 @@ struct Summary {
     frame_total_count: u64,
     render_total: u128,
     render_count: u64,
+    render_acquire: MetricSummary,
+    render_build_passes: MetricSummary,
+    render_encode: MetricSummary,
+    render_submit: MetricSummary,
+    render_present: MetricSummary,
     build_tree_total: u128,
     build_tree_min: Option<u128>,
     build_tree_max: Option<u128>,
@@ -691,6 +701,11 @@ fn process_frame(
         partial_replay_nodes,
         total_nodes_before_build,
         render_time_ns,
+        render_acquire_ns,
+        render_build_passes_ns,
+        render_encode_ns,
+        render_submit_ns,
+        render_present_ns,
         build_tree_time_ns,
         draw_time_ns,
         record_time_ns,
@@ -720,6 +735,21 @@ fn process_frame(
     }
     if let Some(wait_ns) = inter_frame_wait_ns {
         summary.inter_frame_wait.record(u128::from(wait_ns));
+    }
+    if let Some(value) = render_acquire_ns {
+        summary.render_acquire.record(u128::from(value));
+    }
+    if let Some(value) = render_build_passes_ns {
+        summary.render_build_passes.record(u128::from(value));
+    }
+    if let Some(value) = render_encode_ns {
+        summary.render_encode.record(u128::from(value));
+    }
+    if let Some(value) = render_submit_ns {
+        summary.render_submit.record(u128::from(value));
+    }
+    if let Some(value) = render_present_ns {
+        summary.render_present.record(u128::from(value));
     }
 
     let mut frame_totals = PhaseTotals::default();
@@ -1131,6 +1161,81 @@ fn print_summary(summary: &Summary) {
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(""),
             Cell::new(""),
+        ]));
+    }
+    if summary.render_acquire.count > 0 {
+        let avg = summary.render_acquire.sum as f64 / summary.render_acquire.count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Render breakdown: acquire"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_acquire.min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_acquire.max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
+    if summary.render_build_passes.count > 0 {
+        let avg = summary.render_build_passes.sum as f64 / summary.render_build_passes.count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Render breakdown: build_passes"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_build_passes.min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_build_passes.max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
+    if summary.render_encode.count > 0 {
+        let avg = summary.render_encode.sum as f64 / summary.render_encode.count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Render breakdown: encode"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_encode.min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_encode.max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
+    if summary.render_submit.count > 0 {
+        let avg = summary.render_submit.sum as f64 / summary.render_submit.count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Render breakdown: submit"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_submit.min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_submit.max.unwrap_or(0) as f64)
+            )),
+        ]));
+    }
+    if summary.render_present.count > 0 {
+        let avg = summary.render_present.sum as f64 / summary.render_present.count as f64;
+        table.add_row(Row::from(vec![
+            Cell::new("Render breakdown: present"),
+            Cell::new(format!("{} ms", format_ms(avg))),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_present.min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_present.max.unwrap_or(0) as f64)
+            )),
         ]));
     }
 

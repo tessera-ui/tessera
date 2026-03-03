@@ -1535,6 +1535,12 @@ Fps: {:.2}
         #[cfg(feature = "profiling")]
         {
             let render_duration_ns = Some(render_cost.as_nanos());
+            let render_acquire_ns = render_breakdown.map(|breakdown| breakdown.acquire.as_nanos());
+            let render_build_passes_ns =
+                render_breakdown.map(|breakdown| breakdown.build_passes.as_nanos());
+            let render_encode_ns = render_breakdown.map(|breakdown| breakdown.encode.as_nanos());
+            let render_submit_ns = render_breakdown.map(|breakdown| breakdown.submit.as_nanos());
+            let render_present_ns = render_breakdown.map(|breakdown| breakdown.present.as_nanos());
             let frame_total_ns = frame_timer.elapsed().as_nanos();
             let inter_frame_wait_ns = (frame_idx > 0).then(|| frame_delta().as_nanos());
             let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
@@ -1546,6 +1552,11 @@ Fps: {:.2}
                 partial_replay_nodes: build_tree_result.partial_replay_nodes,
                 total_nodes_before_build: build_tree_result.total_nodes_before_build,
                 render_time_ns: render_duration_ns,
+                render_acquire_ns,
+                render_build_passes_ns,
+                render_encode_ns,
+                render_submit_ns,
+                render_present_ns,
                 build_tree_time_ns: Some(build_tree_result.duration.as_nanos()),
                 draw_time_ns: Some(draw_cost.as_nanos()),
                 record_time_ns: Some(record_cost.as_nanos()),

@@ -248,6 +248,16 @@ pub struct FrameMeta {
     pub total_nodes_before_build: Option<u64>,
     /// Render duration for the frame.
     pub render_time_ns: Option<u128>,
+    /// Time spent acquiring the swapchain surface texture.
+    pub render_acquire_ns: Option<u128>,
+    /// Time spent building render passes for the frame.
+    pub render_build_passes_ns: Option<u128>,
+    /// Time spent encoding GPU commands for the frame.
+    pub render_encode_ns: Option<u128>,
+    /// Time spent submitting commands to the GPU queue.
+    pub render_submit_ns: Option<u128>,
+    /// Time spent presenting the rendered frame.
+    pub render_present_ns: Option<u128>,
     /// Component tree build duration for the frame (wall time).
     pub build_tree_time_ns: Option<u128>,
     /// Draw/compute duration for the frame (wall time).
@@ -493,6 +503,21 @@ pub struct FrameEventRecord {
     total_nodes_before_build: Option<u64>,
     /// Render duration for the frame.
     render_time_ns: Option<u128>,
+    /// Time spent acquiring the swapchain surface texture.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    render_acquire_ns: Option<u128>,
+    /// Time spent building render passes for the frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    render_build_passes_ns: Option<u128>,
+    /// Time spent encoding GPU commands for the frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    render_encode_ns: Option<u128>,
+    /// Time spent submitting commands to the GPU queue.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    render_submit_ns: Option<u128>,
+    /// Time spent presenting the rendered frame.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    render_present_ns: Option<u128>,
     /// Component tree build duration for the frame (wall time).
     build_tree_time_ns: Option<u128>,
     /// Draw/compute duration for the frame (wall time).
@@ -738,6 +763,11 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
             partial_replay_nodes: frame_meta.partial_replay_nodes,
             total_nodes_before_build: frame_meta.total_nodes_before_build,
             render_time_ns: frame_meta.render_time_ns,
+            render_acquire_ns: frame_meta.render_acquire_ns,
+            render_build_passes_ns: frame_meta.render_build_passes_ns,
+            render_encode_ns: frame_meta.render_encode_ns,
+            render_submit_ns: frame_meta.render_submit_ns,
+            render_present_ns: frame_meta.render_present_ns,
             build_tree_time_ns: frame_meta.build_tree_time_ns,
             draw_time_ns: frame_meta.draw_time_ns,
             record_time_ns: frame_meta.record_time_ns,
@@ -801,6 +831,11 @@ fn build_frame_record(frame_meta: FrameMeta, samples: Vec<Sample>) -> Option<Fra
         partial_replay_nodes: frame_meta.partial_replay_nodes,
         total_nodes_before_build: frame_meta.total_nodes_before_build,
         render_time_ns: frame_meta.render_time_ns,
+        render_acquire_ns: frame_meta.render_acquire_ns,
+        render_build_passes_ns: frame_meta.render_build_passes_ns,
+        render_encode_ns: frame_meta.render_encode_ns,
+        render_submit_ns: frame_meta.render_submit_ns,
+        render_present_ns: frame_meta.render_present_ns,
         build_tree_time_ns: frame_meta.build_tree_time_ns,
         draw_time_ns: frame_meta.draw_time_ns,
         record_time_ns: frame_meta.record_time_ns,
