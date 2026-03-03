@@ -301,6 +301,34 @@ impl SnackbarHostState {
             .unwrap_or(true)
     }
 
+    fn should_dismiss_current_timeout(&self, frame_nanos: u64) -> bool {
+        let Some(current) = &self.current else {
+            return false;
+        };
+        let Some(timeout) = current.resolved.duration.timeout() else {
+            return false;
+        };
+        let Some(started_frame_nanos) = self.current_started_frame_nanos else {
+            return false;
+        };
+
+        let elapsed_nanos = frame_nanos.saturating_sub(started_frame_nanos);
+        let timeout_nanos = timeout.as_nanos().min(u64::MAX as u128) as u64;
+        elapsed_nanos >= timeout_nanos && self.current.as_ref().map(|r| r.id) == Some(current.id)
+    }
+
+    fn should_poll(&self, frame_nanos: u64) -> bool {
+        if self.current.is_none() {
+            return !self.queue.is_empty();
+        }
+
+        if self.current_started_frame_nanos.is_none() {
+            return true;
+        }
+
+        self.should_dismiss_current_timeout(frame_nanos)
+    }
+
     fn resolve_current(&mut self, id: u64, result: SnackbarResult) -> bool {
         if self.current.as_ref().map(|record| record.id) != Some(id) {
             return false;
@@ -752,14 +780,24 @@ pub fn snackbar_host(args: &SnackbarHostArgs) {
     let state = args.state;
     let snackbar_slot = args.snackbar;
     let frame_nanos = current_frame_nanos();
-    let record = state.with_mut(|host| host.poll(frame_nanos));
+    let should_poll = state.with(|host| host.should_poll(frame_nanos));
+    let record = if should_poll {
+        state.with_mut(|host| host.poll(frame_nanos))
+    } else {
+        state.with(|host| host.current.clone())
+    };
     if state.with(|host| host.has_pending_timeout(frame_nanos)) {
         let state_for_frame = state;
         receive_frame_nanos(move |frame_nanos| {
-            let has_pending_timeout = state_for_frame.with_mut(|host| {
-                let _ = host.poll(frame_nanos);
-                host.has_pending_timeout(frame_nanos)
-            });
+            let should_dismiss =
+                state_for_frame.with(|host| host.should_dismiss_current_timeout(frame_nanos));
+            if should_dismiss {
+                state_for_frame.with_mut(|host| {
+                    let _ = host.poll(frame_nanos);
+                });
+            }
+            let has_pending_timeout =
+                state_for_frame.with(|host| host.has_pending_timeout(frame_nanos));
             if has_pending_timeout {
                 tessera_ui::FrameNanosControl::Continue
             } else {
