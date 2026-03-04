@@ -12,6 +12,15 @@
   - [ ] macOS Package Support
   - [ ] Linux Package Support
 - [x] Asset management system
+  - [x] Embedded backend (available for all targets)
+  - [ ] Platform-specific backends
+    - [x] Android
+    - [ ] Windows
+    - [ ] macOS
+    - [ ] Linux
+    - [ ] iOS
+  - [ ] Tree-shaking for assets
+
 - [x] lazy_column
 - [x] lazy_row
 - [ ] [material design components](https://m3.material.io/components)
