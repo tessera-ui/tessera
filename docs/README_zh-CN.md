@@ -59,28 +59,27 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::Modifier;
+use tessera_ui::{Modifier, tessera};
 
 #[tessera]
 fn app() {
-    surface(&SurfaceArgs::with_child(
-        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-        || {
-            column(ColumnArgs::default(), |scope| {
+    surface(&SurfaceArgs::default()
+        .modifier(Modifier::new().fill_max_size())
+        .child(|| {
+            column(&ColumnArgs::default().children(|scope| {
                 scope.child(|| {
-                    button(&ButtonArgs::with_child(ButtonArgs::filled(|| {}), || {
+                    button(&ButtonArgs::filled(|| {}).child(|| {
                         text(&TextArgs::from("+"));
                     }));
                 });
                 scope.child(|| text(&TextArgs::from("Count: 0")));
                 scope.child(|| {
-                    button(&ButtonArgs::with_child(ButtonArgs::filled(|| {}), || {
+                    button(&ButtonArgs::filled(|| {}).child(|| {
                         text(&TextArgs::from("-"));
                     }));
                 });
-            });
-        },
-    ));
+            }));
+        }));
 }
 ```
 
@@ -93,34 +92,29 @@ use tessera_components::{
     surface::{SurfaceArgs, surface},
     text::{TextArgs, text},
 };
-use tessera_ui::{Modifier, remember};
+use tessera_ui::{Modifier, remember, tessera};
 
 #[tessera]
 fn app() {
     let count = remember(|| 0i32);
-    surface(&SurfaceArgs::with_child(
-        SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-        move || {
-            column(ColumnArgs::default(), move |scope| {
+    surface(&SurfaceArgs::default()
+        .modifier(Modifier::new().fill_max_size())
+        .child(move || {
+            column(&ColumnArgs::default().children(move |scope| {
                 scope.child(move || {
-                    button(&ButtonArgs::with_child(
-                        ButtonArgs::filled(move || count.with_mut(|c| *c += 1)),
-                        || text(&TextArgs::from("+")),
-                    ));
+                    button(&ButtonArgs::filled(move || count.with_mut(|c| *c += 1))
+                        .child(|| text(&TextArgs::from("+"))));
                 });
                 scope.child(move || {
                     let label = format!("Count: {}", count.get());
                     text(&TextArgs::from(label));
                 });
                 scope.child(move || {
-                    button(&ButtonArgs::with_child(
-                        ButtonArgs::filled(move || count.with_mut(|c| *c -= 1)),
-                        || text(&TextArgs::from("-")),
-                    ));
+                    button(&ButtonArgs::filled(move || count.with_mut(|c| *c -= 1))
+                        .child(|| text(&TextArgs::from("-"))));
                 });
-            });
-        },
-    ));
+            }));
+        }));
 }
 ```
 
