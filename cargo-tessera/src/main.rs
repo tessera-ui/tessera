@@ -1,6 +1,6 @@
 use std::{path::PathBuf, process::ExitCode};
 
-use anyhow::Result;
+use anyhow::{Result, bail};
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use tessera_build::AssetBackend;
 
@@ -140,9 +140,13 @@ enum ProfilingCommands {
     Analyze {
         /// Path to tessera profiler JSONL output file
         path: PathBuf,
-        /// Show top N component entries per section
-        #[arg(long, default_value_t = 20)]
-        top: usize,
+        /// Show full profiling summary and all ranking sections
+        #[arg(short, long)]
+        verbose: bool,
+        /// Show top N component entries per section (default: 5 compact, 20
+        /// verbose)
+        #[arg(long)]
+        top: Option<usize>,
         /// Minimum sample count per component to include in top lists
         #[arg(long, default_value_t = 1)]
         min_count: u64,
@@ -167,9 +171,13 @@ enum ProfilingCommands {
         /// Local output path for pulled JSONL before analysis
         #[arg(long, value_name = "FILE", default_value = "profiles/android.jsonl")]
         pull_to: PathBuf,
-        /// Show top N component entries per section
-        #[arg(long, default_value_t = 20)]
-        top: usize,
+        /// Show full profiling summary and all ranking sections
+        #[arg(short, long)]
+        verbose: bool,
+        /// Show top N component entries per section (default: 5 compact, 20
+        /// verbose)
+        #[arg(long)]
+        top: Option<usize>,
         /// Minimum sample count per component to include in top lists
         #[arg(long, default_value_t = 1)]
         min_count: u64,
@@ -342,13 +350,19 @@ fn run() -> Result<()> {
             TesseraCommands::Profiling { command } => match command {
                 ProfilingCommands::Analyze {
                     path,
+                    verbose,
                     top,
                     min_count,
                     skip_invalid,
                     csv,
                 } => {
+                    let top = top.unwrap_or(if verbose { 20 } else { 5 });
+                    if top == 0 {
+                        bail!("--top must be greater than 0");
+                    }
                     commands::profiling::analyze(
                         &path,
+                        verbose,
                         top,
                         min_count,
                         skip_invalid,
@@ -360,17 +374,23 @@ fn run() -> Result<()> {
                     device,
                     remote_path,
                     pull_to,
+                    verbose,
                     top,
                     min_count,
                     skip_invalid,
                     csv,
                 } => {
+                    let top = top.unwrap_or(if verbose { 20 } else { 5 });
+                    if top == 0 {
+                        bail!("--top must be greater than 0");
+                    }
                     commands::profiling::analyze_android(
                         commands::profiling::AnalyzeAndroidOptions {
                             package: &package,
                             device: device.as_deref(),
                             remote_path: remote_path.as_deref(),
                             pull_to: &pull_to,
+                            verbose,
                             top,
                             min_count,
                             skip_invalid,

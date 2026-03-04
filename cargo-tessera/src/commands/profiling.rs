@@ -11,6 +11,7 @@ use anyhow::{Context, Result, bail};
 use comfy_table::{Cell, Color, ContentArrangement, Row, Table, presets::UTF8_FULL};
 use owo_colors::OwoColorize;
 use serde::{Deserialize, Serialize};
+use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::output;
 
@@ -250,6 +251,8 @@ struct Summary {
     frame_total_max: Option<u128>,
     frame_total_count: u64,
     render_total: u128,
+    render_min: Option<u128>,
+    render_max: Option<u128>,
     render_count: u64,
     render_acquire: MetricSummary,
     render_build_passes: MetricSummary,
@@ -332,6 +335,7 @@ struct PhaseTotals {
 
 pub fn analyze(
     path: &Path,
+    verbose: bool,
     top: usize,
     min_count: u64,
     skip_invalid: bool,
@@ -399,8 +403,12 @@ pub fn analyze(
         println!("{} {}", "Wrote CSV:".green(), path.display());
     }
 
-    print_summary(&summary);
-    print_top_sections(&stats_by_name, top, min_count);
+    if verbose {
+        print_summary_verbose(&summary);
+        print_top_sections_verbose(&stats_by_name, top, min_count);
+    } else {
+        print_compact_report(&summary, &stats_by_name, min_count, top);
+    }
     Ok(())
 }
 
@@ -418,6 +426,7 @@ pub struct AnalyzeAndroidOptions<'a> {
     pub device: Option<&'a str>,
     pub remote_path: Option<&'a str>,
     pub pull_to: &'a Path,
+    pub verbose: bool,
     pub top: usize,
     pub min_count: u64,
     pub skip_invalid: bool,
@@ -442,6 +451,7 @@ pub fn analyze_android(options: AnalyzeAndroidOptions<'_>) -> Result<()> {
 
     analyze(
         options.pull_to,
+        options.verbose,
         options.top,
         options.min_count,
         options.skip_invalid,
@@ -855,6 +865,8 @@ fn process_frame(
             let render = u128::from(render);
             summary.render_total += render;
             summary.render_count += 1;
+            summary.render_min = Some(summary.render_min.map_or(render, |v| v.min(render)));
+            summary.render_max = Some(summary.render_max.map_or(render, |v| v.max(render)));
 
             let accounted = frame_totals.build
                 + frame_totals.measure
@@ -951,15 +963,127 @@ fn accumulate_component_exclusive(
     inclusive
 }
 
-fn print_summary(summary: &Summary) {
-    println!("{}", "Profiler summary".bold());
+fn print_compact_report(
+    summary: &Summary,
+    stats: &HashMap<String, Stats>,
+    min_count: u64,
+    top: usize,
+) {
+    let frame_rows = build_frame_rows(summary);
+    let render_rows = build_render_rows(summary);
+    let top_rows = collect_compact_top_rows(stats, min_count, top);
+    let widths = compute_compact_widths(&frame_rows, &render_rows, &top_rows);
+
+    print_compact_timing_group("Cost in stages", &frame_rows, false, widths);
+    print_compact_timing_group("Cost in render stages", &render_rows, true, widths);
+    print_compact_top_total(&top_rows, widths);
+}
+
+fn build_frame_rows(summary: &Summary) -> Vec<CompactTimingRow> {
+    let mut rows = Vec::new();
+    if summary.frame_total_count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Frame wall time",
+            avg_ns: summary.frame_total_sum as f64 / summary.frame_total_count as f64,
+            min_ns: summary.frame_total_min,
+            max_ns: summary.frame_total_max,
+        });
+    }
+    if summary.build_tree_count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Build wall time",
+            avg_ns: summary.build_tree_total as f64 / summary.build_tree_count as f64,
+            min_ns: summary.build_tree_min,
+            max_ns: summary.build_tree_max,
+        });
+    }
+    if summary.draw_count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Draw/compute wall time",
+            avg_ns: summary.draw_total as f64 / summary.draw_count as f64,
+            min_ns: summary.draw_min,
+            max_ns: summary.draw_max,
+        });
+    }
+    if summary.record_count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Record wall time",
+            avg_ns: summary.record_total as f64 / summary.record_count as f64,
+            min_ns: summary.record_min,
+            max_ns: summary.record_max,
+        });
+    }
+    if summary.render_count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Render wall time",
+            avg_ns: summary.render_total as f64 / summary.render_count as f64,
+            min_ns: summary.render_min,
+            max_ns: summary.render_max,
+        });
+    }
+    rows
+}
+
+fn build_render_rows(summary: &Summary) -> Vec<CompactTimingRow> {
+    let mut rows = Vec::new();
+    if summary.render_acquire.count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Acquire",
+            avg_ns: summary.render_acquire.sum as f64 / summary.render_acquire.count as f64,
+            min_ns: summary.render_acquire.min,
+            max_ns: summary.render_acquire.max,
+        });
+    }
+    if summary.render_encode.count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Encode",
+            avg_ns: summary.render_encode.sum as f64 / summary.render_encode.count as f64,
+            min_ns: summary.render_encode.min,
+            max_ns: summary.render_encode.max,
+        });
+    }
+    if summary.render_submit.count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Submit",
+            avg_ns: summary.render_submit.sum as f64 / summary.render_submit.count as f64,
+            min_ns: summary.render_submit.min,
+            max_ns: summary.render_submit.max,
+        });
+    }
+    if summary.render_present.count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Present",
+            avg_ns: summary.render_present.sum as f64 / summary.render_present.count as f64,
+            min_ns: summary.render_present.min,
+            max_ns: summary.render_present.max,
+        });
+    }
+    rows
+}
+
+fn collect_compact_top_rows(
+    stats: &HashMap<String, Stats>,
+    min_count: u64,
+    top: usize,
+) -> Vec<(&String, &Stats)> {
+    let mut rows: Vec<(&String, &Stats)> = stats
+        .iter()
+        .filter(|(_, stat)| stat.count >= min_count)
+        .collect();
+    sort_rows_by_average(&mut rows, |s| s.total_ns());
+    rows.truncate(top);
+    rows
+}
+
+fn print_summary_verbose(summary: &Summary) {
+    println!("{}", "Profile overview".bold());
 
     let mut table = Table::new();
     table
         .load_preset(UTF8_FULL)
         .set_content_arrangement(ContentArrangement::Dynamic)
         .set_header(Row::from(vec![
-            Cell::new("Metric").fg(Color::Cyan),
+            Cell::new("Item").fg(Color::Cyan),
             Cell::new("Avg").fg(Color::Cyan),
             Cell::new("Min").fg(Color::Cyan),
             Cell::new("Max").fg(Color::Cyan),
@@ -1096,7 +1220,7 @@ fn print_summary(summary: &Summary) {
     if summary.frame_total_count > 0 {
         let avg = summary.frame_total_sum as f64 / summary.frame_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Frame total (wall)"),
+            Cell::new("Frame wall time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1112,7 +1236,7 @@ fn print_summary(summary: &Summary) {
     if summary.build_tree_count > 0 {
         let avg = summary.build_tree_total as f64 / summary.build_tree_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Build tree (wall)"),
+            Cell::new("Build wall time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1127,7 +1251,7 @@ fn print_summary(summary: &Summary) {
     if summary.draw_count > 0 {
         let avg = summary.draw_total as f64 / summary.draw_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Draw/compute (wall)"),
+            Cell::new("Draw/compute wall time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1142,7 +1266,7 @@ fn print_summary(summary: &Summary) {
     if summary.record_count > 0 {
         let avg = summary.record_total as f64 / summary.record_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Record (wall)"),
+            Cell::new("Record wall time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1157,16 +1281,22 @@ fn print_summary(summary: &Summary) {
     if summary.render_count > 0 {
         let avg = summary.render_total as f64 / summary.render_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Render (wall)"),
+            Cell::new("Render wall time"),
             Cell::new(format!("{} ms", format_ms(avg))),
-            Cell::new(""),
-            Cell::new(""),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_min.unwrap_or(0) as f64)
+            )),
+            Cell::new(format!(
+                "{} ms",
+                format_ms(summary.render_max.unwrap_or(0) as f64)
+            )),
         ]));
     }
     if summary.render_acquire.count > 0 {
         let avg = summary.render_acquire.sum as f64 / summary.render_acquire.count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Render breakdown: acquire"),
+            Cell::new("Render acquire time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1181,7 +1311,7 @@ fn print_summary(summary: &Summary) {
     if summary.render_build_passes.count > 0 {
         let avg = summary.render_build_passes.sum as f64 / summary.render_build_passes.count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Render breakdown: build_passes"),
+            Cell::new("Render build-pass time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1196,7 +1326,7 @@ fn print_summary(summary: &Summary) {
     if summary.render_encode.count > 0 {
         let avg = summary.render_encode.sum as f64 / summary.render_encode.count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Render breakdown: encode"),
+            Cell::new("Render encode time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1211,7 +1341,7 @@ fn print_summary(summary: &Summary) {
     if summary.render_submit.count > 0 {
         let avg = summary.render_submit.sum as f64 / summary.render_submit.count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Render breakdown: submit"),
+            Cell::new("Render submit time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1226,7 +1356,7 @@ fn print_summary(summary: &Summary) {
     if summary.render_present.count > 0 {
         let avg = summary.render_present.sum as f64 / summary.render_present.count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Render breakdown: present"),
+            Cell::new("Render present time"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1303,7 +1433,7 @@ fn print_summary(summary: &Summary) {
     if summary.unaccounted_total_count > 0 {
         let avg = summary.unaccounted_total_sum as f64 / summary.unaccounted_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Unaccounted (wall)").fg(Color::DarkGrey),
+            Cell::new("Unaccounted wall time").fg(Color::DarkGrey),
             Cell::new(format!("{} ms", format_ms(avg))).fg(Color::DarkGrey),
             Cell::new(format!(
                 "{} ms",
@@ -1540,28 +1670,162 @@ fn redraw_reason_label(reason: RedrawReason) -> &'static str {
     }
 }
 
-fn print_top_sections(stats: &HashMap<String, Stats>, top: usize, min_count: u64) {
+const COMPACT_BAR_WIDTH: usize = 28;
+const COMPACT_BAR_DISPLAY_WIDTH: usize = COMPACT_BAR_WIDTH;
+const COMPACT_FIRST_COL_MAX_WIDTH: usize = 30;
+
+struct CompactTimingRow {
+    label: &'static str,
+    avg_ns: f64,
+    min_ns: Option<u128>,
+    max_ns: Option<u128>,
+}
+
+#[derive(Clone, Copy)]
+struct CompactWidths {
+    first_col: usize,
+    avg_col: usize,
+    share_col: usize,
+    min_col: usize,
+    max_col: usize,
+}
+
+fn print_top_sections_verbose(stats: &HashMap<String, Stats>, top: usize, min_count: u64) {
     let mut rows: Vec<(&String, &Stats)> = stats
         .iter()
         .filter(|(_, stat)| stat.count >= min_count)
         .collect();
 
-    rows.sort_by_key(|(_, stat)| Reverse(stat.measure_ns));
-    print_section("Top by measure_ns (exclusive)", &rows, top, |s| {
+    sort_rows_by_average(&mut rows, |s| s.measure_ns);
+    print_section("Top components by measure cost", &rows, top, |s| {
         s.measure_ns
     });
 
-    rows.sort_by_key(|(_, stat)| Reverse(stat.build_ns));
-    print_section("Top by build_ns (exclusive)", &rows, top, |s| s.build_ns);
+    sort_rows_by_average(&mut rows, |s| s.build_ns);
+    print_section("Top components by build cost", &rows, top, |s| s.build_ns);
 
-    rows.sort_by_key(|(_, stat)| Reverse(stat.record_ns));
-    print_section("Top by record_ns (exclusive)", &rows, top, |s| s.record_ns);
+    sort_rows_by_average(&mut rows, |s| s.record_ns);
+    print_section("Top components by record cost", &rows, top, |s| s.record_ns);
 
-    rows.sort_by_key(|(_, stat)| Reverse(stat.input_ns));
-    print_section("Top by input_ns (exclusive)", &rows, top, |s| s.input_ns);
+    sort_rows_by_average(&mut rows, |s| s.input_ns);
+    print_section("Top components by input cost", &rows, top, |s| s.input_ns);
 
-    rows.sort_by_key(|(_, stat)| Reverse(stat.total_ns()));
-    print_section("Top by total_ns (exclusive)", &rows, top, |s| s.total_ns());
+    sort_rows_by_average(&mut rows, |s| s.total_ns());
+    print_section("Top components by average cost", &rows, top, |s| {
+        s.total_ns()
+    });
+}
+
+fn average_ns(total_ns: u128, count: u64) -> f64 {
+    if count == 0 {
+        0.0
+    } else {
+        total_ns as f64 / count as f64
+    }
+}
+
+fn sort_rows_by_average<F>(rows: &mut [(&String, &Stats)], value: F)
+where
+    F: Fn(&Stats) -> u128,
+{
+    rows.sort_by(|(name_a, stat_a), (name_b, stat_b)| {
+        let total_a = value(stat_a);
+        let total_b = value(stat_b);
+        let avg_a = average_ns(total_a, stat_a.count);
+        let avg_b = average_ns(total_b, stat_b.count);
+        avg_b
+            .partial_cmp(&avg_a)
+            .unwrap_or(std::cmp::Ordering::Equal)
+            .then_with(|| total_b.cmp(&total_a))
+            .then_with(|| name_a.cmp(name_b))
+    });
+}
+
+fn compute_compact_widths(
+    frame_rows: &[CompactTimingRow],
+    render_rows: &[CompactTimingRow],
+    top_rows: &[(&String, &Stats)],
+) -> CompactWidths {
+    let mut first_col = display_width("Metric").max(display_width("Component"));
+    let mut avg_col = display_width("Avg");
+    let mut share_col = display_width("Share");
+    let mut min_col = display_width("Min");
+    let mut max_col = display_width("Max");
+    min_col = min_col.max(display_width("Count"));
+    max_col = max_col.max(display_width("Hit"));
+
+    let mut update_timing_widths = |rows: &[CompactTimingRow]| {
+        let max_avg_ns = rows.iter().map(|row| row.avg_ns).fold(0.0_f64, f64::max);
+        for row in rows {
+            first_col = first_col.max(display_width(&truncate(
+                row.label,
+                COMPACT_FIRST_COL_MAX_WIDTH,
+            )));
+
+            let avg_text = format!("{} ms", format_ms(row.avg_ns));
+            avg_col = avg_col.max(display_width(&avg_text));
+
+            let ratio = if max_avg_ns <= f64::EPSILON {
+                0.0
+            } else {
+                row.avg_ns / max_avg_ns
+            };
+            let share_text = format!("{}%", format_pct(ratio));
+            share_col = share_col.max(display_width(&share_text));
+
+            let min_text = row
+                .min_ns
+                .map(|value| format!("{} ms", format_ms(value as f64)))
+                .unwrap_or_else(|| "--".to_string());
+            min_col = min_col.max(display_width(&min_text));
+
+            let max_text = row
+                .max_ns
+                .map(|value| format!("{} ms", format_ms(value as f64)))
+                .unwrap_or_else(|| "--".to_string());
+            max_col = max_col.max(display_width(&max_text));
+        }
+    };
+
+    update_timing_widths(frame_rows);
+    update_timing_widths(render_rows);
+
+    let max_avg_ns = top_rows
+        .iter()
+        .map(|(_, stat)| average_ns(stat.total_ns(), stat.count))
+        .fold(0.0_f64, f64::max);
+    for (name, stat) in top_rows {
+        first_col = first_col.max(display_width(&truncate(name, COMPACT_FIRST_COL_MAX_WIDTH)));
+
+        let avg_ns = average_ns(stat.total_ns(), stat.count);
+        let avg_text = format!("{} ms", format_ms(avg_ns));
+        avg_col = avg_col.max(display_width(&avg_text));
+
+        let ratio = if max_avg_ns <= f64::EPSILON {
+            0.0
+        } else {
+            avg_ns / max_avg_ns
+        };
+        let share_text = format!("{}%", format_pct(ratio));
+        share_col = share_col.max(display_width(&share_text));
+
+        let count_text = stat.count.to_string();
+        min_col = min_col.max(display_width(&count_text));
+
+        let hit_text = stat
+            .hit_rate()
+            .map(|rate| format!("{}%", format_pct(rate)))
+            .unwrap_or_else(|| "n/a".to_string());
+        max_col = max_col.max(display_width(&hit_text));
+    }
+
+    CompactWidths {
+        first_col: first_col.min(COMPACT_FIRST_COL_MAX_WIDTH),
+        avg_col,
+        share_col,
+        min_col,
+        max_col,
+    }
 }
 
 fn print_section<F>(title: &str, rows: &[(&String, &Stats)], top: usize, value: F)
@@ -1585,11 +1849,7 @@ where
 
     for (idx, (name, stat)) in rows.iter().take(top).enumerate() {
         let total_ns = value(stat);
-        let avg_ns = if stat.count == 0 {
-            0.0
-        } else {
-            total_ns as f64 / stat.count as f64
-        };
+        let avg_ns = average_ns(total_ns, stat.count);
         let hit_rate_display = stat
             .hit_rate()
             .map(format_pct)
@@ -1610,6 +1870,159 @@ where
     println!("{table}\n");
 }
 
+fn print_compact_timing_group(
+    title: &str,
+    rows: &[CompactTimingRow],
+    leading_blank: bool,
+    widths: CompactWidths,
+) {
+    if rows.is_empty() {
+        return;
+    }
+
+    if leading_blank {
+        println!();
+    }
+    println!("{}", title.bold());
+    let max_avg_ns = rows.iter().map(|row| row.avg_ns).fold(0.0_f64, f64::max);
+    let mut rendered_rows: Vec<(String, String, String, String, String, String)> =
+        Vec::with_capacity(rows.len());
+
+    for row in rows {
+        let ratio = if max_avg_ns <= f64::EPSILON {
+            0.0
+        } else {
+            row.avg_ns / max_avg_ns
+        };
+        let bar = render_compact_bar(ratio, COMPACT_BAR_WIDTH);
+        let avg_text = format!("{} ms", format_ms(row.avg_ns));
+        let share_text = format!("{}%", format_pct(ratio));
+        let min_text = row
+            .min_ns
+            .map(|value| format!("{} ms", format_ms(value as f64)))
+            .unwrap_or_else(|| "--".to_string());
+        let max_text = row
+            .max_ns
+            .map(|value| format!("{} ms", format_ms(value as f64)))
+            .unwrap_or_else(|| "--".to_string());
+
+        rendered_rows.push((
+            fit_display(row.label, widths.first_col),
+            avg_text,
+            bar,
+            share_text,
+            min_text,
+            max_text,
+        ));
+    }
+
+    println!(
+        "{}  {}  {:<bar_width$}  {}  {}  {}",
+        fit_display("Stage", widths.first_col),
+        fit_display("Avg", widths.avg_col),
+        "Bar",
+        fit_display("Share", widths.share_col),
+        fit_display("Min", widths.min_col),
+        fit_display("Max", widths.max_col),
+        bar_width = COMPACT_BAR_DISPLAY_WIDTH
+    );
+
+    for (label, avg_text, bar, share_text, min_text, max_text) in rendered_rows {
+        println!(
+            "{}  {}  {}  {}  {}  {}",
+            label,
+            fit_display(&avg_text, widths.avg_col),
+            bar,
+            fit_display(&share_text, widths.share_col),
+            fit_display(&min_text, widths.min_col),
+            fit_display(&max_text, widths.max_col),
+        );
+    }
+}
+
+fn print_compact_top_total(rows: &[(&String, &Stats)], widths: CompactWidths) {
+    println!();
+    println!("{}", "Top components by average cost".bold());
+
+    if rows.is_empty() {
+        println!("No components matched the current filter.");
+        println!();
+        return;
+    }
+
+    let max_avg_ns = rows
+        .iter()
+        .map(|(_, stat)| average_ns(stat.total_ns(), stat.count))
+        .fold(0.0_f64, f64::max);
+
+    let mut rendered_rows: Vec<(String, String, String, String, String, String)> =
+        Vec::with_capacity(rows.len());
+
+    for (name, stat) in rows {
+        let avg_ns = average_ns(stat.total_ns(), stat.count);
+        let ratio = if max_avg_ns <= f64::EPSILON {
+            0.0
+        } else {
+            avg_ns / max_avg_ns
+        };
+        let bar = render_compact_bar(ratio, COMPACT_BAR_WIDTH);
+        let avg_text = format!("{} ms", format_ms(avg_ns));
+        let share_text = format!("{}%", format_pct(ratio));
+        let count_text = stat.count.to_string();
+        let hit_rate = stat
+            .hit_rate()
+            .map(|rate| format!("{}%", format_pct(rate)))
+            .unwrap_or_else(|| "n/a".to_string());
+
+        rendered_rows.push((
+            fit_display(name, widths.first_col),
+            avg_text,
+            bar,
+            share_text,
+            count_text,
+            hit_rate,
+        ));
+    }
+
+    println!(
+        "{}  {}  {:<bar_width$}  {}  {}  {}",
+        fit_display("Component", widths.first_col),
+        fit_display("Avg", widths.avg_col),
+        "Bar",
+        fit_display("Share", widths.share_col),
+        fit_display("Count", widths.min_col),
+        fit_display("Hit", widths.max_col),
+        bar_width = COMPACT_BAR_DISPLAY_WIDTH
+    );
+
+    for (name, avg_text, bar, share_text, count_text, hit_rate) in rendered_rows {
+        println!(
+            "{}  {}  {}  {}  {}  {}",
+            name,
+            fit_display(&avg_text, widths.avg_col),
+            bar,
+            fit_display(&share_text, widths.share_col),
+            fit_display(&count_text, widths.min_col),
+            fit_display(&hit_rate, widths.max_col),
+        );
+    }
+    println!();
+}
+
+fn render_compact_bar(ratio: f64, width: usize) -> String {
+    if width == 0 {
+        return String::new();
+    }
+
+    let clamped = ratio.clamp(0.0, 1.0);
+    let mut filled = ((clamped * width as f64).round() as usize).min(width);
+    if clamped > 0.0 && filled == 0 {
+        filled = 1;
+    }
+    let empty = width.saturating_sub(filled);
+    format!("{}{}", "█".repeat(filled), "░".repeat(empty))
+}
+
 fn format_ms(value_ns: f64) -> String {
     format!("{:.3}", value_ns / 1_000_000.0)
 }
@@ -1623,13 +2036,44 @@ fn format_pct(rate: f64) -> String {
 }
 
 fn truncate(text: &str, limit: usize) -> String {
-    if text.len() <= limit {
-        text.to_string()
-    } else if limit <= 3 {
-        "...".to_string()
+    if limit == 0 {
+        return String::new();
+    }
+    if display_width(text) <= limit {
+        return text.to_string();
+    }
+
+    let ellipsis = '…';
+    let ellipsis_width = UnicodeWidthChar::width(ellipsis).unwrap_or(1);
+    if limit <= ellipsis_width {
+        return ellipsis.to_string();
+    }
+
+    let mut output = String::new();
+    let mut current_width = 0;
+    for ch in text.chars() {
+        let char_width = UnicodeWidthChar::width(ch).unwrap_or(0);
+        if current_width + char_width + ellipsis_width > limit {
+            break;
+        }
+        output.push(ch);
+        current_width += char_width;
+    }
+    output.push(ellipsis);
+    output
+}
+
+fn display_width(text: &str) -> usize {
+    UnicodeWidthStr::width(text)
+}
+
+fn fit_display(text: &str, width: usize) -> String {
+    let truncated = truncate(text, width);
+    let current = display_width(&truncated);
+    if current >= width {
+        truncated
     } else {
-        let cutoff = limit - 3;
-        format!("{}...", &text[..cutoff])
+        format!("{}{}", truncated, " ".repeat(width - current))
     }
 }
 
