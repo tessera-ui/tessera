@@ -985,40 +985,30 @@ fn build_frame_rows(summary: &Summary) -> Vec<CompactTimingRow> {
         rows.push(CompactTimingRow {
             label: "Frame wall time",
             avg_ns: summary.frame_total_sum as f64 / summary.frame_total_count as f64,
-            min_ns: summary.frame_total_min,
-            max_ns: summary.frame_total_max,
         });
     }
     if summary.build_tree_count > 0 {
         rows.push(CompactTimingRow {
             label: "Build wall time",
             avg_ns: summary.build_tree_total as f64 / summary.build_tree_count as f64,
-            min_ns: summary.build_tree_min,
-            max_ns: summary.build_tree_max,
         });
     }
     if summary.draw_count > 0 {
         rows.push(CompactTimingRow {
             label: "Draw/compute wall time",
             avg_ns: summary.draw_total as f64 / summary.draw_count as f64,
-            min_ns: summary.draw_min,
-            max_ns: summary.draw_max,
         });
     }
     if summary.record_count > 0 {
         rows.push(CompactTimingRow {
             label: "Record wall time",
             avg_ns: summary.record_total as f64 / summary.record_count as f64,
-            min_ns: summary.record_min,
-            max_ns: summary.record_max,
         });
     }
     if summary.render_count > 0 {
         rows.push(CompactTimingRow {
             label: "Render wall time",
             avg_ns: summary.render_total as f64 / summary.render_count as f64,
-            min_ns: summary.render_min,
-            max_ns: summary.render_max,
         });
     }
     rows
@@ -1030,32 +1020,24 @@ fn build_render_rows(summary: &Summary) -> Vec<CompactTimingRow> {
         rows.push(CompactTimingRow {
             label: "Acquire",
             avg_ns: summary.render_acquire.sum as f64 / summary.render_acquire.count as f64,
-            min_ns: summary.render_acquire.min,
-            max_ns: summary.render_acquire.max,
         });
     }
     if summary.render_encode.count > 0 {
         rows.push(CompactTimingRow {
             label: "Encode",
             avg_ns: summary.render_encode.sum as f64 / summary.render_encode.count as f64,
-            min_ns: summary.render_encode.min,
-            max_ns: summary.render_encode.max,
         });
     }
     if summary.render_submit.count > 0 {
         rows.push(CompactTimingRow {
             label: "Submit",
             avg_ns: summary.render_submit.sum as f64 / summary.render_submit.count as f64,
-            min_ns: summary.render_submit.min,
-            max_ns: summary.render_submit.max,
         });
     }
     if summary.render_present.count > 0 {
         rows.push(CompactTimingRow {
             label: "Present",
             avg_ns: summary.render_present.sum as f64 / summary.render_present.count as f64,
-            min_ns: summary.render_present.min,
-            max_ns: summary.render_present.max,
         });
     }
     rows
@@ -1677,17 +1659,12 @@ const COMPACT_FIRST_COL_MAX_WIDTH: usize = 30;
 struct CompactTimingRow {
     label: &'static str,
     avg_ns: f64,
-    min_ns: Option<u128>,
-    max_ns: Option<u128>,
 }
 
 #[derive(Clone, Copy)]
 struct CompactWidths {
     first_col: usize,
     avg_col: usize,
-    share_col: usize,
-    min_col: usize,
-    max_col: usize,
 }
 
 fn print_top_sections_verbose(stats: &HashMap<String, Stats>, top: usize, min_count: u64) {
@@ -1746,16 +1723,10 @@ fn compute_compact_widths(
     render_rows: &[CompactTimingRow],
     top_rows: &[(&String, &Stats)],
 ) -> CompactWidths {
-    let mut first_col = display_width("Metric").max(display_width("Component"));
+    let mut first_col = display_width("Stage").max(display_width("Component"));
     let mut avg_col = display_width("Avg");
-    let mut share_col = display_width("Share");
-    let mut min_col = display_width("Min");
-    let mut max_col = display_width("Max");
-    min_col = min_col.max(display_width("Count"));
-    max_col = max_col.max(display_width("Hit"));
 
     let mut update_timing_widths = |rows: &[CompactTimingRow]| {
-        let max_avg_ns = rows.iter().map(|row| row.avg_ns).fold(0.0_f64, f64::max);
         for row in rows {
             first_col = first_col.max(display_width(&truncate(
                 row.label,
@@ -1764,67 +1735,23 @@ fn compute_compact_widths(
 
             let avg_text = format!("{} ms", format_ms(row.avg_ns));
             avg_col = avg_col.max(display_width(&avg_text));
-
-            let ratio = if max_avg_ns <= f64::EPSILON {
-                0.0
-            } else {
-                row.avg_ns / max_avg_ns
-            };
-            let share_text = format!("{}%", format_pct(ratio));
-            share_col = share_col.max(display_width(&share_text));
-
-            let min_text = row
-                .min_ns
-                .map(|value| format!("{} ms", format_ms(value as f64)))
-                .unwrap_or_else(|| "--".to_string());
-            min_col = min_col.max(display_width(&min_text));
-
-            let max_text = row
-                .max_ns
-                .map(|value| format!("{} ms", format_ms(value as f64)))
-                .unwrap_or_else(|| "--".to_string());
-            max_col = max_col.max(display_width(&max_text));
         }
     };
 
     update_timing_widths(frame_rows);
     update_timing_widths(render_rows);
 
-    let max_avg_ns = top_rows
-        .iter()
-        .map(|(_, stat)| average_ns(stat.total_ns(), stat.count))
-        .fold(0.0_f64, f64::max);
     for (name, stat) in top_rows {
         first_col = first_col.max(display_width(&truncate(name, COMPACT_FIRST_COL_MAX_WIDTH)));
 
         let avg_ns = average_ns(stat.total_ns(), stat.count);
         let avg_text = format!("{} ms", format_ms(avg_ns));
         avg_col = avg_col.max(display_width(&avg_text));
-
-        let ratio = if max_avg_ns <= f64::EPSILON {
-            0.0
-        } else {
-            avg_ns / max_avg_ns
-        };
-        let share_text = format!("{}%", format_pct(ratio));
-        share_col = share_col.max(display_width(&share_text));
-
-        let count_text = stat.count.to_string();
-        min_col = min_col.max(display_width(&count_text));
-
-        let hit_text = stat
-            .hit_rate()
-            .map(|rate| format!("{}%", format_pct(rate)))
-            .unwrap_or_else(|| "n/a".to_string());
-        max_col = max_col.max(display_width(&hit_text));
     }
 
     CompactWidths {
         first_col: first_col.min(COMPACT_FIRST_COL_MAX_WIDTH),
         avg_col,
-        share_col,
-        min_col,
-        max_col,
     }
 }
 
@@ -1885,8 +1812,7 @@ fn print_compact_timing_group(
     }
     println!("{}", title.bold());
     let max_avg_ns = rows.iter().map(|row| row.avg_ns).fold(0.0_f64, f64::max);
-    let mut rendered_rows: Vec<(String, String, String, String, String, String)> =
-        Vec::with_capacity(rows.len());
+    let mut rendered_rows: Vec<(String, String, String)> = Vec::with_capacity(rows.len());
 
     for row in rows {
         let ratio = if max_avg_ns <= f64::EPSILON {
@@ -1896,46 +1822,23 @@ fn print_compact_timing_group(
         };
         let bar = render_compact_bar(ratio, COMPACT_BAR_WIDTH);
         let avg_text = format!("{} ms", format_ms(row.avg_ns));
-        let share_text = format!("{}%", format_pct(ratio));
-        let min_text = row
-            .min_ns
-            .map(|value| format!("{} ms", format_ms(value as f64)))
-            .unwrap_or_else(|| "--".to_string());
-        let max_text = row
-            .max_ns
-            .map(|value| format!("{} ms", format_ms(value as f64)))
-            .unwrap_or_else(|| "--".to_string());
-
-        rendered_rows.push((
-            fit_display(row.label, widths.first_col),
-            avg_text,
-            bar,
-            share_text,
-            min_text,
-            max_text,
-        ));
+        rendered_rows.push((fit_display(row.label, widths.first_col), avg_text, bar));
     }
 
     println!(
-        "{}  {}  {:<bar_width$}  {}  {}  {}",
+        "{}  {}  {:<bar_width$}",
         fit_display("Stage", widths.first_col),
         fit_display("Avg", widths.avg_col),
         "Bar",
-        fit_display("Share", widths.share_col),
-        fit_display("Min", widths.min_col),
-        fit_display("Max", widths.max_col),
         bar_width = COMPACT_BAR_DISPLAY_WIDTH
     );
 
-    for (label, avg_text, bar, share_text, min_text, max_text) in rendered_rows {
+    for (label, avg_text, bar) in rendered_rows {
         println!(
-            "{}  {}  {}  {}  {}  {}",
+            "{}  {}  {}",
             label,
             fit_display(&avg_text, widths.avg_col),
             bar,
-            fit_display(&share_text, widths.share_col),
-            fit_display(&min_text, widths.min_col),
-            fit_display(&max_text, widths.max_col),
         );
     }
 }
@@ -1955,8 +1858,7 @@ fn print_compact_top_total(rows: &[(&String, &Stats)], widths: CompactWidths) {
         .map(|(_, stat)| average_ns(stat.total_ns(), stat.count))
         .fold(0.0_f64, f64::max);
 
-    let mut rendered_rows: Vec<(String, String, String, String, String, String)> =
-        Vec::with_capacity(rows.len());
+    let mut rendered_rows: Vec<(String, String, String)> = Vec::with_capacity(rows.len());
 
     for (name, stat) in rows {
         let avg_ns = average_ns(stat.total_ns(), stat.count);
@@ -1967,43 +1869,23 @@ fn print_compact_top_total(rows: &[(&String, &Stats)], widths: CompactWidths) {
         };
         let bar = render_compact_bar(ratio, COMPACT_BAR_WIDTH);
         let avg_text = format!("{} ms", format_ms(avg_ns));
-        let share_text = format!("{}%", format_pct(ratio));
-        let count_text = stat.count.to_string();
-        let hit_rate = stat
-            .hit_rate()
-            .map(|rate| format!("{}%", format_pct(rate)))
-            .unwrap_or_else(|| "n/a".to_string());
-
-        rendered_rows.push((
-            fit_display(name, widths.first_col),
-            avg_text,
-            bar,
-            share_text,
-            count_text,
-            hit_rate,
-        ));
+        rendered_rows.push((fit_display(name, widths.first_col), avg_text, bar));
     }
 
     println!(
-        "{}  {}  {:<bar_width$}  {}  {}  {}",
+        "{}  {}  {:<bar_width$}",
         fit_display("Component", widths.first_col),
         fit_display("Avg", widths.avg_col),
         "Bar",
-        fit_display("Share", widths.share_col),
-        fit_display("Count", widths.min_col),
-        fit_display("Hit", widths.max_col),
         bar_width = COMPACT_BAR_DISPLAY_WIDTH
     );
 
-    for (name, avg_text, bar, share_text, count_text, hit_rate) in rendered_rows {
+    for (name, avg_text, bar) in rendered_rows {
         println!(
-            "{}  {}  {}  {}  {}  {}",
+            "{}  {}  {}",
             name,
             fit_display(&avg_text, widths.avg_col),
             bar,
-            fit_display(&share_text, widths.share_col),
-            fit_display(&count_text, widths.min_col),
-            fit_display(&hit_rate, widths.max_col),
         );
     }
     println!();
