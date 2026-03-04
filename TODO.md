@@ -9,6 +9,7 @@
   - [ ] iOS Plugins
   - [x] Android Package Support
   - [ ] Windows Package Support
+  - [ ] iOS Package Support
   - [ ] macOS Package Support
   - [ ] Linux Package Support
 - [x] Asset management system
@@ -20,7 +21,6 @@
     - [ ] Linux
     - [ ] iOS
   - [ ] Tree-shaking for assets
-
 - [x] lazy_column
 - [x] lazy_row
 - [ ] [material design components](https://m3.material.io/components)
