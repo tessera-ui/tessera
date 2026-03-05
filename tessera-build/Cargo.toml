@@ -9,5 +9,9 @@ description = "Build-time utilities for Tessera projects"
 
 [dependencies]
 anyhow = "1.0.102"
+prettyplease = "0.2.37"
+proc-macro2 = "1.0.103"
+quote = "1.0.42"
 serde = { version = "1.0.228", features = ["derive"] }
+syn = { version = "2.0.110", features = ["full"] }
 toml = "0.9.8"
