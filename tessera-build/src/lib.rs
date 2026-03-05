@@ -6,7 +6,7 @@ use std::{
 };
 
 use anyhow::{Context, Result, anyhow, bail};
-use proc_macro2::TokenStream;
+use proc_macro2::{Literal, TokenStream};
 use quote::{format_ident, quote};
 use serde::Deserialize;
 
@@ -68,6 +68,21 @@ pub struct TesseraConfig {
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AssetsConfig {
     pub dir: Option<String>,
+    pub tree_shaking: Option<AssetsTreeShakingConfig>,
+}
+
+impl AssetsConfig {
+    pub fn tree_shaking_exclude_patterns(&self) -> &[String] {
+        self.tree_shaking
+            .as_ref()
+            .map_or(&[], |tree_shaking| tree_shaking.exclude.as_slice())
+    }
+}
+
+#[derive(Debug, Clone, Deserialize, Default)]
+pub struct AssetsTreeShakingConfig {
+    #[serde(default)]
+    pub exclude: Vec<String>,
 }
 
 #[derive(Debug, Clone, Deserialize, Default)]
@@ -267,25 +282,14 @@ fn generate_asset_file(entries: &[AssetEntry], backend: AssetBackend) -> Result<
     }
 
     let backend_tokens = match backend {
-        AssetBackend::Embed => generate_embed_backend_tokens(entries),
-        AssetBackend::Platform => generate_platform_backend_tokens(entries),
+        AssetBackend::Embed => generate_embed_backend_tokens(),
+        AssetBackend::Platform => generate_platform_backend_tokens(),
     };
-    let module_body_tokens = generate_module_body_tokens(&root)?;
+    let module_body_tokens = generate_module_body_tokens(&root, entries, backend)?;
 
     let file_tokens = quote! {
         use std::io;
         use std::sync::Arc;
-
-        #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
-        pub struct Asset {
-            index: usize,
-        }
-
-        impl Asset {
-            const fn new(index: usize) -> Self {
-                Self { index }
-            }
-        }
 
         #backend_tokens
 
@@ -300,20 +304,28 @@ fn generate_asset_file(entries: &[AssetEntry], backend: AssetBackend) -> Result<
     ))
 }
 
-fn generate_module_body_tokens(node: &ModuleNode) -> Result<TokenStream> {
+fn generate_module_body_tokens(
+    node: &ModuleNode,
+    entries: &[AssetEntry],
+    backend: AssetBackend,
+) -> Result<TokenStream> {
     let mut items = Vec::new();
 
     for (const_name, index) in &node.assets {
         let ident = format_ident!("{const_name}");
         let index = *index;
+        let entry = entries
+            .get(index)
+            .ok_or_else(|| anyhow!("Asset index out of range while generating module body"))?;
+        let value_tokens = generate_asset_value_tokens(entry, index, backend);
         items.push(quote! {
-            pub const #ident: Asset = Asset::new(#index);
+            pub const #ident: Asset = #value_tokens;
         });
     }
 
     for (module_name, child) in &node.modules {
         let module_ident = format_ident!("{module_name}");
-        let child_body = generate_module_body_tokens(child)?;
+        let child_body = generate_module_body_tokens(child, entries, backend)?;
         items.push(quote! {
             pub mod #module_ident {
                 use super::Asset;
@@ -325,6 +337,28 @@ fn generate_module_body_tokens(node: &ModuleNode) -> Result<TokenStream> {
     Ok(quote! {
         #(#items)*
     })
+}
+
+fn generate_asset_value_tokens(
+    entry: &AssetEntry,
+    index: usize,
+    backend: AssetBackend,
+) -> TokenStream {
+    match backend {
+        AssetBackend::Embed => {
+            let path = entry.absolute_path.to_string_lossy().into_owned();
+            let path_literal = Literal::string(&path);
+            quote! {
+                Asset::new_embed(#index, include_bytes!(#path_literal) as &[u8])
+            }
+        }
+        AssetBackend::Platform => {
+            let path_literal = Literal::string(&entry.platform_path);
+            quote! {
+                Asset::new_platform(#index, #path_literal)
+            }
+        }
+    }
 }
 
 fn read_dir(path: &Path) -> Result<ReadDir> {

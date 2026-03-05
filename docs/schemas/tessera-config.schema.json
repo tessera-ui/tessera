@@ -28,6 +28,20 @@
         "dir": {
           "type": "string",
           "description": "Asset directory path relative to the crate root."
+        },
+        "tree_shaking": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "exclude": {
+              "type": "array",
+              "description": "Glob patterns (relative to assets.dir) that are always copied and excluded from platform asset tree shaking.",
+              "items": {
+                "type": "string"
+              },
+              "default": []
+            }
+          }
         }
       }
     },

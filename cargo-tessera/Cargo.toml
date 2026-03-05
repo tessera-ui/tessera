@@ -8,33 +8,35 @@ homepage.workspace = true
 description = "CLI tool for Tessera UI framework - project scaffolding, development server, and build automation"
 keywords = ["gui", "ui", "cli", "tessera"]
 categories = ["command-line-utilities", "gui", "development-tools"]
-include = [
-    "Cargo.toml",
-    "README.md",
-    "src/**",
-    "templates/**",
-]
+include = ["Cargo.toml", "README.md", "src/**", "templates/**"]
 
 [[bin]]
 name = "cargo-tessera"
 path = "src/main.rs"
 
 [dependencies]
-clap = { version = "4.5", features = ["derive", "cargo"] }
 anyhow = "1.0"
-console = "0.16.2"
-indicatif = "0.18.3"
-toml = "1.0.0"
-serde = { version = "1.0", features = ["derive"] }
-include_dir = "0.7"
-notify = "8.2.0"
-inquire = { version = "0.9.3", default-features = false, features = ["crossterm", "editor"] }
-cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", default-features = false, features = ["native-tls"] }
-handlebars = "6"
-serde_json = { version = "1", features = ["unbounded_depth"] }
+aho-corasick = "1.1"
+cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", default-features = false, features = [
+    "native-tls",
+] }
 cargo_metadata = "0.23"
+clap = { version = "4.5", features = ["derive", "cargo"] }
 comfy-table = "7.1"
-owo-colors = "4.1"
+console = "0.16.2"
 csv = "1.3"
+globset = "0.4"
+handlebars = "6"
+include_dir = "0.7"
+indicatif = "0.18.3"
+inquire = { version = "0.9.3", default-features = false, features = [
+    "crossterm",
+    "editor",
+] }
+notify = "8.2.0"
+owo-colors = "4.1"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = { version = "1", features = ["unbounded_depth"] }
 tessera-build = { path = "../tessera-build" }
+toml = "1.0.0"
 unicode-width = "0.2"

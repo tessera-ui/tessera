@@ -1,17 +1,19 @@
-use proc_macro2::{Literal, TokenStream};
+use proc_macro2::TokenStream;
 use quote::quote;
 
-use crate::AssetEntry;
-
-pub(super) fn generate_platform_backend_tokens(entries: &[AssetEntry]) -> TokenStream {
-    let len = entries.len();
-    let paths = entries.iter().map(|entry| {
-        let path_literal = Literal::string(&entry.platform_path);
-        quote! { #path_literal }
-    });
-
+pub(super) fn generate_platform_backend_tokens() -> TokenStream {
     quote! {
-        const __TESSERA_ASSET_PATHS: [&str; #len] = [#(#paths,)*];
+        #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
+        pub struct Asset {
+            index: usize,
+            path: &'static str,
+        }
+
+        impl Asset {
+            const fn new_platform(index: usize, path: &'static str) -> Self {
+                Self { index, path }
+            }
+        }
 
         fn __tessera_read_platform_asset(path: &str) -> io::Result<Arc<[u8]>> {
             #[cfg(target_os = "android")]
@@ -138,13 +140,7 @@ pub(super) fn generate_platform_backend_tokens(entries: &[AssetEntry]) -> TokenS
         impl tessera_ui::AssetExt for Asset {
             fn read(self) -> io::Result<Arc<[u8]>> {
                 tessera_ui::asset::read_with_lru_cache::<Asset, _>(self.index as u64, || {
-                    if let Some(path) = __TESSERA_ASSET_PATHS.get(self.index) {
-                        return __tessera_read_platform_asset(path);
-                    }
-                    Err(io::Error::new(
-                        io::ErrorKind::NotFound,
-                        "asset index out of range",
-                    ))
+                    __tessera_read_platform_asset(self.path)
                 })
             }
         }

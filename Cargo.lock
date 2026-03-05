@@ -828,12 +828,14 @@ dependencies = [
 name = "cargo-tessera"
 version = "0.5.0"
 dependencies = [
+ "aho-corasick",
  "anyhow",
  "cargo_metadata",
  "clap 4.5.58",
  "comfy-table",
  "console",
  "csv",
+ "globset",
  "handlebars",
  "include_dir",
  "indicatif",
