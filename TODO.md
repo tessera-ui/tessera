@@ -20,7 +20,7 @@
     - [ ] macOS
     - [ ] Linux
     - [ ] iOS
-  - [ ] Tree-shaking for assets
+  - [x] Tree-shaking for assets
 - [x] lazy_column
 - [x] lazy_row
 - [ ] [material design components](https://m3.material.io/components)
