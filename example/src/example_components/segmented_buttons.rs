@@ -75,9 +75,10 @@ pub fn segmented_buttons_showcase() {
                                 &SegmentedButtonRowArgs::default().content(move || {
                                     for (index, label) in options.iter().enumerate() {
                                         let icon_args = match index {
-                                            0 => IconArgs::from(filled::inbox_icon()),
-                                            1 => IconArgs::from(filled::notifications_icon()),
-                                            _ => IconArgs::from(filled::settings_icon()),
+                                            0 => IconArgs::default().vector(filled::INBOX_SVG),
+                                            1 => IconArgs::default()
+                                                .vector(filled::NOTIFICATIONS_SVG),
+                                            _ => IconArgs::default().vector(filled::SETTINGS_SVG),
                                         };
                                         let is_selected = selected_filters.with(|values| {
                                             values.get(index).copied().unwrap_or(false)

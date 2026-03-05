@@ -1,10 +1,7 @@
-use std::sync::Arc;
-
 use tessera_components::{
     button::{ButtonArgs, button},
     icon::IconArgs,
     icon_button::{IconButtonArgs, IconButtonVariant, icon_button},
-    image_vector::{ImageVectorData, ImageVectorSource, load_image_vector_from_source},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column},
     modifier::ModifierExt as _,
     row::{RowArgs, row},
@@ -15,35 +12,14 @@ use tessera_components::{
 };
 use tessera_ui::{Dp, Modifier, remember, retain, shard, use_context};
 
-const ICON_BYTES: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../assets/emoji_u1f416.svg"
-));
-
-#[derive(Clone)]
-struct ButtonShowcaseState {
-    icon_data: Arc<ImageVectorData>,
-}
-
-impl ButtonShowcaseState {
-    fn new() -> Self {
-        let icon_data = Arc::new(
-            load_image_vector_from_source(&ImageVectorSource::Bytes(Arc::from(ICON_BYTES)))
-                .expect("Failed to load icon SVG"),
-        );
-
-        Self { icon_data }
-    }
-}
-
-impl Default for ButtonShowcaseState {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-#[shard(state = ButtonShowcaseState)]
+#[shard]
 pub fn button_showcase() {
     let counter = remember(|| 0i32);
+    let icon_args = remember(|| {
+        IconArgs::default()
+            .try_vector_asset(crate::res::EMOJI_U1F416_SVG)
+            .expect("Failed to load icon SVG")
+    });
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
@@ -61,8 +37,7 @@ pub fn button_showcase() {
                             .item(|| text(&TextArgs::default().text("Icon Button").size(Dp(16.0))));
 
                         scope.item(move || {
-                            let icon_data = state.with(|value| value.icon_data.clone());
-                            let icon = IconArgs::from(icon_data).size(Dp(24.0));
+                            let icon = icon_args.get().size(Dp(24.0));
 
                             let button_args = IconButtonArgs::new(icon)
                                 .variant(IconButtonVariant::Filled)

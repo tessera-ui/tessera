@@ -1,7 +1,6 @@
 use tessera_components::{
     icon::{IconArgs, icon},
-    image::{ImageArgs, ImageSource, image, load_image_from_source},
-    image_vector::{ImageVectorSource, load_image_vector_from_source},
+    image::{ImageArgs, TryIntoImageData, image},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column},
     modifier::ModifierExt as _,
     spacer::{SpacerArgs, spacer},
@@ -9,11 +8,6 @@ use tessera_components::{
     text::{TextArgs, text},
 };
 use tessera_ui::{AssetExt, Dp, Modifier, remember, retain, shard};
-
-const VECTOR_BYTES: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../assets/emoji_u1f416.svg"
-));
 #[shard]
 pub fn image_showcase() {
     surface(&SurfaceArgs::with_child(
@@ -27,11 +21,15 @@ fn test_content() {
         let image_bytes = crate::res::SCARLET_UT_JPG
             .read()
             .expect("Failed to read raster asset bytes");
-        load_image_from_source(&ImageSource::Bytes(image_bytes)).expect("Failed to load image data")
+        image_bytes
+            .as_ref()
+            .try_into_image_data()
+            .expect("Failed to load image data")
     });
-    let image_vector_data = remember(|| {
-        load_image_vector_from_source(&ImageVectorSource::Bytes(VECTOR_BYTES.into()))
-            .expect("Failed to load image vector data")
+    let icon_args = remember(|| {
+        IconArgs::default()
+            .try_vector_asset(crate::res::EMOJI_U1F416_SVG)
+            .expect("Failed to load image vector icon")
     });
     let controller = retain(LazyListController::new);
     lazy_column(
@@ -50,15 +48,16 @@ fn test_content() {
                 });
                 scope.item(|| text(&TextArgs::from("Icon (vector source)")));
                 scope.item(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(8.0)))));
-                scope.item(move || icon(&IconArgs::from(image_vector_data.get()).size(Dp(160.0))));
+                scope.item(move || icon(&icon_args.get().size(Dp(160.0))));
             }),
     )
 }
 #[shard]
 pub fn icon_showcase() {
-    let image_vector_data = remember(|| {
-        load_image_vector_from_source(&ImageVectorSource::Bytes(VECTOR_BYTES.into()))
-            .expect("Failed to load image vector data")
+    let icon_args = remember(|| {
+        IconArgs::default()
+            .try_vector_asset(crate::res::EMOJI_U1F416_SVG)
+            .expect("Failed to load image vector icon")
     });
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
@@ -70,9 +69,7 @@ pub fn icon_showcase() {
                     .content(move |scope| {
                         scope.item(|| text(&TextArgs::from("Icon Showcase")));
                         scope.item(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(10.0)))));
-                        scope.item(move || {
-                            icon(&IconArgs::from(image_vector_data.get()).size(Dp(100.0)))
-                        });
+                        scope.item(move || icon(&icon_args.get().size(Dp(100.0))));
                     }),
             );
         },

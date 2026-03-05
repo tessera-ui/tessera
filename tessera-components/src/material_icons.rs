@@ -1,51 +1,29 @@
-//! Material Design icon content helpers.
+//! Material Design icon assets and decode helpers.
 //!
 //! ## Usage
 //!
-//! Use style modules (e.g., [`filled`]) and functions like `home_icon()` to get
-//! an [`IconContent`] that can be passed to [`crate::icon::IconArgs`].
-use std::{collections::HashMap, sync::Arc};
+//! Use style modules (for example [`filled`]) to obtain icon assets, then pass
+//! them to [`crate::icon::IconArgs`] or decode with
+//! [`TryIntoImageVectorData`].
+use std::sync::Arc;
 
-use parking_lot::RwLock;
+use tessera_ui::AssetExt;
 
 use crate::{
-    icon::IconContent, image_vector::ImageVectorSource,
+    image_vector::{ImageVectorLoadError, TryIntoImageVectorData},
     pipelines::image_vector::command::ImageVectorData,
 };
 
-pub use generated::{filled, outlined, round, sharp, two_tone};
+pub use crate::res::material_icons::{filled, outlined, round, sharp, two_tone};
 
-#[allow(missing_docs, clippy::all)]
-mod generated {
-    include!(concat!(env!("OUT_DIR"), "/material_icons.rs"));
-}
+/// Material icon asset handle.
+pub type Asset = crate::res::Asset;
 
-type IconCache = HashMap<(usize, usize), Arc<ImageVectorData>>;
-
-static ICON_CACHE: std::sync::OnceLock<RwLock<IconCache>> = std::sync::OnceLock::new();
-
-fn cache() -> &'static RwLock<IconCache> {
-    ICON_CACHE.get_or_init(|| RwLock::new(HashMap::new()))
-}
-
-/// Load vector data from the bundled blob with caching.
-pub fn load_icon_bytes(bytes: &'static [u8]) -> Arc<ImageVectorData> {
-    let key = (bytes.as_ptr() as usize, bytes.len());
-    if let Some(cached) = cache().read().get(&key) {
-        return cached.clone();
+impl TryIntoImageVectorData for Asset {
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+        let bytes = self
+            .read()
+            .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
+        bytes.as_ref().try_into_image_vector_data()
     }
-
-    let bytes = Arc::<[u8]>::from(bytes);
-    let vector =
-        crate::image_vector::load_image_vector_from_source(&ImageVectorSource::Bytes(bytes))
-            .map(Arc::new)
-            .expect("bundled material icon svg should load");
-
-    cache().write().insert(key, vector.clone());
-    vector
-}
-
-/// Convert loaded vector data into icon content.
-pub fn content_from_data(data: Arc<ImageVectorData>) -> IconContent {
-    IconContent::from(data)
 }

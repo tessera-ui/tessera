@@ -162,9 +162,9 @@ fn app_inner() {
                                                         ).children(move |row_scope| {
                                                         row_scope.child(move || {
                                                             let home_icon_args =
-                                                                IconArgs::from(filled::home_icon());
+                                                                IconArgs::default().vector(filled::HOME_SVG);
                                                             let about_icon_args =
-                                                                IconArgs::from(filled::info_icon());
+                                                                IconArgs::default().vector(filled::INFO_SVG);
 
                                                             let home_action =
                                                                 Callback::new(move || {
@@ -203,11 +203,11 @@ fn app_inner() {
                                                                         let button_args =
                                                                             if is_expanded {
                                                                                 IconButtonArgs::new(
-                                                                                    filled::menu_open_icon(),
+                                                                                    filled::MENU_OPEN_SVG,
                                                                                 )
                                                                             } else {
                                                                                 IconButtonArgs::new(
-                                                                                    filled::menu_icon(),
+                                                                                    filled::MENU_SVG,
                                                                                 )
                                                                             };
                                                                         icon_button(
@@ -299,9 +299,9 @@ fn app_inner() {
                                                 );
                                                     scope.child(move || {
                                                         let home_icon_args =
-                                                            IconArgs::from(filled::home_icon());
+                                                            IconArgs::default().vector(filled::HOME_SVG);
                                                         let about_icon_args =
-                                                            IconArgs::from(filled::info_icon());
+                                                            IconArgs::default().vector(filled::INFO_SVG);
 
                                                         let home_action =
                                                             Callback::new(move || {
@@ -360,7 +360,7 @@ fn app_inner() {
                                 &BasicDialogArgs::new("This is a basic dialog component.")
                                     .headline("Basic Dialog")
                                     .icon(|| {
-                                        icon(&IconArgs::from(filled::info_icon()));
+                                        icon(&IconArgs::default().vector(filled::INFO_SVG));
                                     })
                                     .confirm_button(move || {
                                         button(&ButtonArgs::with_child(
@@ -759,7 +759,7 @@ fn home_node(args: &HomeArgs) {
                                 .placeholder("Search components")
                                 .controller(controller)
                                 .leading_icon(|| {
-                                    icon(&IconArgs::from(filled::search_icon()));
+                                    icon(&IconArgs::default().vector(filled::SEARCH_SVG));
                                 })
                                 .on_query_change(move |text| {
                                     search_query.set(text.clone());
@@ -908,7 +908,7 @@ fn window_controls() {
         .children(move |row_scope| {
             row_scope.child(move || {
                 window_control_button(
-                    IconArgs::from(filled::minimize_icon()),
+                    IconArgs::default().vector(filled::MINIMIZE_SVG),
                     WindowAction::Minimize,
                     neutral,
                 );
@@ -916,7 +916,7 @@ fn window_controls() {
             row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(4.0)))));
             row_scope.child(move || {
                 window_control_button(
-                    IconArgs::from(filled::fullscreen_icon()),
+                    IconArgs::default().vector(filled::FULLSCREEN_SVG),
                     WindowAction::ToggleMaximize,
                     neutral,
                 );
@@ -924,7 +924,7 @@ fn window_controls() {
             row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(4.0)))));
             row_scope.child(move || {
                 window_control_button(
-                    IconArgs::from(filled::close_icon()),
+                    IconArgs::default().vector(filled::CLOSE_SVG),
                     WindowAction::Close,
                     destructive,
                 );
@@ -945,7 +945,7 @@ fn top_app_bar() {
     app_bar(&app_bar_args.content_children(move |scope| {
         scope.child(move || {
             icon_button(
-                &IconButtonArgs::new(filled::arrow_back_icon())
+                &IconButtonArgs::new(filled::ARROW_BACK_SVG)
                     .enabled(can_go_back)
                     .color(Color::TRANSPARENT)
                     .on_click(|| {

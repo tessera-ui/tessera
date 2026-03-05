@@ -144,7 +144,7 @@ fn test_content() {
                             })
                             .modifier(Modifier::new().width(Dp(250.0)))
                             .size(tessera_components::slider::SliderSize::Medium)
-                            .inset_icon(filled::volume_up_icon()),
+                            .inset_icon(filled::VOLUME_UP_SVG),
                     );
                 });
 

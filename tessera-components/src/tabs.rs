@@ -14,7 +14,7 @@ use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgs, boxed},
     column::{ColumnArgs, column},
-    icon::{IconArgs, IconContent, icon},
+    icon::{IconArgs, icon},
     modifier::ModifierExt,
     shape_def::Shape,
     spacer::spacer,
@@ -444,7 +444,7 @@ enum TabTitle {
     Themed(CallbackWith<Color>),
     Label {
         text: String,
-        icon: Option<IconContent>,
+        icon: Option<IconArgs>,
     },
 }
 
@@ -499,7 +499,7 @@ impl<'a> TabsScope<'a> {
     pub fn child_label_with_icon<F>(
         &mut self,
         text: impl Into<String>,
-        icon: impl Into<IconContent>,
+        icon: impl Into<IconArgs>,
         content: F,
     ) where
         F: Fn() + Send + Sync + 'static,
@@ -522,7 +522,7 @@ pub struct TabLabelArgs {
     pub text: String,
     /// Optional icon shown above the text.
     #[prop(into)]
-    pub icon: Option<IconContent>,
+    pub icon: Option<IconArgs>,
     /// Horizontal padding applied to the text area.
     pub horizontal_text_padding: Dp,
     /// Height reserved for the active indicator when positioning text and icon.
@@ -650,7 +650,7 @@ pub fn tab_label(args: &TabLabelArgs) {
                                     let icon_content = icon_content_for_column.clone();
                                     col.child(move || {
                                         if let Some(ic) = icon_content.clone() {
-                                            icon(&IconArgs::from(ic).size(icon_size));
+                                            icon(&ic.size(icon_size).tint(content_color));
                                         }
                                     });
                                     // Spacing between icon and text
@@ -677,7 +677,7 @@ pub fn tab_label(args: &TabLabelArgs) {
                     } else if has_icon {
                         // Icon only
                         if let Some(ic) = icon_content.clone() {
-                            icon(&IconArgs::from(ic).size(icon_size));
+                            icon(&ic.size(icon_size).tint(content_color));
                         }
                     } else if has_text {
                         // Text only

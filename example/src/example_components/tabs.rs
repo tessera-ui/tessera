@@ -45,17 +45,17 @@ fn test_content() {
                             .children(|scope| {
                                 scope.child_label_with_icon(
                                     "Flights",
-                                    material_icons::filled::flight_icon(),
+                                    material_icons::filled::FLIGHT_SVG,
                                     || text(&TextArgs::from("Fly in the air...")),
                                 );
                                 scope.child_label_with_icon(
                                     "Hotel",
-                                    material_icons::filled::hotel_icon(),
+                                    material_icons::filled::HOTEL_SVG,
                                     || text(&TextArgs::from("Sleep well...")),
                                 );
                                 scope.child_label_with_icon(
                                     "Cars",
-                                    material_icons::filled::directions_car_icon(),
+                                    material_icons::filled::DIRECTIONS_CAR_SVG,
                                     || text(&TextArgs::from("Beep beep...")),
                                 );
                             }),

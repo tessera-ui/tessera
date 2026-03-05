@@ -5,7 +5,11 @@
 //! parsed with [`usvg`] and tessellated into GPU-friendly triangles using lyon.
 //! The resulting [`ImageVectorData`] can be cached and reused across frames.
 
-use std::{fs, path::Path as StdPath, sync::Arc};
+use std::{
+    fs,
+    path::{Path as StdPath, PathBuf},
+    sync::Arc,
+};
 
 use lyon_geom::point;
 use lyon_path::Path as LyonPath;
@@ -25,15 +29,6 @@ use crate::pipelines::image_vector::command::ImageVectorVertex;
 
 pub use crate::pipelines::image_vector::command::{ImageVectorData, VectorTintMode as TintMode};
 
-/// Source for loading SVG vector data.
-#[derive(Clone, PartialEq, Debug)]
-pub enum ImageVectorSource {
-    /// Load from a filesystem path.
-    Path(String),
-    /// Load from in-memory bytes.
-    Bytes(Arc<[u8]>),
-}
-
 /// Errors that can occur while decoding or tessellating vector images.
 #[derive(Debug, Error)]
 pub enum ImageVectorLoadError {
@@ -42,6 +37,13 @@ pub enum ImageVectorLoadError {
     Io {
         /// Failing path.
         path: String,
+        /// Underlying IO error.
+        #[source]
+        source: std::io::Error,
+    },
+    /// Failed to read bytes from an asset handle.
+    #[error("failed to read SVG bytes from asset: {source}")]
+    AssetRead {
         /// Underlying IO error.
         #[source]
         source: std::io::Error,
@@ -66,34 +68,74 @@ pub enum ImageVectorLoadError {
     EmptyGeometry,
 }
 
-/// Load [`ImageVectorData`] from the provided source.
-pub fn load_image_vector_from_source(
-    source: &ImageVectorSource,
-) -> Result<ImageVectorData, ImageVectorLoadError> {
-    let (bytes, resources_dir) = read_source_bytes(source)?;
+/// Converts a source into shared vector geometry data.
+pub trait TryIntoImageVectorData {
+    /// Convert this source into shared vector geometry.
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError>;
+}
 
+fn load_image_vector_from_bytes(
+    bytes: &[u8],
+    resources_dir: Option<PathBuf>,
+) -> Result<ImageVectorData, ImageVectorLoadError> {
     let options = usvg::Options {
         resources_dir,
         ..Default::default()
     };
-    let tree = Tree::from_data(&bytes, &options)?;
+    let tree = Tree::from_data(bytes, &options)?;
 
     build_vector_data(&tree)
 }
 
-fn read_source_bytes(
-    source: &ImageVectorSource,
-) -> Result<(Vec<u8>, Option<std::path::PathBuf>), ImageVectorLoadError> {
-    match source {
-        ImageVectorSource::Path(path) => {
-            let bytes = fs::read(path).map_err(|source| ImageVectorLoadError::Io {
-                path: path.clone(),
-                source,
-            })?;
-            let dir = StdPath::new(path).parent().map(|p| p.to_path_buf());
-            Ok((bytes, dir))
-        }
-        ImageVectorSource::Bytes(bytes) => Ok((bytes.as_ref().to_vec(), None)),
+fn load_image_vector_from_path(path: &StdPath) -> Result<ImageVectorData, ImageVectorLoadError> {
+    let path_text = path.to_string_lossy().into_owned();
+    let bytes = fs::read(path).map_err(|source| ImageVectorLoadError::Io {
+        path: path_text,
+        source,
+    })?;
+    let resources_dir = path.parent().map(|parent| parent.to_path_buf());
+    load_image_vector_from_bytes(&bytes, resources_dir)
+}
+
+impl TryIntoImageVectorData for ImageVectorData {
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+        Ok(Arc::new(self))
+    }
+}
+
+impl TryIntoImageVectorData for Vec<u8> {
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+        Ok(Arc::new(load_image_vector_from_bytes(&self, None)?))
+    }
+}
+
+impl TryIntoImageVectorData for &[u8] {
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+        Ok(Arc::new(load_image_vector_from_bytes(self, None)?))
+    }
+}
+
+impl TryIntoImageVectorData for String {
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+        Ok(Arc::new(load_image_vector_from_path(StdPath::new(&self))?))
+    }
+}
+
+impl TryIntoImageVectorData for &str {
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+        Ok(Arc::new(load_image_vector_from_path(StdPath::new(self))?))
+    }
+}
+
+impl TryIntoImageVectorData for PathBuf {
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+        Ok(Arc::new(load_image_vector_from_path(self.as_path())?))
+    }
+}
+
+impl TryIntoImageVectorData for &StdPath {
+    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+        Ok(Arc::new(load_image_vector_from_path(self)?))
     }
 }
 

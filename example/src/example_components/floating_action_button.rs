@@ -54,11 +54,15 @@ pub fn floating_action_button_showcase() {
                                                     clicks.with_mut(|value| *value += 1);
                                                 }),
                                             || {
-                                                icon(&IconArgs::from(filled::home_icon()).size(
-                                                    FloatingActionButtonDefaults::icon_size(
-                                                        FloatingActionButtonSize::Small,
-                                                    ),
-                                                ));
+                                                icon(
+                                                    &IconArgs::default()
+                                                        .vector(filled::HOME_SVG)
+                                                        .size(
+                                                            FloatingActionButtonDefaults::icon_size(
+                                                                FloatingActionButtonSize::Small,
+                                                            ),
+                                                        ),
+                                                );
                                             },
                                         );
                                         floating_action_button(&component_args);
@@ -76,11 +80,15 @@ pub fn floating_action_button_showcase() {
                                                     clicks.with_mut(|value| *value += 1);
                                                 }),
                                             || {
-                                                icon(&IconArgs::from(filled::home_icon()).size(
-                                                    FloatingActionButtonDefaults::icon_size(
-                                                        FloatingActionButtonSize::Standard,
-                                                    ),
-                                                ));
+                                                icon(
+                                                    &IconArgs::default()
+                                                        .vector(filled::HOME_SVG)
+                                                        .size(
+                                                            FloatingActionButtonDefaults::icon_size(
+                                                                FloatingActionButtonSize::Standard,
+                                                            ),
+                                                        ),
+                                                );
                                             },
                                         );
                                         floating_action_button(&component_args);
@@ -98,11 +106,15 @@ pub fn floating_action_button_showcase() {
                                                     clicks.with_mut(|value| *value += 1);
                                                 }),
                                             || {
-                                                icon(&IconArgs::from(filled::home_icon()).size(
-                                                    FloatingActionButtonDefaults::icon_size(
-                                                        FloatingActionButtonSize::Large,
-                                                    ),
-                                                ));
+                                                icon(
+                                                    &IconArgs::default()
+                                                        .vector(filled::HOME_SVG)
+                                                        .size(
+                                                            FloatingActionButtonDefaults::icon_size(
+                                                                FloatingActionButtonSize::Large,
+                                                            ),
+                                                        ),
+                                                );
                                             },
                                         );
                                         floating_action_button(&component_args);
@@ -134,7 +146,7 @@ pub fn floating_action_button_showcase() {
                             let component_args = FloatingActionButtonArgs::with_content(
                                 FloatingActionButtonArgs::default().enabled(false),
                                 || {
-                                    icon(&IconArgs::from(filled::home_icon()).size(
+                                    icon(&IconArgs::default().vector(filled::HOME_SVG).size(
                                         FloatingActionButtonDefaults::icon_size(
                                             FloatingActionButtonSize::Standard,
                                         ),

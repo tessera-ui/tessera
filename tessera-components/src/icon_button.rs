@@ -111,23 +111,24 @@ impl GlassIconButtonArgs {
 ///
 /// ## Examples
 ///
-/// ```no_run
-/// use std::sync::Arc;
+/// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use tessera_components::{
 ///     icon::IconArgs,
 ///     icon_button::{IconButtonArgs, IconButtonVariant, icon_button},
-///     image_vector::{ImageVectorSource, load_image_vector_from_source},
+///     material_icons::filled,
 /// };
 ///
-/// let svg_path = "../assets/emoji_u1f416.svg";
-/// let vector_data =
-///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
+/// let icon_args = IconArgs::default().vector(filled::STAR_SVG);
 ///
 /// icon_button(
-///     &IconButtonArgs::new(IconArgs::from(vector_data.clone()))
+///     &IconButtonArgs::new(icon_args)
 ///         .variant(IconButtonVariant::Filled)
 ///         .on_click(|| println!("Clicked!")),
 /// );
+/// # }
 /// ```
 /// Render an icon button.
 #[tessera]
@@ -221,22 +222,23 @@ pub fn icon_button(args: &IconButtonArgs) {
 ///
 /// ## Examples
 ///
-/// ```no_run
+/// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use tessera_components::{
 ///     glass_button::GlassButtonArgs,
 ///     icon::IconArgs,
 ///     icon_button::{GlassIconButtonArgs, glass_icon_button},
-///     image_vector::{ImageVectorSource, load_image_vector_from_source},
+///     material_icons::filled,
 /// };
 ///
-/// let svg_path = "../assets/emoji_u1f416.svg";
-/// let vector_data =
-///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
+/// let icon_args = IconArgs::default().vector(filled::STAR_SVG);
 ///
 /// glass_icon_button(
-///     &GlassIconButtonArgs::new(IconArgs::from(vector_data))
-///         .button(GlassButtonArgs::default().on_click(|| {})),
+///     &GlassIconButtonArgs::new(icon_args).button(GlassButtonArgs::default().on_click(|| {})),
 /// );
+/// # }
 /// ```
 /// Render a glass icon button.
 #[tessera]

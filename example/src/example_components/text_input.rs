@@ -53,8 +53,8 @@ fn test_content() {
         TextInputController::new(outlined_secure_font_size, outlined_secure_line_height)
     });
 
-    let leading_icon_args = IconArgs::from(filled::home_icon()).size(Dp(20.0));
-    let trailing_icon_args = IconArgs::from(filled::info_icon()).size(Dp(20.0));
+    let leading_icon_args = IconArgs::default().vector(filled::HOME_SVG).size(Dp(20.0));
+    let trailing_icon_args = IconArgs::default().vector(filled::INFO_SVG).size(Dp(20.0));
     let icon_prefix_args = TextFieldArgs::filled()
         .modifier(Modifier::new().fill_max_width())
         .placeholder("example.com")

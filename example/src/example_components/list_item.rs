@@ -48,11 +48,16 @@ pub fn list_item_showcase() {
                             list_item(
                                 &ListItemArgs::new("Inbox")
                                     .leading(|| {
-                                        icon(&IconArgs::from(filled::inbox_icon()).size(Dp(24.0)));
+                                        icon(
+                                            &IconArgs::default()
+                                                .vector(filled::INBOX_SVG)
+                                                .size(Dp(24.0)),
+                                        );
                                     })
                                     .trailing(|| {
                                         icon(
-                                            &IconArgs::from(filled::chevron_right_icon())
+                                            &IconArgs::default()
+                                                .vector(filled::CHEVRON_RIGHT_SVG)
                                                 .size(Dp(20.0)),
                                         );
                                     }),
@@ -82,13 +87,15 @@ pub fn list_item_showcase() {
                                     })
                                     .leading(|| {
                                         icon(
-                                            &IconArgs::from(filled::notifications_icon())
+                                            &IconArgs::default()
+                                                .vector(filled::NOTIFICATIONS_SVG)
                                                 .size(Dp(24.0)),
                                         );
                                     })
                                     .trailing(|| {
                                         icon(
-                                            &IconArgs::from(filled::chevron_right_icon())
+                                            &IconArgs::default()
+                                                .vector(filled::CHEVRON_RIGHT_SVG)
                                                 .size(Dp(20.0)),
                                         );
                                     }),
@@ -113,7 +120,9 @@ pub fn list_item_showcase() {
                                     .supporting_text("Two-factor auth and recovery options")
                                     .leading(|| {
                                         icon(
-                                            &IconArgs::from(filled::settings_icon()).size(Dp(24.0)),
+                                            &IconArgs::default()
+                                                .vector(filled::SETTINGS_SVG)
+                                                .size(Dp(24.0)),
                                         );
                                     }),
                             );
@@ -137,7 +146,8 @@ pub fn list_item_showcase() {
                                     .enabled(false)
                                     .leading(|| {
                                         icon(
-                                            &IconArgs::from(filled::notifications_icon())
+                                            &IconArgs::default()
+                                                .vector(filled::NOTIFICATIONS_SVG)
                                                 .size(Dp(24.0)),
                                         );
                                     }),

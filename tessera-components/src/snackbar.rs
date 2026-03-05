@@ -996,7 +996,7 @@ fn render_action_button(label: String, action_color: Color, on_action: Option<Ca
 
 fn render_dismiss_button(dismiss_color: Color, on_dismiss: Option<Callback>) {
     let on_dismiss = on_dismiss.unwrap_or_default();
-    let icon_args = IconArgs::from(filled::close_icon()).tint_mode(TintMode::Solid);
+    let icon_args = IconArgs::from(filled::CLOSE_SVG).tint_mode(TintMode::Solid);
     icon_button(
         &IconButtonArgs::new(icon_args)
             .variant(IconButtonVariant::Standard)

@@ -1,72 +1,111 @@
-//! A component for rendering raster images.
+//! Raster image component and decoding utilities.
 //!
 //! ## Usage
 //!
-//! Use to display static or dynamically loaded images.
-use std::sync::Arc;
+//! Use to display images from pre-decoded data or bytes/assets loaded once.
+use std::{
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use image::GenericImageView;
 use tessera_ui::{
-    ComputedData, DimensionValue, MeasurementError, Modifier, Prop, Px,
+    AssetExt, ComputedData, DimensionValue, MeasurementError, Modifier, Prop, Px,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera,
 };
+use thiserror::Error;
 
 use crate::pipelines::image::command::ImageCommand;
 
 pub use crate::pipelines::image::command::ImageData;
 
-/// Specifies the source for image data, which can be either a file path or raw
-/// bytes.
-///
-/// This enum is used by [`load_image_from_source`] to load image data from
-/// different sources.
-#[derive(Clone, PartialEq, Debug)]
-pub enum ImageSource {
-    /// Load image from a file path.
-    Path(String),
-    /// Load image from a byte slice. The data is wrapped in an `Arc` for
-    /// efficient sharing.
-    Bytes(Arc<[u8]>),
+/// Errors that can occur while loading raster image data.
+#[derive(Debug, Error)]
+pub enum ImageLoadError {
+    /// Failed to read bytes from an asset handle.
+    #[error("failed to read image bytes from asset: {source}")]
+    AssetRead {
+        /// Underlying IO error.
+        #[source]
+        source: std::io::Error,
+    },
+    /// Image decoding failed.
+    #[error(transparent)]
+    Decode(#[from] image::ImageError),
 }
 
-/// Decodes an image from a given [`ImageSource`].
-///
-/// This function handles the loading and decoding of the image data into a
-/// format suitable for rendering. It should be called outside of the main UI
-/// loop or a component's `measure` closure to avoid performance degradation
-/// from decoding the image on every frame.
-///
-/// # Arguments
-///
-/// * `source` - A reference to the [`ImageSource`] to load the image from.
-///
-/// # Returns
-///
-/// A `Result` containing the decoded [`ImageData`] on success, or an
-/// `image::ImageError` on failure.
-pub fn load_image_from_source(source: &ImageSource) -> Result<ImageData, image::ImageError> {
-    let decoded = match source {
-        ImageSource::Path(path) => image::open(path)?,
-        ImageSource::Bytes(bytes) => image::load_from_memory(bytes)?,
-    };
+/// Converts a source into decoded raster image data.
+pub trait TryIntoImageData {
+    /// Convert this source into decoded image data.
+    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError>;
+}
+
+fn decode_dynamic_image(decoded: image::DynamicImage) -> ImageData {
     let (width, height) = decoded.dimensions();
-    Ok(ImageData {
+    ImageData {
         data: Arc::new(decoded.to_rgba8().into_raw()),
         width,
         height,
-    })
+    }
+}
+
+fn decode_image_from_bytes(bytes: &[u8]) -> Result<ImageData, ImageLoadError> {
+    let decoded = image::load_from_memory(bytes)?;
+    Ok(decode_dynamic_image(decoded))
+}
+
+fn decode_image_from_path(path: &Path) -> Result<ImageData, ImageLoadError> {
+    let decoded = image::open(path)?;
+    Ok(decode_dynamic_image(decoded))
+}
+
+impl TryIntoImageData for ImageData {
+    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
+        Ok(self)
+    }
+}
+
+impl TryIntoImageData for Vec<u8> {
+    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
+        decode_image_from_bytes(&self)
+    }
+}
+
+impl TryIntoImageData for &[u8] {
+    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
+        decode_image_from_bytes(self)
+    }
+}
+
+impl TryIntoImageData for String {
+    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
+        decode_image_from_path(Path::new(&self))
+    }
+}
+
+impl TryIntoImageData for &str {
+    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
+        decode_image_from_path(Path::new(self))
+    }
+}
+
+impl TryIntoImageData for PathBuf {
+    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
+        decode_image_from_path(self.as_path())
+    }
+}
+
+impl TryIntoImageData for &Path {
+    fn try_into_image_data(self) -> Result<ImageData, ImageLoadError> {
+        decode_image_from_path(self)
+    }
 }
 
 /// Arguments for the `image` component.
-///
-/// This struct holds the data and layout properties for an `image` component.
-/// It is typically created using fluent Prop or by converting from
-/// [`ImageData`].
 #[derive(Debug, Prop, Clone)]
 pub struct ImageArgs {
-    /// The decoded image data, represented by [`ImageData`]. This contains the
-    /// raw pixel buffer and the image's dimensions.
+    /// Decoded image data containing RGBA pixels and dimensions.
     #[prop(into)]
     pub data: Arc<ImageData>,
 
@@ -74,10 +113,48 @@ pub struct ImageArgs {
     pub modifier: Modifier,
 }
 
+impl ImageArgs {
+    /// Replaces the image data with already-decoded raster pixels.
+    pub fn raster(mut self, data: impl Into<Arc<ImageData>>) -> Self {
+        self.data = data.into();
+        self
+    }
+
+    /// Decodes raster image data from bytes/path/asset input and stores it.
+    pub fn try_raster<T>(mut self, source: T) -> Result<Self, ImageLoadError>
+    where
+        T: TryIntoImageData,
+    {
+        self.data = Arc::new(source.try_into_image_data()?);
+        Ok(self)
+    }
+
+    /// Decodes raster image data from an asset handle and stores it.
+    pub fn try_raster_asset<T>(mut self, asset: T) -> Result<Self, ImageLoadError>
+    where
+        T: AssetExt,
+    {
+        let bytes = asset
+            .read()
+            .map_err(|source| ImageLoadError::AssetRead { source })?;
+        self.data = Arc::new(decode_image_from_bytes(bytes.as_ref())?);
+        Ok(self)
+    }
+}
+
 impl From<ImageData> for ImageArgs {
     fn from(data: ImageData) -> Self {
         Self {
             data: Arc::new(data),
+            modifier: Modifier::new(),
+        }
+    }
+}
+
+impl From<Arc<ImageData>> for ImageArgs {
+    fn from(data: Arc<ImageData>) -> Self {
+        Self {
+            data,
             modifier: Modifier::new(),
         }
     }
@@ -145,28 +222,29 @@ impl LayoutSpec for ImageLayout {
 ///
 /// ## Usage
 ///
-/// Display a static asset or a dynamically loaded image from a file or memory.
+/// Display a static asset or pre-decoded image pixels.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the image data and layout; see [`ImageArgs`].
+/// - `args` - configures the image data and layout; see [`ImageArgs`].
 ///
 /// ## Examples
 ///
-/// ```ignore
+/// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use std::sync::Arc;
-/// use tessera_components::image::{
-///     ImageSource, image, load_image_from_source,
+/// use tessera_components::image::{ImageArgs, ImageData, image};
+///
+/// let image_data = ImageData {
+///     data: Arc::new(vec![255, 255, 255, 255]),
+///     width: 1,
+///     height: 1,
 /// };
 ///
-/// // In a real app, you might load image bytes from a file at runtime.
-/// // For this example, we include the bytes at compile time.
-/// let image_bytes = Arc::new(*include_bytes!("image.png"));
-/// let image_data =
-///     load_image_from_source(&ImageSource::Bytes(image_bytes)).expect("Failed to load image");
-///
-/// // Render the image using its loaded data.
-/// image(image_data);
+/// image(&ImageArgs::from(image_data));
+/// # }
 /// ```
 #[tessera]
 pub fn image(args: &ImageArgs) {

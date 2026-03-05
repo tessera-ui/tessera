@@ -6,7 +6,7 @@ use tessera_components::{
     column::{ColumnArgs, column},
     fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
     glass_slider::{GlassSliderArgs, glass_slider},
-    image::{ImageArgs, ImageData, ImageSource, image, load_image_from_source},
+    image::{ImageArgs, ImageData, TryIntoImageData, image},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column},
     modifier::ModifierExt as _,
     row::{RowArgs, row},
@@ -70,7 +70,9 @@ impl Default for ExampleGlassState {
             .read()
             .expect("Failed to read image asset bytes");
         let image_data = Arc::new(
-            load_image_from_source(&ImageSource::Bytes(image_bytes))
+            image_bytes
+                .as_ref()
+                .try_into_image_data()
                 .expect("Failed to load image from embedded bytes"),
         );
 

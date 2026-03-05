@@ -1,18 +1,19 @@
-//! A component for rendering raster or vector icons.
+//! Icon component for rendering vector or raster imagery.
 //!
 //! ## Usage
 //!
-//! Use to display a scalable icon from image or vector data.
-use std::sync::Arc;
+//! Use to display a tintable symbol in buttons, tabs, and status indicators.
+use std::sync::{Arc, OnceLock};
 
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Prop, Px,
+    AssetExt, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Prop, Px,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     tessera, use_context,
 };
 
 use crate::{
-    image_vector::TintMode,
+    image::{ImageLoadError, TryIntoImageData},
+    image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
     pipelines::{
         image::command::{ImageCommand, ImageData},
         image_vector::command::{ImageVectorCommand, ImageVectorData},
@@ -20,45 +21,40 @@ use crate::{
     theme::{ContentColor, MaterialTheme},
 };
 
-/// Icon content can be provided either as vector geometry or raster pixels.
 #[derive(Debug, Clone, PartialEq, Eq)]
-pub enum IconContent {
-    /// Render the icon via the vector pipeline.
+enum IconContent {
     Vector(Arc<ImageVectorData>),
-    /// Render the icon via the raster image pipeline.
     Raster(Arc<ImageData>),
 }
 
-impl From<ImageVectorData> for IconContent {
-    fn from(data: ImageVectorData) -> Self {
-        Self::Vector(Arc::new(data))
-    }
+fn placeholder_raster_data() -> Arc<ImageData> {
+    static PLACEHOLDER: OnceLock<Arc<ImageData>> = OnceLock::new();
+    PLACEHOLDER
+        .get_or_init(|| {
+            Arc::new(ImageData {
+                data: Arc::new(vec![0, 0, 0, 0]),
+                width: 1,
+                height: 1,
+            })
+        })
+        .clone()
 }
 
-impl From<Arc<ImageVectorData>> for IconContent {
-    fn from(data: Arc<ImageVectorData>) -> Self {
-        Self::Vector(data)
-    }
-}
-
-impl From<ImageData> for IconContent {
-    fn from(data: ImageData) -> Self {
-        Self::Raster(Arc::new(data))
-    }
-}
-
-impl From<Arc<ImageData>> for IconContent {
-    fn from(data: Arc<ImageData>) -> Self {
-        Self::Raster(data)
-    }
+fn default_tint_color() -> Color {
+    let theme = use_context::<MaterialTheme>();
+    use_context::<ContentColor>()
+        .map(|c| c.get().current)
+        .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
+        .unwrap_or_else(|| ContentColor::default().current)
 }
 
 /// Arguments for the [`icon`] component.
 #[derive(Debug, Prop, Clone)]
 pub struct IconArgs {
-    /// Icon content, provided as either raster pixels or vector geometry.
-    #[prop(into)]
-    pub content: IconContent,
+    /// Icon content, internally tracked as either vector geometry or raster
+    /// pixels.
+    #[prop(skip_setter)]
+    content: IconContent,
     /// Logical size of the icon. Applied to both width and height unless
     /// explicit overrides are provided through [`width`](IconArgs::width) /
     /// [`height`](IconArgs::height).
@@ -69,9 +65,8 @@ pub struct IconArgs {
     /// Optional height override. Handy when the icon should `Fill` or `Wrap`
     /// differently from the default square sizing.
     pub height: Option<DimensionValue>,
-    /// Tint color applied to vector icons. Defaults to white so it preserves
-    /// the original colors (multiplying by white is a no-op). Raster icons
-    /// ignore this field.
+    /// Tint color applied to vector icons. Defaults to the current content
+    /// color. Raster icons ignore this field.
     pub tint: Color,
     /// How the tint is applied to vector icons.
     pub tint_mode: TintMode,
@@ -79,45 +74,111 @@ pub struct IconArgs {
     pub rotation: f32,
 }
 
-impl From<IconContent> for IconArgs {
-    fn from(content: IconContent) -> Self {
-        let theme = use_context::<MaterialTheme>();
+impl Default for IconArgs {
+    fn default() -> Self {
         Self {
-            content,
+            content: IconContent::Raster(placeholder_raster_data()),
             size: Dp(24.0),
             width: None,
             height: None,
-            tint: use_context::<ContentColor>()
-                .map(|c| c.get().current)
-                .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
-                .unwrap_or_else(|| ContentColor::default().current),
+            tint: default_tint_color(),
             tint_mode: TintMode::default(),
             rotation: 0.0,
         }
     }
 }
 
+impl IconArgs {
+    /// Sets vector icon content using already-decoded vector geometry.
+    pub fn vector(mut self, data: impl Into<Arc<ImageVectorData>>) -> Self {
+        self.content = IconContent::Vector(data.into());
+        self
+    }
+
+    /// Sets raster icon content using already-decoded image pixels.
+    pub fn raster(mut self, data: impl Into<Arc<ImageData>>) -> Self {
+        self.content = IconContent::Raster(data.into());
+        self
+    }
+
+    /// Decodes vector icon content from bytes/path/asset input.
+    pub fn try_vector<T>(mut self, source: T) -> Result<Self, ImageVectorLoadError>
+    where
+        T: TryIntoImageVectorData,
+    {
+        self.content = IconContent::Vector(source.try_into_image_vector_data()?);
+        Ok(self)
+    }
+
+    /// Decodes raster icon content from bytes/path/asset input.
+    pub fn try_raster<T>(mut self, source: T) -> Result<Self, ImageLoadError>
+    where
+        T: TryIntoImageData,
+    {
+        self.content = IconContent::Raster(Arc::new(source.try_into_image_data()?));
+        Ok(self)
+    }
+
+    /// Decodes vector icon content from an asset handle.
+    pub fn try_vector_asset<T>(mut self, asset: T) -> Result<Self, ImageVectorLoadError>
+    where
+        T: AssetExt,
+    {
+        let bytes = asset
+            .read()
+            .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
+        self.content = IconContent::Vector(bytes.as_ref().try_into_image_vector_data()?);
+        Ok(self)
+    }
+
+    /// Decodes raster icon content from an asset handle.
+    pub fn try_raster_asset<T>(mut self, asset: T) -> Result<Self, ImageLoadError>
+    where
+        T: AssetExt,
+    {
+        let bytes = asset
+            .read()
+            .map_err(|source| ImageLoadError::AssetRead { source })?;
+        self.content = IconContent::Raster(Arc::new(bytes.as_ref().try_into_image_data()?));
+        Ok(self)
+    }
+}
+
 impl From<ImageVectorData> for IconArgs {
     fn from(data: ImageVectorData) -> Self {
-        IconContent::from(data).into()
+        Self::default().vector(Arc::new(data))
     }
 }
 
 impl From<Arc<ImageVectorData>> for IconArgs {
     fn from(data: Arc<ImageVectorData>) -> Self {
-        IconContent::from(data).into()
+        Self::default().vector(data)
     }
 }
 
 impl From<ImageData> for IconArgs {
     fn from(data: ImageData) -> Self {
-        IconContent::from(data).into()
+        Self::default().raster(Arc::new(data))
     }
 }
 
 impl From<Arc<ImageData>> for IconArgs {
     fn from(data: Arc<ImageData>) -> Self {
-        IconContent::from(data).into()
+        Self::default().raster(data)
+    }
+}
+
+impl From<crate::material_icons::Asset> for Arc<ImageVectorData> {
+    fn from(asset: crate::material_icons::Asset) -> Self {
+        asset
+            .try_into_image_vector_data()
+            .expect("bundled material icon svg should load")
+    }
+}
+
+impl From<crate::material_icons::Asset> for IconArgs {
+    fn from(asset: crate::material_icons::Asset) -> Self {
+        Self::default().vector(asset)
     }
 }
 
@@ -215,30 +276,32 @@ impl LayoutSpec for IconLayout {
 ///
 /// ## Usage
 ///
-/// Display a vector or raster image with a uniform size, often inside a button
-/// or as a status indicator.
+/// Display a vector or raster symbol with uniform size, typically in controls
+/// and compact labels.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the icon's content, size, and tint; see [`IconArgs`].
+/// - `args` - configures the icon content, size, and tint; see [`IconArgs`].
 ///
 /// ## Examples
 ///
-/// ```no_run
-/// use std::sync::Arc;
+/// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
 /// use tessera_components::{
 ///     icon::{IconArgs, icon},
-///     image_vector::{ImageVectorSource, load_image_vector_from_source},
+///     material_icons::filled,
 /// };
 /// use tessera_ui::Color;
 ///
-/// // Load vector data from an SVG file.
-/// // In a real app, this should be done once and the data cached.
-/// let svg_path = "../assets/emoji_u1f416.svg";
-/// let vector_data =
-///     load_image_vector_from_source(&ImageVectorSource::Path(svg_path.to_string())).unwrap();
+/// let args = IconArgs::default()
+///     .vector(filled::STAR_SVG)
+///     .size(tessera_ui::Dp(20.0))
+///     .tint(Color::new(0.2, 0.5, 0.8, 1.0));
 ///
-/// icon(&IconArgs::from(vector_data).tint(Color::new(0.2, 0.5, 0.8, 1.0)));
+/// icon(&args);
+/// # }
 /// ```
 #[tessera]
 pub fn icon(args: &IconArgs) {

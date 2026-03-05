@@ -7,8 +7,7 @@ use tessera_components::{
     glass_button::{GlassButtonArgs, glass_button},
     icon::IconArgs,
     icon_button::{GlassIconButtonArgs, glass_icon_button},
-    image::{ImageArgs, ImageSource, image, load_image_from_source},
-    image_vector::{ImageVectorSource, load_image_vector_from_source},
+    image::{ImageArgs, TryIntoImageData, image},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column},
     modifier::ModifierExt as _,
     shape_def::Shape,
@@ -18,10 +17,6 @@ use tessera_components::{
 };
 use tessera_ui::{AssetExt, Callback, Dp, Modifier, remember, retain, shard};
 
-const ICON_BYTES: &[u8] = include_bytes!(concat!(
-    env!("CARGO_MANIFEST_DIR"),
-    "/../assets/emoji_u1f416.svg"
-));
 #[shard]
 pub fn glass_button_showcase() {
     surface(&SurfaceArgs::with_child(
@@ -36,15 +31,16 @@ fn test_content() {
             .read()
             .expect("Failed to read image asset bytes");
         Arc::new(
-            load_image_from_source(&ImageSource::Bytes(image_bytes))
+            image_bytes
+                .as_ref()
+                .try_into_image_data()
                 .expect("Failed to load image from embedded bytes"),
         )
     });
-    let icon_data = remember(|| {
-        Arc::new(
-            load_image_vector_from_source(&ImageVectorSource::Bytes(Arc::from(ICON_BYTES)))
-                .expect("Failed to load icon SVG"),
-        )
+    let icon_args = remember(|| {
+        IconArgs::default()
+            .try_vector_asset(crate::res::EMOJI_U1F416_SVG)
+            .expect("Failed to load icon SVG")
     });
     let controller = retain(LazyListController::new);
     lazy_column(
@@ -96,8 +92,7 @@ fn test_content() {
                                         });
 
                                         scope.child(move || {
-                                            let icon = IconArgs::from(icon_data.get().clone())
-                                                .size(Dp(28.0));
+                                            let icon = icon_args.get().size(Dp(28.0));
 
                                             let on_click = Callback::new(move || {
                                                 counter.with_mut(|c| *c += 1);

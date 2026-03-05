@@ -48,18 +48,20 @@ pub fn chip_showcase() {
                                         row_scope.child(|| {
                                             chip(
                                                 &ChipArgs::assist("Calendar")
-                                                    .leading_icon(IconArgs::from(
-                                                        filled::info_icon(),
-                                                    ))
+                                                    .leading_icon(
+                                                        IconArgs::default()
+                                                            .vector(filled::INFO_SVG),
+                                                    )
                                                     .on_click(|| {}),
                                             );
                                         });
                                         row_scope.child(|| {
                                             chip(
                                                 &ChipArgs::suggestion("Road Trip")
-                                                    .leading_icon(IconArgs::from(
-                                                        filled::directions_car_icon(),
-                                                    ))
+                                                    .leading_icon(
+                                                        IconArgs::default()
+                                                            .vector(filled::DIRECTIONS_CAR_SVG),
+                                                    )
                                                     .style(ChipStyle::Elevated)
                                                     .on_click(|| {}),
                                             );
@@ -88,9 +90,10 @@ pub fn chip_showcase() {
                                             chip(
                                                 &ChipArgs::filter("Favorites")
                                                     .selected(selected)
-                                                    .leading_icon(IconArgs::from(
-                                                        filled::home_icon(),
-                                                    ))
+                                                    .leading_icon(
+                                                        IconArgs::default()
+                                                            .vector(filled::HOME_SVG),
+                                                    )
                                                     .on_click(move || {
                                                         favorites_selected.with_mut(|value| {
                                                             *value = !*value;
@@ -105,9 +108,10 @@ pub fn chip_showcase() {
                                                 &ChipArgs::filter("Recent")
                                                     .style(ChipStyle::Elevated)
                                                     .selected(selected)
-                                                    .leading_icon(IconArgs::from(
-                                                        filled::info_icon(),
-                                                    ))
+                                                    .leading_icon(
+                                                        IconArgs::default()
+                                                            .vector(filled::INFO_SVG),
+                                                    )
                                                     .on_click(move || {
                                                         recent_selected.with_mut(|value| {
                                                             *value = !*value;
@@ -138,12 +142,14 @@ pub fn chip_showcase() {
                                             chip(
                                                 &ChipArgs::input("Budget")
                                                     .selected(selected)
-                                                    .leading_icon(IconArgs::from(
-                                                        filled::home_icon(),
-                                                    ))
-                                                    .trailing_icon(IconArgs::from(
-                                                        filled::info_icon(),
-                                                    ))
+                                                    .leading_icon(
+                                                        IconArgs::default()
+                                                            .vector(filled::HOME_SVG),
+                                                    )
+                                                    .trailing_icon(
+                                                        IconArgs::default()
+                                                            .vector(filled::INFO_SVG),
+                                                    )
                                                     .on_click(move || {
                                                         input_selected.with_mut(|value| {
                                                             *value = !*value;

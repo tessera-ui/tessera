@@ -36,14 +36,14 @@ pub fn badge_showcase() {
                                 .modifier(Modifier::new().fill_max_width())
                                 .children(|row_scope| {
                                     row_scope.child(|| {
-                                        let icon_content = filled::home_icon();
+                                        let icon_content = filled::HOME_SVG;
                                         badged_box(
                                             &BadgedBoxArgs::default()
                                                 .badge(|| {
                                                     badge(&BadgeArgs::default());
                                                 })
                                                 .content(move || {
-                                                    icon(&IconArgs::from(icon_content.clone()));
+                                                    icon(&IconArgs::default().vector(icon_content));
                                                 }),
                                         );
                                     });
@@ -67,7 +67,7 @@ pub fn badge_showcase() {
                                 .modifier(Modifier::new().fill_max_width())
                                 .children(|row_scope| {
                                     row_scope.child(|| {
-                                        let icon_content = filled::home_icon();
+                                        let icon_content = filled::HOME_SVG;
                                         badged_box(
                                             &BadgedBoxArgs::default()
                                                 .badge(|| {
@@ -81,7 +81,7 @@ pub fn badge_showcase() {
                                                     );
                                                 })
                                                 .content(move || {
-                                                    icon(&IconArgs::from(icon_content.clone()));
+                                                    icon(&IconArgs::default().vector(icon_content));
                                                 }),
                                         );
                                     });

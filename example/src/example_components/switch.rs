@@ -1,7 +1,7 @@
 use tessera_components::{
     icon::{IconArgs, icon},
     lazy_list::{LazyColumnArgs, LazyListController, lazy_column},
-    material_icons::round::check_icon,
+    material_icons::round,
     modifier::ModifierExt as _,
     surface::{SurfaceArgs, surface},
     switch::{SwitchArgs, SwitchController, switch},
@@ -33,7 +33,7 @@ fn test_content() {
                             })
                             .controller(controller)
                             .child(move || {
-                                icon(&IconArgs::from(check_icon()).size(Dp(16.0)));
+                                icon(&IconArgs::default().vector(round::CHECK_SVG).size(Dp(16.0)));
                             });
                         switch(&args);
                     } else {

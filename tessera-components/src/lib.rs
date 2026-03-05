@@ -103,6 +103,7 @@ pub mod pos_misc;
 pub mod progress;
 pub mod pull_refresh;
 pub mod radio_button;
+pub mod res;
 pub mod ripple_state;
 pub mod row;
 pub mod scaffold;

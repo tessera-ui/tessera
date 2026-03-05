@@ -64,7 +64,7 @@ pub fn split_buttons_showcase() {
                                         })
                                         .content(move || {
                                             icon(
-                                                &IconArgs::from(filled::chevron_right_icon()).size(
+                                                &IconArgs::default().vector(filled::CHEVRON_RIGHT_SVG).size(
                                                     SplitButtonDefaults::trailing_icon_size(small),
                                                 ),
                                             );
@@ -91,7 +91,7 @@ pub fn split_buttons_showcase() {
                                                     .cross_axis_alignment(CrossAxisAlignment::Center).children(|row_scope| {
                                                     row_scope.child(|| {
                                                         icon(
-                                                            &IconArgs::from(filled::inbox_icon())
+                                                            &IconArgs::default().vector(filled::INBOX_SVG)
                                                                 .size(SplitButtonDefaults::LEADING_ICON_SIZE),
                                                         );
                                                     });
@@ -112,7 +112,7 @@ pub fn split_buttons_showcase() {
                                         .size(medium)
                                         .content(move || {
                                             icon(
-                                                &IconArgs::from(filled::chevron_right_icon()).size(
+                                                &IconArgs::default().vector(filled::CHEVRON_RIGHT_SVG).size(
                                                     SplitButtonDefaults::trailing_icon_size(medium),
                                                 ),
                                             );

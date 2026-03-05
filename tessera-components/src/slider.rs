@@ -13,6 +13,7 @@ use tessera_ui::{
 };
 
 use crate::{
+    icon::IconArgs,
     pipelines::image_vector::command::VectorTintMode,
     theme::{MaterialAlpha, MaterialTheme},
 };
@@ -375,7 +376,7 @@ pub struct SliderArgs {
     /// Optional icon content to display at the start of the slider (only for
     /// Medium sizes and above).
     #[prop(into)]
-    pub inset_icon: Option<crate::icon::IconContent>,
+    pub inset_icon: Option<IconArgs>,
     /// Optional external controller for drag and focus state.
     ///
     /// When this is `None`, `slider` and `centered_slider` create and own an
@@ -836,7 +837,8 @@ fn slider_inner_node(args: &SliderArgs) {
         };
 
         crate::icon::icon(
-            &crate::icon::IconArgs::from(inset_icon.clone())
+            &inset_icon
+                .clone()
                 .tint(tint)
                 .tint_mode(VectorTintMode::Solid)
                 .size(icon_size),
