@@ -297,17 +297,22 @@ fn generate_asset_file(entries: &[AssetEntry], backend: AssetBackend) -> Result<
             writeln!(generated, "    fn read(self) -> io::Result<Arc<[u8]>> {{")?;
             writeln!(
                 generated,
-                "        if let Some(bytes) = __TESSERA_ASSET_BYTES.get(self.index) {{"
+                "        tessera_ui::asset::read_with_lru_cache::<Asset, _>(self.index as u64, || {{"
             )?;
             writeln!(
                 generated,
-                "            return Ok(Arc::<[u8]>::from(*bytes));"
+                "            if let Some(bytes) = __TESSERA_ASSET_BYTES.get(self.index) {{"
             )?;
-            writeln!(generated, "        }}")?;
+            writeln!(
+                generated,
+                "                return Ok(Arc::<[u8]>::from(*bytes));"
+            )?;
+            writeln!(generated, "            }}")?;
             writeln!(
                 generated,
                 "        Err(io::Error::new(io::ErrorKind::NotFound, \"asset index out of range\"))"
             )?;
+            writeln!(generated, "        }})")?;
             writeln!(generated, "    }}")?;
             writeln!(generated, "}}")?;
         }
@@ -517,17 +522,22 @@ fn generate_asset_file(entries: &[AssetEntry], backend: AssetBackend) -> Result<
             writeln!(generated, "    fn read(self) -> io::Result<Arc<[u8]>> {{")?;
             writeln!(
                 generated,
-                "        if let Some(path) = __TESSERA_ASSET_PATHS.get(self.index) {{"
+                "        tessera_ui::asset::read_with_lru_cache::<Asset, _>(self.index as u64, || {{"
             )?;
             writeln!(
                 generated,
-                "            return __tessera_read_platform_asset(path);"
+                "            if let Some(path) = __TESSERA_ASSET_PATHS.get(self.index) {{"
             )?;
-            writeln!(generated, "        }}")?;
+            writeln!(
+                generated,
+                "                return __tessera_read_platform_asset(path);"
+            )?;
+            writeln!(generated, "            }}")?;
             writeln!(
                 generated,
                 "        Err(io::Error::new(io::ErrorKind::NotFound, \"asset index out of range\"))"
             )?;
+            writeln!(generated, "        }})")?;
             writeln!(generated, "    }}")?;
             writeln!(generated, "}}")?;
         }
