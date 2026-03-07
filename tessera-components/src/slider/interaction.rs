@@ -1,9 +1,10 @@
 use tessera_ui::{
-    CallbackWith, ComputedData, CursorEventContent, Focus, InputHandlerInput, Px, PxPosition,
-    State,
+    CallbackWith, ComputedData, Focus, PointerInput, Px, PxPosition, State,
     accesskit::{Action, Role},
     winit::window::CursorIcon,
 };
+
+use crate::gesture_recognizer::{DragRecognizer, TapRecognizer};
 
 use super::{ACCESSIBILITY_STEP, SliderArgs, SliderController, SliderLayout};
 
@@ -85,7 +86,9 @@ fn range_handle_center_x(
 }
 
 pub(super) fn handle_slider_state(
-    input: &mut InputHandlerInput,
+    input: &mut PointerInput,
+    tap_recognizer: State<TapRecognizer>,
+    drag_recognizer: State<DragRecognizer>,
     state: State<SliderController>,
     args: &SliderArgs,
     layout: &SliderLayout,
@@ -114,55 +117,90 @@ pub(super) fn handle_slider_state(
         input.requests.cursor_icon = CursorIcon::Pointer;
     }
 
-    if !is_in_component && !state.with(|s| s.is_dragging) {
-        return;
-    }
+    let tap_result = tap_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            input.cursor_position_rel,
+            is_in_component,
+        )
+    });
+    let drag_result = drag_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            input.cursor_position_rel,
+            is_in_component,
+        )
+    });
 
     let mut new_value: Option<f32> = None;
 
-    handle_cursor_events(input, state, &mut new_value, layout, args.steps);
-    update_value_on_drag(input, state, &mut new_value, layout, args.steps);
+    handle_press_for_slider(
+        input,
+        state,
+        &mut new_value,
+        layout,
+        args.steps,
+        tap_result.pressed,
+    );
+    handle_drag_for_slider(
+        input,
+        state,
+        &mut new_value,
+        layout,
+        args.steps,
+        drag_result.started,
+        drag_result.updated,
+    );
+    if tap_result.released || drag_result.ended {
+        state.with_mut(|inner| inner.is_dragging = false);
+    }
     notify_on_change(new_value, args);
 }
 
-fn handle_cursor_events(
-    input: &mut InputHandlerInput,
+fn handle_press_for_slider(
+    input: &mut PointerInput,
     state: State<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
     steps: usize,
+    pressed: bool,
 ) {
-    for event in input.cursor_events.iter() {
-        match &event.content {
-            CursorEventContent::Pressed(_) => {
-                state.with_mut(|inner| {
-                    inner.focus.request_focus();
-                    inner.is_dragging = true;
-                });
-                if let Some(v) = cursor_progress(input.cursor_position_rel, layout) {
-                    *new_value = Some(snap_fraction(v, steps));
-                }
-            }
-            CursorEventContent::Released(_) => {
-                state.with_mut(|s| s.is_dragging = false);
-            }
-            _ => {}
+    if pressed {
+        state.with_mut(|inner| {
+            inner.focus.request_focus();
+        });
+        if let Some(v) = cursor_progress(input.cursor_position_rel, layout) {
+            *new_value = Some(snap_fraction(v, steps));
         }
     }
 }
 
-fn update_value_on_drag(
-    input: &InputHandlerInput,
+fn handle_drag_for_slider(
+    input: &PointerInput,
     state: State<SliderController>,
     new_value: &mut Option<f32>,
     layout: &SliderLayout,
     steps: usize,
+    drag_started: bool,
+    drag_updated: bool,
 ) {
-    if state.with(|s| s.is_dragging)
+    if drag_started {
+        state.with_mut(|inner| inner.is_dragging = true);
+    }
+
+    if (drag_updated || state.with(|s| s.is_dragging))
         && let Some(v) = cursor_progress(input.cursor_position_rel, layout)
     {
         *new_value = Some(snap_fraction(v, steps));
     }
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum RangeSliderHandle {
+    Start,
+    End,
 }
 
 fn notify_on_change(new_value: Option<f32>, args: &SliderArgs) {
@@ -174,7 +212,7 @@ fn notify_on_change(new_value: Option<f32>, args: &SliderArgs) {
 }
 
 pub(super) fn apply_slider_accessibility(
-    input: &mut InputHandlerInput<'_>,
+    input: &mut PointerInput<'_>,
     args: &SliderArgs,
     current_value: f32,
     on_change: &CallbackWith<f32>,
@@ -234,6 +272,7 @@ pub struct RangeSliderController {
     pub(crate) is_hovered: bool,
     pub(crate) is_dragging_start: bool,
     pub(crate) is_dragging_end: bool,
+    active_handle: Option<RangeSliderHandle>,
     pub(crate) focus_start: Focus,
     pub(crate) focus_end: Focus,
 }
@@ -251,19 +290,27 @@ impl RangeSliderController {
             is_hovered: false,
             is_dragging_start: false,
             is_dragging_end: false,
+            active_handle: None,
             focus_start: Focus::new(),
             focus_end: Focus::new(),
         }
     }
 }
 
+#[derive(Clone, Copy)]
+pub(super) struct RangeSliderHandleWidths {
+    pub start: Px,
+    pub end: Px,
+}
+
 pub(super) fn handle_range_slider_state(
-    input: &mut InputHandlerInput,
+    input: &mut PointerInput,
+    tap_recognizer: State<TapRecognizer>,
+    drag_recognizer: State<DragRecognizer>,
     state: &State<RangeSliderController>,
     args: &super::RangeSliderArgs,
     layout: &SliderLayout,
-    start_handle_width: Px,
-    end_handle_width: Px,
+    handle_widths: RangeSliderHandleWidths,
 ) {
     if args.disabled {
         let should_reset = state
@@ -273,6 +320,7 @@ pub(super) fn handle_range_slider_state(
                 inner.is_hovered = false;
                 inner.is_dragging_start = false;
                 inner.is_dragging_end = false;
+                inner.active_handle = None;
             });
         }
         return;
@@ -291,78 +339,72 @@ pub(super) fn handle_range_slider_state(
         input.requests.cursor_icon = CursorIcon::Pointer;
     }
 
-    let is_dragging = state.with(|s| s.is_dragging_start || s.is_dragging_end);
-
-    if !is_in_component && !is_dragging {
-        return;
-    }
+    let tap_result = tap_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            input.cursor_position_rel,
+            is_in_component,
+        )
+    });
+    let drag_result = drag_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            input.cursor_position_rel,
+            is_in_component,
+        )
+    });
 
     let mut new_start: Option<f32> = None;
     let mut new_end: Option<f32> = None;
 
-    for event in input.cursor_events.iter() {
-        match &event.content {
-            CursorEventContent::Pressed(_) => {
-                if let Some(progress) = range_cursor_progress(
-                    input.cursor_position_rel,
-                    layout,
-                    start_handle_width,
-                    end_handle_width,
-                ) {
-                    let progress = snap_fraction(progress, args.steps);
-                    let start_value = args.value.0.clamp(0.0, 1.0);
-                    let end_value = args.value.1.clamp(start_value, 1.0);
-                    let cursor_x = input.cursor_position_rel.map(|pos| pos.x.to_f32());
-                    let start_center_x = range_handle_center_x(
-                        layout,
-                        start_value,
-                        start_handle_width,
-                        end_handle_width,
-                    );
-                    let end_center_x = range_handle_center_x(
-                        layout,
-                        end_value,
-                        start_handle_width,
-                        end_handle_width,
-                    );
-                    let dist_start = cursor_x.map(|x| (x - start_center_x).abs());
-                    let dist_end = cursor_x.map(|x| (x - end_center_x).abs());
-                    let drag_start =
-                        dist_start.unwrap_or(f32::INFINITY) <= dist_end.unwrap_or(f32::INFINITY);
-
-                    state.with_mut(|inner| {
-                        if drag_start {
-                            inner.is_dragging_start = true;
-                            inner.focus_start.request_focus();
-                        } else {
-                            inner.is_dragging_end = true;
-                            inner.focus_end.request_focus();
-                        }
-                    });
-
-                    if drag_start {
-                        new_start = Some(progress);
-                    } else {
-                        new_end = Some(progress);
-                    }
-                }
+    if tap_result.pressed
+        && let Some(progress) = range_cursor_progress(
+            input.cursor_position_rel,
+            layout,
+            handle_widths.start,
+            handle_widths.end,
+        )
+    {
+        let progress = snap_fraction(progress, args.steps);
+        let active_handle = choose_range_slider_handle(
+            input.cursor_position_rel,
+            layout,
+            args.value.0.clamp(0.0, 1.0),
+            args.value.1.clamp(args.value.0.clamp(0.0, 1.0), 1.0),
+            handle_widths.start,
+            handle_widths.end,
+        );
+        state.with_mut(|inner| {
+            inner.active_handle = Some(active_handle);
+            match active_handle {
+                RangeSliderHandle::Start => inner.focus_start.request_focus(),
+                RangeSliderHandle::End => inner.focus_end.request_focus(),
             }
-            CursorEventContent::Released(_) => {
-                state.with_mut(|inner| {
-                    inner.is_dragging_start = false;
-                    inner.is_dragging_end = false;
-                });
-            }
-            _ => {}
+        });
+        match active_handle {
+            RangeSliderHandle::Start => new_start = Some(progress.min(args.value.1)),
+            RangeSliderHandle::End => new_end = Some(progress.max(args.value.0)),
         }
     }
 
-    if let Some(progress) = range_cursor_progress(
-        input.cursor_position_rel,
-        layout,
-        start_handle_width,
-        end_handle_width,
-    ) {
+    if drag_result.started {
+        state.with_mut(|inner| match inner.active_handle {
+            Some(RangeSliderHandle::Start) => inner.is_dragging_start = true,
+            Some(RangeSliderHandle::End) => inner.is_dragging_end = true,
+            None => {}
+        });
+    }
+
+    if (drag_result.updated || state.with(|s| s.is_dragging_start || s.is_dragging_end))
+        && let Some(progress) = range_cursor_progress(
+            input.cursor_position_rel,
+            layout,
+            handle_widths.start,
+            handle_widths.end,
+        )
+    {
         let progress = snap_fraction(progress, args.steps);
         state.with(|s| {
             if s.is_dragging_start {
@@ -370,6 +412,14 @@ pub(super) fn handle_range_slider_state(
             } else if s.is_dragging_end {
                 new_end = Some(progress.max(args.value.0)); // Don't cross start
             }
+        });
+    }
+
+    if tap_result.released || drag_result.ended {
+        state.with_mut(|inner| {
+            inner.is_dragging_start = false;
+            inner.is_dragging_end = false;
+            inner.active_handle = None;
         });
     }
 
@@ -385,8 +435,30 @@ pub(super) fn handle_range_slider_state(
     }
 }
 
+fn choose_range_slider_handle(
+    cursor_pos: Option<PxPosition>,
+    layout: &SliderLayout,
+    start_value: f32,
+    end_value: f32,
+    start_handle_width: Px,
+    end_handle_width: Px,
+) -> RangeSliderHandle {
+    let cursor_x = cursor_pos.map(|pos| pos.x.to_f32());
+    let start_center_x =
+        range_handle_center_x(layout, start_value, start_handle_width, end_handle_width);
+    let end_center_x =
+        range_handle_center_x(layout, end_value, start_handle_width, end_handle_width);
+    let dist_start = cursor_x.map(|x| (x - start_center_x).abs());
+    let dist_end = cursor_x.map(|x| (x - end_center_x).abs());
+    if dist_start.unwrap_or(f32::INFINITY) <= dist_end.unwrap_or(f32::INFINITY) {
+        RangeSliderHandle::Start
+    } else {
+        RangeSliderHandle::End
+    }
+}
+
 pub(super) fn apply_range_slider_accessibility(
-    input: &mut InputHandlerInput<'_>,
+    input: &mut PointerInput<'_>,
     args: &super::RangeSliderArgs,
     _current_start: f32,
     _current_end: f32,

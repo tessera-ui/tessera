@@ -7,9 +7,8 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Callback, Color, ComputedData, CursorEvent, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, ParentConstraint, Prop, Px, PxPosition, PxSize, RenderSlot, Slot,
-    State,
+    Callback, Color, ComputedData, DimensionValue, Dp, MeasurementError, Modifier,
+    ParentConstraint, Prop, Px, PxPosition, PxSize, RenderSlot, Slot, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
     remember, tessera, use_context, winit,
@@ -482,23 +481,14 @@ fn extract_available_size(constraint: ParentConstraint<'_>) -> ComputedData {
     ComputedData { width, height }
 }
 
-fn should_close_on_click(
-    cursor_events: &[CursorEvent],
-    cursor_position: Option<PxPosition>,
-    bounds: Option<MenuBounds>,
-) -> bool {
+fn is_click_outside_menu(cursor_position: Option<PxPosition>, bounds: Option<MenuBounds>) -> bool {
     let Some(bounds) = bounds else {
         return false;
     };
 
-    cursor_events.iter().any(|event| {
-        matches!(event.content, CursorEventContent::Released(_))
-            && cursor_position
-                .map(|pos| {
-                    !is_position_in_rect(pos, bounds.origin, bounds.size.width, bounds.size.height)
-                })
-                .unwrap_or(false)
-    })
+    cursor_position
+        .map(|pos| !is_position_in_rect(pos, bounds.origin, bounds.size.width, bounds.size.height))
+        .unwrap_or(false)
 }
 
 fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Callback>) {
@@ -641,39 +631,42 @@ pub fn menu_provider(args: &MenuProviderArgs) {
         },
     ));
 
-    // Parent input handler: block propagation and close on background click.
+    // Parent pointer handler: block propagation and close on background click.
     let bounds_for_handler = bounds.clone();
     let on_dismiss_for_handler = provider_args.on_dismiss.clone();
     let close_on_escape = provider_args.close_on_escape;
     let close_on_background = provider_args.close_on_background;
-    input_handler(move |mut input| {
-        let mut cursor_events: Vec<_> = Vec::new();
-        std::mem::swap(&mut cursor_events, input.cursor_events);
+    pointer_input_handler(move |mut input| {
         let cursor_position = input.cursor_position_rel;
-
-        let mut keyboard_events: Vec<_> = Vec::new();
-        std::mem::swap(&mut keyboard_events, input.keyboard_events);
+        let menu_bounds = *bounds_for_handler.read();
+        let should_close_click = close_on_background
+            && input.has_unconsumed_release()
+            && is_click_outside_menu(cursor_position, menu_bounds);
 
         // Prevent underlying content from receiving input while menu is open.
         input.block_all();
 
-        let menu_bounds = *bounds_for_handler.read();
-        let should_close_click = close_on_background
-            && should_close_on_click(&cursor_events, cursor_position, menu_bounds);
+        if should_close_click {
+            apply_close_action(controller, &on_dismiss_for_handler);
+        }
+    });
 
-        let should_close_escape = close_on_escape
-            && keyboard_events.iter().any(|event| {
+    if close_on_escape {
+        let on_dismiss_for_keyboard = provider_args.on_dismiss.clone();
+        keyboard_input_handler(move |mut input| {
+            let should_close_escape = input.keyboard_events.iter().any(|event| {
                 event.state == winit::event::ElementState::Pressed
                     && matches!(
                         event.physical_key,
                         winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape)
                     )
             });
-
-        if should_close_click || should_close_escape {
-            apply_close_action(controller, &on_dismiss_for_handler);
-        }
-    });
+            if should_close_escape {
+                apply_close_action(controller, &on_dismiss_for_keyboard);
+                input.block_keyboard();
+            }
+        });
+    }
 
     // Measurement: place main content, background, and menu based on anchor.
     layout(MenuLayout {

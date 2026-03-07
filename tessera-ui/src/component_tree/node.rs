@@ -16,7 +16,7 @@ use winit::window::CursorIcon;
 use crate::{
     ComputeResourceManager, Px,
     accessibility::{AccessibilityActionHandler, AccessibilityNode, AccessibilityPadding},
-    cursor::CursorEvent,
+    cursor::{CursorEventContent, PointerChange},
     dp::Dp,
     layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
     px::{PxPosition, PxSize},
@@ -271,9 +271,20 @@ pub struct ComponentNode {
     pub instance_logic_id: u64,
     /// Stable instance identifier for this node in the current frame.
     pub instance_key: u64,
-    /// Describes the input handler for the component.
-    /// This is used to handle state changes.
-    pub input_handler_fn: Option<Box<InputHandlerFn>>,
+    /// Pointer input handler for capture stage (root to leaf).
+    pub pointer_preview_handler_fn: Option<Box<PointerInputHandlerFn>>,
+    /// Pointer input handler for bubble stage (leaf to root).
+    pub pointer_handler_fn: Option<Box<PointerInputHandlerFn>>,
+    /// Pointer input handler for final stage (root to leaf).
+    pub pointer_final_handler_fn: Option<Box<PointerInputHandlerFn>>,
+    /// Keyboard input handler for preview stage (root to leaf).
+    pub keyboard_preview_handler_fn: Option<Box<KeyboardInputHandlerFn>>,
+    /// Keyboard input handler for bubble stage (leaf to root).
+    pub keyboard_handler_fn: Option<Box<KeyboardInputHandlerFn>>,
+    /// IME input handler for preview stage (root to leaf).
+    pub ime_preview_handler_fn: Option<Box<ImeInputHandlerFn>>,
+    /// IME input handler for bubble stage (leaf to root).
+    pub ime_handler_fn: Option<Box<ImeInputHandlerFn>>,
     /// Pure layout spec for skipping and record passes.
     pub layout_spec: Box<dyn LayoutSpecDyn>,
     /// Optional replay metadata for subtree-level rerun.
@@ -370,75 +381,71 @@ pub enum MeasurementError {
     ChildMeasurementFailed(NodeId),
 }
 
-/// A `InputHandlerFn` is a function that handles state changes for a component.
-///
-/// The rule of execution order is:
-///
-/// 1. Children's input handlers are executed earlier than parent's.
-/// 2. Newer components' input handlers are executed earlier than older ones.
-///
-/// Acutally, rule 2 includes rule 1, because a newer component is always a
-/// child of an older component :)
-pub type InputHandlerFn = dyn Fn(InputHandlerInput) + Send + Sync;
+/// Pointer input dispatch pass.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PointerEventPass {
+    /// Dispatch from root to leaf before the main pointer pass.
+    Initial,
+    /// Main pointer dispatch from leaf to root.
+    Main,
+    /// Final pointer dispatch from root to leaf.
+    Final,
+}
 
-/// Input for the input handler function (`InputHandlerFn`).
-///
-/// Note that you can modify the `cursor_events` and `keyboard_events` vectors
-/// for exmaple block some keyboard events or cursor events to prevent them from
-/// propagating to parent components and older brother components.
-pub struct InputHandlerInput<'a> {
+/// Pointer-specific input handler.
+pub type PointerInputHandlerFn = dyn Fn(PointerInput) + Send + Sync;
+/// Keyboard-specific input handler.
+pub type KeyboardInputHandlerFn = dyn Fn(KeyboardInput) + Send + Sync;
+/// IME-specific input handler.
+pub type ImeInputHandlerFn = dyn Fn(ImeInput) + Send + Sync;
+
+/// Input for pointer handlers.
+pub struct PointerInput<'a> {
+    /// Current pointer dispatch pass.
+    pub pass: PointerEventPass,
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
     /// The position of the cursor, if available.
     /// Relative to the root position of the component.
     pub cursor_position_rel: Option<PxPosition>,
-    /// The mut ref of absolute position of the cursor in the window.
-    /// Used to block cursor fully if needed, since cursor_position_rel use
-    /// this. Not a public field for now.
+    /// Absolute cursor position in window coordinates.
     pub(crate) cursor_position_abs: &'a mut Option<PxPosition>,
-    /// Cursor events from the event loop, if any.
-    pub cursor_events: &'a mut Vec<CursorEvent>,
-    /// Keyboard events from the event loop, if any.
-    pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
-    /// IME events from the event loop, if any.
-    pub ime_events: &'a mut Vec<winit::event::Ime>,
+    /// Pointer changes from the event loop, if any.
+    pub pointer_changes: &'a mut Vec<PointerChange>,
     /// The current state of the keyboard modifiers at the time of the event.
-    /// This allows for implementing keyboard shortcuts (e.g., Ctrl+C).
     pub key_modifiers: winit::keyboard::ModifiersState,
     /// A context for making requests to the window for the current frame.
     pub requests: &'a mut WindowRequests,
-    /// The current node ID (for accessibility setup)
+    /// The current node ID (for accessibility setup).
     pub(crate) current_node_id: indextree::NodeId,
-    /// Reference to component metadatas (for accessibility setup)
+    /// Reference to component metadatas (for accessibility setup).
     pub(crate) metadatas: &'a ComponentNodeMetaDatas,
 }
 
-impl InputHandlerInput<'_> {
-    /// Blocks the cursor to other components.
+impl PointerInput<'_> {
+    /// Marks all current pointer changes as consumed.
+    pub fn consume_pointer_changes(&mut self) {
+        for change in self.pointer_changes.iter_mut() {
+            change.consume();
+        }
+    }
+
+    /// Returns whether any current pointer change is an unconsumed release.
+    pub fn has_unconsumed_release(&self) -> bool {
+        self.pointer_changes.iter().any(|change| {
+            !change.is_consumed() && matches!(change.content, CursorEventContent::Released(_))
+        })
+    }
+
+    /// Blocks pointer input to other components.
     pub fn block_cursor(&mut self) {
-        // Block the cursor by setting its position to None.
         self.cursor_position_abs.take();
-        // Clear all cursor events to prevent them from propagating.
-        self.cursor_events.clear();
+        self.consume_pointer_changes();
     }
 
-    /// Blocks the keyboard events to other components.
-    pub fn block_keyboard(&mut self) {
-        // Clear all keyboard events to prevent them from propagating.
-        self.keyboard_events.clear();
-    }
-
-    /// Blocks the IME events to other components.
-    pub fn block_ime(&mut self) {
-        // Clear all IME events to prevent them from propagating.
-        self.ime_events.clear();
-    }
-
-    /// Block all events (cursor, keyboard, IME) to other components.
+    /// Blocks pointer changes to other components.
     pub fn block_all(&mut self) {
         self.block_cursor();
-        self.block_keyboard();
-        self.block_ime();
     }
 
     /// Requests a window action for the current frame.
@@ -446,38 +453,7 @@ impl InputHandlerInput<'_> {
         self.requests.window_action = Some(action);
     }
 
-    /// Provides a fluent API for setting accessibility information for the
-    /// current component.
-    ///
-    /// This method returns a builder that allows you to set various
-    /// accessibility properties like role, label, actions, and state. The
-    /// accessibility information is automatically committed when the
-    /// builder is dropped or when `.commit()` is called explicitly.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use accesskit::{Action, Role};
-    /// use tessera_ui::tessera;
-    ///
-    /// #[tessera]
-    /// fn accessible_button() {
-    ///     input_handler(|input| {
-    ///         input
-    ///             .accessibility()
-    ///             .role(Role::Button)
-    ///             .label("Click me")
-    ///             .focusable()
-    ///             .action(Action::Click);
-    ///
-    ///         // Handle clicks...
-    ///     });
-    /// }
-    /// ```
-    ///
-    /// Note: The builder should be committed with `.commit()` or allowed to
-    /// drop, which will automatically store the accessibility information
-    /// in the metadata.
+    /// Returns an accessibility builder for the current component.
     pub fn accessibility(&self) -> AccessibilityBuilderGuard<'_> {
         AccessibilityBuilderGuard {
             node_id: self.current_node_id,
@@ -487,27 +463,98 @@ impl InputHandlerInput<'_> {
     }
 
     /// Sets an action handler for accessibility actions.
-    ///
-    /// This handler will be called when assistive technologies request actions
-    /// like clicking, focusing, or changing values.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// use accesskit::Action;
-    /// use tessera_ui::tessera;
-    ///
-    /// #[tessera]
-    /// fn interactive_button() {
-    ///     input_handler(|input| {
-    ///         input.set_accessibility_action_handler(|action| {
-    ///             if action == Action::Click {
-    ///                 // Handle click from assistive technology
-    ///             }
-    ///         });
-    ///     });
-    /// }
-    /// ```
+    pub fn set_accessibility_action_handler(
+        &self,
+        handler: impl Fn(accesskit::Action) + Send + Sync + 'static,
+    ) {
+        if let Some(mut metadata) = self.metadatas.get_mut(&self.current_node_id) {
+            metadata.accessibility_action_handler = Some(Box::new(handler));
+        }
+    }
+}
+
+/// Input for keyboard handlers.
+pub struct KeyboardInput<'a> {
+    /// The size of the component node, computed during the measure stage.
+    pub computed_data: ComputedData,
+    /// Keyboard events from the event loop, if any.
+    pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
+    /// The current state of the keyboard modifiers at the time of the event.
+    pub key_modifiers: winit::keyboard::ModifiersState,
+    /// A context for making requests to the window for the current frame.
+    pub requests: &'a mut WindowRequests,
+    /// The current node ID (for accessibility setup).
+    pub(crate) current_node_id: indextree::NodeId,
+    /// Reference to component metadatas (for accessibility setup).
+    pub(crate) metadatas: &'a ComponentNodeMetaDatas,
+}
+
+impl KeyboardInput<'_> {
+    /// Blocks keyboard events to other components.
+    pub fn block_keyboard(&mut self) {
+        self.keyboard_events.clear();
+    }
+
+    /// Requests a window action for the current frame.
+    pub fn request_window_action(&mut self, action: WindowAction) {
+        self.requests.window_action = Some(action);
+    }
+
+    /// Returns an accessibility builder for the current component.
+    pub fn accessibility(&self) -> AccessibilityBuilderGuard<'_> {
+        AccessibilityBuilderGuard {
+            node_id: self.current_node_id,
+            metadatas: self.metadatas,
+            node: AccessibilityNode::new(),
+        }
+    }
+
+    /// Sets an action handler for accessibility actions.
+    pub fn set_accessibility_action_handler(
+        &self,
+        handler: impl Fn(accesskit::Action) + Send + Sync + 'static,
+    ) {
+        if let Some(mut metadata) = self.metadatas.get_mut(&self.current_node_id) {
+            metadata.accessibility_action_handler = Some(Box::new(handler));
+        }
+    }
+}
+
+/// Input for IME handlers.
+pub struct ImeInput<'a> {
+    /// The size of the component node, computed during the measure stage.
+    pub computed_data: ComputedData,
+    /// IME events from the event loop, if any.
+    pub ime_events: &'a mut Vec<winit::event::Ime>,
+    /// A context for making requests to the window for the current frame.
+    pub requests: &'a mut WindowRequests,
+    /// The current node ID (for accessibility setup).
+    pub(crate) current_node_id: indextree::NodeId,
+    /// Reference to component metadatas (for accessibility setup).
+    pub(crate) metadatas: &'a ComponentNodeMetaDatas,
+}
+
+impl ImeInput<'_> {
+    /// Blocks IME events to other components.
+    pub fn block_ime(&mut self) {
+        self.ime_events.clear();
+    }
+
+    /// Requests a window action for the current frame.
+    pub fn request_window_action(&mut self, action: WindowAction) {
+        self.requests.window_action = Some(action);
+    }
+
+    /// Returns an accessibility builder for the current component.
+    pub fn accessibility(&self) -> AccessibilityBuilderGuard<'_> {
+        AccessibilityBuilderGuard {
+            node_id: self.current_node_id,
+            metadatas: self.metadatas,
+            node: AccessibilityNode::new(),
+        }
+    }
+
+    /// Sets an action handler for accessibility actions.
     pub fn set_accessibility_action_handler(
         &self,
         handler: impl Fn(accesskit::Action) + Send + Sync + 'static,

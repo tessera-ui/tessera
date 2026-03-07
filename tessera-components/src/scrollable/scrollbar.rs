@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp, MeasurementError,
-    Modifier, PressKeyEventType, Prop, Px, PxPosition, State,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px,
+    PxPosition, State,
     accesskit::{Action, Role},
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -11,6 +11,7 @@ use tessera_ui::{
 };
 
 use crate::{
+    gesture_recognizer::{DragRecognizer, TapRecognizer},
     modifier::ModifierExt as _,
     scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::{RoundedCorner, Shape},
@@ -105,6 +106,8 @@ pub struct ScrollBarArgs {
 pub struct ScrollBarStateInner {
     /// Whether the scrollbar's thumb is currently being dragged.
     pub is_dragging: bool,
+    /// Whether the active pointer press started on the thumb.
+    pub pressed_on_thumb: bool,
     /// Whether the scrollbar's thumb is currently being hovered.
     pub is_hovered: bool,
     /// The frame timestamp when the hover state last changed.
@@ -154,7 +157,7 @@ impl Default for ScrollBarState {
 /// Calculate the target content position for a vertical scrollbar given a
 /// cursor Y.
 ///
-/// This extracts the logic previously embedded in the `input_handler` closure
+/// This extracts the logic previously embedded in the pointer input closure
 /// so the closure becomes smaller and easier to reason about during static
 /// analysis.
 /// - `cursor_y`: cursor Y within the scrollbar track (in Px).
@@ -454,24 +457,8 @@ fn is_on_track_h(cursor_pos: PxPosition, thickness: Px, track_width: Px) -> bool
         && cursor_pos.x <= track_width
 }
 
-/// Handle the input handler logic for the vertical scrollbar.
-/// Extracted from the inline closure to reduce function/closure complexity.
-fn check_and_handle_release(input: &tessera_ui::InputHandlerInput, state: &ScrollBarState) -> bool {
-    if input.cursor_events.iter().any(|event| {
-        matches!(
-            event.content,
-            CursorEventContent::Released(PressKeyEventType::Left)
-        )
-    }) {
-        state.write().is_dragging = false;
-        true
-    } else {
-        false
-    }
-}
-
 fn apply_scrollbar_accessibility(
-    input: &mut tessera_ui::InputHandlerInput<'_>,
+    input: &mut tessera_ui::PointerInput<'_>,
     args: &ScrollBarArgs,
     state: &ScrollBarState,
     orientation: ScrollOrientation,
@@ -533,20 +520,9 @@ fn scroll_accessibility_step(
     mark_scroll_activity(state, &args.scrollbar_behavior, current_frame_nanos());
 }
 
-/// Return true if there is a left-press event in the input.
-/// Extracted to reduce duplication and simplify input handlers.
-fn is_pressed_left(input: &tessera_ui::InputHandlerInput) -> bool {
-    input.cursor_events.iter().any(|event| {
-        matches!(
-            event.content,
-            CursorEventContent::Pressed(PressKeyEventType::Left)
-        )
-    })
-}
-
 /// Update dragging behavior for vertical axis.
 fn update_drag_vertical(
-    input: &tessera_ui::InputHandlerInput,
+    input: &tessera_ui::PointerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarArgs,
     state: &ScrollBarState,
@@ -576,12 +552,19 @@ fn update_hover_state(is_on_thumb: bool, state: &ScrollBarState, frame_nanos: u6
     }
 }
 
+#[derive(Clone, Copy)]
+struct ScrollBarTrackMetrics {
+    track_extent: Px,
+    thumb_extent: Px,
+}
+
 fn handle_state_v(
     args: &ScrollBarArgs,
     state: &ScrollBarState,
-    track_height: Px,
-    thumb_height: Px,
-    input: &mut tessera_ui::InputHandlerInput<'_>,
+    metrics: ScrollBarTrackMetrics,
+    tap_recognizer: State<TapRecognizer>,
+    drag_recognizer: State<DragRecognizer>,
+    input: &mut tessera_ui::PointerInput<'_>,
     frame_nanos: u64,
 ) {
     // Handle AutoHide behavior - hide scrollbar after inactivity
@@ -593,66 +576,74 @@ fn handle_state_v(
     let calculate_target_pos = |cursor_y: Px| -> PxPosition {
         calculate_target_pos_v(
             cursor_y,
-            track_height,
-            thumb_height,
+            metrics.track_extent,
+            metrics.thumb_extent,
             args.total,
             args.visible,
             fallback_pos,
         )
     };
-
-    if state.read().is_dragging {
-        // If mouse released, stop dragging (extracted helper reduces branching
-        // complexity).
-        if check_and_handle_release(input, state) {
-            return;
-        }
-
-        // Update dragging position or stop if cursor left.
-        update_drag_vertical(input, &calculate_target_pos, args, state, frame_nanos);
-    } else {
-        // Not dragging, check for interactions to start dragging or jump
-        let Some(cursor_pos) = input.cursor_position_rel else {
-            state.write().is_hovered = false; // Reset hover state if no cursor
-            return; // No cursor, do nothing
-        };
-
-        // Check if the cursor is on the thumb
-        let is_on_thumb = cursor_on_thumb_v(
+    let thickness = args.thickness.to_px();
+    let cursor_pos = input.cursor_position_rel;
+    let within_track = cursor_pos
+        .map(|pos| is_on_track_v(pos, thickness, metrics.track_extent))
+        .unwrap_or(false);
+    let thumb_y = args.visible.to_f32() * (args.offset.to_f32().abs() / args.total.to_f32());
+    let is_on_thumb = cursor_pos
+        .map(|pos| cursor_on_thumb_v(pos, thickness, thumb_y, metrics.thumb_extent))
+        .unwrap_or(false);
+    update_hover_state(is_on_thumb, state, frame_nanos);
+    let tap_result = tap_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
             cursor_pos,
-            args.thickness.to_px(),
-            args.visible.to_f32() * (args.offset.to_f32().abs() / args.total.to_f32()),
-            thumb_height,
-        );
+            within_track,
+        )
+    });
+    let drag_result = drag_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            cursor_pos,
+            within_track,
+        )
+    });
 
-        // Update hover state (extracted).
-        update_hover_state(is_on_thumb, state, frame_nanos);
-
-        // Check for left mouse button press
-        if !is_pressed_left(input) {
-            return; // No press, do nothing
-        }
-
+    if tap_result.pressed {
         if is_on_thumb {
-            // Start dragging
-            state.write().is_dragging = true;
-            return;
-        }
-
-        // Check if the press is on the track
-        if is_on_track_v(cursor_pos, args.thickness.to_px(), track_height) {
-            // Jump to the clicked position
+            state.write().pressed_on_thumb = true;
+        } else if within_track && let Some(cursor_pos) = cursor_pos {
             let new_target_pos = calculate_target_pos(cursor_pos.y);
             args.state
                 .with_mut(|c| c.set_target_position(new_target_pos));
+            mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
         }
+    }
+
+    if drag_result.started && state.read().pressed_on_thumb {
+        state.write().is_dragging = true;
+    }
+
+    if state.read().is_dragging && drag_result.updated {
+        update_drag_vertical(input, &calculate_target_pos, args, state, frame_nanos);
+    } else if state.read().is_dragging && cursor_pos.is_none() {
+        let mut state_guard = state.write();
+        state_guard.is_dragging = false;
+        state_guard.pressed_on_thumb = false;
+    }
+
+    if tap_result.released || drag_result.ended {
+        let mut state_guard = state.write();
+        state_guard.is_dragging = false;
+        state_guard.pressed_on_thumb = false;
     }
 }
 
-/// Handle the input handler logic for the horizontal scrollbar.
+/// Handle the pointer input logic for the horizontal scrollbar.
 /// Extracted from the inline closure to reduce function/closure complexity.
 fn update_drag_horizontal(
-    input: &tessera_ui::InputHandlerInput,
+    input: &tessera_ui::PointerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
     args: &ScrollBarArgs,
     state: &ScrollBarState,
@@ -672,9 +663,10 @@ fn update_drag_horizontal(
 fn handle_state_h(
     args: &ScrollBarArgs,
     state: &ScrollBarState,
-    track_width: Px,
-    thumb_width: Px,
-    input: &mut tessera_ui::InputHandlerInput<'_>,
+    metrics: ScrollBarTrackMetrics,
+    tap_recognizer: State<TapRecognizer>,
+    drag_recognizer: State<DragRecognizer>,
+    input: &mut tessera_ui::PointerInput<'_>,
     frame_nanos: u64,
 ) {
     // Handle AutoHide behavior - hide scrollbar after inactivity
@@ -686,57 +678,67 @@ fn handle_state_h(
     let calculate_target_pos = |cursor_x: Px| -> PxPosition {
         calculate_target_pos_h(
             cursor_x,
-            track_width,
-            thumb_width,
+            metrics.track_extent,
+            metrics.thumb_extent,
             args.total,
             args.visible,
             fallback_pos,
         )
     };
-
-    if state.read().is_dragging {
-        // If mouse released, stop dragging (extracted helper).
-        if check_and_handle_release(input, state) {
-            return;
-        }
-
-        // Update dragging position or stop if cursor left.
-        update_drag_horizontal(input, &calculate_target_pos, args, state, frame_nanos);
-    } else {
-        // Not dragging, check for interactions to start dragging or jump
-        let Some(cursor_pos) = input.cursor_position_rel else {
-            state.write().is_hovered = false; // Reset hover state if no cursor
-            return; // No cursor, do nothing
-        };
-
-        // Check if the cursor is on the thumb
-        let is_on_thumb = cursor_on_thumb_h(
+    let thickness = args.thickness.to_px();
+    let cursor_pos = input.cursor_position_rel;
+    let within_track = cursor_pos
+        .map(|pos| is_on_track_h(pos, thickness, metrics.track_extent))
+        .unwrap_or(false);
+    let thumb_x = args.visible.to_f32() * (args.offset.to_f32().abs() / args.total.to_f32());
+    let is_on_thumb = cursor_pos
+        .map(|pos| cursor_on_thumb_h(pos, thickness, thumb_x, metrics.thumb_extent))
+        .unwrap_or(false);
+    update_hover_state(is_on_thumb, state, frame_nanos);
+    let tap_result = tap_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
             cursor_pos,
-            args.thickness.to_px(),
-            args.visible.to_f32() * (args.offset.to_f32().abs() / args.total.to_f32()),
-            thumb_width,
-        );
+            within_track,
+        )
+    });
+    let drag_result = drag_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            cursor_pos,
+            within_track,
+        )
+    });
 
-        // Update hover state (re-use helper).
-        update_hover_state(is_on_thumb, state, frame_nanos);
-
-        if !is_pressed_left(input) {
-            return;
-        }
-
+    if tap_result.pressed {
         if is_on_thumb {
-            // Start dragging
-            state.write().is_dragging = true;
-            return;
-        }
-
-        // Check if the press is on the track
-        if is_on_track_h(cursor_pos, args.thickness.to_px(), track_width) {
-            // Jump to the clicked position
+            state.write().pressed_on_thumb = true;
+        } else if within_track && let Some(cursor_pos) = cursor_pos {
             let new_target_pos = calculate_target_pos(cursor_pos.x);
             args.state
                 .with_mut(|c| c.set_target_position(new_target_pos));
+            mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
         }
+    }
+
+    if drag_result.started && state.read().pressed_on_thumb {
+        state.write().is_dragging = true;
+    }
+
+    if state.read().is_dragging && drag_result.updated {
+        update_drag_horizontal(input, &calculate_target_pos, args, state, frame_nanos);
+    } else if state.read().is_dragging && cursor_pos.is_none() {
+        let mut state_guard = state.write();
+        state_guard.is_dragging = false;
+        state_guard.pressed_on_thumb = false;
+    }
+
+    if tap_result.released || drag_result.ended {
+        let mut state_guard = state.write();
+        state_guard.is_dragging = false;
+        state_guard.pressed_on_thumb = false;
     }
 }
 
@@ -811,13 +813,19 @@ pub fn scrollbar_v(args: &ScrollBarArgs) {
 
     let handler_args = args.clone();
     let handler_state = state.clone();
-    input_handler(move |mut input| {
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
+    pointer_input_handler(move |mut input| {
         let frame_nanos = current_frame_nanos();
         handle_state_v(
             &handler_args,
             &handler_state,
-            track_height,
-            thumb_height,
+            ScrollBarTrackMetrics {
+                track_extent: track_height,
+                thumb_extent: thumb_height,
+            },
+            tap_recognizer,
+            drag_recognizer,
             &mut input,
             frame_nanos,
         );
@@ -901,13 +909,19 @@ pub fn scrollbar_h(args: &ScrollBarArgs) {
 
     let handler_args = args.clone();
     let handler_state = state.clone();
-    input_handler(move |mut input| {
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
+    pointer_input_handler(move |mut input| {
         let frame_nanos = current_frame_nanos();
         handle_state_h(
             &handler_args,
             &handler_state,
-            track_width,
-            thumb_width,
+            ScrollBarTrackMetrics {
+                track_extent: track_width,
+                thumb_extent: thumb_width,
+            },
+            tap_recognizer,
+            drag_recognizer,
             &mut input,
             frame_nanos,
         );

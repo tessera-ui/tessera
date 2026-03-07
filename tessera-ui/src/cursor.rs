@@ -12,6 +12,11 @@ use std::{
 
 use crate::PxPosition;
 
+/// Pointer identifier used by input changes.
+pub type PointerId = u64;
+/// Pointer identifier reserved for mouse input.
+pub const MOUSE_POINTER_ID: PointerId = 0;
+
 /// Maximum number of events to keep in the queue to prevent memory issues
 /// during UI jank.
 const KEEP_EVENTS_COUNT: usize = 10;
@@ -69,7 +74,7 @@ pub struct CursorState {
     /// Current cursor position, if any cursor is active.
     position: Option<PxPosition>,
     /// Bounded queue of cursor events awaiting processing.
-    events: VecDeque<CursorEvent>,
+    events: VecDeque<PointerChange>,
     /// Active touch points mapped by their unique touch IDs.
     touch_points: HashMap<u64, TouchPointState>,
     /// Configuration settings for touch scrolling behavior.
@@ -96,7 +101,7 @@ impl CursorState {
     /// # Arguments
     ///
     /// * `event` - The cursor event to add to the queue
-    pub fn push_event(&mut self, event: CursorEvent) {
+    pub fn push_event(&mut self, event: PointerChange) {
         self.events.push_back(event);
 
         // Maintain bounded queue size to prevent memory issues during UI jank
@@ -128,13 +133,13 @@ impl CursorState {
     ///
     /// # Returns
     ///
-    /// A vector of [`CursorEvent`]s ordered from oldest to newest.
+    /// A vector of [`PointerChange`]s ordered from oldest to newest.
     ///
     /// # Note
     ///
     /// Events are ordered from oldest to newest to ensure proper event
     /// processing order.
-    pub fn take_events(&mut self) -> Vec<CursorEvent> {
+    pub fn take_events(&mut self) -> Vec<PointerChange> {
         self.events.drain(..).collect()
     }
 
@@ -185,10 +190,12 @@ impl CursorState {
             },
         );
         self.update_position(position);
-        let press_event = CursorEvent {
+        let press_event = PointerChange {
             timestamp: now,
+            pointer_id: touch_id,
             content: CursorEventContent::Pressed(PressKeyEventType::Left),
             gesture_state: GestureState::TapCandidate,
+            consumed: false,
         };
         self.push_event(press_event);
     }
@@ -205,16 +212,24 @@ impl CursorState {
     ///
     /// # Returns
     ///
-    /// - `Some(CursorEvent)` containing a scroll event if movement exceeds
+    /// - `Some(PointerChange)` containing a scroll event if movement exceeds
     ///   threshold
     /// - `None` if movement is below threshold or touch scrolling is disabled
     pub fn handle_touch_move(
         &mut self,
         touch_id: u64,
         current_position: PxPosition,
-    ) -> Option<CursorEvent> {
+    ) -> Option<PointerChange> {
         let now = Instant::now();
         self.update_position(current_position);
+
+        self.push_event(PointerChange {
+            timestamp: now,
+            pointer_id: touch_id,
+            content: CursorEventContent::Moved(current_position),
+            gesture_state: GestureState::TapCandidate,
+            consumed: false,
+        });
 
         if !self.touch_scroll_config.enabled {
             return None;
@@ -231,14 +246,16 @@ impl CursorState {
                 touch_state.generated_scroll_event = true;
 
                 // Return a scroll event for immediate feedback.
-                return Some(CursorEvent {
+                return Some(PointerChange {
                     timestamp: now,
+                    pointer_id: touch_id,
                     content: CursorEventContent::Scroll(ScrollEventContent {
                         delta_x, // Direct scroll delta for touch move
                         delta_y,
                         source: ScrollEventSource::Touch,
                     }),
                     gesture_state: GestureState::Dragged,
+                    consumed: false,
                 });
             }
         }
@@ -264,14 +281,16 @@ impl CursorState {
         }
 
         self.touch_points.remove(&touch_id);
-        let release_event = CursorEvent {
+        let release_event = PointerChange {
             timestamp: now,
+            pointer_id: touch_id,
             content: CursorEventContent::Released(PressKeyEventType::Left),
             gesture_state: if was_drag {
                 GestureState::Dragged
             } else {
                 GestureState::TapCandidate
             },
+            consumed: false,
         };
         self.push_event(release_event);
 
@@ -281,15 +300,17 @@ impl CursorState {
     }
 }
 
-/// Represents a single cursor or touch event with timing information.
+/// Represents a single pointer change with timing information.
 ///
-/// `CursorEvent` encapsulates all types of cursor interactions including
+/// `PointerChange` encapsulates all pointer interactions including
 /// presses, releases, and scroll actions. Each event includes a timestamp for
 /// precise timing and ordering of input events.
 #[derive(Debug, Clone)]
-pub struct CursorEvent {
+pub struct PointerChange {
     /// Timestamp indicating when this event occurred.
     pub timestamp: Instant,
+    /// Pointer identifier for this input stream.
+    pub pointer_id: PointerId,
     /// The specific type and data of this cursor event.
     pub content: CursorEventContent,
     /// Classification of the gesture associated with this event.
@@ -298,6 +319,20 @@ pub struct CursorEvent {
     /// [`GestureState::Dragged`], allowing downstream components to
     /// distinguish tap candidates from scroll gestures.
     pub gesture_state: GestureState,
+    /// Whether this change has been consumed by a handler.
+    pub(crate) consumed: bool,
+}
+
+impl PointerChange {
+    /// Marks this change as consumed.
+    pub fn consume(&mut self) {
+        self.consumed = true;
+    }
+
+    /// Returns whether this change has already been consumed.
+    pub fn is_consumed(&self) -> bool {
+        self.consumed
+    }
 }
 
 /// Contains scroll movement data for scroll events.
@@ -322,6 +357,8 @@ pub struct ScrollEventContent {
 /// releases, and scroll actions.
 #[derive(Debug, Clone, PartialEq)]
 pub enum CursorEventContent {
+    /// The pointer moved to a new absolute position.
+    Moved(PxPosition),
     /// A cursor button or touch point was pressed.
     Pressed(PressKeyEventType),
     /// A cursor button or touch point was released.
@@ -329,6 +366,9 @@ pub enum CursorEventContent {
     /// A scroll action occurred (mouse wheel or touch drag).
     Scroll(ScrollEventContent),
 }
+
+/// Backward-compatible alias for older naming.
+pub type CursorEvent = PointerChange;
 
 /// Describes the high-level gesture classification of a cursor event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -404,7 +444,7 @@ impl CursorEventContent {
 }
 
 /// Represents the different types of cursor buttons or touch interactions.
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PressKeyEventType {
     /// The primary mouse button (typically left button) or primary touch.
     Left,

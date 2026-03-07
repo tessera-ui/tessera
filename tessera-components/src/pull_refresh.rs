@@ -3,18 +3,19 @@
 //! ## Usage
 //!
 //! Trigger data reloads when users pull down at the top of a scrollable view.
-use std::time::Duration;
-
 use tessera_ui::{
-    Callback, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Prop, Px, RenderSlot,
-    State, current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
+    Callback, CallbackWith, Color, Dp, Modifier, Prop, Px, RenderSlot, State, current_frame_nanos,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
     boxed::{BoxedArgs, boxed},
     modifier::ModifierExt,
-    pos_misc::is_position_inside_bounds,
+    nested_scroll::{
+        NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
+        ScrollVelocity,
+    },
     progress::{CircularProgressIndicatorArgs, circular_progress_indicator},
     shape_def::Shape,
     surface::{SurfaceArgs, surface},
@@ -40,7 +41,6 @@ impl PullRefreshDefaults {
 const DRAG_MULTIPLIER: f32 = 0.5;
 const INDICATOR_CONTENT_SCALE: f32 = 0.6;
 const INDICATOR_SMOOTHING: f32 = 0.2;
-const SCROLL_IDLE_RELEASE_TIMEOUT: Duration = Duration::from_millis(500);
 const INDICATOR_FADE_START_PROGRESS: f32 = 0.05;
 const INDICATOR_FADE_END_PROGRESS: f32 = 0.25;
 
@@ -53,8 +53,6 @@ pub struct PullRefreshController {
     threshold: f32,
     refreshing_offset: f32,
     last_frame_nanos: Option<u64>,
-    is_pressed: bool,
-    last_scroll_frame_nanos: Option<u64>,
 }
 
 impl Default for PullRefreshController {
@@ -74,8 +72,6 @@ impl PullRefreshController {
             threshold: PullRefreshDefaults::REFRESH_THRESHOLD.to_pixels_f32(),
             refreshing_offset: PullRefreshDefaults::REFRESHING_OFFSET.to_pixels_f32(),
             last_frame_nanos: None,
-            is_pressed: false,
-            last_scroll_frame_nanos: None,
         }
     }
 
@@ -101,30 +97,12 @@ impl PullRefreshController {
         self.distance_pulled > 0.0
     }
 
-    fn is_pressed(&self) -> bool {
-        self.is_pressed
-    }
-
-    fn mark_scroll(&mut self, frame_nanos: u64) {
-        self.last_scroll_frame_nanos = Some(frame_nanos);
-    }
-
-    fn should_release(&self, frame_nanos: u64, idle_timeout: Duration) -> bool {
-        self.last_scroll_frame_nanos
-            .map(|last_scroll_frame_nanos| {
-                Duration::from_nanos(frame_nanos.saturating_sub(last_scroll_frame_nanos))
-                    >= idle_timeout
-            })
-            .unwrap_or(true)
-    }
-
     fn set_refreshing(&mut self, refreshing: bool) {
         if self.refreshing == refreshing {
             return;
         }
         self.refreshing = refreshing;
         self.distance_pulled = 0.0;
-        self.last_scroll_frame_nanos = None;
         let target = if refreshing {
             self.refreshing_offset
         } else {
@@ -146,10 +124,6 @@ impl PullRefreshController {
                 self.set_target_position(offset);
             }
         }
-    }
-
-    fn set_pressed(&mut self, pressed: bool) {
-        self.is_pressed = pressed;
     }
 
     fn on_pull(&mut self, pull_delta: f32) -> f32 {
@@ -531,9 +505,6 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
         state.set_threshold(args.refresh_threshold.to_pixels_f32());
         state.set_refreshing_offset(args.refreshing_offset.to_pixels_f32());
         state.set_refreshing(args.refreshing);
-        if !args.enabled {
-            state.set_pressed(false);
-        }
     });
     let frame_nanos = current_frame_nanos();
     controller.with_mut(|s| {
@@ -554,104 +525,76 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
         });
     }
 
+    let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
     let on_refresh = args.on_refresh.clone();
     let enabled = args.enabled;
-
-    input_handler(move |input| {
-        let size = input.computed_data;
-        let cursor_pos_option = input.cursor_position_rel;
-        let is_cursor_in_component = cursor_pos_option
-            .map(|pos| is_position_inside_bounds(size, pos))
-            .unwrap_or(false);
-
-        if enabled && !is_cursor_in_component {
-            controller.with_mut(|s| s.set_pressed(false));
-        }
-
-        let mut saw_scroll = false;
-        let mut saw_release = false;
-        let mut did_pull = false;
-        let frame_nanos = current_frame_nanos();
-
-        if is_cursor_in_component && enabled {
-            for event in input.cursor_events.iter() {
-                match event.content {
-                    CursorEventContent::Pressed(PressKeyEventType::Left) => {
-                        controller.with_mut(|s| s.set_pressed(true));
-                    }
-                    CursorEventContent::Released(PressKeyEventType::Left) => {
-                        controller.with_mut(|s| s.set_pressed(false));
-                        saw_release = true;
-                    }
-                    _ => {}
-                }
-            }
-        }
-
-        if is_cursor_in_component {
-            for event in input
-                .cursor_events
-                .iter()
-                .filter_map(|event| match &event.content {
-                    CursorEventContent::Scroll(event) => Some(event),
-                    _ => None,
-                })
-            {
-                saw_scroll = true;
-                let mut delta_y = event.delta_y;
-                if enabled && delta_y < 0.0 && controller.with(|s| s.is_pulling()) {
-                    let consumed = controller.with_mut(|s| s.on_pull(delta_y));
-                    if consumed.abs() > f32::EPSILON {
-                        did_pull = true;
-                    }
-                    delta_y -= consumed;
+    let nested_scroll_connection = NestedScrollConnection::new()
+        .with_pre_scroll_handler(CallbackWith::new({
+            move |input: PreScrollInput| {
+                if !enabled || input.source != tessera_ui::ScrollEventSource::Touch {
+                    return ScrollDelta::ZERO;
                 }
 
-                if enabled && delta_y > 0.0 {
-                    let consumed = controller.with_mut(|s| s.on_pull(delta_y));
-                    if consumed.abs() > f32::EPSILON {
-                        did_pull = true;
-                    }
+                let consumed_y = if input.available.y < 0.0 && controller.with(|s| s.is_pulling()) {
+                    controller.with_mut(|s| s.on_pull(input.available.y))
+                } else {
+                    0.0
+                };
+                ScrollDelta::new(0.0, consumed_y)
+            }
+        }))
+        .with_post_scroll_handler(CallbackWith::new({
+            move |input: PostScrollInput| {
+                if !enabled || input.source != tessera_ui::ScrollEventSource::Touch {
+                    return ScrollDelta::ZERO;
                 }
-            }
+                let _ = input.consumed_by_child;
 
-            if enabled && saw_scroll {
-                controller.with_mut(|s| s.mark_scroll(frame_nanos));
+                let consumed_y = if input.available.y > 0.0 {
+                    controller.with_mut(|s| s.on_pull(input.available.y))
+                } else {
+                    0.0
+                };
+                ScrollDelta::new(0.0, consumed_y)
             }
+        }))
+        .with_pre_fling_handler(CallbackWith::new({
+            let on_refresh = on_refresh.clone();
+            move |input: PreFlingInput| {
+                if !enabled || !controller.with(|s| s.is_pulling()) {
+                    return ScrollVelocity::ZERO;
+                }
 
-            if enabled
-                && controller.with(|s| s.is_pulling())
-                && (saw_release
-                    || (!saw_scroll
-                        && !controller.with(|s| s.is_pressed())
-                        && controller
-                            .with(|s| s.should_release(frame_nanos, SCROLL_IDLE_RELEASE_TIMEOUT))))
-            {
                 let should_refresh = controller.with_mut(|s| s.on_release());
                 if should_refresh {
                     on_refresh.call();
                 }
-                did_pull = true;
-            }
 
-            if enabled && (did_pull || saw_release) {
-                input.cursor_events.clear();
+                ScrollVelocity::new(0.0, input.available.y.max(0.0))
             }
-        }
-    });
+        }))
+        .with_parent(parent_nested_scroll);
 
     let render_args = args.clone();
     modifier.run(move || {
         let child = child.clone();
         let indicator_args = render_args.clone();
+        let nested_scroll_connection = nested_scroll_connection.clone();
         boxed(
             &BoxedArgs::default()
                 .modifier(Modifier::new().fill_max_size())
                 .alignment(Alignment::TopCenter)
                 .children(|scope| {
                     let child = child.clone();
+                    let nested_scroll_connection = nested_scroll_connection.clone();
                     scope.child(move || {
-                        child.render();
+                        let child = child.clone();
+                        provide_context(
+                            || nested_scroll_connection.clone(),
+                            move || {
+                                child.render();
+                            },
+                        );
                     });
                     scope.child_with_alignment(Alignment::TopCenter, move || {
                         let offset = indicator_offset_dp(controller, indicator_args.indicator_size);

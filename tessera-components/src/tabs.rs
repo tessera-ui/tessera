@@ -4,8 +4,8 @@
 //!
 //! Use to organize content into separate pages that can be switched between.
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, State,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Prop, Px, PxPosition, RenderSlot, State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -14,6 +14,7 @@ use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::{BoxedArgs, boxed},
     column::{ColumnArgs, column},
+    gesture_recognizer::{ScrollRecognizer, ScrollSettings},
     icon::{IconArgs, icon},
     modifier::ModifierExt,
     shape_def::Shape,
@@ -204,6 +205,7 @@ impl TabsController {
             self.active_tab = index;
             self.tab_row_scroll_user_overridden = false;
             self.pending_retarget_frame = true;
+            self.last_frame_nanos = None;
         }
     }
 
@@ -247,6 +249,7 @@ impl TabsController {
             self.tab_row_scroll_offset.snap_to(target.to_f32());
             self.tab_row_scroll_initialized = true;
         } else {
+            self.last_frame_nanos = None;
             self.tab_row_scroll_offset.set_target(target.to_f32());
         }
     }
@@ -261,6 +264,7 @@ impl TabsController {
             self.content_scroll_offset.snap_to(target.to_f32());
             self.content_scroll_initialized = true;
         } else {
+            self.last_frame_nanos = None;
             self.content_scroll_offset.set_target(target.to_f32());
         }
     }
@@ -278,6 +282,7 @@ impl TabsController {
             self.indicator_x.snap_to(x);
             self.indicator_initialized = true;
         } else {
+            self.last_frame_nanos = None;
             self.indicator_width.set_target(width);
             self.indicator_x.set_target(x);
         }
@@ -1373,8 +1378,10 @@ fn tabs_render_node(args: &TabsRenderArgs) {
     };
     tabs_content_container_node(&content_container_args);
 
+    let tab_row_scroll_recognizer =
+        remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
     let layout_args = args.clone();
-    input_handler(move |input| {
+    pointer_input_handler(move |input| {
         input
             .accessibility()
             .role(tessera_ui::accesskit::Role::TabList)
@@ -1391,37 +1398,21 @@ fn tabs_render_node(args: &TabsRenderArgs) {
             };
 
             if cursor_in_tab_bar {
-                let mut consumed_scroll = false;
-                for event in input
-                    .cursor_events
-                    .iter()
-                    .filter_map(|event| match &event.content {
-                        CursorEventContent::Scroll(event) => Some(event),
-                        _ => None,
-                    })
-                {
-                    let delta = if event.delta_x.abs() >= 0.01 {
-                        event.delta_x
-                    } else {
-                        event.delta_y
-                    };
-                    if delta.abs() < 0.01 {
-                        continue;
-                    }
-
+                let scroll_result = tab_row_scroll_recognizer.with_mut(|recognizer| {
+                    recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
+                });
+                let delta = if scroll_result.delta_x.abs() >= 0.01 {
+                    scroll_result.delta_x
+                } else {
+                    scroll_result.delta_y
+                };
+                if delta.abs() >= 0.01 {
                     controller.with_mut(|c| {
                         let current = c.tab_row_scroll_offset.target;
                         let max = c.tab_row_scroll_max().to_f32();
                         let next = (current - delta).clamp(0.0, max);
                         c.set_tab_row_scroll_immediate(Px::saturating_from_f32(next));
                     });
-                    consumed_scroll = true;
-                }
-
-                if consumed_scroll {
-                    input
-                        .cursor_events
-                        .retain(|event| !matches!(event.content, CursorEventContent::Scroll(_)));
                 }
             }
         }

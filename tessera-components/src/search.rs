@@ -5,13 +5,14 @@
 //! Use to collect search queries and show suggestions or results as the user
 //! types.
 use tessera_ui::{
-    CallbackWith, Color, CursorEventContent, Dp, Modifier, PressKeyEventType, Prop, RenderSlot,
-    State, remember, tessera, use_context, winit,
+    CallbackWith, Color, Dp, Modifier, Prop, RenderSlot, State, remember, tessera, use_context,
+    winit,
 };
 
 use crate::{
     column::{ColumnArgs, column},
     divider::{DividerArgs, horizontal_divider},
+    gesture_recognizer::TapRecognizer,
     modifier::ModifierExt as _,
     pos_misc::is_position_inside_bounds,
     shape_def::Shape,
@@ -539,28 +540,38 @@ fn search_bar_inner_node(args: &SearchBarRenderArgs) {
     let on_active_change = args.on_active_change.clone();
     let on_search = args.on_search.clone();
     let enabled = args.enabled;
-    input_handler(move |input| {
+    let on_active_change_for_pointer = on_active_change.clone();
+    let tap_recognizer = remember(TapRecognizer::default);
+    pointer_input_handler(move |input| {
         if !enabled {
             return;
         }
         let is_active = controller.with(|c| c.is_active());
         let cursor_pos = input.cursor_position_rel;
-        let has_left_click = input.cursor_events.iter().any(|event| {
-            matches!(
-                event.content,
-                CursorEventContent::Pressed(PressKeyEventType::Left)
+        let within_bounds = cursor_pos
+            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+            .unwrap_or(false);
+        let tap_result = tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                within_bounds,
             )
         });
 
-        if has_left_click
-            && let Some(cursor_pos) = cursor_pos
-            && is_position_inside_bounds(input.computed_data, cursor_pos)
-            && !is_active
-        {
+        if tap_result.pressed && within_bounds && !is_active {
             controller.with_mut(|c| c.open());
-            on_active_change.call(true);
+            on_active_change_for_pointer.call(true);
         }
+    });
 
+    let on_active_change_for_keyboard = on_active_change.clone();
+    keyboard_input_handler(move |mut input| {
+        if !enabled {
+            return;
+        }
+        let is_active = controller.with(|c| c.is_active());
         for event in input.keyboard_events.iter() {
             if event.state == winit::event::ElementState::Pressed {
                 if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
@@ -568,7 +579,7 @@ fn search_bar_inner_node(args: &SearchBarRenderArgs) {
                         winit::keyboard::KeyCode::Escape => {
                             if is_active {
                                 controller.with_mut(|c| c.close());
-                                on_active_change.call(false);
+                                on_active_change_for_keyboard.call(false);
                             }
                         }
                         winit::keyboard::KeyCode::Enter | winit::keyboard::KeyCode::NumpadEnter => {
@@ -581,6 +592,9 @@ fn search_bar_inner_node(args: &SearchBarRenderArgs) {
                     }
                 }
             }
+        }
+        if is_active {
+            input.block_keyboard();
         }
     });
 

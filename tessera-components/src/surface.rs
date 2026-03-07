@@ -1007,7 +1007,8 @@ fn surface_inner(args: &SurfaceInnerArgs) {
     });
 
     if !interactive && surface.block_input {
-        input_handler(move |mut input| {
+        // Block after descendants so container surfaces can host interactive children.
+        pointer_input_handler(move |mut input| {
             let size = input.computed_data;
             let cursor_pos_option = input.cursor_position_rel;
             let is_cursor_in_surface = cursor_pos_option

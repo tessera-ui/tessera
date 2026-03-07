@@ -26,10 +26,12 @@
 //!
 //! The focus state is safely accessible from multiple threads.
 
-use std::sync::OnceLock;
+use std::{collections::HashMap, sync::OnceLock};
 
 use parking_lot::{RwLock, RwLockReadGuard};
 use uuid::Uuid;
+
+use crate::{NodeId, runtime::current_node_id};
 
 /// Global focus state storage.
 ///
@@ -37,6 +39,7 @@ use uuid::Uuid;
 /// application. It's initialized lazily on first access and protected by a
 /// read-write lock for thread-safe access.
 static FOCUS_STATE: OnceLock<RwLock<FocusState>> = OnceLock::new();
+static FOCUS_NODE_HINTS: OnceLock<RwLock<HashMap<Uuid, NodeId>>> = OnceLock::new();
 
 /// Internal focus state representation.
 ///
@@ -79,6 +82,30 @@ fn write_focus_state() -> parking_lot::RwLockWriteGuard<'static, FocusState> {
     FOCUS_STATE
         .get_or_init(|| RwLock::new(FocusState::default()))
         .write()
+}
+
+fn read_focus_node_hints() -> parking_lot::RwLockReadGuard<'static, HashMap<Uuid, NodeId>> {
+    FOCUS_NODE_HINTS
+        .get_or_init(|| RwLock::new(HashMap::new()))
+        .read()
+}
+
+fn write_focus_node_hints() -> parking_lot::RwLockWriteGuard<'static, HashMap<Uuid, NodeId>> {
+    FOCUS_NODE_HINTS
+        .get_or_init(|| RwLock::new(HashMap::new()))
+        .write()
+}
+
+fn bind_focus_to_current_node(focus_id: Uuid) {
+    let Some(node_id) = current_node_id() else {
+        return;
+    };
+    write_focus_node_hints().insert(focus_id, node_id);
+}
+
+pub(crate) fn focused_node_hint() -> Option<NodeId> {
+    let focused_id = read_focus_state().focused?;
+    read_focus_node_hints().get(&focused_id).copied()
 }
 
 /// A focus handle that represents a focusable component.
@@ -177,6 +204,7 @@ impl Focus {
     /// This method is thread-safe and can be called from any thread.
     /// It acquires a read lock on the global focus state.
     pub fn is_focused(&self) -> bool {
+        bind_focus_to_current_node(self.id);
         let focus_state = read_focus_state();
         focus_state.focused == Some(self.id)
     }
@@ -210,6 +238,7 @@ impl Focus {
     /// This method is thread-safe and can be called from any thread.
     /// It acquires a write lock on the global focus state.
     pub fn request_focus(&self) {
+        bind_focus_to_current_node(self.id);
         let mut focus_state = write_focus_state();
         focus_state.focused = Some(self.id);
     }
@@ -250,6 +279,7 @@ impl Focus {
         if focus_state.focused == Some(self.id) {
             focus_state.focused = None;
         }
+        write_focus_node_hints().remove(&self.id);
     }
 }
 

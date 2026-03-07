@@ -4,8 +4,8 @@
 //!
 //! Use to allow users to select a value from a continuous range.
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, InputHandlerInput,
-    MeasurementError, Modifier, Prop, Px, PxPosition, State,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    PointerInput, Prop, Px, PxPosition, State,
     accesskit::{Action, Role},
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -13,14 +13,15 @@ use tessera_ui::{
 };
 
 use crate::{
+    gesture_recognizer::{DragRecognizer, TapRecognizer},
     icon::IconArgs,
     pipelines::image_vector::command::VectorTintMode,
     theme::{MaterialAlpha, MaterialTheme},
 };
 
 use interaction::{
-    apply_range_slider_accessibility, apply_slider_accessibility, handle_range_slider_state,
-    handle_slider_state, snap_fraction,
+    RangeSliderHandleWidths, apply_range_slider_accessibility, apply_slider_accessibility,
+    handle_range_slider_state, handle_slider_state, snap_fraction,
 };
 use layout::{
     CenteredSliderLayout, RangeSliderLayout, SliderLayout, fallback_component_width,
@@ -73,7 +74,7 @@ struct RangeSliderThumbArgs {
     accessibility: RangeThumbAccessibilityArgs,
 }
 
-fn apply_range_thumb_accessibility(input: &InputHandlerInput, args: &RangeThumbAccessibilityArgs) {
+fn apply_range_thumb_accessibility(input: &PointerInput, args: &RangeThumbAccessibilityArgs) {
     let mut builder = input.accessibility().role(Role::Slider).key(args.key);
 
     if let Some(label) = args.label.as_ref() {
@@ -132,7 +133,7 @@ fn range_slider_thumb_node(args: &RangeSliderThumbArgs) {
     render_handle(args.thumb_layout, args.handle_width, &args.colors);
     let accessibility = args.accessibility.clone();
 
-    input_handler(move |input| {
+    pointer_input_handler(move |input| {
         apply_range_thumb_accessibility(&input, &accessibility);
     });
 }
@@ -862,7 +863,9 @@ fn slider_inner_node(args: &SliderArgs) {
     render_handle(slider_layout, handle_width, &colors);
 
     let cloned_args = args.clone();
-    input_handler(move |mut input| {
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
+    pointer_input_handler(move |mut input| {
         let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
         let base_handle_width = cloned_args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -873,7 +876,14 @@ fn slider_inner_node(args: &SliderArgs) {
         };
         let resolved_layout =
             slider_layout_with_handle_width(&cloned_args, input.computed_data.width, handle_width);
-        handle_slider_state(&mut input, controller, &cloned_args, &resolved_layout);
+        handle_slider_state(
+            &mut input,
+            tap_recognizer,
+            drag_recognizer,
+            controller,
+            &cloned_args,
+            &resolved_layout,
+        );
         apply_slider_accessibility(
             &mut input,
             &cloned_args,
@@ -1160,7 +1170,9 @@ fn centered_slider_node(args: &SliderArgs) {
     render_handle(centered_layout.base, handle_width, &colors);
 
     let cloned_args = args.clone();
-    input_handler(move |mut input| {
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
+    pointer_input_handler(move |mut input| {
         let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
         let base_handle_width = cloned_args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1176,7 +1188,14 @@ fn centered_slider_node(args: &SliderArgs) {
                 handle_width,
             ),
         };
-        handle_slider_state(&mut input, controller, &cloned_args, &resolved_layout.base);
+        handle_slider_state(
+            &mut input,
+            tap_recognizer,
+            drag_recognizer,
+            controller,
+            &cloned_args,
+            &resolved_layout.base,
+        );
         apply_slider_accessibility(
             &mut input,
             &cloned_args,
@@ -1526,8 +1545,10 @@ fn range_slider_inner_node(args: &RangeSliderArgs) {
     let cloned_args = args.clone();
     let start_val = start;
     let end_val = end;
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
 
-    input_handler(move |mut input| {
+    pointer_input_handler(move |mut input| {
         let resolved_layout = range_slider_layout(&cloned_args, input.computed_data.width);
         let base_handle_width = cloned_args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1549,11 +1570,15 @@ fn range_slider_inner_node(args: &RangeSliderArgs) {
         };
         handle_range_slider_state(
             &mut input,
+            tap_recognizer,
+            drag_recognizer,
             &state,
             &cloned_args,
             &resolved_layout.base,
-            start_handle_width,
-            end_handle_width,
+            RangeSliderHandleWidths {
+                start: start_handle_width,
+                end: end_handle_width,
+            },
         );
         apply_range_slider_accessibility(
             &mut input,

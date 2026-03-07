@@ -6,7 +6,7 @@
 //!
 //! ## Usage
 //!
-//! Components use the accessibility API through the input handler context:
+//! Components use the accessibility API through typed input contexts:
 //!
 //! ```
 //! use accesskit::{Action, Role};
@@ -20,7 +20,7 @@
 //! #[tessera]
 //! fn my_button(args: &MyButtonArgs) {
 //!     let label = args.label.clone();
-//!     input_handler(move |input| {
+//!     pointer_input_handler(move |input| {
 //!         // Set accessibility information
 //!         input
 //!             .accessibility()

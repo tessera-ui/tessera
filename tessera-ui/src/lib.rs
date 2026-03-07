@@ -377,13 +377,14 @@ pub use crate::{
     color::Color,
     component_tree::{
         ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
-        ComponentTree, ComputedData, Constraint, DimensionValue, ImeRequest, InputHandlerFn,
-        InputHandlerInput, MeasurementError, ParentConstraint, WindowAction, WindowRequests,
+        ComponentTree, ComputedData, Constraint, DimensionValue, ImeInput, ImeInputHandlerFn,
+        ImeRequest, KeyboardInput, KeyboardInputHandlerFn, MeasurementError, ParentConstraint,
+        PointerEventPass, PointerInput, PointerInputHandlerFn, WindowAction, WindowRequests,
     },
     context::{Context, provide_context, use_context},
     cursor::{
-        CursorEvent, CursorEventContent, GestureState, PressKeyEventType, ScrollEventContent,
-        ScrollEventSource,
+        CursorEvent, CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PointerId,
+        PressKeyEventType, ScrollEventContent, ScrollEventSource,
     },
     dp::Dp,
     entry_point::EntryPoint,

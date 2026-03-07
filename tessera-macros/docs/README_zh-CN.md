@@ -14,7 +14,7 @@
 ## 特性
 
 - **组件集成**: 自动将函数注册为 Tessera 组件树中的组件
-- **运行时注入**: 在组件函数内提供对 `layout` 和 `input_handler` 函数的访问
+- **运行时注入**: 在组件函数内提供对 `layout` 和 typed input handler 注册函数的访问
 - **简洁的语法**: 以最少的样板代码实现声明式组件定义
 - **树管理**: 自动处理组件树节点的创建和清理
 
@@ -30,7 +30,8 @@ fn my_component() {
     // 你的组件逻辑在这里
     // 宏自动提供对以下内容的访问：
     // - layout: 用于自定义布局逻辑
-    // - input_handler: 用于处理用户交互
+    // - pointer_input_handler / keyboard_input_handler / ime_input_handler:
+    //   用于处理用户交互
 }
 ```
 
@@ -60,7 +61,7 @@ fn button_component(args: &ButtonArgs) {
 }
 ```
 
-### 使用 Layout 和 Input Handler
+### 使用 Layout 和 Typed Input Handlers
 
 ```rust
 use tessera_macros::tessera;
@@ -88,7 +89,7 @@ fn custom_component() {
     layout(FixedLayout);
 
     // 处理用户交互
-    input_handler(|_| {
+    pointer_input_handler(|_| {
         // 处理点击、按键等事件
     });
 }
@@ -100,7 +101,7 @@ fn custom_component() {
 
 1. **组件注册**: 将函数以其名称添加到组件树中
 2. **运行时访问**: 注入代码以访问 Tessera 运行时
-3. **函数注入**: 在组件作用域内提供 `layout` 和 `input_handler` 函数
+3. **函数注入**: 在组件作用域内提供 `layout` 和 typed input handler 注册函数
 4. **树管理**: 处理从组件树中推入和弹出节点
 5. **错误安全**: 包装原始函数体，以防止提前返回破坏组件树
 
@@ -122,9 +123,12 @@ fn my_component() {
         runtime.component_tree.add_node(ComponentNode { ... });
     });
 
-    // 注入 layout 和 input_handler 函数
+    // 注入 layout 和 typed input handler 函数
     let layout = |spec: impl LayoutSpec| { /* ... */ };
-    let input_handler = |fun: impl Fn(InputHandlerInput) + Send + Sync + 'static| { /* ... */ };
+    let pointer_input_handler =
+        |fun: impl Fn(PointerInput) + Send + Sync + 'static| { /* ... */ };
+    let keyboard_input_handler =
+        |fun: impl Fn(KeyboardInput) + Send + Sync + 'static| { /* ... */ };
 
     // 安全地执行原始函数体
     let result = {

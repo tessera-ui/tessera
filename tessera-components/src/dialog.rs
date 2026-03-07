@@ -301,9 +301,9 @@ fn render_scrim(style: DialogStyle, on_close_request: &Callback, is_open: bool, 
     }
 }
 
-fn make_keyboard_input_handler(
+fn make_keyboard_handler(
     on_close: Callback,
-) -> Box<dyn for<'a> Fn(tessera_ui::InputHandlerInput<'a>) + Send + Sync + 'static> {
+) -> Box<dyn for<'a> Fn(tessera_ui::KeyboardInput<'a>) + Send + Sync + 'static> {
     Box::new(move |input| {
         input.keyboard_events.drain(..).for_each(|event| {
             if event.state == winit::event::ElementState::Pressed
@@ -552,8 +552,8 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
         };
 
         render_scrim(args.style, &args.on_close_request, is_open, progress);
-        let handler = make_keyboard_input_handler(args.on_close_request.clone());
-        input_handler(handler);
+        let handler = make_keyboard_handler(args.on_close_request.clone());
+        keyboard_input_handler(handler);
 
         let content_wrapper_args = DialogContentWrapperArgs {
             style: args.style,

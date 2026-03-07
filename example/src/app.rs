@@ -78,6 +78,7 @@ use crate::example_components::{
 };
 
 const NAVIGATION_RAIL_BREAKPOINT: Dp = Dp(600.0);
+const NAVIGATION_BAR_HEIGHT: Dp = Dp(80.0);
 
 #[derive(Clone, Prop)]
 struct MeasureParentWidthArgs {
@@ -95,7 +96,7 @@ fn measure_parent_width(width_state: State<Dp>, child: impl Fn() + Send + Sync +
 
 #[tessera]
 fn measure_parent_width_node(args: &MeasureParentWidthArgs) {
-    input_handler({
+    pointer_input_handler({
         let width_state = args.width_state;
         move |input| {
             let width = Dp::from(input.computed_data.width);
@@ -279,77 +280,73 @@ fn app_inner() {
                                                     );
                                                     }));
                                             } else {
-                                                column(&ColumnArgs::default().children(|scope| {
-                                                    scope.child_weighted(
-                                                    move || {
-                                                        let component_args =
-                                                            ScaffoldArgs::with_content(
-                                                                ScaffoldArgs::default()
-                                                                    .top_bar_height(
-                                                                        AppBarDefaults::TOP_APP_BAR_HEIGHT,
-                                                                    )
-                                                                    .top_bar(top_app_bar),
-                                                                move || {
-                                                                    router_view();
-                                                                },
-                                                            );
-                                                        scaffold(&component_args);
-                                                    },
-                                                    1.0,
-                                                );
-                                                    scope.child(move || {
-                                                        let home_icon_args =
-                                                            IconArgs::default().vector(filled::HOME_SVG);
-                                                        let about_icon_args =
-                                                            IconArgs::default().vector(filled::INFO_SVG);
+                                                let home_icon_args =
+                                                    IconArgs::default().vector(filled::HOME_SVG);
+                                                let about_icon_args =
+                                                    IconArgs::default().vector(filled::INFO_SVG);
 
-                                                        let home_action =
-                                                            Callback::new(move || {
-                                                                Router::reset(
-                                                                        HomeDestination {
-                                                                            bottom_sheet_controller,
-                                                                            side_sheet_controller,
-                                                                            dialog_controller,
-                                                                        },
-                                                                    );
-                                                            });
-                                                        let about_action = Callback::new(|| {
-                                                            Router::reset(
-                                                                    AboutDestination {},
-                                                                );
-                                                        });
+                                                let home_action = Callback::new(move || {
+                                                    Router::reset(HomeDestination {
+                                                        bottom_sheet_controller,
+                                                        side_sheet_controller,
+                                                        dialog_controller,
+                                                    });
+                                                });
+                                                let about_action = Callback::new(|| {
+                                                    Router::reset(AboutDestination {});
+                                                });
 
-                                                        navigation_bar(
-                                                            &NavigationBarArgs::default()
-                                                                .item(
-                                                                    NavigationBarItem::new("Home")
+                                                let component_args = ScaffoldArgs::with_content(
+                                                    ScaffoldArgs::default()
+                                                        .top_bar_height(
+                                                            AppBarDefaults::TOP_APP_BAR_HEIGHT,
+                                                        )
+                                                        .bottom_bar_height(NAVIGATION_BAR_HEIGHT)
+                                                        .top_bar(top_app_bar)
+                                                        .bottom_bar(move || {
+                                                            navigation_bar(
+                                                                &NavigationBarArgs::default()
+                                                                    .item(
+                                                                        NavigationBarItem::new(
+                                                                            "Home",
+                                                                        )
                                                                         .icon(closure!(
                                                                             clone home_icon_args,
                                                                             || {
-                                                                                icon(&home_icon_args.clone());
+                                                                                icon(
+                                                                                    &home_icon_args
+                                                                                        .clone(),
+                                                                                );
                                                                             }
                                                                         ))
                                                                         .on_click_shared(
                                                                             home_action.clone(),
                                                                         ),
-                                                                )
-                                                                .item(
-                                                                    NavigationBarItem::new(
-                                                                        "About",
                                                                     )
-                                                                    .icon(closure!(
-                                                                        clone about_icon_args,
-                                                                        || {
-                                                                            icon(&about_icon_args.clone());
-                                                                        }
-                                                                    ))
-                                                                    .on_click_shared(
-                                                                        about_action.clone(),
+                                                                    .item(
+                                                                        NavigationBarItem::new(
+                                                                            "About",
+                                                                        )
+                                                                        .icon(closure!(
+                                                                            clone about_icon_args,
+                                                                            || {
+                                                                                icon(
+                                                                                    &about_icon_args
+                                                                                        .clone(),
+                                                                                );
+                                                                            }
+                                                                        ))
+                                                                        .on_click_shared(
+                                                                            about_action.clone(),
+                                                                        ),
                                                                     ),
-                                                                ),
-                                                        );
-                                                    });
-                                                }));
+                                                            );
+                                                        }),
+                                                    move || {
+                                                        router_view();
+                                                    },
+                                                );
+                                                scaffold(&component_args);
                                             }
                                         },
                                     );

@@ -6,14 +6,18 @@
 //! subtrees.
 
 use tessera_ui::{
-    Callback, CallbackWith, ComputedData, CursorEventContent, GestureState, PressKeyEventType,
-    Prop, PxPosition, PxSize, RenderSlot, State, WindowAction,
+    Callback, CallbackWith, ComputedData, Prop, PxPosition, PxSize, RenderSlot, State,
+    WindowAction,
     accesskit::{self, Action, Toggled},
-    tessera,
+    remember, tessera,
     winit::window::CursorIcon,
 };
 
-use crate::{pos_misc::is_position_in_rect, theme::MaterialAlpha};
+use crate::{
+    gesture_recognizer::{LongPressRecognizer, TapRecognizer},
+    pos_misc::is_position_in_rect,
+    theme::MaterialAlpha,
+};
 
 /// Context for pointer press/release callbacks.
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -328,24 +332,13 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
         description,
         interaction_state,
     } = args.clickable.clone();
+    let tap_recognizer = remember(TapRecognizer::default);
+    let long_press_recognizer = remember(LongPressRecognizer::default);
 
     args.child.render();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(move |mut input| {
-        let cursor_events: Vec<_> = input
-            .cursor_events
-            .iter()
-            .filter(|event| {
-                matches!(
-                    event.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                        | CursorEventContent::Released(PressKeyEventType::Left)
-                )
-            })
-            .cloned()
-            .collect();
-
+    pointer_input_handler(move |mut input| {
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -361,6 +354,24 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
         if enabled && within_bounds {
             input.requests.cursor_icon = CursorIcon::Pointer;
         }
+
+        let tap_result = tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                within_bounds,
+            )
+        });
+        let long_press_result = long_press_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                within_bounds,
+            )
+        });
+        let tapped = tap_result.tapped && !long_press_result.triggered;
 
         let mut builder = input.accessibility().role(role);
         if let Some(label) = label.as_ref() {
@@ -390,16 +401,8 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
                 return;
             }
 
-            for event in cursor_events.iter() {
-                if within_bounds
-                    && event.gesture_state == GestureState::TapCandidate
-                    && matches!(
-                        event.content,
-                        CursorEventContent::Released(PressKeyEventType::Left)
-                    )
-                {
-                    on_click.call();
-                }
+            if tapped {
+                on_click.call();
             }
             if block_input && within_bounds {
                 input.block_all();
@@ -425,44 +428,28 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
 
         let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
-        for event in cursor_events.iter() {
-            if within_bounds
-                && matches!(
-                    event.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                )
-            {
-                if let Some(on_press) = on_press.as_ref() {
-                    on_press.call(context);
-                }
-                let press_changed = interaction_state.with(|s| !s.is_pressed());
-                if press_changed {
-                    interaction_state.with_mut(|s| s.set_pressed(true));
-                }
+        if tap_result.pressed {
+            if let Some(on_press) = on_press.as_ref() {
+                on_press.call(context);
             }
+            let press_changed = interaction_state.with(|s| !s.is_pressed());
+            if press_changed {
+                interaction_state.with_mut(|s| s.set_pressed(true));
+            }
+        }
 
-            if matches!(
-                event.content,
-                CursorEventContent::Released(PressKeyEventType::Left)
-            ) {
-                let was_pressed = interaction_state.with(|s| s.is_pressed());
-                if was_pressed {
-                    interaction_state.with_mut(|s| s.release());
-                }
-                if let Some(on_release) = on_release.as_ref() {
-                    on_release.call(context);
-                }
+        if tap_result.released {
+            let was_pressed = interaction_state.with(|s| s.is_pressed());
+            if was_pressed {
+                interaction_state.with_mut(|s| s.release());
             }
+            if let Some(on_release) = on_release.as_ref() {
+                on_release.call(context);
+            }
+        }
 
-            if within_bounds
-                && event.gesture_state == GestureState::TapCandidate
-                && matches!(
-                    event.content,
-                    CursorEventContent::Released(PressKeyEventType::Left)
-                )
-            {
-                on_click.call();
-            }
+        if tapped {
+            on_click.call();
         }
 
         if !within_bounds {
@@ -493,9 +480,10 @@ pub(crate) fn modifier_window_drag_region(child: RenderSlot) {
 
 #[tessera]
 fn modifier_window_drag_region_node(args: &ModifierWindowDragRegionArgs) {
+    let tap_recognizer = remember(TapRecognizer::default);
     args.child.render();
 
-    input_handler(move |mut input| {
+    pointer_input_handler(move |mut input| {
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -512,18 +500,16 @@ fn modifier_window_drag_region_node(args: &ModifierWindowDragRegionArgs) {
             return;
         }
 
-        let mut should_drag = false;
-        for event in input.cursor_events.iter() {
-            if matches!(
-                event.content,
-                CursorEventContent::Pressed(PressKeyEventType::Left)
-            ) {
-                should_drag = true;
-                break;
-            }
-        }
+        let tap_result = tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                within_bounds,
+            )
+        });
 
-        if should_drag {
+        if tap_result.pressed {
             input.request_window_action(WindowAction::DragWindow);
         }
         input.block_all();
@@ -544,9 +530,10 @@ pub(crate) fn modifier_window_action(action: WindowAction, child: RenderSlot) {
 #[tessera]
 fn modifier_window_action_node(args: &ModifierWindowActionArgs) {
     let action = args.action;
+    let tap_recognizer = remember(TapRecognizer::default);
     args.child.render();
 
-    input_handler(move |mut input| {
+    pointer_input_handler(move |mut input| {
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -563,29 +550,23 @@ fn modifier_window_action_node(args: &ModifierWindowActionArgs) {
             input.requests.cursor_icon = CursorIcon::Pointer;
         }
 
-        let mut requested = false;
         let is_drag_action = matches!(action, WindowAction::DragWindow);
-        for event in input.cursor_events.iter() {
-            match event.content {
-                CursorEventContent::Pressed(PressKeyEventType::Left) => {
-                    if is_drag_action && within_bounds {
-                        input.request_window_action(action);
-                        requested = true;
-                        break;
-                    }
-                }
-                CursorEventContent::Released(PressKeyEventType::Left) => {
-                    if !is_drag_action
-                        && within_bounds
-                        && event.gesture_state == GestureState::TapCandidate
-                    {
-                        input.request_window_action(action);
-                        requested = true;
-                        break;
-                    }
-                }
-                _ => {}
-            }
+        let tap_result = tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                within_bounds,
+            )
+        });
+        let requested = if is_drag_action {
+            tap_result.pressed
+        } else {
+            tap_result.tapped
+        };
+
+        if requested && within_bounds {
+            input.request_window_action(action);
         }
 
         if requested || within_bounds {
@@ -608,7 +589,9 @@ pub(crate) fn modifier_block_touch_propagation(child: RenderSlot) {
 fn modifier_block_touch_propagation_node(args: &ModifierBlockTouchPropagationArgs) {
     args.child.render();
 
-    input_handler(move |mut input| {
+    // Block after descendants so overlay/content wrappers do not swallow child
+    // interactions.
+    pointer_input_handler(move |mut input| {
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -654,24 +637,12 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
         on_press,
         on_release,
     } = args.toggleable.clone();
+    let tap_recognizer = remember(TapRecognizer::default);
 
     args.child.render();
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
-    input_handler(move |input| {
-        let cursor_events: Vec<_> = input
-            .cursor_events
-            .iter()
-            .filter(|event| {
-                matches!(
-                    event.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                        | CursorEventContent::Released(PressKeyEventType::Left)
-                )
-            })
-            .cloned()
-            .collect();
-
+    pointer_input_handler(move |input| {
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -687,6 +658,15 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
         if enabled && within_bounds {
             input.requests.cursor_icon = CursorIcon::Pointer;
         }
+
+        let tap_result = tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                within_bounds,
+            )
+        });
 
         let mut builder = input.accessibility().role(role);
         if let Some(label) = label.as_ref() {
@@ -735,44 +715,28 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
 
         let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
-        for event in cursor_events.iter() {
-            if within_bounds
-                && matches!(
-                    event.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                )
-            {
-                if let Some(on_press) = on_press.as_ref() {
-                    on_press.call(context);
-                }
-                let press_changed = interaction_state.with(|s| !s.is_pressed());
-                if press_changed {
-                    interaction_state.with_mut(|s| s.set_pressed(true));
-                }
+        if tap_result.pressed {
+            if let Some(on_press) = on_press.as_ref() {
+                on_press.call(context);
             }
+            let press_changed = interaction_state.with(|s| !s.is_pressed());
+            if press_changed {
+                interaction_state.with_mut(|s| s.set_pressed(true));
+            }
+        }
 
-            if matches!(
-                event.content,
-                CursorEventContent::Released(PressKeyEventType::Left)
-            ) {
-                let was_pressed = interaction_state.with(|s| s.is_pressed());
-                if was_pressed {
-                    interaction_state.with_mut(|s| s.release());
-                }
-                if let Some(on_release) = on_release.as_ref() {
-                    on_release.call(context);
-                }
+        if tap_result.released {
+            let was_pressed = interaction_state.with(|s| s.is_pressed());
+            if was_pressed {
+                interaction_state.with_mut(|s| s.release());
             }
+            if let Some(on_release) = on_release.as_ref() {
+                on_release.call(context);
+            }
+        }
 
-            if within_bounds
-                && event.gesture_state == GestureState::TapCandidate
-                && matches!(
-                    event.content,
-                    CursorEventContent::Released(PressKeyEventType::Left)
-                )
-            {
-                on_value_change.call(!value);
-            }
+        if tap_result.tapped {
+            on_value_change.call(!value);
         }
 
         if !within_bounds {
@@ -814,24 +778,12 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
         on_press,
         on_release,
     } = args.selectable.clone();
+    let tap_recognizer = remember(TapRecognizer::default);
 
     args.child.render();
 
     let role = role.unwrap_or(accesskit::Role::Button);
-    input_handler(move |input| {
-        let cursor_events: Vec<_> = input
-            .cursor_events
-            .iter()
-            .filter(|event| {
-                matches!(
-                    event.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                        | CursorEventContent::Released(PressKeyEventType::Left)
-                )
-            })
-            .cloned()
-            .collect();
-
+    pointer_input_handler(move |input| {
         let within_bounds = input
             .cursor_position_rel
             .map(|pos| {
@@ -847,6 +799,15 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
         if enabled && within_bounds {
             input.requests.cursor_icon = CursorIcon::Pointer;
         }
+
+        let tap_result = tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                within_bounds,
+            )
+        });
 
         let mut builder = input.accessibility().role(role);
         if let Some(label) = label.as_ref() {
@@ -899,44 +860,28 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
 
         let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
-        for event in cursor_events.iter() {
-            if within_bounds
-                && matches!(
-                    event.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                )
-            {
-                if let Some(on_press) = on_press.as_ref() {
-                    on_press.call(context);
-                }
-                let press_changed = interaction_state.with(|s| !s.is_pressed());
-                if press_changed {
-                    interaction_state.with_mut(|s| s.set_pressed(true));
-                }
+        if tap_result.pressed {
+            if let Some(on_press) = on_press.as_ref() {
+                on_press.call(context);
             }
+            let press_changed = interaction_state.with(|s| !s.is_pressed());
+            if press_changed {
+                interaction_state.with_mut(|s| s.set_pressed(true));
+            }
+        }
 
-            if matches!(
-                event.content,
-                CursorEventContent::Released(PressKeyEventType::Left)
-            ) {
-                let was_pressed = interaction_state.with(|s| s.is_pressed());
-                if was_pressed {
-                    interaction_state.with_mut(|s| s.release());
-                }
-                if let Some(on_release) = on_release.as_ref() {
-                    on_release.call(context);
-                }
+        if tap_result.released {
+            let was_pressed = interaction_state.with(|s| s.is_pressed());
+            if was_pressed {
+                interaction_state.with_mut(|s| s.release());
             }
+            if let Some(on_release) = on_release.as_ref() {
+                on_release.call(context);
+            }
+        }
 
-            if within_bounds
-                && event.gesture_state == GestureState::TapCandidate
-                && matches!(
-                    event.content,
-                    CursorEventContent::Released(PressKeyEventType::Left)
-                )
-            {
-                on_click.call();
-            }
+        if tap_result.tapped {
+            on_click.call();
         }
 
         if !within_bounds {

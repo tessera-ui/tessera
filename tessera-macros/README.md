@@ -14,7 +14,7 @@ The `#[tessera]` macro transforms regular Rust functions into Tessera UI compone
 ## Features
 
 - **Component Integration**: Automatically registers functions as components in the Tessera component tree
-- **Runtime Injection**: Provides access to `layout` and `input_handler` functions within component functions
+- **Runtime Injection**: Provides access to `layout` and typed input handler registration functions within component functions
 - **Clean Syntax**: Enables declarative component definition with minimal boilerplate
 - **Tree Management**: Handles component tree node creation and cleanup automatically
 - **Prop Derive**: Generates `Prop` implementation and ergonomic setters for component args structs
@@ -31,7 +31,8 @@ fn my_component() {
     // Your component logic here
     // The macro automatically provides access to:
     // - layout: for custom layout logic
-    // - input_handler: for handling user interactions
+    // - pointer_input_handler / keyboard_input_handler / ime_input_handler:
+    //   for handling user interactions
 }
 ```
 
@@ -100,7 +101,7 @@ Field-level:
 - Fields marked with `#[prop(skip_eq)]` are excluded from comparison.
 - `Arc<T>`/`Rc<T>` fields (and `Option<Arc<T>>`/`Option<Rc<T>>`) are compared by pointer identity (`ptr_eq`).
 
-### Using Layout and Input Handler
+### Using Layout and Typed Input Handlers
 
 ```rust
 use tessera_macros::tessera;
@@ -127,9 +128,9 @@ fn custom_component() {
     // Define custom layout behavior
     layout(FixedLayout);
 
-    // Handle user interactions
-    input_handler(|_| {
-        // Handle events like clicks, key presses, etc.
+    // Handle pointer interactions
+    pointer_input_handler(|_| {
+        // Handle events like clicks and drags.
     });
 }
 ```
@@ -140,7 +141,7 @@ The `#[tessera]` macro performs the following transformations:
 
 1. **Component Registration**: Adds the function to the component tree with its name
 2. **Runtime Access**: Injects code to access the Tessera runtime
-3. **Function Injection**: Provides `layout` and `input_handler` functions in the component scope
+3. **Function Injection**: Provides `layout` and typed input handler registration functions in the component scope
 4. **Tree Management**: Handles pushing and popping nodes from the component tree
 5. **Error Safety**: Wraps the original function body to prevent early returns from breaking the component tree
 
@@ -162,9 +163,12 @@ fn my_component() {
         runtime.component_tree.add_node(ComponentNode { ... });
     });
     
-    // Inject layout and input_handler functions
+    // Inject layout and typed input handler functions
     let layout = |spec: impl LayoutSpec| { /* ... */ };
-    let input_handler = |fun: impl Fn(InputHandlerInput) + Send + Sync + 'static| { /* ... */ };
+    let pointer_input_handler =
+        |fun: impl Fn(PointerInput) + Send + Sync + 'static| { /* ... */ };
+    let keyboard_input_handler =
+        |fun: impl Fn(KeyboardInput) + Send + Sync + 'static| { /* ... */ };
     
     // Execute original function body safely
     let result = {

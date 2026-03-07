@@ -17,7 +17,7 @@ use tracing::{debug, warn};
 
 use crate::{
     ComputeResourceManager, Px, PxRect,
-    cursor::CursorEvent,
+    cursor::{CursorEventContent, PointerChange},
     layout::{LayoutResult, RenderInput},
     px::{PxPosition, PxSize},
     render_graph::{RenderGraph, RenderGraphBuilder},
@@ -30,7 +30,9 @@ use crate::{
 pub use constraint::{Constraint, DimensionValue, ParentConstraint};
 pub use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, ComputedData,
-    ImeRequest, InputHandlerFn, InputHandlerInput, MeasurementError, WindowAction, WindowRequests,
+    ImeInput, ImeInputHandlerFn, ImeRequest, KeyboardInput, KeyboardInputHandlerFn,
+    MeasurementError, PointerEventPass, PointerInput, PointerInputHandlerFn, WindowAction,
+    WindowRequests,
 };
 
 pub(crate) use node::{measure_node, measure_nodes};
@@ -193,7 +195,7 @@ impl LayoutDiagnosticsCollector {
 pub(crate) struct ComputeParams<'a> {
     pub screen_size: PxSize,
     pub cursor_position: Option<PxPosition>,
-    pub cursor_events: Vec<CursorEvent>,
+    pub pointer_changes: Vec<PointerChange>,
     pub keyboard_events: Vec<winit::event::KeyEvent>,
     pub ime_events: Vec<winit::event::Ime>,
     pub modifiers: winit::keyboard::ModifiersState,
@@ -212,6 +214,9 @@ pub struct ComponentTree {
     node_queue: Vec<indextree::NodeId>,
     /// Detached old-subtree nodes keyed by instance key during replay replace.
     replay_reuse_candidates: HashMap<u64, indextree::NodeId>,
+    /// Active pointer hit paths keyed by pointer id.
+    /// Each path stores node instance keys from root to leaf.
+    active_pointer_paths: HashMap<u64, Vec<u64>>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -258,6 +263,7 @@ impl ComponentTree {
             node_queue,
             metadatas,
             replay_reuse_candidates: HashMap::default(),
+            active_pointer_paths: HashMap::default(),
         }
     }
 
@@ -267,16 +273,23 @@ impl ComponentTree {
         self.metadatas.clear();
         self.node_queue.clear();
         self.replay_reuse_candidates.clear();
+        self.active_pointer_paths.clear();
     }
 
     /// Get node by NodeId
     pub fn get(&self, node_id: indextree::NodeId) -> Option<&ComponentNode> {
-        self.tree.get(node_id).map(|n| n.get())
+        self.tree
+            .get(node_id)
+            .filter(|node| !node.is_removed())
+            .map(|node| node.get())
     }
 
     /// Get mutable node by NodeId
     pub fn get_mut(&mut self, node_id: indextree::NodeId) -> Option<&mut ComponentNode> {
-        self.tree.get_mut(node_id).map(|n| n.get_mut())
+        self.tree
+            .get_mut(node_id)
+            .filter(|node| !node.is_removed())
+            .map(|node| node.get_mut())
     }
 
     /// Find a node id by stable instance key.
@@ -604,7 +617,7 @@ impl ComponentTree {
         let ComputeParams {
             screen_size,
             mut cursor_position,
-            mut cursor_events,
+            mut pointer_changes,
             mut keyboard_events,
             mut ime_events,
             modifiers,
@@ -694,123 +707,167 @@ impl ComponentTree {
             graph.ops().len()
         );
 
-        let input_handler_timer = Instant::now();
+        let input_dispatch_timer = Instant::now();
         let mut window_requests = WindowRequests::default();
-        debug!("Start executing input handlers...");
+        debug!("Start executing typed input dispatch...");
 
-        for node_id in root_node
+        let node_ids_preorder: Vec<_> = root_node
+            .traverse(&self.tree)
+            .filter_map(|edge| match edge {
+                indextree::NodeEdge::Start(id) => Some(id),
+                indextree::NodeEdge::End(_) => None,
+            })
+            .collect();
+        let node_ids_postorder: Vec<_> = root_node
             .reverse_traverse(&self.tree)
             .filter_map(|edge| match edge {
                 indextree::NodeEdge::Start(id) => Some(id),
                 indextree::NodeEdge::End(_) => None,
             })
-        {
-            let Some(input_handler) = self
+            .collect();
+        let pointer_change_paths = build_pointer_change_paths(
+            root_node,
+            &self.tree,
+            &self.metadatas,
+            &pointer_changes,
+            cursor_position,
+            &mut self.active_pointer_paths,
+        );
+        let focus_chain_node_ids = collect_focus_chain_node_ids(root_node, &self.tree);
+
+        for node_id in node_ids_preorder.iter().copied() {
+            let Some(handler) = self
                 .tree
                 .get(node_id)
-                .and_then(|n| n.get().input_handler_fn.as_ref())
+                .and_then(|n| n.get().pointer_preview_handler_fn.as_ref())
             else {
                 continue;
             };
+            run_pointer_handler_for_node(
+                &self.tree,
+                &self.metadatas,
+                node_id,
+                PointerEventPass::Initial,
+                handler,
+                &mut cursor_position,
+                pointer_changes.as_mut_slice(),
+                &pointer_change_paths,
+                modifiers,
+                &mut window_requests,
+            );
+        }
 
-            let Some(metadata) = self.metadatas.get(&node_id) else {
-                warn!(
-                    "Input handler metadata missing for node {node_id:?}; skipping input handling"
-                );
+        for node_id in node_ids_postorder.iter().copied() {
+            let Some(handler) = self
+                .tree
+                .get(node_id)
+                .and_then(|n| n.get().pointer_handler_fn.as_ref())
+            else {
                 continue;
             };
-            let Some(abs_pos) = metadata.abs_position else {
-                warn!("Absolute position missing for node {node_id:?}; skipping input handling");
+            run_pointer_handler_for_node(
+                &self.tree,
+                &self.metadatas,
+                node_id,
+                PointerEventPass::Main,
+                handler,
+                &mut cursor_position,
+                pointer_changes.as_mut_slice(),
+                &pointer_change_paths,
+                modifiers,
+                &mut window_requests,
+            );
+        }
+
+        for node_id in node_ids_preorder.iter().copied() {
+            let Some(handler) = self
+                .tree
+                .get(node_id)
+                .and_then(|n| n.get().pointer_final_handler_fn.as_ref())
+            else {
                 continue;
             };
-            let event_clip_rect = metadata.event_clip_rect;
-            let node_computed_data = metadata.computed_data;
-            drop(metadata); // release DashMap guard so handlers can mutate metadata if needed
+            run_pointer_handler_for_node(
+                &self.tree,
+                &self.metadatas,
+                node_id,
+                PointerEventPass::Final,
+                handler,
+                &mut cursor_position,
+                pointer_changes.as_mut_slice(),
+                &pointer_change_paths,
+                modifiers,
+                &mut window_requests,
+            );
+        }
 
-            let mut cursor_position_ref = &mut cursor_position;
-            let mut dummy_cursor_position = None;
-            let mut cursor_events_ref = &mut cursor_events;
-            let mut empty_dummy_cursor_events = Vec::new();
-            if let (Some(cursor_pos), Some(clip_rect)) = (*cursor_position_ref, event_clip_rect) {
-                // check if the cursor is inside the clip rect
-                if !clip_rect.contains(cursor_pos) {
-                    // If not, set cursor relative inputs to None
-                    cursor_position_ref = &mut dummy_cursor_position;
-                    cursor_events_ref = &mut empty_dummy_cursor_events;
-                }
-            }
-            let current_cursor_position = cursor_position_ref.map(|pos| pos - abs_pos);
-
-            if let Some(node_computed_data) = node_computed_data {
-                let (instance_logic_id, instance_key, fn_name) = self
-                    .tree
-                    .get(node_id)
-                    .map(|n| {
-                        let node = n.get();
-                        (
-                            node.instance_logic_id,
-                            node.instance_key,
-                            node.fn_name.as_str().to_owned(),
-                        )
-                    })
-                    .unwrap_or_default();
-                #[cfg(feature = "profiling")]
-                let mut profiler_guard = {
-                    let parent_id = self.tree.get(node_id).and_then(|n| n.parent());
-                    let fn_name = Some(fn_name.clone());
-                    Some(ProfilerScopeGuard::new(
-                        ProfilerPhase::Input,
-                        Some(node_id),
-                        parent_id,
-                        fn_name.as_deref(),
-                    ))
-                };
-                let _node_ctx_guard = push_current_node_with_instance_logic_id(
+        for node_id in focus_chain_node_ids.iter().copied() {
+            if let Some(handler) = self
+                .tree
+                .get(node_id)
+                .and_then(|n| n.get().keyboard_preview_handler_fn.as_ref())
+            {
+                run_keyboard_handler_for_node(
+                    &self.tree,
+                    &self.metadatas,
                     node_id,
-                    instance_logic_id,
-                    fn_name.as_str(),
+                    handler,
+                    &mut keyboard_events,
+                    modifiers,
+                    &mut window_requests,
                 );
-                let _instance_ctx_guard = push_current_component_instance_key(instance_key);
-                let _phase_guard = push_phase(RuntimePhase::Input);
-                let input = InputHandlerInput {
-                    computed_data: node_computed_data,
-                    cursor_position_rel: current_cursor_position,
-                    cursor_position_abs: cursor_position_ref,
-                    cursor_events: cursor_events_ref,
-                    keyboard_events: &mut keyboard_events,
-                    ime_events: &mut ime_events,
-                    key_modifiers: modifiers,
-                    requests: &mut window_requests,
-                    current_node_id: node_id,
-                    metadatas: &self.metadatas,
-                };
-                input_handler(input);
-                #[cfg(feature = "profiling")]
-                {
-                    let abs_tuple = (abs_pos.x.0, abs_pos.y.0);
-                    if let Some(g) = &mut profiler_guard {
-                        g.set_positions(Some(abs_tuple));
-                    }
-                    let _ = profiler_guard.take();
-                }
-                // if input_handler set ime request, it's position must be None, and we set it
-                // here
-                if let Some(ref mut ime_request) = window_requests.ime_request
-                    && ime_request.position.is_none()
-                {
-                    ime_request.position = Some(abs_pos);
-                }
-            } else {
-                warn!(
-                    "Computed data not found for node {:?} during input handler execution.",
-                    node_id
+            }
+            if let Some(handler) = self
+                .tree
+                .get(node_id)
+                .and_then(|n| n.get().ime_preview_handler_fn.as_ref())
+            {
+                run_ime_handler_for_node(
+                    &self.tree,
+                    &self.metadatas,
+                    node_id,
+                    handler,
+                    &mut ime_events,
+                    &mut window_requests,
+                );
+            }
+        }
+
+        for node_id in focus_chain_node_ids.iter().rev().copied() {
+            if let Some(handler) = self
+                .tree
+                .get(node_id)
+                .and_then(|n| n.get().keyboard_handler_fn.as_ref())
+            {
+                run_keyboard_handler_for_node(
+                    &self.tree,
+                    &self.metadatas,
+                    node_id,
+                    handler,
+                    &mut keyboard_events,
+                    modifiers,
+                    &mut window_requests,
+                );
+            }
+            if let Some(handler) = self
+                .tree
+                .get(node_id)
+                .and_then(|n| n.get().ime_handler_fn.as_ref())
+            {
+                run_ime_handler_for_node(
+                    &self.tree,
+                    &self.metadatas,
+                    node_id,
+                    handler,
+                    &mut ime_events,
+                    &mut window_requests,
                 );
             }
         }
 
         debug!(
-            "Input Handlers executed in {:?}",
-            input_handler_timer.elapsed()
+            "Typed input dispatch executed in {:?}",
+            input_dispatch_timer.elapsed()
         );
         (
             graph,
@@ -824,6 +881,423 @@ impl ComponentTree {
             record_cost,
         )
     }
+}
+
+struct NodeInputContext {
+    abs_pos: PxPosition,
+    event_clip_rect: Option<PxRect>,
+    node_computed_data: ComputedData,
+    instance_logic_id: u64,
+    instance_key: u64,
+    fn_name: String,
+    parent_id: Option<indextree::NodeId>,
+}
+
+fn resolve_node_input_context(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    node_id: indextree::NodeId,
+) -> Option<NodeInputContext> {
+    let Some(metadata) = metadatas.get(&node_id) else {
+        warn!("Input metadata missing for node {node_id:?}; skipping input handling");
+        return None;
+    };
+    let Some(abs_pos) = metadata.abs_position else {
+        warn!("Absolute position missing for node {node_id:?}; skipping input handling");
+        return None;
+    };
+    let event_clip_rect = metadata.event_clip_rect;
+    let Some(node_computed_data) = metadata.computed_data else {
+        warn!(
+            "Computed data not found for node {:?} during input dispatch.",
+            node_id
+        );
+        return None;
+    };
+    drop(metadata);
+
+    let Some(node_ref) = tree.get(node_id) else {
+        warn!("Node not found for node {node_id:?}; skipping input handling");
+        return None;
+    };
+    let node = node_ref.get();
+    let instance_logic_id = node.instance_logic_id;
+    let instance_key = node.instance_key;
+    let fn_name = node.fn_name.as_str().to_owned();
+    let parent_id = node_ref.parent();
+
+    Some(NodeInputContext {
+        abs_pos,
+        event_clip_rect,
+        node_computed_data,
+        instance_logic_id,
+        instance_key,
+        fn_name,
+        parent_id,
+    })
+}
+
+fn attach_ime_position_if_needed(window_requests: &mut WindowRequests, abs_pos: PxPosition) {
+    if let Some(ref mut ime_request) = window_requests.ime_request
+        && ime_request.position.is_none()
+    {
+        ime_request.position = Some(abs_pos);
+    }
+}
+
+fn hit_path_node_ids(
+    root_node: indextree::NodeId,
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    position: Option<PxPosition>,
+) -> Vec<indextree::NodeId> {
+    fn collect_hit_path(
+        node_id: indextree::NodeId,
+        tree: &ComponentNodeTree,
+        metadatas: &ComponentNodeMetaDatas,
+        position: PxPosition,
+    ) -> Option<Vec<indextree::NodeId>> {
+        let metadata = metadatas.get(&node_id)?;
+        let abs_pos = metadata.abs_position?;
+        let size = metadata.computed_data?;
+        if size.width.0 <= 0 || size.height.0 <= 0 {
+            return None;
+        }
+        if let Some(clip_rect) = metadata.event_clip_rect
+            && !clip_rect.contains(position)
+        {
+            return None;
+        }
+        let bounds = PxRect::from_position_size(abs_pos, PxSize::new(size.width, size.height));
+        let bounds_contains = bounds.contains(position);
+        let node_has_pointer_handler = tree.get(node_id).is_some_and(|node| {
+            let node = node.get();
+            node.pointer_preview_handler_fn.is_some()
+                || node.pointer_handler_fn.is_some()
+                || node.pointer_final_handler_fn.is_some()
+        });
+
+        let children: Vec<_> = node_id.children(tree).collect();
+        for child_id in children.into_iter().rev() {
+            if let Some(mut child_path) = collect_hit_path(child_id, tree, metadatas, position) {
+                let mut path = Vec::with_capacity(child_path.len() + 1);
+                path.push(node_id);
+                path.append(&mut child_path);
+                return Some(path);
+            }
+        }
+
+        (bounds_contains && node_has_pointer_handler).then_some(vec![node_id])
+    }
+
+    let Some(position) = position else {
+        return Vec::new();
+    };
+    collect_hit_path(root_node, tree, metadatas, position).unwrap_or_default()
+}
+
+fn build_pointer_change_paths(
+    root_node: indextree::NodeId,
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    pointer_changes: &[PointerChange],
+    cursor_position: Option<PxPosition>,
+    active_pointer_paths: &mut HashMap<u64, Vec<u64>>,
+) -> Vec<Vec<u64>> {
+    let mut paths = Vec::with_capacity(pointer_changes.len());
+    for change in pointer_changes {
+        let debug_position = match &change.content {
+            CursorEventContent::Moved(position) => Some(*position),
+            _ => cursor_position,
+        };
+        let path = match &change.content {
+            CursorEventContent::Pressed(_) => {
+                let computed_path =
+                    hit_path_instance_keys(root_node, tree, metadatas, debug_position);
+                if computed_path.is_empty() {
+                    active_pointer_paths.remove(&change.pointer_id);
+                } else {
+                    active_pointer_paths.insert(change.pointer_id, computed_path.clone());
+                }
+                computed_path
+            }
+            CursorEventContent::Moved(position) => active_pointer_paths
+                .get(&change.pointer_id)
+                .cloned()
+                .unwrap_or_else(|| {
+                    hit_path_instance_keys(root_node, tree, metadatas, Some(*position))
+                }),
+            CursorEventContent::Released(_) => {
+                let computed = active_pointer_paths
+                    .get(&change.pointer_id)
+                    .cloned()
+                    .unwrap_or_else(|| {
+                        hit_path_instance_keys(root_node, tree, metadatas, debug_position)
+                    });
+                active_pointer_paths.remove(&change.pointer_id);
+                computed
+            }
+            CursorEventContent::Scroll(_) => active_pointer_paths
+                .get(&change.pointer_id)
+                .cloned()
+                .unwrap_or_else(|| {
+                    hit_path_instance_keys(root_node, tree, metadatas, debug_position)
+                }),
+        };
+        paths.push(path);
+    }
+    paths
+}
+
+fn hit_path_instance_keys(
+    root_node: indextree::NodeId,
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    position: Option<PxPosition>,
+) -> Vec<u64> {
+    hit_path_node_ids(root_node, tree, metadatas, position)
+        .into_iter()
+        .filter_map(|node_id| tree.get(node_id).map(|node| node.get().instance_key))
+        .collect()
+}
+
+fn collect_focus_chain_node_ids(
+    root_node: indextree::NodeId,
+    tree: &ComponentNodeTree,
+) -> Vec<indextree::NodeId> {
+    fn live_node(
+        tree: &ComponentNodeTree,
+        node_id: indextree::NodeId,
+    ) -> Option<&indextree::Node<ComponentNode>> {
+        tree.get(node_id).filter(|node| !node.is_removed())
+    }
+
+    let Some(focused_node_id) = crate::focus_state::focused_node_hint() else {
+        return Vec::new();
+    };
+    if live_node(tree, focused_node_id).is_none() {
+        return Vec::new();
+    }
+
+    let mut chain = Vec::new();
+    let mut current = Some(focused_node_id);
+    while let Some(node_id) = current {
+        chain.push(node_id);
+        if node_id == root_node {
+            break;
+        }
+        current = live_node(tree, node_id).and_then(|node| node.parent());
+    }
+    if chain.last().copied() != Some(root_node) {
+        return Vec::new();
+    }
+    chain.reverse();
+    chain
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_pointer_handler_for_node(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    node_id: indextree::NodeId,
+    pass: PointerEventPass,
+    pointer_handler: &PointerInputHandlerFn,
+    cursor_position: &mut Option<PxPosition>,
+    pointer_changes: &mut [PointerChange],
+    pointer_change_paths: &[Vec<u64>],
+    modifiers: winit::keyboard::ModifiersState,
+    window_requests: &mut WindowRequests,
+) {
+    let Some(NodeInputContext {
+        abs_pos,
+        event_clip_rect,
+        node_computed_data,
+        instance_logic_id,
+        instance_key,
+        fn_name,
+        parent_id,
+    }) = resolve_node_input_context(tree, metadatas, node_id)
+    else {
+        return;
+    };
+    #[cfg(not(feature = "profiling"))]
+    let _ = parent_id;
+
+    let mut cursor_position_ref = cursor_position;
+    let mut dummy_cursor_position = None;
+    if let (Some(cursor_pos), Some(clip_rect)) = (*cursor_position_ref, event_clip_rect)
+        && !clip_rect.contains(cursor_pos)
+    {
+        cursor_position_ref = &mut dummy_cursor_position;
+    }
+    let current_cursor_position = cursor_position_ref.map(|pos| pos - abs_pos);
+    let mut selected_change_indices = Vec::new();
+    let mut local_pointer_changes = Vec::new();
+    for (index, change) in pointer_changes.iter().enumerate() {
+        if change.is_consumed() {
+            continue;
+        }
+        let Some(path) = pointer_change_paths.get(index) else {
+            continue;
+        };
+        if path.contains(&instance_key) {
+            selected_change_indices.push(index);
+            local_pointer_changes.push(change.clone());
+        }
+    }
+
+    #[cfg(feature = "profiling")]
+    let mut profiler_guard = Some(ProfilerScopeGuard::new(
+        ProfilerPhase::Input,
+        Some(node_id),
+        parent_id,
+        Some(fn_name.as_str()),
+    ));
+    let _node_ctx_guard =
+        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
+    let _instance_ctx_guard = push_current_component_instance_key(instance_key);
+    let _phase_guard = push_phase(RuntimePhase::Input);
+    let input = PointerInput {
+        pass,
+        computed_data: node_computed_data,
+        cursor_position_rel: current_cursor_position,
+        cursor_position_abs: cursor_position_ref,
+        pointer_changes: &mut local_pointer_changes,
+        key_modifiers: modifiers,
+        requests: window_requests,
+        current_node_id: node_id,
+        metadatas,
+    };
+    pointer_handler(input);
+    for (local_change, &original_index) in local_pointer_changes
+        .iter()
+        .zip(selected_change_indices.iter())
+    {
+        if let Some(original) = pointer_changes.get_mut(original_index) {
+            *original = local_change.clone();
+        }
+    }
+
+    #[cfg(feature = "profiling")]
+    {
+        let abs_tuple = (abs_pos.x.0, abs_pos.y.0);
+        if let Some(g) = &mut profiler_guard {
+            g.set_positions(Some(abs_tuple));
+        }
+        let _ = profiler_guard.take();
+    }
+    attach_ime_position_if_needed(window_requests, abs_pos);
+}
+
+#[allow(clippy::too_many_arguments)]
+fn run_keyboard_handler_for_node(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    node_id: indextree::NodeId,
+    keyboard_handler: &KeyboardInputHandlerFn,
+    keyboard_events: &mut Vec<winit::event::KeyEvent>,
+    modifiers: winit::keyboard::ModifiersState,
+    window_requests: &mut WindowRequests,
+) {
+    let Some(NodeInputContext {
+        abs_pos,
+        event_clip_rect: _,
+        node_computed_data,
+        instance_logic_id,
+        instance_key,
+        fn_name,
+        parent_id,
+    }) = resolve_node_input_context(tree, metadatas, node_id)
+    else {
+        return;
+    };
+    #[cfg(not(feature = "profiling"))]
+    let _ = parent_id;
+
+    #[cfg(feature = "profiling")]
+    let mut profiler_guard = Some(ProfilerScopeGuard::new(
+        ProfilerPhase::Input,
+        Some(node_id),
+        parent_id,
+        Some(fn_name.as_str()),
+    ));
+    let _node_ctx_guard =
+        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
+    let _instance_ctx_guard = push_current_component_instance_key(instance_key);
+    let _phase_guard = push_phase(RuntimePhase::Input);
+    let input = KeyboardInput {
+        computed_data: node_computed_data,
+        keyboard_events,
+        key_modifiers: modifiers,
+        requests: window_requests,
+        current_node_id: node_id,
+        metadatas,
+    };
+    keyboard_handler(input);
+
+    #[cfg(feature = "profiling")]
+    {
+        let abs_tuple = (abs_pos.x.0, abs_pos.y.0);
+        if let Some(g) = &mut profiler_guard {
+            g.set_positions(Some(abs_tuple));
+        }
+        let _ = profiler_guard.take();
+    }
+    attach_ime_position_if_needed(window_requests, abs_pos);
+}
+
+fn run_ime_handler_for_node(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    node_id: indextree::NodeId,
+    ime_handler: &ImeInputHandlerFn,
+    ime_events: &mut Vec<winit::event::Ime>,
+    window_requests: &mut WindowRequests,
+) {
+    let Some(NodeInputContext {
+        abs_pos,
+        event_clip_rect: _,
+        node_computed_data,
+        instance_logic_id,
+        instance_key,
+        fn_name,
+        parent_id,
+    }) = resolve_node_input_context(tree, metadatas, node_id)
+    else {
+        return;
+    };
+    #[cfg(not(feature = "profiling"))]
+    let _ = parent_id;
+
+    #[cfg(feature = "profiling")]
+    let mut profiler_guard = Some(ProfilerScopeGuard::new(
+        ProfilerPhase::Input,
+        Some(node_id),
+        parent_id,
+        Some(fn_name.as_str()),
+    ));
+    let _node_ctx_guard =
+        push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
+    let _instance_ctx_guard = push_current_component_instance_key(instance_key);
+    let _phase_guard = push_phase(RuntimePhase::Input);
+    let input = ImeInput {
+        computed_data: node_computed_data,
+        ime_events,
+        requests: window_requests,
+        current_node_id: node_id,
+        metadatas,
+    };
+    ime_handler(input);
+
+    #[cfg(feature = "profiling")]
+    {
+        let abs_tuple = (abs_pos.x.0, abs_pos.y.0);
+        if let Some(g) = &mut profiler_guard {
+            g.set_positions(Some(abs_tuple));
+        }
+        let _ = profiler_guard.take();
+    }
+    attach_ime_position_if_needed(window_requests, abs_pos);
 }
 
 fn expand_dirty_nodes_with_ancestors(
@@ -1056,7 +1530,13 @@ mod tests {
             component_type_id: instance_logic_id,
             instance_logic_id,
             instance_key,
-            input_handler_fn: None,
+            pointer_preview_handler_fn: None,
+            pointer_handler_fn: None,
+            pointer_final_handler_fn: None,
+            keyboard_preview_handler_fn: None,
+            keyboard_handler_fn: None,
+            ime_preview_handler_fn: None,
+            ime_handler_fn: None,
             layout_spec: Box::new(DefaultLayoutSpec),
             replay: None,
             props_unchanged_from_previous: false,

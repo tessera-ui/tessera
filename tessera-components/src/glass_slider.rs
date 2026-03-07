@@ -4,8 +4,8 @@
 //!
 //! Use to select a value from a continuous range.
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Prop, Px, PxPosition, State,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    Prop, Px, PxPosition, State,
     accesskit::Role,
     focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
@@ -15,6 +15,7 @@ use tessera_ui::{
 
 use crate::{
     fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
+    gesture_recognizer::{DragRecognizer, TapRecognizer},
     modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
 };
@@ -183,37 +184,56 @@ fn cursor_progress(cursor_pos: Option<PxPosition>, width_f: f32) -> Option<f32> 
     cursor_pos.map(|pos| (pos.x.0 as f32 / width_f).clamp(0.0, 1.0))
 }
 
-/// Process cursor events and update the slider state accordingly.
+/// Process pointer gestures and update the slider state accordingly.
 /// Returns the new value (0.0..1.0) if a change should be emitted.
-fn process_cursor_events(
+fn process_pointer_gestures(
     controller: State<GlassSliderController>,
-    input: &tessera_ui::InputHandlerInput,
+    tap_recognizer: State<TapRecognizer>,
+    drag_recognizer: State<DragRecognizer>,
+    input: &mut tessera_ui::PointerInput,
     width_f: f32,
 ) -> Option<f32> {
+    let is_in_component = cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
+    let tap_result = tap_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            input.cursor_position_rel,
+            is_in_component,
+        )
+    });
+    let drag_result = drag_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            input.cursor_position_rel,
+            is_in_component,
+        )
+    });
+
     let mut new_value: Option<f32> = None;
 
-    for event in input.cursor_events.iter() {
-        match &event.content {
-            CursorEventContent::Pressed(_) => {
-                controller.with_mut(|c| {
-                    c.request_focus();
-                    c.set_dragging(true);
-                });
-                if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
-                    new_value = Some(v);
-                }
-            }
-            CursorEventContent::Released(_) => {
-                controller.with_mut(|c| c.set_dragging(false));
-            }
-            _ => {}
+    if tap_result.pressed {
+        controller.with_mut(|c| {
+            c.request_focus();
+        });
+        if let Some(v) = cursor_progress(input.cursor_position_rel, width_f) {
+            new_value = Some(v);
         }
     }
 
-    if controller.with(|c| c.is_dragging())
+    if drag_result.started {
+        controller.with_mut(|c| c.set_dragging(true));
+    }
+
+    if (drag_result.updated || controller.with(|c| c.is_dragging()))
         && let Some(v) = cursor_progress(input.cursor_position_rel, width_f)
     {
         new_value = Some(v);
+    }
+
+    if tap_result.released || drag_result.ended {
+        controller.with_mut(|c| c.set_dragging(false));
     }
 
     new_value
@@ -404,8 +424,10 @@ fn glass_slider_inner_node(args: &GlassSliderArgs) {
 
     let on_change = args.on_change.clone();
     let handler_args = args.clone();
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
 
-    input_handler(move |input| {
+    pointer_input_handler(move |mut input| {
         if !handler_args.disabled {
             let is_in_component =
                 cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
@@ -417,8 +439,13 @@ fn glass_slider_inner_node(args: &GlassSliderArgs) {
             if is_in_component || controller.with(|c| c.is_dragging()) {
                 let width_f = input.computed_data.width.0 as f32;
 
-                if let Some(v) = process_cursor_events(controller, &input, width_f)
-                    && (v - handler_args.value).abs() > f32::EPSILON
+                if let Some(v) = process_pointer_gestures(
+                    controller,
+                    tap_recognizer,
+                    drag_recognizer,
+                    &mut input,
+                    width_f,
+                ) && (v - handler_args.value).abs() > f32::EPSILON
                 {
                     on_change.call(v);
                 }

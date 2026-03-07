@@ -5,11 +5,12 @@
 //! Embed as a bare text input surface when you need to build custom styling.
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
-    CallbackWith, Color, CursorEventContent, Dp, ImeRequest, Modifier, Prop, Px, PxPosition, State,
-    accesskit::Role, remember, tessera, use_context, winit,
+    CallbackWith, Color, Dp, ImeRequest, Modifier, Prop, Px, PxPosition, State, accesskit::Role,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
+    gesture_recognizer::{ScrollRecognizer, TapRecognizer},
     modifier::ModifierExt,
     pipelines::text::pipeline::write_font_system,
     pos_misc::is_position_inside_bounds,
@@ -238,9 +239,6 @@ pub fn text_input(args: &TextInputArgs) {
     if !editor_args.enabled {
         controller.with_mut(|c| c.focus_handler_mut().unfocus());
     }
-    let on_change = editor_args.on_change.clone();
-    let input_transform = editor_args.input_transform.clone();
-
     sync_text_input_controller(&controller, &editor_args);
 
     // surface layer - provides visual container and minimum size guarantee
@@ -262,13 +260,41 @@ pub fn text_input(args: &TextInputArgs) {
     // Event handling at the outermost layer - can access full surface area
 
     let handler_args = editor_args.clone();
-    input_handler(move |mut input| {
+    let tap_recognizer = remember(TapRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
+    pointer_input_handler(move |mut input| {
         handle_text_input(
             &mut input,
             &handler_args,
             &controller,
-            &on_change,
-            &input_transform,
+            tap_recognizer,
+            scroll_recognizer,
+        );
+    });
+
+    let keyboard_args = editor_args.clone();
+    let on_change_for_keyboard = editor_args.on_change.clone();
+    let input_transform_for_keyboard = editor_args.input_transform.clone();
+    keyboard_input_handler(move |mut input| {
+        handle_text_input_keyboard(
+            &mut input,
+            &keyboard_args,
+            &controller,
+            &on_change_for_keyboard,
+            &input_transform_for_keyboard,
+        );
+    });
+
+    let ime_args = editor_args.clone();
+    let on_change_for_ime = editor_args.on_change.clone();
+    let input_transform_for_ime = editor_args.input_transform.clone();
+    ime_input_handler(move |mut input| {
+        handle_text_input_ime(
+            &mut input,
+            &ime_args,
+            &controller,
+            &on_change_for_ime,
+            &input_transform_for_ime,
         );
     });
 }
@@ -283,12 +309,10 @@ fn text_input_core_node(args: &TextInputArgs) {
     if !editor_args.enabled {
         controller.with_mut(|c| c.focus_handler_mut().unfocus());
     }
-    let on_change = editor_args.on_change.clone();
-    let input_transform = editor_args.input_transform.clone();
     sync_text_input_controller(&controller, &editor_args);
 
     let handler_args = editor_args.clone();
-    let modifier = editor_args.modifier;
+    let modifier = editor_args.modifier.clone();
     let padding = editor_args.padding;
     modifier.run(move || {
         Modifier::new().padding_all(padding).run(move || {
@@ -297,13 +321,41 @@ fn text_input_core_node(args: &TextInputArgs) {
         });
     });
 
-    input_handler(move |mut input| {
+    let tap_recognizer = remember(TapRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
+    pointer_input_handler(move |mut input| {
         handle_text_input(
             &mut input,
             &handler_args,
             &controller,
-            &on_change,
-            &input_transform,
+            tap_recognizer,
+            scroll_recognizer,
+        );
+    });
+
+    let keyboard_args = editor_args.clone();
+    let on_change_for_keyboard = editor_args.on_change.clone();
+    let input_transform_for_keyboard = editor_args.input_transform.clone();
+    keyboard_input_handler(move |mut input| {
+        handle_text_input_keyboard(
+            &mut input,
+            &keyboard_args,
+            &controller,
+            &on_change_for_keyboard,
+            &input_transform_for_keyboard,
+        );
+    });
+
+    let ime_args = editor_args.clone();
+    let on_change_for_ime = editor_args.on_change.clone();
+    let input_transform_for_ime = editor_args.input_transform.clone();
+    ime_input_handler(move |mut input| {
+        handle_text_input_ime(
+            &mut input,
+            &ime_args,
+            &controller,
+            &on_change_for_ime,
+            &input_transform_for_ime,
         );
     });
 }
@@ -342,11 +394,11 @@ fn sync_text_input_controller(controller: &State<TextInputController>, args: &Te
 }
 
 fn handle_text_input(
-    input: &mut tessera_ui::InputHandlerInput<'_>,
+    input: &mut tessera_ui::PointerInput<'_>,
     args: &TextInputArgs,
     controller: &State<TextInputController>,
-    on_change: &CallbackWith<String, String>,
-    input_transform: &Option<CallbackWith<String, String>>,
+    tap_recognizer: State<TapRecognizer>,
+    scroll_recognizer: State<ScrollRecognizer>,
 ) {
     if !args.enabled {
         apply_text_input_accessibility(input, args, controller);
@@ -365,21 +417,16 @@ fn handle_text_input(
 
     // Handle click events - now we have a full clickable area from surface
     if is_cursor_in_editor {
-        // Handle mouse pressed events
-        let click_events: Vec<_> = input
-            .cursor_events
-            .iter()
-            .filter(|event| matches!(event.content, CursorEventContent::Pressed(_)))
-            .collect();
+        let tap_result = tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                is_cursor_in_editor,
+            )
+        });
 
-        // Handle mouse released events (end of drag)
-        let release_events: Vec<_> = input
-            .cursor_events
-            .iter()
-            .filter(|event| matches!(event.content, CursorEventContent::Released(_)))
-            .collect();
-
-        if !click_events.is_empty() {
+        if tap_result.pressed {
             // Request focus if not already focused
             if !controller.with(|s| s.focus_handler().is_focused()) {
                 controller.with_mut(|s| {
@@ -399,10 +446,14 @@ fn handle_text_input(
                 // Only process if the click is within the text area (non-negative relative
                 // coords)
                 if text_relative_x_px >= Px(0) && text_relative_y_px >= Px(0) {
+                    let Some(click_timestamp) = tap_result.press_timestamp else {
+                        apply_text_input_accessibility(input, args, controller);
+                        return;
+                    };
                     let text_relative_pos = PxPosition::new(text_relative_x_px, text_relative_y_px);
                     // Determine click type and handle accordingly
-                    let click_type = controller
-                        .with_mut(|s| s.handle_click(text_relative_pos, click_events[0].timestamp));
+                    let click_type =
+                        controller.with_mut(|s| s.handle_click(text_relative_pos, click_timestamp));
 
                     match click_type {
                         ClickType::Single => {
@@ -493,170 +544,164 @@ fn handle_text_input(
         }
 
         // Handle mouse release events (end drag)
-        if !release_events.is_empty() {
+        if tap_result.released {
             controller.with_mut(|s| s.stop_drag());
         }
 
-        let scroll_events: Vec<_> = input
-            .cursor_events
-            .iter()
-            .filter_map(|event| match &event.content {
-                CursorEventContent::Scroll(scroll_event) => Some(scroll_event),
-                _ => None,
-            })
-            .collect();
+        let scroll_result = scroll_recognizer.with_mut(|recognizer| {
+            recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
+        });
 
         // Handle scroll events (only when focused and cursor is in editor)
-        if controller.with(|s| s.focus_handler().is_focused()) {
-            for scroll_event in scroll_events {
-                // Convert scroll delta to lines
-                let scroll = -scroll_event.delta_y;
-
-                // Scroll up for positive, down for negative
-                let action = GlyphonAction::Scroll { pixels: scroll };
-                controller.with_mut(|s| {
-                    s.with_editor_mut(|editor| {
-                        editor.action(&mut write_font_system(), action);
-                    });
+        if controller.with(|s| s.focus_handler().is_focused()) && scroll_result.has_scroll() {
+            let action = GlyphonAction::Scroll {
+                pixels: -scroll_result.delta_y,
+            };
+            controller.with_mut(|s| {
+                s.with_editor_mut(|editor| {
+                    editor.action(&mut write_font_system(), action);
                 });
-            }
+            });
         }
 
         // Only block cursor events when focused to prevent propagation
         if controller.with(|s| s.focus_handler().is_focused()) {
-            input.cursor_events.clear();
+            input.consume_pointer_changes();
         }
     }
 
-    // Handle keyboard events (only when focused)
-    if controller.with(|s| s.focus_handler().is_focused()) {
-        // Handle keyboard events
-        let is_ctrl = input.key_modifiers.control_key() || input.key_modifiers.super_key();
+    apply_text_input_accessibility(input, args, controller);
+}
 
-        // Custom handling for Ctrl+A (Select All)
-        let select_all_event_index = input.keyboard_events.iter().position(|key_event| {
-            if let winit::keyboard::Key::Character(s) = &key_event.logical_key {
-                is_ctrl
-                    && s.to_lowercase() == "a"
-                    && key_event.state == winit::event::ElementState::Pressed
-            } else {
-                false
+fn handle_text_input_keyboard(
+    input: &mut tessera_ui::KeyboardInput<'_>,
+    args: &TextInputArgs,
+    controller: &State<TextInputController>,
+    on_change: &CallbackWith<String, String>,
+    input_transform: &Option<CallbackWith<String, String>>,
+) {
+    if !args.enabled || !controller.with(|s| s.focus_handler().is_focused()) {
+        return;
+    }
+
+    let is_ctrl = input.key_modifiers.control_key() || input.key_modifiers.super_key();
+    let select_all_event_index = input.keyboard_events.iter().position(|key_event| {
+        if let winit::keyboard::Key::Character(s) = &key_event.logical_key {
+            is_ctrl
+                && s.to_lowercase() == "a"
+                && key_event.state == winit::event::ElementState::Pressed
+        } else {
+            false
+        }
+    });
+
+    if select_all_event_index.is_some() {
+        controller.with_mut(|s| {
+            s.with_editor_mut(|editor| {
+                editor.set_cursor(glyphon::Cursor::new(0, 0));
+                editor.set_selection(glyphon::cosmic_text::Selection::Normal(
+                    glyphon::Cursor::new(0, 0),
+                ));
+                editor.action(
+                    &mut write_font_system(),
+                    GlyphonAction::Motion(glyphon::cosmic_text::Motion::BufferEnd),
+                );
+            });
+        });
+    } else {
+        let mut all_actions = Vec::new();
+        controller.with_mut(|s| {
+            for key_event in input.keyboard_events.iter().cloned() {
+                if let Some(actions) = s.map_key_event_to_action(key_event, input.key_modifiers) {
+                    all_actions.extend(actions);
+                }
             }
         });
+        if !all_actions.is_empty() {
+            if args.read_only {
+                all_actions.retain(|action| !is_editing_action(action));
+            }
+            for action in all_actions {
+                handle_action(
+                    controller,
+                    action,
+                    on_change.clone(),
+                    input_transform.clone(),
+                );
+            }
+        }
+    }
 
-        if let Some(_index) = select_all_event_index {
-            controller.with_mut(|s| {
-                s.with_editor_mut(|editor| {
-                    // Set cursor to the beginning of the document
-                    editor.set_cursor(glyphon::Cursor::new(0, 0));
-                    // Set selection to start from the beginning
-                    editor.set_selection(glyphon::cosmic_text::Selection::Normal(
-                        glyphon::Cursor::new(0, 0),
-                    ));
-                    // Move cursor to the end, which extends the selection (use BufferEnd for
-                    // full document)
-                    editor.action(
-                        &mut write_font_system(),
-                        GlyphonAction::Motion(glyphon::cosmic_text::Motion::BufferEnd),
-                    );
-                });
-            });
-        } else {
-            // Original logic for other keys
-            let mut all_actions = Vec::new();
-            controller.with_mut(|s| {
-                for key_event in input.keyboard_events.iter().cloned() {
-                    if let Some(actions) = s.map_key_event_to_action(key_event, input.key_modifiers)
-                    {
-                        all_actions.extend(actions);
+    input.block_keyboard();
+}
+
+fn handle_text_input_ime(
+    input: &mut tessera_ui::ImeInput<'_>,
+    args: &TextInputArgs,
+    controller: &State<TextInputController>,
+    on_change: &CallbackWith<String, String>,
+    input_transform: &Option<CallbackWith<String, String>>,
+) {
+    if !args.enabled || !controller.with(|s| s.focus_handler().is_focused()) {
+        return;
+    }
+    if args.read_only {
+        input.block_ime();
+        return;
+    }
+
+    let ime_events: Vec<_> = input.ime_events.drain(..).collect();
+    for event in ime_events {
+        match event {
+            winit::event::Ime::Commit(text) => {
+                let preedit_text = controller.with_mut(|s| s.preedit_string.take());
+                if let Some(preedit_text) = preedit_text {
+                    for _ in 0..preedit_text.chars().count() {
+                        handle_action(
+                            controller,
+                            GlyphonAction::Backspace,
+                            on_change.clone(),
+                            input_transform.clone(),
+                        );
                     }
                 }
-            });
-
-            if !all_actions.is_empty() {
-                if args.read_only {
-                    all_actions.retain(|action| !is_editing_action(action));
-                }
-                for action in all_actions {
+                for c in text.chars() {
                     handle_action(
                         controller,
-                        action,
+                        GlyphonAction::Insert(c),
                         on_change.clone(),
                         input_transform.clone(),
                     );
                 }
             }
-        }
-
-        // Block all keyboard events to prevent propagation
-        input.keyboard_events.clear();
-
-        if !args.read_only {
-            // Handle IME events
-            let ime_events: Vec<_> = input.ime_events.drain(..).collect();
-            for event in ime_events {
-                match event {
-                    winit::event::Ime::Commit(text) => {
-                        // Clear preedit string if it exists
-                        let preedit_text = controller.with_mut(|s| s.preedit_string.take());
-
-                        if let Some(preedit_text) = preedit_text {
-                            for _ in 0..preedit_text.chars().count() {
-                                handle_action(
-                                    controller,
-                                    GlyphonAction::Backspace,
-                                    on_change.clone(),
-                                    input_transform.clone(),
-                                );
-                            }
-                        }
-                        // Insert the committed text
-                        for c in text.chars() {
-                            handle_action(
-                                controller,
-                                GlyphonAction::Insert(c),
-                                on_change.clone(),
-                                input_transform.clone(),
-                            );
-                        }
+            winit::event::Ime::Preedit(text, _cursor_offset) => {
+                let old_preedit = controller.with_mut(|s| s.preedit_string.take());
+                if let Some(old_preedit) = old_preedit {
+                    for _ in 0..old_preedit.chars().count() {
+                        handle_action(
+                            controller,
+                            GlyphonAction::Backspace,
+                            on_change.clone(),
+                            input_transform.clone(),
+                        );
                     }
-                    winit::event::Ime::Preedit(text, _cursor_offset) => {
-                        // Remove the old preedit text if it exists
-                        let old_preedit = controller.with_mut(|s| s.preedit_string.take());
-
-                        if let Some(old_preedit) = old_preedit {
-                            for _ in 0..old_preedit.chars().count() {
-                                handle_action(
-                                    controller,
-                                    GlyphonAction::Backspace,
-                                    on_change.clone(),
-                                    input_transform.clone(),
-                                );
-                            }
-                        }
-                        // Insert the new preedit text
-                        for c in text.chars() {
-                            handle_action(
-                                controller,
-                                GlyphonAction::Insert(c),
-                                on_change.clone(),
-                                input_transform.clone(),
-                            );
-                        }
-                        controller.with_mut(|c| c.preedit_string = Some(text.to_string()));
-                    }
-                    _ => {}
                 }
+                for c in text.chars() {
+                    handle_action(
+                        controller,
+                        GlyphonAction::Insert(c),
+                        on_change.clone(),
+                        input_transform.clone(),
+                    );
+                }
+                controller.with_mut(|c| c.preedit_string = Some(text.to_string()));
             }
-
-            // Request IME window
-            input.requests.ime_request = Some(ImeRequest::new(size.into()));
-        } else {
-            input.ime_events.clear();
+            _ => {}
         }
     }
 
-    apply_text_input_accessibility(input, args, controller);
+    input.requests.ime_request = Some(ImeRequest::new(input.computed_data.into()));
+    input.block_ime();
 }
 
 pub(crate) fn handle_action(
@@ -1151,7 +1196,7 @@ fn get_editor_content(editor: &glyphon::Editor) -> String {
 }
 
 fn apply_text_input_accessibility(
-    input: &mut tessera_ui::InputHandlerInput<'_>,
+    input: &mut tessera_ui::PointerInput<'_>,
     args: &TextInputArgs,
     state: &State<TextInputController>,
 ) {

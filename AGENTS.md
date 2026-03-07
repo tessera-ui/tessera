@@ -31,10 +31,10 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Components are stateless Rust functions annotated with `#[tessera]`. Persistent UI state is created with `remember` (returned as `State<T>`) and can be passed around as `State<T>`.
 - Inside the component function:
   - `layout`: Provide a layout spec for measurement (optional)
-  - `input_handler`: Event and interaction handling (optional)
+  - Typed input handlers such as `pointer_input_handler`, `keyboard_input_handler`, and `ime_input_handler`: Event and interaction handling (optional, choose the handlers you need)
   - All child component closures must be executed to build the complete component tree
 
-**Automatic Injection**: `layout` and `input_handler` are injected by the macro and do not require manual import.
+**Automatic Injection**: `layout` and the typed input handler registration functions are injected by the macro and do not require manual import.
 
 ### Component API Pattern
 
@@ -92,9 +92,11 @@ This document defines how You should assist in the Tessera project to ensure cod
 ## 🎯 Event & State Management
 
 - Components are stateless; persistent state is stored via `remember` as `State<T>` and passed via parameters as needed.
-- Event handling is done via the `input_handler` closure, which receives `InputHandlerInput` containing:
-  - `node_id`, `computed_data`, `cursor_position`
-  - `cursor_events`, `keyboard_events`, `ime_events`
+- Event handling is done via typed closures:
+  - `pointer_preview_input_handler` (root → leaf), `pointer_input_handler` (leaf → root), `pointer_final_input_handler` (root → leaf)
+  - `keyboard_preview_input_handler` / `keyboard_input_handler`
+  - `ime_preview_input_handler` / `ime_input_handler`
+- The typed input contexts are `PointerInput`, `KeyboardInput`, and `ImeInput`.
 - Mouse, keyboard, and IME events are processed via event queues and must be consumed promptly.
 - Event handlers should be lightweight to avoid blocking the main loop.
 

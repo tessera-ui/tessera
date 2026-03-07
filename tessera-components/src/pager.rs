@@ -4,14 +4,19 @@
 //!
 //! Show onboarding steps or media carousels that snap between pages.
 use tessera_ui::{
-    CallbackWith, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition, State, key,
+    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop,
+    Px, PxPosition, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
-    alignment::CrossAxisAlignment, modifier::ModifierExt as _, pos_misc::is_position_inside_bounds,
+    alignment::CrossAxisAlignment,
+    gesture_recognizer::{
+        DragAxis, DragRecognizer, DragSettings, ScrollRecognizer, ScrollSettings,
+    },
+    modifier::ModifierExt as _,
+    pos_misc::is_position_inside_bounds,
 };
 
 const DEFAULT_SNAP_THRESHOLD: f32 = 0.5;
@@ -119,7 +124,6 @@ pub struct PagerController {
     last_frame_nanos: Option<u64>,
     last_scroll_frame_nanos: Option<u64>,
     is_dragging: bool,
-    last_drag_position: Option<PxPosition>,
     initialized: bool,
 }
 
@@ -137,7 +141,6 @@ impl PagerController {
             last_frame_nanos: None,
             last_scroll_frame_nanos: None,
             is_dragging: false,
-            last_drag_position: None,
             initialized: false,
         }
     }
@@ -271,21 +274,13 @@ impl PagerController {
         self.update_current_page_from_offset();
     }
 
-    fn start_drag(&mut self, pos: PxPosition, frame_nanos: u64) {
+    fn start_drag(&mut self, frame_nanos: u64) {
         self.is_dragging = true;
-        self.last_drag_position = Some(pos);
         self.last_scroll_frame_nanos = Some(frame_nanos);
     }
 
     fn end_drag(&mut self) {
         self.is_dragging = false;
-        self.last_drag_position = None;
-    }
-
-    fn drag_delta(&mut self, pos: PxPosition, axis: PagerAxis) -> Option<f32> {
-        let last = self.last_drag_position?;
-        self.last_drag_position = Some(pos);
-        Some(axis.drag_delta(last, pos))
     }
 
     fn is_dragging(&self) -> bool {
@@ -392,7 +387,7 @@ impl Default for PagerController {
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum PagerAxis {
     Horizontal,
     Vertical,
@@ -442,13 +437,6 @@ impl PagerAxis {
                     delta_x
                 }
             }
-        }
-    }
-
-    fn drag_delta(self, from: PxPosition, to: PxPosition) -> f32 {
-        match self {
-            Self::Horizontal => (to.x - from.x).to_f32(),
-            Self::Vertical => (to.y - from.y).to_f32(),
         }
     }
 }
@@ -877,7 +865,17 @@ fn pager_inner_node(args: &PagerRenderArgs) {
     });
 
     let user_scroll_enabled = args.user_scroll_enabled;
-    input_handler(move |input| {
+    let drag_recognizer = remember(move || {
+        DragRecognizer::new(DragSettings {
+            axis: Some(match axis {
+                PagerAxis::Horizontal => DragAxis::Horizontal,
+                PagerAxis::Vertical => DragAxis::Vertical,
+            }),
+            ..DragSettings::default()
+        })
+    });
+    let scroll_recognizer = remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
+    pointer_input_handler(move |input| {
         if !user_scroll_enabled {
             return;
         }
@@ -892,65 +890,40 @@ fn pager_inner_node(args: &PagerRenderArgs) {
         }
 
         let frame_nanos = tessera_ui::current_frame_nanos();
-        let mut scroll_delta = 0.0;
-        for event in input.cursor_events.iter() {
-            if let CursorEventContent::Scroll(scroll_event) = &event.content {
-                let delta = axis.scroll_delta(scroll_event.delta_x, scroll_event.delta_y);
-                if delta.abs() >= 0.01 {
-                    scroll_delta += delta;
-                }
-            }
-        }
+        let scroll_result = scroll_recognizer.with_mut(|recognizer| {
+            recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
+        });
+        let scroll_delta = axis.scroll_delta(scroll_result.delta_x, scroll_result.delta_y);
 
         if scroll_delta.abs() >= 0.01 {
             controller.with_mut(|c| {
                 c.apply_scroll_delta(scroll_delta, frame_nanos);
                 c.end_drag();
             });
-            input
-                .cursor_events
-                .retain(|event| !matches!(event.content, CursorEventContent::Scroll(_)));
             return;
         }
 
-        let mut drag_start_pos = None;
-        let mut should_end_drag = false;
-        for event in input.cursor_events.iter() {
-            match &event.content {
-                CursorEventContent::Pressed(PressKeyEventType::Left) => {
-                    if is_cursor_in_component {
-                        drag_start_pos = input.cursor_position_rel;
-                    }
-                }
-                CursorEventContent::Released(PressKeyEventType::Left) => {
-                    should_end_drag = true;
-                }
-                _ => {}
-            }
-        }
-
-        let should_process_drag = drag_start_pos.is_some()
-            || should_end_drag
-            || (is_dragging && input.cursor_position_rel.is_some());
-        if !should_process_drag {
-            return;
-        }
-
-        controller.with_mut(|c| {
-            if let Some(pos) = drag_start_pos {
-                c.start_drag(pos, frame_nanos);
-            }
-            if should_end_drag {
-                c.end_drag();
-            }
-            if c.is_dragging()
-                && let Some(pos) = input.cursor_position_rel
-                && let Some(delta) = c.drag_delta(pos, axis)
-                && delta.abs() >= 0.01
-            {
-                c.apply_scroll_delta(delta, frame_nanos);
-            }
+        let drag_result = drag_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                is_cursor_in_component,
+            )
         });
+        if drag_result.started {
+            controller.with_mut(|c| c.start_drag(frame_nanos));
+        }
+
+        let drag_delta =
+            axis.scroll_delta(drag_result.delta_x.to_f32(), drag_result.delta_y.to_f32());
+        if drag_result.updated && drag_delta.abs() >= 0.01 {
+            controller.with_mut(|c| c.apply_scroll_delta(drag_delta, frame_nanos));
+        }
+
+        if drag_result.ended {
+            controller.with_mut(|c| c.end_drag());
+        }
     });
 
     let page_content = page_content.clone();

@@ -204,8 +204,9 @@ impl DrawCommand for FluidGlassCommand {
     }
 }
 
-// Helper: input handler logic extracted to reduce complexity of `fluid_glass`.
-fn handle_block_input(input: &mut tessera_ui::InputHandlerInput) {
+// Helper: pointer blocking logic extracted to reduce complexity of
+// `fluid_glass`.
+fn handle_block_input(input: &mut tessera_ui::PointerInput) {
     let size = input.computed_data;
     let cursor_pos_option = input.cursor_position_rel;
     let is_cursor_in = cursor_pos_option
@@ -371,7 +372,7 @@ fn fluid_glass_inner(args: &FluidGlassInnerArgs) {
 
     if fluid_args.on_click.is_none() && fluid_args.block_input {
         let args_for_handler = fluid_args.clone();
-        input_handler(move |mut input: tessera_ui::InputHandlerInput| {
+        pointer_input_handler(move |mut input: tessera_ui::PointerInput| {
             if args_for_handler.block_input {
                 handle_block_input(&mut input);
             }

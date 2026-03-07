@@ -7,15 +7,19 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
+    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError,
+    Modifier, Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    receive_frame_nanos, remember, tessera, use_context, winit,
+    provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
 use crate::{
     animation,
     modifier::ModifierExt,
+    nested_scroll::{
+        NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
+        ScrollVelocity,
+    },
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceArgs, surface},
     theme::MaterialTheme,
@@ -54,6 +58,8 @@ struct SideSheetProviderRenderArgs {
 struct SideSheetContentWrapperArgs {
     sheet_type: SideSheetType,
     position: SideSheetPosition,
+    controller: State<SideSheetController>,
+    on_close_request: Callback,
     content: SharedContent,
 }
 
@@ -189,6 +195,7 @@ impl SideSheetProviderArgs {
 pub struct SideSheetController {
     is_open: bool,
     animation_start_frame_nanos: Option<u64>,
+    drag_offset: f32,
 }
 
 impl SideSheetController {
@@ -197,6 +204,7 @@ impl SideSheetController {
         Self {
             is_open: initial_open,
             animation_start_frame_nanos: None,
+            drag_offset: 0.0,
         }
     }
 
@@ -208,6 +216,7 @@ impl SideSheetController {
     pub fn open(&mut self) {
         if !self.is_open {
             self.is_open = true;
+            self.drag_offset = 0.0;
             let now_nanos = current_frame_nanos();
             if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
                 let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
@@ -260,8 +269,34 @@ impl SideSheetController {
             .unwrap_or(false)
     }
 
-    fn snapshot(&self) -> (bool, Option<u64>) {
-        (self.is_open, self.animation_start_frame_nanos)
+    fn snapshot(&self) -> (bool, Option<u64>, f32) {
+        (
+            self.is_open,
+            self.animation_start_frame_nanos,
+            self.drag_offset,
+        )
+    }
+
+    fn drag_offset(&self) -> f32 {
+        self.drag_offset
+    }
+
+    fn apply_drag_delta(&mut self, delta_x: f32, position: SideSheetPosition) -> f32 {
+        let current_offset = self.drag_offset;
+        let new_offset = match position {
+            SideSheetPosition::Start => (current_offset + delta_x).min(0.0),
+            SideSheetPosition::End => (current_offset + delta_x).max(0.0),
+        };
+        self.drag_offset = new_offset;
+        new_offset - current_offset
+    }
+
+    fn complete_drag(&mut self) -> bool {
+        let should_close = self.drag_offset.abs() > 100.0;
+        if !should_close {
+            self.drag_offset = 0.0;
+        }
+        should_close
     }
 }
 
@@ -322,6 +357,7 @@ fn compute_side_sheet_x(
     progress: f32,
     is_open: bool,
     position: SideSheetPosition,
+    drag_offset: f32,
 ) -> i32 {
     let parent = parent_width.0 as f32;
     let sheet = sheet_width.0 as f32;
@@ -334,7 +370,7 @@ fn compute_side_sheet_x(
     } else {
         open_x + (closed_x - open_x) * progress
     };
-    x as i32
+    (x + drag_offset) as i32
 }
 
 fn render_modal_scrim(on_close_request: Callback, progress: f32, is_open: bool) {
@@ -379,8 +415,8 @@ fn render_scrim(
 /// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(
     on_close: Callback,
-) -> Box<dyn Fn(tessera_ui::InputHandlerInput<'_>) + Send + Sync> {
-    Box::new(move |input: tessera_ui::InputHandlerInput<'_>| {
+) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>) + Send + Sync> {
+    Box::new(move |input: tessera_ui::KeyboardInput<'_>| {
         for event in input.keyboard_events.drain(..) {
             if event.state == winit::event::ElementState::Pressed
                 && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
@@ -392,6 +428,71 @@ fn make_keyboard_closure(
     })
 }
 
+fn is_close_direction(delta_x: f32, position: SideSheetPosition) -> bool {
+    match position {
+        SideSheetPosition::Start => delta_x < 0.0,
+        SideSheetPosition::End => delta_x > 0.0,
+    }
+}
+
+fn is_open_direction(delta_x: f32, position: SideSheetPosition) -> bool {
+    match position {
+        SideSheetPosition::Start => delta_x > 0.0,
+        SideSheetPosition::End => delta_x < 0.0,
+    }
+}
+
+fn build_side_sheet_nested_scroll_connection(
+    controller: State<SideSheetController>,
+    on_close_request: Callback,
+    position: SideSheetPosition,
+    parent: Option<NestedScrollConnection>,
+) -> NestedScrollConnection {
+    NestedScrollConnection::new()
+        .with_pre_scroll_handler(CallbackWith::new({
+            move |input: PreScrollInput| {
+                if input.source != tessera_ui::ScrollEventSource::Touch
+                    || !is_open_direction(input.available.x, position)
+                    || controller.with(|c| c.drag_offset()) == 0.0
+                {
+                    return ScrollDelta::ZERO;
+                }
+
+                let consumed_x =
+                    controller.with_mut(|c| c.apply_drag_delta(input.available.x, position));
+                ScrollDelta::new(consumed_x, 0.0)
+            }
+        }))
+        .with_post_scroll_handler(CallbackWith::new({
+            move |input: PostScrollInput| {
+                if input.source != tessera_ui::ScrollEventSource::Touch
+                    || !is_close_direction(input.available.x, position)
+                {
+                    return ScrollDelta::ZERO;
+                }
+
+                let consumed_x =
+                    controller.with_mut(|c| c.apply_drag_delta(input.available.x, position));
+                ScrollDelta::new(consumed_x, 0.0)
+            }
+        }))
+        .with_pre_fling_handler(CallbackWith::new({
+            move |input: PreFlingInput| {
+                if controller.with(|c| c.drag_offset()) == 0.0 {
+                    return ScrollVelocity::ZERO;
+                }
+
+                let should_close = controller.with_mut(|c| c.complete_drag());
+                if should_close {
+                    on_close_request.call();
+                }
+
+                ScrollVelocity::new(input.available.x, 0.0)
+            }
+        }))
+        .with_parent(parent)
+}
+
 /// Place side sheet if present. Extracted to reduce complexity of the parent
 /// function.
 fn place_side_sheet_if_present(
@@ -400,6 +501,7 @@ fn place_side_sheet_if_present(
     is_open: bool,
     progress: f32,
     position: SideSheetPosition,
+    drag_offset: f32,
 ) {
     if input.children_ids().len() <= 2 {
         return;
@@ -430,7 +532,14 @@ fn place_side_sheet_if_present(
         Err(_) => return,
     };
 
-    let x = compute_side_sheet_x(parent_width, child_size.width, progress, is_open, position);
+    let x = compute_side_sheet_x(
+        parent_width,
+        child_size.width,
+        progress,
+        is_open,
+        position,
+        drag_offset,
+    );
     output.place_child(side_sheet_id, PxPosition::new(Px(x), Px(0)));
 }
 
@@ -588,13 +697,13 @@ fn side_sheet_provider_inner_node(args: &SideSheetProviderInnerArgs) {
 fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
     args.main_content.render();
 
-    let (is_open, timer_opt) = args.controller.with(|c| c.snapshot());
+    let (is_open, timer_opt, drag_offset) = args.controller.with(|c| c.snapshot());
     let is_animating = args.controller.with(|c| c.is_animating());
     if is_animating {
         let controller_for_frame = args.controller;
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller_for_frame.with_mut(|controller| {
-                let (_, timer_opt) = controller.snapshot();
+                let (_, timer_opt, _) = controller.snapshot();
                 if let Some(start_frame_nanos) = timer_opt {
                     let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
                     let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
@@ -624,11 +733,13 @@ fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
         is_open,
     );
 
-    input_handler(make_keyboard_closure(args.on_close_request.clone()));
+    keyboard_input_handler(make_keyboard_closure(args.on_close_request.clone()));
 
     let content_wrapper_args = SideSheetContentWrapperArgs {
         sheet_type: args.sheet_type,
         position: args.position,
+        controller: args.controller,
+        on_close_request: args.on_close_request.clone(),
         content: args.side_sheet_content.clone(),
     };
     side_sheet_content_wrapper_node(&content_wrapper_args);
@@ -637,6 +748,7 @@ fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
         progress,
         is_open,
         position: args.position,
+        drag_offset,
     });
 }
 
@@ -646,6 +758,9 @@ fn side_sheet_content_wrapper_node(args: &SideSheetContentWrapperArgs) {
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
+    let position = args.position;
+    let controller = args.controller;
+    let on_close_request = args.on_close_request.clone();
     let container_color = match args.sheet_type {
         SideSheetType::Modal => scheme.surface_container_low,
         SideSheetType::Standard => scheme.surface,
@@ -659,14 +774,28 @@ fn side_sheet_content_wrapper_node(args: &SideSheetContentWrapperArgs) {
     surface(&crate::surface::SurfaceArgs::with_child(
         surface_args
             .style(container_color.into())
-            .shape(sheet_shape(args.position))
+            .shape(sheet_shape(position))
             .modifier(Modifier::new().fill_max_height())
             .block_input(true),
         move || {
             let content = content.clone();
-            Modifier::new()
-                .padding_all(Dp(16.0))
-                .run(move || content.render());
+            let parent_nested_scroll =
+                use_context::<NestedScrollConnection>().map(|context| context.get());
+            let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
+                controller,
+                on_close_request.clone(),
+                position,
+                parent_nested_scroll,
+            );
+            Modifier::new().padding_all(Dp(16.0)).run(move || {
+                let content = content.clone();
+                provide_context(
+                    || nested_scroll_connection.clone(),
+                    move || {
+                        content.render();
+                    },
+                );
+            });
         },
     ));
 }
@@ -676,6 +805,7 @@ struct SideSheetLayout {
     progress: f32,
     is_open: bool,
     position: SideSheetPosition,
+    drag_offset: f32,
 }
 
 impl LayoutSpec for SideSheetLayout {
@@ -694,7 +824,14 @@ impl LayoutSpec for SideSheetLayout {
             output.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
         }
 
-        place_side_sheet_if_present(input, output, self.is_open, self.progress, self.position);
+        place_side_sheet_if_present(
+            input,
+            output,
+            self.is_open,
+            self.progress,
+            self.position,
+            self.drag_offset,
+        );
 
         Ok(main_content_size)
     }

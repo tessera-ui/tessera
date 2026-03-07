@@ -10,17 +10,18 @@ use std::{
 };
 
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEvent, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, ScrollEventSource, State,
-    current_frame_nanos,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px,
+    PxPosition, RenderSlot, ScrollEventSource, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    receive_frame_nanos, remember, tessera,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
     boxed::{BoxedArgs, boxed},
+    gesture_recognizer::{ScrollRecognizer, TapRecognizer},
     modifier::ModifierExt,
+    nested_scroll::{NestedScrollConnection, ScrollDelta, ScrollVelocity},
     pos_misc::is_position_inside_bounds,
     scrollable::scrollbar::{ScrollBarArgs, ScrollBarState, scrollbar_h, scrollbar_v},
 };
@@ -318,6 +319,32 @@ impl ScrollableController {
         self.active_inertia = None;
     }
 
+    fn apply_scroll_delta(
+        &mut self,
+        delta: ScrollDelta,
+        container_size: &ComputedData,
+        vertical_scrollable: bool,
+        horizontal_scrollable: bool,
+    ) -> ScrollDelta {
+        let current_target = self.target_position;
+        let new_target = current_target.saturating_offset(
+            Px::saturating_from_f32(delta.x),
+            Px::saturating_from_f32(delta.y),
+        );
+        let constrained_target = constrain_position(
+            new_target,
+            &self.child_size,
+            container_size,
+            vertical_scrollable,
+            horizontal_scrollable,
+        );
+        self.target_position = constrained_target;
+        ScrollDelta::new(
+            constrained_target.x.to_f32() - current_target.x.to_f32(),
+            constrained_target.y.to_f32() - current_target.y.to_f32(),
+        )
+    }
+
     fn push_touch_delta(&mut self, now: Instant, dx: f32, dy: f32) {
         self.cancel_inertia();
         let tracker = self
@@ -326,21 +353,29 @@ impl ScrollableController {
         tracker.push_delta(now, dx, dy);
     }
 
-    fn end_touch_scroll(&mut self, now: Instant) {
+    fn resolve_touch_velocity(&mut self, now: Instant) -> ScrollVelocity {
         let Some(mut tracker) = self.velocity_tracker.take() else {
-            return;
+            return ScrollVelocity::ZERO;
         };
         if let Some((avg_vx, avg_vy)) = tracker.resolve(now) {
             let velocity_magnitude = (avg_vx * avg_vx + avg_vy * avg_vy).sqrt();
             if velocity_magnitude > SCROLL_INERTIA_START_THRESHOLD {
                 let (vx, vy) = clamp_inertia_velocity(avg_vx, avg_vy);
-                self.active_inertia = Some(ActiveInertia {
-                    velocity_x: vx,
-                    velocity_y: vy,
-                    last_tick_time: now,
-                });
+                return ScrollVelocity::new(vx, vy);
             }
         }
+        ScrollVelocity::ZERO
+    }
+
+    fn start_inertia(&mut self, now: Instant, velocity: ScrollVelocity) {
+        if velocity.is_zero() {
+            return;
+        }
+        self.active_inertia = Some(ActiveInertia {
+            velocity_x: velocity.x,
+            velocity_y: velocity.y,
+            last_tick_time: now,
+        });
     }
 
     fn should_trigger_idle_inertia(&self, now: Instant) -> bool {
@@ -955,7 +990,11 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
     });
 
     // Handle scroll input and position updates
-    input_handler(move |input| {
+    let tap_recognizer = remember(TapRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
+    let nested_scroll_connection =
+        use_context::<NestedScrollConnection>().map(|context| context.get());
+    pointer_input_handler(move |input| {
         let size = input.computed_data;
         let cursor_pos_option = input.cursor_position_rel;
         let is_cursor_in_component = cursor_pos_option
@@ -964,51 +1003,83 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
         let now = Instant::now();
         let frame_nanos = current_frame_nanos();
         let should_handle_scroll = is_cursor_in_component;
+        let tap_result = tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                is_cursor_in_component,
+            )
+        });
+
+        if tap_result.pressed && controller.with(|c| c.active_inertia.is_some()) {
+            controller.with_mut(|c| c.cancel_inertia());
+        }
+
+        if let Some(release_timestamp) = tap_result.release_timestamp {
+            let available_velocity =
+                controller.with_mut(|c| c.resolve_touch_velocity(release_timestamp));
+            if !available_velocity.is_zero() {
+                let consumed_velocity = nested_scroll_connection
+                    .as_ref()
+                    .map(|connection| connection.pre_fling(available_velocity))
+                    .unwrap_or(ScrollVelocity::ZERO);
+                let remaining_velocity = available_velocity - consumed_velocity;
+                controller.with_mut(|c| c.start_inertia(release_timestamp, remaining_velocity));
+            }
+        }
 
         if should_handle_scroll {
-            let mut remaining_events: Vec<CursorEvent> = Vec::new();
-            for cursor_event in input.cursor_events.iter() {
-                match &cursor_event.content {
-                    CursorEventContent::Scroll(scroll_event) => {
+            scroll_recognizer.with_mut(|recognizer| {
+                recognizer.for_each(
+                    input.pass,
+                    input.pointer_changes.as_mut_slice(),
+                    |context, scroll_event| {
                         if controller.with(|c| c.active_inertia.is_some()) {
                             controller.with_mut(|c| c.cancel_inertia());
                         }
-                        let scroll_delta_x = scroll_event.delta_x;
-                        let scroll_delta_y = scroll_event.delta_y;
-                        let (consumed_x, consumed_y) = controller.with_mut(|c| {
-                            let current_target = c.target_position;
-                            let new_target = current_target.saturating_offset(
-                                Px::saturating_from_f32(scroll_delta_x),
-                                Px::saturating_from_f32(scroll_delta_y),
-                            );
-                            let child_size = c.child_size;
-                            let constrained_target = constrain_position(
-                                new_target,
-                                &child_size,
+                        let available =
+                            ScrollDelta::new(scroll_event.delta_x, scroll_event.delta_y);
+                        let parent_pre_consumed = nested_scroll_connection
+                            .as_ref()
+                            .map(|connection| connection.pre_scroll(available, scroll_event.source))
+                            .unwrap_or(ScrollDelta::ZERO);
+                        let available_after_pre = available - parent_pre_consumed;
+                        let child_consumed = controller.with_mut(|c| {
+                            c.apply_scroll_delta(
+                                available_after_pre,
                                 &input.computed_data,
                                 args.vertical,
                                 args.horizontal,
-                            );
-                            c.set_target_position(constrained_target);
-                            (
-                                constrained_target.x.to_f32() - current_target.x.to_f32(),
-                                constrained_target.y.to_f32() - current_target.y.to_f32(),
                             )
                         });
-
-                        let remaining_x = scroll_delta_x - consumed_x;
-                        let remaining_y = scroll_delta_y - consumed_y;
+                        let available_after_child = available_after_pre - child_consumed;
+                        let parent_post_consumed = nested_scroll_connection
+                            .as_ref()
+                            .map(|connection| {
+                                connection.post_scroll(
+                                    child_consumed,
+                                    available_after_child,
+                                    scroll_event.source,
+                                )
+                            })
+                            .unwrap_or(ScrollDelta::ZERO);
+                        let remaining = available_after_child - parent_post_consumed;
 
                         if scroll_event.source == ScrollEventSource::Touch
-                            && (consumed_x.abs() > f32::EPSILON || consumed_y.abs() > f32::EPSILON)
+                            && !child_consumed.is_zero()
                         {
                             controller.with_mut(|c| {
-                                c.push_touch_delta(cursor_event.timestamp, consumed_x, consumed_y);
+                                c.push_touch_delta(
+                                    context.timestamp,
+                                    child_consumed.x,
+                                    child_consumed.y,
+                                );
                             });
                         }
 
                         if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide)
-                            && (consumed_x.abs() > f32::EPSILON || consumed_y.abs() > f32::EPSILON)
+                            && !child_consumed.is_zero()
                         {
                             if args.vertical {
                                 let mut scrollbar_state = scrollbar_state_v.write();
@@ -1024,29 +1095,11 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
                             }
                         }
 
-                        if remaining_x.abs() > f32::EPSILON || remaining_y.abs() > f32::EPSILON {
-                            let mut event = cursor_event.clone();
-                            if let CursorEventContent::Scroll(scroll_event) = &mut event.content {
-                                scroll_event.delta_x = remaining_x;
-                                scroll_event.delta_y = remaining_y;
-                            }
-                            remaining_events.push(event);
-                        }
-                    }
-                    CursorEventContent::Pressed(_) => {
-                        if controller.with(|c| c.active_inertia.is_some()) {
-                            controller.with_mut(|c| c.cancel_inertia());
-                        }
-                        remaining_events.push(cursor_event.clone());
-                    }
-                    CursorEventContent::Released(_) => {
-                        if controller.with(|c| c.velocity_tracker.is_some()) {
-                            controller.with_mut(|c| c.end_touch_scroll(cursor_event.timestamp));
-                        }
-                        remaining_events.push(cursor_event.clone());
-                    }
-                }
-            }
+                        scroll_event.delta_x = remaining.x;
+                        scroll_event.delta_y = remaining.y;
+                    },
+                );
+            });
 
             // Apply bound constraints to the child position
             // To make sure we constrain the target position at least once per frame
@@ -1062,16 +1115,21 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
             if target != constrained_position {
                 controller.with_mut(|c| c.set_target_position(constrained_position));
             }
-
-            input.cursor_events.clear();
-            input.cursor_events.extend(remaining_events);
         }
 
         if !is_cursor_in_component {
             let should_trigger_idle_inertia =
                 controller.with(|c| c.should_trigger_idle_inertia(now));
             if should_trigger_idle_inertia {
-                controller.with_mut(|c| c.end_touch_scroll(now));
+                let available_velocity = controller.with_mut(|c| c.resolve_touch_velocity(now));
+                if !available_velocity.is_zero() {
+                    let consumed_velocity = nested_scroll_connection
+                        .as_ref()
+                        .map(|connection| connection.pre_fling(available_velocity))
+                        .unwrap_or(ScrollVelocity::ZERO);
+                    let remaining_velocity = available_velocity - consumed_velocity;
+                    controller.with_mut(|c| c.start_inertia(now, remaining_velocity));
+                }
             }
         }
 

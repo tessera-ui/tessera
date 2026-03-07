@@ -302,7 +302,7 @@ fn modifier_semantics_node(args: &ModifierSemanticsArgs) {
 
     args.child.render();
 
-    input_handler(move |input| {
+    pointer_input_handler(move |input| {
         let mut builder = input.accessibility();
 
         if let Some(role) = role {

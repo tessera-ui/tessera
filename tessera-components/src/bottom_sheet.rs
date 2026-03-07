@@ -3,17 +3,13 @@
 //! ## Usage
 //!
 //! Used to show contextual information or actions in a modal sheet.
-use std::{
-    sync::{Arc, Mutex},
-    time::Duration,
-};
+use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition, RenderSlot, State,
-    current_frame_nanos,
+    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError,
+    Modifier, Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    receive_frame_nanos, remember, tessera, use_context, winit,
+    provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -21,7 +17,13 @@ use crate::{
     animation,
     column::{ColumnArgs, column},
     fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
+    gesture_recognizer::DragRecognizer,
     modifier::ModifierExt,
+    nested_scroll::{
+        NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
+        ScrollVelocity,
+    },
+    pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceArgs, surface},
@@ -148,7 +150,6 @@ pub struct BottomSheetController {
     animation_start_frame_nanos: Option<u64>,
     is_dragging: bool,
     drag_offset: f32,
-    drag_start_y: f32,
 }
 
 impl BottomSheetController {
@@ -159,7 +160,6 @@ impl BottomSheetController {
             animation_start_frame_nanos: None,
             is_dragging: false,
             drag_offset: 0.0,
-            drag_start_y: 0.0,
         }
     }
 
@@ -236,24 +236,24 @@ impl BottomSheetController {
         self.is_dragging = dragging;
     }
 
-    fn update_drag_offset(&mut self, offset: f32) {
-        self.drag_offset = offset;
+    fn apply_drag_delta(&mut self, delta_y: f32) -> f32 {
+        let current_offset = self.drag_offset;
+        let new_offset = (current_offset + delta_y).max(0.0);
+        self.drag_offset = new_offset;
+        new_offset - current_offset
     }
 
-    fn get_drag_offset(&self) -> f32 {
+    fn drag_offset(&self) -> f32 {
         self.drag_offset
     }
 
-    fn is_dragging(&self) -> bool {
-        self.is_dragging
-    }
-
-    fn set_drag_start_y(&mut self, y: f32) {
-        self.drag_start_y = y;
-    }
-
-    fn get_drag_start_y(&self) -> f32 {
-        self.drag_start_y
+    fn complete_drag(&mut self) -> bool {
+        self.is_dragging = false;
+        let should_close = self.drag_offset > 100.0;
+        if !should_close {
+            self.drag_offset = 0.0;
+        }
+        should_close
     }
 }
 
@@ -372,8 +372,8 @@ fn render_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
 /// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(
     on_close: Callback,
-) -> Box<dyn Fn(tessera_ui::InputHandlerInput<'_>) + Send + Sync> {
-    Box::new(move |input: tessera_ui::InputHandlerInput<'_>| {
+) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>) + Send + Sync> {
+    Box::new(move |input: tessera_ui::KeyboardInput<'_>| {
         for event in input.keyboard_events.drain(..) {
             if event.state == winit::event::ElementState::Pressed
                 && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
@@ -388,48 +388,38 @@ fn make_keyboard_closure(
 /// Handle drag gestures on the bottom sheet.
 fn handle_drag_gestures(
     controller: State<BottomSheetController>,
-    input: &mut tessera_ui::InputHandlerInput<'_>,
+    drag_recognizer: State<DragRecognizer>,
+    input: &mut tessera_ui::PointerInput<'_>,
     on_close: &Callback,
 ) {
-    let mut is_dragging = controller.with(|c| c.is_dragging());
-    let drag_offset = controller.with(|c| c.get_drag_offset());
+    let within_bounds = input
+        .cursor_position_rel
+        .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+        .unwrap_or(false);
+    let drag_result = drag_recognizer.with_mut(|recognizer| {
+        recognizer.update(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            input.cursor_position_rel,
+            within_bounds,
+        )
+    });
 
-    for event in input.cursor_events.iter() {
-        match &event.content {
-            CursorEventContent::Pressed(PressKeyEventType::Left) => {
-                if let Some(pos) = input.cursor_position_rel {
-                    is_dragging = true;
-                    controller.with_mut(|c| {
-                        c.set_dragging(true);
-                        c.set_drag_start_y(pos.y.0 as f32);
-                    });
-                }
-            }
-            CursorEventContent::Released(PressKeyEventType::Left) => {
-                if is_dragging {
-                    is_dragging = false;
-                    controller.with_mut(|c| c.set_dragging(false));
+    if drag_result.started {
+        controller.with_mut(|c| c.set_dragging(true));
+    }
 
-                    if drag_offset > 100.0 {
-                        on_close.call();
-                    } else {
-                        controller.with_mut(|c| c.update_drag_offset(0.0));
-                    }
-                }
-            }
-            _ => {}
+    if drag_result.updated {
+        let consumed = controller.with_mut(|c| c.apply_drag_delta(drag_result.delta_y.to_f32()));
+        if consumed.abs() > f32::EPSILON {
+            controller.with_mut(|c| c.set_dragging(true));
         }
     }
 
-    if is_dragging && let Some(pos) = input.cursor_position_rel {
-        let current_y = pos.y.0 as f32;
-        let start_y = controller.with(|c| c.get_drag_start_y());
-        let delta = current_y - start_y;
-
-        // Accumulate delta since component moves with drag.
-        let new_offset = (drag_offset + delta).max(0.0);
-        if (new_offset - drag_offset).abs() > 0.001 {
-            controller.with_mut(|c| c.update_drag_offset(new_offset));
+    if drag_result.ended {
+        let should_close = controller.with_mut(|c| c.complete_drag());
+        if should_close {
+            on_close.call();
         }
     }
 }
@@ -504,23 +494,103 @@ fn place_bottom_sheet_if_present(
     output.place_child(bottom_sheet_id, PxPosition::new(x, Px(y)));
 }
 #[derive(Clone, Prop)]
-struct DragHandlerArgs {
+struct BottomSheetDragHandleArgs {
     controller: State<BottomSheetController>,
     on_close: Callback,
-    child: RenderSlot,
 }
 
 #[tessera]
-fn drag_handler_node(args: &DragHandlerArgs) {
+fn bottom_sheet_drag_handle_node(args: &BottomSheetDragHandleArgs) {
     let controller = args.controller;
     let on_close = args.on_close.clone();
-    let child = args.child.clone();
+    let drag_recognizer = remember(DragRecognizer::default);
 
-    input_handler(move |mut input| {
-        handle_drag_gestures(controller, &mut input, &on_close);
+    pointer_input_handler(move |mut input| {
+        handle_drag_gestures(controller, drag_recognizer, &mut input, &on_close);
     });
 
-    child.render();
+    column(
+        &ColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .children(|scope| {
+                scope.child(|| {
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().height(Dp(22.0)),
+                    ));
+                });
+                scope.child(|| {
+                    surface(&crate::surface::SurfaceArgs::with_child(
+                        SurfaceArgs::default()
+                            .style(
+                                use_context::<MaterialTheme>()
+                                    .expect("MaterialTheme must be provided")
+                                    .get()
+                                    .color_scheme
+                                    .on_surface_variant
+                                    .with_alpha(0.4)
+                                    .into(),
+                            )
+                            .shape(Shape::capsule())
+                            .modifier(Modifier::new().size(Dp(32.0), Dp(4.0))),
+                        || {},
+                    ));
+                });
+                scope.child(|| {
+                    spacer(&crate::spacer::SpacerArgs::new(
+                        Modifier::new().height(Dp(22.0)),
+                    ));
+                });
+            }),
+    );
+}
+
+fn build_bottom_sheet_nested_scroll_connection(
+    controller: State<BottomSheetController>,
+    on_close: Callback,
+    parent: Option<NestedScrollConnection>,
+) -> NestedScrollConnection {
+    NestedScrollConnection::new()
+        .with_pre_scroll_handler(CallbackWith::new({
+            move |input: PreScrollInput| {
+                if input.source != tessera_ui::ScrollEventSource::Touch
+                    || input.available.y >= 0.0
+                    || controller.with(|c| c.drag_offset()) <= 0.0
+                {
+                    return ScrollDelta::ZERO;
+                }
+
+                let consumed_y = controller.with_mut(|c| c.apply_drag_delta(input.available.y));
+                ScrollDelta::new(0.0, consumed_y)
+            }
+        }))
+        .with_post_scroll_handler(CallbackWith::new({
+            move |input: PostScrollInput| {
+                if input.source != tessera_ui::ScrollEventSource::Touch || input.available.y <= 0.0
+                {
+                    return ScrollDelta::ZERO;
+                }
+
+                let consumed_y = controller.with_mut(|c| c.apply_drag_delta(input.available.y));
+                ScrollDelta::new(0.0, consumed_y)
+            }
+        }))
+        .with_pre_fling_handler(CallbackWith::new({
+            let on_close = on_close.clone();
+            move |input: PreFlingInput| {
+                if controller.with(|c| c.drag_offset()) <= 0.0 {
+                    return ScrollVelocity::ZERO;
+                }
+
+                let should_close = controller.with_mut(|c| c.complete_drag());
+                if should_close {
+                    on_close.call();
+                }
+
+                ScrollVelocity::new(0.0, input.available.y.max(0.0))
+            }
+        }))
+        .with_parent(parent)
 }
 
 fn render_content(
@@ -530,69 +600,42 @@ fn render_content(
     on_close: Callback,
 ) {
     let bottom_sheet_content = bottom_sheet_content.clone();
+    let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let nested_scroll_connection = build_bottom_sheet_nested_scroll_connection(
+        controller,
+        on_close.clone(),
+        parent_nested_scroll,
+    );
     let content_wrapper = move || {
         let bottom_sheet_content = bottom_sheet_content.clone();
-        let child_once: Box<dyn FnOnce() + Send + Sync> = Box::new(move || {
-            column(
-                &ColumnArgs::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .children(|scope| {
-                        scope.child(|| {
-                            spacer(&crate::spacer::SpacerArgs::new(
-                                Modifier::new().height(Dp(22.0)),
-                            ));
+        let on_close = on_close.clone();
+        let nested_scroll_connection = nested_scroll_connection.clone();
+        column(
+            &ColumnArgs::default()
+                .modifier(Modifier::new().fill_max_width())
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move |scope| {
+                    let on_close = on_close.clone();
+                    scope.child(move || {
+                        bottom_sheet_drag_handle_node(&BottomSheetDragHandleArgs {
+                            controller,
+                            on_close: on_close.clone(),
                         });
-                        scope.child(|| {
-                            surface(&crate::surface::SurfaceArgs::with_child(
-                                SurfaceArgs::default()
-                                    .style(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .color_scheme
-                                            .on_surface_variant
-                                            .with_alpha(0.4)
-                                            .into(),
-                                    )
-                                    .shape(Shape::capsule())
-                                    .modifier(Modifier::new().size(Dp(32.0), Dp(4.0))),
-                                || {},
-                            ));
-                        });
-                        scope.child(|| {
-                            spacer(&crate::spacer::SpacerArgs::new(
-                                Modifier::new().height(Dp(22.0)),
-                            ));
-                        });
+                    });
 
+                    let bottom_sheet_content = bottom_sheet_content.clone();
+                    let nested_scroll_connection = nested_scroll_connection.clone();
+                    scope.child(move || {
                         let bottom_sheet_content = bottom_sheet_content.clone();
-                        scope.child(move || {
-                            bottom_sheet_content.render();
-                        });
-                    }),
-            );
-        });
-        let child_slot = Arc::new(Mutex::new(Some(child_once)));
-        let replayable_child = {
-            let child_slot = Arc::clone(&child_slot);
-            RenderSlot::new(move || {
-                if let Some(child_once) = child_slot
-                    .lock()
-                    .expect("drag_handler child mutex poisoned")
-                    .take()
-                {
-                    child_once();
-                }
-            })
-        };
-
-        let drag_handler_args = DragHandlerArgs {
-            controller,
-            on_close: on_close.clone(),
-            child: replayable_child,
-        };
-        drag_handler_node(&drag_handler_args);
+                        provide_context(
+                            || nested_scroll_connection.clone(),
+                            move || {
+                                bottom_sheet_content.render();
+                            },
+                        );
+                    });
+                }),
+        );
     };
     match style {
         BottomSheetStyle::Glass => {
@@ -738,7 +781,7 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
     render_scrim(&provider_args, progress, is_open);
 
     let keyboard_closure = make_keyboard_closure(on_close_for_keyboard);
-    input_handler(keyboard_closure);
+    keyboard_input_handler(keyboard_closure);
 
     render_content(
         provider_args.style,

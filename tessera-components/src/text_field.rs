@@ -9,15 +9,16 @@ use glyphon::{
 };
 use tessera_platform::clipboard;
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, CursorEventContent, DimensionValue, Dp,
-    LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Prop, Px,
-    PxPosition, RenderSlot, State, provide_context, remember, tessera, use_context, winit,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
+    LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition, RenderSlot,
+    State, provide_context, remember, tessera, use_context, winit,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::{BoxedArgs, boxed},
     divider::{DividerArgs, horizontal_divider},
+    gesture_recognizer::{TapRecognizer, TapSettings},
     menus::{
         MenuAnchor, MenuController, MenuItemArgs, MenuPlacement, MenuProviderArgs, MenuScope,
         menu_provider,
@@ -1218,8 +1219,35 @@ pub fn text_field(args: &TextFieldArgs) {
         render_text_field(render_args, controller, editor_args);
     }
 
-    input_handler(move |mut input| {
+    let focus_tap_recognizer = remember(TapRecognizer::default);
+    let context_menu_tap_recognizer = remember(|| {
+        TapRecognizer::new(TapSettings {
+            button: PressKeyEventType::Right,
+            ..Default::default()
+        })
+    });
+    pointer_input_handler(move |mut input| {
         let cursor_pos = input.cursor_position_rel;
+        let is_inside = cursor_pos
+            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+            .unwrap_or(false);
+        let context_menu_tap_result = context_menu_tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                is_inside,
+            )
+        });
+        let focus_tap_result = focus_tap_recognizer.with_mut(|recognizer| {
+            recognizer.update(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                input.cursor_position_rel,
+                is_inside,
+            )
+        });
+
         if menu_policy.enabled {
             if let Some(action) = action_state.with_mut(|state| state.take()) {
                 apply_menu_action(
@@ -1232,16 +1260,8 @@ pub fn text_field(args: &TextFieldArgs) {
                 );
             }
 
-            let has_right_click = input.cursor_events.iter().any(|event| {
-                matches!(
-                    event.content,
-                    CursorEventContent::Released(PressKeyEventType::Right)
-                )
-            });
-
-            if has_right_click
+            if context_menu_tap_result.tapped
                 && let Some(cursor_pos) = cursor_pos
-                && is_position_inside_bounds(input.computed_data, cursor_pos)
             {
                 menu_controller.with_mut(|menu| {
                     menu.open_at(MenuAnchor::at(cursor_pos));
@@ -1249,25 +1269,13 @@ pub fn text_field(args: &TextFieldArgs) {
             }
         }
 
-        let is_inside = cursor_pos
-            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-            .unwrap_or(false);
-
         if enabled {
             if is_inside {
                 input.requests.cursor_icon = winit::window::CursorIcon::Text;
             }
 
-            let has_left_click = input.cursor_events.iter().any(|event| {
-                matches!(
-                    event.content,
-                    CursorEventContent::Pressed(PressKeyEventType::Left)
-                )
-            });
-
-            if has_left_click && cursor_pos.is_some() && is_inside {
+            if focus_tap_result.pressed && cursor_pos.is_some() && is_inside {
                 controller.with_mut(|c| c.focus_handler_mut().request_focus());
-                input.cursor_events.clear();
             }
         }
 
