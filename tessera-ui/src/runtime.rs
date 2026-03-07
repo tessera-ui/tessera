@@ -30,26 +30,11 @@ thread_local! {
     static INSTANCE_LOGIC_ID_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
     /// Current execution phase stack for the thread.
     static PHASE_STACK: RefCell<Vec<RuntimePhase>> = const { RefCell::new(Vec::new()) };
-    /// Call counter stack: tracks sequential remember calls within each group.
-    /// Each entry corresponds to a group depth level.
-    static CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
-
-    /// Call counter stack: tracks sequential context provider calls within each group.
-    /// This must not share state with `CALL_COUNTER_STACK`, otherwise `provide_context`
-    /// would perturb `remember` slot keys.
-    static CONTEXT_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
+    /// Execution-order frames scoped to the current component/group nesting.
+    static ORDER_FRAME_STACK: RefCell<Vec<OrderFrame>> = const { RefCell::new(Vec::new()) };
 
     /// Instance key stack: overrides instance identity inside `key` blocks.
     static INSTANCE_KEY_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
-
-    /// Call counter stack used for instance identity, reset by `key` blocks.
-    static INSTANCE_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
-
-    /// Call counter stack used by frame-nanos receivers.
-    ///
-    /// This must be independent from `CALL_COUNTER_STACK` so frame-receive APIs
-    /// never perturb `remember` slot identity.
-    static FRAME_RECEIVER_CALL_COUNTER_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
 
     /// Stack of currently executing component instance keys for the current thread.
     ///
@@ -67,24 +52,77 @@ thread_local! {
     static BUILD_DIRTY_INSTANCE_KEYS_STACK: RefCell<Vec<Arc<HashSet<u64>>>> = const { RefCell::new(Vec::new()) };
 }
 
+#[derive(Clone, Copy, Default)]
+struct OrderFrame {
+    remember: u64,
+    context: u64,
+    instance: u64,
+    frame_receiver: u64,
+}
+
+#[derive(Clone, Copy)]
+enum OrderCounterKind {
+    Remember,
+    Context,
+    FrameReceiver,
+}
+
+fn push_order_frame() {
+    ORDER_FRAME_STACK.with(|stack| stack.borrow_mut().push(OrderFrame::default()));
+}
+
+fn pop_order_frame(underflow_message: &str) {
+    ORDER_FRAME_STACK.with(|stack| {
+        let popped = stack.borrow_mut().pop();
+        debug_assert!(popped.is_some(), "{underflow_message}");
+    });
+}
+
+fn next_order_counter(kind: OrderCounterKind, empty_message: &str) -> u64 {
+    ORDER_FRAME_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        debug_assert!(!stack.is_empty(), "{empty_message}");
+        let frame = stack.last_mut().expect(empty_message);
+        match kind {
+            OrderCounterKind::Remember => {
+                let counter = frame.remember;
+                frame.remember = frame.remember.wrapping_add(1);
+                counter
+            }
+            OrderCounterKind::Context => {
+                let counter = frame.context;
+                frame.context = frame.context.wrapping_add(1);
+                counter
+            }
+            OrderCounterKind::FrameReceiver => {
+                let counter = frame.frame_receiver;
+                frame.frame_receiver = frame.frame_receiver.wrapping_add(1);
+                counter
+            }
+        }
+    })
+}
+
+fn next_child_instance_call_index() -> u64 {
+    ORDER_FRAME_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        let Some(frame) = stack.last_mut() else {
+            return 0;
+        };
+        let index = frame.instance;
+        frame.instance = frame.instance.wrapping_add(1);
+        index
+    })
+}
+
 pub(crate) fn compute_context_slot_key() -> (u64, u64) {
     let instance_logic_id = current_instance_logic_id();
     let group_path_hash = current_group_path_hash();
 
-    let call_counter = CONTEXT_CALL_COUNTER_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        debug_assert!(
-            !stack.is_empty(),
-            "CONTEXT_CALL_COUNTER_STACK is empty; provide_context must be called inside a component"
-        );
-        let counter = *stack
-            .last()
-            .expect("CONTEXT_CALL_COUNTER_STACK should not be empty");
-        *stack
-            .last_mut()
-            .expect("CONTEXT_CALL_COUNTER_STACK should not be empty") += 1;
-        counter
-    });
+    let call_counter = next_order_counter(
+        OrderCounterKind::Context,
+        "ORDER_FRAME_STACK is empty; provide_context must be called inside a component",
+    );
 
     let slot_hash = hash_components(&[&group_path_hash, &call_counter]);
     (instance_logic_id, slot_hash)
@@ -688,20 +726,10 @@ fn compute_frame_nanos_receiver_key() -> FrameNanosReceiverKey {
     let instance_logic_id = current_instance_logic_id();
     let group_path_hash = current_group_path_hash();
 
-    let call_counter = FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        debug_assert!(
-            !stack.is_empty(),
-            "FRAME_RECEIVER_CALL_COUNTER_STACK is empty; receive_frame_nanos must be called inside a component"
-        );
-        let counter = *stack
-            .last()
-            .expect("FRAME_RECEIVER_CALL_COUNTER_STACK should not be empty");
-        *stack
-            .last_mut()
-            .expect("FRAME_RECEIVER_CALL_COUNTER_STACK should not be empty") += 1;
-        counter
-    });
+    let call_counter = next_order_counter(
+        OrderCounterKind::FrameReceiver,
+        "ORDER_FRAME_STACK is empty; receive_frame_nanos must be called inside a component",
+    );
 
     let receiver_hash = hash_components(&[&group_path_hash, &call_counter]);
     FrameNanosReceiverKey {
@@ -1297,23 +1325,25 @@ pub fn push_current_node(
     // Get the parent's call index and increment it
     // This distinguishes multiple calls to the same component (e.g., foo(1);
     // foo(2);)
-    let (parent_call_index, parent_instance_logic_id) = INSTANCE_CALL_COUNTER_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let index = stack.last().copied().unwrap_or(0);
-        if let Some(last) = stack.last_mut() {
-            *last += 1;
-        }
-        let parent_id = INSTANCE_LOGIC_ID_STACK.with(|s| s.borrow().last().copied().unwrap_or(0));
-        (index, parent_id)
-    });
+    let parent_call_index = next_child_instance_call_index();
+    let parent_instance_logic_id =
+        INSTANCE_LOGIC_ID_STACK.with(|s| s.borrow().last().copied().unwrap_or(0));
 
-    // Combine component_type_id with parent_instance_logic_id and
-    // parent_call_index to create a stable instance logic id. This ensures:
+    let group_path_hash = current_group_path_hash();
+    let has_group_path = GROUP_PATH_STACK.with(|stack| !stack.borrow().is_empty());
+
+    // Combine component_type_id with parent_instance_logic_id, the current
+    // control-flow group path, and the call index local to that group. This
+    // ensures:
     // 1. foo(1) and foo(2) get different logic_ids (via parent_call_index)
-    // 2. Components in different container instances get different logic_ids (via
+    // 2. Components in different control-flow groups get different logic_ids even
+    //    when each group starts its local call index from zero
+    // 3. Components in different container instances get different logic_ids (via
     //    parent_instance_logic_id)
     let instance_salt = if let Some(key_hash) = current_instance_key_override() {
-        hash_components(&[&key_hash, &parent_call_index])
+        hash_components(&[&key_hash, &group_path_hash, &parent_call_index])
+    } else if has_group_path {
+        hash_components(&[&group_path_hash, &parent_call_index])
     } else {
         parent_call_index
     };
@@ -1324,6 +1354,7 @@ pub fn push_current_node(
         } else if parent_call_index == 0
             && parent_instance_logic_id == 0
             && current_instance_key_override().is_none()
+            && !has_group_path
         {
             component_type_id
         } else {
@@ -1336,17 +1367,7 @@ pub fn push_current_node(
 
     INSTANCE_LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
 
-    // Push a new call counter layer for this component's internal remember calls
-    CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
-
-    // Push a new call counter layer for this component's internal context providers
-    CONTEXT_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
-
-    // Push a new call counter layer for this component's child instance identity
-    INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
-
-    // Push a new call counter layer for frame-nanos receivers.
-    FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+    push_order_frame();
 
     #[cfg(feature = "profiling")]
     let profiling_guard = match current_phase() {
@@ -1384,19 +1405,10 @@ pub fn push_current_node_with_instance_logic_id(
         parent
     });
 
-    // Keep child call counters balanced with push/pop semantics even when we
-    // restore an explicit instance logic id.
-    INSTANCE_CALL_COUNTER_STACK.with(|stack| {
-        if let Some(last) = stack.borrow_mut().last_mut() {
-            *last += 1;
-        }
-    });
+    let _ = next_child_instance_call_index();
 
     INSTANCE_LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
-    CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
-    CONTEXT_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
-    INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
-    FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
+    push_order_frame();
 
     #[cfg(feature = "profiling")]
     let profiling_guard = match current_phase() {
@@ -1439,39 +1451,7 @@ fn pop_current_node() {
             "Attempted to pop current node from an empty stack"
         );
     });
-    // Pop this component's call counter layer
-    CALL_COUNTER_STACK.with(|stack| {
-        let popped = stack.borrow_mut().pop();
-        debug_assert!(
-            popped.is_some(),
-            "CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
-        );
-    });
-
-    // Pop this component's context call counter layer
-    CONTEXT_CALL_COUNTER_STACK.with(|stack| {
-        let popped = stack.borrow_mut().pop();
-        debug_assert!(
-            popped.is_some(),
-            "CONTEXT_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
-        );
-    });
-
-    INSTANCE_CALL_COUNTER_STACK.with(|stack| {
-        let popped = stack.borrow_mut().pop();
-        debug_assert!(
-            popped.is_some(),
-            "INSTANCE_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
-        );
-    });
-
-    FRAME_RECEIVER_CALL_COUNTER_STACK.with(|stack| {
-        let popped = stack.borrow_mut().pop();
-        debug_assert!(
-            popped.is_some(),
-            "FRAME_RECEIVER_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
-        );
-    });
+    pop_order_frame("ORDER_FRAME_STACK underflow: attempted to pop from empty stack");
 }
 
 /// Get the node id at the top of the thread-local component stack.
@@ -1576,11 +1556,38 @@ impl GroupGuard {
     /// Push a group id onto the current component's group stack.
     pub fn new(group_id: u64) -> Self {
         push_group_id(group_id);
+        push_order_frame();
         Self { group_id }
     }
 }
 
 impl Drop for GroupGuard {
+    fn drop(&mut self) {
+        pop_order_frame("ORDER_FRAME_STACK underflow: attempted to pop GroupGuard frame");
+        pop_group_id(self.group_id);
+    }
+}
+
+/// RAII guard for path-only control-flow groups, primarily used for loop
+/// bodies.
+///
+/// Unlike [`GroupGuard`], this guard does not create a new local order frame.
+/// Repeated iterations therefore continue consuming sibling call indices from
+/// the surrounding component scope instead of restarting from zero each time.
+pub struct PathGroupGuard {
+    group_id: u64,
+}
+
+impl PathGroupGuard {
+    /// Push a group id onto the current component's group stack without
+    /// resetting local call-order counters.
+    pub fn new(group_id: u64) -> Self {
+        push_group_id(group_id);
+        Self { group_id }
+    }
+}
+
+impl Drop for PathGroupGuard {
     fn drop(&mut self) {
         pop_group_id(self.group_id);
     }
@@ -1592,24 +1599,15 @@ pub struct InstanceKeyGuard {
 }
 
 impl InstanceKeyGuard {
-    /// Push a key hash for instance identity and reset the instance call
-    /// counter.
+    /// Push a key hash for instance identity.
     pub fn new(key_hash: u64) -> Self {
         INSTANCE_KEY_STACK.with(|stack| stack.borrow_mut().push(key_hash));
-        INSTANCE_CALL_COUNTER_STACK.with(|stack| stack.borrow_mut().push(0));
         Self { key_hash }
     }
 }
 
 impl Drop for InstanceKeyGuard {
     fn drop(&mut self) {
-        INSTANCE_CALL_COUNTER_STACK.with(|stack| {
-            let popped = stack.borrow_mut().pop();
-            debug_assert!(
-                popped.is_some(),
-                "INSTANCE_CALL_COUNTER_STACK underflow: attempted to pop from empty stack"
-            );
-        });
         INSTANCE_KEY_STACK.with(|stack| {
             let mut stack = stack.borrow_mut();
             let popped = stack.pop();
@@ -1639,20 +1637,10 @@ fn compute_slot_key<K: Hash>(key: &K) -> (u64, u64) {
     // component Note: instance_logic_id already distinguishes different component
     // instances (foo(1) vs foo(2)) and group_path_hash handles nested control
     // flow (if/loop)
-    let call_counter = CALL_COUNTER_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        debug_assert!(
-            !stack.is_empty(),
-            "CALL_COUNTER_STACK is empty; remember must be called inside a component"
-        );
-        let counter = *stack
-            .last()
-            .expect("CALL_COUNTER_STACK should not be empty");
-        *stack
-            .last_mut()
-            .expect("CALL_COUNTER_STACK should not be empty") += 1;
-        counter
-    });
+    let call_counter = next_order_counter(
+        OrderCounterKind::Remember,
+        "ORDER_FRAME_STACK is empty; remember must be called inside a component",
+    );
 
     let slot_hash = hash_components(&[&group_path_hash, &key_hash, &call_counter]);
     (instance_logic_id, slot_hash)
@@ -1666,7 +1654,7 @@ pub(crate) fn ensure_build_phase() {
         }
         Some(RuntimePhase::Input) => {
             panic!(
-                "remember must not be called inside input_handler; move state to component render"
+                "remember must not be called inside typed input handlers; move state to component render"
             )
         }
         None => panic!(
@@ -2091,6 +2079,15 @@ where
 mod tests {
     use super::*;
 
+    fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
+        let mut arena = crate::Arena::<()>::new();
+        let node_id = arena.new_node(());
+        let _phase_guard = push_phase(RuntimePhase::Build);
+        let _node_guard = push_current_node(node_id, component_type_id, "test_component");
+        let _instance_guard = push_current_component_instance_key(current_instance_key());
+        f()
+    }
+
     #[test]
     fn frame_receiver_uses_component_scope_instance_key() {
         let _instance_guard = push_current_component_instance_key(7);
@@ -2215,6 +2212,134 @@ mod tests {
         assert_eq!(current_group_path(), vec![5]);
         let restored_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
         assert_eq!(restored_override, None);
+    }
+
+    #[test]
+    fn group_local_remember_does_not_shift_following_slots() {
+        reset_slots();
+
+        begin_recompose_slot_epoch();
+        with_test_component_scope(1001, || {
+            let stable_state = remember(|| 1usize);
+            stable_state.set(41);
+        });
+
+        begin_recompose_slot_epoch();
+        with_test_component_scope(1001, || {
+            {
+                let _group_guard = GroupGuard::new(7);
+                let _branch_state = remember(|| 10usize);
+            }
+            let stable_state = remember(|| 1usize);
+            assert_eq!(stable_state.get(), 41);
+        });
+    }
+
+    #[test]
+    fn conditional_frame_receiver_does_not_shift_following_remember_slots() {
+        reset_slots();
+        reset_frame_clock();
+        begin_frame_clock(Instant::now());
+
+        begin_recompose_slot_epoch();
+        with_test_component_scope(1002, || {
+            let stable_state = remember(|| 1usize);
+            stable_state.set(99);
+        });
+
+        begin_recompose_slot_epoch();
+        with_test_component_scope(1002, || {
+            {
+                let _group_guard = GroupGuard::new(9);
+                receive_frame_nanos(|_| FrameNanosControl::Stop);
+            }
+            let stable_state = remember(|| 1usize);
+            assert_eq!(stable_state.get(), 99);
+        });
+    }
+
+    #[test]
+    fn group_local_child_identity_does_not_shift_following_siblings() {
+        fn stable_child_instance_logic_id(with_group_child: bool) -> u64 {
+            let mut arena = crate::Arena::<()>::new();
+            let root_node = arena.new_node(());
+            let stable_child_node = arena.new_node(());
+            let group_child_node = arena.new_node(());
+
+            let _phase_guard = push_phase(RuntimePhase::Build);
+            let _root_guard = push_current_node(root_node, 2001, "root_component");
+            let _root_instance_guard = push_current_component_instance_key(current_instance_key());
+
+            if with_group_child {
+                let _group_guard = GroupGuard::new(5);
+                let _group_child_guard =
+                    push_current_node(group_child_node, 2002, "group_child_component");
+                let _group_child_instance_guard =
+                    push_current_component_instance_key(current_instance_key());
+                let _ = current_instance_logic_id();
+            }
+
+            let _stable_child_guard =
+                push_current_node(stable_child_node, 2003, "stable_child_component");
+            current_instance_logic_id()
+        }
+
+        assert_eq!(
+            stable_child_instance_logic_id(false),
+            stable_child_instance_logic_id(true)
+        );
+    }
+
+    #[test]
+    fn child_components_in_different_groups_get_distinct_instance_logic_ids() {
+        let mut arena = crate::Arena::<()>::new();
+        let root_node = arena.new_node(());
+        let first_child_node = arena.new_node(());
+        let second_child_node = arena.new_node(());
+
+        let _phase_guard = push_phase(RuntimePhase::Build);
+        let _root_guard = push_current_node(root_node, 3001, "root_component");
+        let _root_instance_guard = push_current_component_instance_key(current_instance_key());
+
+        let first_id = {
+            let _group_guard = GroupGuard::new(11);
+            let _child_guard = push_current_node(first_child_node, 3002, "grouped_child");
+            current_instance_logic_id()
+        };
+
+        let second_id = {
+            let _group_guard = GroupGuard::new(12);
+            let _child_guard = push_current_node(second_child_node, 3002, "grouped_child");
+            current_instance_logic_id()
+        };
+
+        assert_ne!(first_id, second_id);
+    }
+
+    #[test]
+    fn child_components_in_repeated_path_groups_keep_distinct_instance_logic_ids() {
+        let mut arena = crate::Arena::<()>::new();
+        let root_node = arena.new_node(());
+        let first_child_node = arena.new_node(());
+        let second_child_node = arena.new_node(());
+
+        let _phase_guard = push_phase(RuntimePhase::Build);
+        let _root_guard = push_current_node(root_node, 4001, "root_component");
+        let _root_instance_guard = push_current_component_instance_key(current_instance_key());
+
+        let first_id = {
+            let _group_guard = PathGroupGuard::new(21);
+            let _child_guard = push_current_node(first_child_node, 4002, "loop_child");
+            current_instance_logic_id()
+        };
+
+        let second_id = {
+            let _group_guard = PathGroupGuard::new(21);
+            let _child_guard = push_current_node(second_child_node, 4002, "loop_child");
+            current_instance_logic_id()
+        };
+
+        assert_ne!(first_id, second_id);
     }
 
     #[test]

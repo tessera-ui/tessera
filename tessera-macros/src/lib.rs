@@ -377,7 +377,13 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
                         component_type_id: __tessera_component_type_id,
                         instance_logic_id: 0,
                         instance_key: 0,
-                        input_handler_fn: None,
+                        pointer_preview_handler_fn: None,
+                        pointer_handler_fn: None,
+                        pointer_final_handler_fn: None,
+                        keyboard_preview_handler_fn: None,
+                        keyboard_handler_fn: None,
+                        ime_preview_handler_fn: None,
+                        ime_handler_fn: None,
                         layout_spec: Box::new(DefaultLayoutSpec::default()),
                         replay: None,
                         props_unchanged_from_previous: false,
@@ -520,15 +526,15 @@ fn layout_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     }
 }
 
-/// Helper: tokens to inject `input_handler`
+/// Helper: tokens to inject typed input handlers.
 fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
     quote! {
         #[allow(clippy::needless_pass_by_value)]
-        fn input_handler<F>(fun: F)
+        fn pointer_preview_input_handler<F>(fun: F)
         where
-            F: Fn(#crate_path::InputHandlerInput) + Send + Sync + 'static,
+            F: Fn(#crate_path::PointerInput) + Send + Sync + 'static,
         {
-            use #crate_path::InputHandlerFn;
+            use #crate_path::PointerInputHandlerFn;
             use #crate_path::runtime::TesseraRuntime;
 
             TesseraRuntime::with_mut(|runtime| {
@@ -536,7 +542,109 @@ fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStre
                     .component_tree
                     .current_node_mut()
                     .unwrap()
-                    .input_handler_fn = Some(Box::new(fun) as Box<InputHandlerFn>)
+                    .pointer_preview_handler_fn = Some(Box::new(fun) as Box<PointerInputHandlerFn>)
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn pointer_input_handler<F>(fun: F)
+        where
+            F: Fn(#crate_path::PointerInput) + Send + Sync + 'static,
+        {
+            use #crate_path::PointerInputHandlerFn;
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .current_node_mut()
+                    .unwrap()
+                    .pointer_handler_fn = Some(Box::new(fun) as Box<PointerInputHandlerFn>)
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn pointer_final_input_handler<F>(fun: F)
+        where
+            F: Fn(#crate_path::PointerInput) + Send + Sync + 'static,
+        {
+            use #crate_path::PointerInputHandlerFn;
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .current_node_mut()
+                    .unwrap()
+                    .pointer_final_handler_fn = Some(Box::new(fun) as Box<PointerInputHandlerFn>)
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn keyboard_preview_input_handler<F>(fun: F)
+        where
+            F: Fn(#crate_path::KeyboardInput) + Send + Sync + 'static,
+        {
+            use #crate_path::KeyboardInputHandlerFn;
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .current_node_mut()
+                    .unwrap()
+                    .keyboard_preview_handler_fn = Some(Box::new(fun) as Box<KeyboardInputHandlerFn>)
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn keyboard_input_handler<F>(fun: F)
+        where
+            F: Fn(#crate_path::KeyboardInput) + Send + Sync + 'static,
+        {
+            use #crate_path::KeyboardInputHandlerFn;
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .current_node_mut()
+                    .unwrap()
+                    .keyboard_handler_fn = Some(Box::new(fun) as Box<KeyboardInputHandlerFn>)
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn ime_preview_input_handler<F>(fun: F)
+        where
+            F: Fn(#crate_path::ImeInput) + Send + Sync + 'static,
+        {
+            use #crate_path::ImeInputHandlerFn;
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .current_node_mut()
+                    .unwrap()
+                    .ime_preview_handler_fn = Some(Box::new(fun) as Box<ImeInputHandlerFn>)
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn ime_input_handler<F>(fun: F)
+        where
+            F: Fn(#crate_path::ImeInput) + Send + Sync + 'static,
+        {
+            use #crate_path::ImeInputHandlerFn;
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .current_node_mut()
+                    .unwrap()
+                    .ime_handler_fn = Some(Box::new(fun) as Box<ImeInputHandlerFn>)
             });
         }
     }
@@ -1031,6 +1139,23 @@ impl ControlFlowInstrumenter {
 
         *block = new_block;
     }
+
+    /// Wrap a block in a path-only group block.
+    fn wrap_block_in_path_group(&mut self, block: &mut Block) {
+        self.visit_block_mut(block);
+
+        let group_id = self.next_group_id();
+        let original_stmts = &block.stmts;
+
+        let new_block: Block = parse_quote! {
+            {
+                let _group_guard = ::tessera_ui::runtime::PathGroupGuard::new(#group_id);
+                #(#original_stmts)*
+            }
+        };
+
+        *block = new_block;
+    }
 }
 
 impl VisitMut for ControlFlowInstrumenter {
@@ -1061,16 +1186,16 @@ impl VisitMut for ControlFlowInstrumenter {
 
     fn visit_expr_for_loop_mut(&mut self, f: &mut syn::ExprForLoop) {
         self.visit_expr_mut(&mut f.expr);
-        self.wrap_block_in_group(&mut f.body);
+        self.wrap_block_in_path_group(&mut f.body);
     }
 
     fn visit_expr_while_mut(&mut self, w: &mut syn::ExprWhile) {
         self.visit_expr_mut(&mut w.cond);
-        self.wrap_block_in_group(&mut w.body);
+        self.wrap_block_in_path_group(&mut w.body);
     }
 
     fn visit_expr_loop_mut(&mut self, l: &mut syn::ExprLoop) {
-        self.wrap_block_in_group(&mut l.body);
+        self.wrap_block_in_path_group(&mut l.body);
     }
 }
 
