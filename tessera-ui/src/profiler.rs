@@ -294,7 +294,10 @@ pub struct RuntimeMeta {
 /// ```json
 /// {"type":"frame","frame":1,"build_mode":"root_recompose","redraw_reasons":["startup"],"render_time_ns":1000000,"frame_total_ns":2000000,"components":[{"id":"1","fn_name":"root","abs_pos":{"x":0,"y":0},"size":{"w":100,"h":50},"layout_cache_hit":true,"phases":{"build_ns":5000},"children":[]}]}
 /// ```
-
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Profiler messages are forwarded to a worker thread, and keeping payloads inline avoids an extra heap allocation per event."
+)]
 enum Message {
     Sample(Sample),
     FrameMeta(FrameMeta),
@@ -477,6 +480,10 @@ impl FrameHeader {
 /// Profiler output event stream record.
 #[derive(Serialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
+#[expect(
+    clippy::large_enum_variant,
+    reason = "Profiler events are serialized immediately, and boxing the frame variant would only add allocation churn in profiling mode."
+)]
 enum TraceEvent {
     Frame(FrameEventRecord),
     Wake(WakeEventRecord),

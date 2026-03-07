@@ -3,10 +3,12 @@
 //! ## Usage
 //!
 //! Use for visually distinctive actions in layered or modern UIs.
-use tessera_ui::{Callback, Color, Dp, Modifier, Prop, RenderSlot, tessera};
+use tessera_ui::{Callback, Color, DimensionValue, Dp, Modifier, Prop, RenderSlot, tessera};
 
 use crate::{
+    button::ButtonDefaults,
     fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
+    modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
 };
 
@@ -199,49 +201,62 @@ impl GlassButtonArgs {
 #[tessera]
 pub fn glass_button(args: &GlassButtonArgs) {
     let button_args = args.clone();
-
-    let mut glass_args = FluidGlassArgs::default();
-    if let Some(contrast) = button_args.contrast {
-        glass_args = glass_args.contrast(contrast);
-    }
-
-    let mut glass_args = glass_args
-        .modifier(button_args.modifier)
-        .tint_color(button_args.tint_color)
-        .shape(button_args.shape)
-        .blur_radius(button_args.blur_radius)
-        .dispersion_height(button_args.dispersion_height)
-        .chroma_multiplier(button_args.chroma_multiplier)
-        .refraction_height(button_args.refraction_height)
-        .refraction_amount(button_args.refraction_amount)
-        .noise_amount(button_args.noise_amount)
-        .noise_scale(button_args.noise_scale)
-        .time(button_args.time)
-        .padding(button_args.padding);
-
-    if let Some(on_click) = button_args.on_click {
-        glass_args = glass_args.on_click_shared(on_click);
-    }
-
-    if let Some(border) = button_args.border {
-        glass_args = glass_args.border(border);
-    }
-
-    if let Some(label) = button_args.accessibility_label {
-        glass_args = glass_args.accessibility_label(label);
-    }
-
-    if let Some(description) = button_args.accessibility_description {
-        glass_args = glass_args.accessibility_description(description);
-    }
-
-    if button_args.accessibility_focusable {
-        glass_args = glass_args.accessibility_focusable(true);
-    }
-
     let child = button_args.child.clone();
-    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-        &glass_args,
-        move || child.render(),
-    ));
+    let outer_modifier = button_args
+        .modifier
+        .clone()
+        .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
+        .size_in(
+            Some(ButtonDefaults::MIN_WIDTH),
+            None,
+            Some(ButtonDefaults::MIN_HEIGHT),
+            None,
+        );
+
+    outer_modifier.run(move || {
+        let mut glass_args = FluidGlassArgs::default();
+        if let Some(contrast) = button_args.contrast {
+            glass_args = glass_args.contrast(contrast);
+        }
+
+        let mut glass_args = glass_args
+            .modifier(Modifier::new())
+            .tint_color(button_args.tint_color)
+            .shape(button_args.shape)
+            .blur_radius(button_args.blur_radius)
+            .dispersion_height(button_args.dispersion_height)
+            .chroma_multiplier(button_args.chroma_multiplier)
+            .refraction_height(button_args.refraction_height)
+            .refraction_amount(button_args.refraction_amount)
+            .noise_amount(button_args.noise_amount)
+            .noise_scale(button_args.noise_scale)
+            .time(button_args.time)
+            .padding(button_args.padding);
+
+        if let Some(on_click) = button_args.on_click.clone() {
+            glass_args = glass_args.on_click_shared(on_click);
+        }
+
+        if let Some(border) = button_args.border {
+            glass_args = glass_args.border(border);
+        }
+
+        if let Some(label) = button_args.accessibility_label.clone() {
+            glass_args = glass_args.accessibility_label(label);
+        }
+
+        if let Some(description) = button_args.accessibility_description.clone() {
+            glass_args = glass_args.accessibility_description(description);
+        }
+
+        if button_args.accessibility_focusable {
+            glass_args = glass_args.accessibility_focusable(true);
+        }
+
+        let child = child.clone();
+        fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
+            &glass_args,
+            move || child.render(),
+        ));
+    });
 }
