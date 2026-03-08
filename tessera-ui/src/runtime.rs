@@ -285,6 +285,7 @@ pub(crate) struct ReplayNodeSnapshot {
     pub parent_instance_key: Option<u64>,
     pub instance_logic_id: u64,
     pub group_path: Vec<u64>,
+    pub instance_key_override: Option<u64>,
     pub fn_name: String,
     pub replay: ComponentReplayData,
 }
@@ -407,14 +408,17 @@ fn take_next_node_instance_logic_id_override() -> Option<u64> {
 ///
 /// The replay scope restores:
 /// - the control-flow group path active at the original call site
+/// - the keyed-instance override active at the original call site
 /// - a one-shot instance-logic-id override for the replayed component root
 pub(crate) fn with_replay_scope<R>(
     instance_logic_id: u64,
     group_path: &[u64],
+    instance_key_override: Option<u64>,
     f: impl FnOnce() -> R,
 ) -> R {
     struct ReplayScopeGuard {
         previous_group_path: Option<Vec<u64>>,
+        previous_instance_key_stack: Option<Vec<u64>>,
         previous_instance_logic_id_override: Option<Option<u64>>,
     }
 
@@ -423,6 +427,11 @@ pub(crate) fn with_replay_scope<R>(
             if let Some(previous_group_path) = self.previous_group_path.take() {
                 GROUP_PATH_STACK.with(|stack| {
                     *stack.borrow_mut() = previous_group_path;
+                });
+            }
+            if let Some(previous_instance_key_stack) = self.previous_instance_key_stack.take() {
+                INSTANCE_KEY_STACK.with(|stack| {
+                    *stack.borrow_mut() = previous_instance_key_stack;
                 });
             }
             if let Some(previous_instance_logic_id_override) =
@@ -439,12 +448,18 @@ pub(crate) fn with_replay_scope<R>(
         let mut stack = stack.borrow_mut();
         std::mem::replace(&mut *stack, group_path.to_vec())
     });
+    let previous_instance_key_stack = INSTANCE_KEY_STACK.with(|stack| {
+        let mut stack = stack.borrow_mut();
+        let next_stack = instance_key_override.into_iter().collect::<Vec<_>>();
+        std::mem::replace(&mut *stack, next_stack)
+    });
     let previous_instance_logic_id_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
         let mut slot = slot.borrow_mut();
         (*slot).replace(instance_logic_id)
     });
     let _guard = ReplayScopeGuard {
         previous_group_path: Some(previous_group_path),
+        previous_instance_key_stack: Some(previous_instance_key_stack),
         previous_instance_logic_id_override: Some(previous_instance_logic_id_override),
     };
 
@@ -867,6 +882,7 @@ fn record_component_replay_snapshot(runtime: &TesseraRuntime, node_id: NodeId) {
         parent_instance_key,
         instance_logic_id: node.instance_logic_id,
         group_path: current_group_path(),
+        instance_key_override: current_instance_key_override(),
         fn_name: node.fn_name.clone(),
         replay,
     };
@@ -2177,17 +2193,22 @@ mod tests {
         GROUP_PATH_STACK.with(|stack| {
             *stack.borrow_mut() = vec![1, 2, 3];
         });
+        INSTANCE_KEY_STACK.with(|stack| {
+            *stack.borrow_mut() = vec![5];
+        });
         NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
             *slot.borrow_mut() = Some(9);
         });
 
-        with_replay_scope(42, &[7, 8], || {
+        with_replay_scope(42, &[7, 8], Some(11), || {
             assert_eq!(current_group_path(), vec![7, 8]);
+            assert_eq!(current_instance_key_override(), Some(11));
             assert_eq!(take_next_node_instance_logic_id_override(), Some(42));
             assert_eq!(take_next_node_instance_logic_id_override(), None);
         });
 
         assert_eq!(current_group_path(), vec![1, 2, 3]);
+        assert_eq!(current_instance_key_override(), Some(5));
         let restored_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
         assert_eq!(restored_override, Some(9));
     }
@@ -2197,19 +2218,24 @@ mod tests {
         GROUP_PATH_STACK.with(|stack| {
             *stack.borrow_mut() = vec![5];
         });
+        INSTANCE_KEY_STACK.with(|stack| {
+            *stack.borrow_mut() = vec![13];
+        });
         NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
             *slot.borrow_mut() = None;
         });
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            with_replay_scope(77, &[10], || {
+            with_replay_scope(77, &[10], Some(17), || {
                 assert_eq!(current_group_path(), vec![10]);
+                assert_eq!(current_instance_key_override(), Some(17));
                 panic!("expected panic");
             });
         }));
         assert!(result.is_err());
 
         assert_eq!(current_group_path(), vec![5]);
+        assert_eq!(current_instance_key_override(), Some(13));
         let restored_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
         assert_eq!(restored_override, None);
     }

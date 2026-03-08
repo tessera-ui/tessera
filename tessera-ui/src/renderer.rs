@@ -1148,6 +1148,7 @@ impl<F: Fn()> Renderer<F> {
                     let replay = replay_snapshot.replay.clone();
                     let replay_instance_logic_id = replay_snapshot.instance_logic_id;
                     let replay_group_path = replay_snapshot.group_path.clone();
+                    let replay_instance_key_override = replay_snapshot.instance_key_override;
 
                     let replace_context = TesseraRuntime::with_mut(|runtime| {
                         runtime
@@ -1168,9 +1169,14 @@ impl<F: Fn()> Renderer<F> {
                     };
 
                     with_context_snapshot(context_snapshot, || {
-                        with_replay_scope(replay_instance_logic_id, &replay_group_path, || {
-                            replay.runner.run(replay.props.as_ref());
-                        });
+                        with_replay_scope(
+                            replay_instance_logic_id,
+                            &replay_group_path,
+                            replay_instance_key_override,
+                            || {
+                                replay.runner.run(replay.props.as_ref());
+                            },
+                        );
                     });
 
                     let replace_result = TesseraRuntime::with_mut(|runtime| {
