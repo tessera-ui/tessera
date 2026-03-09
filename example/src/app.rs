@@ -790,27 +790,10 @@ fn home_screen(args: &HomeArgs) {
         },
     ));
 }
-#[derive(Clone, Prop)]
-struct ComponentCardArgs {
-    title: String,
-    description: String,
-    on_click: Callback,
-}
-
 fn component_card(title: &str, description: &str, on_click: impl Into<Callback>) {
-    let args = ComponentCardArgs {
-        title: title.to_string(),
-        description: description.to_string(),
-        on_click: on_click.into(),
-    };
-    component_card_tile(&args);
-}
-
-#[tessera]
-fn component_card_tile(args: &ComponentCardArgs) {
-    let on_click = args.on_click.clone();
-    let title = args.title.clone();
-    let description = args.description.clone();
+    let on_click = on_click.into();
+    let title = title.to_string();
+    let description = description.to_string();
 
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
@@ -858,37 +841,18 @@ fn component_card_tile(args: &ComponentCardArgs) {
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[derive(Clone, Prop)]
-struct WindowControlButtonArgs {
-    icon_args: IconArgs,
-    action: tessera_ui::WindowAction,
-    tint: Color,
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
 fn window_control_button(icon_args: IconArgs, action: tessera_ui::WindowAction, tint: Color) {
-    let args = WindowControlButtonArgs {
-        icon_args,
-        action,
-        tint,
-    };
-    window_control_button_surface(&args);
-}
-
-#[cfg(not(any(target_os = "android", target_os = "ios")))]
-#[tessera]
-fn window_control_button_surface(args: &WindowControlButtonArgs) {
-    let icon_args = args.icon_args.clone().size(Dp(18.0)).tint(args.tint);
+    let icon_args = icon_args.size(Dp(18.0)).tint(tint);
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(
                 Modifier::new()
                     .size(Dp(40.0), Dp(32.0))
-                    .window_action(args.action),
+                    .window_action(action),
             )
             .style(Color::TRANSPARENT.into())
-            .content_color(args.tint)
+            .content_color(tint)
             .content_alignment(tessera_components::alignment::Alignment::Center),
         move || {
             icon(&icon_args);

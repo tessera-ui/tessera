@@ -555,7 +555,7 @@ pub(crate) fn clear_redraw_waker() {
     *redraw_waker().write() = None;
 }
 
-fn current_component_instance_key_from_scope() -> Option<u64> {
+pub(crate) fn current_component_instance_key_from_scope() -> Option<u64> {
     CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| stack.borrow().last().copied())
 }
 
@@ -759,10 +759,6 @@ pub(crate) fn is_instance_key_build_dirty(instance_key: u64) -> bool {
             .last()
             .is_some_and(|dirty_instance_keys| dirty_instance_keys.contains(&instance_key))
     })
-}
-
-pub(crate) fn current_component_instance_key_in_scope() -> Option<u64> {
-    current_component_instance_key_from_scope()
 }
 
 pub(crate) fn record_component_invalidation_for_instance_key(instance_key: u64) {
@@ -1067,10 +1063,6 @@ fn ensure_frame_receive_phase() {
     }
 }
 
-fn current_component_instance_key_for_receiver() -> Option<u64> {
-    current_component_instance_key_from_scope()
-}
-
 fn compute_frame_nanos_receiver_key() -> FrameNanosReceiverKey {
     let instance_logic_id = current_instance_logic_id();
     let group_path_hash = current_group_path_hash();
@@ -1100,7 +1092,7 @@ where
     let frame_nanos_state = remember(current_frame_nanos);
     let _ = frame_nanos_state.get();
 
-    let owner_instance_key = current_component_instance_key_for_receiver()
+    let owner_instance_key = current_component_instance_key_from_scope()
         .unwrap_or_else(|| panic!("receive_frame_nanos requires an active component node context"));
     let key = compute_frame_nanos_receiver_key();
 
@@ -2689,7 +2681,7 @@ mod tests {
     #[test]
     fn frame_receiver_uses_component_scope_instance_key() {
         let _instance_guard = push_current_component_instance_key(7);
-        assert_eq!(current_component_instance_key_for_receiver(), Some(7));
+        assert_eq!(current_component_instance_key_from_scope(), Some(7));
     }
 
     #[test]

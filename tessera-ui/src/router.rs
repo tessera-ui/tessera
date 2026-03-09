@@ -18,7 +18,7 @@ pub use tessera_shard::router::RouterDestination;
 
 use crate::{
     context::{context_from_previous_snapshot_for_instance, provide_context, use_context},
-    runtime::{RuntimePhase, current_component_instance_key_in_scope, current_phase, remember},
+    runtime::{RuntimePhase, current_component_instance_key_from_scope, current_phase, remember},
 };
 
 #[derive(Clone, Copy)]
@@ -34,7 +34,7 @@ fn resolve_router_state() -> crate::State<ShardRouter> {
             context.get().state
         }
         Some(RuntimePhase::Input) => {
-            let instance_key = current_component_instance_key_in_scope()
+            let instance_key = current_component_instance_key_from_scope()
                 .expect("Router command requires an active component scope during input handling");
             let context = context_from_previous_snapshot_for_instance::<RouterContext>(
                 instance_key,

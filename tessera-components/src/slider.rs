@@ -819,13 +819,9 @@ pub fn slider(args: &SliderArgs) {
     let controller = args
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
-    slider_render(args, controller);
-}
-
-fn slider_render(slider_args: SliderArgs, controller: State<SliderController>) {
-    let modifier = slider_args.modifier.clone();
+    let modifier = args.modifier.clone();
     modifier.run(move || {
-        let mut inner_args = slider_args.clone();
+        let mut inner_args = args.clone();
         inner_args.controller = Some(controller);
         slider_inner(&inner_args);
     });
@@ -1484,10 +1480,6 @@ pub fn range_slider(args: &RangeSliderArgs) {
     let state = args
         .controller
         .unwrap_or_else(|| remember(RangeSliderController::new));
-    range_slider_render(args, state);
-}
-
-fn range_slider_render(args: RangeSliderArgs, state: State<RangeSliderController>) {
     let modifier = args.modifier.clone();
     modifier.run(move || {
         let mut inner_args = args.clone();

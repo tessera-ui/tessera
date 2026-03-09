@@ -177,37 +177,30 @@ pub fn glass_progress(args: &GlassProgressArgs) {
     let modifier = args.modifier.clone();
 
     modifier.run(move || {
-        let inner_args = args.clone();
-        glass_progress_inner(&inner_args);
+        let effective_height = Dp((args.height.0 - (args.track_border_width.0 * 2.0)).max(0.0));
+        let fill_shape = capsule_shape_for_height(effective_height);
+
+        fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
+            FluidGlassArgs::default()
+                .tint_color(args.track_tint_color)
+                .blur_radius(args.blur_radius)
+                .shape(capsule_shape_for_height(args.height))
+                .border(GlassBorder::new(args.track_border_width.into()))
+                .padding(args.track_border_width),
+            move || {
+                let fill_args = GlassProgressFillArgs {
+                    value: args.value,
+                    tint_color: args.progress_tint_color,
+                    blur_radius: args.blur_radius,
+                    shape: fill_shape,
+                };
+                glass_progress_fill(&fill_args);
+            },
+        ));
+
+        let height = args.height.to_px();
+        layout(GlassProgressLayout { height });
     });
-}
-
-#[tessera]
-fn glass_progress_inner(args: &GlassProgressArgs) {
-    let args = args.clone();
-    let effective_height = Dp((args.height.0 - (args.track_border_width.0 * 2.0)).max(0.0));
-    let fill_shape = capsule_shape_for_height(effective_height);
-
-    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-        FluidGlassArgs::default()
-            .tint_color(args.track_tint_color)
-            .blur_radius(args.blur_radius)
-            .shape(capsule_shape_for_height(args.height))
-            .border(GlassBorder::new(args.track_border_width.into()))
-            .padding(args.track_border_width),
-        move || {
-            let fill_args = GlassProgressFillArgs {
-                value: args.value,
-                tint_color: args.progress_tint_color,
-                blur_radius: args.blur_radius,
-                shape: fill_shape,
-            };
-            glass_progress_fill(&fill_args);
-        },
-    ));
-
-    let height = args.height.to_px();
-    layout(GlassProgressLayout { height });
 }
 
 #[derive(Clone, Copy, PartialEq)]

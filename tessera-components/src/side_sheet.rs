@@ -393,15 +393,6 @@ fn render_modal_scrim(on_close_request: Callback, progress: f32, is_open: bool) 
     ));
 }
 
-fn render_standard_scrim() {
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .style(Color::TRANSPARENT.into())
-            .modifier(Modifier::new().fill_max_size()),
-        || {},
-    ));
-}
-
 /// Render scrim according to configured type.
 fn render_scrim(
     sheet_type: SideSheetType,
@@ -411,7 +402,12 @@ fn render_scrim(
 ) {
     match sheet_type {
         SideSheetType::Modal => render_modal_scrim(on_close_request, progress, is_open),
-        SideSheetType::Standard => render_standard_scrim(),
+        SideSheetType::Standard => surface(&crate::surface::SurfaceArgs::with_child(
+            SurfaceArgs::default()
+                .style(Color::TRANSPARENT.into())
+                .modifier(Modifier::new().fill_max_size()),
+            || {},
+        )),
     }
 }
 

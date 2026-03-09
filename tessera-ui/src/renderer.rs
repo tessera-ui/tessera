@@ -1036,11 +1036,6 @@ impl<F: Fn()> Renderer<F> {
         })
     }
 
-    #[cfg(feature = "profiling")]
-    fn component_tree_node_count() -> u64 {
-        TesseraRuntime::with(|runtime| runtime.component_tree.tree().count() as u64)
-    }
-
     /// Build the component tree only when invalidated.
     #[instrument(level = "debug", skip(entry_point))]
     fn build_component_tree(entry_point: &F) -> BuildTreeResult {
@@ -1132,7 +1127,8 @@ impl<F: Fn()> Renderer<F> {
                 #[cfg(feature = "profiling")]
                 let mut replayed_nodes = 0_u64;
                 #[cfg(feature = "profiling")]
-                let total_nodes_before_build = Self::component_tree_node_count();
+                let total_nodes_before_build =
+                    TesseraRuntime::with(|runtime| runtime.component_tree.tree().count() as u64);
 
                 for instance_key in &dirty_roots {
                     #[cfg(feature = "profiling")]

@@ -353,7 +353,10 @@ enum SearchBarLayoutKind {
 #[tessera]
 pub fn search_bar(args: &SearchBarArgs) {
     let render_args = build_search_bar_render_args(args.clone(), SearchBarLayoutKind::FullScreen);
-    search_bar_render(render_args);
+    let modifier = render_args.modifier.clone();
+    modifier.run(move || {
+        search_bar_inner(&render_args);
+    });
 }
 
 /// # docked_search_bar
@@ -394,7 +397,10 @@ pub fn search_bar(args: &SearchBarArgs) {
 #[tessera]
 pub fn docked_search_bar(args: &SearchBarArgs) {
     let render_args = build_search_bar_render_args(args.clone(), SearchBarLayoutKind::Docked);
-    search_bar_render(render_args);
+    let modifier = render_args.modifier.clone();
+    modifier.run(move || {
+        search_bar_inner(&render_args);
+    });
 }
 
 fn build_search_bar_render_args(
@@ -434,13 +440,6 @@ fn build_search_bar_render_args(
         controller,
         content,
     }
-}
-
-fn search_bar_render(args: SearchBarRenderArgs) {
-    let modifier = args.modifier.clone();
-    modifier.run(move || {
-        search_bar_inner(&args);
-    });
 }
 
 #[derive(Clone, Prop)]

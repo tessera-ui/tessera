@@ -16,8 +16,8 @@ use parking_lot::RwLock;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::runtime::{
-    RuntimePhase, compute_context_slot_key, current_component_instance_key_in_scope, current_phase,
-    ensure_build_phase, record_component_invalidation_for_instance_key,
+    RuntimePhase, compute_context_slot_key, current_component_instance_key_from_scope,
+    current_phase, ensure_build_phase, record_component_invalidation_for_instance_key,
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -265,7 +265,7 @@ fn track_context_read_dependency(slot: u32, generation: u64) {
     if !matches!(current_phase(), Some(RuntimePhase::Build)) {
         return;
     }
-    let Some(reader_instance_key) = current_component_instance_key_in_scope() else {
+    let Some(reader_instance_key) = current_component_instance_key_from_scope() else {
         return;
     };
 
