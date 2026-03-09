@@ -340,7 +340,7 @@ mod cursor;
 pub mod dp;
 pub mod entry_point;
 pub mod entry_registry;
-pub mod focus_state;
+pub mod focus;
 mod ime_state;
 mod keyboard_state;
 pub mod layout;
@@ -389,9 +389,12 @@ pub use crate::{
     dp::Dp,
     entry_point::EntryPoint,
     entry_registry::{EntryRegistry, TesseraPackage},
-    focus_state::Focus,
+    focus::{
+        FocusDirection, FocusGroupNode, FocusManager, FocusNode, FocusProperties, FocusRequester,
+        FocusScopeNode, FocusState, FocusTraversalPolicy, FocusTraversalStrategy,
+    },
     layout::{DefaultLayoutSpec, LayoutInput, LayoutOutput, LayoutResult, LayoutSpec, RenderInput},
-    modifier::{Modifier, ModifierChild, ModifierWrapper},
+    modifier::{FocusModifierExt, Modifier, ModifierChild, ModifierWrapper},
     pipeline_context::PipelineContext,
     plugin::{
         Plugin, PluginContext, PluginResult, register_plugin, register_plugin_boxed, with_plugin,
@@ -433,3 +436,6 @@ pub use tessera_shard;
 
 #[cfg(target_os = "android")]
 pub use {jni, ndk_context, ndk_sys};
+
+/// Backward-compatible alias for the primary focus requester handle.
+pub type Focus = FocusRequester;

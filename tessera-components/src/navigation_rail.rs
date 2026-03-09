@@ -6,11 +6,12 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Prop, Px, PxPosition, PxSize, RenderSlot, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusTraversalPolicy,
+    MeasurementError, Modifier, Prop, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -691,78 +692,89 @@ fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
     let indicator_start_width =
         Dp((container_width.0 - ITEM_HORIZONTAL_PADDING.0 * 2.0).max(INDICATOR_TOP_WIDTH.0));
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().fill_max_height().width(container_width))
-            .style(scheme.surface.into())
-            .block_input(true),
-        move || {
+    Modifier::new()
+        .focus_group()
+        .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true))
+        .run({
             let header = header.clone();
             let items = items.clone();
-            column(
-                &ColumnArgs::default()
-                    .modifier(Modifier::new().fill_max_size().padding(Padding::new(
-                        Dp::ZERO,
-                        TOP_PADDING,
-                        Dp::ZERO,
-                        Dp::ZERO,
-                    )))
-                    .main_axis_alignment(MainAxisAlignment::Start)
-                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                    .children(move |column_scope| {
-                        if let Some(header) = header.clone() {
-                            column_scope.child(move || {
-                                let header = header.clone();
-                                row(&RowArgs::default()
-                                    .modifier(Modifier::new().padding(Padding::new(
-                                        ITEM_HORIZONTAL_PADDING,
-                                        Dp::ZERO,
-                                        Dp::ZERO,
-                                        Dp::ZERO,
-                                    )))
-                                    .children(move |row_scope| {
-                                        row_scope.child(move || {
-                                            header.render();
+            move || {
+                let header_for_surface = header.clone();
+                let items_for_surface = items.clone();
+                surface(&crate::surface::SurfaceArgs::with_child(
+                    SurfaceArgs::default()
+                        .modifier(Modifier::new().fill_max_height().width(container_width))
+                        .style(scheme.surface.into())
+                        .block_input(true),
+                    move || {
+                        let header = header_for_surface.clone();
+                        let items = items_for_surface.clone();
+                        column(
+                            &ColumnArgs::default()
+                                .modifier(Modifier::new().fill_max_size().padding(Padding::new(
+                                    Dp::ZERO,
+                                    TOP_PADDING,
+                                    Dp::ZERO,
+                                    Dp::ZERO,
+                                )))
+                                .main_axis_alignment(MainAxisAlignment::Start)
+                                .cross_axis_alignment(CrossAxisAlignment::Start)
+                                .children(move |column_scope| {
+                                    if let Some(header) = header.clone() {
+                                        column_scope.child(move || {
+                                            let header = header.clone();
+                                            row(&RowArgs::default()
+                                                .modifier(Modifier::new().padding(Padding::new(
+                                                    ITEM_HORIZONTAL_PADDING,
+                                                    Dp::ZERO,
+                                                    Dp::ZERO,
+                                                    Dp::ZERO,
+                                                )))
+                                                .children(move |row_scope| {
+                                                    row_scope.child(move || {
+                                                        header.render();
+                                                    });
+                                                }));
                                         });
-                                    }));
-                            });
-                            column_scope.child(move || {
-                                spacer(&crate::spacer::SpacerArgs::new(
-                                    Modifier::new().height(HEADER_BOTTOM_PADDING),
-                                ));
-                            });
-                        }
+                                        column_scope.child(move || {
+                                            spacer(&crate::spacer::SpacerArgs::new(
+                                                Modifier::new().height(HEADER_BOTTOM_PADDING),
+                                            ));
+                                        });
+                                    }
 
-                        let last_index = items.len().saturating_sub(1);
-                        for (index, item) in items.iter().cloned().enumerate() {
-                            column_scope.child(move || {
-                                let item_args = NavigationRailItemArgs {
-                                    controller,
-                                    index,
-                                    item: item.clone(),
-                                    selected_index,
-                                    previous_index,
-                                    selection_progress,
-                                    icon_position,
-                                    indicator_start_width,
-                                    item_min_height,
-                                };
-                                navigation_rail_item_node(&item_args);
-                            });
+                                    let last_index = items.len().saturating_sub(1);
+                                    for (index, item) in items.iter().cloned().enumerate() {
+                                        column_scope.child(move || {
+                                            let item_args = NavigationRailItemArgs {
+                                                controller,
+                                                index,
+                                                item: item.clone(),
+                                                selected_index,
+                                                previous_index,
+                                                selection_progress,
+                                                icon_position,
+                                                indicator_start_width,
+                                                item_min_height,
+                                            };
+                                            navigation_rail_item_node(&item_args);
+                                        });
 
-                            if index != last_index && item_spacing.0 > 0.0 {
-                                let spacing = item_spacing;
-                                column_scope.child(move || {
-                                    spacer(&crate::spacer::SpacerArgs::new(
-                                        Modifier::new().height(spacing),
-                                    ));
-                                });
-                            }
-                        }
-                    }),
-            );
-        },
-    ));
+                                        if index != last_index && item_spacing.0 > 0.0 {
+                                            let spacing = item_spacing;
+                                            column_scope.child(move || {
+                                                spacer(&crate::spacer::SpacerArgs::new(
+                                                    Modifier::new().height(spacing),
+                                                ));
+                                            });
+                                        }
+                                    }
+                                }),
+                        );
+                    },
+                ));
+            }
+        });
 }
 
 /// Controller for the `navigation_rail` component.

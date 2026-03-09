@@ -7,10 +7,12 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Callback, Color, ComputedData, DimensionValue, Dp, MeasurementError, Modifier,
-    ParentConstraint, Prop, Px, PxPosition, PxSize, RenderSlot, Slot, State,
+    Callback, Color, ComputedData, DimensionValue, Dp, FocusRequester, FocusTraversalPolicy,
+    MeasurementError, Modifier, ParentConstraint, Prop, Px, PxPosition, PxSize, RenderSlot, Slot,
+    State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    modifier::FocusModifierExt as _,
     remember, tessera, use_context, winit,
 };
 
@@ -106,7 +108,7 @@ impl<'a, 'b> MenuScope<'a, 'b> {
     /// Adds a menu item to the menu.
     pub fn menu_item(&mut self, args: &MenuItemArgs) {
         let mut args = args.clone();
-        if args.close_on_click {
+        if args.close_on_click && args.submenu_content.is_none() {
             let prev = args.on_click.clone();
             let controller = self.controller;
             args.on_click = Some(Callback::new(move || {
@@ -218,6 +220,10 @@ pub enum MenuPlacement {
     AboveStart,
     /// Align to the anchor's end edge and expand upward.
     AboveEnd,
+    /// Align to the anchor's end edge and expand rightward.
+    RightStart,
+    /// Align to the anchor's start edge and expand leftward.
+    LeftStart,
 }
 
 /// Configuration for the menu overlay/provider.
@@ -253,6 +259,9 @@ pub struct MenuProviderArgs {
     /// Optional external controller for open/close and anchor state.
     #[prop(skip_setter)]
     pub controller: Option<State<MenuController>>,
+    /// Optional fallback focus target restored when this menu closes.
+    #[prop(skip_setter)]
+    pub focus_restorer_fallback: Option<FocusRequester>,
     /// Optional main content rendered behind the menu.
     #[prop(skip_setter)]
     pub main_content: Option<RenderSlot>,
@@ -280,6 +289,12 @@ impl MenuProviderArgs {
     /// Sets an external menu controller.
     pub fn controller(mut self, controller: State<MenuController>) -> Self {
         self.controller = Some(controller);
+        self
+    }
+
+    /// Sets the fallback focus target restored when the menu closes.
+    pub fn focus_restorer_fallback(mut self, fallback: FocusRequester) -> Self {
+        self.focus_restorer_fallback = Some(fallback);
         self
     }
 
@@ -330,10 +345,19 @@ impl Default for MenuProviderArgs {
             on_dismiss: None,
             is_open: false,
             controller: None,
+            focus_restorer_fallback: None,
             main_content: None,
             menu_content: None,
         }
     }
+}
+
+#[derive(Clone, Prop)]
+struct MenuPanelArgs {
+    provider: MenuProviderArgs,
+    controller: State<MenuController>,
+    menu_content: MenuContentSlot,
+    just_opened: bool,
 }
 
 /// Backward compatibility alias for earlier menu args naming.
@@ -436,11 +460,14 @@ fn resolve_menu_position(
     let mut x = match placement {
         MenuPlacement::BelowStart | MenuPlacement::AboveStart => anchor.origin.x,
         MenuPlacement::BelowEnd | MenuPlacement::AboveEnd => anchor_end_x - menu_size.width,
+        MenuPlacement::RightStart => anchor_end_x,
+        MenuPlacement::LeftStart => anchor.origin.x - menu_size.width,
     };
 
     let mut y = match placement {
         MenuPlacement::BelowStart | MenuPlacement::BelowEnd => anchor_end_y,
         MenuPlacement::AboveStart | MenuPlacement::AboveEnd => anchor.origin.y - menu_size.height,
+        MenuPlacement::RightStart | MenuPlacement::LeftStart => anchor.origin.y,
     };
 
     x += Px::from(offset[0]);
@@ -567,11 +594,17 @@ pub fn menu_provider(args: &MenuProviderArgs) {
         .menu_content
         .clone()
         .unwrap_or_else(|| MenuContentSlot::new(|_| {}));
+    let menu_open_state = remember(|| false);
 
     // Render underlying content first.
     main_content.render();
 
     let (is_open, anchor) = controller.with(|c| c.snapshot());
+    let mut just_opened = false;
+    menu_open_state.with_mut(|was_open| {
+        just_opened = !*was_open && is_open;
+        *was_open = is_open;
+    });
     if !is_open {
         return;
     }
@@ -591,45 +624,12 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     ));
 
     // Menu panel.
-    surface(&crate::surface::SurfaceArgs::with_child(
-        {
-            SurfaceArgs::default()
-                .style(SurfaceStyle::Filled {
-                    color: provider_args.container_color,
-                })
-                .shape(provider_args.shape)
-                .modifier(
-                    provider_args
-                        .modifier
-                        .clone()
-                        .constrain(
-                            None,
-                            Some(DimensionValue::Wrap {
-                                min: None,
-                                max: provider_args.max_height,
-                            }),
-                        )
-                        .clip_to_bounds(),
-                )
-                .accessibility_role(Role::Menu)
-                .block_input(true)
-                .elevation(provider_args.elevation)
-        },
-        move || {
-            let menu_content = menu_content.clone();
-            column(
-                &ColumnArgs::default()
-                    .modifier(Modifier::new().fill_max_width())
-                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                    .children({
-                        move |scope| {
-                            let mut menu_scope = MenuScope { scope, controller };
-                            menu_content.render(&mut menu_scope);
-                        }
-                    }),
-            );
-        },
-    ));
+    menu_panel_node(&MenuPanelArgs {
+        provider: provider_args.clone(),
+        controller,
+        menu_content,
+        just_opened,
+    });
 
     // Parent pointer handler: block propagation and close on background click.
     let bounds_for_handler = bounds.clone();
@@ -677,6 +677,110 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     });
 }
 
+#[tessera]
+fn menu_panel_node(args: &MenuPanelArgs) {
+    let args = args.clone();
+    let controller = args.controller;
+    let menu_content = args.menu_content.clone();
+    let focus_scope = remember_focus_scope();
+    let on_dismiss = args.provider.on_dismiss.clone();
+    let placement = args.provider.placement;
+    let just_opened = args.just_opened;
+
+    Modifier::new()
+        .focus_restorer_with(focus_scope, args.provider.focus_restorer_fallback)
+        .focus_traversal_policy(
+            FocusTraversalPolicy::vertical()
+                .wrap(true)
+                .tab_navigation(true),
+        )
+        .run(move || {
+            if just_opened {
+                focus_scope.restore_focus();
+            }
+
+            let on_dismiss = on_dismiss.clone();
+            keyboard_input_handler(move |mut input| {
+                if input.key_modifiers.control_key()
+                    || input.key_modifiers.alt_key()
+                    || input.key_modifiers.super_key()
+                {
+                    return;
+                }
+
+                let mut handled = false;
+                for event in input.keyboard_events.iter() {
+                    if event.state != winit::event::ElementState::Pressed {
+                        continue;
+                    }
+
+                    handled = match event.logical_key {
+                        winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowLeft)
+                            if placement == MenuPlacement::RightStart =>
+                        {
+                            apply_close_action(controller, &on_dismiss);
+                            true
+                        }
+                        winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowRight)
+                            if placement == MenuPlacement::LeftStart =>
+                        {
+                            apply_close_action(controller, &on_dismiss);
+                            true
+                        }
+                        _ => false,
+                    };
+
+                    if handled {
+                        break;
+                    }
+                }
+
+                if handled {
+                    input.block_keyboard();
+                }
+            });
+
+            let menu_content = menu_content.clone();
+            surface(&crate::surface::SurfaceArgs::with_child(
+                SurfaceArgs::default()
+                    .style(SurfaceStyle::Filled {
+                        color: args.provider.container_color,
+                    })
+                    .shape(args.provider.shape)
+                    .modifier(
+                        args.provider
+                            .modifier
+                            .clone()
+                            .constrain(
+                                None,
+                                Some(DimensionValue::Wrap {
+                                    min: None,
+                                    max: args.provider.max_height,
+                                }),
+                            )
+                            .clip_to_bounds(),
+                    )
+                    .accessibility_role(Role::Menu)
+                    .block_input(true)
+                    .elevation(args.provider.elevation),
+                move || {
+                    let menu_content = menu_content.clone();
+                    column(
+                        &ColumnArgs::default()
+                            .modifier(Modifier::new().fill_max_width())
+                            .cross_axis_alignment(CrossAxisAlignment::Start)
+                            .children({
+                                move |scope| {
+                                    let mut menu_scope = MenuScope { scope, controller };
+                                    menu_content.render(&mut menu_scope);
+                                }
+                            }),
+                    );
+                },
+            ));
+        });
+}
+
 /// Defines the configuration for an individual menu item.
 #[derive(Clone, Prop)]
 pub struct MenuItemArgs {
@@ -695,6 +799,11 @@ pub struct MenuItemArgs {
     /// Trailing icon displayed on the right edge.
     #[prop(into)]
     pub trailing_icon: Option<crate::icon::IconArgs>,
+    /// Optional submenu content opened from this item.
+    #[prop(skip_setter)]
+    pub submenu_content: Option<MenuContentSlot>,
+    /// Placement used when showing the submenu.
+    pub submenu_placement: MenuPlacement,
     /// Whether the item is currently selected (renders a checkmark instead of a
     /// leading icon).
     pub selected: bool,
@@ -728,6 +837,8 @@ impl MenuItemArgs {
             trailing_text: None,
             leading_icon: None,
             trailing_icon: None,
+            submenu_content: None,
+            submenu_placement: MenuPlacement::RightStart,
             selected: false,
             enabled: true,
             close_on_click: true,
@@ -753,6 +864,21 @@ impl MenuItemArgs {
     /// Set the click handler using a shared callback.
     pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
         self.on_click = Some(on_click.into());
+        self
+    }
+
+    /// Sets the submenu content slot.
+    pub fn submenu_content<F>(mut self, submenu_content: F) -> Self
+    where
+        F: for<'a, 'b> Fn(&mut MenuScope<'a, 'b>) + Send + Sync + 'static,
+    {
+        self.submenu_content = Some(MenuContentSlot::new(submenu_content));
+        self
+    }
+
+    /// Sets the submenu content slot using a shared slot.
+    pub fn submenu_content_shared(mut self, submenu_content: MenuContentSlot) -> Self {
+        self.submenu_content = Some(submenu_content);
         self
     }
 }
@@ -859,13 +985,74 @@ fn render_trailing(args: &MenuItemArgs, enabled: bool) {
                     args.disabled_color
                 }),
         ));
+    } else if args.submenu_content.is_some() {
+        text(&crate::text::TextArgs::from(
+            &TextArgs::default()
+                .text(">")
+                .size(Dp(14.0))
+                .color(if enabled {
+                    args.supporting_color
+                } else {
+                    args.disabled_color
+                }),
+        ));
     }
 }
 
+#[derive(Clone, Prop)]
+struct MenuItemSurfaceArgs {
+    item: MenuItemArgs,
+    submenu_controller: Option<State<MenuController>>,
+    focus_requester: Option<FocusRequester>,
+}
+
 #[tessera]
-fn menu_item_node(args: &MenuItemArgs) {
+fn menu_item_surface_node(args: &MenuItemSurfaceArgs) {
     let args = args.clone();
-    let enabled = args.enabled && args.on_click.is_some();
+    let item = args.item.clone();
+    let enabled = item.enabled && (item.on_click.is_some() || item.submenu_content.is_some());
+    let has_submenu = item.submenu_content.is_some();
+    let submenu_controller = args.submenu_controller;
+
+    if let Some(submenu_controller) = submenu_controller {
+        keyboard_input_handler(move |mut input| {
+            if input.key_modifiers.control_key()
+                || input.key_modifiers.alt_key()
+                || input.key_modifiers.super_key()
+            {
+                return;
+            }
+
+            let mut handled = false;
+            for event in input.keyboard_events.iter() {
+                if event.state != winit::event::ElementState::Pressed {
+                    continue;
+                }
+
+                handled = match &event.logical_key {
+                    winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowRight) => {
+                        submenu_controller.with_mut(|controller| controller.open());
+                        true
+                    }
+                    winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowLeft)
+                        if submenu_controller.with(|controller| controller.is_open()) =>
+                    {
+                        submenu_controller.with_mut(|controller| controller.close());
+                        true
+                    }
+                    _ => false,
+                };
+
+                if handled {
+                    break;
+                }
+            }
+
+            if handled {
+                input.block_keyboard();
+            }
+        });
+    }
 
     let mut surface_args = SurfaceArgs::default()
         .style(SurfaceStyle::Filled {
@@ -875,12 +1062,12 @@ fn menu_item_node(args: &MenuItemArgs) {
         .modifier(Modifier::new().constrain(
             Some(DimensionValue::FILLED),
             Some(DimensionValue::Wrap {
-                min: Some(Px::from(args.height)),
+                min: Some(Px::from(item.height)),
                 max: None,
             }),
         ))
         .accessibility_role(Role::MenuItem)
-        .accessibility_label(args.label.clone())
+        .accessibility_label(item.label.clone())
         .block_input(true)
         .ripple_color(
             use_context::<MaterialTheme>()
@@ -891,11 +1078,20 @@ fn menu_item_node(args: &MenuItemArgs) {
                 .with_alpha(1.0),
         );
 
-    if let Some(on_click) = args.on_click.clone() {
+    if let Some(focus_requester) = args.focus_requester {
+        surface_args = surface_args.focus_requester(focus_requester);
+    }
+
+    if has_submenu {
+        let submenu_controller = submenu_controller.expect("submenu item requires controller");
+        surface_args = surface_args.on_click_shared(move || {
+            submenu_controller.with_mut(|controller| controller.open());
+        });
+    } else if let Some(on_click) = item.on_click.clone() {
         surface_args = surface_args.on_click_shared(on_click);
     }
 
-    if let Some(description) = args.supporting_text.clone() {
+    if let Some(description) = item.supporting_text.clone() {
         surface_args = surface_args.accessibility_description(description);
     }
 
@@ -906,7 +1102,7 @@ fn menu_item_node(args: &MenuItemArgs) {
                 .modifier(Modifier::new().constrain(
                     Some(DimensionValue::FILLED),
                     Some(DimensionValue::Wrap {
-                        min: Some(Px::from(args.height)),
+                        min: Some(Px::from(item.height)),
                         max: None,
                     }),
                 ))
@@ -921,7 +1117,7 @@ fn menu_item_node(args: &MenuItemArgs) {
                     });
 
                     // Leading indicator / icon.
-                    let leading_args = args.clone();
+                    let leading_args = item.clone();
                     row_scope.child(move || {
                         render_leading(&leading_args, enabled);
                     });
@@ -935,7 +1131,7 @@ fn menu_item_node(args: &MenuItemArgs) {
                     });
 
                     // Labels column.
-                    let label_args = args.clone();
+                    let label_args = item.clone();
                     row_scope.child(move || {
                         render_labels(&label_args, enabled);
                     });
@@ -951,8 +1147,11 @@ fn menu_item_node(args: &MenuItemArgs) {
                     );
 
                     // Trailing text/icon if any.
-                    if args.trailing_icon.is_some() || args.trailing_text.is_some() {
-                        let trailing_args = args.clone();
+                    if item.trailing_icon.is_some()
+                        || item.trailing_text.is_some()
+                        || item.submenu_content.is_some()
+                    {
+                        let trailing_args = item.clone();
                         row_scope.child(move || {
                             render_trailing(&trailing_args, enabled);
                         });
@@ -974,4 +1173,39 @@ fn menu_item_node(args: &MenuItemArgs) {
                 }));
         },
     ));
+}
+
+#[tessera]
+fn menu_item_node(args: &MenuItemArgs) {
+    let args = args.clone();
+    let submenu_content = args.submenu_content.clone();
+
+    if let Some(submenu_content) = submenu_content {
+        let submenu_controller = remember(MenuController::new);
+        let focus_requester = remember_focus_requester();
+        menu_provider(
+            &MenuProviderArgs::default()
+                .placement(args.submenu_placement)
+                .offset([Dp::ZERO, Dp::ZERO])
+                .controller(submenu_controller)
+                .focus_restorer_fallback(focus_requester)
+                .main_content({
+                    let args = args.clone();
+                    move || {
+                        menu_item_surface_node(&MenuItemSurfaceArgs {
+                            item: args.clone(),
+                            submenu_controller: Some(submenu_controller),
+                            focus_requester: Some(focus_requester),
+                        });
+                    }
+                })
+                .menu_content_shared(submenu_content),
+        );
+    } else {
+        menu_item_surface_node(&MenuItemSurfaceArgs {
+            item: args,
+            submenu_controller: None,
+            focus_requester: None,
+        });
+    }
 }

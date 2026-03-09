@@ -17,8 +17,13 @@ use smallvec::SmallVec;
 use crate::{
     NodeId,
     component_tree::ComponentTree,
+    focus::{
+        FocusDirection, FocusGroupNode, FocusHandleId, FocusNode, FocusProperties,
+        FocusRegistration, FocusRegistrationKind, FocusRequester, FocusRequesterId,
+        FocusRevealRequest, FocusScopeNode, FocusState, FocusTraversalPolicy,
+    },
     layout::{LayoutSpec, LayoutSpecDyn},
-    prop::{ComponentReplayData, ErasedComponentRunner, Prop},
+    prop::{CallbackWith, ComponentReplayData, ErasedComponentRunner, Prop},
 };
 
 thread_local! {
@@ -256,6 +261,138 @@ impl SlotTable {
     }
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct PersistentFocusHandleKey {
+    instance_key: u64,
+    slot_hash: u64,
+}
+
+#[derive(Clone, Copy)]
+struct PersistentFocusHandleEntry<T> {
+    value: T,
+    missing_frames: u8,
+}
+
+impl<T: Copy> PersistentFocusHandleEntry<T> {
+    fn new(value: T) -> Self {
+        Self {
+            value,
+            missing_frames: 0,
+        }
+    }
+
+    fn mark_live(&mut self) -> T {
+        self.missing_frames = 0;
+        self.value
+    }
+
+    fn retain_for_frame(&mut self) -> bool {
+        if self.missing_frames == 0 {
+            self.missing_frames = 1;
+            true
+        } else {
+            false
+        }
+    }
+}
+
+#[derive(Default)]
+struct PersistentFocusHandleStore {
+    targets: HashMap<PersistentFocusHandleKey, PersistentFocusHandleEntry<FocusNode>>,
+    scopes: HashMap<PersistentFocusHandleKey, PersistentFocusHandleEntry<FocusScopeNode>>,
+    groups: HashMap<PersistentFocusHandleKey, PersistentFocusHandleEntry<FocusGroupNode>>,
+    requesters: HashMap<PersistentFocusHandleKey, PersistentFocusHandleEntry<FocusRequester>>,
+}
+
+#[derive(Default)]
+pub(crate) struct RemovedPersistentFocusHandles {
+    pub handle_ids: HashSet<FocusHandleId>,
+    pub requester_ids: HashSet<FocusRequesterId>,
+}
+
+impl PersistentFocusHandleStore {
+    fn retain_instance_keys(
+        &mut self,
+        live_instance_keys: &HashSet<u64>,
+    ) -> RemovedPersistentFocusHandles {
+        let mut removed = RemovedPersistentFocusHandles::default();
+        self.targets.retain(|key, handle| {
+            if !live_instance_keys.contains(&key.instance_key) {
+                if handle.retain_for_frame() {
+                    true
+                } else {
+                    removed.handle_ids.insert(handle.value.handle_id());
+                    false
+                }
+            } else {
+                handle.mark_live();
+                true
+            }
+        });
+        self.scopes.retain(|key, scope| {
+            if !live_instance_keys.contains(&key.instance_key) {
+                if scope.retain_for_frame() {
+                    true
+                } else {
+                    removed.handle_ids.insert(scope.value.handle_id());
+                    false
+                }
+            } else {
+                scope.mark_live();
+                true
+            }
+        });
+        self.groups.retain(|key, group| {
+            if !live_instance_keys.contains(&key.instance_key) {
+                if group.retain_for_frame() {
+                    true
+                } else {
+                    removed.handle_ids.insert(group.value.handle_id());
+                    false
+                }
+            } else {
+                group.mark_live();
+                true
+            }
+        });
+        self.requesters.retain(|key, requester| {
+            if !live_instance_keys.contains(&key.instance_key) {
+                if requester.retain_for_frame() {
+                    true
+                } else {
+                    removed.requester_ids.insert(requester.value.requester_id());
+                    false
+                }
+            } else {
+                requester.mark_live();
+                true
+            }
+        });
+        removed
+    }
+
+    fn contains_handle(&self, handle_id: FocusHandleId) -> bool {
+        self.targets
+            .values()
+            .any(|entry| entry.value.handle_id() == handle_id)
+            || self
+                .scopes
+                .values()
+                .any(|entry| entry.value.handle_id() == handle_id)
+            || self
+                .groups
+                .values()
+                .any(|entry| entry.value.handle_id() == handle_id)
+    }
+
+    fn clear(&mut self) {
+        self.targets.clear();
+        self.scopes.clear();
+        self.groups.clear();
+        self.requesters.clear();
+    }
+}
+
 static SLOT_TABLE: OnceLock<RwLock<SlotTable>> = OnceLock::new();
 
 fn slot_table() -> &'static RwLock<SlotTable> {
@@ -356,14 +493,33 @@ struct StateReadDependencyKey {
     generation: u64,
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+struct FocusReadDependencyKey {
+    kind: FocusReadDependencyKind,
+}
+
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+enum FocusReadDependencyKind {
+    Handle(FocusHandleId),
+    Requester(FocusRequesterId),
+}
+
 #[derive(Default)]
 struct StateReadDependencyTracker {
     readers_by_state: HashMap<StateReadDependencyKey, HashSet<u64>>,
     states_by_reader: HashMap<u64, HashSet<StateReadDependencyKey>>,
 }
 
+#[derive(Default)]
+struct FocusReadDependencyTracker {
+    readers_by_focus: HashMap<FocusReadDependencyKey, HashSet<u64>>,
+    focus_by_reader: HashMap<u64, HashSet<FocusReadDependencyKey>>,
+}
+
 static BUILD_INVALIDATION_TRACKER: OnceLock<RwLock<BuildInvalidationTracker>> = OnceLock::new();
 static STATE_READ_DEPENDENCY_TRACKER: OnceLock<RwLock<StateReadDependencyTracker>> =
+    OnceLock::new();
+static FOCUS_READ_DEPENDENCY_TRACKER: OnceLock<RwLock<FocusReadDependencyTracker>> =
     OnceLock::new();
 type RedrawWaker = Arc<dyn Fn() + Send + Sync + 'static>;
 static REDRAW_WAKER: OnceLock<RwLock<Option<RedrawWaker>>> = OnceLock::new();
@@ -374,6 +530,10 @@ fn build_invalidation_tracker() -> &'static RwLock<BuildInvalidationTracker> {
 
 fn state_read_dependency_tracker() -> &'static RwLock<StateReadDependencyTracker> {
     STATE_READ_DEPENDENCY_TRACKER.get_or_init(|| RwLock::new(StateReadDependencyTracker::default()))
+}
+
+fn focus_read_dependency_tracker() -> &'static RwLock<FocusReadDependencyTracker> {
+    FOCUS_READ_DEPENDENCY_TRACKER.get_or_init(|| RwLock::new(FocusReadDependencyTracker::default()))
 }
 
 fn redraw_waker() -> &'static RwLock<Option<RedrawWaker>> {
@@ -397,6 +557,98 @@ pub(crate) fn clear_redraw_waker() {
 
 fn current_component_instance_key_from_scope() -> Option<u64> {
     CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| stack.borrow().last().copied())
+}
+
+static PERSISTENT_FOCUS_HANDLE_STORE: OnceLock<RwLock<PersistentFocusHandleStore>> =
+    OnceLock::new();
+
+fn persistent_focus_handle_store() -> &'static RwLock<PersistentFocusHandleStore> {
+    PERSISTENT_FOCUS_HANDLE_STORE.get_or_init(|| RwLock::new(PersistentFocusHandleStore::default()))
+}
+
+fn current_persistent_focus_handle_key<K: Hash>(slot_key: K) -> PersistentFocusHandleKey {
+    let Some(instance_key) = current_component_instance_key_from_scope() else {
+        panic!("persistent focus handles must be requested during a component build");
+    };
+    let slot_hash = hash_components(&[&slot_key]);
+    PersistentFocusHandleKey {
+        instance_key,
+        slot_hash,
+    }
+}
+
+#[doc(hidden)]
+pub fn persistent_focus_target_for_current_instance<K: Hash>(slot_key: K) -> FocusNode {
+    let key = current_persistent_focus_handle_key(slot_key);
+    let mut store = persistent_focus_handle_store().write();
+    match store.targets.entry(key) {
+        std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            let value = FocusNode::new();
+            entry.insert(PersistentFocusHandleEntry::new(value));
+            value
+        }
+    }
+}
+
+#[doc(hidden)]
+pub fn persistent_focus_scope_for_current_instance<K: Hash>(slot_key: K) -> FocusScopeNode {
+    let key = current_persistent_focus_handle_key(slot_key);
+    let mut store = persistent_focus_handle_store().write();
+    match store.scopes.entry(key) {
+        std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            let value = FocusScopeNode::new();
+            entry.insert(PersistentFocusHandleEntry::new(value));
+            value
+        }
+    }
+}
+
+#[doc(hidden)]
+pub fn persistent_focus_group_for_current_instance<K: Hash>(slot_key: K) -> FocusGroupNode {
+    let key = current_persistent_focus_handle_key(slot_key);
+    let mut store = persistent_focus_handle_store().write();
+    match store.groups.entry(key) {
+        std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            let value = FocusGroupNode::new();
+            entry.insert(PersistentFocusHandleEntry::new(value));
+            value
+        }
+    }
+}
+
+#[doc(hidden)]
+pub fn persistent_focus_requester_for_current_instance<K: Hash>(slot_key: K) -> FocusRequester {
+    let key = current_persistent_focus_handle_key(slot_key);
+    let mut store = persistent_focus_handle_store().write();
+    match store.requesters.entry(key) {
+        std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
+        std::collections::hash_map::Entry::Vacant(entry) => {
+            let value = FocusRequester::new();
+            entry.insert(PersistentFocusHandleEntry::new(value));
+            value
+        }
+    }
+}
+
+pub(crate) fn has_persistent_focus_handle(handle_id: FocusHandleId) -> bool {
+    persistent_focus_handle_store()
+        .read()
+        .contains_handle(handle_id)
+}
+
+pub(crate) fn retain_persistent_focus_handles(
+    live_instance_keys: &HashSet<u64>,
+) -> RemovedPersistentFocusHandles {
+    persistent_focus_handle_store()
+        .write()
+        .retain_instance_keys(live_instance_keys)
+}
+
+pub(crate) fn clear_persistent_focus_handles() {
+    persistent_focus_handle_store().write().clear();
 }
 
 fn take_next_node_instance_logic_id_override() -> Option<u64> {
@@ -563,6 +815,62 @@ fn state_read_subscribers(slot: SlotHandle, generation: u64) -> Vec<u64> {
         .unwrap_or_default()
 }
 
+fn track_focus_dependency(kind: FocusReadDependencyKind) {
+    if !matches!(current_phase(), Some(RuntimePhase::Build)) {
+        return;
+    }
+    let Some(reader_instance_key) = current_component_instance_key_from_scope() else {
+        return;
+    };
+
+    let key = FocusReadDependencyKey { kind };
+    let tracker = focus_read_dependency_tracker().upgradable_read();
+    if tracker
+        .readers_by_focus
+        .get(&key)
+        .is_some_and(|readers| readers.contains(&reader_instance_key))
+    {
+        return;
+    }
+    let mut tracker = RwLockUpgradableReadGuard::upgrade(tracker);
+    tracker
+        .readers_by_focus
+        .entry(key)
+        .or_default()
+        .insert(reader_instance_key);
+    tracker
+        .focus_by_reader
+        .entry(reader_instance_key)
+        .or_default()
+        .insert(key);
+}
+
+fn focus_read_subscribers_by_kind(kind: FocusReadDependencyKind) -> Vec<u64> {
+    let key = FocusReadDependencyKey { kind };
+    focus_read_dependency_tracker()
+        .read()
+        .readers_by_focus
+        .get(&key)
+        .map(|readers| readers.iter().copied().collect())
+        .unwrap_or_default()
+}
+
+pub(crate) fn track_focus_read_dependency(handle_id: FocusHandleId) {
+    track_focus_dependency(FocusReadDependencyKind::Handle(handle_id));
+}
+
+pub(crate) fn track_focus_requester_read_dependency(requester_id: FocusRequesterId) {
+    track_focus_dependency(FocusReadDependencyKind::Requester(requester_id));
+}
+
+pub(crate) fn focus_read_subscribers(handle_id: FocusHandleId) -> Vec<u64> {
+    focus_read_subscribers_by_kind(FocusReadDependencyKind::Handle(handle_id))
+}
+
+pub(crate) fn focus_requester_read_subscribers(requester_id: FocusRequesterId) -> Vec<u64> {
+    focus_read_subscribers_by_kind(FocusReadDependencyKind::Requester(requester_id))
+}
+
 pub(crate) fn remove_state_read_dependencies(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
@@ -585,8 +893,34 @@ pub(crate) fn remove_state_read_dependencies(instance_keys: &HashSet<u64>) {
     }
 }
 
+pub(crate) fn remove_focus_read_dependencies(instance_keys: &HashSet<u64>) {
+    if instance_keys.is_empty() {
+        return;
+    }
+    let mut tracker = focus_read_dependency_tracker().write();
+    for instance_key in instance_keys {
+        let Some(focus_keys) = tracker.focus_by_reader.remove(instance_key) else {
+            continue;
+        };
+        for focus_key in focus_keys {
+            let mut remove_entry = false;
+            if let Some(readers) = tracker.readers_by_focus.get_mut(&focus_key) {
+                readers.remove(instance_key);
+                remove_entry = readers.is_empty();
+            }
+            if remove_entry {
+                tracker.readers_by_focus.remove(&focus_key);
+            }
+        }
+    }
+}
+
 pub(crate) fn reset_state_read_dependencies() {
     *state_read_dependency_tracker().write() = StateReadDependencyTracker::default();
+}
+
+pub(crate) fn reset_focus_read_dependencies() {
+    *focus_read_dependency_tracker().write() = FocusReadDependencyTracker::default();
 }
 
 pub(crate) fn take_build_invalidations() -> BuildInvalidationSet {
@@ -1205,6 +1539,254 @@ impl TesseraRuntime {
             debug_assert!(
                 false,
                 "set_current_layout_spec must be called inside a component build"
+            );
+        }
+    }
+
+    /// Binds a focus requester to the current component node.
+    #[doc(hidden)]
+    pub fn bind_current_focus_requester(&mut self, requester: FocusRequester) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            current.focus_requester_binding = Some(requester);
+        } else {
+            debug_assert!(
+                false,
+                "bind_current_focus_requester must be called inside a component build"
+            );
+        }
+    }
+
+    /// Registers the current component node as a focus target.
+    #[doc(hidden)]
+    pub fn register_current_focus_target(&mut self, node: FocusNode) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            current.focus_registration = Some(FocusRegistration::target(node));
+        } else {
+            debug_assert!(
+                false,
+                "register_current_focus_target must be called inside a component build"
+            );
+        }
+    }
+
+    /// Ensures the current component node has a focus target registration.
+    #[doc(hidden)]
+    pub fn ensure_current_focus_target(&mut self, node: FocusNode) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            if current.focus_registration.is_none() {
+                current.focus_registration = Some(FocusRegistration::target(node));
+            }
+        } else {
+            debug_assert!(
+                false,
+                "ensure_current_focus_target must be called inside a component build"
+            );
+        }
+    }
+
+    /// Registers the current component node as a focus scope.
+    #[doc(hidden)]
+    pub fn register_current_focus_scope(&mut self, scope: FocusScopeNode) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            current.focus_registration = Some(FocusRegistration::scope(scope));
+        } else {
+            debug_assert!(
+                false,
+                "register_current_focus_scope must be called inside a component build"
+            );
+        }
+    }
+
+    /// Ensures the current component node has a focus scope registration.
+    #[doc(hidden)]
+    pub fn ensure_current_focus_scope(&mut self, scope: FocusScopeNode) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            if current.focus_registration.is_none() {
+                current.focus_registration = Some(FocusRegistration::scope(scope));
+            }
+        } else {
+            debug_assert!(
+                false,
+                "ensure_current_focus_scope must be called inside a component build"
+            );
+        }
+    }
+
+    /// Registers the current component node as a focus traversal group.
+    #[doc(hidden)]
+    pub fn register_current_focus_group(&mut self, group: FocusGroupNode) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            current.focus_registration = Some(FocusRegistration::group(group));
+        } else {
+            debug_assert!(
+                false,
+                "register_current_focus_group must be called inside a component build"
+            );
+        }
+    }
+
+    /// Ensures the current component node has a focus traversal group
+    /// registration.
+    #[doc(hidden)]
+    pub fn ensure_current_focus_group(&mut self, group: FocusGroupNode) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            if current.focus_registration.is_none() {
+                current.focus_registration = Some(FocusRegistration::group(group));
+            }
+        } else {
+            debug_assert!(
+                false,
+                "ensure_current_focus_group must be called inside a component build"
+            );
+        }
+    }
+
+    /// Returns the current component node's registered focus target, if any.
+    #[doc(hidden)]
+    pub fn current_focus_target_handle(&self) -> Option<FocusNode> {
+        let registration = self.component_tree.current_node()?.focus_registration?;
+        (registration.kind == FocusRegistrationKind::Target)
+            .then(|| FocusNode::from_handle_id(registration.id))
+    }
+
+    /// Returns the current component node's registered focus scope, if any.
+    #[doc(hidden)]
+    pub fn current_focus_scope_handle(&self) -> Option<FocusScopeNode> {
+        let registration = self.component_tree.current_node()?.focus_registration?;
+        (registration.kind == FocusRegistrationKind::Scope)
+            .then(|| FocusScopeNode::from_handle_id(registration.id))
+    }
+
+    /// Returns the current component node's registered focus group, if any.
+    #[doc(hidden)]
+    pub fn current_focus_group_handle(&self) -> Option<FocusGroupNode> {
+        let registration = self.component_tree.current_node()?.focus_registration?;
+        (registration.kind == FocusRegistrationKind::Group)
+            .then(|| FocusGroupNode::from_handle_id(registration.id))
+    }
+
+    /// Updates focus properties for the current component node registration.
+    #[doc(hidden)]
+    pub fn set_current_focus_properties(&mut self, properties: FocusProperties) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            if let Some(registration) = current.focus_registration.as_mut() {
+                registration.properties = properties;
+            } else {
+                debug_assert!(
+                    false,
+                    "set_current_focus_properties requires focus_target, focus_scope, or focus_group first"
+                );
+            }
+        } else {
+            debug_assert!(
+                false,
+                "set_current_focus_properties must be called inside a component build"
+            );
+        }
+    }
+
+    /// Updates the traversal policy for the current focus scope or group.
+    #[doc(hidden)]
+    pub fn set_current_focus_traversal_policy(&mut self, policy: FocusTraversalPolicy) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            if current.focus_registration.is_some_and(|registration| {
+                matches!(
+                    registration.kind,
+                    FocusRegistrationKind::Scope | FocusRegistrationKind::Group
+                )
+            }) {
+                current.focus_traversal_policy = Some(policy);
+            } else {
+                debug_assert!(
+                    false,
+                    "set_current_focus_traversal_policy requires focus_scope or focus_group first"
+                );
+            }
+        } else {
+            debug_assert!(
+                false,
+                "set_current_focus_traversal_policy must be called inside a component build"
+            );
+        }
+    }
+
+    /// Registers a focus-changed callback on the current component node.
+    #[doc(hidden)]
+    pub fn set_current_focus_changed_handler(&mut self, handler: CallbackWith<FocusState>) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            current.focus_changed_handler = Some(handler);
+        } else {
+            debug_assert!(
+                false,
+                "set_current_focus_changed_handler must be called inside a component build"
+            );
+        }
+    }
+
+    /// Registers a focus-event callback on the current component node.
+    #[doc(hidden)]
+    pub fn set_current_focus_event_handler(&mut self, handler: CallbackWith<FocusState>) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            current.focus_event_handler = Some(handler);
+        } else {
+            debug_assert!(
+                false,
+                "set_current_focus_event_handler must be called inside a component build"
+            );
+        }
+    }
+
+    /// Registers a beyond-bounds focus callback on the current component node.
+    #[doc(hidden)]
+    pub fn set_current_focus_beyond_bounds_handler(
+        &mut self,
+        handler: CallbackWith<FocusDirection, bool>,
+    ) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            current.focus_beyond_bounds_handler = Some(handler);
+        } else {
+            debug_assert!(
+                false,
+                "set_current_focus_beyond_bounds_handler must be called inside a component build"
+            );
+        }
+    }
+
+    /// Registers a focus reveal callback on the current component node.
+    #[doc(hidden)]
+    pub fn set_current_focus_reveal_handler(
+        &mut self,
+        handler: CallbackWith<FocusRevealRequest, bool>,
+    ) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            current.focus_reveal_handler = Some(handler);
+        } else {
+            debug_assert!(
+                false,
+                "set_current_focus_reveal_handler must be called inside a component build"
+            );
+        }
+    }
+
+    /// Registers a restorer fallback on the current focus scope node.
+    #[doc(hidden)]
+    pub fn set_current_focus_restorer_fallback(&mut self, fallback: FocusRequester) {
+        if let Some(current) = self.component_tree.current_node_mut() {
+            if current
+                .focus_registration
+                .is_some_and(|registration| registration.kind == FocusRegistrationKind::Scope)
+            {
+                current.focus_restorer_fallback = Some(fallback);
+            } else {
+                debug_assert!(
+                    false,
+                    "set_current_focus_restorer_fallback requires focus_scope or focus_restorer first"
+                );
+            }
+        } else {
+            debug_assert!(
+                false,
+                "set_current_focus_restorer_fallback must be called inside a component build"
             );
         }
     }

@@ -9,6 +9,7 @@ use indextree::NodeId as ComponentNodeId;
 use crate::{
     accessibility::AccessibilityId,
     component_tree::{ComponentNodeMetaDatas, ComponentNodeTree, ComputedData},
+    focus::{FocusOwner, bind_focus_owner},
     px::PxPosition,
 };
 
@@ -340,6 +341,7 @@ fn rect_from_geometry_with_padding(
 pub fn dispatch_action(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
+    focus_owner: &mut FocusOwner,
     action_request: accesskit::ActionRequest,
 ) -> bool {
     // Convert AccessKit NodeId back to AccessibilityId
@@ -360,6 +362,7 @@ pub fn dispatch_action(
         && let Some(handler) = &metadata.accessibility_action_handler
     {
         // Call the handler
+        let _focus_owner_guard = bind_focus_owner(focus_owner);
         handler(action_request.action);
         return true;
     }

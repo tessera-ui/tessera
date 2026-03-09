@@ -18,7 +18,12 @@ use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityNode, AccessibilityPadding},
     cursor::{CursorEventContent, PointerChange},
     dp::Dp,
+    focus::{
+        FocusDirection, FocusRegistration, FocusRequester, FocusRevealRequest, FocusState,
+        FocusTraversalPolicy,
+    },
     layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
+    prop::CallbackWith,
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
     runtime::{
@@ -285,6 +290,24 @@ pub struct ComponentNode {
     pub ime_preview_handler_fn: Option<Box<ImeInputHandlerFn>>,
     /// IME input handler for bubble stage (leaf to root).
     pub ime_handler_fn: Option<Box<ImeInputHandlerFn>>,
+    /// Optional focus requester bound to this component node.
+    pub focus_requester_binding: Option<FocusRequester>,
+    /// Optional focus registration attached to this component node.
+    pub focus_registration: Option<FocusRegistration>,
+    /// Optional fallback target used when a focus scope restores focus.
+    pub focus_restorer_fallback: Option<FocusRequester>,
+    /// Optional traversal policy used when directional navigation starts inside
+    /// this focus group or scope.
+    pub focus_traversal_policy: Option<FocusTraversalPolicy>,
+    /// Optional callback invoked when the node's focus state changes.
+    pub focus_changed_handler: Option<FocusChangedHandler>,
+    /// Optional callback invoked when the node participates in a focus event.
+    pub focus_event_handler: Option<FocusEventHandler>,
+    /// Optional callback used to expand virtualized content for focus search.
+    pub focus_beyond_bounds_handler: Option<FocusBeyondBoundsHandler>,
+    /// Optional callback used to reveal the focused rectangle inside a
+    /// container.
+    pub focus_reveal_handler: Option<FocusRevealHandler>,
     /// Pure layout spec for skipping and record passes.
     pub layout_spec: Box<dyn LayoutSpecDyn>,
     /// Optional replay metadata for subtree-level rerun.
@@ -300,6 +323,8 @@ pub struct ComponentNodeMetaData {
     pub computed_data: Option<ComputedData>,
     /// Whether the layout cache was hit for this node in the current frame.
     pub layout_cache_hit: bool,
+    /// Placement order among siblings within the parent layout result.
+    pub placement_order: Option<u64>,
     /// The node's start position, relative to its parent.
     /// None if the node is not placed yet.
     pub rel_position: Option<PxPosition>,
@@ -331,6 +356,7 @@ impl ComponentNodeMetaData {
         Self {
             computed_data: None,
             layout_cache_hit: false,
+            placement_order: None,
             rel_position: None,
             abs_position: None,
             event_clip_rect: None,
@@ -398,6 +424,14 @@ pub type PointerInputHandlerFn = dyn Fn(PointerInput) + Send + Sync;
 pub type KeyboardInputHandlerFn = dyn Fn(KeyboardInput) + Send + Sync;
 /// IME-specific input handler.
 pub type ImeInputHandlerFn = dyn Fn(ImeInput) + Send + Sync;
+/// Focus-changed callback attached to a component node.
+pub type FocusChangedHandler = CallbackWith<FocusState>;
+/// Focus-event callback attached to a component node.
+pub type FocusEventHandler = CallbackWith<FocusState>;
+/// Beyond-bounds focus callback attached to a virtualized container node.
+pub type FocusBeyondBoundsHandler = CallbackWith<FocusDirection, bool>;
+/// Reveal callback attached to a scrollable container node.
+pub type FocusRevealHandler = CallbackWith<FocusRevealRequest, bool>;
 
 /// Input for pointer handlers.
 pub struct PointerInput<'a> {
@@ -636,9 +670,14 @@ fn apply_layout_placements(
             child_map.insert(child.get().instance_key, *child_id);
         }
     }
-    for (instance_key, position) in placements {
+    for (placement_order, (instance_key, position)) in placements.iter().enumerate() {
         if let Some(child_id) = child_map.get(instance_key) {
-            place_node(*child_id, *position, component_node_metadatas);
+            place_node(
+                *child_id,
+                *position,
+                placement_order as u64,
+                component_node_metadatas,
+            );
         }
     }
 }
@@ -672,14 +711,27 @@ fn restore_cached_subtree_metadata(
     }
 
     let mut child_positions = HashMap::new();
-    for (child_key, child_pos) in placements {
+    let mut child_orders = HashMap::new();
+    for (placement_order, (child_key, child_pos)) in placements.into_iter().enumerate() {
         child_positions.insert(child_key, child_pos);
+        child_orders.insert(child_key, placement_order as u64);
     }
 
     for child_id in node_id.children(tree) {
-        let child_rel_position = tree
-            .get(child_id)
-            .and_then(|child| child_positions.get(&child.get().instance_key).copied());
+        let child_layout = tree.get(child_id).map(|child| {
+            let instance_key = child.get().instance_key;
+            (
+                child_positions.get(&instance_key).copied(),
+                child_orders.get(&instance_key).copied(),
+            )
+        });
+        let (child_rel_position, child_placement_order) = child_layout.unwrap_or((None, None));
+        if let Some(placement_order) = child_placement_order {
+            component_node_metadatas
+                .entry(child_id)
+                .or_default()
+                .placement_order = Some(placement_order);
+        }
         if !restore_cached_subtree_metadata(
             child_id,
             child_rel_position,
@@ -974,12 +1026,12 @@ pub(crate) fn measure_node(
 pub(crate) fn place_node(
     node: indextree::NodeId,
     rel_position: PxPosition,
+    placement_order: u64,
     component_node_metadatas: &ComponentNodeMetaDatas,
 ) {
-    component_node_metadatas
-        .entry(node)
-        .or_default()
-        .rel_position = Some(rel_position);
+    let mut metadata = component_node_metadatas.entry(node).or_default();
+    metadata.rel_position = Some(rel_position);
+    metadata.placement_order = Some(placement_order);
 }
 
 /// Concurrently measures multiple nodes using Rayon for parallelism.

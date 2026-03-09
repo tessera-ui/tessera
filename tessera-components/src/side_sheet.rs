@@ -7,9 +7,11 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError,
-    Modifier, Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
+    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp,
+    FocusTraversalPolicy, MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, State,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
@@ -60,6 +62,7 @@ struct SideSheetContentWrapperArgs {
     position: SideSheetPosition,
     controller: State<SideSheetController>,
     on_close_request: Callback,
+    just_opened: bool,
     content: SharedContent,
 }
 
@@ -416,14 +419,25 @@ fn render_scrim(
 fn make_keyboard_closure(
     on_close: Callback,
 ) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>) + Send + Sync> {
-    Box::new(move |input: tessera_ui::KeyboardInput<'_>| {
-        for event in input.keyboard_events.drain(..) {
-            if event.state == winit::event::ElementState::Pressed
-                && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
-                    event.physical_key
+    Box::new(move |mut input: tessera_ui::KeyboardInput<'_>| {
+        let mut handled = false;
+        input.keyboard_events.retain(|event| {
+            if event.state != winit::event::ElementState::Pressed {
+                return true;
+            }
+
+            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
+                event.physical_key
             {
                 on_close.call();
+                handled = true;
+                return false;
             }
+
+            true
+        });
+        if handled {
+            input.block_keyboard();
         }
     })
 }
@@ -699,6 +713,12 @@ fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
 
     let (is_open, timer_opt, drag_offset) = args.controller.with(|c| c.snapshot());
     let is_animating = args.controller.with(|c| c.is_animating());
+    let side_sheet_open_state = remember(|| false);
+    let mut just_opened = false;
+    side_sheet_open_state.with_mut(|was_open| {
+        just_opened = !*was_open && is_open;
+        *was_open = is_open;
+    });
     if is_animating {
         let controller_for_frame = args.controller;
         receive_frame_nanos(move |frame_nanos| {
@@ -733,13 +753,12 @@ fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
         is_open,
     );
 
-    keyboard_input_handler(make_keyboard_closure(args.on_close_request.clone()));
-
     let content_wrapper_args = SideSheetContentWrapperArgs {
         sheet_type: args.sheet_type,
         position: args.position,
         controller: args.controller,
         on_close_request: args.on_close_request.clone(),
+        just_opened,
         content: args.side_sheet_content.clone(),
     };
     side_sheet_content_wrapper_node(&content_wrapper_args);
@@ -754,6 +773,7 @@ fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
 
 #[tessera]
 fn side_sheet_content_wrapper_node(args: &SideSheetContentWrapperArgs) {
+    let args = args.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -770,34 +790,54 @@ fn side_sheet_content_wrapper_node(args: &SideSheetContentWrapperArgs) {
         SideSheetType::Standard => SurfaceArgs::default(),
     };
     let content = args.content.clone();
+    let just_opened = args.just_opened;
+    let on_close_request_for_keyboard = args.on_close_request.clone();
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        surface_args
-            .style(container_color.into())
-            .shape(sheet_shape(position))
-            .modifier(Modifier::new().fill_max_height())
-            .block_input(true),
-        move || {
+    let focus_scope = remember_focus_scope();
+    Modifier::new()
+        .focus_scope_with(focus_scope)
+        .focus_traversal_policy(
+            FocusTraversalPolicy::linear()
+                .wrap(true)
+                .tab_navigation(true),
+        )
+        .run(move || {
+            if just_opened {
+                focus_scope.restore_focus();
+            }
+            keyboard_input_handler(make_keyboard_closure(on_close_request_for_keyboard.clone()));
+
+            let surface_args = surface_args.clone();
             let content = content.clone();
-            let parent_nested_scroll =
-                use_context::<NestedScrollConnection>().map(|context| context.get());
-            let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
-                controller,
-                on_close_request.clone(),
-                position,
-                parent_nested_scroll,
-            );
-            Modifier::new().padding_all(Dp(16.0)).run(move || {
-                let content = content.clone();
-                provide_context(
-                    || nested_scroll_connection.clone(),
-                    move || {
-                        content.render();
-                    },
-                );
-            });
-        },
-    ));
+            let on_close_request = on_close_request.clone();
+            surface(&crate::surface::SurfaceArgs::with_child(
+                surface_args
+                    .style(container_color.into())
+                    .shape(sheet_shape(position))
+                    .modifier(Modifier::new().fill_max_height())
+                    .block_input(true),
+                move || {
+                    let content = content.clone();
+                    let parent_nested_scroll =
+                        use_context::<NestedScrollConnection>().map(|context| context.get());
+                    let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
+                        controller,
+                        on_close_request.clone(),
+                        position,
+                        parent_nested_scroll,
+                    );
+                    Modifier::new().padding_all(Dp(16.0)).run(move || {
+                        let content = content.clone();
+                        provide_context(
+                            || nested_scroll_connection.clone(),
+                            move || {
+                                content.render();
+                            },
+                        );
+                    });
+                },
+            ));
+        });
 }
 
 #[derive(Clone, PartialEq)]

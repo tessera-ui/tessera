@@ -11,10 +11,12 @@ use std::{
 };
 
 use tessera_ui::{
-    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId,
-    ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
+    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, FocusDirection, MeasurementError,
+    NodeId, ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera,
+    remember,
+    runtime::TesseraRuntime,
+    tessera,
 };
 
 use crate::{
@@ -787,12 +789,21 @@ fn lazy_staggered_grid_view(args: &LazyStaggeredGridViewArgs) {
             args.main_axis_spacing,
         )
     });
-    let visible_items = plan.visible_items(visible_range);
+    let visible_items = plan.visible_items(visible_range.clone());
 
     if visible_items.is_empty() {
         layout(ZeroLayout);
         return;
     }
+
+    register_lazy_staggered_grid_focus_beyond_bounds_handler(
+        &args,
+        total_count,
+        total_main,
+        viewport_span,
+        visible_range,
+        lane_count,
+    );
 
     let viewport_limit = viewport_span + padding_main + padding_main;
     let visible_layout_items = visible_items
@@ -919,6 +930,12 @@ enum StaggeredGridAxis {
     Horizontal,
 }
 
+#[derive(Clone, Copy)]
+enum FocusScrollDirection {
+    Forward,
+    Backward,
+}
+
 impl StaggeredGridAxis {
     fn main(&self, size: &ComputedData) -> Px {
         match self {
@@ -968,10 +985,33 @@ impl StaggeredGridAxis {
         }
     }
 
+    fn scroll_position(&self, offset: Px) -> PxPosition {
+        match self {
+            Self::Vertical => PxPosition::new(Px::ZERO, -offset),
+            Self::Horizontal => PxPosition::new(-offset, Px::ZERO),
+        }
+    }
+
     fn scroll_offset(&self, position: PxPosition) -> Px {
         match self {
             Self::Vertical => (-position.y).max(Px::ZERO),
             Self::Horizontal => (-position.x).max(Px::ZERO),
+        }
+    }
+
+    fn focus_scroll_direction(&self, direction: FocusDirection) -> Option<FocusScrollDirection> {
+        match (self, direction) {
+            (_, FocusDirection::Next | FocusDirection::Enter) => {
+                Some(FocusScrollDirection::Forward)
+            }
+            (_, FocusDirection::Previous | FocusDirection::Exit) => {
+                Some(FocusScrollDirection::Backward)
+            }
+            (Self::Vertical, FocusDirection::Down) => Some(FocusScrollDirection::Forward),
+            (Self::Vertical, FocusDirection::Up) => Some(FocusScrollDirection::Backward),
+            (Self::Horizontal, FocusDirection::Right) => Some(FocusScrollDirection::Forward),
+            (Self::Horizontal, FocusDirection::Left) => Some(FocusScrollDirection::Backward),
+            _ => None,
         }
     }
 
@@ -1256,6 +1296,79 @@ struct VisibleStaggeredItem {
     key_hash: u64,
 }
 
+fn register_lazy_staggered_grid_focus_beyond_bounds_handler(
+    args: &LazyStaggeredGridViewArgs,
+    total_count: usize,
+    total_main: Px,
+    viewport_span: Px,
+    visible_range: Range<usize>,
+    lane_count: usize,
+) {
+    let axis = args.axis;
+    let controller = args.controller;
+    let scroll_controller = args.scroll_controller;
+    let estimated_item_main = args.estimated_item_main;
+    let main_axis_spacing = args.main_axis_spacing;
+    let current_scroll_offset = args
+        .axis
+        .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
+    let max_scroll = (total_main - viewport_span).max(Px::ZERO);
+
+    TesseraRuntime::with_mut(|runtime| {
+        runtime.set_current_focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
+            let Some(scroll_direction) = axis.focus_scroll_direction(direction) else {
+                return false;
+            };
+            if total_count == 0 || lane_count == 0 || viewport_span <= Px::ZERO {
+                return false;
+            }
+
+            let target_index = match scroll_direction {
+                FocusScrollDirection::Forward => {
+                    if visible_range.end >= total_count {
+                        return false;
+                    }
+                    visible_range.end
+                }
+                FocusScrollDirection::Backward => {
+                    let Some(index) = visible_range.start.checked_sub(1) else {
+                        return false;
+                    };
+                    index
+                }
+            };
+
+            let Some((target_offset, target_main)) = controller.with(|c| {
+                staggered_item_layout_info(
+                    &c.cache,
+                    target_index,
+                    lane_count,
+                    estimated_item_main,
+                    main_axis_spacing,
+                )
+            }) else {
+                return false;
+            };
+
+            let desired_scroll = match scroll_direction {
+                FocusScrollDirection::Forward => {
+                    (target_offset + target_main - viewport_span).max(Px::ZERO)
+                }
+                FocusScrollDirection::Backward => target_offset,
+            }
+            .min(max_scroll);
+
+            if desired_scroll == current_scroll_offset {
+                return false;
+            }
+
+            let position = axis.scroll_position(desired_scroll);
+            scroll_controller.with_mut(|c| c.set_scroll_position(position));
+            true
+        }));
+    });
+}
+
 #[derive(PartialEq, Default)]
 struct StaggeredGridCache {
     item_main: Vec<Option<Px>>,
@@ -1279,6 +1392,30 @@ impl StaggeredGridCache {
         }
         self.item_main[index] = Some(actual);
     }
+}
+
+fn staggered_item_layout_info(
+    cache: &StaggeredGridCache,
+    target_index: usize,
+    lane_count: usize,
+    estimated_item_main: Px,
+    spacing: Px,
+) -> Option<(Px, Px)> {
+    if lane_count == 0 || target_index >= cache.item_main.len() {
+        return None;
+    }
+
+    let mut lane_offsets = vec![Px::ZERO; lane_count];
+    for index in 0..=target_index {
+        let lane = find_shortest_lane(&lane_offsets);
+        let item_main = cache.item_main(index).unwrap_or(estimated_item_main);
+        let item_offset = lane_offsets[lane];
+        if index == target_index {
+            return Some((item_offset, item_main));
+        }
+        lane_offsets[lane] = item_offset + item_main + spacing;
+    }
+    None
 }
 
 fn calculate_cells_cross_axis_size(available: Px, slot_count: usize, spacing: Px) -> Vec<Px> {

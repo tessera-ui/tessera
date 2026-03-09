@@ -262,11 +262,13 @@ pub fn fluid_glass(args: &FluidGlassArgs) {
     let fluid_args = args.clone();
     let mut modifier = fluid_args.modifier.clone();
     let interactive = fluid_args.on_click.is_some();
+    let focus_requester = remember_focus_requester();
     let interaction_state = interactive.then(|| remember(InteractionState::new));
     let ripple_state = interactive.then(|| remember(RippleState::new));
     let has_semantics = fluid_args.accessibility_role.is_some()
         || fluid_args.accessibility_label.is_some()
-        || fluid_args.accessibility_description.is_some();
+        || fluid_args.accessibility_description.is_some()
+        || fluid_args.accessibility_focusable;
 
     if interactive {
         let press_handler = ripple_state.map(|state| {
@@ -291,6 +293,8 @@ pub fn fluid_glass(args: &FluidGlassArgs) {
 
         if let Some(role) = fluid_args.accessibility_role {
             clickable_args = clickable_args.role(role);
+        } else if fluid_args.accessibility_focusable {
+            clickable_args = clickable_args.role(Role::Button);
         }
         if let Some(label) = fluid_args.accessibility_label.clone() {
             clickable_args = clickable_args.label(label);
@@ -307,6 +311,7 @@ pub fn fluid_glass(args: &FluidGlassArgs) {
         if let Some(handler) = release_handler {
             clickable_args = clickable_args.on_release(handler);
         }
+        clickable_args = clickable_args.focus_requester(focus_requester);
 
         modifier = modifier.clickable(clickable_args);
     } else if fluid_args.block_input {
@@ -316,12 +321,17 @@ pub fn fluid_glass(args: &FluidGlassArgs) {
         let mut semantics = SemanticsArgs::new();
         if let Some(role) = fluid_args.accessibility_role {
             semantics = semantics.role(role);
+        } else if fluid_args.accessibility_focusable {
+            semantics = semantics.role(Role::Button);
         }
         if let Some(label) = fluid_args.accessibility_label.clone() {
             semantics = semantics.label(label);
         }
         if let Some(desc) = fluid_args.accessibility_description.clone() {
             semantics = semantics.description(desc);
+        }
+        if fluid_args.accessibility_focusable {
+            semantics = semantics.focusable(true);
         }
         modifier = modifier.semantics(semantics);
     }

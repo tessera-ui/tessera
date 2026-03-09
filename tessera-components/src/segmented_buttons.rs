@@ -5,8 +5,9 @@
 //! Switch between views or filters with a connected control.
 
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
-    LayoutSpec, MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, accesskit::Role,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusState,
+    FocusTraversalPolicy, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier, Prop,
+    Px, PxPosition, RenderSlot, accesskit::Role, modifier::FocusModifierExt as _, provide_context,
     tessera, use_context,
 };
 
@@ -23,6 +24,11 @@ use crate::{
 };
 
 const SEGMENTED_ICON_SPACING: Dp = Dp(8.0);
+
+#[derive(Clone, Copy, Debug)]
+struct SegmentedButtonRowContext {
+    select_on_focus: bool,
+}
 
 /// Color values for segmented buttons in different states.
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -338,6 +344,7 @@ impl Default for SegmentedButtonRowArgs {
 #[tessera]
 pub fn segmented_button(args: &SegmentedButtonArgs) {
     let args: SegmentedButtonArgs = args.clone();
+    let row_context = use_context::<SegmentedButtonRowContext>().map(|context| context.get());
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -361,11 +368,24 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
     };
 
     let label = args.label;
+    let mut modifier =
+        args.modifier
+            .clone()
+            .size_in(None, None, Some(SegmentedButtonDefaults::HEIGHT), None);
+    if args.enabled
+        && row_context.is_some_and(|context| context.select_on_focus)
+        && let Some(on_click) = args.on_click.clone()
+    {
+        let is_selected = args.selected;
+        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
+            if focus_state.has_focus() && !is_selected {
+                on_click.call();
+            }
+        });
+    }
+
     let mut surface_args = SurfaceArgs::default()
-        .modifier(
-            args.modifier
-                .size_in(None, None, Some(SegmentedButtonDefaults::HEIGHT), None),
-        )
+        .modifier(modifier)
         .style(surface_style)
         .shape(args.shape)
         .content_alignment(Alignment::Center)
@@ -504,10 +524,21 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
 #[tessera]
 pub fn single_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {
     let (modifier, layout_spec, content) = segmented_button_row_parts(args.clone());
-    modifier.run(move || {
-        layout(layout_spec.clone());
-        content.render();
-    });
+    modifier
+        .focus_group()
+        .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true))
+        .run(move || {
+            let content = content.clone();
+            layout(layout_spec.clone());
+            provide_context(
+                || SegmentedButtonRowContext {
+                    select_on_focus: true,
+                },
+                move || {
+                    content.render();
+                },
+            );
+        });
 }
 
 /// # multi_choice_segmented_button_row
@@ -575,10 +606,21 @@ pub fn single_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {
 #[tessera]
 pub fn multi_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {
     let (modifier, layout_spec, content) = segmented_button_row_parts(args.clone());
-    modifier.run(move || {
-        layout(layout_spec.clone());
-        content.render();
-    });
+    modifier
+        .focus_group()
+        .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true))
+        .run(move || {
+            let content = content.clone();
+            layout(layout_spec.clone());
+            provide_context(
+                || SegmentedButtonRowContext {
+                    select_on_focus: false,
+                },
+                move || {
+                    content.render();
+                },
+            );
+        });
 }
 
 fn segmented_button_row_parts(

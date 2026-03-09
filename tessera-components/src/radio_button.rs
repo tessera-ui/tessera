@@ -7,8 +7,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CallbackWith, Color, DimensionValue, Dp, Modifier, Prop, Px, PxSize, State, accesskit::Role,
-    current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
+    CallbackWith, Color, DimensionValue, Dp, FocusState, FocusTraversalPolicy, Modifier, Prop, Px,
+    PxSize, RenderSlot, State, accesskit::Role, current_frame_nanos,
+    modifier::FocusModifierExt as _, provide_context, receive_frame_nanos, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -23,6 +25,19 @@ use crate::{
 };
 
 const RADIO_ANIMATION_DURATION: Duration = Duration::from_millis(200);
+
+#[derive(Clone, Copy, Debug)]
+struct RadioGroupContext;
+
+/// Orientation for [`radio_group`] traversal.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum RadioGroupOrientation {
+    /// Traverse radios vertically with `Up` and `Down`.
+    #[default]
+    Vertical,
+    /// Traverse radios horizontally with `Left` and `Right`.
+    Horizontal,
+}
 
 /// Material Design 3 defaults for [`radio_button`].
 pub struct RadioButtonDefaults;
@@ -210,6 +225,48 @@ impl Default for RadioButtonArgs {
     }
 }
 
+/// Arguments for [`radio_group`].
+#[derive(Clone, Prop)]
+pub struct RadioGroupArgs {
+    /// Modifier chain applied to the group container.
+    pub modifier: Modifier,
+    /// Direction used for keyboard traversal inside the group.
+    pub orientation: RadioGroupOrientation,
+    /// Whether traversal wraps when it reaches either end.
+    pub wrap: bool,
+    /// Radios rendered inside the group.
+    #[prop(skip_setter)]
+    pub content: Option<RenderSlot>,
+}
+
+impl RadioGroupArgs {
+    /// Sets the content slot.
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.content = Some(RenderSlot::new(content));
+        self
+    }
+
+    /// Sets the content slot using a shared render slot.
+    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
+        self.content = Some(content.into());
+        self
+    }
+}
+
+impl Default for RadioGroupArgs {
+    fn default() -> Self {
+        Self {
+            modifier: Modifier::new(),
+            orientation: RadioGroupOrientation::default(),
+            wrap: true,
+            content: None,
+        }
+    }
+}
+
 fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
     let factor = t.clamp(0.0, 1.0);
     Color {
@@ -218,6 +275,76 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
         b: a.b + (b.b - a.b) * factor,
         a: a.a + (b.a - a.a) * factor,
     }
+}
+
+/// # radio_group
+///
+/// Provide roving-focus keyboard navigation for a single-choice group of radio
+/// buttons.
+///
+/// ## Usage
+///
+/// Use around related radio buttons so arrow keys move within the group and
+/// focus change selects the active radio.
+///
+/// ## Parameters
+///
+/// - `args` — configures orientation, wrapping, and group content; see
+///   [`RadioGroupArgs`].
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_components::radio_button::{
+///     RadioButtonArgs, RadioGroupArgs, radio_button, radio_group,
+/// };
+/// use tessera_ui::{remember, tessera};
+///
+/// #[tessera]
+/// fn radio_group_demo() {
+///     let selected = remember(|| 0usize);
+///     radio_group(&RadioGroupArgs::default().content(move || {
+///         radio_button(
+///             &RadioButtonArgs::default()
+///                 .selected(selected.get() == 0)
+///                 .on_select({
+///                     let selected = selected;
+///                     move |_| selected.set(0)
+///                 }),
+///         );
+///         radio_button(
+///             &RadioButtonArgs::default()
+///                 .selected(selected.get() == 1)
+///                 .on_select({
+///                     let selected = selected;
+///                     move |_| selected.set(1)
+///                 }),
+///         );
+///     }));
+/// }
+/// ```
+#[tessera]
+pub fn radio_group(args: &RadioGroupArgs) {
+    let args = args.clone();
+    let content = args.content.unwrap_or_else(|| RenderSlot::new(|| {}));
+    args.modifier
+        .focus_group()
+        .focus_traversal_policy(
+            match args.orientation {
+                RadioGroupOrientation::Horizontal => FocusTraversalPolicy::horizontal(),
+                RadioGroupOrientation::Vertical => FocusTraversalPolicy::vertical(),
+            }
+            .wrap(args.wrap),
+        )
+        .run(move || {
+            let content = content.clone();
+            provide_context(
+                || RadioGroupContext,
+                move || {
+                    content.render();
+                },
+            );
+        });
 }
 
 /// # radio_button
@@ -263,6 +390,7 @@ pub fn radio_button(args: &RadioButtonArgs) {
 #[tessera]
 fn radio_button_node(args: &RadioButtonArgs) {
     let args = args.clone();
+    let radio_group = use_context::<RadioGroupContext>().map(|context| context.get());
     let controller = args
         .controller
         .expect("radio_button_node requires controller to be set");
@@ -349,6 +477,15 @@ fn radio_button_node(args: &RadioButtonArgs) {
     state_layer_args.set_ripple_state(ripple_state);
 
     let mut modifier = args.modifier.clone().size(target_size, target_size);
+    if args.enabled && radio_group.is_some() {
+        let on_select = args.on_select.clone();
+        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
+            if focus_state.has_focus() && controller.with_mut(|controller| controller.select()) {
+                on_select.call(true);
+            }
+        });
+    }
+
     if args.enabled {
         let ripple_spec = RippleSpec {
             bounded: false,

@@ -4,8 +4,8 @@
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Prop, Px, PxPosition, PxSize, RenderSlot, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusProperties, FocusRequester,
+    MeasurementError, Modifier, Prop, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
@@ -194,6 +194,10 @@ pub struct SurfaceArgs {
     pub accessibility_description: Option<String>,
     /// Whether this surface should be focusable even when not interactive.
     pub accessibility_focusable: bool,
+    /// Optional externally managed focus requester for the interactive surface.
+    pub focus_requester: Option<FocusRequester>,
+    /// Optional focus properties applied to the interactive surface target.
+    pub focus_properties: Option<FocusProperties>,
     /// Optional child render slot.
     #[prop(skip_setter)]
     pub child: Option<RenderSlot>,
@@ -270,6 +274,8 @@ impl Default for SurfaceArgs {
             accessibility_label: None,
             accessibility_description: None,
             accessibility_focusable: false,
+            focus_requester: None,
+            focus_properties: None,
             child: None,
         }
     }
@@ -820,6 +826,8 @@ pub fn surface(args: &SurfaceArgs) {
     let mut modifier = args.modifier.clone();
     let clickable = args.on_click.is_some();
     let interactive = args.enabled && clickable;
+    let internal_focus_requester = remember_focus_requester();
+    let focus_requester = args.focus_requester.unwrap_or(internal_focus_requester);
     let interaction_state = args
         .interaction_state
         .or_else(|| interactive.then(|| remember(InteractionState::new)));
@@ -873,12 +881,16 @@ pub fn surface(args: &SurfaceArgs) {
         if let Some(state) = interaction_state {
             clickable_args = clickable_args.interaction_state(state);
         }
+        if let Some(properties) = args.focus_properties {
+            clickable_args = clickable_args.focus_properties(properties);
+        }
         if let Some(handler) = press_handler {
             clickable_args = clickable_args.on_press(handler);
         }
         if let Some(handler) = release_handler {
             clickable_args = clickable_args.on_release(handler);
         }
+        clickable_args = clickable_args.focus_requester(focus_requester);
 
         modifier = modifier.clickable(clickable_args);
     } else if args.block_input {

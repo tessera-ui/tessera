@@ -6,11 +6,12 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Prop, Px, PxPosition, PxSize, RenderSlot, State,
+    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusTraversalPolicy,
+    MeasurementError, Modifier, Prop, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -583,73 +584,92 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
     let selected_index = controller.with(|c| c.selected());
     let previous_index = controller.with(|c| c.previous_selected());
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
-            .style(scheme.surface_container.into())
-            .elevation(Dp(3.0))
-            .block_input(true),
-        move || {
+    Modifier::new()
+        .focus_group()
+        .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true))
+        .run({
             let items = items.clone();
-            let separator_color = scheme.outline_variant.with_alpha(0.12);
-            column(
-                &ColumnArgs::default()
-                    .modifier(Modifier::new().fill_max_size())
-                    .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                    .children(move |column_scope| {
-                        column_scope.child(move || {
-                            surface(&crate::surface::SurfaceArgs::with_child(
-                                SurfaceArgs::default()
-                                    .modifier(
-                                        Modifier::new().fill_max_width().height(DIVIDER_HEIGHT),
-                                    )
-                                    .style(separator_color.into()),
-                                || {},
-                            ));
-                        });
+            move || {
+                let items_for_surface = items.clone();
+                surface(&crate::surface::SurfaceArgs::with_child(
+                    SurfaceArgs::default()
+                        .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
+                        .style(scheme.surface_container.into())
+                        .elevation(Dp(3.0))
+                        .block_input(true),
+                    move || {
+                        let items = items_for_surface.clone();
+                        let separator_color = scheme.outline_variant.with_alpha(0.12);
+                        column(
+                            &ColumnArgs::default()
+                                .modifier(Modifier::new().fill_max_size())
+                                .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                                .children(move |column_scope| {
+                                    column_scope.child(move || {
+                                        surface(&crate::surface::SurfaceArgs::with_child(
+                                            SurfaceArgs::default()
+                                                .modifier(
+                                                    Modifier::new()
+                                                        .fill_max_width()
+                                                        .height(DIVIDER_HEIGHT),
+                                                )
+                                                .style(separator_color.into()),
+                                            || {},
+                                        ));
+                                    });
 
-                        column_scope.child_weighted(
-                            move || {
-                                let items = items.clone();
-                                row(&RowArgs::default()
-                                    .modifier(Modifier::new().fill_max_size())
-                                    .main_axis_alignment(MainAxisAlignment::Start)
-                                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .children(move |row_scope| {
-                                        let last_index = items.len().saturating_sub(1);
-                                        for (index, item) in items.iter().cloned().enumerate() {
-                                            row_scope.child_weighted(
-                                                move || {
-                                                    let item_args = NavigationBarItemArgs {
-                                                        controller,
-                                                        index,
-                                                        item: item.clone(),
-                                                        selected_index,
-                                                        previous_index,
-                                                        animation_progress,
-                                                    };
-                                                    navigation_bar_item_node(&item_args);
-                                                },
-                                                1.0,
-                                            );
+                                    column_scope.child_weighted(
+                                        move || {
+                                            let items = items.clone();
+                                            row(&RowArgs::default()
+                                                .modifier(Modifier::new().fill_max_size())
+                                                .main_axis_alignment(MainAxisAlignment::Start)
+                                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                                .children(move |row_scope| {
+                                                    let last_index = items.len().saturating_sub(1);
+                                                    for (index, item) in
+                                                        items.iter().cloned().enumerate()
+                                                    {
+                                                        row_scope.child_weighted(
+                                                            move || {
+                                                                let item_args =
+                                                                    NavigationBarItemArgs {
+                                                                        controller,
+                                                                        index,
+                                                                        item: item.clone(),
+                                                                        selected_index,
+                                                                        previous_index,
+                                                                        animation_progress,
+                                                                    };
+                                                                navigation_bar_item_node(
+                                                                    &item_args,
+                                                                );
+                                                            },
+                                                            1.0,
+                                                        );
 
-                                            if index != last_index {
-                                                row_scope.child(|| {
-                                                    spacer(&crate::spacer::SpacerArgs::new(
-                                                        Modifier::new()
-                                                            .width(ITEM_HORIZONTAL_SPACING),
-                                                    ));
-                                                });
-                                            }
-                                        }
-                                    }));
-                            },
-                            1.0,
+                                                        if index != last_index {
+                                                            row_scope.child(|| {
+                                                                spacer(
+                                                                    &crate::spacer::SpacerArgs::new(
+                                                                        Modifier::new().width(
+                                                                            ITEM_HORIZONTAL_SPACING,
+                                                                        ),
+                                                                    ),
+                                                                );
+                                                            });
+                                                        }
+                                                    }
+                                                }));
+                                        },
+                                        1.0,
+                                    );
+                                }),
                         );
-                    }),
-            );
-        },
-    ));
+                    },
+                ));
+            }
+        });
 }
 
 /// Controller for the `navigation_bar` component.

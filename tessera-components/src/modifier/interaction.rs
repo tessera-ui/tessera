@@ -6,9 +6,10 @@
 //! subtrees.
 
 use tessera_ui::{
-    Callback, CallbackWith, ComputedData, Prop, PxPosition, PxSize, RenderSlot, State,
-    WindowAction,
+    Callback, CallbackWith, ComputedData, FocusProperties, FocusRequester, FocusState, Modifier,
+    Prop, PxPosition, PxSize, RenderSlot, State, WindowAction,
     accesskit::{self, Action, Toggled},
+    modifier::FocusModifierExt as _,
     remember, tessera,
     winit::window::CursorIcon,
 };
@@ -53,6 +54,10 @@ pub struct ClickableArgs {
     pub description: Option<String>,
     /// Optional external interaction state (hover/pressed/focus).
     pub interaction_state: Option<State<InteractionState>>,
+    /// Optional externally managed focus requester for this clickable target.
+    pub focus_requester: Option<FocusRequester>,
+    /// Optional focus properties applied to the clickable target.
+    pub focus_properties: Option<FocusProperties>,
 }
 
 impl ClickableArgs {
@@ -68,6 +73,8 @@ impl ClickableArgs {
             label: None,
             description: None,
             interaction_state: None,
+            focus_requester: None,
+            focus_properties: None,
         }
     }
 
@@ -118,6 +125,18 @@ impl ClickableArgs {
         self.interaction_state = Some(state);
         self
     }
+
+    /// Attach an external focus requester.
+    pub fn focus_requester(mut self, requester: FocusRequester) -> Self {
+        self.focus_requester = Some(requester);
+        self
+    }
+
+    /// Attach explicit focus properties.
+    pub fn focus_properties(mut self, properties: FocusProperties) -> Self {
+        self.focus_properties = Some(properties);
+        self
+    }
 }
 
 /// Arguments for the `toggleable` modifier.
@@ -142,6 +161,8 @@ pub struct ToggleableArgs {
     pub on_press: Option<PressCallback>,
     /// Optional release callback with normalized position and element size.
     pub on_release: Option<PressCallback>,
+    /// Optional externally managed focus requester for this toggleable target.
+    pub focus_requester: Option<FocusRequester>,
 }
 
 impl ToggleableArgs {
@@ -158,6 +179,7 @@ impl ToggleableArgs {
             interaction_state: None,
             on_press: None,
             on_release: None,
+            focus_requester: None,
         }
     }
 
@@ -200,6 +222,12 @@ impl ToggleableArgs {
     /// Set a release callback.
     pub fn on_release(mut self, on_release: impl Into<PressCallback>) -> Self {
         self.on_release = Some(on_release.into());
+        self
+    }
+
+    /// Attach an external focus requester.
+    pub fn focus_requester(mut self, requester: FocusRequester) -> Self {
+        self.focus_requester = Some(requester);
         self
     }
 }
@@ -226,6 +254,8 @@ pub struct SelectableArgs {
     pub on_press: Option<PressCallback>,
     /// Optional release callback with normalized position and element size.
     pub on_release: Option<PressCallback>,
+    /// Optional externally managed focus requester for this selectable target.
+    pub focus_requester: Option<FocusRequester>,
 }
 
 impl SelectableArgs {
@@ -242,6 +272,7 @@ impl SelectableArgs {
             interaction_state: None,
             on_press: None,
             on_release: None,
+            focus_requester: None,
         }
     }
 
@@ -286,6 +317,12 @@ impl SelectableArgs {
         self.on_release = Some(on_release.into());
         self
     }
+
+    /// Attach an external focus requester.
+    pub fn focus_requester(mut self, requester: FocusRequester) -> Self {
+        self.focus_requester = Some(requester);
+        self
+    }
 }
 
 fn pointer_context(position: Option<PxPosition>, size: ComputedData) -> PointerEventContext {
@@ -305,15 +342,54 @@ fn pointer_context(position: Option<PxPosition>, size: ComputedData) -> PointerE
     }
 }
 
+fn has_keyboard_activation_event(
+    keyboard_events: &[tessera_ui::winit::event::KeyEvent],
+    modifiers: tessera_ui::winit::keyboard::ModifiersState,
+) -> bool {
+    if modifiers.control_key() || modifiers.alt_key() || modifiers.super_key() {
+        return false;
+    }
+
+    keyboard_events.iter().any(|event| {
+        event.state == tessera_ui::winit::event::ElementState::Pressed
+            && matches!(
+                &event.logical_key,
+                tessera_ui::winit::keyboard::Key::Named(
+                    tessera_ui::winit::keyboard::NamedKey::Enter
+                        | tessera_ui::winit::keyboard::NamedKey::Space
+                )
+            )
+    })
+}
+
+fn reset_disabled_interaction_state(state: State<InteractionState>) {
+    let should_reset = state.with(|interaction| {
+        interaction.is_hovered()
+            || interaction.is_pressed()
+            || interaction.is_dragged()
+            || interaction.is_focused()
+    });
+    if should_reset {
+        state.with_mut(|interaction| {
+            interaction.release();
+            interaction.set_hovered(false);
+            interaction.set_dragged(false);
+            interaction.set_focused(false);
+        });
+    }
+}
+
 #[derive(Clone, Prop)]
 struct ModifierClickableArgs {
     clickable: ClickableArgs,
+    focus_requester: Option<FocusRequester>,
     child: RenderSlot,
 }
 
 pub(crate) fn modifier_clickable(args: ClickableArgs, child: RenderSlot) {
     let render_args = ModifierClickableArgs {
         clickable: args,
+        focus_requester: None,
         child,
     };
     modifier_clickable_node(&render_args);
@@ -331,11 +407,48 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
         label,
         description,
         interaction_state,
+        focus_requester: provided_focus_requester,
+        focus_properties: provided_focus_properties,
     } = args.clickable.clone();
     let tap_recognizer = remember(TapRecognizer::default);
     let long_press_recognizer = remember(LongPressRecognizer::default);
+    let focus_requester = provided_focus_requester
+        .unwrap_or_else(|| args.focus_requester.unwrap_or_else(focus_requester));
+    let participates_in_focus =
+        enabled && (role.is_some() || label.is_some() || description.is_some());
+    let mut modifier = Modifier::new();
 
-    args.child.render();
+    if participates_in_focus {
+        modifier = modifier.focus_requester(focus_requester).focusable();
+        if let Some(properties) = provided_focus_properties {
+            modifier = modifier.focus_properties(properties);
+        }
+    } else if !enabled && let Some(interaction_state) = interaction_state {
+        reset_disabled_interaction_state(interaction_state);
+    }
+    if let Some(interaction_state) = interaction_state {
+        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
+            interaction_state.with_mut(|state| state.set_focused(focus_state.has_focus()));
+        });
+    }
+
+    let child = args.child.clone();
+    modifier.run(move || child.render());
+
+    {
+        let on_click = on_click.clone();
+        keyboard_input_handler(move |mut input| {
+            if !enabled
+                || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
+            {
+                return;
+            }
+
+            focus_requester.request_focus();
+            on_click.call();
+            input.block_keyboard();
+        });
+    }
 
     let role = role.unwrap_or(accesskit::Role::Button);
     pointer_input_handler(move |mut input| {
@@ -389,8 +502,10 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
 
         if enabled {
             let on_click_action = on_click.clone();
+            let focus_requester = focus_requester;
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
+                    focus_requester.request_focus();
                     on_click_action.call();
                 }
             });
@@ -429,6 +544,7 @@ fn modifier_clickable_node(args: &ModifierClickableArgs) {
         let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
         if tap_result.pressed {
+            focus_requester.request_focus();
             if let Some(on_press) = on_press.as_ref() {
                 on_press.call(context);
             }
@@ -613,12 +729,14 @@ fn modifier_block_touch_propagation_node(args: &ModifierBlockTouchPropagationArg
 #[derive(Clone, Prop)]
 struct ModifierToggleableArgs {
     toggleable: ToggleableArgs,
+    focus_requester: Option<FocusRequester>,
     child: RenderSlot,
 }
 
 pub(crate) fn modifier_toggleable(args: ToggleableArgs, child: RenderSlot) {
     let render_args = ModifierToggleableArgs {
         toggleable: args,
+        focus_requester: None,
         child,
     };
     modifier_toggleable_node(&render_args);
@@ -636,10 +754,41 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
         interaction_state,
         on_press,
         on_release,
+        focus_requester: provided_focus_requester,
     } = args.toggleable.clone();
     let tap_recognizer = remember(TapRecognizer::default);
+    let focus_requester = provided_focus_requester
+        .unwrap_or_else(|| args.focus_requester.unwrap_or_else(focus_requester));
+    let mut modifier = Modifier::new();
 
-    args.child.render();
+    if enabled {
+        modifier = modifier.focus_requester(focus_requester).focusable();
+    } else if let Some(interaction_state) = interaction_state {
+        reset_disabled_interaction_state(interaction_state);
+    }
+    if let Some(interaction_state) = interaction_state {
+        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
+            interaction_state.with_mut(|state| state.set_focused(focus_state.has_focus()));
+        });
+    }
+
+    let child = args.child.clone();
+    modifier.run(move || child.render());
+
+    {
+        let on_value_change = on_value_change.clone();
+        keyboard_input_handler(move |mut input| {
+            if !enabled
+                || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
+            {
+                return;
+            }
+
+            focus_requester.request_focus();
+            on_value_change.call(!value);
+            input.block_keyboard();
+        });
+    }
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
     pointer_input_handler(move |input| {
@@ -686,8 +835,10 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
 
         if enabled {
             let on_value_change = on_value_change.clone();
+            let focus_requester = focus_requester;
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
+                    focus_requester.request_focus();
                     on_value_change.call(!value);
                 }
             });
@@ -703,11 +854,13 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
                 interaction_state.with_mut(|s| s.set_hovered(within_bounds));
             }
         } else {
-            let should_reset = interaction_state.with(|s| s.is_pressed() || s.is_hovered());
+            let should_reset =
+                interaction_state.with(|s| s.is_pressed() || s.is_hovered() || s.is_focused());
             if should_reset {
                 interaction_state.with_mut(|s| {
                     s.release();
                     s.set_hovered(false);
+                    s.set_focused(false);
                 });
             }
             return;
@@ -716,6 +869,7 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
         let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
         if tap_result.pressed {
+            focus_requester.request_focus();
             if let Some(on_press) = on_press.as_ref() {
                 on_press.call(context);
             }
@@ -754,12 +908,14 @@ fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
 #[derive(Clone, Prop)]
 struct ModifierSelectableArgs {
     selectable: SelectableArgs,
+    focus_requester: Option<FocusRequester>,
     child: RenderSlot,
 }
 
 pub(crate) fn modifier_selectable(args: SelectableArgs, child: RenderSlot) {
     let render_args = ModifierSelectableArgs {
         selectable: args,
+        focus_requester: None,
         child,
     };
     modifier_selectable_node(&render_args);
@@ -777,10 +933,41 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
         interaction_state,
         on_press,
         on_release,
+        focus_requester: provided_focus_requester,
     } = args.selectable.clone();
     let tap_recognizer = remember(TapRecognizer::default);
+    let focus_requester = provided_focus_requester
+        .unwrap_or_else(|| args.focus_requester.unwrap_or_else(focus_requester));
+    let mut modifier = Modifier::new();
 
-    args.child.render();
+    if enabled {
+        modifier = modifier.focus_requester(focus_requester).focusable();
+    } else if let Some(interaction_state) = interaction_state {
+        reset_disabled_interaction_state(interaction_state);
+    }
+    if let Some(interaction_state) = interaction_state {
+        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
+            interaction_state.with_mut(|state| state.set_focused(focus_state.has_focus()));
+        });
+    }
+
+    let child = args.child.clone();
+    modifier.run(move || child.render());
+
+    {
+        let on_click = on_click.clone();
+        keyboard_input_handler(move |mut input| {
+            if !enabled
+                || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
+            {
+                return;
+            }
+
+            focus_requester.request_focus();
+            on_click.call();
+            input.block_keyboard();
+        });
+    }
 
     let role = role.unwrap_or(accesskit::Role::Button);
     pointer_input_handler(move |input| {
@@ -831,8 +1018,10 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
 
         if enabled {
             let on_click = on_click.clone();
+            let focus_requester = focus_requester;
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
+                    focus_requester.request_focus();
                     on_click.call();
                 }
             });
@@ -848,11 +1037,13 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
                 interaction_state.with_mut(|s| s.set_hovered(within_bounds));
             }
         } else {
-            let should_reset = interaction_state.with(|s| s.is_pressed() || s.is_hovered());
+            let should_reset =
+                interaction_state.with(|s| s.is_pressed() || s.is_hovered() || s.is_focused());
             if should_reset {
                 interaction_state.with_mut(|s| {
                     s.release();
                     s.set_hovered(false);
+                    s.set_focused(false);
                 });
             }
             return;
@@ -861,6 +1052,7 @@ fn modifier_selectable_node(args: &ModifierSelectableArgs) {
         let context = pointer_context(input.cursor_position_rel, input.computed_data);
 
         if tap_result.pressed {
+            focus_requester.request_focus();
             if let Some(on_press) = on_press.as_ref() {
                 on_press.call(context);
             }

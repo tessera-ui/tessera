@@ -5,8 +5,8 @@
 //! Group related content into a single, elevated or outlined container.
 
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, Prop, RenderSlot, State, receive_frame_nanos, remember, tessera,
-    use_context,
+    Callback, Color, Dp, Modifier, Prop, RenderSlot, State, accesskit::Role, receive_frame_nanos,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -615,7 +615,10 @@ pub fn card(args: &CardArgs) {
     }
 
     if let Some(on_click) = args.on_click.clone() {
-        surface_args = surface_args.on_click_shared(on_click);
+        surface_args = surface_args
+            .on_click_shared(on_click)
+            .accessibility_role(Role::Button)
+            .accessibility_focusable(true);
     }
 
     surface(&crate::surface::SurfaceArgs::with_child(

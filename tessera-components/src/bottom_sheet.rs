@@ -6,9 +6,11 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError,
-    Modifier, Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
+    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp,
+    FocusTraversalPolicy, MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, State,
+    current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
@@ -373,14 +375,25 @@ fn render_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bool) {
 fn make_keyboard_closure(
     on_close: Callback,
 ) -> Box<dyn Fn(tessera_ui::KeyboardInput<'_>) + Send + Sync> {
-    Box::new(move |input: tessera_ui::KeyboardInput<'_>| {
-        for event in input.keyboard_events.drain(..) {
-            if event.state == winit::event::ElementState::Pressed
-                && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
-                    event.physical_key
+    Box::new(move |mut input: tessera_ui::KeyboardInput<'_>| {
+        let mut handled = false;
+        input.keyboard_events.retain(|event| {
+            if event.state != winit::event::ElementState::Pressed {
+                return true;
+            }
+
+            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
+                event.physical_key
             {
                 on_close.call();
+                handled = true;
+                return false;
             }
+
+            true
+        });
+        if handled {
+            input.block_keyboard();
         }
     })
 }
@@ -593,91 +606,117 @@ fn build_bottom_sheet_nested_scroll_connection(
         .with_parent(parent)
 }
 
-fn render_content(
+#[derive(Clone, Prop)]
+struct BottomSheetContentWrapperArgs {
     style: BottomSheetStyle,
     bottom_sheet_content: RenderSlot,
     controller: State<BottomSheetController>,
     on_close: Callback,
-) {
-    let bottom_sheet_content = bottom_sheet_content.clone();
+    just_opened: bool,
+}
+
+#[tessera]
+fn bottom_sheet_content_wrapper_node(args: &BottomSheetContentWrapperArgs) {
+    let args = args.clone();
+    let bottom_sheet_content = args.bottom_sheet_content.clone();
     let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
     let nested_scroll_connection = build_bottom_sheet_nested_scroll_connection(
-        controller,
-        on_close.clone(),
+        args.controller,
+        args.on_close.clone(),
         parent_nested_scroll,
     );
-    let content_wrapper = move || {
-        let bottom_sheet_content = bottom_sheet_content.clone();
-        let on_close = on_close.clone();
-        let nested_scroll_connection = nested_scroll_connection.clone();
-        column(
-            &ColumnArgs::default()
-                .modifier(Modifier::new().fill_max_width())
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .children(move |scope| {
-                    let on_close = on_close.clone();
-                    scope.child(move || {
-                        bottom_sheet_drag_handle_node(&BottomSheetDragHandleArgs {
-                            controller,
-                            on_close: on_close.clone(),
-                        });
-                    });
+    let just_opened = args.just_opened;
+    let on_close = args.on_close.clone();
+    let style = args.style;
+    let focus_scope = remember_focus_scope();
+    Modifier::new()
+        .focus_scope_with(focus_scope)
+        .focus_traversal_policy(
+            FocusTraversalPolicy::linear()
+                .wrap(true)
+                .tab_navigation(true),
+        )
+        .run(move || {
+            if just_opened {
+                focus_scope.restore_focus();
+            }
+            keyboard_input_handler(make_keyboard_closure(on_close.clone()));
+            let bottom_sheet_content = bottom_sheet_content.clone();
+            let nested_scroll_connection = nested_scroll_connection.clone();
+            let on_close = on_close.clone();
+            let content_wrapper = move || {
+                let bottom_sheet_content = bottom_sheet_content.clone();
+                let on_close = on_close.clone();
+                let nested_scroll_connection = nested_scroll_connection.clone();
+                column(
+                    &ColumnArgs::default()
+                        .modifier(Modifier::new().fill_max_width())
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |scope| {
+                            let on_close = on_close.clone();
+                            scope.child(move || {
+                                bottom_sheet_drag_handle_node(&BottomSheetDragHandleArgs {
+                                    controller: args.controller,
+                                    on_close: on_close.clone(),
+                                });
+                            });
 
-                    let bottom_sheet_content = bottom_sheet_content.clone();
-                    let nested_scroll_connection = nested_scroll_connection.clone();
-                    scope.child(move || {
-                        let bottom_sheet_content = bottom_sheet_content.clone();
-                        provide_context(
-                            || nested_scroll_connection.clone(),
-                            move || {
-                                bottom_sheet_content.render();
-                            },
-                        );
-                    });
-                }),
-        );
-    };
-    match style {
-        BottomSheetStyle::Glass => {
-            fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-                FluidGlassArgs::default()
-                    .shape(Shape::RoundedRectangle {
-                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-                    })
-                    .tint_color(Color::WHITE.with_alpha(0.4))
-                    .modifier(Modifier::new().fill_max_width())
-                    .refraction_amount(32.0)
-                    .blur_radius(Dp(5.0))
-                    .block_input(true),
-                content_wrapper,
-            ));
-        }
-        BottomSheetStyle::Material => {
-            surface(&crate::surface::SurfaceArgs::with_child(
-                SurfaceArgs::default()
-                    .style(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .color_scheme
-                            .surface_container_low
-                            .into(),
-                    )
-                    .shape(Shape::RoundedRectangle {
-                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-                    })
-                    .modifier(Modifier::new().fill_max_width())
-                    .block_input(true),
-                content_wrapper,
-            ));
-        }
-    }
+                            let bottom_sheet_content = bottom_sheet_content.clone();
+                            let nested_scroll_connection = nested_scroll_connection.clone();
+                            scope.child(move || {
+                                let bottom_sheet_content = bottom_sheet_content.clone();
+                                provide_context(
+                                    || nested_scroll_connection.clone(),
+                                    move || {
+                                        bottom_sheet_content.render();
+                                    },
+                                );
+                            });
+                        }),
+                );
+            };
+            match style {
+                BottomSheetStyle::Glass => {
+                    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
+                        FluidGlassArgs::default()
+                            .shape(Shape::RoundedRectangle {
+                                top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                            })
+                            .tint_color(Color::WHITE.with_alpha(0.4))
+                            .modifier(Modifier::new().fill_max_width())
+                            .refraction_amount(32.0)
+                            .blur_radius(Dp(5.0))
+                            .block_input(true),
+                        content_wrapper,
+                    ));
+                }
+                BottomSheetStyle::Material => {
+                    surface(&crate::surface::SurfaceArgs::with_child(
+                        SurfaceArgs::default()
+                            .style(
+                                use_context::<MaterialTheme>()
+                                    .expect("MaterialTheme must be provided")
+                                    .get()
+                                    .color_scheme
+                                    .surface_container_low
+                                    .into(),
+                            )
+                            .shape(Shape::RoundedRectangle {
+                                top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                            })
+                            .modifier(Modifier::new().fill_max_width())
+                            .block_input(true),
+                        content_wrapper,
+                    ));
+                }
+            }
+        });
 }
 
 /// # bottom_sheet_provider
@@ -750,6 +789,12 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
     // Snapshot state to minimize locking overhead.
     let (is_open, timer_opt, drag_offset) = controller.with(|c| c.snapshot());
     let is_animating = controller.with(|c| c.is_animating());
+    let bottom_sheet_open_state = remember(|| false);
+    let mut just_opened = false;
+    bottom_sheet_open_state.with_mut(|was_open| {
+        just_opened = !*was_open && is_open;
+        *was_open = is_open;
+    });
     if is_animating {
         let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
@@ -775,20 +820,17 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
         return;
     }
 
-    let on_close_for_keyboard = provider_args.on_close_request.clone();
     let progress = calc_progress_from_timer(timer_opt);
 
     render_scrim(&provider_args, progress, is_open);
 
-    let keyboard_closure = make_keyboard_closure(on_close_for_keyboard);
-    keyboard_input_handler(keyboard_closure);
-
-    render_content(
-        provider_args.style,
+    bottom_sheet_content_wrapper_node(&BottomSheetContentWrapperArgs {
+        style: provider_args.style,
         bottom_sheet_content,
         controller,
-        provider_args.on_close_request.clone(),
-    );
+        on_close: provider_args.on_close_request.clone(),
+        just_opened,
+    });
 
     layout(BottomSheetLayout {
         progress,

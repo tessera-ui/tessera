@@ -7,9 +7,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, ComputedData, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px,
-    PxPosition, RenderSlot, State, current_frame_nanos,
+    Callback, Color, ComputedData, DimensionValue, Dp, FocusTraversalPolicy, MeasurementError,
+    Modifier, Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
@@ -245,6 +246,8 @@ struct DialogContentWrapperArgs {
     style: DialogStyle,
     alpha: f32,
     padding: Dp,
+    just_opened: bool,
+    on_close_request: Callback,
     content: RenderSlot,
 }
 
@@ -304,98 +307,152 @@ fn render_scrim(style: DialogStyle, on_close_request: &Callback, is_open: bool, 
 fn make_keyboard_handler(
     on_close: Callback,
 ) -> Box<dyn for<'a> Fn(tessera_ui::KeyboardInput<'a>) + Send + Sync + 'static> {
-    Box::new(move |input| {
-        input.keyboard_events.drain(..).for_each(|event| {
-            if event.state == winit::event::ElementState::Pressed
-                && let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
-                    event.physical_key
+    Box::new(move |mut input| {
+        let mut handled = false;
+        input.keyboard_events.retain(|event| {
+            if event.state != winit::event::ElementState::Pressed {
+                return true;
+            }
+
+            if let winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) =
+                event.physical_key
             {
                 on_close.call();
+                handled = true;
+                return false;
             }
+
+            true
         });
+        if handled {
+            input.block_keyboard();
+        }
     })
 }
 
 #[tessera]
 fn dialog_content_wrapper_node(args: &DialogContentWrapperArgs) {
+    let args = args.clone();
     let style = args.style;
     let alpha = args.alpha;
     let padding = args.padding;
     let content = args.content.clone();
-    layout(DialogContentLayout { alpha });
+    let just_opened = args.just_opened;
+    let on_close_request = args.on_close_request.clone();
+    let focus_scope = remember_focus_scope();
+    Modifier::new()
+        .focus_scope_with(focus_scope)
+        .focus_traversal_policy(
+            FocusTraversalPolicy::linear()
+                .wrap(true)
+                .tab_navigation(true),
+        )
+        .run(move || {
+            if just_opened {
+                focus_scope.restore_focus();
+            }
+            keyboard_input_handler(make_keyboard_handler(on_close_request.clone()));
+            layout(DialogContentLayout { alpha });
 
-    boxed(
-        &BoxedArgs::default()
-            .modifier(Modifier::new().fill_max_size())
-            .alignment(Alignment::Center)
-            .children(|scope| {
-                scope.child(move || {
-                    let content = content.clone();
-                    surface(&crate::surface::SurfaceArgs::with_child(
-                        SurfaceArgs::default()
-                            .style(Color::TRANSPARENT.into())
-                            .modifier(
-                                Modifier::new()
-                                    .constrain(
-                                        Some(DimensionValue::WRAP),
-                                        Some(DimensionValue::WRAP),
-                                    )
-                                    .padding_all(Dp(24.0)),
-                            ),
-                        move || match style {
-                            DialogStyle::Glass => {
-                                let content_for_glass = content.clone();
-                                fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-                                    FluidGlassArgs::default()
-                                        .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
-                                        .blur_radius(Dp(5.0 * alpha as f64))
-                                        .shape(Shape::RoundedRectangle {
-                                            top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                            top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                            bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                            bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                        })
-                                        .refraction_amount(32.0 * alpha)
-                                        .block_input(true)
-                                        .padding(padding),
-                                    move || {
-                                        content_for_glass.render();
-                                    },
-                                ));
-                            }
-                            DialogStyle::Material => {
-                                let content_for_material = content.clone();
-                                surface(&crate::surface::SurfaceArgs::with_child(
-                                    SurfaceArgs::default()
-                                        .style(
-                                            use_context::<MaterialTheme>()
-                                                .expect("MaterialTheme must be provided")
-                                                .get()
-                                                .color_scheme
-                                                .surface_container_high
-                                                .into(),
-                                        )
-                                        .elevation(Dp(6.0))
-                                        .shape(Shape::RoundedRectangle {
-                                            top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                            top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                            bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                            bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                        })
-                                        .block_input(true),
-                                    move || {
-                                        let content_for_material = content_for_material.clone();
-                                        Modifier::new().padding_all(padding).run(move || {
-                                            content_for_material.render();
-                                        });
-                                    },
-                                ));
-                            }
-                        },
-                    ));
-                });
-            }),
-    );
+            let content = content.clone();
+            boxed(
+                &BoxedArgs::default()
+                    .modifier(Modifier::new().fill_max_size())
+                    .alignment(Alignment::Center)
+                    .children(|scope| {
+                        scope.child(move || {
+                            let content = content.clone();
+                            surface(&crate::surface::SurfaceArgs::with_child(
+                                SurfaceArgs::default()
+                                    .style(Color::TRANSPARENT.into())
+                                    .modifier(
+                                        Modifier::new()
+                                            .constrain(
+                                                Some(DimensionValue::WRAP),
+                                                Some(DimensionValue::WRAP),
+                                            )
+                                            .padding_all(Dp(24.0)),
+                                    ),
+                                move || match style {
+                                    DialogStyle::Glass => {
+                                        let content_for_glass = content.clone();
+                                        fluid_glass(
+                                            &crate::fluid_glass::FluidGlassArgs::with_child(
+                                                FluidGlassArgs::default()
+                                                    .tint_color(
+                                                        Color::WHITE.with_alpha(alpha / 2.5),
+                                                    )
+                                                    .blur_radius(Dp(5.0 * alpha as f64))
+                                                    .shape(Shape::RoundedRectangle {
+                                                        top_left: RoundedCorner::manual(
+                                                            Dp(28.0),
+                                                            3.0,
+                                                        ),
+                                                        top_right: RoundedCorner::manual(
+                                                            Dp(28.0),
+                                                            3.0,
+                                                        ),
+                                                        bottom_right: RoundedCorner::manual(
+                                                            Dp(28.0),
+                                                            3.0,
+                                                        ),
+                                                        bottom_left: RoundedCorner::manual(
+                                                            Dp(28.0),
+                                                            3.0,
+                                                        ),
+                                                    })
+                                                    .refraction_amount(32.0 * alpha)
+                                                    .block_input(true)
+                                                    .padding(padding),
+                                                move || {
+                                                    content_for_glass.render();
+                                                },
+                                            ),
+                                        );
+                                    }
+                                    DialogStyle::Material => {
+                                        let content_for_material = content.clone();
+                                        surface(&crate::surface::SurfaceArgs::with_child(
+                                            SurfaceArgs::default()
+                                                .style(
+                                                    use_context::<MaterialTheme>()
+                                                        .expect("MaterialTheme must be provided")
+                                                        .get()
+                                                        .color_scheme
+                                                        .surface_container_high
+                                                        .into(),
+                                                )
+                                                .elevation(Dp(6.0))
+                                                .shape(Shape::RoundedRectangle {
+                                                    top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                                    top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                                    bottom_right: RoundedCorner::manual(
+                                                        Dp(28.0),
+                                                        3.0,
+                                                    ),
+                                                    bottom_left: RoundedCorner::manual(
+                                                        Dp(28.0),
+                                                        3.0,
+                                                    ),
+                                                })
+                                                .block_input(true),
+                                            move || {
+                                                let content_for_material =
+                                                    content_for_material.clone();
+                                                Modifier::new().padding_all(padding).run(
+                                                    move || {
+                                                        content_for_material.render();
+                                                    },
+                                                );
+                                            },
+                                        ));
+                                    }
+                                },
+                            ));
+                        });
+                    }),
+            );
+        });
 }
 
 #[derive(Clone, PartialEq)]
@@ -512,6 +569,7 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
     let controller = args.controller;
     let main_content = args.main_content;
     let dialog_content = args.dialog_content;
+    let dialog_open_state = remember(|| false);
 
     // Render the main application content unconditionally.
     main_content.render();
@@ -519,6 +577,11 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
     // If the dialog is open, render the modal overlay.
     // Sample state once to avoid repeated locks and improve readability.
     let (is_open, timer_opt) = controller.with(|c| c.snapshot());
+    let mut just_opened = false;
+    dialog_open_state.with_mut(|was_open| {
+        just_opened = !*was_open && is_open;
+        *was_open = is_open;
+    });
 
     let is_animating = controller.with(|c| c.is_animating());
     if is_animating {
@@ -552,13 +615,13 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
         };
 
         render_scrim(args.style, &args.on_close_request, is_open, progress);
-        let handler = make_keyboard_handler(args.on_close_request.clone());
-        keyboard_input_handler(handler);
 
         let content_wrapper_args = DialogContentWrapperArgs {
             style: args.style,
             alpha: content_alpha,
             padding: args.padding,
+            just_opened,
+            on_close_request: args.on_close_request.clone(),
             content: dialog_content,
         };
         dialog_content_wrapper_node(&content_wrapper_args);

@@ -4,10 +4,11 @@
 //!
 //! Show onboarding steps or media carousels that snap between pages.
 use tessera_ui::{
-    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop,
-    Px, PxPosition, State, key,
+    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, FocusProperties, MeasurementError,
+    Modifier, Prop, Px, PxPosition, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    receive_frame_nanos, remember, tessera,
+    modifier::FocusModifierExt as _,
+    receive_frame_nanos, remember, tessera, winit,
 };
 
 use crate::{
@@ -807,6 +808,83 @@ fn pager_node(args: PagerArgs, controller: State<PagerController>, axis: PagerAx
     });
 }
 
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum PagerKeyboardCommand {
+    Previous,
+    Next,
+    First,
+    Last,
+}
+
+fn pager_keyboard_command(
+    axis: PagerAxis,
+    logical_key: &winit::keyboard::Key,
+) -> Option<PagerKeyboardCommand> {
+    use winit::keyboard::{Key, NamedKey};
+
+    match logical_key {
+        Key::Named(NamedKey::Home) => Some(PagerKeyboardCommand::First),
+        Key::Named(NamedKey::End) => Some(PagerKeyboardCommand::Last),
+        Key::Named(NamedKey::PageUp) => Some(PagerKeyboardCommand::Previous),
+        Key::Named(NamedKey::PageDown) => Some(PagerKeyboardCommand::Next),
+        Key::Named(NamedKey::ArrowLeft) if axis == PagerAxis::Horizontal => {
+            Some(PagerKeyboardCommand::Previous)
+        }
+        Key::Named(NamedKey::ArrowRight) if axis == PagerAxis::Horizontal => {
+            Some(PagerKeyboardCommand::Next)
+        }
+        Key::Named(NamedKey::ArrowUp) if axis == PagerAxis::Vertical => {
+            Some(PagerKeyboardCommand::Previous)
+        }
+        Key::Named(NamedKey::ArrowDown) if axis == PagerAxis::Vertical => {
+            Some(PagerKeyboardCommand::Next)
+        }
+        _ => None,
+    }
+}
+
+fn run_pager_keyboard_command(
+    controller: State<PagerController>,
+    command: PagerKeyboardCommand,
+) -> bool {
+    controller.with_mut(|controller| {
+        if controller.page_count <= 1 {
+            return false;
+        }
+
+        let target = match command {
+            PagerKeyboardCommand::Previous => {
+                if controller.current_page == 0 {
+                    return false;
+                }
+                controller.current_page - 1
+            }
+            PagerKeyboardCommand::Next => {
+                if controller.current_page + 1 >= controller.page_count {
+                    return false;
+                }
+                controller.current_page + 1
+            }
+            PagerKeyboardCommand::First => {
+                if controller.current_page == 0 {
+                    return false;
+                }
+                0
+            }
+            PagerKeyboardCommand::Last => {
+                let last_page = controller.page_count - 1;
+                if controller.current_page == last_page {
+                    return false;
+                }
+                last_page
+            }
+        };
+
+        controller.scroll_to_page(target);
+        true
+    })
+}
+
 #[tessera]
 fn pager_inner_node(args: &PagerRenderArgs) {
     let args = args.clone();
@@ -849,87 +927,126 @@ fn pager_inner_node(args: &PagerRenderArgs) {
         return;
     }
 
-    let page_spacing = sanitize_spacing(Px::from(args.page_spacing));
-    let content_padding = sanitize_spacing(Px::from(args.content_padding));
-    let scroll_offset = controller.with(|c| c.scroll_offset_px());
-    layout(PagerLayout {
-        axis,
-        cross_axis_alignment: args.cross_axis_alignment,
-        page_size: args.page_size,
-        page_spacing,
-        content_padding,
-        page_count: args.page_count,
-        visible_pages: visible_pages.clone(),
-        scroll_offset,
-        controller,
-    });
-
-    let user_scroll_enabled = args.user_scroll_enabled;
-    let drag_recognizer = remember(move || {
-        DragRecognizer::new(DragSettings {
-            axis: Some(match axis {
-                PagerAxis::Horizontal => DragAxis::Horizontal,
-                PagerAxis::Vertical => DragAxis::Vertical,
-            }),
-            ..DragSettings::default()
-        })
-    });
-    let scroll_recognizer = remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
-    pointer_input_handler(move |input| {
-        if !user_scroll_enabled {
-            return;
-        }
-
-        let is_cursor_in_component = input
-            .cursor_position_rel
-            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-            .unwrap_or(false);
-        let is_dragging = controller.with(|c| c.is_dragging());
-        if !is_cursor_in_component && !is_dragging {
-            return;
-        }
-
-        let frame_nanos = tessera_ui::current_frame_nanos();
-        let scroll_result = scroll_recognizer.with_mut(|recognizer| {
-            recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
-        });
-        let scroll_delta = axis.scroll_delta(scroll_result.delta_x, scroll_result.delta_y);
-
-        if scroll_delta.abs() >= 0.01 {
-            controller.with_mut(|c| {
-                c.apply_scroll_delta(scroll_delta, frame_nanos);
-                c.end_drag();
+    Modifier::new()
+        .focusable()
+        .focus_properties(
+            FocusProperties::new()
+                .can_focus(args.user_scroll_enabled && args.page_count > 1)
+                .can_request_focus(args.user_scroll_enabled && args.page_count > 1),
+        )
+        .run(move || {
+            let page_spacing = sanitize_spacing(Px::from(args.page_spacing));
+            let content_padding = sanitize_spacing(Px::from(args.content_padding));
+            let scroll_offset = controller.with(|c| c.scroll_offset_px());
+            layout(PagerLayout {
+                axis,
+                cross_axis_alignment: args.cross_axis_alignment,
+                page_size: args.page_size,
+                page_spacing,
+                content_padding,
+                page_count: args.page_count,
+                visible_pages: visible_pages.clone(),
+                scroll_offset,
+                controller,
             });
-            return;
-        }
 
-        let drag_result = drag_recognizer.with_mut(|recognizer| {
-            recognizer.update(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
-                is_cursor_in_component,
-            )
+            let user_scroll_enabled = args.user_scroll_enabled;
+            keyboard_input_handler(move |mut input| {
+                if !user_scroll_enabled
+                    || input.key_modifiers.control_key()
+                    || input.key_modifiers.alt_key()
+                    || input.key_modifiers.super_key()
+                {
+                    return;
+                }
+
+                let mut handled = false;
+                for event in input.keyboard_events.iter() {
+                    if event.state != winit::event::ElementState::Pressed {
+                        continue;
+                    }
+
+                    let Some(command) = pager_keyboard_command(axis, &event.logical_key) else {
+                        continue;
+                    };
+
+                    handled = run_pager_keyboard_command(controller, command);
+                    if handled {
+                        break;
+                    }
+                }
+
+                if handled {
+                    input.block_keyboard();
+                }
+            });
+            let drag_recognizer = remember(move || {
+                DragRecognizer::new(DragSettings {
+                    axis: Some(match axis {
+                        PagerAxis::Horizontal => DragAxis::Horizontal,
+                        PagerAxis::Vertical => DragAxis::Vertical,
+                    }),
+                    ..DragSettings::default()
+                })
+            });
+            let scroll_recognizer =
+                remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
+            pointer_input_handler(move |input| {
+                if !user_scroll_enabled {
+                    return;
+                }
+
+                let is_cursor_in_component = input
+                    .cursor_position_rel
+                    .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+                    .unwrap_or(false);
+                let is_dragging = controller.with(|c| c.is_dragging());
+                if !is_cursor_in_component && !is_dragging {
+                    return;
+                }
+
+                let frame_nanos = tessera_ui::current_frame_nanos();
+                let scroll_result = scroll_recognizer.with_mut(|recognizer| {
+                    recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
+                });
+                let scroll_delta = axis.scroll_delta(scroll_result.delta_x, scroll_result.delta_y);
+
+                if scroll_delta.abs() >= 0.01 {
+                    controller.with_mut(|c| {
+                        c.apply_scroll_delta(scroll_delta, frame_nanos);
+                        c.end_drag();
+                    });
+                    return;
+                }
+
+                let drag_result = drag_recognizer.with_mut(|recognizer| {
+                    recognizer.update(
+                        input.pass,
+                        input.pointer_changes.as_mut_slice(),
+                        input.cursor_position_rel,
+                        is_cursor_in_component,
+                    )
+                });
+                if drag_result.started {
+                    controller.with_mut(|c| c.start_drag(frame_nanos));
+                }
+
+                let drag_delta =
+                    axis.scroll_delta(drag_result.delta_x.to_f32(), drag_result.delta_y.to_f32());
+                if drag_result.updated && drag_delta.abs() >= 0.01 {
+                    controller.with_mut(|c| c.apply_scroll_delta(drag_delta, frame_nanos));
+                }
+
+                if drag_result.ended {
+                    controller.with_mut(|c| c.end_drag());
+                }
+            });
+
+            let page_content = page_content.clone();
+            for page_index in visible_pages.iter().copied() {
+                key(page_index, || {
+                    page_content.call(page_index);
+                });
+            }
         });
-        if drag_result.started {
-            controller.with_mut(|c| c.start_drag(frame_nanos));
-        }
-
-        let drag_delta =
-            axis.scroll_delta(drag_result.delta_x.to_f32(), drag_result.delta_y.to_f32());
-        if drag_result.updated && drag_delta.abs() >= 0.01 {
-            controller.with_mut(|c| c.apply_scroll_delta(drag_delta, frame_nanos));
-        }
-
-        if drag_result.ended {
-            controller.with_mut(|c| c.end_drag());
-        }
-    });
-
-    let page_content = page_content.clone();
-    for page_index in visible_pages {
-        key(page_index, || {
-            page_content.call(page_index);
-        });
-    }
 }

@@ -51,6 +51,7 @@ use crate::{
         PressKeyEventType,
     },
     dp::SCALE_FACTOR,
+    focus::{FocusDirection, flush_pending_focus_callbacks},
     keyboard_state::KeyboardState,
     pipeline_context::PipelineContext,
     plugin::{PluginContext, PluginHost},
@@ -60,15 +61,16 @@ use crate::{
     runtime::{
         TesseraRuntime, begin_frame_clock, begin_frame_component_replay_tracking,
         begin_frame_layout_dirty_tracking, begin_recompose_slot_epoch, clear_frame_nanos_receivers,
-        clear_redraw_waker, drop_slots_for_instance_logic_ids,
+        clear_persistent_focus_handles, clear_redraw_waker, drop_slots_for_instance_logic_ids,
         finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
         finalize_frame_layout_dirty_tracking, has_pending_build_invalidations,
         has_pending_frame_nanos_receivers, install_redraw_waker, previous_component_replay_nodes,
-        remove_frame_nanos_receivers, remove_previous_component_replay_nodes,
-        remove_state_read_dependencies, reset_build_invalidations, reset_component_replay_tracking,
+        remove_focus_read_dependencies, remove_frame_nanos_receivers,
+        remove_previous_component_replay_nodes, remove_state_read_dependencies,
+        reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
         reset_frame_clock, reset_layout_dirty_tracking, reset_state_read_dependencies,
-        take_build_invalidations, take_layout_self_dirty_nodes, tick_frame_nanos_receivers,
-        with_build_dirty_instance_keys, with_replay_scope,
+        retain_persistent_focus_handles, take_build_invalidations, take_layout_self_dirty_nodes,
+        tick_frame_nanos_receivers, with_build_dirty_instance_keys, with_replay_scope,
     },
     thread_utils,
 };
@@ -122,6 +124,8 @@ type RenderComputationOutput = (
     std::time::Duration,
     LayoutFrameDiagnostics,
     std::time::Duration,
+    Option<FocusDirection>,
+    bool,
 );
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -788,6 +792,7 @@ struct RenderFrameOutcome {
 
 impl<F: Fn()> Renderer<F> {
     const RESIZE_EDGE_THRESHOLD: f64 = 8.0;
+    const MAX_FOCUS_BEYOND_BOUNDS_RETRIES: usize = 8;
 
     #[cfg(target_os = "windows")]
     fn update_native_window_shape(&self, window: &Window) {
@@ -1049,6 +1054,7 @@ impl<F: Fn()> Renderer<F> {
                 debug!("Building component tree...");
                 clear_frame_nanos_receivers();
                 // Root recomposition rebuilds reader dependencies from scratch.
+                reset_focus_read_dependencies();
                 reset_state_read_dependencies();
                 reset_context_read_dependencies();
                 TesseraRuntime::with_mut(|runtime| runtime.component_tree.clear());
@@ -1205,12 +1211,12 @@ impl<F: Fn()> Renderer<F> {
                         }
                     }
                 }
-
                 finalize_frame_component_replay_tracking_partial();
                 finalize_frame_component_context_tracking_partial();
                 finalize_frame_layout_dirty_tracking();
                 remove_previous_component_replay_nodes(&stale_instance_keys);
                 remove_frame_nanos_receivers(&stale_instance_keys);
+                remove_focus_read_dependencies(&stale_instance_keys);
                 remove_state_read_dependencies(&stale_instance_keys);
                 crate::runtime::remove_build_invalidations(&stale_instance_keys);
                 remove_previous_component_context_snapshots(&stale_instance_keys);
@@ -1310,33 +1316,57 @@ Fps: {:.2}
         args: &mut RenderFrameArgs<'a>,
         screen_size: PxSize,
         frame_idx: u64,
+        retry_focus_move: Option<FocusDirection>,
+        retry_focus_reveal: bool,
     ) -> RenderComputationOutput {
         let draw_timer = Instant::now();
         debug!("Computing draw commands...");
         let cursor_position = args.cursor_state.position();
-        let pointer_changes = args.cursor_state.take_events();
-        let keyboard_events = args.keyboard_state.take_events();
-        let ime_events = args.ime_state.take_events();
+        let is_retry = retry_focus_move.is_some() || retry_focus_reveal;
+        let pointer_changes = if is_retry {
+            Vec::new()
+        } else {
+            args.cursor_state.take_events()
+        };
+        let keyboard_events = if is_retry {
+            Vec::new()
+        } else {
+            args.keyboard_state.take_events()
+        };
+        let ime_events = if is_retry {
+            Vec::new()
+        } else {
+            args.ime_state.take_events()
+        };
 
         // Clear any existing compute resources
         args.app.compute_resource_manager().write().clear();
         let layout_self_dirty_nodes = take_layout_self_dirty_nodes();
 
-        let (graph, window_requests, layout_diagnostics, record_cost) =
-            TesseraRuntime::with_mut(|rt| {
-                let component_tree = &mut rt.component_tree;
-                component_tree.compute(crate::component_tree::ComputeParams {
-                    screen_size,
-                    cursor_position,
-                    pointer_changes,
-                    keyboard_events,
-                    ime_events,
-                    modifiers: args.keyboard_state.modifiers(),
-                    compute_resource_manager: args.app.compute_resource_manager(),
-                    gpu: args.app.device(),
-                    layout_self_dirty_nodes: &layout_self_dirty_nodes,
-                })
-            });
+        let (
+            graph,
+            window_requests,
+            layout_diagnostics,
+            record_cost,
+            pending_focus_move_retry,
+            pending_focus_reveal_retry,
+        ) = TesseraRuntime::with_mut(|rt| {
+            let component_tree = &mut rt.component_tree;
+            component_tree.compute(crate::component_tree::ComputeParams {
+                screen_size,
+                cursor_position,
+                pointer_changes,
+                keyboard_events,
+                ime_events,
+                retry_focus_move,
+                retry_focus_reveal,
+                modifiers: args.keyboard_state.modifiers(),
+                compute_resource_manager: args.app.compute_resource_manager(),
+                gpu: args.app.device(),
+                layout_self_dirty_nodes: &layout_self_dirty_nodes,
+            })
+        });
+        flush_pending_focus_callbacks();
 
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
@@ -1346,6 +1376,8 @@ Fps: {:.2}
             draw_cost,
             layout_diagnostics,
             record_cost,
+            pending_focus_move_retry,
+            pending_focus_reveal_retry,
         )
     }
 
@@ -1498,13 +1530,79 @@ Fps: {:.2}
         // and tell runtime the new size
         TesseraRuntime::with_mut(|rt: &mut TesseraRuntime| rt.window_size = args.app.size().into());
         // Build the component tree and measure time
-        let build_tree_result = Self::build_component_tree(entry_point);
+        let mut build_tree_result = Self::build_component_tree(entry_point);
         debug!("Component tree build mode: {:?}", build_tree_result.mode);
 
         // Compute draw commands
         let screen_size: PxSize = args.app.size().into();
-        let (new_graph, window_requests, draw_cost, layout_diagnostics, record_cost) =
-            Self::compute_draw_commands(args, screen_size, frame_idx);
+        let (
+            mut new_graph,
+            mut window_requests,
+            mut draw_cost,
+            mut layout_diagnostics,
+            mut record_cost,
+            mut pending_focus_move_retry,
+            mut pending_focus_reveal_retry,
+        ) = Self::compute_draw_commands(args, screen_size, frame_idx, None, false);
+        let mut beyond_bounds_retry_count = 0usize;
+        while pending_focus_move_retry.is_some() || pending_focus_reveal_retry {
+            if beyond_bounds_retry_count >= Self::MAX_FOCUS_BEYOND_BOUNDS_RETRIES
+                || !has_pending_build_invalidations()
+            {
+                break;
+            }
+
+            beyond_bounds_retry_count += 1;
+            let retry_build = Self::build_component_tree(entry_point);
+            build_tree_result.duration += retry_build.duration;
+            build_tree_result.mode = retry_build.mode;
+            #[cfg(feature = "profiling")]
+            {
+                build_tree_result.partial_replay_nodes = retry_build.partial_replay_nodes;
+                build_tree_result.total_nodes_before_build = retry_build.total_nodes_before_build;
+            }
+            #[cfg(feature = "debug-dirty-overlay")]
+            {
+                build_tree_result.had_invalidations = retry_build.had_invalidations;
+                build_tree_result.dirty_replay_roots = retry_build.dirty_replay_roots;
+            }
+
+            let (
+                retry_graph,
+                retry_window_requests,
+                retry_draw_cost,
+                retry_layout_diagnostics,
+                retry_record_cost,
+                next_focus_move_retry,
+                next_focus_reveal_retry,
+            ) = Self::compute_draw_commands(
+                args,
+                screen_size,
+                frame_idx,
+                pending_focus_move_retry,
+                pending_focus_reveal_retry,
+            );
+            new_graph = retry_graph;
+            window_requests = retry_window_requests;
+            draw_cost += retry_draw_cost;
+            layout_diagnostics = retry_layout_diagnostics;
+            record_cost += retry_record_cost;
+            pending_focus_move_retry = next_focus_move_retry;
+            pending_focus_reveal_retry = next_focus_reveal_retry;
+        }
+        let final_frame_instance_keys =
+            TesseraRuntime::with(|runtime| runtime.component_tree.live_instance_keys());
+        let removed_focus_handles = retain_persistent_focus_handles(&final_frame_instance_keys);
+        if !removed_focus_handles.handle_ids.is_empty()
+            || !removed_focus_handles.requester_ids.is_empty()
+        {
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.component_tree.focus_owner_mut().remove_handles(
+                    &removed_focus_handles.handle_ids,
+                    &removed_focus_handles.requester_ids,
+                );
+            });
+        }
         #[cfg(not(feature = "profiling"))]
         let _ = (layout_diagnostics, record_cost);
         #[cfg(feature = "debug-dirty-overlay")]
@@ -2163,7 +2261,7 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
         }
 
         TesseraRuntime::with_mut(|runtime| {
-            runtime.component_tree.clear();
+            runtime.component_tree.reset();
             runtime.cursor_icon_request = None;
             runtime.window_minimized = false;
             runtime.window_size = [0, 0];
@@ -2171,12 +2269,14 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
         clear_layout_snapshots();
         reset_layout_dirty_tracking();
         reset_component_replay_tracking();
+        reset_focus_read_dependencies();
         reset_state_read_dependencies();
         reset_component_context_tracking();
         reset_context_read_dependencies();
         reset_build_invalidations();
         reset_frame_clock();
         clear_redraw_waker();
+        clear_persistent_focus_handles();
         crate::runtime::reset_slots();
         #[cfg(feature = "profiling")]
         self.pending_redraw_reasons.clear();
@@ -2288,7 +2388,14 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
                 #[cfg(feature = "profiling")]
                 redraw_reasons.push(RedrawReason::ImeEvent);
             }
-            WindowEvent::Focused(false) => {
+            WindowEvent::Focused(focused) => {
+                TesseraRuntime::with_mut(|runtime| {
+                    runtime
+                        .component_tree
+                        .focus_owner_mut()
+                        .set_owner_focused(focused);
+                });
+                flush_pending_focus_callbacks();
                 if self.resize_in_progress {
                     self.resize_in_progress = false;
                     self.cursor_state.clear();
@@ -2337,12 +2444,17 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
                     }
                     AccessKitWindowEvent::ActionRequested(action_request) => {
                         // Dispatch action to the appropriate component handler
-                        let handled = TesseraRuntime::with(|runtime| {
-                            let tree = runtime.component_tree.tree();
-                            let metadatas = runtime.component_tree.metadatas();
-
-                            crate::accessibility::dispatch_action(tree, metadatas, action_request)
+                        let handled = TesseraRuntime::with_mut(|runtime| {
+                            let (tree, metadatas, focus_owner) =
+                                runtime.component_tree.accessibility_dispatch_context();
+                            crate::accessibility::dispatch_action(
+                                tree,
+                                metadatas,
+                                focus_owner,
+                                action_request,
+                            )
                         });
+                        flush_pending_focus_callbacks();
 
                         if !handled {
                             debug!("Action was not handled by any component");

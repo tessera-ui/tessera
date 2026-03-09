@@ -6,12 +6,12 @@
 use glyphon::{Action as GlyphonAction, Edit};
 use tessera_ui::{
     CallbackWith, Color, Dp, ImeRequest, Modifier, Prop, Px, PxPosition, State, accesskit::Role,
-    remember, tessera, use_context, winit,
+    modifier::FocusModifierExt as _, remember, tessera, use_context, winit,
 };
 
 use crate::{
     gesture_recognizer::{ScrollRecognizer, TapRecognizer},
-    modifier::ModifierExt,
+    modifier::ModifierExt as _,
     pipelines::text::pipeline::write_font_system,
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
@@ -240,63 +240,69 @@ pub fn text_input(args: &TextInputArgs) {
         controller.with_mut(|c| c.focus_handler_mut().unfocus());
     }
     sync_text_input_controller(&controller, &editor_args);
+    let focus = controller.with(|c| *c.focus_handler());
+    Modifier::new()
+        .focus_requester(focus)
+        .focusable()
+        .focus_properties(
+            tessera_ui::FocusProperties::new()
+                .can_focus(editor_args.enabled)
+                .can_request_focus(editor_args.enabled),
+        )
+        .run(move || {
+            {
+                let surface_args = editor_args.clone();
+                surface(&crate::surface::SurfaceArgs::with_child(
+                    create_surface_args(&surface_args, &controller),
+                    move || {
+                        let padding = surface_args.padding;
+                        Modifier::new().padding_all(padding).run(move || {
+                            let core_args = TextEditCoreArgs::new(controller);
+                            text_edit_core(&core_args);
+                        });
+                    },
+                ));
+            }
 
-    // surface layer - provides visual container and minimum size guarantee
-    {
-        let surface_args = editor_args.clone();
-        surface(&crate::surface::SurfaceArgs::with_child(
-            create_surface_args(&surface_args, &controller),
-            move || {
-                // Core layer - handles text rendering and editing logic
-                let padding = surface_args.padding;
-                Modifier::new().padding_all(padding).run(move || {
-                    let core_args = TextEditCoreArgs::new(controller);
-                    text_edit_core(&core_args);
-                });
-            },
-        ));
-    }
+            let handler_args = editor_args.clone();
+            let tap_recognizer = remember(TapRecognizer::default);
+            let scroll_recognizer = remember(ScrollRecognizer::default);
+            pointer_input_handler(move |mut input| {
+                handle_text_input(
+                    &mut input,
+                    &handler_args,
+                    &controller,
+                    tap_recognizer,
+                    scroll_recognizer,
+                );
+            });
 
-    // Event handling at the outermost layer - can access full surface area
+            let keyboard_args = editor_args.clone();
+            let on_change_for_keyboard = editor_args.on_change.clone();
+            let input_transform_for_keyboard = editor_args.input_transform.clone();
+            keyboard_input_handler(move |mut input| {
+                handle_text_input_keyboard(
+                    &mut input,
+                    &keyboard_args,
+                    &controller,
+                    &on_change_for_keyboard,
+                    &input_transform_for_keyboard,
+                );
+            });
 
-    let handler_args = editor_args.clone();
-    let tap_recognizer = remember(TapRecognizer::default);
-    let scroll_recognizer = remember(ScrollRecognizer::default);
-    pointer_input_handler(move |mut input| {
-        handle_text_input(
-            &mut input,
-            &handler_args,
-            &controller,
-            tap_recognizer,
-            scroll_recognizer,
-        );
-    });
-
-    let keyboard_args = editor_args.clone();
-    let on_change_for_keyboard = editor_args.on_change.clone();
-    let input_transform_for_keyboard = editor_args.input_transform.clone();
-    keyboard_input_handler(move |mut input| {
-        handle_text_input_keyboard(
-            &mut input,
-            &keyboard_args,
-            &controller,
-            &on_change_for_keyboard,
-            &input_transform_for_keyboard,
-        );
-    });
-
-    let ime_args = editor_args.clone();
-    let on_change_for_ime = editor_args.on_change.clone();
-    let input_transform_for_ime = editor_args.input_transform.clone();
-    ime_input_handler(move |mut input| {
-        handle_text_input_ime(
-            &mut input,
-            &ime_args,
-            &controller,
-            &on_change_for_ime,
-            &input_transform_for_ime,
-        );
-    });
+            let ime_args = editor_args.clone();
+            let on_change_for_ime = editor_args.on_change.clone();
+            let input_transform_for_ime = editor_args.input_transform.clone();
+            ime_input_handler(move |mut input| {
+                handle_text_input_ime(
+                    &mut input,
+                    &ime_args,
+                    &controller,
+                    &on_change_for_ime,
+                    &input_transform_for_ime,
+                );
+            });
+        });
 }
 
 #[tessera]
@@ -310,54 +316,64 @@ fn text_input_core_node(args: &TextInputArgs) {
         controller.with_mut(|c| c.focus_handler_mut().unfocus());
     }
     sync_text_input_controller(&controller, &editor_args);
+    let focus = controller.with(|c| *c.focus_handler());
+    Modifier::new()
+        .focus_requester(focus)
+        .focusable()
+        .focus_properties(
+            tessera_ui::FocusProperties::new()
+                .can_focus(editor_args.enabled)
+                .can_request_focus(editor_args.enabled),
+        )
+        .run(move || {
+            let modifier = editor_args.modifier.clone();
+            let padding = editor_args.padding;
+            modifier.run(move || {
+                Modifier::new().padding_all(padding).run(move || {
+                    let core_args = TextEditCoreArgs::new(controller);
+                    text_edit_core(&core_args);
+                });
+            });
 
-    let handler_args = editor_args.clone();
-    let modifier = editor_args.modifier.clone();
-    let padding = editor_args.padding;
-    modifier.run(move || {
-        Modifier::new().padding_all(padding).run(move || {
-            let core_args = TextEditCoreArgs::new(controller);
-            text_edit_core(&core_args);
+            let handler_args = editor_args.clone();
+            let tap_recognizer = remember(TapRecognizer::default);
+            let scroll_recognizer = remember(ScrollRecognizer::default);
+            pointer_input_handler(move |mut input| {
+                handle_text_input(
+                    &mut input,
+                    &handler_args,
+                    &controller,
+                    tap_recognizer,
+                    scroll_recognizer,
+                );
+            });
+
+            let keyboard_args = editor_args.clone();
+            let on_change_for_keyboard = editor_args.on_change.clone();
+            let input_transform_for_keyboard = editor_args.input_transform.clone();
+            keyboard_input_handler(move |mut input| {
+                handle_text_input_keyboard(
+                    &mut input,
+                    &keyboard_args,
+                    &controller,
+                    &on_change_for_keyboard,
+                    &input_transform_for_keyboard,
+                );
+            });
+
+            let ime_args = editor_args.clone();
+            let on_change_for_ime = editor_args.on_change.clone();
+            let input_transform_for_ime = editor_args.input_transform.clone();
+            ime_input_handler(move |mut input| {
+                handle_text_input_ime(
+                    &mut input,
+                    &ime_args,
+                    &controller,
+                    &on_change_for_ime,
+                    &input_transform_for_ime,
+                );
+            });
         });
-    });
-
-    let tap_recognizer = remember(TapRecognizer::default);
-    let scroll_recognizer = remember(ScrollRecognizer::default);
-    pointer_input_handler(move |mut input| {
-        handle_text_input(
-            &mut input,
-            &handler_args,
-            &controller,
-            tap_recognizer,
-            scroll_recognizer,
-        );
-    });
-
-    let keyboard_args = editor_args.clone();
-    let on_change_for_keyboard = editor_args.on_change.clone();
-    let input_transform_for_keyboard = editor_args.input_transform.clone();
-    keyboard_input_handler(move |mut input| {
-        handle_text_input_keyboard(
-            &mut input,
-            &keyboard_args,
-            &controller,
-            &on_change_for_keyboard,
-            &input_transform_for_keyboard,
-        );
-    });
-
-    let ime_args = editor_args.clone();
-    let on_change_for_ime = editor_args.on_change.clone();
-    let input_transform_for_ime = editor_args.input_transform.clone();
-    ime_input_handler(move |mut input| {
-        handle_text_input_ime(
-            &mut input,
-            &ime_args,
-            &controller,
-            &on_change_for_ime,
-            &input_transform_for_ime,
-        );
-    });
 }
 
 pub(crate) fn text_input_core(args: &TextInputArgs, controller: State<TextInputController>) {

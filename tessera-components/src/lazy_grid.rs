@@ -11,10 +11,12 @@ use std::{
 };
 
 use tessera_ui::{
-    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, NodeId,
-    ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
+    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, FocusDirection, MeasurementError,
+    NodeId, ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera,
+    remember,
+    runtime::TesseraRuntime,
+    tessera,
 };
 
 use crate::{
@@ -859,6 +861,14 @@ fn lazy_grid_view(args: &LazyGridViewArgs) {
         return;
     }
 
+    register_lazy_grid_focus_beyond_bounds_handler(
+        &args,
+        total_main,
+        viewport_span,
+        visible_plan.line_range.clone(),
+        args.controller.with(|c| c.cache.line_count()),
+    );
+
     let viewport_limit = viewport_span + padding_main + padding_main;
     let visible_layout_items = visible_plan
         .items
@@ -989,6 +999,12 @@ enum LazyGridAxis {
     Horizontal,
 }
 
+#[derive(Clone, Copy)]
+enum FocusScrollDirection {
+    Forward,
+    Backward,
+}
+
 impl LazyGridAxis {
     fn main(&self, size: &ComputedData) -> Px {
         match self {
@@ -1038,10 +1054,33 @@ impl LazyGridAxis {
         }
     }
 
+    fn scroll_position(&self, offset: Px) -> PxPosition {
+        match self {
+            Self::Vertical => PxPosition::new(Px::ZERO, -offset),
+            Self::Horizontal => PxPosition::new(-offset, Px::ZERO),
+        }
+    }
+
     fn scroll_offset(&self, position: PxPosition) -> Px {
         match self {
             Self::Vertical => (-position.y).max(Px::ZERO),
             Self::Horizontal => (-position.x).max(Px::ZERO),
+        }
+    }
+
+    fn focus_scroll_direction(&self, direction: FocusDirection) -> Option<FocusScrollDirection> {
+        match (self, direction) {
+            (_, FocusDirection::Next | FocusDirection::Enter) => {
+                Some(FocusScrollDirection::Forward)
+            }
+            (_, FocusDirection::Previous | FocusDirection::Exit) => {
+                Some(FocusScrollDirection::Backward)
+            }
+            (Self::Vertical, FocusDirection::Down) => Some(FocusScrollDirection::Forward),
+            (Self::Vertical, FocusDirection::Up) => Some(FocusScrollDirection::Backward),
+            (Self::Horizontal, FocusDirection::Right) => Some(FocusScrollDirection::Forward),
+            (Self::Horizontal, FocusDirection::Left) => Some(FocusScrollDirection::Backward),
+            _ => None,
         }
     }
 
@@ -1294,6 +1333,79 @@ impl VisibleGridPlan {
             line_range: 0..0,
         }
     }
+}
+
+fn register_lazy_grid_focus_beyond_bounds_handler(
+    args: &LazyGridViewArgs,
+    total_main: Px,
+    viewport_span: Px,
+    visible_line_range: Range<usize>,
+    total_lines: usize,
+) {
+    let axis = args.axis;
+    let controller = args.controller;
+    let scroll_controller = args.scroll_controller;
+    let estimated_line_main = args.estimated_line_main;
+    let main_axis_spacing = args.main_axis_spacing;
+    let current_scroll_offset = args
+        .axis
+        .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
+    let max_scroll = (total_main - viewport_span).max(Px::ZERO);
+
+    TesseraRuntime::with_mut(|runtime| {
+        runtime.set_current_focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
+            let Some(scroll_direction) = axis.focus_scroll_direction(direction) else {
+                return false;
+            };
+            if total_lines == 0 || viewport_span <= Px::ZERO {
+                return false;
+            }
+
+            let target_line = match scroll_direction {
+                FocusScrollDirection::Forward => {
+                    if visible_line_range.end >= total_lines {
+                        return false;
+                    }
+                    visible_line_range.end
+                }
+                FocusScrollDirection::Backward => {
+                    let Some(line) = visible_line_range.start.checked_sub(1) else {
+                        return false;
+                    };
+                    line
+                }
+            };
+
+            let (target_offset, target_main) = controller.with(|c| {
+                (
+                    c.cache
+                        .offset_for_line(target_line, estimated_line_main, main_axis_spacing),
+                    c.cache
+                        .measured_line_main
+                        .get(target_line)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(estimated_line_main),
+                )
+            });
+
+            let desired_scroll = match scroll_direction {
+                FocusScrollDirection::Forward => {
+                    (target_offset + target_main - viewport_span).max(Px::ZERO)
+                }
+                FocusScrollDirection::Backward => target_offset,
+            }
+            .min(max_scroll);
+
+            if desired_scroll == current_scroll_offset {
+                return false;
+            }
+
+            let position = axis.scroll_position(desired_scroll);
+            scroll_controller.with_mut(|c| c.set_scroll_position(position));
+            true
+        }));
+    });
 }
 #[derive(PartialEq, Default)]
 struct LazyGridCache {

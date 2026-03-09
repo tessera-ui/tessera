@@ -29,9 +29,8 @@ use glyphon::{
 };
 use tessera_platform::clipboard;
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, DimensionValue, Dp, MeasurementError, Prop, Px, PxPosition,
-    State, current_frame_nanos,
-    focus_state::Focus,
+    CallbackWith, Color, ComputedData, DimensionValue, Dp, FocusRequester, MeasurementError, Prop,
+    Px, PxPosition, State, current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
     receive_frame_nanos, tessera, winit,
 };
@@ -93,7 +92,7 @@ pub struct TextEditorController {
     pub(crate) editor: glyphon::Editor<'static>,
     blink_start_frame_nanos: u64,
     current_frame_nanos: u64,
-    focus_handler: Focus,
+    focus_handler: FocusRequester,
     pub(crate) selection_color: Color,
     pub(crate) text_color: Color,
     pub(crate) cursor_color: Color,
@@ -149,7 +148,7 @@ impl TextEditorController {
             editor,
             blink_start_frame_nanos: frame_nanos,
             current_frame_nanos: frame_nanos,
-            focus_handler: Focus::new(),
+            focus_handler: FocusRequester::new(),
             selection_color,
             text_color,
             cursor_color,
@@ -209,12 +208,12 @@ impl TextEditorController {
     }
 
     // Returns a reference to the internal focus handler.
-    pub(crate) fn focus_handler(&self) -> &Focus {
+    pub(crate) fn focus_handler(&self) -> &FocusRequester {
         &self.focus_handler
     }
 
     // Returns a mutable reference to the internal focus handler.
-    pub(crate) fn focus_handler_mut(&mut self) -> &mut Focus {
+    pub(crate) fn focus_handler_mut(&mut self) -> &mut FocusRequester {
         &mut self.focus_handler
     }
 

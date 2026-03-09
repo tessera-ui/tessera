@@ -12,8 +12,12 @@ use std::{
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px,
     PxPosition, RenderSlot, ScrollEventSource, State, current_frame_nanos,
+    focus::FocusRevealRequest,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    receive_frame_nanos, remember, tessera, use_context,
+    prop::CallbackWith,
+    receive_frame_nanos, remember,
+    runtime::TesseraRuntime,
+    tessera, use_context,
 };
 
 use crate::{
@@ -979,6 +983,9 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
             }
         });
     }
+    if args.vertical || args.horizontal {
+        register_scrollable_focus_reveal_handler(args.controller, args.vertical, args.horizontal);
+    }
     let child_position = controller.with(|c| c.child_position());
     let has_override = controller.with(|c| c.override_child_size.is_some());
     layout(ScrollableInnerLayout {
@@ -1142,6 +1149,76 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
 
     // Add child component
     args.child.render();
+}
+
+fn register_scrollable_focus_reveal_handler(
+    controller: State<ScrollableController>,
+    vertical: bool,
+    horizontal: bool,
+) {
+    TesseraRuntime::with_mut(|runtime| {
+        runtime.set_current_focus_reveal_handler(CallbackWith::new(
+            move |request: FocusRevealRequest| {
+                let (current_position, child_size, visible_size) =
+                    controller.with(|c| (c.child_position(), c.child_size(), c.visible_size()));
+                let mut desired_position = current_position;
+
+                if horizontal {
+                    desired_position.x = reveal_axis_position(
+                        current_position.x,
+                        request.target_rect.x,
+                        request.target_rect.x + request.target_rect.width,
+                        request.viewport_rect.x,
+                        request.viewport_rect.x + request.viewport_rect.width,
+                    );
+                }
+
+                if vertical {
+                    desired_position.y = reveal_axis_position(
+                        current_position.y,
+                        request.target_rect.y,
+                        request.target_rect.y + request.target_rect.height,
+                        request.viewport_rect.y,
+                        request.viewport_rect.y + request.viewport_rect.height,
+                    );
+                }
+
+                let constrained_position = constrain_position(
+                    desired_position,
+                    &child_size,
+                    &visible_size,
+                    vertical,
+                    horizontal,
+                );
+                if constrained_position == current_position {
+                    return false;
+                }
+
+                controller.with_mut(|c| {
+                    c.cancel_inertia();
+                    c.velocity_tracker = None;
+                    c.set_scroll_position(constrained_position);
+                });
+                true
+            },
+        ));
+    });
+}
+
+fn reveal_axis_position(
+    current: Px,
+    target_start: Px,
+    target_end: Px,
+    viewport_start: Px,
+    viewport_end: Px,
+) -> Px {
+    if target_start < viewport_start {
+        current + (viewport_start - target_start)
+    } else if target_end > viewport_end {
+        current - (target_end - viewport_end)
+    } else {
+        current
+    }
 }
 
 /// Constrains a position to stay within the scrollable bounds.

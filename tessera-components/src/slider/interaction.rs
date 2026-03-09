@@ -1,5 +1,5 @@
 use tessera_ui::{
-    CallbackWith, ComputedData, Focus, PointerInput, Px, PxPosition, State,
+    CallbackWith, ComputedData, FocusRequester, PointerInput, Px, PxPosition, State,
     accesskit::{Action, Role},
     winit::window::CursorIcon,
 };
@@ -273,8 +273,8 @@ pub struct RangeSliderController {
     pub(crate) is_dragging_start: bool,
     pub(crate) is_dragging_end: bool,
     active_handle: Option<RangeSliderHandle>,
-    pub(crate) focus_start: Focus,
-    pub(crate) focus_end: Focus,
+    pub(crate) focus_start: FocusRequester,
+    pub(crate) focus_end: FocusRequester,
 }
 
 impl Default for RangeSliderController {
@@ -291,8 +291,8 @@ impl RangeSliderController {
             is_dragging_start: false,
             is_dragging_end: false,
             active_handle: None,
-            focus_start: Focus::new(),
-            focus_end: Focus::new(),
+            focus_start: FocusRequester::new(),
+            focus_end: FocusRequester::new(),
         }
     }
 }

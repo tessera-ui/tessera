@@ -4,11 +4,11 @@
 //!
 //! Use to select a value from a continuous range.
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Prop, Px, PxPosition, State,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, FocusProperties,
+    FocusRequester, MeasurementError, Modifier, Prop, Px, PxPosition, State,
     accesskit::Role,
-    focus_state::Focus,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    modifier::FocusModifierExt as _,
     remember, tessera,
     winit::window::CursorIcon,
 };
@@ -25,7 +25,7 @@ const ACCESSIBILITY_STEP: f32 = 0.05;
 /// Controller for the `glass_slider` component.
 pub struct GlassSliderController {
     is_dragging: bool,
-    focus: Focus,
+    focus: FocusRequester,
 }
 
 impl GlassSliderController {
@@ -33,7 +33,7 @@ impl GlassSliderController {
     pub fn new() -> Self {
         Self {
             is_dragging: false,
-            focus: Focus::new(),
+            focus: FocusRequester::new(),
         }
     }
 
@@ -401,82 +401,89 @@ fn glass_slider_inner_node(args: &GlassSliderArgs) {
     let controller = args
         .controller
         .expect("glass_slider_inner_node requires controller to be set");
-    // External track (background) with border - capsule shape
-    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-        FluidGlassArgs::default()
-            .modifier(Modifier::new().fill_max_size())
-            .tint_color(args.track_tint_color)
-            .blur_radius(args.blur_radius)
-            .shape(Shape::capsule())
-            .border(GlassBorder::new(args.track_border_width.into()))
-            .padding(args.track_border_width),
-        move || {
-            // Internal progress fill - capsule shape using surface
-            // Child constraint already excludes padding from the track.
-            let fill_args = GlassSliderProgressFillArgs {
-                value: args.value,
-                tint_color: args.progress_tint_color,
-                blur_radius: args.blur_radius,
-            };
-            glass_slider_progress_fill_node(&fill_args);
-        },
-    ));
+    Modifier::new()
+        .focus_requester(controller.with(|c| c.focus))
+        .focusable()
+        .focus_properties(
+            FocusProperties::new()
+                .can_focus(!args.disabled)
+                .can_request_focus(!args.disabled),
+        )
+        .run(move || {
+            fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
+                FluidGlassArgs::default()
+                    .modifier(Modifier::new().fill_max_size())
+                    .tint_color(args.track_tint_color)
+                    .blur_radius(args.blur_radius)
+                    .shape(Shape::capsule())
+                    .border(GlassBorder::new(args.track_border_width.into()))
+                    .padding(args.track_border_width),
+                move || {
+                    let fill_args = GlassSliderProgressFillArgs {
+                        value: args.value,
+                        tint_color: args.progress_tint_color,
+                        blur_radius: args.blur_radius,
+                    };
+                    glass_slider_progress_fill_node(&fill_args);
+                },
+            ));
 
-    let on_change = args.on_change.clone();
-    let handler_args = args.clone();
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
+            let on_change = args.on_change.clone();
+            let handler_args = args.clone();
+            let tap_recognizer = remember(TapRecognizer::default);
+            let drag_recognizer = remember(DragRecognizer::default);
 
-    pointer_input_handler(move |mut input| {
-        if !handler_args.disabled {
-            let is_in_component =
-                cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
+            pointer_input_handler(move |mut input| {
+                if !handler_args.disabled {
+                    let is_in_component =
+                        cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
 
-            if is_in_component {
-                input.requests.cursor_icon = CursorIcon::Pointer;
-            }
+                    if is_in_component {
+                        input.requests.cursor_icon = CursorIcon::Pointer;
+                    }
 
-            if is_in_component || controller.with(|c| c.is_dragging()) {
-                let width_f = input.computed_data.width.0 as f32;
+                    if is_in_component || controller.with(|c| c.is_dragging()) {
+                        let width_f = input.computed_data.width.0 as f32;
 
-                if let Some(v) = process_pointer_gestures(
-                    controller,
-                    tap_recognizer,
-                    drag_recognizer,
-                    &mut input,
-                    width_f,
-                ) && (v - handler_args.value).abs() > f32::EPSILON
-                {
-                    on_change.call(v);
+                        if let Some(v) = process_pointer_gestures(
+                            controller,
+                            tap_recognizer,
+                            drag_recognizer,
+                            &mut input,
+                            width_f,
+                        ) && (v - handler_args.value).abs() > f32::EPSILON
+                        {
+                            on_change.call(v);
+                        }
+                    }
                 }
+            });
+            let mut semantics = SemanticsArgs::new().role(Role::Slider);
+            if let Some(label) = args.accessibility_label.clone() {
+                semantics = semantics.label(label);
             }
-        }
-    });
-    let mut semantics = SemanticsArgs::new().role(Role::Slider);
-    if let Some(label) = args.accessibility_label.clone() {
-        semantics = semantics.label(label);
-    }
-    if let Some(description) = args.accessibility_description.clone() {
-        semantics = semantics.description(description);
-    }
-    semantics = semantics
-        .numeric_range(0.0, 1.0)
-        .numeric_value(args.value as f64)
-        .numeric_value_step(ACCESSIBILITY_STEP as f64);
-    semantics = if args.disabled {
-        semantics.disabled(true)
-    } else {
-        semantics.focusable(true)
-    };
-    let _modifier = Modifier::new().semantics(semantics);
+            if let Some(description) = args.accessibility_description.clone() {
+                semantics = semantics.description(description);
+            }
+            semantics = semantics
+                .numeric_range(0.0, 1.0)
+                .numeric_value(args.value as f64)
+                .numeric_value_step(ACCESSIBILITY_STEP as f64);
+            semantics = if args.disabled {
+                semantics.disabled(true)
+            } else {
+                semantics.focusable(true)
+            };
+            let _modifier = Modifier::new().semantics(semantics);
 
-    let track_height = args.track_height.to_px();
-    let fallback_width = Dp(200.0).to_px();
+            let track_height = args.track_height.to_px();
+            let fallback_width = Dp(200.0).to_px();
 
-    layout(GlassSliderLayout {
-        track_height,
-        fallback_width,
-    });
+            layout(GlassSliderLayout {
+                track_height,
+                fallback_width,
+            });
+        });
 }
 
 #[derive(Clone, Copy, PartialEq)]

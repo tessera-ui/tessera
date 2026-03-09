@@ -384,6 +384,14 @@ fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_ma
                         keyboard_handler_fn: None,
                         ime_preview_handler_fn: None,
                         ime_handler_fn: None,
+                        focus_requester_binding: None,
+                        focus_registration: None,
+                        focus_restorer_fallback: None,
+                        focus_traversal_policy: None,
+                        focus_changed_handler: None,
+                        focus_event_handler: None,
+                        focus_beyond_bounds_handler: None,
+                        focus_reveal_handler: None,
                         layout_spec: Box::new(DefaultLayoutSpec::default()),
                         replay: None,
                         props_unchanged_from_previous: false,
@@ -646,6 +654,216 @@ fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStre
                     .unwrap()
                     .ime_handler_fn = Some(Box::new(fun) as Box<ImeInputHandlerFn>)
             });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn focus_requester_with(requester: #crate_path::FocusRequester) {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.bind_current_focus_requester(requester);
+            });
+        }
+
+        fn focus_requester() -> #crate_path::FocusRequester {
+            #crate_path::runtime::persistent_focus_requester_for_current_instance(
+                "__tessera_focus_requester",
+            )
+        }
+
+        fn remember_focus_requester() -> #crate_path::FocusRequester {
+            focus_requester()
+        }
+
+        fn focus_target_handle() -> #crate_path::FocusNode {
+            #crate_path::runtime::persistent_focus_target_for_current_instance(
+                "__tessera_focus_target",
+            )
+        }
+
+        fn focus_scope_handle() -> #crate_path::FocusScopeNode {
+            #crate_path::runtime::persistent_focus_scope_for_current_instance(
+                "__tessera_focus_scope",
+            )
+        }
+
+        fn remember_focus_scope() -> #crate_path::FocusScopeNode {
+            focus_scope_handle()
+        }
+
+        fn focus_group_handle() -> #crate_path::FocusGroupNode {
+            #crate_path::runtime::persistent_focus_group_for_current_instance(
+                "__tessera_focus_group",
+            )
+        }
+
+        fn remember_focus_group() -> #crate_path::FocusGroupNode {
+            focus_group_handle()
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn focus_target_with(node: #crate_path::FocusNode) -> #crate_path::FocusNode {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.register_current_focus_target(node);
+            });
+            node
+        }
+
+        fn focus_target() -> #crate_path::FocusNode {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                if let Some(node) = runtime.current_focus_target_handle() {
+                    node
+                } else {
+                    let node = focus_target_handle();
+                    runtime.ensure_current_focus_target(node);
+                    node
+                }
+            })
+        }
+
+        fn focusable() -> #crate_path::FocusNode {
+            focus_target()
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn focusable_with_requester(
+            requester: #crate_path::FocusRequester,
+        ) -> #crate_path::FocusNode {
+            focus_requester_with(requester);
+            focus_target()
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn focus_scope_with(scope: #crate_path::FocusScopeNode) -> #crate_path::FocusScopeNode {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.register_current_focus_scope(scope);
+            });
+            scope
+        }
+
+        fn focus_scope() -> #crate_path::FocusScopeNode {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                if let Some(scope) = runtime.current_focus_scope_handle() {
+                    scope
+                } else {
+                    let scope = focus_scope_handle();
+                    runtime.ensure_current_focus_scope(scope);
+                    scope
+                }
+            })
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn focus_group_with(group: #crate_path::FocusGroupNode) -> #crate_path::FocusGroupNode {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.register_current_focus_group(group);
+            });
+            group
+        }
+
+        fn focus_group() -> #crate_path::FocusGroupNode {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                if let Some(group) = runtime.current_focus_group_handle() {
+                    group
+                } else {
+                    let group = focus_group_handle();
+                    runtime.ensure_current_focus_group(group);
+                    group
+                }
+            })
+        }
+
+        fn focus_restorer() -> #crate_path::FocusScopeNode {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                if let Some(scope) = runtime.current_focus_scope_handle() {
+                    scope
+                } else {
+                    let scope = focus_scope_handle();
+                    runtime.ensure_current_focus_scope(scope);
+                    scope
+                }
+            })
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn focus_restorer_with_fallback(
+            fallback: #crate_path::FocusRequester,
+        ) -> #crate_path::FocusScopeNode {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                let scope = if let Some(scope) = runtime.current_focus_scope_handle() {
+                    scope
+                } else {
+                    let scope = focus_scope_handle();
+                    runtime.ensure_current_focus_scope(scope);
+                    scope
+                };
+                runtime.set_current_focus_restorer_fallback(fallback);
+                scope
+            })
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn focus_properties(properties: #crate_path::FocusProperties) {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.set_current_focus_properties(properties);
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn focus_traversal_policy(policy: #crate_path::FocusTraversalPolicy) {
+            use #crate_path::runtime::TesseraRuntime;
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.set_current_focus_traversal_policy(policy);
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn on_focus_changed<F>(fun: F)
+        where
+            F: Into<#crate_path::CallbackWith<#crate_path::FocusState>>,
+        {
+            use #crate_path::runtime::TesseraRuntime;
+
+            let handler: #crate_path::CallbackWith<#crate_path::FocusState> = fun.into();
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.set_current_focus_changed_handler(handler);
+            });
+        }
+
+        #[allow(clippy::needless_pass_by_value)]
+        fn on_focus_event<F>(fun: F)
+        where
+            F: Into<#crate_path::CallbackWith<#crate_path::FocusState>>,
+        {
+            use #crate_path::runtime::TesseraRuntime;
+
+            let handler: #crate_path::CallbackWith<#crate_path::FocusState> = fun.into();
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.set_current_focus_event_handler(handler);
+            });
+        }
+
+        fn focus_manager() -> #crate_path::FocusManager {
+            #crate_path::FocusManager::current()
         }
     }
 }

@@ -4,9 +4,11 @@
 //!
 //! Use to organize content into separate pages that can be switched between.
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Prop, Px, PxPosition, RenderSlot, State,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, FocusProperties,
+    FocusRequester, FocusState, MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot,
+    State,
     layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    modifier::FocusModifierExt as _,
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -559,6 +561,22 @@ struct TabsRenderArgs {
     tabs: TabsArgs,
     controller: State<TabsController>,
     items: Vec<TabDef>,
+}
+
+#[derive(Clone, Prop)]
+struct TabTriggerArgs {
+    controller: State<TabsController>,
+    title: TabTitle,
+    enabled: bool,
+    index: usize,
+    focus_requester: FocusRequester,
+    previous_focus_requester: FocusRequester,
+    next_focus_requester: FocusRequester,
+    label_color: Color,
+    ripple_color: Color,
+    tab_height: Dp,
+    tab_padding: Dp,
+    indicator_height: Dp,
 }
 
 /// # tab_label
@@ -1259,6 +1277,12 @@ fn tabs_render_node(args: &TabsRenderArgs) {
 
     let (title_closures, content_closures): (Vec<_>, Vec<_>) =
         tabs.into_iter().map(|def| (def.title, def.content)).unzip();
+    let tab_focus_requesters = remember(Vec::<FocusRequester>::new);
+    let tab_focus_requesters = tab_focus_requesters.with_mut(|requesters| {
+        requesters.resize_with(num_tabs, FocusRequester::new);
+        requesters.truncate(num_tabs);
+        requesters.clone()
+    });
 
     surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
@@ -1307,50 +1331,25 @@ fn tabs_render_node(args: &TabsRenderArgs) {
             } if !text.is_empty() => TabsDefaults::LARGE_TAB_HEIGHT,
             _ => args.min_tab_height,
         };
+        let focus_requester = tab_focus_requesters[index];
+        let previous_focus_requester =
+            tab_focus_requesters[(index + num_tabs.saturating_sub(1)) % num_tabs];
+        let next_focus_requester = tab_focus_requesters[(index + 1) % num_tabs];
 
-        let mut tab_surface = SurfaceArgs::default()
-            .style(Color::TRANSPARENT.into())
-            .content_alignment(Alignment::Center)
-            .content_color(label_color)
-            .modifier(
-                Modifier::new().constrain(None, Some(DimensionValue::Fixed(tab_height.into()))),
-            )
-            .ripple_color(ripple_color)
-            .shape(Shape::RECTANGLE)
-            .enabled(args.enabled)
-            .accessibility_role(tessera_ui::accesskit::Role::Tab)
-            .accessibility_focusable(true);
-
-        if let TabTitle::Label { text, .. } = &child {
-            tab_surface = tab_surface.accessibility_label(text.clone());
-        }
-
-        if args.enabled {
-            tab_surface = tab_surface.on_click(move || {
-                controller.with_mut(|c| c.set_active_tab(index));
-            });
-        }
-
-        surface(&crate::surface::SurfaceArgs::with_child(
-            tab_surface,
-            move || {
-                let child = child.clone();
-                match child {
-                    TabTitle::Custom(render) => render.render(),
-                    TabTitle::Themed(render) => render.call(label_color),
-                    TabTitle::Label { text, icon } => {
-                        let mut label_args = TabLabelArgs::default()
-                            .text(&text)
-                            .horizontal_text_padding(args.tab_padding)
-                            .indicator_height(args.indicator_height);
-                        if let Some(icon) = icon {
-                            label_args = label_args.icon(icon.clone());
-                        }
-                        tab_label(&label_args);
-                    }
-                }
-            },
-        ));
+        tab_trigger_node(&TabTriggerArgs {
+            controller,
+            title: child,
+            enabled: args.enabled,
+            index,
+            focus_requester,
+            previous_focus_requester,
+            next_focus_requester,
+            label_color,
+            ripple_color,
+            tab_height,
+            tab_padding: args.tab_padding,
+            indicator_height: args.indicator_height,
+        });
     }
 
     if controller.with(|c| c.has_pending_animation_frame()) {
@@ -1427,4 +1426,73 @@ fn tabs_render_node(args: &TabsRenderArgs) {
         indicator_x_px,
         indicator_width_px,
     });
+}
+
+#[tessera]
+fn tab_trigger_node(args: &TabTriggerArgs) {
+    let args = args.clone();
+    let controller = args.controller;
+    let index = args.index;
+    let tab_modifier = Modifier::new()
+        .constrain(None, Some(DimensionValue::Fixed(args.tab_height.into())))
+        .focus_group()
+        .on_focus_changed(move |focus_state: FocusState| {
+            if !focus_state.has_focus() {
+                return;
+            }
+
+            let should_select = controller.with(|state| state.active_tab() != index);
+            if should_select {
+                controller.with_mut(|state| state.set_active_tab(index));
+            }
+        });
+
+    let mut tab_surface = SurfaceArgs::default()
+        .style(Color::TRANSPARENT.into())
+        .content_alignment(Alignment::Center)
+        .content_color(args.label_color)
+        .modifier(tab_modifier)
+        .ripple_color(args.ripple_color)
+        .shape(Shape::RECTANGLE)
+        .enabled(args.enabled)
+        .focus_requester(args.focus_requester)
+        .accessibility_role(tessera_ui::accesskit::Role::Tab)
+        .accessibility_focusable(true);
+
+    if let TabTitle::Label { text, .. } = &args.title {
+        tab_surface = tab_surface.accessibility_label(text.clone());
+    }
+
+    if args.enabled {
+        tab_surface = tab_surface
+            .focus_properties(
+                FocusProperties::new()
+                    .left(args.previous_focus_requester)
+                    .right(args.next_focus_requester),
+            )
+            .on_click(move || {
+                controller.with_mut(|state| state.set_active_tab(index));
+            });
+    }
+
+    surface(&crate::surface::SurfaceArgs::with_child(
+        tab_surface,
+        move || {
+            let title = args.title.clone();
+            match title {
+                TabTitle::Custom(render) => render.render(),
+                TabTitle::Themed(render) => render.call(args.label_color),
+                TabTitle::Label { text, icon } => {
+                    let mut label_args = TabLabelArgs::default()
+                        .text(&text)
+                        .horizontal_text_padding(args.tab_padding)
+                        .indicator_height(args.indicator_height);
+                    if let Some(icon) = icon {
+                        label_args = label_args.icon(icon.clone());
+                    }
+                    tab_label(&label_args);
+                }
+            }
+        },
+    ));
 }

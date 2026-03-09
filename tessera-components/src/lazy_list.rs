@@ -11,10 +11,12 @@ use std::{
 };
 
 use tessera_ui::{
-    Callback, CallbackWith, ComputedData, Constraint, DimensionValue, Dp, MeasurementError,
-    Modifier, NodeId, ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
+    Callback, CallbackWith, ComputedData, Constraint, DimensionValue, Dp, FocusDirection,
+    MeasurementError, Modifier, NodeId, ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember, tessera,
+    remember,
+    runtime::TesseraRuntime,
+    tessera,
 };
 
 use crate::{
@@ -709,13 +711,23 @@ fn lazy_list_view(args: &LazyListViewArgs) {
         )
     });
 
-    if visible_children.is_empty() {
+    if visible_children.children.is_empty() {
         layout(ZeroLayout);
         return;
     }
 
+    register_lazy_list_focus_beyond_bounds_handler(
+        &args,
+        total_count,
+        total_main,
+        viewport_span,
+        scroll_offset,
+        visible_children.range.clone(),
+    );
+
     let viewport_limit = viewport_span + padding_main + padding_main;
     let visible_item_indices = visible_children
+        .children
         .iter()
         .map(|visible| visible.item_index)
         .collect();
@@ -736,7 +748,7 @@ fn lazy_list_view(args: &LazyListViewArgs) {
         scroll_controller: args.scroll_controller,
     });
 
-    for child in visible_children {
+    for child in visible_children.children {
         key(child.key_hash, || {
             child.builder.call(child.local_index);
         });
@@ -947,9 +959,9 @@ fn compute_visible_children(
     overscan: usize,
     estimated_main: Px,
     spacing: Px,
-) -> Vec<VisibleChild> {
+) -> VisibleChildrenPlan {
     if total_count == 0 {
-        return Vec::new();
+        return VisibleChildrenPlan::empty();
     }
 
     let mut start_index = cache.index_for_offset(scroll_offset, estimated_main, spacing);
@@ -963,7 +975,8 @@ fn compute_visible_children(
         start_index = start_index.saturating_sub(1);
     }
 
-    let mut result = plan.visible_children(start_index..end_index);
+    let visible_range = start_index..end_index;
+    let mut result = plan.visible_children(visible_range.clone());
     if let Some(sticky_index) = plan.last_sticky_before(start_index) {
         let existing = result
             .iter()
@@ -975,7 +988,10 @@ fn compute_visible_children(
             result.push(child);
         }
     }
-    result
+    VisibleChildrenPlan {
+        children: result,
+        range: visible_range,
+    }
 }
 
 fn clamp_reported_main(
@@ -1005,6 +1021,12 @@ fn compute_cross_offset(final_cross: Px, child_cross: Px, alignment: CrossAxisAl
 enum LazyListAxis {
     Vertical,
     Horizontal,
+}
+
+#[derive(Clone, Copy)]
+enum FocusScrollDirection {
+    Forward,
+    Backward,
 }
 
 impl LazyListAxis {
@@ -1049,10 +1071,33 @@ impl LazyListAxis {
         }
     }
 
+    fn scroll_position(&self, offset: Px) -> PxPosition {
+        match self {
+            Self::Vertical => PxPosition::new(Px::ZERO, -offset),
+            Self::Horizontal => PxPosition::new(-offset, Px::ZERO),
+        }
+    }
+
     fn scroll_offset(&self, position: PxPosition) -> Px {
         match self {
             Self::Vertical => (-position.y).max(Px::ZERO),
             Self::Horizontal => (-position.x).max(Px::ZERO),
+        }
+    }
+
+    fn focus_scroll_direction(&self, direction: FocusDirection) -> Option<FocusScrollDirection> {
+        match (self, direction) {
+            (_, FocusDirection::Next | FocusDirection::Enter) => {
+                Some(FocusScrollDirection::Forward)
+            }
+            (_, FocusDirection::Previous | FocusDirection::Exit) => {
+                Some(FocusScrollDirection::Backward)
+            }
+            (Self::Vertical, FocusDirection::Down) => Some(FocusScrollDirection::Forward),
+            (Self::Vertical, FocusDirection::Up) => Some(FocusScrollDirection::Backward),
+            (Self::Horizontal, FocusDirection::Right) => Some(FocusScrollDirection::Forward),
+            (Self::Horizontal, FocusDirection::Left) => Some(FocusScrollDirection::Backward),
+            _ => None,
         }
     }
 
@@ -1089,6 +1134,93 @@ struct Placement {
     child_id: NodeId,
     offset_main: Px,
     size: ComputedData,
+}
+
+#[derive(Clone)]
+struct VisibleChildrenPlan {
+    children: Vec<VisibleChild>,
+    range: Range<usize>,
+}
+
+impl VisibleChildrenPlan {
+    fn empty() -> Self {
+        Self {
+            children: Vec::new(),
+            range: 0..0,
+        }
+    }
+}
+
+fn register_lazy_list_focus_beyond_bounds_handler(
+    args: &LazyListViewArgs,
+    total_count: usize,
+    total_main: Px,
+    viewport_span: Px,
+    scroll_offset: Px,
+    visible_range: Range<usize>,
+) {
+    let axis = args.axis;
+    let controller = args.controller;
+    let scroll_controller = args.scroll_controller;
+    let estimated_item_main = args.estimated_item_main;
+    let item_spacing = args.item_spacing;
+    let max_scroll = (total_main - viewport_span).max(Px::ZERO);
+
+    TesseraRuntime::with_mut(|runtime| {
+        runtime.set_current_focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
+            let Some(scroll_direction) = axis.focus_scroll_direction(direction) else {
+                return false;
+            };
+            if total_count == 0 || viewport_span <= Px::ZERO {
+                return false;
+            }
+
+            let target_index = match scroll_direction {
+                FocusScrollDirection::Forward => {
+                    if visible_range.end >= total_count {
+                        return false;
+                    }
+                    visible_range.end
+                }
+                FocusScrollDirection::Backward => {
+                    let Some(index) = visible_range.start.checked_sub(1) else {
+                        return false;
+                    };
+                    index
+                }
+            };
+
+            let (target_offset, target_main) = controller.with(|c| {
+                (
+                    c.cache
+                        .offset_for(target_index, estimated_item_main, item_spacing),
+                    c.cache
+                        .measured_main
+                        .get(target_index)
+                        .copied()
+                        .flatten()
+                        .unwrap_or(estimated_item_main),
+                )
+            });
+
+            let desired_scroll = match scroll_direction {
+                FocusScrollDirection::Forward => {
+                    (target_offset + target_main - viewport_span).max(Px::ZERO)
+                }
+                FocusScrollDirection::Backward => target_offset,
+            }
+            .min(max_scroll);
+
+            if desired_scroll == scroll_offset {
+                return false;
+            }
+
+            let position = axis.scroll_position(desired_scroll);
+            scroll_controller.with_mut(|c| c.set_scroll_position(position));
+            controller.with_mut(|c| c.scroll.set_scroll_position(position));
+            true
+        }));
+    });
 }
 
 #[derive(Clone, PartialEq)]
