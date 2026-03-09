@@ -109,7 +109,7 @@ impl<'a, 'b> MenuScope<'a, 'b> {
     pub fn menu_item(&mut self, args: &MenuItemArgs) {
         let mut args = args.clone();
         if args.close_on_click && args.submenu_content.is_none() {
-            let prev = args.on_click.clone();
+            let prev = args.on_click;
             let controller = self.controller;
             args.on_click = Some(Callback::new(move || {
                 if let Some(f) = &prev {
@@ -589,7 +589,7 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     let main_content = provider_args
         .main_content
         .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+        .unwrap_or_else(RenderSlot::empty);
     let menu_content = provider_args
         .menu_content
         .clone()
@@ -633,7 +633,7 @@ pub fn menu_provider(args: &MenuProviderArgs) {
 
     // Parent pointer handler: block propagation and close on background click.
     let bounds = bounds.clone();
-    let on_dismiss = provider_args.on_dismiss.clone();
+    let on_dismiss = provider_args.on_dismiss;
     let close_on_escape = provider_args.close_on_escape;
     let close_on_background = provider_args.close_on_background;
     pointer_input_handler({
@@ -655,7 +655,7 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     });
 
     if close_on_escape {
-        let on_dismiss = provider_args.on_dismiss.clone();
+        let on_dismiss = provider_args.on_dismiss;
         keyboard_input_handler(move |mut input| {
             let should_close_escape = input.keyboard_events.iter().any(|event| {
                 event.state == winit::event::ElementState::Pressed
@@ -686,7 +686,7 @@ fn menu_panel(args: &MenuPanelArgs) {
     let controller = args.controller;
     let menu_content = args.menu_content.clone();
     let focus_scope = remember_focus_scope();
-    let on_dismiss = args.provider.on_dismiss.clone();
+    let on_dismiss = args.provider.on_dismiss;
     let placement = args.provider.placement;
     let just_opened = args.just_opened;
 
@@ -702,7 +702,6 @@ fn menu_panel(args: &MenuPanelArgs) {
                 focus_scope.restore_focus();
             }
 
-            let on_dismiss = on_dismiss.clone();
             keyboard_input_handler(move |mut input| {
                 if input.key_modifiers.control_key()
                     || input.key_modifiers.alt_key()
@@ -1090,7 +1089,7 @@ fn menu_item_surface(args: &MenuItemSurfaceArgs) {
         surface_args = surface_args.on_click_shared(move || {
             submenu_controller.with_mut(|controller| controller.open());
         });
-    } else if let Some(on_click) = item.on_click.clone() {
+    } else if let Some(on_click) = item.on_click {
         surface_args = surface_args.on_click_shared(on_click);
     }
 

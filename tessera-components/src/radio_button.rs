@@ -203,7 +203,7 @@ impl Default for RadioButtonArgs {
             .color_scheme;
         Self {
             modifier: Modifier::new(),
-            on_select: CallbackWith::new(|_| {}),
+            on_select: CallbackWith::default_value(),
             selected: false,
             size: Dp(20.0),
             touch_target_size: Dp(48.0),
@@ -307,18 +307,12 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 ///         radio_button(
 ///             &RadioButtonArgs::default()
 ///                 .selected(selected.get() == 0)
-///                 .on_select({
-///                     let selected = selected;
-///                     move |_| selected.set(0)
-///                 }),
+///                 .on_select({ move |_| selected.set(0) }),
 ///         );
 ///         radio_button(
 ///             &RadioButtonArgs::default()
 ///                 .selected(selected.get() == 1)
-///                 .on_select({
-///                     let selected = selected;
-///                     move |_| selected.set(1)
-///                 }),
+///                 .on_select({ move |_| selected.set(1) }),
 ///         );
 ///     }));
 /// }
@@ -326,7 +320,7 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 #[tessera]
 pub fn radio_group(args: &RadioGroupArgs) {
     let args = args.clone();
-    let content = args.content.unwrap_or_else(|| RenderSlot::new(|| {}));
+    let content = args.content.unwrap_or_else(RenderSlot::empty);
     args.modifier
         .focus_group()
         .focus_traversal_policy(
@@ -446,7 +440,7 @@ fn radio_button_inner(args: &RadioButtonArgs) {
     };
 
     let on_click = {
-        let on_select = args.on_select.clone();
+        let on_select = args.on_select;
         move || {
             if controller.with_mut(|c| c.select()) {
                 on_select.call(true);
@@ -472,12 +466,11 @@ fn radio_button_inner(args: &RadioButtonArgs) {
         state_layer_args = state_layer_args.interaction_state(state);
     }
 
-    let mut state_layer_args = state_layer_args;
     state_layer_args.set_ripple_state(ripple_state);
 
     let mut modifier = args.modifier.clone().size(target_size, target_size);
     if args.enabled && radio_group.is_some() {
-        let on_select = args.on_select.clone();
+        let on_select = args.on_select;
         modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
             if focus_state.has_focus() && controller.with_mut(|controller| controller.select()) {
                 on_select.call(true);
@@ -500,7 +493,7 @@ fn radio_button_inner(args: &RadioButtonArgs) {
         });
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
-        let mut selectable_args = SelectableArgs::new(is_selected, on_click.clone())
+        let mut selectable_args = SelectableArgs::new(is_selected, on_click)
             .enabled(true)
             .role(Role::RadioButton);
         if let Some(label) = args.accessibility_label.clone() {

@@ -1259,7 +1259,7 @@ impl LazySlotPlan {
                 result.push(VisibleStaggeredItem {
                     item_index: index,
                     local_index,
-                    builder: slot.builder.clone(),
+                    builder: slot.builder,
                     key_hash,
                 });
             }

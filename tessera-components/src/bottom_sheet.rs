@@ -324,7 +324,7 @@ fn render_glass_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open: bo
     let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
     fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
         FluidGlassArgs::default()
-            .on_click_shared(args.on_close_request.clone())
+            .on_click_shared(args.on_close_request)
             .tint_color(Color::TRANSPARENT)
             .modifier(Modifier::new().fill_max_size())
             .dispersion_height(Dp(0.0))
@@ -354,7 +354,7 @@ fn render_material_scrim(args: &BottomSheetProviderArgs, progress: f32, is_open:
     surface(&crate::surface::SurfaceArgs::with_child(
         SurfaceArgs::default()
             .style(scrim_color.with_alpha(scrim_alpha).into())
-            .on_click_shared(args.on_close_request.clone())
+            .on_click_shared(args.on_close_request)
             .modifier(Modifier::new().fill_max_size())
             .block_input(true),
         || {},
@@ -515,7 +515,7 @@ struct BottomSheetDragHandleArgs {
 #[tessera]
 fn bottom_sheet_drag_handle(args: &BottomSheetDragHandleArgs) {
     let controller = args.controller;
-    let on_close = args.on_close.clone();
+    let on_close = args.on_close;
     let drag_recognizer = remember(DragRecognizer::default);
 
     pointer_input_handler(move |mut input| {
@@ -589,7 +589,6 @@ fn build_bottom_sheet_nested_scroll_connection(
             }
         }))
         .with_pre_fling_handler(CallbackWith::new({
-            let on_close = on_close.clone();
             move |input: PreFlingInput| {
                 if controller.with(|c| c.drag_offset()) <= 0.0 {
                     return ScrollVelocity::ZERO;
@@ -622,11 +621,11 @@ fn bottom_sheet_content_wrapper(args: &BottomSheetContentWrapperArgs) {
     let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
     let nested_scroll_connection = build_bottom_sheet_nested_scroll_connection(
         args.controller,
-        args.on_close.clone(),
+        args.on_close,
         parent_nested_scroll,
     );
     let just_opened = args.just_opened;
-    let on_close = args.on_close.clone();
+    let on_close = args.on_close;
     let style = args.style;
     let focus_scope = remember_focus_scope();
     Modifier::new()
@@ -640,24 +639,21 @@ fn bottom_sheet_content_wrapper(args: &BottomSheetContentWrapperArgs) {
             if just_opened {
                 focus_scope.restore_focus();
             }
-            keyboard_input_handler(make_keyboard_closure(on_close.clone()));
+            keyboard_input_handler(make_keyboard_closure(on_close));
             let bottom_sheet_content = bottom_sheet_content.clone();
             let nested_scroll_connection = nested_scroll_connection.clone();
-            let on_close = on_close.clone();
             let content_wrapper = move || {
                 let bottom_sheet_content = bottom_sheet_content.clone();
-                let on_close = on_close.clone();
                 let nested_scroll_connection = nested_scroll_connection.clone();
                 column(
                     &ColumnArgs::default()
                         .modifier(Modifier::new().fill_max_width())
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(move |scope| {
-                            let on_close = on_close.clone();
                             scope.child(move || {
                                 bottom_sheet_drag_handle(&BottomSheetDragHandleArgs {
                                     controller: args.controller,
-                                    on_close: on_close.clone(),
+                                    on_close,
                                 });
                             });
 
@@ -762,11 +758,11 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
     let main_content = provider_args
         .main_content
         .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+        .unwrap_or_else(RenderSlot::empty);
     let bottom_sheet_content = provider_args
         .bottom_sheet_content
         .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+        .unwrap_or_else(RenderSlot::empty);
     let controller = provider_args
         .controller
         .unwrap_or_else(|| remember(|| BottomSheetController::new(provider_args.is_open)));
@@ -827,7 +823,7 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
         style: provider_args.style,
         bottom_sheet_content,
         controller,
-        on_close: provider_args.on_close_request.clone(),
+        on_close: provider_args.on_close_request,
         just_opened,
     });
 

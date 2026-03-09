@@ -435,20 +435,15 @@ fn modifier_clickable_wrapper(args: &ModifierClickableArgs) {
     let child = args.child.clone();
     modifier.run(move || child.render());
 
-    {
-        let on_click = on_click.clone();
-        keyboard_input_handler(move |mut input| {
-            if !enabled
-                || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
-            {
-                return;
-            }
+    keyboard_input_handler(move |mut input| {
+        if !enabled || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers) {
+            return;
+        }
 
-            focus_requester.request_focus();
-            on_click.call();
-            input.block_keyboard();
-        });
-    }
+        focus_requester.request_focus();
+        on_click.call();
+        input.block_keyboard();
+    });
 
     let role = role.unwrap_or(accesskit::Role::Button);
     pointer_input_handler(move |mut input| {
@@ -501,8 +496,7 @@ fn modifier_clickable_wrapper(args: &ModifierClickableArgs) {
         builder.commit();
 
         if enabled {
-            let on_click_action = on_click.clone();
-            let focus_requester = focus_requester;
+            let on_click_action = on_click;
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
                     focus_requester.request_focus();
@@ -775,20 +769,15 @@ fn modifier_toggleable_wrapper(args: &ModifierToggleableArgs) {
     let child = args.child.clone();
     modifier.run(move || child.render());
 
-    {
-        let on_value_change = on_value_change.clone();
-        keyboard_input_handler(move |mut input| {
-            if !enabled
-                || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
-            {
-                return;
-            }
+    keyboard_input_handler(move |mut input| {
+        if !enabled || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers) {
+            return;
+        }
 
-            focus_requester.request_focus();
-            on_value_change.call(!value);
-            input.block_keyboard();
-        });
-    }
+        focus_requester.request_focus();
+        on_value_change.call(!value);
+        input.block_keyboard();
+    });
 
     let role = role.unwrap_or(accesskit::Role::CheckBox);
     pointer_input_handler(move |input| {
@@ -834,8 +823,6 @@ fn modifier_toggleable_wrapper(args: &ModifierToggleableArgs) {
         builder.commit();
 
         if enabled {
-            let on_value_change = on_value_change.clone();
-            let focus_requester = focus_requester;
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
                     focus_requester.request_focus();
@@ -954,20 +941,15 @@ fn modifier_selectable_wrapper(args: &ModifierSelectableArgs) {
     let child = args.child.clone();
     modifier.run(move || child.render());
 
-    {
-        let on_click = on_click.clone();
-        keyboard_input_handler(move |mut input| {
-            if !enabled
-                || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
-            {
-                return;
-            }
+    keyboard_input_handler(move |mut input| {
+        if !enabled || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers) {
+            return;
+        }
 
-            focus_requester.request_focus();
-            on_click.call();
-            input.block_keyboard();
-        });
-    }
+        focus_requester.request_focus();
+        on_click.call();
+        input.block_keyboard();
+    });
 
     let role = role.unwrap_or(accesskit::Role::Button);
     pointer_input_handler(move |input| {
@@ -1017,8 +999,6 @@ fn modifier_selectable_wrapper(args: &ModifierSelectableArgs) {
         builder.commit();
 
         if enabled {
-            let on_click = on_click.clone();
-            let focus_requester = focus_requester;
             input.set_accessibility_action_handler(move |action| {
                 if action == Action::Click {
                     focus_requester.request_focus();

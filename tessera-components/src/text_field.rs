@@ -402,7 +402,7 @@ impl Default for TextFieldArgs {
             enabled: true,
             read_only: false,
             modifier: Modifier::new(),
-            on_change: CallbackWith::new(|value| value),
+            on_change: CallbackWith::identity(),
             min_width: Some(TextFieldDefaults::MIN_WIDTH),
             min_height: Some(TextFieldDefaults::MIN_HEIGHT),
             background_color: Some(scheme.surface_container_highest),
@@ -502,7 +502,7 @@ fn build_editor_args(
         enabled: args.enabled,
         read_only: args.read_only,
         modifier: args.modifier.clone(),
-        on_change: args.on_change.clone(),
+        on_change: args.on_change,
         min_width: args.min_width,
         min_height: args.min_height,
         background_color: args.background_color,
@@ -1030,8 +1030,8 @@ fn apply_menu_action(
                 handle_action(
                     &controller,
                     GlyphonAction::Backspace,
-                    on_change.clone(),
-                    input_transform.clone(),
+                    on_change,
+                    input_transform,
                 );
             }
         }
@@ -1046,8 +1046,8 @@ fn apply_menu_action(
                 handle_action(
                     &controller,
                     GlyphonAction::Insert(ch),
-                    on_change.clone(),
-                    input_transform.clone(),
+                    on_change,
+                    input_transform,
                 );
             }
         }
@@ -1188,13 +1188,13 @@ pub fn text_field(args: &TextFieldArgs) {
     let read_only = args.read_only;
     let menu_controller = remember(MenuController::new);
     let action_state = remember(|| None::<TextFieldMenuAction>);
-    let input_transform = merge_input_transforms(args.line_limit, args.input_transform.clone());
+    let input_transform = merge_input_transforms(args.line_limit, args.input_transform);
     let display_transform = args.obfuscation_char.map(|mask| {
         CallbackWith::new(move |value: String| obfuscate_text(&value, mask)) as DisplayTransform
     });
-    let editor_args = build_editor_args(&args, input_transform.clone(), display_transform);
+    let editor_args = build_editor_args(&args, input_transform, display_transform);
     let menu_policy = resolve_text_field_menu_policy(args.context_menu, enabled, read_only);
-    let on_change = args.on_change.clone();
+    let on_change = args.on_change;
     let render_args = args.clone();
 
     if menu_policy.enabled {
@@ -1249,8 +1249,8 @@ pub fn text_field(args: &TextFieldArgs) {
                 apply_menu_action(
                     action,
                     controller,
-                    on_change.clone(),
-                    input_transform.clone(),
+                    on_change,
+                    input_transform,
                     enabled,
                     read_only,
                 );

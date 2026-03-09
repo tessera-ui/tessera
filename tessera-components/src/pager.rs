@@ -106,7 +106,7 @@ impl Default for PagerArgs {
             user_scroll_enabled: true,
             snap_threshold: DEFAULT_SNAP_THRESHOLD,
             scroll_smoothing: DEFAULT_SCROLL_SMOOTHING,
-            page_content: CallbackWith::new(|_| {}),
+            page_content: CallbackWith::default_value(),
             controller: None,
         }
     }
@@ -802,7 +802,7 @@ fn pager_render(args: PagerArgs, controller: State<PagerController>, axis: Pager
             scroll_smoothing: pager_args.scroll_smoothing,
             controller,
             axis,
-            page_content: pager_args.page_content.clone(),
+            page_content: pager_args.page_content,
         };
         pager_inner(&render_args);
     });
@@ -1041,7 +1041,6 @@ fn pager_inner(args: &PagerRenderArgs) {
                 }
             });
 
-            let page_content = page_content.clone();
             for page_index in visible_pages.iter().copied() {
                 key(page_index, || {
                     page_content.call(page_index);

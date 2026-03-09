@@ -654,12 +654,8 @@ impl From<&SplitButtonTrailingArgs> for SplitButtonTrailingArgs {
 pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
     let args = args.clone();
     let modifier = args.modifier;
-    let leading_button = args
-        .leading_button
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
-    let trailing_button = args
-        .trailing_button
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let leading_button = args.leading_button.unwrap_or_else(RenderSlot::empty);
+    let trailing_button = args.trailing_button.unwrap_or_else(RenderSlot::empty);
     modifier.run(move || {
         let spacing = Px::from(args.spacing).max(Px::ZERO);
         layout(SplitButtonLayoutSpec { spacing });
@@ -707,10 +703,7 @@ pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
 #[tessera]
 pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
     let args = args.clone();
-    let content = args
-        .content
-        .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let content = args.content.clone().unwrap_or_else(RenderSlot::empty);
     render_split_button(args.into(), content);
 }
 
@@ -753,10 +746,7 @@ pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
 #[tessera]
 pub fn split_trailing_button(args: &SplitButtonTrailingArgs) {
     let args = args.clone();
-    let content = args
-        .content
-        .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let content = args.content.clone().unwrap_or_else(RenderSlot::empty);
     render_split_button(args.into(), content);
 }
 #[derive(Clone, Prop)]

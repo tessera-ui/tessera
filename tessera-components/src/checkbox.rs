@@ -197,7 +197,7 @@ impl Default for CheckboxArgs {
             .color_scheme;
         Self {
             modifier: Modifier::new(),
-            on_toggle: CallbackWith::new(|_| {}),
+            on_toggle: CallbackWith::default_value(),
             checked: false,
             size: CheckboxDefaults::GLYPH_SIZE,
             color: scheme.on_surface_variant,
@@ -353,7 +353,7 @@ fn checkbox_inner(args: &CheckboxArgs) {
     let interaction_state = enabled.then(|| remember(InteractionState::new));
     let ripple_state = enabled.then(|| remember(RippleState::new));
     let on_value_change = {
-        let on_toggle = args.on_toggle.clone();
+        let on_toggle = args.on_toggle;
         CallbackWith::new(move |checked| {
             controller.with_mut(|c| c.set_checked(checked));
             on_toggle.call(checked);
@@ -431,7 +431,6 @@ fn checkbox_inner(args: &CheckboxArgs) {
     let render_checkbox_surface = {
         let render_checkmark = render_checkmark.clone();
         RenderSlot::new(move || {
-            let shape = shape;
             let checkbox_style = checkbox_style.clone();
             let render_checkmark = render_checkmark.clone();
             surface(&crate::surface::SurfaceArgs::with_child(
@@ -487,7 +486,6 @@ fn checkbox_inner(args: &CheckboxArgs) {
                 surface_args = surface_args.interaction_state(state);
             }
 
-            let mut surface_args = surface_args;
             surface_args.set_ripple_state(ripple_state);
 
             let render_checkbox_container = render_checkbox_container.clone();

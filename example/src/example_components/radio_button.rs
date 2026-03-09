@@ -139,10 +139,9 @@ fn option_row(
         .children(move |scope| {
             let on_select = CallbackWith::new(on_select);
             scope.child({
-                let on_select = on_select.clone();
                 move || {
                     let args = RadioButtonArgs::default()
-                        .on_select_shared(on_select.clone())
+                        .on_select_shared(on_select)
                         .enabled(enabled)
                         .controller(controller);
                     radio_button(&args);

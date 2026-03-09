@@ -957,7 +957,7 @@ fn compute_visible_items(
                     local_index,
                     line_index: line,
                     slot_index: index - start_index,
-                    builder: slot.builder.clone(),
+                    builder: slot.builder,
                     key_hash,
                 });
             }

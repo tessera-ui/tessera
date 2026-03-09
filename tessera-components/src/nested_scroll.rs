@@ -112,9 +112,9 @@ impl NestedScrollConnection {
     pub(crate) fn new() -> Self {
         Self {
             parent: None,
-            on_pre_scroll: CallbackWith::new(|_| ScrollDelta::ZERO),
-            on_post_scroll: CallbackWith::new(|_| ScrollDelta::ZERO),
-            on_pre_fling: CallbackWith::new(|_| ScrollVelocity::ZERO),
+            on_pre_scroll: CallbackWith::default_value(),
+            on_post_scroll: CallbackWith::default_value(),
+            on_pre_fling: CallbackWith::default_value(),
         }
     }
 

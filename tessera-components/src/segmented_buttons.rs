@@ -374,7 +374,7 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
             .size_in(None, None, Some(SegmentedButtonDefaults::HEIGHT), None);
     if args.enabled
         && row_context.is_some_and(|context| context.select_on_focus)
-        && let Some(on_click) = args.on_click.clone()
+        && let Some(on_click) = args.on_click
     {
         let is_selected = args.selected;
         modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
@@ -633,7 +633,7 @@ fn segmented_button_row_parts(
         equal_width,
         content,
     } = args;
-    let content = content.unwrap_or_else(|| RenderSlot::new(|| {}));
+    let content = content.unwrap_or_else(RenderSlot::empty);
     let overlap = Px::from(overlap).max(Px::ZERO);
     let modifier = modifier.size_in(None, None, Some(SegmentedButtonDefaults::HEIGHT), None);
     let layout_spec = SegmentedButtonRowLayout {

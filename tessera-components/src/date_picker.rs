@@ -239,7 +239,6 @@ impl DatePickerState {
         display_mode: DatePickerDisplayMode,
     ) -> Self {
         let year_range = normalize_year_range(year_range);
-        let selectable_dates = selectable_dates;
         let selected_date = initial_selected_date
             .filter(|date| is_date_selectable(*date, &year_range, &selectable_dates));
 
@@ -892,12 +891,11 @@ fn month_navigation(args: &MonthNavigationArgs) {
         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move |scope| {
-            let on_prev = on_prev.clone();
             scope.child(move || {
                 nav_button(&NavButtonArgs {
                     label: "<",
                     enabled: can_prev,
-                    on_click: on_prev.clone(),
+                    on_click: on_prev,
                 });
             });
 
@@ -917,12 +915,11 @@ fn month_navigation(args: &MonthNavigationArgs) {
                 ));
             });
 
-            let on_next = on_next.clone();
             scope.child(move || {
                 nav_button(&NavButtonArgs {
                     label: ">",
                     enabled: can_next,
-                    on_click: on_next.clone(),
+                    on_click: on_next,
                 });
             });
         }));
@@ -1237,8 +1234,8 @@ struct InputRowArgs {
 fn input_row(args: &InputRowArgs) {
     let label = args.label;
     let value = args.value.clone();
-    let on_decrement = args.on_decrement.clone();
-    let on_increment = args.on_increment.clone();
+    let on_decrement = args.on_decrement;
+    let on_increment = args.on_increment;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1264,19 +1261,16 @@ fn input_row(args: &InputRowArgs) {
                 ));
             });
             scope.child(move || {
-                let on_decrement = on_decrement.clone();
-                let on_increment = on_increment.clone();
                 let value = value.clone();
                 row(&RowArgs::default()
                     .main_axis_alignment(MainAxisAlignment::Center)
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .children(move |row_scope| {
-                        let on_decrement = on_decrement.clone();
                         row_scope.child(move || {
                             nav_button(&NavButtonArgs {
                                 label: "-",
                                 enabled: true,
-                                on_click: on_decrement.clone(),
+                                on_click: on_decrement,
                             });
                         });
                         row_scope.child(|| {
@@ -1304,12 +1298,11 @@ fn input_row(args: &InputRowArgs) {
                                 Modifier::new().width(Dp(8.0)),
                             ))
                         });
-                        let on_increment = on_increment.clone();
                         row_scope.child(move || {
                             nav_button(&NavButtonArgs {
                                 label: "+",
                                 enabled: true,
-                                on_click: on_increment.clone(),
+                                on_click: on_increment,
                             });
                         });
                     }));
@@ -1373,7 +1366,7 @@ struct NavButtonArgs {
 fn nav_button(args: &NavButtonArgs) {
     let label = args.label;
     let enabled = args.enabled;
-    let on_click = args.on_click.clone();
+    let on_click = args.on_click;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()

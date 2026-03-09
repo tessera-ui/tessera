@@ -294,7 +294,6 @@ fn glass_config_slider(label: &str, value: f32, on_change: CallbackWith<f32>) {
             .children(move |scope| {
                 scope.child(move || {
                     let label = label.clone();
-                    let on_change = on_change.clone();
                     column(&ColumnArgs::default().children(|scope| {
                         scope.child(move || {
                             text(&TextArgs::default().text(label.clone()).size(Dp(16.0)));
@@ -307,7 +306,7 @@ fn glass_config_slider(label: &str, value: f32, on_change: CallbackWith<f32>) {
                                 glass_slider(
                                     &GlassSliderArgs::default()
                                         .value(value)
-                                        .on_change_shared(on_change.clone())
+                                        .on_change_shared(on_change)
                                         .modifier(Modifier::new().width(Dp(300.0))),
                                 );
                             }

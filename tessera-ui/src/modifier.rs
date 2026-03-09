@@ -509,10 +509,10 @@ fn apply_focus_modifier(config: FocusModifierConfig, child: ModifierChild) -> Mo
             if let Some(policy) = config.traversal_policy {
                 runtime.set_current_focus_traversal_policy(policy);
             }
-            if let Some(handler) = config.changed_handler.clone() {
+            if let Some(handler) = config.changed_handler {
                 runtime.set_current_focus_changed_handler(handler);
             }
-            if let Some(handler) = config.event_handler.clone() {
+            if let Some(handler) = config.event_handler {
                 runtime.set_current_focus_event_handler(handler);
             }
         });

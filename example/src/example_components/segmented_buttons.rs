@@ -45,7 +45,6 @@ pub fn segmented_buttons_showcase() {
                             single_choice_segmented_button_row(
                                 &SegmentedButtonRowArgs::default().content(move || {
                                     for (index, label) in options.iter().enumerate() {
-                                        let selected_index = selected_index;
                                         let label = (*label).to_string();
                                         segmented_button(
                                             &SegmentedButtonArgs::new(label)
@@ -83,7 +82,6 @@ pub fn segmented_buttons_showcase() {
                                         let is_selected = selected_filters.with(|values| {
                                             values.get(index).copied().unwrap_or(false)
                                         });
-                                        let selected_filters = selected_filters;
                                         let label = (*label).to_string();
                                         segmented_button(
                                             &SegmentedButtonArgs::new(label)

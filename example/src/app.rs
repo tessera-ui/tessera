@@ -239,7 +239,7 @@ fn app_inner() {
                                                                             }
                                                                         ))
                                                                         .on_click_shared(
-                                                                            home_action.clone(),
+                                                                            home_action,
                                                                         ),
                                                                     )
                                                                     .item(
@@ -256,7 +256,7 @@ fn app_inner() {
                                                                             }
                                                                         ))
                                                                         .on_click_shared(
-                                                                            about_action.clone(),
+                                                                            about_action,
                                                                         ),
                                                                     ),
                                                             );
@@ -321,7 +321,7 @@ fn app_inner() {
                                                                             }
                                                                         ))
                                                                         .on_click_shared(
-                                                                            home_action.clone(),
+                                                                            home_action,
                                                                         ),
                                                                     )
                                                                     .item(
@@ -338,7 +338,7 @@ fn app_inner() {
                                                                             }
                                                                         ))
                                                                         .on_click_shared(
-                                                                            about_action.clone(),
+                                                                            about_action,
                                                                         ),
                                                                     ),
                                                             );
@@ -757,7 +757,6 @@ fn home_screen(args: &HomeArgs) {
                     .content(move |scope| {
                         let filtered = filtered.clone();
                         scope.sticky_header(move || {
-                            let search_query = search_query;
                             let controller = search_controller;
                             let args = SearchBarArgs::default()
                                 .modifier(Modifier::new().fill_max_width())
@@ -780,7 +779,7 @@ fn home_screen(args: &HomeArgs) {
                         });
 
                         scope.items_from_iter(filtered, move |_, example| {
-                            let on_click = example.on_click.clone();
+                            let on_click = example.on_click;
                             let title = example.title.clone();
                             let description = example.desription.clone();
                             component_card(&ComponentCardArgs {
@@ -808,7 +807,7 @@ struct ComponentCardArgs {
 fn component_card(args: &ComponentCardArgs) {
     let title = args.title.clone();
     let description = args.description.clone();
-    let on_click = args.on_click.clone();
+    let on_click = args.on_click;
 
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()

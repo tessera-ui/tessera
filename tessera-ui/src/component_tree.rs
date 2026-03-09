@@ -622,13 +622,13 @@ impl ComponentTree {
                 && let Some(handler) = &node.focus_changed_handler
             {
                 invocations.push(PendingFocusCallbackInvocation::new(
-                    handler.clone(),
+                    *handler,
                     notification.state,
                 ));
             }
             if let Some(handler) = &node.focus_event_handler {
                 invocations.push(PendingFocusCallbackInvocation::new(
-                    handler.clone(),
+                    *handler,
                     notification.state,
                 ));
             }

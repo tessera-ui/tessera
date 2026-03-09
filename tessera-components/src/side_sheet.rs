@@ -594,14 +594,11 @@ fn place_side_sheet_if_present(
 #[tessera]
 pub fn modal_side_sheet_provider(args: &SideSheetProviderArgs) {
     let args = args.clone();
-    let main_content = args
-        .main_content
-        .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let main_content = args.main_content.clone().unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = args
         .side_sheet_content
         .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+        .unwrap_or_else(RenderSlot::empty);
     let provider_inner_args = SideSheetProviderInnerArgs {
         sheet_type: SideSheetType::Modal,
         on_close_request: args.on_close_request,
@@ -656,14 +653,11 @@ pub fn modal_side_sheet_provider(args: &SideSheetProviderArgs) {
 #[tessera]
 pub fn standard_side_sheet_provider(args: &SideSheetProviderArgs) {
     let args = args.clone();
-    let main_content = args
-        .main_content
-        .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let main_content = args.main_content.clone().unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = args
         .side_sheet_content
         .clone()
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+        .unwrap_or_else(RenderSlot::empty);
     let provider_inner_args = SideSheetProviderInnerArgs {
         sheet_type: SideSheetType::Standard,
         on_close_request: args.on_close_request,
@@ -694,7 +688,7 @@ fn side_sheet_provider_inner(args: &SideSheetProviderInnerArgs) {
 
     let provider_render_args = SideSheetProviderRenderArgs {
         sheet_type: args.sheet_type,
-        on_close_request: args.on_close_request.clone(),
+        on_close_request: args.on_close_request,
         position: args.position,
         controller,
         main_content: args.main_content.clone(),
@@ -742,18 +736,13 @@ fn side_sheet_provider_render(args: &SideSheetProviderRenderArgs) {
 
     let progress = calc_progress_from_timer(timer_opt);
 
-    render_scrim(
-        args.sheet_type,
-        args.on_close_request.clone(),
-        progress,
-        is_open,
-    );
+    render_scrim(args.sheet_type, args.on_close_request, progress, is_open);
 
     let content_wrapper_args = SideSheetContentWrapperArgs {
         sheet_type: args.sheet_type,
         position: args.position,
         controller: args.controller,
-        on_close_request: args.on_close_request.clone(),
+        on_close_request: args.on_close_request,
         just_opened,
         content: args.side_sheet_content.clone(),
     };
@@ -776,7 +765,7 @@ fn side_sheet_content_wrapper(args: &SideSheetContentWrapperArgs) {
         .color_scheme;
     let position = args.position;
     let controller = args.controller;
-    let on_close_request = args.on_close_request.clone();
+    let on_close_request = args.on_close_request;
     let container_color = match args.sheet_type {
         SideSheetType::Modal => scheme.surface_container_low,
         SideSheetType::Standard => scheme.surface,
@@ -787,7 +776,7 @@ fn side_sheet_content_wrapper(args: &SideSheetContentWrapperArgs) {
     };
     let content = args.content.clone();
     let just_opened = args.just_opened;
-    let on_close_request_for_keyboard = args.on_close_request.clone();
+    let on_close_request_for_keyboard = args.on_close_request;
 
     let focus_scope = remember_focus_scope();
     Modifier::new()
@@ -801,11 +790,10 @@ fn side_sheet_content_wrapper(args: &SideSheetContentWrapperArgs) {
             if just_opened {
                 focus_scope.restore_focus();
             }
-            keyboard_input_handler(make_keyboard_closure(on_close_request_for_keyboard.clone()));
+            keyboard_input_handler(make_keyboard_closure(on_close_request_for_keyboard));
 
             let surface_args = surface_args.clone();
             let content = content.clone();
-            let on_close_request = on_close_request.clone();
             surface(&crate::surface::SurfaceArgs::with_child(
                 surface_args
                     .style(container_color.into())
@@ -818,7 +806,7 @@ fn side_sheet_content_wrapper(args: &SideSheetContentWrapperArgs) {
                         use_context::<NestedScrollConnection>().map(|context| context.get());
                     let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
                         controller,
-                        on_close_request.clone(),
+                        on_close_request,
                         position,
                         parent_nested_scroll,
                     );

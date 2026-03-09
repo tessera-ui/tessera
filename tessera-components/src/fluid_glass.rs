@@ -286,7 +286,6 @@ pub fn fluid_glass(args: &FluidGlassArgs) {
         let mut clickable_args = ClickableArgs::new(
             fluid_args
                 .on_click
-                .clone()
                 .expect("interactive implies on_click is set"),
         )
         .block_input(fluid_args.block_input);

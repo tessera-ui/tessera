@@ -77,8 +77,6 @@ pub fn chip_showcase() {
                         });
 
                         scope.child(move || {
-                            let favorites_selected = favorites_selected;
-                            let recent_selected = recent_selected;
                             flow_row(
                                 &FlowRowArgs::default()
                                     .item_spacing(Dp(8.0))
@@ -130,7 +128,6 @@ pub fn chip_showcase() {
                         });
 
                         scope.child(move || {
-                            let input_selected = input_selected;
                             flow_row(
                                 &FlowRowArgs::default()
                                     .item_spacing(Dp(8.0))

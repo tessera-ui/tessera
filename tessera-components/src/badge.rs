@@ -393,8 +393,8 @@ impl BadgedBoxArgs {
 impl Default for BadgedBoxArgs {
     fn default() -> Self {
         Self {
-            badge: RenderSlot::new(|| {}),
-            content: RenderSlot::new(|| {}),
+            badge: RenderSlot::empty(),
+            content: RenderSlot::empty(),
         }
     }
 }
@@ -490,7 +490,7 @@ pub fn badge(args: &BadgeArgs) {
 #[tessera]
 pub fn badge_with_content(args: &BadgeArgs) {
     let args = args.clone();
-    let content = args.content.unwrap_or_else(|| RenderSlot::new(|| {}));
+    let content = args.content.unwrap_or_else(RenderSlot::empty);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();

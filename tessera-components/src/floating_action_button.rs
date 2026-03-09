@@ -335,10 +335,7 @@ impl Default for FloatingActionButtonArgs {
 /// #         || MaterialTheme::default(),
 /// #         || {
 ///     let clicked = remember(|| false);
-///     let on_click = Callback::new({
-///         let clicked = clicked;
-///         move || clicked.with_mut(|value| *value = true)
-///     });
+///     let on_click = Callback::new({ move || clicked.with_mut(|value| *value = true) });
 ///     let args = FloatingActionButtonArgs::default().on_click_shared(on_click.clone());
 ///     on_click.call();
 ///

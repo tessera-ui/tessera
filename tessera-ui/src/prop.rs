@@ -5,7 +5,14 @@
 //! Define a `Prop` args type for `#[tessera]` components and pass it by
 //! shared reference.
 
-use std::{any::Any, sync::Arc};
+use std::{any::Any, marker::PhantomData, ptr, sync::Arc};
+
+use crate::runtime::{
+    FunctorHandle, invoke_callback_handle, invoke_callback_with_handle, invoke_render_slot_handle,
+    invoke_render_slot_with_handle, remember_callback_handle, remember_callback_with_handle,
+    remember_render_slot_handle, remember_render_slot_with_handle,
+    track_render_slot_read_dependency,
+};
 
 /// Stable, comparable slot handle for any shared callable trait object.
 ///
@@ -45,28 +52,53 @@ impl<F: ?Sized> Eq for Slot<F> {}
 
 /// Stable, comparable callback handle for `Fn()`.
 ///
-/// `Callback` compares by identity (`Arc::ptr_eq`) so it can be used in
-/// component props without forcing deep closure comparisons.
-#[derive(Clone)]
+/// `Callback` is a stable handle to the latest callback closure created at the
+/// same build call site.
+///
+/// Callback identity does not change when the captured closure changes during
+/// recomposition. As a result, callback updates do not force prop mismatches or
+/// replay invalidation. Event handlers always invoke the latest closure stored
+/// behind the handle.
+///
+/// Create callbacks only during a Tessera component build.
+#[derive(Clone, Copy)]
 pub struct Callback {
-    slot: Slot<dyn Fn() + Send + Sync>,
+    repr: CallbackRepr,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum CallbackRepr {
+    Noop,
+    Handle(FunctorHandle),
 }
 
 impl Callback {
     /// Create a callback handle from a closure.
+    ///
+    /// This must be called during a component build.
+    #[track_caller]
     pub fn new<F>(handler: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
         Self {
-            slot: Slot::from_shared(Arc::new(handler)),
+            repr: CallbackRepr::Handle(remember_callback_handle(handler)),
+        }
+    }
+
+    /// Create an empty callback.
+    pub const fn noop() -> Self {
+        Self {
+            repr: CallbackRepr::Noop,
         }
     }
 
     /// Invoke the callback.
     pub fn call(&self) {
-        let handler = self.slot.shared();
-        handler();
+        match self.repr {
+            CallbackRepr::Noop => {}
+            CallbackRepr::Handle(handle) => invoke_callback_handle(handle),
+        }
     }
 }
 
@@ -81,13 +113,13 @@ where
 
 impl Default for Callback {
     fn default() -> Self {
-        Self::new(|| {})
+        Self::noop()
     }
 }
 
 impl PartialEq for Callback {
     fn eq(&self, other: &Self) -> bool {
-        self.slot == other.slot
+        self.repr == other.repr
     }
 }
 
@@ -95,31 +127,64 @@ impl Eq for Callback {}
 
 /// Stable, comparable callback handle for `Fn(T) -> R`.
 ///
+/// This follows the same stability rules as [`Callback`]: the handle remains
+/// stable across recomposition, while calls always observe the latest closure.
+///
 /// This is useful for value-change handlers and similar one-argument callbacks.
 pub struct CallbackWith<T, R = ()> {
-    slot: Slot<dyn Fn(T) -> R + Send + Sync>,
+    repr: CallbackWithRepr<T, R>,
 }
 
-impl<T, R> CallbackWith<T, R> {
+enum CallbackWithRepr<T, R> {
+    Handle(FunctorHandle),
+    Static(fn(T) -> R),
+}
+
+impl<T, R> Copy for CallbackWithRepr<T, R> {}
+
+impl<T, R> Clone for CallbackWithRepr<T, R> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
+impl<T, R> CallbackWith<T, R>
+where
+    T: 'static,
+    R: 'static,
+{
     /// Create a callback handle from a closure.
+    ///
+    /// This must be called during a component build.
+    #[track_caller]
     pub fn new<F>(handler: F) -> Self
     where
         F: Fn(T) -> R + Send + Sync + 'static,
     {
         Self {
-            slot: Slot::from_shared(Arc::new(handler)),
+            repr: CallbackWithRepr::Handle(remember_callback_with_handle(handler)),
         }
     }
 
     /// Invoke the callback with an argument.
     pub fn call(&self, value: T) -> R {
-        let handler = self.slot.shared();
-        handler(value)
+        match self.repr {
+            CallbackWithRepr::Handle(handle) => invoke_callback_with_handle(handle, value),
+            CallbackWithRepr::Static(handler) => handler(value),
+        }
+    }
+
+    fn from_static(handler: fn(T) -> R) -> Self {
+        Self {
+            repr: CallbackWithRepr::Static(handler),
+        }
     }
 }
 
 impl<T, R, F> From<F> for CallbackWith<T, R>
 where
+    T: 'static,
+    R: 'static,
     F: Fn(T) -> R + Send + Sync + 'static,
 {
     fn from(handler: F) -> Self {
@@ -127,46 +192,111 @@ where
     }
 }
 
+impl<T, R> Copy for CallbackWith<T, R> {}
+
 impl<T, R> Clone for CallbackWith<T, R> {
     fn clone(&self) -> Self {
-        Self {
-            slot: self.slot.clone(),
-        }
+        *self
     }
 }
 
 impl<T, R> PartialEq for CallbackWith<T, R> {
     fn eq(&self, other: &Self) -> bool {
-        self.slot == other.slot
+        match (self.repr, other.repr) {
+            (CallbackWithRepr::Handle(lhs), CallbackWithRepr::Handle(rhs)) => lhs == rhs,
+            (CallbackWithRepr::Static(lhs), CallbackWithRepr::Static(rhs)) => {
+                ptr::fn_addr_eq(lhs, rhs)
+            }
+            _ => false,
+        }
     }
 }
 
 impl<T, R> Eq for CallbackWith<T, R> {}
 
+impl<T, R> CallbackWith<T, R>
+where
+    T: 'static,
+    R: Default + 'static,
+{
+    /// Create a callback that ignores its input and returns
+    /// [`Default::default`].
+    pub fn default_value() -> Self {
+        fn default_value_impl<T, R: Default>(_: T) -> R {
+            R::default()
+        }
+
+        Self::from_static(default_value_impl::<T, R>)
+    }
+}
+
+impl<T> CallbackWith<T, T>
+where
+    T: 'static,
+{
+    /// Create a callback that returns its input unchanged.
+    pub fn identity() -> Self {
+        fn identity_impl<T>(value: T) -> T {
+            value
+        }
+
+        Self::from_static(identity_impl::<T>)
+    }
+}
+
 /// Stable, comparable render slot handle.
 ///
-/// `RenderSlot` is semantically distinct from `Callback`, but it has the same
-/// identity semantics and is optimized for "call child content later" patterns.
-#[derive(Clone)]
+/// `RenderSlot` is a stable handle to deferred UI content.
+///
+/// Like [`Callback`], the handle stays stable across recomposition. Unlike
+/// callbacks, updating a render slot's closure invalidates component instances
+/// that rendered the slot, so slot content changes can trigger replayed
+/// components to rebuild with the latest UI.
+///
+/// Create render slots only during a Tessera component build.
 pub struct RenderSlot {
-    slot: Slot<dyn Fn() + Send + Sync>,
+    repr: RenderSlotRepr,
+}
+
+enum RenderSlotRepr {
+    Empty,
+    Handle(FunctorHandle),
 }
 
 impl RenderSlot {
     /// Create a render slot from a closure.
+    ///
+    /// This must be called during a component build.
+    #[track_caller]
     pub fn new<F>(render: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
         Self {
-            slot: Slot::from_shared(Arc::new(render)),
+            repr: RenderSlotRepr::Handle(remember_render_slot_handle(render)),
+        }
+    }
+
+    /// Create an empty render slot.
+    pub const fn empty() -> Self {
+        Self {
+            repr: RenderSlotRepr::Empty,
+        }
+    }
+
+    fn invoke(&self) {
+        match &self.repr {
+            RenderSlotRepr::Empty => {}
+            RenderSlotRepr::Handle(handle) => invoke_render_slot_handle(*handle),
         }
     }
 
     /// Execute the render closure.
     pub fn render(&self) {
-        let render = self.slot.shared();
-        render();
+        if let RenderSlotRepr::Handle(handle) = self.repr {
+            track_render_slot_read_dependency(handle);
+        }
+        self.invoke();
     }
 }
 
@@ -181,15 +311,28 @@ where
 
 impl From<Callback> for RenderSlot {
     fn from(callback: Callback) -> Self {
-        Self {
-            slot: callback.slot,
+        Self::new(move || callback.call())
+    }
+}
+
+impl Clone for RenderSlot {
+    fn clone(&self) -> Self {
+        match &self.repr {
+            RenderSlotRepr::Empty => Self::empty(),
+            RenderSlotRepr::Handle(handle) => Self {
+                repr: RenderSlotRepr::Handle(*handle),
+            },
         }
     }
 }
 
 impl PartialEq for RenderSlot {
     fn eq(&self, other: &Self) -> bool {
-        self.slot == other.slot
+        match (&self.repr, &other.repr) {
+            (RenderSlotRepr::Empty, RenderSlotRepr::Empty) => true,
+            (RenderSlotRepr::Handle(lhs), RenderSlotRepr::Handle(rhs)) => lhs == rhs,
+            _ => false,
+        }
     }
 }
 
@@ -197,31 +340,45 @@ impl Eq for RenderSlot {}
 
 /// Stable, comparable render slot handle for `Fn(T) -> R`.
 ///
-/// This is useful for deferred rendering that depends on an input value.
+/// This follows the same invalidation rules as [`RenderSlot`], while supporting
+/// deferred rendering that depends on an input value.
 pub struct RenderSlotWith<T, R = ()> {
-    slot: Slot<dyn Fn(T) -> R + Send + Sync>,
+    handle: FunctorHandle,
+    marker: PhantomData<fn(T) -> R>,
 }
 
 impl<T, R> RenderSlotWith<T, R> {
     /// Create a render slot from a closure.
+    ///
+    /// This must be called during a component build.
+    #[track_caller]
     pub fn new<F>(render: F) -> Self
     where
+        T: 'static,
+        R: 'static,
         F: Fn(T) -> R + Send + Sync + 'static,
     {
         Self {
-            slot: Slot::from_shared(Arc::new(render)),
+            handle: remember_render_slot_with_handle(render),
+            marker: PhantomData,
         }
     }
 
     /// Execute the render closure with an input value.
-    pub fn render(&self, value: T) -> R {
-        let render = self.slot.shared();
-        render(value)
+    pub fn render(&self, value: T) -> R
+    where
+        T: 'static,
+        R: 'static,
+    {
+        track_render_slot_read_dependency(self.handle);
+        invoke_render_slot_with_handle(self.handle, value)
     }
 }
 
 impl<T, R, F> From<F> for RenderSlotWith<T, R>
 where
+    T: 'static,
+    R: 'static,
     F: Fn(T) -> R + Send + Sync + 'static,
 {
     fn from(render: F) -> Self {
@@ -229,25 +386,28 @@ where
     }
 }
 
-impl<T, R> From<CallbackWith<T, R>> for RenderSlotWith<T, R> {
+impl<T, R> From<CallbackWith<T, R>> for RenderSlotWith<T, R>
+where
+    T: 'static,
+    R: 'static,
+{
     fn from(callback: CallbackWith<T, R>) -> Self {
-        Self {
-            slot: callback.slot,
-        }
+        Self::new(move |value| callback.call(value))
     }
 }
 
 impl<T, R> Clone for RenderSlotWith<T, R> {
     fn clone(&self) -> Self {
         Self {
-            slot: self.slot.clone(),
+            handle: self.handle,
+            marker: PhantomData,
         }
     }
 }
 
 impl<T, R> PartialEq for RenderSlotWith<T, R> {
     fn eq(&self, other: &Self) -> bool {
-        self.slot == other.slot
+        self.handle == other.handle
     }
 }
 

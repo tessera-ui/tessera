@@ -254,13 +254,12 @@ fn glass_switch_inner(args: &GlassSwitchArgs) {
         .expect("glass_switch_inner requires controller to be set");
     let mut modifier = args.modifier;
 
-    let on_toggle = args.on_toggle.clone();
+    let on_toggle = args.on_toggle;
     let enabled = on_toggle.is_some();
     let interaction_state = enabled.then(|| remember(InteractionState::new));
     let checked = controller.with(|c| c.is_checked());
     if enabled {
         modifier = modifier.minimum_interactive_component_size();
-        let on_toggle = on_toggle.clone();
         let mut toggle_args = ToggleableArgs::new(checked, move |_| {
             controller.with_mut(|c| c.toggle());
             let checked = controller.with(|c| c.is_checked());

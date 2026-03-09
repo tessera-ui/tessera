@@ -1341,9 +1341,9 @@ impl LazySlotPlan {
             }),
         };
         let (builder, local_index) = match resolved {
-            ResolvedSlot::Items(slot, local_index) => (slot.builder.clone(), local_index),
+            ResolvedSlot::Items(slot, local_index) => (slot.builder, local_index),
             ResolvedSlot::Sticky(slot) => {
-                let builder = slot.builder.clone();
+                let builder = slot.builder;
                 (
                     {
                         CallbackWith::new(move |_| {

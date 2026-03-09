@@ -767,7 +767,7 @@ pub fn scrollable(args: &ScrollableArgs) {
     let controller = args
         .controller
         .unwrap_or_else(|| remember(ScrollableController::new));
-    let child = args.child.clone().unwrap_or_else(|| RenderSlot::new(|| {}));
+    let child = args.child.clone().unwrap_or_else(RenderSlot::empty);
     scrollable_content(args, controller, child);
 }
 

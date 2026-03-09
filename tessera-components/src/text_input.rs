@@ -156,7 +156,7 @@ impl Default for TextInputArgs {
             enabled: true,
             read_only: false,
             modifier: Modifier::new(),
-            on_change: CallbackWith::new(|_| String::new()),
+            on_change: CallbackWith::default_value(),
             min_width: None,
             min_height: None,
             background_color: Some(scheme.surface_variant),
@@ -278,8 +278,8 @@ pub fn text_input(args: &TextInputArgs) {
             });
 
             let keyboard_args = editor_args.clone();
-            let on_change = editor_args.on_change.clone();
-            let input_transform = editor_args.input_transform.clone();
+            let on_change = editor_args.on_change;
+            let input_transform = editor_args.input_transform;
             keyboard_input_handler(move |mut input| {
                 handle_text_input_keyboard(
                     &mut input,
@@ -291,8 +291,8 @@ pub fn text_input(args: &TextInputArgs) {
             });
 
             let ime_args = editor_args.clone();
-            let on_change = editor_args.on_change.clone();
-            let input_transform = editor_args.input_transform.clone();
+            let on_change = editor_args.on_change;
+            let input_transform = editor_args.input_transform;
             ime_input_handler(move |mut input| {
                 handle_text_input_ime(
                     &mut input,
@@ -349,8 +349,8 @@ fn text_input_editor(args: &TextInputArgs) {
             });
 
             let keyboard_args = editor_args.clone();
-            let on_change = editor_args.on_change.clone();
-            let input_transform = editor_args.input_transform.clone();
+            let on_change = editor_args.on_change;
+            let input_transform = editor_args.input_transform;
             keyboard_input_handler(move |mut input| {
                 handle_text_input_keyboard(
                     &mut input,
@@ -362,8 +362,8 @@ fn text_input_editor(args: &TextInputArgs) {
             });
 
             let ime_args = editor_args.clone();
-            let on_change = editor_args.on_change.clone();
-            let input_transform = editor_args.input_transform.clone();
+            let on_change = editor_args.on_change;
+            let input_transform = editor_args.input_transform;
             ime_input_handler(move |mut input| {
                 handle_text_input_ime(
                     &mut input,
@@ -401,7 +401,7 @@ fn sync_text_input_controller(controller: &State<TextInputController>, args: &Te
             controller.with_mut(|c| c.set_cursor_color(cursor_color));
         }
     }
-    let display_transform = args.display_transform.clone();
+    let display_transform = args.display_transform;
     let needs_display_transform_update =
         controller.with(|c| c.display_transform() != display_transform);
     if needs_display_transform_update {
@@ -638,12 +638,7 @@ fn handle_text_input_keyboard(
                 all_actions.retain(|action| !is_editing_action(action));
             }
             for action in all_actions {
-                handle_action(
-                    controller,
-                    action,
-                    on_change.clone(),
-                    input_transform.clone(),
-                );
+                handle_action(controller, action, *on_change, *input_transform);
             }
         }
     }
@@ -676,8 +671,8 @@ fn handle_text_input_ime(
                         handle_action(
                             controller,
                             GlyphonAction::Backspace,
-                            on_change.clone(),
-                            input_transform.clone(),
+                            *on_change,
+                            *input_transform,
                         );
                     }
                 }
@@ -685,8 +680,8 @@ fn handle_text_input_ime(
                     handle_action(
                         controller,
                         GlyphonAction::Insert(c),
-                        on_change.clone(),
-                        input_transform.clone(),
+                        *on_change,
+                        *input_transform,
                     );
                 }
             }
@@ -697,8 +692,8 @@ fn handle_text_input_ime(
                         handle_action(
                             controller,
                             GlyphonAction::Backspace,
-                            on_change.clone(),
-                            input_transform.clone(),
+                            *on_change,
+                            *input_transform,
                         );
                     }
                 }
@@ -706,8 +701,8 @@ fn handle_text_input_ime(
                     handle_action(
                         controller,
                         GlyphonAction::Insert(c),
-                        on_change.clone(),
-                        input_transform.clone(),
+                        *on_change,
+                        *input_transform,
                     );
                 }
                 controller.with_mut(|c| c.preedit_string = Some(text.to_string()));

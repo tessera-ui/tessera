@@ -505,7 +505,7 @@ impl Default for CardArgs {
 #[tessera]
 pub fn card(args: &CardArgs) {
     let args = args.clone();
-    let content = args.content.unwrap_or_else(|| RenderSlot::new(|| {}));
+    let content = args.content.unwrap_or_else(RenderSlot::empty);
 
     let shape = args.shape.unwrap_or_else(|| match args.variant {
         CardVariant::Filled => CardDefaults::shape(),
@@ -613,7 +613,7 @@ pub fn card(args: &CardArgs) {
         surface_args = surface_args.interaction_state(state);
     }
 
-    if let Some(on_click) = args.on_click.clone() {
+    if let Some(on_click) = args.on_click {
         surface_args = surface_args
             .on_click_shared(on_click)
             .accessibility_role(Role::Button)

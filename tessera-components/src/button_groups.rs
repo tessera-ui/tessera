@@ -282,49 +282,56 @@ impl ButtonGroupsState {
 /// };
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-/// button_groups(&ButtonGroupsArgs::default().children(|scope| {
-///     scope.child(
-///         |color| {
-///             text(&TextArgs {
-///                 text: "Button 1".to_string(),
-///                 color,
-///                 ..Default::default()
-///             })
-///         },
-///         |_| {
-///             println!("Button 1 clicked");
-///         },
-///     );
+/// # #[tessera_ui::tessera]
+/// # fn demo() {
+///     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
+///         || MaterialTheme::default(),
+///         || {
+///             button_groups(&ButtonGroupsArgs::default().children(|scope| {
+///                 scope.child(
+///                     |color| {
+///                         text(&TextArgs {
+///                             text: "Button 1".to_string(),
+///                             color,
+///                             ..Default::default()
+///                         })
+///                     },
+///                     |_| {
+///                         println!("Button 1 clicked");
+///                     },
+///                 );
 ///
-///     scope.child(
-///         |color| {
-///             text(&TextArgs {
-///                 text: "Button 2".to_string(),
-///                 color,
-///                 ..Default::default()
-///             })
-///         },
-///         |actived| {
-///             println!("Button 2 clicked");
-///         },
-///     );
+///                 scope.child(
+///                     |color| {
+///                         text(&TextArgs {
+///                             text: "Button 2".to_string(),
+///                             color,
+///                             ..Default::default()
+///                         })
+///                     },
+///                     |_| {
+///                         println!("Button 2 clicked");
+///                     },
+///                 );
 ///
-///     scope.child(
-///         |color| {
-///             text(&TextArgs {
-///                 text: "Button 3".to_string(),
-///                 color,
-///                 ..Default::default()
-///             })
-///         },
-///         |_| {
-///             println!("Button 3 clicked");
+///                 scope.child(
+///                     |color| {
+///                         text(&TextArgs {
+///                             text: "Button 3".to_string(),
+///                             color,
+///                             ..Default::default()
+///                         })
+///                     },
+///                     |_| {
+///                         println!("Button 3 clicked");
+///                     },
+///                 );
+///             }));
 ///         },
 ///     );
-/// }));
-/// # });
-/// # material_theme(&args);
+///     material_theme(&args);
+/// }
+/// # demo();
 /// ```
 #[tessera]
 pub fn button_groups(args: &ButtonGroupsArgs) {
@@ -341,7 +348,7 @@ pub fn button_groups(args: &ButtonGroupsArgs) {
         .main_axis_alignment(MainAxisAlignment::Start)
         .children(move |scope| {
             for (index, child_closure) in child_closures.iter().cloned().enumerate() {
-                let on_click_closure = on_click_closures[index].clone();
+                let on_click_closure = on_click_closures[index];
                 let item_layout = layout.clone();
                 let between_space = layout.between_space;
 
@@ -349,7 +356,6 @@ pub fn button_groups(args: &ButtonGroupsArgs) {
                     let actived =
                         state.with(|s| s.item_states.get(&index).is_some_and(|item| item.actived));
                     if actived {
-                        let on_click_closure = on_click_closure.clone();
                         let mut button_args = ButtonArgs::filled(move || {
                             on_click_closure.call(false);
                             state.with_mut(|s| {
@@ -365,9 +371,7 @@ pub fn button_groups(args: &ButtonGroupsArgs) {
                             .color_scheme;
                         let label_color = scheme.on_primary;
                         button(&crate::button::ButtonArgs::with_child(button_args, {
-                            let child_closure = child_closure.clone();
                             move || {
-                                let child_closure = child_closure.clone();
                                 let elastic_args = ElasticContainerArgs {
                                     state,
                                     index,
@@ -377,7 +381,6 @@ pub fn button_groups(args: &ButtonGroupsArgs) {
                             }
                         }));
                     } else {
-                        let on_click_closure = on_click_closure.clone();
                         let mut button_args = ButtonArgs::filled(move || {
                             on_click_closure.call(true);
                             state.with_mut(|s| {
@@ -414,9 +417,7 @@ pub fn button_groups(args: &ButtonGroupsArgs) {
                             .color_scheme;
                         let label_color = scheme.on_secondary_container;
                         button(&crate::button::ButtonArgs::with_child(button_args, {
-                            let child_closure = child_closure.clone();
                             move || {
-                                let child_closure = child_closure.clone();
                                 let elastic_args = ElasticContainerArgs {
                                     state,
                                     index,

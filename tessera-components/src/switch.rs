@@ -475,14 +475,13 @@ pub fn switch(args: &SwitchArgs) {
         });
     }
 
-    let on_toggle = args.enabled.then(|| args.on_toggle.clone()).flatten();
+    let on_toggle = args.enabled.then_some(args.on_toggle).flatten();
     let interactive = on_toggle.is_some();
     let interaction_state = interactive.then(|| remember(InteractionState::new));
     let ripple_state = interactive.then(|| remember(RippleState::new));
     let checked = controller.with(|c| c.is_checked());
     if interactive {
         modifier = modifier.minimum_interactive_component_size();
-        let on_toggle = on_toggle.clone();
         let ripple_spec = RippleSpec {
             bounded: false,
             radius: Some(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0)),
@@ -599,7 +598,6 @@ pub fn switch(args: &SwitchArgs) {
         if let Some(interaction_state) = interaction_state {
             state_layer_args = state_layer_args.interaction_state(interaction_state);
         }
-        let mut state_layer_args = state_layer_args;
         state_layer_args.set_ripple_state(ripple_state);
         surface(&crate::surface::SurfaceArgs::with_child(
             state_layer_args,

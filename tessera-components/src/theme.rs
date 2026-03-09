@@ -319,7 +319,7 @@ impl MaterialTheme {
 /// ```
 #[tessera]
 pub fn material_theme(args: &MaterialThemeProviderArgs) {
-    let theme = args.theme.clone();
+    let theme = args.theme;
     let child = args.child.clone();
     provide_context(
         move || theme.call(()),

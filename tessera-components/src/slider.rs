@@ -117,7 +117,7 @@ fn apply_range_thumb_accessibility(input: &PointerInput, args: &RangeThumbAccess
     let min = args.min;
     let max = args.max;
     let steps = args.steps;
-    let on_change = args.on_change.clone();
+    let on_change = args.on_change;
     input.set_accessibility_action_handler(move |action| {
         let next = match action {
             Action::Increment => value + delta,
@@ -449,7 +449,7 @@ impl Default for SliderArgs {
         Self {
             modifier: Modifier::new(),
             value: 0.0,
-            on_change: CallbackWith::new(|_| {}),
+            on_change: CallbackWith::default_value(),
             size: SliderSize::default(),
             active_track_color: scheme.primary,
             inactive_track_color: scheme.secondary_container,
@@ -548,7 +548,7 @@ impl Default for RangeSliderArgs {
         Self {
             modifier: Modifier::new(),
             value: (0.0, 1.0),
-            on_change: CallbackWith::new(|_| {}),
+            on_change: CallbackWith::default_value(),
             size: SliderSize::default(),
             active_track_color: scheme.primary,
             inactive_track_color: scheme.secondary_container,
@@ -1547,7 +1547,7 @@ fn range_slider_inner(args: &RangeSliderArgs) {
             min: 0.0,
             max: end,
             on_change: CallbackWith::new({
-                let on_change = args.on_change.clone();
+                let on_change = args.on_change;
                 move |new_start| on_change.call((new_start, end))
             }),
         },
@@ -1570,7 +1570,7 @@ fn range_slider_inner(args: &RangeSliderArgs) {
             min: start,
             max: 1.0,
             on_change: CallbackWith::new({
-                let on_change = args.on_change.clone();
+                let on_change = args.on_change;
                 move |new_end| on_change.call((start, new_end))
             }),
         },

@@ -498,7 +498,7 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
     let controller = args
         .controller
         .unwrap_or_else(|| remember(PullRefreshController::new));
-    let child = args.child.clone().unwrap_or_else(|| RenderSlot::new(|| {}));
+    let child = args.child.clone().unwrap_or_else(RenderSlot::empty);
     let modifier = args.modifier.clone().clip_to_bounds();
 
     controller.with_mut(|state| {
@@ -525,7 +525,7 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
     }
 
     let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
-    let on_refresh = args.on_refresh.clone();
+    let on_refresh = args.on_refresh;
     let enabled = args.enabled;
     let nested_scroll_connection = NestedScrollConnection::new()
         .with_pre_scroll_handler(CallbackWith::new({
@@ -558,7 +558,6 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
             }
         }))
         .with_pre_fling_handler(CallbackWith::new({
-            let on_refresh = on_refresh.clone();
             move |input: PreFlingInput| {
                 if !enabled || !controller.with(|s| s.is_pulling()) {
                     return ScrollVelocity::ZERO;

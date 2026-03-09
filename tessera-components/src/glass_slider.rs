@@ -141,7 +141,7 @@ impl Default for GlassSliderArgs {
         Self {
             value: 0.0,
             modifier: default_slider_modifier(),
-            on_change: CallbackWith::new(|_| {}),
+            on_change: CallbackWith::default_value(),
             track_height: Dp(12.0),
             track_tint_color: Color::new(0.3, 0.3, 0.3, 0.15),
             progress_tint_color: Color::new(0.5, 0.7, 1.0, 0.25),
@@ -420,7 +420,7 @@ fn glass_slider_inner(args: &GlassSliderArgs) {
                 },
             ));
 
-            let on_change = args.on_change.clone();
+            let on_change = args.on_change;
             let handler_args = args.clone();
             let tap_recognizer = remember(TapRecognizer::default);
             let drag_recognizer = remember(DragRecognizer::default);

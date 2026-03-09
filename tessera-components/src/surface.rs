@@ -861,13 +861,10 @@ pub fn surface(args: &SurfaceArgs) {
         });
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
-        let mut clickable_args = ClickableArgs::new(
-            args.on_click
-                .clone()
-                .expect("interactive implies on_click is set"),
-        )
-        .enabled(args.enabled)
-        .block_input(args.block_input);
+        let mut clickable_args =
+            ClickableArgs::new(args.on_click.expect("interactive implies on_click is set"))
+                .enabled(args.enabled)
+                .block_input(args.block_input);
 
         if let Some(role) = args.accessibility_role {
             clickable_args = clickable_args.role(role);

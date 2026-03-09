@@ -162,7 +162,7 @@ impl Default for ButtonArgs {
             content_color: None,
             shape: Shape::capsule(),
             padding: ButtonDefaults::CONTENT_VERTICAL_PADDING,
-            on_click: Some(Callback::new(|| {})),
+            on_click: Some(Callback::noop()),
             ripple_color: scheme.on_primary,
             border_width: Dp(0.0),
             border_color: None,
@@ -285,7 +285,7 @@ fn create_surface_args(args: &ButtonArgs) -> crate::surface::SurfaceArgs {
 
     // Set on_click handler if available
     if args.enabled
-        && let Some(on_click) = args.on_click.clone()
+        && let Some(on_click) = args.on_click
     {
         surface_args = surface_args.on_click_shared(on_click);
     }

@@ -628,8 +628,8 @@ fn time_stepper_column(args: &TimeStepperColumnArgs) {
     let label = args.label;
     let value = args.value.clone();
     let show_label = args.show_label;
-    let on_increment = args.on_increment.clone();
-    let on_decrement = args.on_decrement.clone();
+    let on_increment = args.on_increment;
+    let on_decrement = args.on_decrement;
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -640,11 +640,10 @@ fn time_stepper_column(args: &TimeStepperColumnArgs) {
         &ColumnArgs::default()
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .children(move |scope| {
-                let on_increment = on_increment.clone();
                 scope.child(move || {
                     step_button(&StepButtonArgs {
                         label: "+",
-                        on_click: on_increment.clone(),
+                        on_click: on_increment,
                     });
                 });
                 scope.child(|| {
@@ -663,11 +662,10 @@ fn time_stepper_column(args: &TimeStepperColumnArgs) {
                         Modifier::new().height(Dp(6.0)),
                     ))
                 });
-                let on_decrement = on_decrement.clone();
                 scope.child(move || {
                     step_button(&StepButtonArgs {
                         label: "-",
-                        on_click: on_decrement.clone(),
+                        on_click: on_decrement,
                     });
                 });
                 if show_label {
@@ -742,7 +740,7 @@ struct StepButtonArgs {
 #[tessera]
 fn step_button(args: &StepButtonArgs) {
     let label = args.label;
-    let on_click = args.on_click.clone();
+    let on_click = args.on_click;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()

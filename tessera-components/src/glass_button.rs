@@ -121,7 +121,7 @@ impl Default for GlassButtonArgs {
             accessibility_label: None,
             accessibility_description: None,
             accessibility_focusable: false,
-            child: RenderSlot::new(|| {}),
+            child: RenderSlot::empty(),
         }
     }
 }
@@ -233,7 +233,7 @@ pub fn glass_button(args: &GlassButtonArgs) {
             .time(button_args.time)
             .padding(button_args.padding);
 
-        if let Some(on_click) = button_args.on_click.clone() {
+        if let Some(on_click) = button_args.on_click {
             glass_args = glass_args.on_click_shared(on_click);
         }
 

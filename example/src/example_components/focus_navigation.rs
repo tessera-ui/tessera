@@ -490,7 +490,7 @@ struct DemoButtonArgs {
 #[tessera]
 fn demo_button(args: &DemoButtonArgs) {
     let label = args.label.clone();
-    let on_click = args.on_click.clone();
+    let on_click = args.on_click;
     button(&ButtonArgs::with_child(
         ButtonArgs::filled(move || {
             on_click.call();
@@ -525,7 +525,6 @@ fn radio_option_row(args: &RadioOptionRowArgs) {
                             .selected(selected_index.get() == index)
                             .accessibility_label(label.clone())
                             .on_select({
-                                let selected_index = selected_index;
                                 move |_| {
                                     selected_index.set(index);
                                 }
@@ -783,7 +782,6 @@ fn reveal_demo_section(args: &RevealDemoSectionArgs) {
                                         "Tab forward until this list reveals the next focused row.",
                                     )
                                     .on_click({
-                                        let selected_row = selected_row;
                                         move || {
                                             selected_row.set(title.clone());
                                         }

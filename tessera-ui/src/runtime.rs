@@ -60,6 +60,7 @@ thread_local! {
 #[derive(Clone, Copy, Default)]
 struct OrderFrame {
     remember: u64,
+    functor: u64,
     context: u64,
     instance: u64,
     frame_receiver: u64,
@@ -68,6 +69,7 @@ struct OrderFrame {
 #[derive(Clone, Copy)]
 enum OrderCounterKind {
     Remember,
+    Functor,
     Context,
     FrameReceiver,
 }
@@ -92,6 +94,11 @@ fn next_order_counter(kind: OrderCounterKind, empty_message: &str) -> u64 {
             OrderCounterKind::Remember => {
                 let counter = frame.remember;
                 frame.remember = frame.remember.wrapping_add(1);
+                counter
+            }
+            OrderCounterKind::Functor => {
+                let counter = frame.functor;
+                frame.functor = frame.functor.wrapping_add(1);
                 counter
             }
             OrderCounterKind::Context => {
@@ -399,6 +406,98 @@ fn slot_table() -> &'static RwLock<SlotTable> {
     SLOT_TABLE.get_or_init(|| RwLock::new(SlotTable::default()))
 }
 
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub(crate) struct FunctorHandle {
+    slot: SlotHandle,
+    generation: u64,
+}
+
+impl FunctorHandle {
+    fn new(slot: SlotHandle, generation: u64) -> Self {
+        Self { slot, generation }
+    }
+}
+
+struct CallbackCell {
+    current: RwLock<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl CallbackCell {
+    fn new(current: Arc<dyn Fn() + Send + Sync>) -> Self {
+        Self {
+            current: RwLock::new(current),
+        }
+    }
+
+    fn update(&self, next: Arc<dyn Fn() + Send + Sync>) {
+        *self.current.write() = next;
+    }
+
+    fn shared(&self) -> Arc<dyn Fn() + Send + Sync> {
+        Arc::clone(&self.current.read())
+    }
+}
+
+struct CallbackWithCell<T, R> {
+    current: RwLock<Arc<dyn Fn(T) -> R + Send + Sync>>,
+}
+
+impl<T, R> CallbackWithCell<T, R> {
+    fn new(current: Arc<dyn Fn(T) -> R + Send + Sync>) -> Self {
+        Self {
+            current: RwLock::new(current),
+        }
+    }
+
+    fn update(&self, next: Arc<dyn Fn(T) -> R + Send + Sync>) {
+        *self.current.write() = next;
+    }
+
+    fn shared(&self) -> Arc<dyn Fn(T) -> R + Send + Sync> {
+        Arc::clone(&self.current.read())
+    }
+}
+
+struct RenderSlotCell {
+    current: RwLock<Arc<dyn Fn() + Send + Sync>>,
+}
+
+impl RenderSlotCell {
+    fn new(current: Arc<dyn Fn() + Send + Sync>) -> Self {
+        Self {
+            current: RwLock::new(current),
+        }
+    }
+
+    fn update(&self, next: Arc<dyn Fn() + Send + Sync>) {
+        *self.current.write() = next;
+    }
+
+    fn shared(&self) -> Arc<dyn Fn() + Send + Sync> {
+        Arc::clone(&self.current.read())
+    }
+}
+
+struct RenderSlotWithCell<T, R> {
+    current: RwLock<Arc<dyn Fn(T) -> R + Send + Sync>>,
+}
+
+impl<T, R> RenderSlotWithCell<T, R> {
+    fn new(current: Arc<dyn Fn(T) -> R + Send + Sync>) -> Self {
+        Self {
+            current: RwLock::new(current),
+        }
+    }
+
+    fn update(&self, next: Arc<dyn Fn(T) -> R + Send + Sync>) {
+        *self.current.write() = next;
+    }
+
+    fn shared(&self) -> Arc<dyn Fn(T) -> R + Send + Sync> {
+        Arc::clone(&self.current.read())
+    }
+}
+
 #[derive(Default)]
 struct LayoutDirtyTracker {
     previous_layout_specs_by_node: HashMap<u64, Box<dyn LayoutSpecDyn>>,
@@ -516,10 +615,18 @@ struct FocusReadDependencyTracker {
     focus_by_reader: HashMap<u64, HashSet<FocusReadDependencyKey>>,
 }
 
+#[derive(Default)]
+struct RenderSlotReadDependencyTracker {
+    readers_by_slot: HashMap<FunctorHandle, HashSet<u64>>,
+    slots_by_reader: HashMap<u64, HashSet<FunctorHandle>>,
+}
+
 static BUILD_INVALIDATION_TRACKER: OnceLock<RwLock<BuildInvalidationTracker>> = OnceLock::new();
 static STATE_READ_DEPENDENCY_TRACKER: OnceLock<RwLock<StateReadDependencyTracker>> =
     OnceLock::new();
 static FOCUS_READ_DEPENDENCY_TRACKER: OnceLock<RwLock<FocusReadDependencyTracker>> =
+    OnceLock::new();
+static RENDER_SLOT_READ_DEPENDENCY_TRACKER: OnceLock<RwLock<RenderSlotReadDependencyTracker>> =
     OnceLock::new();
 type RedrawWaker = Arc<dyn Fn() + Send + Sync + 'static>;
 static REDRAW_WAKER: OnceLock<RwLock<Option<RedrawWaker>>> = OnceLock::new();
@@ -534,6 +641,11 @@ fn state_read_dependency_tracker() -> &'static RwLock<StateReadDependencyTracker
 
 fn focus_read_dependency_tracker() -> &'static RwLock<FocusReadDependencyTracker> {
     FOCUS_READ_DEPENDENCY_TRACKER.get_or_init(|| RwLock::new(FocusReadDependencyTracker::default()))
+}
+
+fn render_slot_read_dependency_tracker() -> &'static RwLock<RenderSlotReadDependencyTracker> {
+    RENDER_SLOT_READ_DEPENDENCY_TRACKER
+        .get_or_init(|| RwLock::new(RenderSlotReadDependencyTracker::default()))
 }
 
 fn redraw_waker() -> &'static RwLock<Option<RedrawWaker>> {
@@ -761,6 +873,13 @@ pub(crate) fn is_instance_key_build_dirty(instance_key: u64) -> bool {
     })
 }
 
+fn consume_pending_build_invalidation(instance_key: u64) -> bool {
+    build_invalidation_tracker()
+        .write()
+        .dirty_instance_keys
+        .remove(&instance_key)
+}
+
 pub(crate) fn record_component_invalidation_for_instance_key(instance_key: u64) {
     let inserted = build_invalidation_tracker()
         .write()
@@ -867,6 +986,44 @@ pub(crate) fn focus_requester_read_subscribers(requester_id: FocusRequesterId) -
     focus_read_subscribers_by_kind(FocusReadDependencyKind::Requester(requester_id))
 }
 
+pub(crate) fn track_render_slot_read_dependency(handle: FunctorHandle) {
+    if !matches!(current_phase(), Some(RuntimePhase::Build)) {
+        return;
+    }
+    let Some(reader_instance_key) = current_component_instance_key_from_scope() else {
+        return;
+    };
+
+    let tracker = render_slot_read_dependency_tracker().upgradable_read();
+    if tracker
+        .readers_by_slot
+        .get(&handle)
+        .is_some_and(|readers| readers.contains(&reader_instance_key))
+    {
+        return;
+    }
+    let mut tracker = RwLockUpgradableReadGuard::upgrade(tracker);
+    tracker
+        .readers_by_slot
+        .entry(handle)
+        .or_default()
+        .insert(reader_instance_key);
+    tracker
+        .slots_by_reader
+        .entry(reader_instance_key)
+        .or_default()
+        .insert(handle);
+}
+
+fn render_slot_read_subscribers(handle: FunctorHandle) -> Vec<u64> {
+    render_slot_read_dependency_tracker()
+        .read()
+        .readers_by_slot
+        .get(&handle)
+        .map(|readers| readers.iter().copied().collect())
+        .unwrap_or_default()
+}
+
 pub(crate) fn remove_state_read_dependencies(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
@@ -911,12 +1068,38 @@ pub(crate) fn remove_focus_read_dependencies(instance_keys: &HashSet<u64>) {
     }
 }
 
+pub(crate) fn remove_render_slot_read_dependencies(instance_keys: &HashSet<u64>) {
+    if instance_keys.is_empty() {
+        return;
+    }
+    let mut tracker = render_slot_read_dependency_tracker().write();
+    for instance_key in instance_keys {
+        let Some(slot_keys) = tracker.slots_by_reader.remove(instance_key) else {
+            continue;
+        };
+        for slot_key in slot_keys {
+            let mut remove_entry = false;
+            if let Some(readers) = tracker.readers_by_slot.get_mut(&slot_key) {
+                readers.remove(instance_key);
+                remove_entry = readers.is_empty();
+            }
+            if remove_entry {
+                tracker.readers_by_slot.remove(&slot_key);
+            }
+        }
+    }
+}
+
 pub(crate) fn reset_state_read_dependencies() {
     *state_read_dependency_tracker().write() = StateReadDependencyTracker::default();
 }
 
 pub(crate) fn reset_focus_read_dependencies() {
     *focus_read_dependency_tracker().write() = FocusReadDependencyTracker::default();
+}
+
+pub(crate) fn reset_render_slot_read_dependencies() {
+    *render_slot_read_dependency_tracker().write() = RenderSlotReadDependencyTracker::default();
 }
 
 pub(crate) fn take_build_invalidations() -> BuildInvalidationSet {
@@ -1484,9 +1667,14 @@ impl TesseraRuntime {
             }
         });
 
+        let pending_dirty = current_node_info
+            .map(|(instance_key, _)| consume_pending_build_invalidation(instance_key))
+            .unwrap_or(false);
+
         if let Some((instance_key, instance_logic_id)) = current_node_info
             && let Some(replay) = previous_replay.clone()
             && !is_instance_key_build_dirty(instance_key)
+            && !pending_dirty
             && self
                 .component_tree
                 .try_reuse_current_subtree(instance_key, instance_logic_id)
@@ -2236,6 +2424,20 @@ fn compute_slot_key<K: Hash>(key: &K) -> (u64, u64) {
     (instance_logic_id, slot_hash)
 }
 
+fn compute_functor_slot_key<K: Hash>(key: &K) -> (u64, u64) {
+    let instance_logic_id = current_instance_logic_id();
+    let group_path_hash = current_group_path_hash();
+    let key_hash = hash_components(&[key]);
+
+    let call_counter = next_order_counter(
+        OrderCounterKind::Functor,
+        "ORDER_FRAME_STACK is empty; callback constructors must be called inside a component",
+    );
+
+    let slot_hash = hash_components(&[&group_path_hash, &key_hash, &call_counter]);
+    (instance_logic_id, slot_hash)
+}
+
 pub(crate) fn ensure_build_phase() {
     match current_phase() {
         Some(RuntimePhase::Build) => {}
@@ -2251,6 +2453,271 @@ pub(crate) fn ensure_build_phase() {
             "remember must be called inside a tessera component. Ensure you're calling this from within a function annotated with #[tessera]."
         ),
     }
+}
+
+fn remember_functor_cell_with_key<K, T, F>(key: K, init: F) -> (Arc<T>, FunctorHandle)
+where
+    K: Hash,
+    T: Send + Sync + 'static,
+    F: FnOnce() -> T,
+{
+    ensure_build_phase();
+    let (instance_logic_id, slot_hash) = compute_functor_slot_key(&key);
+    let slot_key = SlotKey {
+        instance_logic_id,
+        slot_hash,
+        type_id: TypeId::of::<T>(),
+    };
+
+    let mut table = slot_table().write();
+    let mut init_opt = Some(init);
+    if let Some(slot) = table.try_fast_slot_lookup(slot_key) {
+        let epoch = table.epoch;
+        let (generation, value) = {
+            let entry = table
+                .entries
+                .get_mut(slot)
+                .expect("functor slot entry should exist");
+
+            if entry.key.type_id != slot_key.type_id {
+                panic!(
+                    "callback slot type mismatch: expected {}, found {:?}",
+                    std::any::type_name::<T>(),
+                    entry.key.type_id
+                );
+            }
+
+            entry.last_alive_epoch = epoch;
+            if entry.value.is_none() {
+                let init_fn = init_opt
+                    .take()
+                    .expect("callback slot init called more than once");
+                entry.value = Some(Arc::new(init_fn()));
+                entry.generation = entry.generation.wrapping_add(1);
+            }
+
+            (
+                entry.generation,
+                entry
+                    .value
+                    .as_ref()
+                    .expect("callback slot must contain a value")
+                    .clone(),
+            )
+        };
+
+        (
+            value
+                .downcast::<T>()
+                .unwrap_or_else(|_| panic!("callback slot {:?} downcast failed", slot)),
+            FunctorHandle::new(slot, generation),
+        )
+    } else if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
+        table.record_slot_usage_slow(instance_logic_id, slot);
+        let epoch = table.epoch;
+        let (generation, value) = {
+            let entry = table
+                .entries
+                .get_mut(slot)
+                .expect("functor slot entry should exist");
+
+            if entry.key.type_id != slot_key.type_id {
+                panic!(
+                    "callback slot type mismatch: expected {}, found {:?}",
+                    std::any::type_name::<T>(),
+                    entry.key.type_id
+                );
+            }
+
+            entry.last_alive_epoch = epoch;
+            if entry.value.is_none() {
+                let init_fn = init_opt
+                    .take()
+                    .expect("callback slot init called more than once");
+                entry.value = Some(Arc::new(init_fn()));
+                entry.generation = entry.generation.wrapping_add(1);
+            }
+
+            (
+                entry.generation,
+                entry
+                    .value
+                    .as_ref()
+                    .expect("callback slot must contain a value")
+                    .clone(),
+            )
+        };
+
+        (
+            value
+                .downcast::<T>()
+                .unwrap_or_else(|_| panic!("callback slot {:?} downcast failed", slot)),
+            FunctorHandle::new(slot, generation),
+        )
+    } else {
+        let epoch = table.epoch;
+        let init_fn = init_opt
+            .take()
+            .expect("callback slot init called more than once");
+        let generation = 1u64;
+        let slot = table.entries.insert(SlotEntry {
+            key: slot_key,
+            generation,
+            value: Some(Arc::new(init_fn())),
+            last_alive_epoch: epoch,
+            retained: false,
+        });
+
+        table.key_to_slot.insert(slot_key, slot);
+        table.record_slot_usage_slow(instance_logic_id, slot);
+
+        let value = table
+            .entries
+            .get(slot)
+            .expect("functor slot entry should exist")
+            .value
+            .as_ref()
+            .expect("callback slot must contain a value")
+            .clone()
+            .downcast::<T>()
+            .unwrap_or_else(|_| panic!("callback slot {:?} downcast failed", slot));
+
+        (value, FunctorHandle::new(slot, generation))
+    }
+}
+
+fn load_functor_cell<T>(handle: FunctorHandle) -> Arc<T>
+where
+    T: Send + Sync + 'static,
+{
+    let table = slot_table().read();
+    let entry = table
+        .entries
+        .get(handle.slot)
+        .unwrap_or_else(|| panic!("Callback points to freed slot: {:?}", handle.slot));
+
+    if entry.generation != handle.generation {
+        panic!(
+            "Callback is stale (slot {:?}, generation {}, current generation {})",
+            handle.slot, handle.generation, entry.generation
+        );
+    }
+
+    if entry.key.type_id != TypeId::of::<T>() {
+        panic!(
+            "Callback type mismatch for slot {:?}: expected {}, stored {:?}",
+            handle.slot,
+            std::any::type_name::<T>(),
+            entry.key.type_id
+        );
+    }
+
+    entry
+        .value
+        .as_ref()
+        .unwrap_or_else(|| panic!("Callback slot {:?} has been cleared", handle.slot))
+        .clone()
+        .downcast::<T>()
+        .unwrap_or_else(|_| panic!("Callback slot {:?} downcast failed", handle.slot))
+}
+
+pub(crate) fn remember_callback_handle<F>(handler: F) -> FunctorHandle
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    let handler = Arc::new(handler) as Arc<dyn Fn() + Send + Sync>;
+    let (cell, handle) = remember_functor_cell_with_key((), {
+        let handler = Arc::clone(&handler);
+        move || CallbackCell::new(handler)
+    });
+    cell.update(handler);
+    handle
+}
+
+pub(crate) fn invoke_callback_handle(handle: FunctorHandle) {
+    let callback = load_functor_cell::<CallbackCell>(handle).shared();
+    callback();
+}
+
+pub(crate) fn remember_render_slot_handle<F>(render: F) -> FunctorHandle
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    let render = Arc::new(render) as Arc<dyn Fn() + Send + Sync>;
+    let creator_instance_key = current_component_instance_key_from_scope()
+        .unwrap_or_else(|| panic!("RenderSlot handles must be created during a component build"));
+    let (cell, handle) = remember_functor_cell_with_key((), {
+        let render = Arc::clone(&render);
+        move || RenderSlotCell::new(render)
+    });
+    cell.update(render);
+    for instance_key in render_slot_read_subscribers(handle) {
+        if instance_key != creator_instance_key {
+            record_component_invalidation_for_instance_key(instance_key);
+        }
+    }
+    handle
+}
+
+pub(crate) fn invoke_render_slot_handle(handle: FunctorHandle) {
+    let render = load_functor_cell::<RenderSlotCell>(handle).shared();
+    render();
+}
+
+pub(crate) fn remember_render_slot_with_handle<T, R, F>(render: F) -> FunctorHandle
+where
+    T: 'static,
+    R: 'static,
+    F: Fn(T) -> R + Send + Sync + 'static,
+{
+    let render = Arc::new(render) as Arc<dyn Fn(T) -> R + Send + Sync>;
+    let creator_instance_key = current_component_instance_key_from_scope().unwrap_or_else(|| {
+        panic!("RenderSlotWith handles must be created during a component build")
+    });
+    let (cell, handle) = remember_functor_cell_with_key((), {
+        let render = Arc::clone(&render);
+        move || RenderSlotWithCell::new(render)
+    });
+    cell.update(render);
+    for instance_key in render_slot_read_subscribers(handle) {
+        if instance_key != creator_instance_key {
+            record_component_invalidation_for_instance_key(instance_key);
+        }
+    }
+    handle
+}
+
+pub(crate) fn invoke_render_slot_with_handle<T, R>(handle: FunctorHandle, value: T) -> R
+where
+    T: 'static,
+    R: 'static,
+{
+    let render = load_functor_cell::<RenderSlotWithCell<T, R>>(handle).shared();
+    render(value)
+}
+
+pub(crate) fn remember_callback_with_handle<T, R, F>(handler: F) -> FunctorHandle
+where
+    T: 'static,
+    R: 'static,
+    F: Fn(T) -> R + Send + Sync + 'static,
+{
+    let handler = Arc::new(handler) as Arc<dyn Fn(T) -> R + Send + Sync>;
+    let (cell, handle) = remember_functor_cell_with_key((), {
+        let handler = Arc::clone(&handler);
+        move || CallbackWithCell::new(handler)
+    });
+    cell.update(handler);
+    handle
+}
+
+pub(crate) fn invoke_callback_with_handle<T, R>(handle: FunctorHandle, value: T) -> R
+where
+    T: 'static,
+    R: 'static,
+{
+    let callback = load_functor_cell::<CallbackWithCell<T, R>>(handle).shared();
+    callback(value)
 }
 
 /// Start a new state-slot epoch for the current recomposition pass.
@@ -2667,7 +3134,13 @@ where
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
     use super::*;
+    use crate::prop::{Callback, RenderSlot};
 
     fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
         let mut arena = crate::Arena::<()>::new();
@@ -2856,6 +3329,63 @@ mod tests {
             let stable_state = remember(|| 1usize);
             assert_eq!(stable_state.get(), 99);
         });
+    }
+
+    #[test]
+    fn callback_handle_stays_stable_and_invokes_latest_closure() {
+        reset_slots();
+
+        let calls = Arc::new(AtomicUsize::new(0));
+
+        begin_recompose_slot_epoch();
+        let first = with_test_component_scope(11001, || {
+            let calls = Arc::clone(&calls);
+            Callback::new(move || {
+                calls.store(1, Ordering::SeqCst);
+            })
+        });
+
+        begin_recompose_slot_epoch();
+        let second = with_test_component_scope(11001, || {
+            let calls = Arc::clone(&calls);
+            Callback::new(move || {
+                calls.store(2, Ordering::SeqCst);
+            })
+        });
+
+        assert!(first == second);
+        first.call();
+        assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn render_slot_update_invalidates_reader_instance() {
+        reset_slots();
+        reset_render_slot_read_dependencies();
+        reset_build_invalidations();
+
+        begin_recompose_slot_epoch();
+        let first = with_test_component_scope(11002, || RenderSlot::new(|| {}));
+
+        let reader_instance_key = with_test_component_scope(11003, || {
+            let instance_key =
+                current_component_instance_key_from_scope().expect("reader must have instance key");
+            first.render();
+            instance_key
+        });
+
+        assert!(!has_pending_build_invalidations());
+
+        begin_recompose_slot_epoch();
+        let second = with_test_component_scope(11002, || RenderSlot::new(|| {}));
+
+        assert!(first == second);
+        assert!(has_pending_build_invalidations());
+
+        let invalidations = take_build_invalidations();
+        let mut expected = HashSet::default();
+        expected.insert(reader_instance_key);
+        assert_eq!(invalidations.dirty_instance_keys, expected);
     }
 
     #[test]

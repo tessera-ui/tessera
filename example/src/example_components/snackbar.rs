@@ -69,7 +69,6 @@ pub fn snackbar_showcase() {
                                         });
 
                                         column_scope.child(move || {
-                                            let host_state = host_state;
                                             button(&ButtonArgs::with_child(
                                                 ButtonArgs::filled(move || {
                                                     host_state.with_mut(|state| {
@@ -96,7 +95,6 @@ pub fn snackbar_showcase() {
                                         });
 
                                         column_scope.child(move || {
-                                            let host_state = host_state;
                                             button(&ButtonArgs::with_child(
                                                 ButtonArgs::filled(move || {
                                                     host_state.with_mut(|state| {

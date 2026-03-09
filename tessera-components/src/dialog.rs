@@ -267,7 +267,7 @@ fn render_scrim(style: DialogStyle, on_close_request: &Callback, is_open: bool, 
             let blur_radius = blur_radius_for(progress, is_open, 5.0);
             fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
                 FluidGlassArgs::default()
-                    .on_click_shared(on_close_request.clone())
+                    .on_click_shared(*on_close_request)
                     .tint_color(Color::TRANSPARENT)
                     .modifier(Modifier::new().fill_max_size())
                     .dispersion_height(Dp(0.0))
@@ -295,7 +295,7 @@ fn render_scrim(style: DialogStyle, on_close_request: &Callback, is_open: bool, 
             surface(&crate::surface::SurfaceArgs::with_child(
                 SurfaceArgs::default()
                     .style(scrim_color.with_alpha(alpha).into())
-                    .on_click_shared(on_close_request.clone())
+                    .on_click_shared(*on_close_request)
                     .modifier(Modifier::new().fill_max_size())
                     .block_input(true),
                 || {},
@@ -338,7 +338,7 @@ fn dialog_content_wrapper(args: &DialogContentWrapperArgs) {
     let padding = args.padding;
     let content = args.content.clone();
     let just_opened = args.just_opened;
-    let on_close_request = args.on_close_request.clone();
+    let on_close_request = args.on_close_request;
     let focus_scope = remember_focus_scope();
     Modifier::new()
         .focus_scope_with(focus_scope)
@@ -351,7 +351,7 @@ fn dialog_content_wrapper(args: &DialogContentWrapperArgs) {
             if just_opened {
                 focus_scope.restore_focus();
             }
-            keyboard_input_handler(make_keyboard_handler(on_close_request.clone()));
+            keyboard_input_handler(make_keyboard_handler(on_close_request));
             layout(DialogContentLayout { alpha });
 
             let content = content.clone();
@@ -530,10 +530,8 @@ impl LayoutSpec for DialogContentLayout {
 #[tessera]
 pub fn dialog_provider(args: &DialogProviderArgs) {
     let args = args.clone();
-    let main_content = args.main_content.unwrap_or_else(|| RenderSlot::new(|| {}));
-    let dialog_content = args
-        .dialog_content
-        .unwrap_or_else(|| RenderSlot::new(|| {}));
+    let main_content = args.main_content.unwrap_or_else(RenderSlot::empty);
+    let dialog_content = args.dialog_content.unwrap_or_else(RenderSlot::empty);
     let controller = args
         .controller
         .unwrap_or_else(|| remember(|| DialogController::new(args.is_open)));
@@ -552,7 +550,7 @@ pub fn dialog_provider(args: &DialogProviderArgs) {
     }
 
     let provider_render_args = DialogProviderRenderArgs {
-        on_close_request: args.on_close_request.clone(),
+        on_close_request: args.on_close_request,
         padding: args.padding,
         style: args.style,
         controller,
@@ -619,7 +617,7 @@ fn dialog_provider_render(args: &DialogProviderRenderArgs) {
             alpha: content_alpha,
             padding: args.padding,
             just_opened,
-            on_close_request: args.on_close_request.clone(),
+            on_close_request: args.on_close_request,
             content: dialog_content,
         };
         dialog_content_wrapper(&content_wrapper_args);

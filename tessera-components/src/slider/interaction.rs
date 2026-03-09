@@ -245,7 +245,7 @@ pub(super) fn apply_slider_accessibility(
         return;
     }
 
-    let on_change = on_change.clone();
+    let on_change = *on_change;
     let steps = args.steps;
     input.set_accessibility_action_handler(move |action| {
         let delta = if steps == 0 {

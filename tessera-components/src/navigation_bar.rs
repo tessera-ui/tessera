@@ -408,7 +408,7 @@ fn navigation_bar_item(args: &NavigationBarItemArgs) {
         ripple_state.with_mut(|state| state.release());
     };
 
-    let on_click_item = item.on_click.clone();
+    let on_click_item = item.on_click;
     let on_click = move || {
         controller.with_mut(|c| c.set_selected(index));
         on_click_item.call();
@@ -469,7 +469,7 @@ impl NavigationBarItem {
         Self {
             label: label.into(),
             icon: None,
-            on_click: Callback::new(|| {}),
+            on_click: Callback::noop(),
             label_behavior: NavigationBarLabelBehavior::AlwaysShow,
         }
     }
