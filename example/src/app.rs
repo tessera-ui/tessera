@@ -49,6 +49,7 @@ use crate::example_components::{
     divider::DividerShowcaseDestination,
     floating_action_button::FloatingActionButtonShowcaseDestination,
     fluid_glass::FluidGlassShowcaseDestination,
+    focus_navigation::FocusNavigationShowcaseDestination,
     glass_button::GlassButtonShowcaseDestination,
     glass_progress::GlassProgressShowcaseDestination,
     glass_slider::GlassSliderShowcaseDestination,
@@ -455,6 +456,13 @@ fn home_node(args: &HomeArgs) {
     let search_query = remember(String::new);
     let search_controller = remember(SearchBarController::default);
     let examples = Arc::new(vec![
+        ComponentExampleDesc::new(
+            "Focus & Keyboard Navigation",
+            "A concentrated page for Tab traversal, roving focus, submenu navigation, modal trap, and scroll reveal.",
+            || {
+                Router::push(FocusNavigationShowcaseDestination {});
+            },
+        ),
         ComponentExampleDesc::new(
             "Text Input",
             "A basic component for multiline text input.",
