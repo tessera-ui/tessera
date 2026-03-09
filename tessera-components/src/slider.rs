@@ -1129,7 +1129,7 @@ fn measure_centered_slider(
 ///     *value_guard = 0.75;
 ///     assert_eq!(*value_guard, 0.75);
 /// }
-/// let current_value = current_value.clone();
+/// let slider_value = current_value.clone();
 ///
 /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
@@ -1137,7 +1137,7 @@ fn measure_centered_slider(
 /// centered_slider(
 ///     &SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(*current_value.lock().unwrap())
+///         .value(*slider_value.lock().unwrap())
 ///         .on_change(move |new_value| {
 ///             // In a real app, you would update your state here.
 ///             // For this example, we'll just check it after the simulated change.
