@@ -130,7 +130,7 @@ fn apply_range_thumb_accessibility(input: &PointerInput, args: &RangeThumbAccess
 }
 
 #[tessera]
-fn range_slider_thumb_node(args: &RangeSliderThumbArgs) {
+fn range_slider_thumb(args: &RangeSliderThumbArgs) {
     let args = args.clone();
     Modifier::new()
         .focus_requester(args.focus)
@@ -819,24 +819,24 @@ pub fn slider(args: &SliderArgs) {
     let controller = args
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
-    slider_node(args, controller);
+    slider_render(args, controller);
 }
 
-fn slider_node(slider_args: SliderArgs, controller: State<SliderController>) {
+fn slider_render(slider_args: SliderArgs, controller: State<SliderController>) {
     let modifier = slider_args.modifier.clone();
     modifier.run(move || {
         let mut inner_args = slider_args.clone();
         inner_args.controller = Some(controller);
-        slider_inner_node(&inner_args);
+        slider_inner(&inner_args);
     });
 }
 
 #[tessera]
-fn slider_inner_node(args: &SliderArgs) {
+fn slider_inner(args: &SliderArgs) {
     let args: SliderArgs = args.clone();
     let controller = args
         .controller
-        .expect("slider_inner_node requires controller to be set");
+        .expect("slider_inner requires controller to be set");
     FocusTargetModifier {
         requester: controller.with(|c| c.focus),
         disabled: args.disabled,
@@ -1168,15 +1168,15 @@ pub fn centered_slider(args: &SliderArgs) {
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
     args.controller = Some(controller);
-    centered_slider_node(&args);
+    centered_slider_inner(&args);
 }
 
 #[tessera]
-fn centered_slider_node(args: &SliderArgs) {
+fn centered_slider_inner(args: &SliderArgs) {
     let args = args.clone();
     let controller = args
         .controller
-        .expect("centered_slider_node requires controller to be set");
+        .expect("centered_slider_inner requires controller to be set");
     FocusTargetModifier {
         requester: controller.with(|c| c.focus),
         disabled: args.disabled,
@@ -1484,24 +1484,24 @@ pub fn range_slider(args: &RangeSliderArgs) {
     let state = args
         .controller
         .unwrap_or_else(|| remember(RangeSliderController::new));
-    range_slider_node(args, state);
+    range_slider_render(args, state);
 }
 
-fn range_slider_node(args: RangeSliderArgs, state: State<RangeSliderController>) {
+fn range_slider_render(args: RangeSliderArgs, state: State<RangeSliderController>) {
     let modifier = args.modifier.clone();
     modifier.run(move || {
         let mut inner_args = args.clone();
         inner_args.controller = Some(state);
-        range_slider_inner_node(&inner_args);
+        range_slider_inner(&inner_args);
     });
 }
 
 #[tessera]
-fn range_slider_inner_node(args: &RangeSliderArgs) {
+fn range_slider_inner(args: &RangeSliderArgs) {
     let args: RangeSliderArgs = args.clone();
     let state = args
         .controller
-        .expect("range_slider_inner_node requires controller to be set");
+        .expect("range_slider_inner requires controller to be set");
     let dummy_slider_args = SliderArgs::default()
         .size(args.size)
         .show_stop_indicator(args.show_stop_indicator);
@@ -1569,7 +1569,7 @@ fn range_slider_inner_node(args: &RangeSliderArgs) {
             }),
         },
     };
-    range_slider_thumb_node(&start_thumb_args);
+    range_slider_thumb(&start_thumb_args);
 
     let end_thumb_args = RangeSliderThumbArgs {
         thumb_layout: range_layout.base,
@@ -1592,7 +1592,7 @@ fn range_slider_inner_node(args: &RangeSliderArgs) {
             }),
         },
     };
-    range_slider_thumb_node(&end_thumb_args);
+    range_slider_thumb(&end_thumb_args);
 
     let cloned_args = args.clone();
     let start_val = start;

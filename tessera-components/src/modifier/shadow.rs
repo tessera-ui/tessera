@@ -168,11 +168,11 @@ pub(super) fn modifier_shadow_layers(shadow: ShadowLayers, shape: Shape, child: 
         shape,
         child,
     };
-    modifier_shadow_layers_node(&args);
+    modifier_shadow_layers_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_shadow_layers_node(args: &ModifierShadowLayersArgs) {
+fn modifier_shadow_layers_wrapper(args: &ModifierShadowLayersArgs) {
     layout(ShadowLayout {
         shadow: args.shadow,
         shape: args.shape,

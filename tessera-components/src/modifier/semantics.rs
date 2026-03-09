@@ -266,11 +266,11 @@ pub(crate) fn modifier_semantics(args: SemanticsArgs, child: RenderSlot) {
         semantics: args,
         child,
     };
-    modifier_semantics_node(&render_args);
+    modifier_semantics_wrapper(&render_args);
 }
 
 #[tessera]
-fn modifier_semantics_node(args: &ModifierSemanticsArgs) {
+fn modifier_semantics_wrapper(args: &ModifierSemanticsArgs) {
     let SemanticsArgs {
         role,
         label,

@@ -139,7 +139,7 @@ pub(crate) fn shrink_dimension(dimension: DimensionValue, before: Px, after: Px)
 }
 
 #[tessera]
-fn modifier_padding_node(args: &ModifierPaddingArgs) {
+fn modifier_padding_wrapper(args: &ModifierPaddingArgs) {
     layout(PaddingLayout {
         padding: args.padding,
     });
@@ -154,11 +154,11 @@ struct ModifierPaddingArgs {
 
 pub(crate) fn modifier_padding(padding: Padding, child: RenderSlot) {
     let args = ModifierPaddingArgs { padding, child };
-    modifier_padding_node(&args);
+    modifier_padding_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_offset_node(args: &ModifierOffsetArgs) {
+fn modifier_offset_wrapper(args: &ModifierOffsetArgs) {
     layout(OffsetLayout {
         x: args.x,
         y: args.y,
@@ -175,11 +175,11 @@ struct ModifierOffsetArgs {
 
 pub(crate) fn modifier_offset(x: Dp, y: Dp, child: RenderSlot) {
     let args = ModifierOffsetArgs { x, y, child };
-    modifier_offset_node(&args);
+    modifier_offset_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_constraints_node(args: &ModifierConstraintsArgs) {
+fn modifier_constraints_wrapper(args: &ModifierConstraintsArgs) {
     layout(ConstraintLayout {
         width_override: args.width_override,
         height_override: args.height_override,
@@ -204,11 +204,11 @@ pub(crate) fn modifier_constraints(
         height_override,
         child,
     };
-    modifier_constraints_node(&args);
+    modifier_constraints_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_minimum_interactive_size_node(args: &ModifierMinimumInteractiveArgs) {
+fn modifier_minimum_interactive_size_wrapper(args: &ModifierMinimumInteractiveArgs) {
     layout(MinimumInteractiveLayout);
     args.child.render();
 }
@@ -220,7 +220,7 @@ struct ModifierMinimumInteractiveArgs {
 
 pub(crate) fn modifier_minimum_interactive_size(child: RenderSlot) {
     let args = ModifierMinimumInteractiveArgs { child };
-    modifier_minimum_interactive_size_node(&args);
+    modifier_minimum_interactive_size_wrapper(&args);
 }
 
 #[derive(Clone, Copy, PartialEq)]

@@ -740,7 +740,7 @@ pub fn horizontal_pager(args: &PagerArgs) {
     let controller = pager_args
         .controller
         .unwrap_or_else(|| remember(|| PagerController::new(pager_args.initial_page)));
-    pager_node(pager_args, controller, PagerAxis::Horizontal);
+    pager_render(pager_args, controller, PagerAxis::Horizontal);
 }
 
 /// # vertical_pager
@@ -783,10 +783,10 @@ pub fn vertical_pager(args: &PagerArgs) {
     let controller = pager_args
         .controller
         .unwrap_or_else(|| remember(|| PagerController::new(pager_args.initial_page)));
-    pager_node(pager_args, controller, PagerAxis::Vertical);
+    pager_render(pager_args, controller, PagerAxis::Vertical);
 }
 
-fn pager_node(args: PagerArgs, controller: State<PagerController>, axis: PagerAxis) {
+fn pager_render(args: PagerArgs, controller: State<PagerController>, axis: PagerAxis) {
     let pager_args = args;
     let modifier = pager_args.modifier.clone();
     modifier.run(move || {
@@ -804,7 +804,7 @@ fn pager_node(args: PagerArgs, controller: State<PagerController>, axis: PagerAx
             axis,
             page_content: pager_args.page_content.clone(),
         };
-        pager_inner_node(&render_args);
+        pager_inner(&render_args);
     });
 }
 
@@ -886,7 +886,7 @@ fn run_pager_keyboard_command(
 }
 
 #[tessera]
-fn pager_inner_node(args: &PagerRenderArgs) {
+fn pager_inner(args: &PagerRenderArgs) {
     let args = args.clone();
     let controller = args.controller;
     let axis = args.axis;

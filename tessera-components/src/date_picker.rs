@@ -577,14 +577,14 @@ pub fn date_picker(args: &DatePickerArgs) {
         })
     });
     args.state = Some(state);
-    date_picker_node(&args);
+    date_picker_inner(&args);
 }
 
 #[tessera]
-fn date_picker_node(args: &DatePickerArgs) {
+fn date_picker_inner(args: &DatePickerArgs) {
     let state = args
         .state
-        .expect("date_picker_node requires state to be set");
+        .expect("date_picker_inner requires state to be set");
     let args = args.clone();
     let snapshot = state.with(|s| s.snapshot());
     let theme = use_context::<MaterialTheme>()

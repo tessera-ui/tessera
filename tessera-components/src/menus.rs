@@ -120,7 +120,7 @@ impl<'a, 'b> MenuScope<'a, 'b> {
         }
         self.scope.child(move || {
             let render_args = args.clone();
-            menu_item_node(&render_args);
+            menu_item_inner(&render_args);
         });
     }
 }
@@ -624,7 +624,7 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     ));
 
     // Menu panel.
-    menu_panel_node(&MenuPanelArgs {
+    menu_panel(&MenuPanelArgs {
         provider: provider_args.clone(),
         controller,
         menu_content,
@@ -681,7 +681,7 @@ pub fn menu_provider(args: &MenuProviderArgs) {
 }
 
 #[tessera]
-fn menu_panel_node(args: &MenuPanelArgs) {
+fn menu_panel(args: &MenuPanelArgs) {
     let args = args.clone();
     let controller = args.controller;
     let menu_content = args.menu_content.clone();
@@ -1010,7 +1010,7 @@ struct MenuItemSurfaceArgs {
 }
 
 #[tessera]
-fn menu_item_surface_node(args: &MenuItemSurfaceArgs) {
+fn menu_item_surface(args: &MenuItemSurfaceArgs) {
     let args = args.clone();
     let item = args.item.clone();
     let enabled = item.enabled && (item.on_click.is_some() || item.submenu_content.is_some());
@@ -1179,7 +1179,7 @@ fn menu_item_surface_node(args: &MenuItemSurfaceArgs) {
 }
 
 #[tessera]
-fn menu_item_node(args: &MenuItemArgs) {
+fn menu_item_inner(args: &MenuItemArgs) {
     let args = args.clone();
     let submenu_content = args.submenu_content.clone();
 
@@ -1195,7 +1195,7 @@ fn menu_item_node(args: &MenuItemArgs) {
                 .main_content({
                     let args = args.clone();
                     move || {
-                        menu_item_surface_node(&MenuItemSurfaceArgs {
+                        menu_item_surface(&MenuItemSurfaceArgs {
                             item: args.clone(),
                             submenu_controller: Some(submenu_controller),
                             focus_requester: Some(focus_requester),
@@ -1205,7 +1205,7 @@ fn menu_item_node(args: &MenuItemArgs) {
                 .menu_content_shared(submenu_content),
         );
     } else {
-        menu_item_surface_node(&MenuItemSurfaceArgs {
+        menu_item_surface(&MenuItemSurfaceArgs {
             item: args,
             submenu_controller: None,
             focus_requester: None,

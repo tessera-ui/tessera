@@ -768,10 +768,10 @@ pub fn scrollable(args: &ScrollableArgs) {
         .controller
         .unwrap_or_else(|| remember(ScrollableController::new));
     let child = args.child.clone().unwrap_or_else(|| RenderSlot::new(|| {}));
-    scrollable_node(args, controller, child);
+    scrollable_content(args, controller, child);
 }
 
-fn scrollable_node(
+fn scrollable_content(
     args: ScrollableArgs,
     controller: State<ScrollableController>,
     child: RenderSlot,
@@ -857,7 +857,7 @@ fn scrollable_with_alongside_scrollbar(args: &ScrollableAlongsideArgs) {
         scrollbar_state_h: scrollbar_h_state.clone(),
         child: args.child.clone(),
     };
-    scrollable_inner(&inner_args);
+    scrollable_viewport(&inner_args);
 
     if args.vertical {
         let mut scrollbar_args = args.scrollbar_args_v.clone();
@@ -910,7 +910,7 @@ fn scrollable_with_overlay_scrollbar(args: &ScrollableOverlayArgs) {
                             scrollbar_state_h: scrollbar_h_state.clone(),
                             child: child.clone(),
                         };
-                        scrollable_inner(&inner_args);
+                        scrollable_viewport(&inner_args);
                     }
                 });
                 scope.child({
@@ -963,7 +963,7 @@ fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
 }
 
 #[tessera]
-fn scrollable_inner(args: &ScrollableInnerArgs) {
+fn scrollable_viewport(args: &ScrollableInnerArgs) {
     let args = args.clone();
     let scrollbar_state_v = args.scrollbar_state_v.clone();
     let scrollbar_state_h = args.scrollbar_state_h.clone();

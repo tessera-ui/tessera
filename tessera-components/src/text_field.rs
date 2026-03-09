@@ -681,7 +681,7 @@ impl LayoutSpec for OutlinedFloatingLabelLayout {
 }
 
 #[tessera]
-fn outlined_floating_label_node(args: &OutlinedFloatingLabelArgs) {
+fn outlined_floating_label(args: &OutlinedFloatingLabelArgs) {
     let args = args.clone();
 
     layout(OutlinedFloatingLabelLayout {
@@ -892,7 +892,7 @@ fn render_text_field(
                                                             Alignment::TopStart,
                                                             move || {
                                                                 let args = floating_args.clone();
-                                                                outlined_floating_label_node(&args);
+                                                                outlined_floating_label(&args);
                                                             },
                                                         );
                                                     } else {

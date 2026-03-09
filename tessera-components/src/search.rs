@@ -353,7 +353,7 @@ enum SearchBarLayoutKind {
 #[tessera]
 pub fn search_bar(args: &SearchBarArgs) {
     let render_args = build_search_bar_render_args(args.clone(), SearchBarLayoutKind::FullScreen);
-    search_bar_node(render_args);
+    search_bar_render(render_args);
 }
 
 /// # docked_search_bar
@@ -394,7 +394,7 @@ pub fn search_bar(args: &SearchBarArgs) {
 #[tessera]
 pub fn docked_search_bar(args: &SearchBarArgs) {
     let render_args = build_search_bar_render_args(args.clone(), SearchBarLayoutKind::Docked);
-    search_bar_node(render_args);
+    search_bar_render(render_args);
 }
 
 fn build_search_bar_render_args(
@@ -436,10 +436,10 @@ fn build_search_bar_render_args(
     }
 }
 
-fn search_bar_node(args: SearchBarRenderArgs) {
+fn search_bar_render(args: SearchBarRenderArgs) {
     let modifier = args.modifier.clone();
     modifier.run(move || {
-        search_bar_inner_node(&args);
+        search_bar_inner(&args);
     });
 }
 
@@ -479,7 +479,7 @@ struct SearchResultsSurfaceArgs {
 }
 
 #[tessera]
-fn search_bar_inner_node(args: &SearchBarRenderArgs) {
+fn search_bar_inner(args: &SearchBarRenderArgs) {
     let args = args.clone();
     let kind = args.kind;
     let controller = args.controller;

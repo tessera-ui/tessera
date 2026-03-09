@@ -81,7 +81,7 @@ struct NavigationRailItemContentArgs {
 }
 
 #[tessera]
-fn navigation_rail_item_content_node(args: &NavigationRailItemContentArgs) {
+fn navigation_rail_item_content(args: &NavigationRailItemContentArgs) {
     let args = args.clone();
     let NavigationRailItemContentArgs {
         item,
@@ -435,7 +435,7 @@ struct NavigationRailRenderArgs {
 }
 
 #[tessera]
-fn navigation_rail_item_node(args: &NavigationRailItemArgs) {
+fn navigation_rail_item(args: &NavigationRailItemArgs) {
     let args = args.clone();
     let NavigationRailItemArgs {
         controller,
@@ -511,7 +511,7 @@ fn navigation_rail_item_node(args: &NavigationRailItemArgs) {
                 interaction_state,
                 ripple_state,
             };
-            navigation_rail_item_content_node(&content_args);
+            navigation_rail_item_content(&content_args);
         }
     });
 }
@@ -642,11 +642,11 @@ pub fn navigation_rail(args: &NavigationRailArgs) {
         items: args.items,
         header: args.header,
     };
-    navigation_rail_render_node(&render_args);
+    navigation_rail_render(&render_args);
 }
 
 #[tessera]
-fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
+fn navigation_rail_render(args: &NavigationRailRenderArgs) {
     let controller = args.controller;
     let items = args.items.clone();
     let header = args.header.clone();
@@ -755,7 +755,7 @@ fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
                                                 indicator_start_width,
                                                 item_min_height,
                                             };
-                                            navigation_rail_item_node(&item_args);
+                                            navigation_rail_item(&item_args);
                                         });
 
                                         if index != last_index && item_spacing.0 > 0.0 {

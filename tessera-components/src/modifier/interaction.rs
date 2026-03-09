@@ -392,11 +392,11 @@ pub(crate) fn modifier_clickable(args: ClickableArgs, child: RenderSlot) {
         focus_requester: None,
         child,
     };
-    modifier_clickable_node(&render_args);
+    modifier_clickable_wrapper(&render_args);
 }
 
 #[tessera]
-fn modifier_clickable_node(args: &ModifierClickableArgs) {
+fn modifier_clickable_wrapper(args: &ModifierClickableArgs) {
     let ClickableArgs {
         on_click,
         enabled,
@@ -591,11 +591,11 @@ struct ModifierWindowDragRegionArgs {
 
 pub(crate) fn modifier_window_drag_region(child: RenderSlot) {
     let args = ModifierWindowDragRegionArgs { child };
-    modifier_window_drag_region_node(&args);
+    modifier_window_drag_region_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_window_drag_region_node(args: &ModifierWindowDragRegionArgs) {
+fn modifier_window_drag_region_wrapper(args: &ModifierWindowDragRegionArgs) {
     let tap_recognizer = remember(TapRecognizer::default);
     args.child.render();
 
@@ -640,11 +640,11 @@ struct ModifierWindowActionArgs {
 
 pub(crate) fn modifier_window_action(action: WindowAction, child: RenderSlot) {
     let args = ModifierWindowActionArgs { action, child };
-    modifier_window_action_node(&args);
+    modifier_window_action_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_window_action_node(args: &ModifierWindowActionArgs) {
+fn modifier_window_action_wrapper(args: &ModifierWindowActionArgs) {
     let action = args.action;
     let tap_recognizer = remember(TapRecognizer::default);
     args.child.render();
@@ -698,11 +698,11 @@ struct ModifierBlockTouchPropagationArgs {
 
 pub(crate) fn modifier_block_touch_propagation(child: RenderSlot) {
     let args = ModifierBlockTouchPropagationArgs { child };
-    modifier_block_touch_propagation_node(&args);
+    modifier_block_touch_propagation_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_block_touch_propagation_node(args: &ModifierBlockTouchPropagationArgs) {
+fn modifier_block_touch_propagation_wrapper(args: &ModifierBlockTouchPropagationArgs) {
     args.child.render();
 
     // Block after descendants so overlay/content wrappers do not swallow child
@@ -739,11 +739,11 @@ pub(crate) fn modifier_toggleable(args: ToggleableArgs, child: RenderSlot) {
         focus_requester: None,
         child,
     };
-    modifier_toggleable_node(&render_args);
+    modifier_toggleable_wrapper(&render_args);
 }
 
 #[tessera]
-fn modifier_toggleable_node(args: &ModifierToggleableArgs) {
+fn modifier_toggleable_wrapper(args: &ModifierToggleableArgs) {
     let ToggleableArgs {
         value,
         on_value_change,
@@ -918,11 +918,11 @@ pub(crate) fn modifier_selectable(args: SelectableArgs, child: RenderSlot) {
         focus_requester: None,
         child,
     };
-    modifier_selectable_node(&render_args);
+    modifier_selectable_wrapper(&render_args);
 }
 
 #[tessera]
-fn modifier_selectable_node(args: &ModifierSelectableArgs) {
+fn modifier_selectable_wrapper(args: &ModifierSelectableArgs) {
     let SelectableArgs {
         selected,
         on_click,

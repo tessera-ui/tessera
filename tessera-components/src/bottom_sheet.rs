@@ -513,7 +513,7 @@ struct BottomSheetDragHandleArgs {
 }
 
 #[tessera]
-fn bottom_sheet_drag_handle_node(args: &BottomSheetDragHandleArgs) {
+fn bottom_sheet_drag_handle(args: &BottomSheetDragHandleArgs) {
     let controller = args.controller;
     let on_close = args.on_close.clone();
     let drag_recognizer = remember(DragRecognizer::default);
@@ -616,7 +616,7 @@ struct BottomSheetContentWrapperArgs {
 }
 
 #[tessera]
-fn bottom_sheet_content_wrapper_node(args: &BottomSheetContentWrapperArgs) {
+fn bottom_sheet_content_wrapper(args: &BottomSheetContentWrapperArgs) {
     let args = args.clone();
     let bottom_sheet_content = args.bottom_sheet_content.clone();
     let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
@@ -655,7 +655,7 @@ fn bottom_sheet_content_wrapper_node(args: &BottomSheetContentWrapperArgs) {
                         .children(move |scope| {
                             let on_close = on_close.clone();
                             scope.child(move || {
-                                bottom_sheet_drag_handle_node(&BottomSheetDragHandleArgs {
+                                bottom_sheet_drag_handle(&BottomSheetDragHandleArgs {
                                     controller: args.controller,
                                     on_close: on_close.clone(),
                                 });
@@ -823,7 +823,7 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
 
     render_scrim(&provider_args, progress, is_open);
 
-    bottom_sheet_content_wrapper_node(&BottomSheetContentWrapperArgs {
+    bottom_sheet_content_wrapper(&BottomSheetContentWrapperArgs {
         style: provider_args.style,
         bottom_sheet_content,
         controller,

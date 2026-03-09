@@ -367,14 +367,14 @@ pub fn time_picker(args: &TimePickerArgs) {
         remember(|| TimePickerState::new(initial_hour, initial_minute, is_24_hour, display_mode))
     });
     args.state = Some(state);
-    time_picker_node(&args);
+    time_picker_inner(&args);
 }
 
 #[tessera]
-fn time_picker_node(args: &TimePickerArgs) {
+fn time_picker_inner(args: &TimePickerArgs) {
     let state = args
         .state
-        .expect("time_picker_node requires state to be set");
+        .expect("time_picker_inner requires state to be set");
     let args = args.clone();
     let snapshot = state.with(|s| s.snapshot());
     let theme = use_context::<MaterialTheme>()

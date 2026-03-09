@@ -331,7 +331,7 @@ fn make_keyboard_handler(
 }
 
 #[tessera]
-fn dialog_content_wrapper_node(args: &DialogContentWrapperArgs) {
+fn dialog_content_wrapper(args: &DialogContentWrapperArgs) {
     let args = args.clone();
     let style = args.style;
     let alpha = args.alpha;
@@ -559,11 +559,11 @@ pub fn dialog_provider(args: &DialogProviderArgs) {
         main_content,
         dialog_content,
     };
-    dialog_provider_node(&provider_render_args);
+    dialog_provider_render(&provider_render_args);
 }
 
 #[tessera]
-fn dialog_provider_node(args: &DialogProviderRenderArgs) {
+fn dialog_provider_render(args: &DialogProviderRenderArgs) {
     let args = args.clone();
     let controller = args.controller;
     let main_content = args.main_content;
@@ -622,7 +622,7 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
             on_close_request: args.on_close_request.clone(),
             content: dialog_content,
         };
-        dialog_content_wrapper_node(&content_wrapper_args);
+        dialog_content_wrapper(&content_wrapper_args);
     }
 }
 

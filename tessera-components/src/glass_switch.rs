@@ -243,15 +243,15 @@ pub fn glass_switch(args: &GlassSwitchArgs) {
         controller.with_mut(|c| c.set_checked(switch_args.checked));
     }
     switch_args.controller = Some(controller);
-    glass_switch_node(&switch_args);
+    glass_switch_inner(&switch_args);
 }
 
 #[tessera]
-fn glass_switch_node(args: &GlassSwitchArgs) {
+fn glass_switch_inner(args: &GlassSwitchArgs) {
     let args = args.clone();
     let controller = args
         .controller
-        .expect("glass_switch_node requires controller to be set");
+        .expect("glass_switch_inner requires controller to be set");
     let mut modifier = args.modifier;
 
     let on_toggle = args.on_toggle.clone();

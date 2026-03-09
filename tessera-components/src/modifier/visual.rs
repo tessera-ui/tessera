@@ -22,11 +22,11 @@ struct ModifierAlphaArgs {
 
 pub(crate) fn modifier_alpha(alpha: f32, child: RenderSlot) {
     let args = ModifierAlphaArgs { alpha, child };
-    modifier_alpha_node(&args);
+    modifier_alpha_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_alpha_node(args: &ModifierAlphaArgs) {
+fn modifier_alpha_wrapper(args: &ModifierAlphaArgs) {
     layout(AlphaLayout { alpha: args.alpha });
     args.child.render();
 }
@@ -71,11 +71,11 @@ struct ModifierClipToBoundsArgs {
 
 pub(crate) fn modifier_clip_to_bounds(child: RenderSlot) {
     let args = ModifierClipToBoundsArgs { child };
-    modifier_clip_to_bounds_node(&args);
+    modifier_clip_to_bounds_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_clip_to_bounds_node(args: &ModifierClipToBoundsArgs) {
+fn modifier_clip_to_bounds_wrapper(args: &ModifierClipToBoundsArgs) {
     layout(ClipLayout);
     args.child.render();
 }
@@ -93,11 +93,11 @@ pub(crate) fn modifier_background(color: Color, shape: Shape, child: RenderSlot)
         shape,
         child,
     };
-    modifier_background_node(&args);
+    modifier_background_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_background_node(args: &ModifierBackgroundArgs) {
+fn modifier_background_wrapper(args: &ModifierBackgroundArgs) {
     layout(BackgroundLayout {
         color: args.color,
         shape: args.shape,
@@ -113,7 +113,7 @@ struct ModifierBorderOverlayArgs {
 }
 
 #[tessera]
-fn modifier_border_overlay_node(args: &ModifierBorderOverlayArgs) {
+fn modifier_border_overlay_wrapper(args: &ModifierBorderOverlayArgs) {
     layout(BorderOverlayLayout {
         width: args.width,
         color: args.color,
@@ -136,11 +136,11 @@ pub(crate) fn modifier_border(width: Dp, color: Color, shape: Shape, child: Rend
         shape,
         child,
     };
-    modifier_border_node(&args);
+    modifier_border_wrapper(&args);
 }
 
 #[tessera]
-fn modifier_border_node(args: &ModifierBorderArgs) {
+fn modifier_border_wrapper(args: &ModifierBorderArgs) {
     layout(BorderLayout);
     args.child.render();
     let overlay = ModifierBorderOverlayArgs {
@@ -148,7 +148,7 @@ fn modifier_border_node(args: &ModifierBorderArgs) {
         color: args.color,
         shape: args.shape,
     };
-    modifier_border_overlay_node(&overlay);
+    modifier_border_overlay_wrapper(&overlay);
 }
 
 #[derive(Clone, Copy, PartialEq)]

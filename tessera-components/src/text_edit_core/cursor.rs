@@ -64,7 +64,7 @@ impl LayoutSpec for CursorLayout {
 /// * `blink_start_frame_nanos` - Frame timestamp where the blink cycle starts
 /// * `current_frame_nanos` - Current frame timestamp used to sample visibility
 #[tessera]
-fn cursor_node(args: &CursorArgs) {
+fn cursor_visual(args: &CursorArgs) {
     let elapsed_nanos = args
         .current_frame_nanos
         .saturating_sub(args.blink_start_frame_nanos);
@@ -97,5 +97,5 @@ pub(super) fn cursor(
         current_frame_nanos,
         color,
     };
-    cursor_node(&args);
+    cursor_visual(&args);
 }

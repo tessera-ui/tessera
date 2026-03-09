@@ -295,11 +295,11 @@ pub fn glass_slider(args: &GlassSliderArgs) {
         .controller
         .unwrap_or_else(|| remember(GlassSliderController::new));
     slider_args.controller = Some(controller);
-    glass_slider_node(&slider_args);
+    glass_slider_render(&slider_args);
 }
 
 #[tessera]
-fn glass_slider_progress_fill_node(args: &GlassSliderProgressFillArgs) {
+fn glass_slider_progress_fill(args: &GlassSliderProgressFillArgs) {
     let value = args.value;
     let tint_color = args.tint_color;
     let blur_radius = args.blur_radius;
@@ -364,11 +364,11 @@ impl LayoutSpec for GlassSliderFillLayout {
 }
 
 #[tessera]
-fn glass_slider_node(args: &GlassSliderArgs) {
+fn glass_slider_render(args: &GlassSliderArgs) {
     let args = args.clone();
     let controller = args
         .controller
-        .expect("glass_slider_node requires controller to be set");
+        .expect("glass_slider_render requires controller to be set");
     let mut modifier = args.modifier.clone();
     let mut semantics = SemanticsArgs::new().role(Role::Slider);
     if let Some(label) = args.accessibility_label.clone() {
@@ -391,16 +391,16 @@ fn glass_slider_node(args: &GlassSliderArgs) {
     modifier.run(move || {
         let mut inner_args = args.clone();
         inner_args.controller = Some(controller);
-        glass_slider_inner_node(&inner_args);
+        glass_slider_inner(&inner_args);
     });
 }
 
 #[tessera]
-fn glass_slider_inner_node(args: &GlassSliderArgs) {
+fn glass_slider_inner(args: &GlassSliderArgs) {
     let args = args.clone();
     let controller = args
         .controller
-        .expect("glass_slider_inner_node requires controller to be set");
+        .expect("glass_slider_inner requires controller to be set");
     Modifier::new()
         .focus_requester(controller.with(|c| c.focus))
         .focusable()
@@ -424,7 +424,7 @@ fn glass_slider_inner_node(args: &GlassSliderArgs) {
                         tint_color: args.progress_tint_color,
                         blur_radius: args.blur_radius,
                     };
-                    glass_slider_progress_fill_node(&fill_args);
+                    glass_slider_progress_fill(&fill_args);
                 },
             ));
 

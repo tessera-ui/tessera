@@ -79,7 +79,7 @@ struct GlassProgressFillArgs {
 }
 
 #[tessera]
-fn glass_progress_fill_node(args: &GlassProgressFillArgs) {
+fn glass_progress_fill(args: &GlassProgressFillArgs) {
     let value = args.value;
     let tint_color = args.tint_color;
     let blur_radius = args.blur_radius;
@@ -178,12 +178,12 @@ pub fn glass_progress(args: &GlassProgressArgs) {
 
     modifier.run(move || {
         let inner_args = args.clone();
-        glass_progress_inner_node(&inner_args);
+        glass_progress_inner(&inner_args);
     });
 }
 
 #[tessera]
-fn glass_progress_inner_node(args: &GlassProgressArgs) {
+fn glass_progress_inner(args: &GlassProgressArgs) {
     let args = args.clone();
     let effective_height = Dp((args.height.0 - (args.track_border_width.0 * 2.0)).max(0.0));
     let fill_shape = capsule_shape_for_height(effective_height);
@@ -202,7 +202,7 @@ fn glass_progress_inner_node(args: &GlassProgressArgs) {
                 blur_radius: args.blur_radius,
                 shape: fill_shape,
             };
-            glass_progress_fill_node(&fill_args);
+            glass_progress_fill(&fill_args);
         },
     ));
 

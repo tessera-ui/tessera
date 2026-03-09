@@ -615,7 +615,7 @@ pub fn modal_side_sheet_provider(args: &SideSheetProviderArgs) {
         main_content,
         side_sheet_content,
     };
-    side_sheet_provider_inner_node(&provider_inner_args);
+    side_sheet_provider_inner(&provider_inner_args);
 }
 
 /// # standard_side_sheet_provider
@@ -677,11 +677,11 @@ pub fn standard_side_sheet_provider(args: &SideSheetProviderArgs) {
         main_content,
         side_sheet_content,
     };
-    side_sheet_provider_inner_node(&provider_inner_args);
+    side_sheet_provider_inner(&provider_inner_args);
 }
 
 #[tessera]
-fn side_sheet_provider_inner_node(args: &SideSheetProviderInnerArgs) {
+fn side_sheet_provider_inner(args: &SideSheetProviderInnerArgs) {
     let controller = args
         .controller
         .unwrap_or_else(|| remember(|| SideSheetController::new(args.is_open)));
@@ -704,11 +704,11 @@ fn side_sheet_provider_inner_node(args: &SideSheetProviderInnerArgs) {
         main_content: args.main_content.clone(),
         side_sheet_content: args.side_sheet_content.clone(),
     };
-    side_sheet_provider_render_inner_node(&provider_render_args);
+    side_sheet_provider_render(&provider_render_args);
 }
 
 #[tessera]
-fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
+fn side_sheet_provider_render(args: &SideSheetProviderRenderArgs) {
     args.main_content.render();
 
     let (is_open, timer_opt, drag_offset) = args.controller.with(|c| c.snapshot());
@@ -761,7 +761,7 @@ fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
         just_opened,
         content: args.side_sheet_content.clone(),
     };
-    side_sheet_content_wrapper_node(&content_wrapper_args);
+    side_sheet_content_wrapper(&content_wrapper_args);
 
     layout(SideSheetLayout {
         progress,
@@ -772,7 +772,7 @@ fn side_sheet_provider_render_inner_node(args: &SideSheetProviderRenderArgs) {
 }
 
 #[tessera]
-fn side_sheet_content_wrapper_node(args: &SideSheetContentWrapperArgs) {
+fn side_sheet_content_wrapper(args: &SideSheetContentWrapperArgs) {
     let args = args.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")

@@ -306,10 +306,10 @@ pub fn text_input(args: &TextInputArgs) {
 }
 
 #[tessera]
-fn text_input_core_node(args: &TextInputArgs) {
+fn text_input_editor(args: &TextInputArgs) {
     let controller = args
         .controller
-        .expect("text_input_core_node requires controller to be set");
+        .expect("text_input_editor requires controller to be set");
     let editor_args: TextInputArgs = args.clone();
 
     if !editor_args.enabled {
@@ -379,7 +379,7 @@ fn text_input_core_node(args: &TextInputArgs) {
 pub(crate) fn text_input_core(args: &TextInputArgs, controller: State<TextInputController>) {
     let mut core_args = args.clone();
     core_args.controller = Some(controller);
-    text_input_core_node(&core_args);
+    text_input_editor(&core_args);
 }
 
 fn sync_text_input_controller(controller: &State<TextInputController>, args: &TextInputArgs) {

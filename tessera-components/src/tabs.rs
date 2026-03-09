@@ -767,7 +767,7 @@ impl LayoutSpec for TabsContentLayout {
 }
 
 #[tessera]
-fn tabs_content_container_node(args: &TabsContentContainerArgs) {
+fn tabs_content_container(args: &TabsContentContainerArgs) {
     for child in &args.children {
         child.render();
     }
@@ -1258,11 +1258,11 @@ pub fn tabs(args: &TabsArgs) {
         controller,
         items: args.items,
     };
-    tabs_render_node(&render_args);
+    tabs_render(&render_args);
 }
 
 #[tessera]
-fn tabs_render_node(args: &TabsRenderArgs) {
+fn tabs_render(args: &TabsRenderArgs) {
     let controller = args.controller;
     let tabs = args.items.clone();
     let args = args.tabs.clone();
@@ -1336,7 +1336,7 @@ fn tabs_render_node(args: &TabsRenderArgs) {
             tab_focus_requesters[(index + num_tabs.saturating_sub(1)) % num_tabs];
         let next_focus_requester = tab_focus_requesters[(index + 1) % num_tabs];
 
-        tab_trigger_node(&TabTriggerArgs {
+        tab_trigger(&TabTriggerArgs {
             controller,
             title: child,
             enabled: args.enabled,
@@ -1374,7 +1374,7 @@ fn tabs_render_node(args: &TabsRenderArgs) {
         scroll_offset,
         children: content_closures,
     };
-    tabs_content_container_node(&content_container_args);
+    tabs_content_container(&content_container_args);
 
     let tab_row_scroll_recognizer =
         remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
@@ -1428,7 +1428,7 @@ fn tabs_render_node(args: &TabsRenderArgs) {
 }
 
 #[tessera]
-fn tab_trigger_node(args: &TabTriggerArgs) {
+fn tab_trigger(args: &TabTriggerArgs) {
     let args = args.clone();
     let controller = args.controller;
     let index = args.index;

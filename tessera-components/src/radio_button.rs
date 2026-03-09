@@ -384,16 +384,16 @@ pub fn radio_button(args: &RadioButtonArgs) {
     }
 
     args.controller = Some(controller);
-    radio_button_node(&args);
+    radio_button_inner(&args);
 }
 
 #[tessera]
-fn radio_button_node(args: &RadioButtonArgs) {
+fn radio_button_inner(args: &RadioButtonArgs) {
     let args = args.clone();
     let radio_group = use_context::<RadioGroupContext>().map(|context| context.get());
     let controller = args
         .controller
-        .expect("radio_button_node requires controller to be set");
+        .expect("radio_button_inner requires controller to be set");
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller.with_mut(|controller| {

@@ -91,7 +91,7 @@ fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
 }
 
 #[tessera]
-fn navigation_bar_item_content_node(args: &NavigationBarItemContentArgs) {
+fn navigation_bar_item_content(args: &NavigationBarItemContentArgs) {
     let item = args.item.clone();
     let is_selected = args.is_selected;
     let was_selected = args.was_selected;
@@ -376,7 +376,7 @@ impl LayoutSpec for NavigationBarItemLayout {
 }
 
 #[tessera]
-fn navigation_bar_item_node(args: &NavigationBarItemArgs) {
+fn navigation_bar_item(args: &NavigationBarItemArgs) {
     let controller = args.controller;
     let index = args.index;
     let item = args.item.clone();
@@ -433,7 +433,7 @@ fn navigation_bar_item_node(args: &NavigationBarItemArgs) {
                 interaction_state,
                 ripple_state,
             };
-            navigation_bar_item_content_node(&content_args);
+            navigation_bar_item_content(&content_args);
         }
     });
 }
@@ -550,11 +550,11 @@ pub fn navigation_bar(args: &NavigationBarArgs) {
         controller,
         items: args.items,
     };
-    navigation_bar_render_node(&render_args);
+    navigation_bar_render(&render_args);
 }
 
 #[tessera]
-fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
+fn navigation_bar_render(args: &NavigationBarRenderArgs) {
     let controller = args.controller;
     let items = args.items.clone();
     let scheme = use_context::<MaterialTheme>()
@@ -636,9 +636,7 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
                                                                         previous_index,
                                                                         animation_progress,
                                                                     };
-                                                                navigation_bar_item_node(
-                                                                    &item_args,
-                                                                );
+                                                                navigation_bar_item(&item_args);
                                                             },
                                                             1.0,
                                                         );

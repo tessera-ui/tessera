@@ -321,15 +321,15 @@ pub fn checkbox(args: &CheckboxArgs) {
         .controller
         .unwrap_or_else(|| remember(|| CheckboxController::new(args.checked)));
     args.controller = Some(controller);
-    checkbox_node(&args);
+    checkbox_inner(&args);
 }
 
 #[tessera]
-fn checkbox_node(args: &CheckboxArgs) {
+fn checkbox_inner(args: &CheckboxArgs) {
     let args = args.clone();
     let controller = args
         .controller
-        .expect("checkbox_node requires controller to be set");
+        .expect("checkbox_inner requires controller to be set");
     let enabled = !args.disabled;
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
