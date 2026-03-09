@@ -1,7 +1,9 @@
-//! Focus management for Tessera.
+//! Focus ownership, traversal, and restoration for interactive UI.
 //!
-//! This module provides persistent focus handles, scope-based restoration, and
-//! per-tree focus ownership for keyboard and IME routing.
+//! ## Usage
+//!
+//! Register focus targets, scopes, and traversal rules for keyboard and IME
+//! input.
 
 use std::{
     cell::RefCell,
@@ -115,6 +117,20 @@ pub(crate) fn bind_focus_owner(owner: &mut FocusOwner) -> FocusOwnerBindingGuard
 }
 
 /// Focus state for a registered focus node.
+///
+/// Use this to render focus-dependent UI and distinguish between the primary
+/// focused target and its focused ancestors.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::FocusState;
+///
+/// assert!(!FocusState::Inactive.has_focus());
+/// assert!(FocusState::ActiveParent.has_focus());
+/// assert!(FocusState::Active.is_focused());
+/// assert!(FocusState::Captured.is_captured());
+/// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum FocusState {
     /// The node is not participating in the active focus path.
@@ -146,6 +162,9 @@ impl FocusState {
 }
 
 /// Focus traversal direction for owner-level movement.
+///
+/// These directions are used by [`FocusManager`], [`FocusScopeNode`], and
+/// [`FocusGroupNode`] when keyboard or programmatic traversal moves focus.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub enum FocusDirection {
     /// Move to the next focusable target in traversal order.
@@ -179,8 +198,24 @@ pub enum FocusTraversalStrategy {
     Spatial,
 }
 
-/// Policy applied by a focus scope or group when arrow-key traversal starts
-/// inside it.
+/// Policy applied by a focus scope or group when traversal starts inside it.
+///
+/// Use policies to describe how a container handles directional keys and
+/// whether `Tab` navigation should stay inside the container.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::{FocusTraversalPolicy, FocusTraversalStrategy};
+///
+/// let policy = FocusTraversalPolicy::vertical()
+///     .wrap(true)
+///     .tab_navigation(true);
+///
+/// assert_eq!(policy.strategy, FocusTraversalStrategy::Vertical);
+/// assert!(policy.wrap);
+/// assert!(policy.tab_navigation);
+/// ```
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FocusTraversalPolicy {
     /// Traversal strategy used for arrow-key navigation.
@@ -292,6 +327,28 @@ impl FocusRevealRequest {
 
 /// Focus properties used when registering a focus node on the current
 /// component.
+///
+/// Use properties to enable or disable focus participation and to declare
+/// explicit traversal neighbors for complex layouts.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::{FocusProperties, FocusRequester};
+///
+/// let next = FocusRequester::new();
+/// let right = FocusRequester::new();
+/// let props = FocusProperties::new()
+///     .can_focus(true)
+///     .skip_traversal(false)
+///     .next(next)
+///     .right(right);
+///
+/// assert_eq!(props.next, Some(next));
+/// assert_eq!(props.right, Some(right));
+/// assert!(props.can_focus);
+/// assert!(!props.skip_traversal);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct FocusProperties {
     /// Whether this node may receive focus.
@@ -453,6 +510,20 @@ impl FocusRegistration {
 }
 
 /// Imperative handle used to request focus for a registered target.
+///
+/// Requesters are stable handles that can be stored in component state and
+/// passed across component boundaries without exposing the underlying focus
+/// tree.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::FocusRequester;
+///
+/// let first = FocusRequester::new();
+/// let second = FocusRequester::new();
+/// assert_ne!(first, second);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusRequester {
     id: FocusRequesterId,
@@ -525,6 +596,9 @@ impl Default for FocusRequester {
 }
 
 /// Persistent focus target handle.
+///
+/// This is the low-level target identity used by focus modifiers. Most code
+/// should prefer [`FocusRequester`] and [`crate::modifier::FocusModifierExt`].
 #[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusNode {
@@ -555,6 +629,19 @@ impl Default for FocusNode {
 }
 
 /// Persistent focus scope handle.
+///
+/// Scopes own restore behavior and provide imperative traversal within a
+/// subtree.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::FocusScopeNode;
+///
+/// let first = FocusScopeNode::new();
+/// let second = FocusScopeNode::new();
+/// assert_ne!(first, second);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusScopeNode {
     id: FocusHandleId,
@@ -626,6 +713,19 @@ impl Default for FocusScopeNode {
 }
 
 /// Persistent traversal-only focus group handle.
+///
+/// Groups define traversal boundaries without taking on scope restore
+/// semantics.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::FocusGroupNode;
+///
+/// let first = FocusGroupNode::new();
+/// let second = FocusGroupNode::new();
+/// assert_ne!(first, second);
+/// ```
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct FocusGroupNode {
     id: FocusHandleId,
@@ -681,6 +781,17 @@ impl Default for FocusGroupNode {
 }
 
 /// Owner-scoped focus manager for traversal and forced clear operations.
+///
+/// Use the focus manager to trigger application-level traversal without
+/// storing a specific scope or requester.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::FocusManager;
+///
+/// let _manager = FocusManager::current();
+/// ```
 #[derive(Clone, Copy, Debug, Default)]
 pub struct FocusManager;
 

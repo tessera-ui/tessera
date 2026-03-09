@@ -1,8 +1,9 @@
-//! Modifier chains for composing wrapper behavior around components.
+//! Modifier chains for layout, focus, and drawing behavior.
 //!
 //! ## Usage
 //!
-//! Build reusable modifier chains for padding, backgrounds, and interactions.
+//! Build reusable modifier chains that wrap component subtrees with shared
+//! behavior.
 
 use std::{
     fmt,
@@ -118,6 +119,28 @@ pub struct Modifier {
 ///
 /// These APIs live in the core crate so focus behavior can be reused without
 /// depending on the component library.
+///
+/// Typical usage is to remember a [`crate::FocusRequester`], bind it to a
+/// modifier, and then declare the current subtree as focusable.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::modifier::FocusModifierExt as _;
+/// use tessera_ui::{FocusProperties, FocusRequester, Modifier, remember, tessera};
+///
+/// #[tessera]
+/// fn focusable_field() {
+///     let requester = remember(FocusRequester::new).get();
+///     let _modifier = Modifier::new()
+///         .focus_requester(requester)
+///         .focusable()
+///         .focus_properties(FocusProperties::new().can_focus(true))
+///         .on_focus_changed(|state: tessera_ui::FocusState| {
+///             let _ = state.is_focused();
+///         });
+/// }
+/// ```
 pub trait FocusModifierExt {
     /// Registers a focus target for this subtree.
     fn focusable(self) -> Modifier;
