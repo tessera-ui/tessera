@@ -468,7 +468,11 @@ pub fn list_item(args: &ListItemArgs) {
                     if let Some(leading) = leading.clone() {
                         let color = leading_color;
                         row_scope.child(move || {
-                            render_slot(leading.clone(), color, ListItemDefaults::LEADING_MIN_SIZE);
+                            render_slot(&RenderSlotArgs {
+                                content: leading.clone(),
+                                color,
+                                min_size: ListItemDefaults::LEADING_MIN_SIZE,
+                            });
                         });
                         row_scope.child(move || {
                             spacer(&crate::spacer::SpacerArgs::new(
@@ -494,11 +498,11 @@ pub fn list_item(args: &ListItemArgs) {
                                         if let Some(overline) = overline_text.clone() {
                                             let color = overline_color;
                                             column_scope.child(move || {
-                                                render_text_line(
-                                                    overline.clone(),
-                                                    typography.label_small,
+                                                render_text_line(&RenderTextLineArgs {
+                                                    text_value: overline.clone(),
+                                                    style: typography.label_small,
                                                     color,
-                                                );
+                                                });
                                             });
                                         }
 
@@ -509,22 +513,22 @@ pub fn list_item(args: &ListItemArgs) {
                                                     Modifier::new(),
                                                 ));
                                             } else {
-                                                render_text_line(
-                                                    headline_text.clone(),
-                                                    typography.body_large,
+                                                render_text_line(&RenderTextLineArgs {
+                                                    text_value: headline_text.clone(),
+                                                    style: typography.body_large,
                                                     color,
-                                                );
+                                                });
                                             }
                                         });
 
                                         if let Some(supporting) = supporting_text.clone() {
                                             let color = supporting_color;
                                             column_scope.child(move || {
-                                                render_text_line(
-                                                    supporting.clone(),
-                                                    typography.body_medium,
+                                                render_text_line(&RenderTextLineArgs {
+                                                    text_value: supporting.clone(),
+                                                    style: typography.body_medium,
                                                     color,
-                                                );
+                                                });
                                             });
                                         }
                                     }),
@@ -541,11 +545,11 @@ pub fn list_item(args: &ListItemArgs) {
                         });
                         let color = trailing_color;
                         row_scope.child(move || {
-                            render_slot(
-                                trailing.clone(),
+                            render_slot(&RenderSlotArgs {
+                                content: trailing.clone(),
                                 color,
-                                ListItemDefaults::TRAILING_MIN_SIZE,
-                            );
+                                min_size: ListItemDefaults::TRAILING_MIN_SIZE,
+                            });
                         });
                     }
                 }));
@@ -553,15 +557,38 @@ pub fn list_item(args: &ListItemArgs) {
     ));
 }
 
-fn render_text_line(text_value: String, style: crate::theme::TextStyle, color: Color) {
+#[derive(Clone, Prop)]
+struct RenderTextLineArgs {
+    #[prop(into)]
+    text_value: String,
+    style: crate::theme::TextStyle,
+    color: Color,
+}
+
+#[tessera]
+fn render_text_line(args: &RenderTextLineArgs) {
+    let text_value = args.text_value.clone();
+    let style = args.style;
+    let color = args.color;
     provide_text_style(style, move || {
         text(&crate::text::TextArgs::from(
-            &TextArgs::default().text(&text_value).color(color),
+            &TextArgs::default().text(text_value.clone()).color(color),
         ));
     });
 }
 
-fn render_slot(content: RenderSlot, color: Color, min_size: Dp) {
+#[derive(Clone, Prop)]
+struct RenderSlotArgs {
+    content: RenderSlot,
+    color: Color,
+    min_size: Dp,
+}
+
+#[tessera]
+fn render_slot(args: &RenderSlotArgs) {
+    let content = args.content.clone();
+    let color = args.color;
+    let min_size = args.min_size;
     provide_context(
         || ContentColor { current: color },
         move || {

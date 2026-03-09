@@ -783,17 +783,32 @@ fn home_screen(args: &HomeArgs) {
                             let on_click = example.on_click.clone();
                             let title = example.title.clone();
                             let description = example.desription.clone();
-                            component_card(&title, &description, on_click);
+                            component_card(&ComponentCardArgs {
+                                title,
+                                description,
+                                on_click,
+                            });
                         });
                     }),
             );
         },
     ));
 }
-fn component_card(title: &str, description: &str, on_click: impl Into<Callback>) {
-    let on_click = on_click.into();
-    let title = title.to_string();
-    let description = description.to_string();
+
+#[derive(Clone, Prop)]
+struct ComponentCardArgs {
+    #[prop(into)]
+    title: String,
+    #[prop(into)]
+    description: String,
+    on_click: Callback,
+}
+
+#[tessera]
+fn component_card(args: &ComponentCardArgs) {
+    let title = args.title.clone();
+    let description = args.description.clone();
+    let on_click = args.on_click.clone();
 
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
@@ -816,7 +831,7 @@ fn component_card(title: &str, description: &str, on_click: impl Into<Callback>)
                     modifier: Modifier::new().fill_max_width().padding_all(Dp(25.0)),
                     ..Default::default()
                 }
-                .children(|scope| {
+                .children(move |scope| {
                     scope.child(move || {
                         text(&TextArgs::default().text(title.clone()).size(Dp(20.0)));
                     });
@@ -841,9 +856,19 @@ fn component_card(title: &str, description: &str, on_click: impl Into<Callback>)
 }
 
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
+#[derive(Clone, Prop)]
+struct WindowControlButtonArgs {
+    icon_args: IconArgs,
+    action: tessera_ui::WindowAction,
+    tint: Color,
+}
+
 #[cfg(not(any(target_os = "android", target_os = "ios")))]
-fn window_control_button(icon_args: IconArgs, action: tessera_ui::WindowAction, tint: Color) {
-    let icon_args = icon_args.size(Dp(18.0)).tint(tint);
+#[tessera]
+fn window_control_button(args: &WindowControlButtonArgs) {
+    let icon_args = args.icon_args.clone().size(Dp(18.0)).tint(args.tint);
+    let action = args.action;
+    let tint = args.tint;
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(
@@ -876,27 +901,27 @@ fn window_controls() {
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move |row_scope| {
             row_scope.child(move || {
-                window_control_button(
-                    IconArgs::default().vector(filled::MINIMIZE_SVG),
-                    WindowAction::Minimize,
-                    neutral,
-                );
+                window_control_button(&WindowControlButtonArgs {
+                    icon_args: IconArgs::default().vector(filled::MINIMIZE_SVG),
+                    action: WindowAction::Minimize,
+                    tint: neutral,
+                });
             });
             row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(4.0)))));
             row_scope.child(move || {
-                window_control_button(
-                    IconArgs::default().vector(filled::FULLSCREEN_SVG),
-                    WindowAction::ToggleMaximize,
-                    neutral,
-                );
+                window_control_button(&WindowControlButtonArgs {
+                    icon_args: IconArgs::default().vector(filled::FULLSCREEN_SVG),
+                    action: WindowAction::ToggleMaximize,
+                    tint: neutral,
+                });
             });
             row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(4.0)))));
             row_scope.child(move || {
-                window_control_button(
-                    IconArgs::default().vector(filled::CLOSE_SVG),
-                    WindowAction::Close,
-                    destructive,
-                );
+                window_control_button(&WindowControlButtonArgs {
+                    icon_args: IconArgs::default().vector(filled::CLOSE_SVG),
+                    action: WindowAction::Close,
+                    tint: destructive,
+                });
             });
         }));
 }

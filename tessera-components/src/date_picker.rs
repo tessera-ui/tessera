@@ -656,7 +656,7 @@ fn date_picker_inner(args: &DatePickerArgs) {
 
                             if show_mode_toggle {
                                 row_scope.child(move || {
-                                    display_mode_toggle(state);
+                                    display_mode_toggle(&DisplayModeToggleArgs { state });
                                 });
                             }
                         }));
@@ -665,17 +665,20 @@ fn date_picker_inner(args: &DatePickerArgs) {
                 match snapshot.display_mode {
                     DatePickerDisplayMode::Picker => {
                         scope.child(move || {
-                            calendar_view(
-                                snapshot.clone(),
+                            calendar_view(&CalendarViewArgs {
+                                snapshot: snapshot.clone(),
                                 first_day_of_week,
                                 show_weekday_labels,
                                 state,
-                            );
+                            });
                         });
                     }
                     DatePickerDisplayMode::Input => {
                         scope.child(move || {
-                            input_view(snapshot.clone(), state);
+                            input_view(&InputViewArgs {
+                                snapshot: snapshot.clone(),
+                                state,
+                            });
                         });
                     }
                 }
@@ -816,36 +819,60 @@ pub fn date_picker_dialog(args: &DatePickerDialogArgs) {
     );
 }
 
-fn calendar_view(
+#[derive(Clone, Prop)]
+struct CalendarViewArgs {
     snapshot: DatePickerSnapshot,
     first_day_of_week: Weekday,
     show_weekday_labels: bool,
     state: State<DatePickerState>,
-) {
+}
+
+#[tessera]
+fn calendar_view(args: &CalendarViewArgs) {
+    let snapshot = args.snapshot.clone();
+    let first_day_of_week = args.first_day_of_week;
+    let show_weekday_labels = args.show_weekday_labels;
+    let state = args.state;
     column(
         &ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width())
             .children(move |scope| {
                 let nav_snapshot = snapshot.clone();
                 scope.child(move || {
-                    month_navigation(nav_snapshot.clone(), state);
+                    month_navigation(&MonthNavigationArgs {
+                        snapshot: nav_snapshot.clone(),
+                        state,
+                    });
                 });
 
                 if show_weekday_labels {
                     scope.child(move || {
-                        weekday_labels_row(first_day_of_week);
+                        weekday_labels_row(&WeekdayLabelsRowArgs { first_day_of_week });
                     });
                 }
 
                 let grid_snapshot = snapshot.clone();
                 scope.child(move || {
-                    date_grid(grid_snapshot.clone(), first_day_of_week, state);
+                    date_grid(&DateGridArgs {
+                        snapshot: grid_snapshot.clone(),
+                        first_day_of_week,
+                        state,
+                    });
                 });
             }),
     );
 }
 
-fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
+#[derive(Clone, Prop)]
+struct MonthNavigationArgs {
+    snapshot: DatePickerSnapshot,
+    state: State<DatePickerState>,
+}
+
+#[tessera]
+fn month_navigation(args: &MonthNavigationArgs) {
+    let snapshot = args.snapshot.clone();
+    let state = args.state;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -867,7 +894,11 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
         .children(move |scope| {
             let on_prev = on_prev.clone();
             scope.child(move || {
-                nav_button("<", can_prev, on_prev.clone());
+                nav_button(&NavButtonArgs {
+                    label: "<",
+                    enabled: can_prev,
+                    on_click: on_prev.clone(),
+                });
             });
 
             scope.child(move || {
@@ -888,12 +919,23 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
 
             let on_next = on_next.clone();
             scope.child(move || {
-                nav_button(">", can_next, on_next.clone());
+                nav_button(&NavButtonArgs {
+                    label: ">",
+                    enabled: can_next,
+                    on_click: on_next.clone(),
+                });
             });
         }));
 }
 
-fn weekday_labels_row(first_day_of_week: Weekday) {
+#[derive(Clone, Prop)]
+struct WeekdayLabelsRowArgs {
+    first_day_of_week: Weekday,
+}
+
+#[tessera]
+fn weekday_labels_row(args: &WeekdayLabelsRowArgs) {
+    let first_day_of_week = args.first_day_of_week;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -935,11 +977,18 @@ fn weekday_labels_row(first_day_of_week: Weekday) {
     );
 }
 
-fn date_grid(
+#[derive(Clone, Prop)]
+struct DateGridArgs {
     snapshot: DatePickerSnapshot,
     first_day_of_week: Weekday,
     state: State<DatePickerState>,
-) {
+}
+
+#[tessera]
+fn date_grid(args: &DateGridArgs) {
+    let snapshot = args.snapshot.clone();
+    let first_day_of_week = args.first_day_of_week;
+    let state = args.state;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1037,7 +1086,16 @@ fn date_grid(
     );
 }
 
-fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
+#[derive(Clone, Prop)]
+struct InputViewArgs {
+    snapshot: DatePickerSnapshot,
+    state: State<DatePickerState>,
+}
+
+#[tessera]
+fn input_view(args: &InputViewArgs) {
+    let snapshot = args.snapshot.clone();
+    let state = args.state;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1058,10 +1116,10 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                 scope.child(move || {
                     let decrement_snapshot = snapshot_year.clone();
                     let increment_snapshot = snapshot_year.clone();
-                    input_row(
-                        "Year",
-                        format!("{}", current_date.year()),
-                        Callback::new(move || {
+                    input_row(&InputRowArgs {
+                        label: "Year",
+                        value: format!("{}", current_date.year()),
+                        on_decrement: Callback::new(move || {
                             adjust_input_date(
                                 state,
                                 decrement_snapshot.clone(),
@@ -1069,7 +1127,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                                 -1,
                             );
                         }),
-                        Callback::new(move || {
+                        on_increment: Callback::new(move || {
                             adjust_input_date(
                                 state,
                                 increment_snapshot.clone(),
@@ -1077,7 +1135,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                                 1,
                             );
                         }),
-                    );
+                    });
                 });
                 scope.child(|| {
                     spacer(&crate::spacer::SpacerArgs::new(
@@ -1087,10 +1145,10 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                 scope.child(move || {
                     let decrement_snapshot = snapshot_month.clone();
                     let increment_snapshot = snapshot_month.clone();
-                    input_row(
-                        "Month",
-                        format_month_name(current_date.month()).to_string(),
-                        Callback::new(move || {
+                    input_row(&InputRowArgs {
+                        label: "Month",
+                        value: format_month_name(current_date.month()).to_string(),
+                        on_decrement: Callback::new(move || {
                             adjust_input_date(
                                 state,
                                 decrement_snapshot.clone(),
@@ -1098,7 +1156,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                                 -1,
                             );
                         }),
-                        Callback::new(move || {
+                        on_increment: Callback::new(move || {
                             adjust_input_date(
                                 state,
                                 increment_snapshot.clone(),
@@ -1106,7 +1164,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                                 1,
                             );
                         }),
-                    );
+                    });
                 });
                 scope.child(|| {
                     spacer(&crate::spacer::SpacerArgs::new(
@@ -1116,10 +1174,10 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                 scope.child(move || {
                     let decrement_snapshot = snapshot_day.clone();
                     let increment_snapshot = snapshot_day.clone();
-                    input_row(
-                        "Day",
-                        format!("{}", current_date.day()),
-                        Callback::new(move || {
+                    input_row(&InputRowArgs {
+                        label: "Day",
+                        value: format!("{}", current_date.day()),
+                        on_decrement: Callback::new(move || {
                             adjust_input_date(
                                 state,
                                 decrement_snapshot.clone(),
@@ -1127,7 +1185,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                                 -1,
                             );
                         }),
-                        Callback::new(move || {
+                        on_increment: Callback::new(move || {
                             adjust_input_date(
                                 state,
                                 increment_snapshot.clone(),
@@ -1135,7 +1193,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                                 1,
                             );
                         }),
-                    );
+                    });
                 });
                 scope.child(|| {
                     spacer(&crate::spacer::SpacerArgs::new(
@@ -1166,7 +1224,21 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
     );
 }
 
-fn input_row(label: &'static str, value: String, on_decrement: Callback, on_increment: Callback) {
+#[derive(Clone, Prop)]
+struct InputRowArgs {
+    label: &'static str,
+    #[prop(into)]
+    value: String,
+    on_decrement: Callback,
+    on_increment: Callback,
+}
+
+#[tessera]
+fn input_row(args: &InputRowArgs) {
+    let label = args.label;
+    let value = args.value.clone();
+    let on_decrement = args.on_decrement.clone();
+    let on_increment = args.on_increment.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1201,7 +1273,11 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
                     .children(move |row_scope| {
                         let on_decrement = on_decrement.clone();
                         row_scope.child(move || {
-                            nav_button("-", true, on_decrement.clone());
+                            nav_button(&NavButtonArgs {
+                                label: "-",
+                                enabled: true,
+                                on_click: on_decrement.clone(),
+                            });
                         });
                         row_scope.child(|| {
                             spacer(&crate::spacer::SpacerArgs::new(
@@ -1230,14 +1306,25 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
                         });
                         let on_increment = on_increment.clone();
                         row_scope.child(move || {
-                            nav_button("+", true, on_increment.clone());
+                            nav_button(&NavButtonArgs {
+                                label: "+",
+                                enabled: true,
+                                on_click: on_increment.clone(),
+                            });
                         });
                     }));
             });
         }));
 }
 
-fn display_mode_toggle(state: State<DatePickerState>) {
+#[derive(Clone, Prop)]
+struct DisplayModeToggleArgs {
+    state: State<DatePickerState>,
+}
+
+#[tessera]
+fn display_mode_toggle(args: &DisplayModeToggleArgs) {
+    let state = args.state;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1275,7 +1362,18 @@ fn display_mode_toggle(state: State<DatePickerState>) {
     ));
 }
 
-fn nav_button(label: &'static str, enabled: bool, on_click: Callback) {
+#[derive(Clone, Prop)]
+struct NavButtonArgs {
+    label: &'static str,
+    enabled: bool,
+    on_click: Callback,
+}
+
+#[tessera]
+fn nav_button(args: &NavButtonArgs) {
+    let label = args.label;
+    let enabled = args.enabled;
+    let on_click = args.on_click.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()

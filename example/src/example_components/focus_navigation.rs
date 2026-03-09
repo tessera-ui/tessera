@@ -37,7 +37,9 @@ use tessera_components::{
     text_input::{TextInputArgs, TextInputController, text_input},
     theme::MaterialTheme,
 };
-use tessera_ui::{Dp, Modifier, RenderSlot, State, remember, retain, shard, use_context};
+use tessera_ui::{
+    Callback, Dp, Modifier, Prop, RenderSlot, State, remember, retain, shard, tessera, use_context,
+};
 
 #[shard]
 pub fn focus_navigation_showcase() {
@@ -65,33 +67,44 @@ pub fn focus_navigation_showcase() {
                         .style(DialogStyle::Material)
                         .controller(dialog_controller)
                         .main_content(move || {
-                            focus_navigation_page(
+                            focus_navigation_page(&FocusNavigationPageArgs {
                                 dialog_controller,
                                 bottom_sheet_controller,
                                 side_sheet_controller,
-                            );
+                            });
                         })
                         .dialog_content(move || {
-                            dialog_focus_content(dialog_controller);
+                            dialog_focus_content(&DialogFocusContentArgs { dialog_controller });
                         }),
                     );
                 })
                 .bottom_sheet_content(move || {
-                    bottom_sheet_focus_content(bottom_sheet_controller);
+                    bottom_sheet_focus_content(&BottomSheetFocusContentArgs {
+                        bottom_sheet_controller,
+                    });
                 }),
             );
         })
         .side_sheet_content(move || {
-            side_sheet_focus_content(side_sheet_controller);
+            side_sheet_focus_content(&SideSheetFocusContentArgs {
+                side_sheet_controller,
+            });
         }),
     );
 }
 
-fn focus_navigation_page(
+#[derive(Clone, Prop)]
+struct FocusNavigationPageArgs {
     dialog_controller: State<DialogController>,
     bottom_sheet_controller: State<BottomSheetController>,
     side_sheet_controller: State<SideSheetController>,
-) {
+}
+
+#[tessera]
+fn focus_navigation_page(args: &FocusNavigationPageArgs) {
+    let dialog_controller = args.dialog_controller;
+    let bottom_sheet_controller = args.bottom_sheet_controller;
+    let side_sheet_controller = args.side_sheet_controller;
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
         move || {
@@ -141,10 +154,10 @@ fn focus_navigation_page(
                                                 ));
                                             });
                                             scope.child(move || {
-                                                showcase_section(
-                                                    "Traversal Basics",
-                                                    "These controls should participate in the global focus order and activate from Enter or Space.",
-                                                    move || {
+                                                showcase_section(&ShowcaseSectionArgs {
+                                                    title: "Traversal Basics".into(),
+                                                    description: "These controls should participate in the global focus order and activate from Enter or Space.".into(),
+                                                    child: RenderSlot::new(move || {
                                                         column(
                                                             &ColumnArgs::default()
                                                                 .modifier(Modifier::new().fill_max_width())
@@ -153,8 +166,11 @@ fn focus_navigation_page(
                                                                     section_scope.child(move || {
                                                                         row(&RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center).children(move |row_scope| {
                                                                             row_scope.child(move || {
-                                                                                demo_button("Primary Action", move || {
-                                                                                    action_count.with_mut(|count| *count += 1);
+                                                                                demo_button(&DemoButtonArgs {
+                                                                                    label: "Primary Action".into(),
+                                                                                    on_click: Callback::new(move || {
+                                                                                        action_count.with_mut(|count| *count += 1);
+                                                                                    }),
                                                                                 });
                                                                             });
                                                                             row_scope.child(|| {
@@ -206,15 +222,15 @@ fn focus_navigation_page(
                                                                     });
                                                                 }),
                                                         );
-                                                    },
-                                                );
+                                                    }),
+                                                });
                                             });
                                             scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
                                             scope.child(move || {
-                                                showcase_section(
-                                                    "Radio Group",
-                                                    "Use Up and Down to move through the group. Focus movement should also update the selected radio.",
-                                                    move || {
+                                                showcase_section(&ShowcaseSectionArgs {
+                                                    title: "Radio Group".into(),
+                                                    description: "Use Up and Down to move through the group. Focus movement should also update the selected radio.".into(),
+                                                    child: RenderSlot::new(move || {
                                                         column(&ColumnArgs::default().modifier(Modifier::new().fill_max_width()).cross_axis_alignment(CrossAxisAlignment::Start).children(move |section_scope| {
                                                             section_scope.child(move || {
                                                                 radio_group(
@@ -222,9 +238,9 @@ fn focus_navigation_page(
                                                                         .orientation(RadioGroupOrientation::Vertical)
                                                                         .content(move || {
                                                                             column(&ColumnArgs::default().cross_axis_alignment(CrossAxisAlignment::Start).children(move |radio_scope| {
-                                                                                radio_scope.child(move || radio_option_row("Inbox".to_string(), radio_selection, 0));
-                                                                                radio_scope.child(move || radio_option_row("Mentions".to_string(), radio_selection, 1));
-                                                                                radio_scope.child(move || radio_option_row("Archived".to_string(), radio_selection, 2));
+                                                                                radio_scope.child(move || radio_option_row(&RadioOptionRowArgs { label: "Inbox".to_string(), selected_index: radio_selection, index: 0 }));
+                                                                                radio_scope.child(move || radio_option_row(&RadioOptionRowArgs { label: "Mentions".to_string(), selected_index: radio_selection, index: 1 }));
+                                                                                radio_scope.child(move || radio_option_row(&RadioOptionRowArgs { label: "Archived".to_string(), selected_index: radio_selection, index: 2 }));
                                                                             }));
                                                                         }),
                                                                 );
@@ -235,15 +251,15 @@ fn focus_navigation_page(
                                                                 text(&TextArgs::default().text(format!("Selected radio: {label}")));
                                                             });
                                                         }));
-                                                    },
-                                                );
+                                                    }),
+                                                });
                                             });
                                             scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
                                             scope.child(move || {
-                                                showcase_section(
-                                                    "Tabs, Segmented Rows, And Navigation",
-                                                    "Tabs and single-choice segmented rows should behave like roving-focus groups. Navigation bar should cycle with Left and Right.",
-                                                    move || {
+                                                showcase_section(&ShowcaseSectionArgs {
+                                                    title: "Tabs, Segmented Rows, And Navigation".into(),
+                                                    description: "Tabs and single-choice segmented rows should behave like roving-focus groups. Navigation bar should cycle with Left and Right.".into(),
+                                                    child: RenderSlot::new(move || {
                                                         let base_shape = SegmentedButtonDefaults::shape();
                                                         let navigation_bar_controller = remember(|| NavigationBarController::new(0));
                                                         column(&ColumnArgs::default().modifier(Modifier::new().fill_max_width()).cross_axis_alignment(CrossAxisAlignment::Start).children(move |section_scope| {
@@ -311,60 +327,77 @@ fn focus_navigation_page(
                                                                 ));
                                                             });
                                                         }));
-                                                    },
-                                                );
+                                                    }),
+                                                });
                                             });
                                             scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
                                             scope.child(move || {
-                                                showcase_section(
-                                                    "Menus And Submenus",
-                                                    "Open the menu, use Up and Down to move, Right to enter the submenu, and Left to return.",
-                                                    submenu_demo_section,
-                                                );
+                                                showcase_section(&ShowcaseSectionArgs {
+                                                    title: "Menus And Submenus".into(),
+                                                    description: "Open the menu, use Up and Down to move, Right to enter the submenu, and Left to return.".into(),
+                                                    child: RenderSlot::new(submenu_demo_section),
+                                                });
                                             });
                                             scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
                                             scope.child(move || {
-                                                showcase_section(
-                                                    "Pager Navigation",
-                                                    "Tab to the pager viewport, then use Left and Right, PageUp and PageDown, or Home and End to change pages.",
-                                                    move || pager_demo_section(pager_controller),
-                                                );
+                                                showcase_section(&ShowcaseSectionArgs {
+                                                    title: "Pager Navigation".into(),
+                                                    description: "Tab to the pager viewport, then use Left and Right, PageUp and PageDown, or Home and End to change pages.".into(),
+                                                    child: RenderSlot::new(move || {
+                                                        pager_demo_section(&PagerDemoSectionArgs {
+                                                            controller: pager_controller,
+                                                        });
+                                                    }),
+                                                });
                                             });
                                             scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
                                             scope.child(move || {
-                                                showcase_section(
-                                                    "Modal Focus Trap",
-                                                    "Open the dialog, bottom sheet, and side sheet. Tab should stay inside each surface until you close it.",
-                                                    move || {
+                                                showcase_section(&ShowcaseSectionArgs {
+                                                    title: "Modal Focus Trap".into(),
+                                                    description: "Open the dialog, bottom sheet, and side sheet. Tab should stay inside each surface until you close it.".into(),
+                                                    child: RenderSlot::new(move || {
                                                         row(&RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center).children(move |row_scope| {
                                                             row_scope.child(move || {
-                                                                demo_button("Open Dialog", move || {
-                                                                    dialog_controller.with_mut(|controller| controller.open());
+                                                                demo_button(&DemoButtonArgs {
+                                                                    label: "Open Dialog".into(),
+                                                                    on_click: Callback::new(move || {
+                                                                        dialog_controller.with_mut(|controller| controller.open());
+                                                                    }),
                                                                 });
                                                             });
                                                             row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0)))));
                                                             row_scope.child(move || {
-                                                                demo_button("Open Bottom Sheet", move || {
-                                                                    bottom_sheet_controller.with_mut(|controller| controller.open());
+                                                                demo_button(&DemoButtonArgs {
+                                                                    label: "Open Bottom Sheet".into(),
+                                                                    on_click: Callback::new(move || {
+                                                                        bottom_sheet_controller.with_mut(|controller| controller.open());
+                                                                    }),
                                                                 });
                                                             });
                                                             row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0)))));
                                                             row_scope.child(move || {
-                                                                demo_button("Open Side Sheet", move || {
-                                                                    side_sheet_controller.with_mut(|controller| controller.open());
+                                                                demo_button(&DemoButtonArgs {
+                                                                    label: "Open Side Sheet".into(),
+                                                                    on_click: Callback::new(move || {
+                                                                        side_sheet_controller.with_mut(|controller| controller.open());
+                                                                    }),
                                                                 });
                                                             });
                                                         }));
-                                                    },
-                                                );
+                                                    }),
+                                                });
                                             });
                                             scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
                                             scope.child(move || {
-                                                showcase_section(
-                                                    "Lazy Reveal",
-                                                    "Tab through this inner lazy column until focus moves beyond the viewport. The container should reveal the focused row automatically.",
-                                                    move || reveal_demo_section(reveal_selection),
-                                                );
+                                                showcase_section(&ShowcaseSectionArgs {
+                                                    title: "Lazy Reveal".into(),
+                                                    description: "Tab through this inner lazy column until focus moves beyond the viewport. The container should reveal the focused row automatically.".into(),
+                                                    child: RenderSlot::new(move || {
+                                                        reveal_demo_section(&RevealDemoSectionArgs {
+                                                            selected_row: reveal_selection,
+                                                        });
+                                                    }),
+                                                });
                                             });
                                         }),
                                 );
@@ -375,15 +408,25 @@ fn focus_navigation_page(
     ));
 }
 
-fn showcase_section(title: &str, description: &str, child: impl Fn() + Send + Sync + 'static) {
+#[derive(Clone, Prop)]
+struct ShowcaseSectionArgs {
+    #[prop(into)]
+    title: String,
+    #[prop(into)]
+    description: String,
+    child: RenderSlot,
+}
+
+#[tessera]
+fn showcase_section(args: &ShowcaseSectionArgs) {
     let container_color = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme
         .surface_container_low;
-    let title = title.to_string();
-    let description = description.to_string();
-    let child = RenderSlot::new(child);
+    let title = args.title.clone();
+    let description = args.description.clone();
+    let child = args.child.clone();
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
             .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
@@ -437,17 +480,40 @@ fn section_supporting_color() -> tessera_ui::Color {
         .on_surface_variant
 }
 
-fn demo_button(label: &str, on_click: impl Fn() + Send + Sync + 'static) {
-    let label = label.to_string();
+#[derive(Clone, Prop)]
+struct DemoButtonArgs {
+    #[prop(into)]
+    label: String,
+    on_click: Callback,
+}
+
+#[tessera]
+fn demo_button(args: &DemoButtonArgs) {
+    let label = args.label.clone();
+    let on_click = args.on_click.clone();
     button(&ButtonArgs::with_child(
-        ButtonArgs::filled(on_click),
+        ButtonArgs::filled(move || {
+            on_click.call();
+        }),
         move || {
             text(&TextArgs::from(label.clone()));
         },
     ));
 }
 
-fn radio_option_row(label: String, selected_index: State<usize>, index: usize) {
+#[derive(Clone, Prop)]
+struct RadioOptionRowArgs {
+    #[prop(into)]
+    label: String,
+    selected_index: State<usize>,
+    index: usize,
+}
+
+#[tessera]
+fn radio_option_row(args: &RadioOptionRowArgs) {
+    let label = args.label.clone();
+    let selected_index = args.selected_index;
+    let index = args.index;
     row(&RowArgs::default()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move |scope| {
@@ -476,6 +542,7 @@ fn radio_option_row(label: String, selected_index: State<usize>, index: usize) {
         }));
 }
 
+#[tessera]
 fn submenu_demo_section() {
     let menu_controller = remember(MenuController::new);
     let selected_path = remember(|| "None".to_string());
@@ -557,7 +624,14 @@ fn submenu_demo_section() {
     );
 }
 
-fn pager_demo_section(controller: State<PagerController>) {
+#[derive(Clone, Prop)]
+struct PagerDemoSectionArgs {
+    controller: State<PagerController>,
+}
+
+#[tessera]
+fn pager_demo_section(args: &PagerDemoSectionArgs) {
+    let controller = args.controller;
     let current_page = controller.with(|state| state.current_page());
     let color = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -596,7 +670,9 @@ fn pager_demo_section(controller: State<PagerController>) {
                                     .modifier(Modifier::new().fill_max_size())
                                     .controller(controller)
                                     .page_content(|page| {
-                                        focus_navigation_pager_page(page);
+                                        focus_navigation_pager_page(
+                                            &FocusNavigationPagerPageArgs { page },
+                                        );
                                     }),
                             );
                         },
@@ -606,7 +682,14 @@ fn pager_demo_section(controller: State<PagerController>) {
     );
 }
 
-fn focus_navigation_pager_page(page: usize) {
+#[derive(Clone, Prop)]
+struct FocusNavigationPagerPageArgs {
+    page: usize,
+}
+
+#[tessera]
+fn focus_navigation_pager_page(args: &FocusNavigationPagerPageArgs) {
+    let page = args.page;
     let palette = [
         filled::HOME_SVG,
         filled::SEARCH_SVG,
@@ -657,7 +740,14 @@ fn focus_navigation_pager_page(page: usize) {
     ));
 }
 
-fn reveal_demo_section(selected_row: State<String>) {
+#[derive(Clone, Prop)]
+struct RevealDemoSectionArgs {
+    selected_row: State<String>,
+}
+
+#[tessera]
+fn reveal_demo_section(args: &RevealDemoSectionArgs) {
+    let selected_row = args.selected_row;
     let reveal_controller = retain(LazyListController::new);
     let color = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -706,7 +796,14 @@ fn reveal_demo_section(selected_row: State<String>) {
     ));
 }
 
-fn dialog_focus_content(dialog_controller: State<DialogController>) {
+#[derive(Clone, Prop)]
+struct DialogFocusContentArgs {
+    dialog_controller: State<DialogController>,
+}
+
+#[tessera]
+fn dialog_focus_content(args: &DialogFocusContentArgs) {
+    let dialog_controller = args.dialog_controller;
     let editor_controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0), None);
         controller.set_text("Press Tab inside this dialog to verify focus stays trapped.");
@@ -770,18 +867,24 @@ fn dialog_focus_content(dialog_controller: State<DialogController>) {
                                 .main_axis_alignment(MainAxisAlignment::End)
                                 .children(move |row_scope| {
                                     row_scope.child(move || {
-                                        demo_button("Cancel", move || {
-                                            dialog_controller
-                                                .with_mut(|controller| controller.close());
+                                        demo_button(&DemoButtonArgs {
+                                            label: "Cancel".into(),
+                                            on_click: Callback::new(move || {
+                                                dialog_controller
+                                                    .with_mut(|controller| controller.close());
+                                            }),
                                         });
                                     });
                                     row_scope.child(|| {
                                         spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0))))
                                     });
                                     row_scope.child(move || {
-                                        demo_button("Save", move || {
-                                            dialog_controller
-                                                .with_mut(|controller| controller.close());
+                                        demo_button(&DemoButtonArgs {
+                                            label: "Save".into(),
+                                            on_click: Callback::new(move || {
+                                                dialog_controller
+                                                    .with_mut(|controller| controller.close());
+                                            }),
                                         });
                                     });
                                 }));
@@ -792,7 +895,14 @@ fn dialog_focus_content(dialog_controller: State<DialogController>) {
     ));
 }
 
-fn bottom_sheet_focus_content(bottom_sheet_controller: State<BottomSheetController>) {
+#[derive(Clone, Prop)]
+struct BottomSheetFocusContentArgs {
+    bottom_sheet_controller: State<BottomSheetController>,
+}
+
+#[tessera]
+fn bottom_sheet_focus_content(args: &BottomSheetFocusContentArgs) {
+    let bottom_sheet_controller = args.bottom_sheet_controller;
     let editor_controller = remember(|| {
         let mut controller = TextInputController::new(Dp(16.0), None);
         controller.set_text("Bottom sheets should keep Tab traversal inside the sheet.");
@@ -826,15 +936,25 @@ fn bottom_sheet_focus_content(bottom_sheet_controller: State<BottomSheetControll
                     spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
                 });
                 scope.child(move || {
-                    demo_button("Close bottom sheet", move || {
-                        bottom_sheet_controller.with_mut(|controller| controller.close());
+                    demo_button(&DemoButtonArgs {
+                        label: "Close bottom sheet".into(),
+                        on_click: Callback::new(move || {
+                            bottom_sheet_controller.with_mut(|controller| controller.close());
+                        }),
                     });
                 });
             }),
     );
 }
 
-fn side_sheet_focus_content(side_sheet_controller: State<SideSheetController>) {
+#[derive(Clone, Prop)]
+struct SideSheetFocusContentArgs {
+    side_sheet_controller: State<SideSheetController>,
+}
+
+#[tessera]
+fn side_sheet_focus_content(args: &SideSheetFocusContentArgs) {
+    let side_sheet_controller = args.side_sheet_controller;
     let switch_controller = remember(|| SwitchController::new(true));
     let sheet_selection = remember(|| "Overview".to_string());
 
@@ -893,8 +1013,11 @@ fn side_sheet_focus_content(side_sheet_controller: State<SideSheetController>) {
                     spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
                 });
                 scope.child(move || {
-                    demo_button("Close side sheet", move || {
-                        side_sheet_controller.with_mut(|controller| controller.close());
+                    demo_button(&DemoButtonArgs {
+                        label: "Close side sheet".into(),
+                        on_click: Callback::new(move || {
+                            side_sheet_controller.with_mut(|controller| controller.close());
+                        }),
                     });
                 });
             }),

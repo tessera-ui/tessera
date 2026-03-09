@@ -404,17 +404,17 @@ fn time_picker_inner(args: &TimePickerArgs) {
                         .children(move |row_scope| {
                             let hour_display = hour_display.clone();
                             row_scope.child(move || {
-                                time_stepper_column(
-                                    "Hour",
-                                    hour_display.clone(),
-                                    show_labels,
-                                    Callback::new(move || {
+                                time_stepper_column(&TimeStepperColumnArgs {
+                                    label: "Hour",
+                                    value: hour_display.clone(),
+                                    show_label: show_labels,
+                                    on_increment: Callback::new(move || {
                                         state.with_mut(|s| s.increment_hour(hour_step));
                                     }),
-                                    Callback::new(move || {
+                                    on_decrement: Callback::new(move || {
                                         state.with_mut(|s| s.decrement_hour(hour_step));
                                     }),
-                                );
+                                });
                             });
 
                             row_scope.child(|| {
@@ -438,17 +438,17 @@ fn time_picker_inner(args: &TimePickerArgs) {
 
                             row_scope.child(move || {
                                 let minute_display = minute_display.clone();
-                                time_stepper_column(
-                                    "Minute",
-                                    minute_display,
-                                    show_labels,
-                                    Callback::new(move || {
+                                time_stepper_column(&TimeStepperColumnArgs {
+                                    label: "Minute",
+                                    value: minute_display,
+                                    show_label: show_labels,
+                                    on_increment: Callback::new(move || {
                                         state.with_mut(|s| s.increment_minute(minute_step));
                                     }),
-                                    Callback::new(move || {
+                                    on_decrement: Callback::new(move || {
                                         state.with_mut(|s| s.decrement_minute(minute_step));
                                     }),
-                                );
+                                });
                             });
                         }));
                 });
@@ -461,7 +461,7 @@ fn time_picker_inner(args: &TimePickerArgs) {
                     });
                     let is_pm = snapshot.hour >= 12;
                     scope.child(move || {
-                        period_toggle(is_pm, state);
+                        period_toggle(&PeriodToggleArgs { is_pm, state });
                     });
                 }
             }),
@@ -555,7 +555,7 @@ pub fn time_picker_dialog(args: &TimePickerDialogArgs) {
                             });
                             if show_mode_toggle {
                                 row_scope.child(move || {
-                                    time_display_mode_toggle(state);
+                                    time_display_mode_toggle(&TimeDisplayModeToggleArgs { state });
                                 });
                             }
                         }));
@@ -613,13 +613,23 @@ pub fn time_picker_dialog(args: &TimePickerDialogArgs) {
     );
 }
 
-fn time_stepper_column(
+#[derive(Clone, Prop)]
+struct TimeStepperColumnArgs {
     label: &'static str,
+    #[prop(into)]
     value: String,
     show_label: bool,
     on_increment: Callback,
     on_decrement: Callback,
-) {
+}
+
+#[tessera]
+fn time_stepper_column(args: &TimeStepperColumnArgs) {
+    let label = args.label;
+    let value = args.value.clone();
+    let show_label = args.show_label;
+    let on_increment = args.on_increment.clone();
+    let on_decrement = args.on_decrement.clone();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -632,8 +642,10 @@ fn time_stepper_column(
             .children(move |scope| {
                 let on_increment = on_increment.clone();
                 scope.child(move || {
-                    let on_increment = on_increment.clone();
-                    step_button("+", move || on_increment.call());
+                    step_button(&StepButtonArgs {
+                        label: "+",
+                        on_click: on_increment.clone(),
+                    });
                 });
                 scope.child(|| {
                     spacer(&crate::spacer::SpacerArgs::new(
@@ -642,7 +654,9 @@ fn time_stepper_column(
                 });
                 let value_text = value.clone();
                 scope.child(move || {
-                    time_value_cell(value_text.clone());
+                    time_value_cell(&TimeValueCellArgs {
+                        value: value_text.clone(),
+                    });
                 });
                 scope.child(|| {
                     spacer(&crate::spacer::SpacerArgs::new(
@@ -651,8 +665,10 @@ fn time_stepper_column(
                 });
                 let on_decrement = on_decrement.clone();
                 scope.child(move || {
-                    let on_decrement = on_decrement.clone();
-                    step_button("-", move || on_decrement.call());
+                    step_button(&StepButtonArgs {
+                        label: "-",
+                        on_click: on_decrement.clone(),
+                    });
                 });
                 if show_label {
                     scope.child(|| {
@@ -673,7 +689,15 @@ fn time_stepper_column(
     );
 }
 
-fn time_value_cell(value: String) {
+#[derive(Clone, Prop)]
+struct TimeValueCellArgs {
+    #[prop(into)]
+    value: String,
+}
+
+#[tessera]
+fn time_value_cell(args: &TimeValueCellArgs) {
+    let value = args.value.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -709,7 +733,16 @@ fn time_value_cell(value: String) {
     ));
 }
 
-fn step_button(label: &'static str, on_click: impl Fn() + Send + Sync + 'static) {
+#[derive(Clone, Prop)]
+struct StepButtonArgs {
+    label: &'static str,
+    on_click: Callback,
+}
+
+#[tessera]
+fn step_button(args: &StepButtonArgs) {
+    let label = args.label;
+    let on_click = args.on_click.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -722,7 +755,7 @@ fn step_button(label: &'static str, on_click: impl Fn() + Send + Sync + 'static)
             })
             .shape(Shape::capsule())
             .content_alignment(Alignment::Center)
-            .on_click(on_click),
+            .on_click_shared(on_click),
         move || {
             text(&crate::text::TextArgs::from(
                 &TextArgs::default()
@@ -741,13 +774,27 @@ fn step_button(label: &'static str, on_click: impl Fn() + Send + Sync + 'static)
     ));
 }
 
-fn period_toggle(is_pm: bool, state: State<TimePickerState>) {
+#[derive(Clone, Prop)]
+struct PeriodToggleArgs {
+    is_pm: bool,
+    state: State<TimePickerState>,
+}
+
+#[tessera]
+fn period_toggle(args: &PeriodToggleArgs) {
+    let is_pm = args.is_pm;
+    let state = args.state;
     row(&RowArgs::default()
         .main_axis_alignment(MainAxisAlignment::Center)
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move |scope| {
             scope.child(move || {
-                period_button("AM", !is_pm, DayPeriod::Am, state);
+                period_button(&PeriodButtonArgs {
+                    label: "AM",
+                    selected: !is_pm,
+                    period: DayPeriod::Am,
+                    state,
+                });
             });
             scope.child(|| {
                 spacer(&crate::spacer::SpacerArgs::new(
@@ -755,17 +802,30 @@ fn period_toggle(is_pm: bool, state: State<TimePickerState>) {
                 ))
             });
             scope.child(move || {
-                period_button("PM", is_pm, DayPeriod::Pm, state);
+                period_button(&PeriodButtonArgs {
+                    label: "PM",
+                    selected: is_pm,
+                    period: DayPeriod::Pm,
+                    state,
+                });
             });
         }));
 }
 
-fn period_button(
+#[derive(Clone, Prop)]
+struct PeriodButtonArgs {
     label: &'static str,
     selected: bool,
     period: DayPeriod,
     state: State<TimePickerState>,
-) {
+}
+
+#[tessera]
+fn period_button(args: &PeriodButtonArgs) {
+    let label = args.label;
+    let selected = args.selected;
+    let period = args.period;
+    let state = args.state;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -815,7 +875,14 @@ fn period_button(
     ));
 }
 
-fn time_display_mode_toggle(state: State<TimePickerState>) {
+#[derive(Clone, Prop)]
+struct TimeDisplayModeToggleArgs {
+    state: State<TimePickerState>,
+}
+
+#[tessera]
+fn time_display_mode_toggle(args: &TimeDisplayModeToggleArgs) {
+    let state = args.state;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()

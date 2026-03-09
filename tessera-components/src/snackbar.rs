@@ -707,7 +707,7 @@ pub fn snackbar(args: &SnackbarArgs) {
             let on_action = on_action.clone();
             let on_dismiss = on_dismiss.clone();
             if action_on_new_line {
-                render_snackbar_column(SnackbarLayoutArgs {
+                render_snackbar_column(&SnackbarLayoutArgs {
                     message,
                     message_style: typography.body_medium,
                     message_color: content_color,
@@ -719,7 +719,7 @@ pub fn snackbar(args: &SnackbarArgs) {
                     padding: content_padding,
                 });
             } else {
-                render_snackbar_row(SnackbarLayoutArgs {
+                render_snackbar_row(&SnackbarLayoutArgs {
                     message,
                     message_style: typography.body_medium,
                     message_color: content_color,
@@ -823,7 +823,8 @@ pub fn snackbar_host(args: &SnackbarHostArgs) {
     });
 }
 
-fn render_snackbar_row(args: SnackbarLayoutArgs) {
+#[tessera]
+fn render_snackbar_row(args: &SnackbarLayoutArgs) {
     let SnackbarLayoutArgs {
         message,
         message_style,
@@ -834,7 +835,7 @@ fn render_snackbar_row(args: SnackbarLayoutArgs) {
         on_action,
         on_dismiss,
         padding,
-    } = args;
+    } = args.clone();
     row(&RowArgs::default()
         .modifier(Modifier::new().fill_max_width().padding(padding))
         .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -848,11 +849,11 @@ fn render_snackbar_row(args: SnackbarLayoutArgs) {
                             .children(|boxed_scope| {
                                 let message_text = message_text.clone();
                                 boxed_scope.child(move || {
-                                    render_message(
-                                        message_text.clone(),
-                                        message_style,
-                                        message_color,
-                                    );
+                                    render_message(&RenderMessageArgs {
+                                        message: message_text.clone(),
+                                        style: message_style,
+                                        color: message_color,
+                                    });
                                 });
                             }),
                     );
@@ -867,7 +868,11 @@ fn render_snackbar_row(args: SnackbarLayoutArgs) {
                     ))
                 });
                 scope.child(move || {
-                    render_action_button(label.clone(), action_color, on_action.clone());
+                    render_action_button(&RenderActionButtonArgs {
+                        label: label.clone(),
+                        action_color,
+                        on_action: on_action.clone(),
+                    });
                 });
             }
 
@@ -878,13 +883,17 @@ fn render_snackbar_row(args: SnackbarLayoutArgs) {
                     ))
                 });
                 scope.child(move || {
-                    render_dismiss_button(dismiss_action_color, on_dismiss.clone());
+                    render_dismiss_button(&RenderDismissButtonArgs {
+                        dismiss_color: dismiss_action_color,
+                        on_dismiss: on_dismiss.clone(),
+                    });
                 });
             }
         }));
 }
 
-fn render_snackbar_column(args: SnackbarLayoutArgs) {
+#[tessera]
+fn render_snackbar_column(args: &SnackbarLayoutArgs) {
     let SnackbarLayoutArgs {
         message,
         message_style,
@@ -895,7 +904,7 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
         on_action,
         on_dismiss,
         padding,
-    } = args;
+    } = args.clone();
     column(
         &ColumnArgs::default()
             .modifier(Modifier::new().fill_max_width().padding(padding))
@@ -903,7 +912,11 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
             .children(|scope| {
                 let message_text = message.clone();
                 scope.child(move || {
-                    render_message(message_text.clone(), message_style, message_color);
+                    render_message(&RenderMessageArgs {
+                        message: message_text.clone(),
+                        style: message_style,
+                        color: message_color,
+                    });
                 });
 
                 if action_label.is_some() || on_dismiss.is_some() {
@@ -927,11 +940,11 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
                                 if let Some(label) = action_label.clone() {
                                     let on_action = on_action.clone();
                                     row_scope.child(move || {
-                                        render_action_button(
-                                            label.clone(),
+                                        render_action_button(&RenderActionButtonArgs {
+                                            label: label.clone(),
                                             action_color,
-                                            on_action.clone(),
-                                        );
+                                            on_action: on_action.clone(),
+                                        });
                                     });
                                 }
 
@@ -943,10 +956,10 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
                                     });
                                     let on_dismiss = on_dismiss.clone();
                                     row_scope.child(move || {
-                                        render_dismiss_button(
-                                            dismiss_action_color,
-                                            on_dismiss.clone(),
-                                        );
+                                        render_dismiss_button(&RenderDismissButtonArgs {
+                                            dismiss_color: dismiss_action_color,
+                                            on_dismiss: on_dismiss.clone(),
+                                        });
                                     });
                                 }
                             }));
@@ -956,14 +969,27 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
     );
 }
 
-fn render_message(message: String, style: crate::theme::TextStyle, color: Color) {
+#[derive(Clone, Prop)]
+struct RenderMessageArgs {
+    #[prop(into)]
+    message: String,
+    style: crate::theme::TextStyle,
+    color: Color,
+}
+
+#[tessera]
+fn render_message(args: &RenderMessageArgs) {
+    let message = args.message.clone();
+    let style = args.style;
+    let color = args.color;
     provide_text_style(style, move || {
         text(&crate::text::TextArgs::from(
-            &TextArgs::default().text(&message).color(color),
+            &TextArgs::default().text(message.clone()).color(color),
         ));
     });
 }
 
+#[derive(Clone, Prop)]
 struct SnackbarLayoutArgs {
     message: String,
     message_style: crate::theme::TextStyle,
@@ -976,8 +1002,19 @@ struct SnackbarLayoutArgs {
     padding: Padding,
 }
 
-fn render_action_button(label: String, action_color: Color, on_action: Option<Callback>) {
-    let on_action = on_action.unwrap_or_default();
+#[derive(Clone, Prop)]
+struct RenderActionButtonArgs {
+    #[prop(into)]
+    label: String,
+    action_color: Color,
+    on_action: Option<Callback>,
+}
+
+#[tessera]
+fn render_action_button(args: &RenderActionButtonArgs) {
+    let label = args.label.clone();
+    let action_color = args.action_color;
+    let on_action = args.on_action.clone().unwrap_or_default();
     button(&crate::button::ButtonArgs::with_child(
         ButtonArgs::text(move || {
             on_action.call();
@@ -992,8 +1029,16 @@ fn render_action_button(label: String, action_color: Color, on_action: Option<Ca
     ));
 }
 
-fn render_dismiss_button(dismiss_color: Color, on_dismiss: Option<Callback>) {
-    let on_dismiss = on_dismiss.unwrap_or_default();
+#[derive(Clone, Prop)]
+struct RenderDismissButtonArgs {
+    dismiss_color: Color,
+    on_dismiss: Option<Callback>,
+}
+
+#[tessera]
+fn render_dismiss_button(args: &RenderDismissButtonArgs) {
+    let dismiss_color = args.dismiss_color;
+    let on_dismiss = args.on_dismiss.clone().unwrap_or_default();
     let icon_args = IconArgs::from(filled::CLOSE_SVG).tint_mode(TintMode::Solid);
     icon_button(
         &IconButtonArgs::new(icon_args)
