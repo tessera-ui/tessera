@@ -391,13 +391,12 @@ fn navigation_bar_item_node(args: &NavigationBarItemArgs) {
     let was_selected = index == previous_index && selected_index != previous_index;
     let label = item.label.clone();
 
-    let ripple_state_for_press = ripple_state;
     let on_press = move |ctx: PointerEventContext| {
         let spec = RippleSpec {
             bounded: true,
             radius: None,
         };
-        ripple_state_for_press.with_mut(|state| {
+        ripple_state.with_mut(|state| {
             state.start_animation_with_spec(
                 ctx.normalized_pos,
                 PxSize::new(INDICATOR_WIDTH.to_px(), INDICATOR_HEIGHT.to_px()),
@@ -405,15 +404,13 @@ fn navigation_bar_item_node(args: &NavigationBarItemArgs) {
             );
         });
     };
-    let ripple_state_for_release = ripple_state;
     let on_release = move |_ctx: PointerEventContext| {
-        ripple_state_for_release.with_mut(|state| state.release());
+        ripple_state.with_mut(|state| state.release());
     };
 
     let on_click_item = item.on_click.clone();
-    let controller_for_click = controller;
     let on_click = move || {
-        controller_for_click.with_mut(|c| c.set_selected(index));
+        controller.with_mut(|c| c.set_selected(index));
         on_click_item.call();
     };
 
@@ -570,10 +567,8 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
         .with(|c| c.animation_progress(frame_nanos))
         .unwrap_or(1.0);
     if controller.with(|c| c.is_animating(frame_nanos)) {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating =
-                controller_for_frame.with(|controller| controller.is_animating(frame_nanos));
+            let is_animating = controller.with(|controller| controller.is_animating(frame_nanos));
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -590,7 +585,7 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
         .run({
             let items = items.clone();
             move || {
-                let items_for_surface = items.clone();
+                let items = items.clone();
                 surface(&crate::surface::SurfaceArgs::with_child(
                     SurfaceArgs::default()
                         .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
@@ -598,7 +593,7 @@ fn navigation_bar_render_node(args: &NavigationBarRenderArgs) {
                         .elevation(Dp(3.0))
                         .block_input(true),
                     move || {
-                        let items = items_for_surface.clone();
+                        let items = items.clone();
                         let separator_color = scheme.outline_variant.with_alpha(0.12);
                         column(
                             &ColumnArgs::default()

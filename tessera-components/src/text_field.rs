@@ -1198,18 +1198,14 @@ pub fn text_field(args: &TextFieldArgs) {
     let render_args = args.clone();
 
     if menu_policy.enabled {
-        let render_args_for_menu = render_args.clone();
-        let editor_args_for_menu = editor_args.clone();
+        let render_args = render_args.clone();
+        let editor_args = editor_args.clone();
         let menu_args = MenuProviderArgs::default()
             .placement(MenuPlacement::BelowStart)
             .offset([Dp(0.0), Dp(4.0)])
             .controller(menu_controller)
             .main_content(move || {
-                render_text_field(
-                    render_args_for_menu.clone(),
-                    controller,
-                    editor_args_for_menu.clone(),
-                );
+                render_text_field(render_args.clone(), controller, editor_args.clone());
             })
             .menu_content(move |menu_scope| {
                 configure_text_field_menu(menu_scope, controller, menu_policy, action_state);

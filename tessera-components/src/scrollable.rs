@@ -969,10 +969,9 @@ fn scrollable_inner(args: &ScrollableInnerArgs) {
     let scrollbar_state_h = args.scrollbar_state_h.clone();
     let controller = args.controller;
     if controller.with(|c| c.has_pending_animation_frame()) {
-        let controller_for_frame = controller;
         let smoothing = args.scroll_smoothing;
         receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller_for_frame.with_mut(|c| {
+            let has_pending_animation_frame = controller.with_mut(|c| {
                 c.update_scroll_position(frame_nanos, smoothing);
                 c.has_pending_animation_frame()
             });

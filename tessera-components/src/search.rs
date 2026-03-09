@@ -540,33 +540,34 @@ fn search_bar_inner_node(args: &SearchBarRenderArgs) {
     let on_active_change = args.on_active_change.clone();
     let on_search = args.on_search.clone();
     let enabled = args.enabled;
-    let on_active_change_for_pointer = on_active_change.clone();
     let tap_recognizer = remember(TapRecognizer::default);
-    pointer_input_handler(move |input| {
-        if !enabled {
-            return;
-        }
-        let is_active = controller.with(|c| c.is_active());
-        let cursor_pos = input.cursor_position_rel;
-        let within_bounds = cursor_pos
-            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-            .unwrap_or(false);
-        let tap_result = tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
-                within_bounds,
-            )
-        });
+    pointer_input_handler({
+        let on_active_change = on_active_change.clone();
+        move |input| {
+            if !enabled {
+                return;
+            }
+            let is_active = controller.with(|c| c.is_active());
+            let cursor_pos = input.cursor_position_rel;
+            let within_bounds = cursor_pos
+                .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+                .unwrap_or(false);
+            let tap_result = tap_recognizer.with_mut(|recognizer| {
+                recognizer.update(
+                    input.pass,
+                    input.pointer_changes.as_mut_slice(),
+                    input.cursor_position_rel,
+                    within_bounds,
+                )
+            });
 
-        if tap_result.pressed && within_bounds && !is_active {
-            controller.with_mut(|c| c.open());
-            on_active_change_for_pointer.call(true);
+            if tap_result.pressed && within_bounds && !is_active {
+                controller.with_mut(|c| c.open());
+                on_active_change.call(true);
+            }
         }
     });
 
-    let on_active_change_for_keyboard = on_active_change.clone();
     keyboard_input_handler(move |mut input| {
         if !enabled {
             return;
@@ -579,7 +580,7 @@ fn search_bar_inner_node(args: &SearchBarRenderArgs) {
                         winit::keyboard::KeyCode::Escape => {
                             if is_active {
                                 controller.with_mut(|c| c.close());
-                                on_active_change_for_keyboard.call(false);
+                                on_active_change.call(false);
                             }
                         }
                         winit::keyboard::KeyCode::Enter | winit::keyboard::KeyCode::NumpadEnter => {

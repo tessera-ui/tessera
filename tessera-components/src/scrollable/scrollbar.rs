@@ -755,12 +755,11 @@ pub fn scrollbar_v(args: &ScrollBarArgs) {
 
     handle_autohide_if_needed(&args, &state, frame_nanos);
     if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
-        let frame_tick_for_frame = frame_tick;
-        let args_for_frame = args.clone();
-        let state_for_frame = state.clone();
+        let args = args.clone();
+        let state = state.clone();
         receive_frame_nanos(move |frame_nanos| {
-            frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
-            if needs_scrollbar_frame_tick(&args_for_frame, &state_for_frame, frame_nanos) {
+            frame_tick.with_mut(|tick| *tick = tick.wrapping_add(1));
+            if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
                 tessera_ui::FrameNanosControl::Continue
             } else {
                 tessera_ui::FrameNanosControl::Stop
@@ -851,12 +850,11 @@ pub fn scrollbar_h(args: &ScrollBarArgs) {
 
     handle_autohide_if_needed(&args, &state, frame_nanos);
     if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
-        let frame_tick_for_frame = frame_tick;
-        let args_for_frame = args.clone();
-        let state_for_frame = state.clone();
+        let args = args.clone();
+        let state = state.clone();
         receive_frame_nanos(move |frame_nanos| {
-            frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
-            if needs_scrollbar_frame_tick(&args_for_frame, &state_for_frame, frame_nanos) {
+            frame_tick.with_mut(|tick| *tick = tick.wrapping_add(1));
+            if needs_scrollbar_frame_tick(&args, &state, frame_nanos) {
                 tessera_ui::FrameNanosControl::Continue
             } else {
                 tessera_ui::FrameNanosControl::Stop

@@ -901,9 +901,8 @@ fn pager_inner_node(args: &PagerRenderArgs) {
     }
     let frame_nanos = tessera_ui::current_frame_nanos();
     if controller.with(|c| c.has_pending_animation_frame(frame_nanos)) {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller_for_frame.with_mut(|c| {
+            let has_pending_animation_frame = controller.with_mut(|c| {
                 c.tick(frame_nanos, args.snap_threshold, args.scroll_smoothing);
                 c.has_pending_animation_frame(frame_nanos)
             });

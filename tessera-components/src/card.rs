@@ -567,9 +567,8 @@ pub fn card(args: &CardArgs) {
     let should_schedule_frame = elevation_spring.with(|spring| spring.is_animating());
 
     if should_schedule_frame {
-        let elevation_spring_for_frame = elevation_spring;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = elevation_spring_for_frame.with_mut(|spring| {
+            let is_animating = elevation_spring.with_mut(|spring| {
                 spring.tick(frame_nanos);
                 spring.is_animating()
             });

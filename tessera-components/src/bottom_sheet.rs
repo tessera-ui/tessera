@@ -796,9 +796,8 @@ pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {
         *was_open = is_open;
     });
     if is_animating {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller_for_frame.with_mut(|controller| {
+            let is_animating = controller.with_mut(|controller| {
                 let (_, timer_opt, _) = controller.snapshot();
                 if let Some(start_frame_nanos) = timer_opt {
                     let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);

@@ -429,14 +429,16 @@ pub fn floating_action_button(args: &FloatingActionButtonArgs) {
         surface_args = surface_args.accessibility_description(description);
     }
 
-    let content_for_surface = content.clone();
-    surface(&surface_args.child(move || {
-        let content = content_for_surface.clone();
-        provide_text_style(typography.label_large, move || {
-            if let Some(content) = content.as_ref() {
-                content.render();
-            }
-        });
+    surface(&surface_args.child({
+        let content = content.clone();
+        move || {
+            let content = content.clone();
+            provide_text_style(typography.label_large, move || {
+                if let Some(content) = content.as_ref() {
+                    content.render();
+                }
+            });
+        }
     }));
 }
 

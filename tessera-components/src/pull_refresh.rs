@@ -511,9 +511,8 @@ pub fn pull_refresh(args: &PullRefreshArgs) {
         s.update_position(frame_nanos, INDICATOR_SMOOTHING);
     });
     if controller.with(|s| s.has_pending_animation_frame()) {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller_for_frame.with_mut(|s| {
+            let has_pending_animation_frame = controller.with_mut(|s| {
                 s.update_position(frame_nanos, INDICATOR_SMOOTHING);
                 s.has_pending_animation_frame()
             });

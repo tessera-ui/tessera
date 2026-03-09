@@ -395,9 +395,8 @@ fn radio_button_node(args: &RadioButtonArgs) {
         .controller
         .expect("radio_button_node requires controller to be set");
     if controller.with(|c| c.is_animating()) {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller_for_frame.with_mut(|controller| {
+            let is_animating = controller.with_mut(|controller| {
                 controller.update_animation(frame_nanos);
                 controller.is_animating()
             });

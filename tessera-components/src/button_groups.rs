@@ -515,12 +515,11 @@ fn elastic_container(args: &ElasticContainerArgs) {
             .is_some_and(|item| item.elastic_state.is_animating(frame_nanos))
     });
     if should_schedule_frame {
-        let frame_tick_for_frame = frame_tick;
-        let state_for_frame = args.state;
         let index = args.index;
+        let state = args.state;
         receive_frame_nanos(move |frame_nanos| {
-            frame_tick_for_frame.with_mut(|tick| *tick = tick.wrapping_add(1));
-            let is_animating = state_for_frame.with(|state| {
+            frame_tick.with_mut(|tick| *tick = tick.wrapping_add(1));
+            let is_animating = state.with(|state| {
                 state
                     .item_states
                     .get(&index)

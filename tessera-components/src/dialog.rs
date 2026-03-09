@@ -375,7 +375,7 @@ fn dialog_content_wrapper_node(args: &DialogContentWrapperArgs) {
                                     ),
                                 move || match style {
                                     DialogStyle::Glass => {
-                                        let content_for_glass = content.clone();
+                                        let content = content.clone();
                                         fluid_glass(
                                             &crate::fluid_glass::FluidGlassArgs::with_child(
                                                 FluidGlassArgs::default()
@@ -405,13 +405,13 @@ fn dialog_content_wrapper_node(args: &DialogContentWrapperArgs) {
                                                     .block_input(true)
                                                     .padding(padding),
                                                 move || {
-                                                    content_for_glass.render();
+                                                    content.render();
                                                 },
                                             ),
                                         );
                                     }
                                     DialogStyle::Material => {
-                                        let content_for_material = content.clone();
+                                        let content = content.clone();
                                         surface(&crate::surface::SurfaceArgs::with_child(
                                             SurfaceArgs::default()
                                                 .style(
@@ -437,11 +437,10 @@ fn dialog_content_wrapper_node(args: &DialogContentWrapperArgs) {
                                                 })
                                                 .block_input(true),
                                             move || {
-                                                let content_for_material =
-                                                    content_for_material.clone();
+                                                let content = content.clone();
                                                 Modifier::new().padding_all(padding).run(
                                                     move || {
-                                                        content_for_material.render();
+                                                        content.render();
                                                     },
                                                 );
                                             },
@@ -585,9 +584,8 @@ fn dialog_provider_node(args: &DialogProviderRenderArgs) {
 
     let is_animating = controller.with(|c| c.is_animating());
     if is_animating {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller_for_frame.with_mut(|controller| {
+            let is_animating = controller.with_mut(|controller| {
                 let (_, timer_opt) = controller.snapshot();
                 if let Some(start_frame_nanos) = timer_opt {
                     let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);

@@ -612,20 +612,17 @@ pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
     let args: LinearProgressIndicatorArgs = args.clone();
     let modifier = args.modifier.clone();
     modifier.run(move || {
-        let args_for_accessibility = args.clone();
         let animation_start = remember(Instant::now);
         let frame_tick = remember(|| 0_u64);
-        let should_receive_frames = remember(|| args_for_accessibility.progress.is_none());
-        should_receive_frames.set(args_for_accessibility.progress.is_none());
+        let should_receive_frames = remember(|| args.progress.is_none());
+        should_receive_frames.set(args.progress.is_none());
 
         if should_receive_frames.get() {
-            let frame_tick_for_next = frame_tick;
-            let should_receive_frames_for_frame = should_receive_frames;
             receive_frame_nanos(move |frame_nanos| {
-                if !should_receive_frames_for_frame.get() {
+                if !should_receive_frames.get() {
                     return tessera_ui::FrameNanosControl::Stop;
                 }
-                frame_tick_for_next.set(frame_nanos);
+                frame_tick.set(frame_nanos);
                 tessera_ui::FrameNanosControl::Continue
             });
         }
@@ -637,13 +634,13 @@ pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
         };
 
         let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
-        if let Some(label) = args_for_accessibility.accessibility_label.clone() {
+        if let Some(label) = args.accessibility_label.clone() {
             semantics = semantics.label(label);
         }
-        if let Some(description) = args_for_accessibility.accessibility_description.clone() {
+        if let Some(description) = args.accessibility_description.clone() {
             semantics = semantics.description(description);
         }
-        if let Some(progress) = args_for_accessibility.progress {
+        if let Some(progress) = args.progress {
             let progress = if progress.is_nan() {
                 0.0
             } else {
@@ -654,35 +651,33 @@ pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
                 .numeric_value(progress as f64);
         }
 
-        let args_for_children = args.clone();
-        let args_for_measure = args.clone();
-        let animation_start_for_measure = animation_start;
+        let layout_args = args.clone();
 
         Modifier::new().semantics(semantics).run(move || {
-            if args_for_children.progress.is_some() {
+            if args.progress.is_some() {
                 surface(&crate::surface::SurfaceArgs::with_child(
                     SurfaceArgs::default()
-                        .style(args_for_children.track_color.into())
+                        .style(args.track_color.into())
                         .shape(segment_shape)
                         .modifier(Modifier::new().fill_max_size()),
                     || {},
                 ));
                 surface(&crate::surface::SurfaceArgs::with_child(
                     SurfaceArgs::default()
-                        .style(args_for_children.color.into())
+                        .style(args.color.into())
                         .shape(segment_shape)
                         .modifier(Modifier::new().fill_max_size()),
                     || {},
                 ));
-                if args_for_children.draw_stop_indicator {
-                    let stop_shape = if args_for_children.stroke_cap == ProgressStrokeCap::Butt {
+                if args.draw_stop_indicator {
+                    let stop_shape = if args.stroke_cap == ProgressStrokeCap::Butt {
                         Shape::RECTANGLE
                     } else {
                         Shape::Ellipse
                     };
                     surface(&crate::surface::SurfaceArgs::with_child(
                         SurfaceArgs::default()
-                            .style(args_for_children.color.into())
+                            .style(args.color.into())
                             .shape(stop_shape)
                             .modifier(Modifier::new().fill_max_size()),
                         || {},
@@ -690,11 +685,11 @@ pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
                 }
             } else {
                 for (color, shape) in [
-                    (args_for_children.track_color, segment_shape),
-                    (args_for_children.color, segment_shape),
-                    (args_for_children.track_color, segment_shape),
-                    (args_for_children.color, segment_shape),
-                    (args_for_children.track_color, segment_shape),
+                    (args.track_color, segment_shape),
+                    (args.color, segment_shape),
+                    (args.track_color, segment_shape),
+                    (args.color, segment_shape),
+                    (args.track_color, segment_shape),
                 ] {
                     surface(&crate::surface::SurfaceArgs::with_child(
                         SurfaceArgs::default()
@@ -706,19 +701,16 @@ pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
                 }
             }
 
-            let animation_cycle = if args_for_measure.progress.is_some() {
+            let animation_cycle = if layout_args.progress.is_some() {
                 None
             } else {
-                Some(linear_cycle_progress(
-                    animation_start_for_measure.get(),
-                    1750,
-                ))
+                Some(linear_cycle_progress(animation_start.get(), 1750))
             };
             layout(LinearProgressLayout {
-                progress: args_for_measure.progress,
-                stroke_cap: args_for_measure.stroke_cap,
-                gap_size: args_for_measure.gap_size,
-                draw_stop_indicator: args_for_measure.draw_stop_indicator,
+                progress: layout_args.progress,
+                stroke_cap: layout_args.stroke_cap,
+                gap_size: layout_args.gap_size,
+                draw_stop_indicator: layout_args.draw_stop_indicator,
                 animation_cycle,
             });
         });
@@ -878,32 +870,29 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 #[tessera]
 pub fn circular_progress_indicator(args: &CircularProgressIndicatorArgs) {
     let args: CircularProgressIndicatorArgs = args.clone();
-    let args_for_accessibility = args.clone();
     let animation_start = remember(Instant::now);
     let frame_tick = remember(|| 0_u64);
-    let should_receive_frames = remember(|| args_for_accessibility.progress.is_none());
-    should_receive_frames.set(args_for_accessibility.progress.is_none());
+    let should_receive_frames = remember(|| args.progress.is_none());
+    should_receive_frames.set(args.progress.is_none());
 
     if should_receive_frames.get() {
-        let frame_tick_for_next = frame_tick;
-        let should_receive_frames_for_frame = should_receive_frames;
         receive_frame_nanos(move |frame_nanos| {
-            if !should_receive_frames_for_frame.get() {
+            if !should_receive_frames.get() {
                 return tessera_ui::FrameNanosControl::Stop;
             }
-            frame_tick_for_next.set(frame_nanos);
+            frame_tick.set(frame_nanos);
             tessera_ui::FrameNanosControl::Continue
         });
     }
 
     let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
-    if let Some(label) = args_for_accessibility.accessibility_label.clone() {
+    if let Some(label) = args.accessibility_label.clone() {
         semantics = semantics.label(label);
     }
-    if let Some(description) = args_for_accessibility.accessibility_description.clone() {
+    if let Some(description) = args.accessibility_description.clone() {
         semantics = semantics.description(description);
     }
-    if let Some(progress) = args_for_accessibility.progress {
+    if let Some(progress) = args.progress {
         let progress = if progress.is_nan() {
             0.0
         } else {

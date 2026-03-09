@@ -290,9 +290,8 @@ fn glass_switch_node(args: &GlassSwitchArgs) {
 
     // Track tint color interpolation based on progress
     if controller.with(|c| c.is_animating()) {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller_for_frame.with_mut(|controller| {
+            let is_animating = controller.with_mut(|controller| {
                 controller.update_progress(frame_nanos);
                 controller.is_animating()
             });

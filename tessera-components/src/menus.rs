@@ -632,27 +632,30 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     });
 
     // Parent pointer handler: block propagation and close on background click.
-    let bounds_for_handler = bounds.clone();
-    let on_dismiss_for_handler = provider_args.on_dismiss.clone();
+    let bounds = bounds.clone();
+    let on_dismiss = provider_args.on_dismiss.clone();
     let close_on_escape = provider_args.close_on_escape;
     let close_on_background = provider_args.close_on_background;
-    pointer_input_handler(move |mut input| {
-        let cursor_position = input.cursor_position_rel;
-        let menu_bounds = *bounds_for_handler.read();
-        let should_close_click = close_on_background
-            && input.has_unconsumed_release()
-            && is_click_outside_menu(cursor_position, menu_bounds);
+    pointer_input_handler({
+        let bounds = bounds.clone();
+        move |mut input| {
+            let cursor_position = input.cursor_position_rel;
+            let menu_bounds = *bounds.read();
+            let should_close_click = close_on_background
+                && input.has_unconsumed_release()
+                && is_click_outside_menu(cursor_position, menu_bounds);
 
-        // Prevent underlying content from receiving input while menu is open.
-        input.block_all();
+            // Prevent underlying content from receiving input while menu is open.
+            input.block_all();
 
-        if should_close_click {
-            apply_close_action(controller, &on_dismiss_for_handler);
+            if should_close_click {
+                apply_close_action(controller, &on_dismiss);
+            }
         }
     });
 
     if close_on_escape {
-        let on_dismiss_for_keyboard = provider_args.on_dismiss.clone();
+        let on_dismiss = provider_args.on_dismiss.clone();
         keyboard_input_handler(move |mut input| {
             let should_close_escape = input.keyboard_events.iter().any(|event| {
                 event.state == winit::event::ElementState::Pressed
@@ -662,7 +665,7 @@ pub fn menu_provider(args: &MenuProviderArgs) {
                     )
             });
             if should_close_escape {
-                apply_close_action(controller, &on_dismiss_for_keyboard);
+                apply_close_action(controller, &on_dismiss);
                 input.block_keyboard();
             }
         });

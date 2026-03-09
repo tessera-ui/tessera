@@ -662,10 +662,8 @@ fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
     let previous_index = controller.with(|c| c.previous_selected());
     let expand_fraction = controller.with(|c| c.expand_fraction(frame_nanos));
     if controller.with(|c| c.is_animating(frame_nanos)) {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating =
-                controller_for_frame.with(|controller| controller.is_animating(frame_nanos));
+            let is_animating = controller.with(|controller| controller.is_animating(frame_nanos));
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -699,16 +697,16 @@ fn navigation_rail_render_node(args: &NavigationRailRenderArgs) {
             let header = header.clone();
             let items = items.clone();
             move || {
-                let header_for_surface = header.clone();
-                let items_for_surface = items.clone();
+                let header = header.clone();
+                let items = items.clone();
                 surface(&crate::surface::SurfaceArgs::with_child(
                     SurfaceArgs::default()
                         .modifier(Modifier::new().fill_max_height().width(container_width))
                         .style(scheme.surface.into())
                         .block_input(true),
                     move || {
-                        let header = header_for_surface.clone();
-                        let items = items_for_surface.clone();
+                        let header = header.clone();
+                        let items = items.clone();
                         column(
                             &ColumnArgs::default()
                                 .modifier(Modifier::new().fill_max_size().padding(Padding::new(

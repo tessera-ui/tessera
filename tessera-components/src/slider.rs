@@ -1133,7 +1133,7 @@ fn measure_centered_slider(
 ///     *value_guard = 0.75;
 ///     assert_eq!(*value_guard, 0.75);
 /// }
-/// let value_for_slider = current_value.clone();
+/// let current_value = current_value.clone();
 ///
 /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
@@ -1141,7 +1141,7 @@ fn measure_centered_slider(
 /// centered_slider(
 ///     &SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(*value_for_slider.lock().unwrap())
+///         .value(*current_value.lock().unwrap())
 ///         .on_change(move |new_value| {
 ///             // In a real app, you would update your state here.
 ///             // For this example, we'll just check it after the simulated change.
@@ -1506,7 +1506,7 @@ fn range_slider_inner_node(args: &RangeSliderArgs) {
         .size(args.size)
         .show_stop_indicator(args.show_stop_indicator);
     let initial_width = fallback_component_width(&dummy_slider_args);
-    let dummy_for_measure = dummy_slider_args.clone();
+    let slider = dummy_slider_args.clone();
     let range_layout = range_slider_layout(&args, initial_width);
 
     let start = args.value.0.clamp(0.0, 1.0);
@@ -1643,7 +1643,7 @@ fn range_slider_inner_node(args: &RangeSliderArgs) {
 
     layout(RangeSliderLayoutSpec {
         args,
-        slider: dummy_for_measure,
+        slider,
         start,
         end,
         start_handle_width,

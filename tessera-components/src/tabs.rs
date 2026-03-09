@@ -659,8 +659,8 @@ pub fn tab_label(args: &TabLabelArgs) {
                 scope.child(move || {
                     if has_icon && has_text {
                         // Vertical layout with icon above text
-                        let icon_content_for_column = icon_content.clone();
-                        let text_content_for_column = text_content.clone();
+                        let icon_content = icon_content.clone();
+                        let text_content = text_content.clone();
                         column(
                             &ColumnArgs::default()
                                 .main_axis_alignment(MainAxisAlignment::Center)
@@ -670,7 +670,7 @@ pub fn tab_label(args: &TabLabelArgs) {
                                     Some(DimensionValue::WRAP),
                                 ))
                                 .children(move |col| {
-                                    let icon_content = icon_content_for_column.clone();
+                                    let icon_content = icon_content.clone();
                                     col.child(move || {
                                         if let Some(ic) = icon_content.clone() {
                                             icon(&ic.size(icon_size).tint(content_color));
@@ -685,7 +685,7 @@ pub fn tab_label(args: &TabLabelArgs) {
                                             ),
                                         ));
                                     });
-                                    let text_content = text_content_for_column.clone();
+                                    let text_content = text_content.clone();
                                     col.child(move || {
                                         text(&crate::text::TextArgs::from(
                                             &TextArgs::default()
@@ -1353,9 +1353,8 @@ fn tabs_render_node(args: &TabsRenderArgs) {
     }
 
     if controller.with(|c| c.has_pending_animation_frame()) {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let has_pending_animation_frame = controller_for_frame.with_mut(|controller| {
+            let has_pending_animation_frame = controller.with_mut(|controller| {
                 controller.advance_from_frame_nanos(frame_nanos);
                 controller.has_pending_animation_frame()
             });

@@ -832,9 +832,8 @@ pub fn text_edit_core(args: &TextEditCoreArgs) {
     if controller.with(|c| c.focus_handler().is_focused()) {
         let frame_nanos = current_frame_nanos();
         controller.with_mut(|controller| controller.update_frame_nanos(frame_nanos));
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_focused = controller_for_frame.with_mut(|controller| {
+            let is_focused = controller.with_mut(|controller| {
                 controller.update_frame_nanos(frame_nanos);
                 controller.focus_handler().is_focused()
             });

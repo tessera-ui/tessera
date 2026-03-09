@@ -278,28 +278,28 @@ pub fn text_input(args: &TextInputArgs) {
             });
 
             let keyboard_args = editor_args.clone();
-            let on_change_for_keyboard = editor_args.on_change.clone();
-            let input_transform_for_keyboard = editor_args.input_transform.clone();
+            let on_change = editor_args.on_change.clone();
+            let input_transform = editor_args.input_transform.clone();
             keyboard_input_handler(move |mut input| {
                 handle_text_input_keyboard(
                     &mut input,
                     &keyboard_args,
                     &controller,
-                    &on_change_for_keyboard,
-                    &input_transform_for_keyboard,
+                    &on_change,
+                    &input_transform,
                 );
             });
 
             let ime_args = editor_args.clone();
-            let on_change_for_ime = editor_args.on_change.clone();
-            let input_transform_for_ime = editor_args.input_transform.clone();
+            let on_change = editor_args.on_change.clone();
+            let input_transform = editor_args.input_transform.clone();
             ime_input_handler(move |mut input| {
                 handle_text_input_ime(
                     &mut input,
                     &ime_args,
                     &controller,
-                    &on_change_for_ime,
-                    &input_transform_for_ime,
+                    &on_change,
+                    &input_transform,
                 );
             });
         });
@@ -349,28 +349,28 @@ fn text_input_core_node(args: &TextInputArgs) {
             });
 
             let keyboard_args = editor_args.clone();
-            let on_change_for_keyboard = editor_args.on_change.clone();
-            let input_transform_for_keyboard = editor_args.input_transform.clone();
+            let on_change = editor_args.on_change.clone();
+            let input_transform = editor_args.input_transform.clone();
             keyboard_input_handler(move |mut input| {
                 handle_text_input_keyboard(
                     &mut input,
                     &keyboard_args,
                     &controller,
-                    &on_change_for_keyboard,
-                    &input_transform_for_keyboard,
+                    &on_change,
+                    &input_transform,
                 );
             });
 
             let ime_args = editor_args.clone();
-            let on_change_for_ime = editor_args.on_change.clone();
-            let input_transform_for_ime = editor_args.input_transform.clone();
+            let on_change = editor_args.on_change.clone();
+            let input_transform = editor_args.input_transform.clone();
             ime_input_handler(move |mut input| {
                 handle_text_input_ime(
                     &mut input,
                     &ime_args,
                     &controller,
-                    &on_change_for_ime,
-                    &input_transform_for_ime,
+                    &on_change,
+                    &input_transform,
                 );
             });
         });

@@ -787,17 +787,15 @@ pub fn snackbar_host(args: &SnackbarHostArgs) {
         state.with(|host| host.current.clone())
     };
     if state.with(|host| host.has_pending_timeout(frame_nanos)) {
-        let state_for_frame = state;
         receive_frame_nanos(move |frame_nanos| {
             let should_dismiss =
-                state_for_frame.with(|host| host.should_dismiss_current_timeout(frame_nanos));
+                state.with(|host| host.should_dismiss_current_timeout(frame_nanos));
             if should_dismiss {
-                state_for_frame.with_mut(|host| {
+                state.with_mut(|host| {
                     let _ = host.poll(frame_nanos);
                 });
             }
-            let has_pending_timeout =
-                state_for_frame.with(|host| host.has_pending_timeout(frame_nanos));
+            let has_pending_timeout = state.with(|host| host.has_pending_timeout(frame_nanos));
             if has_pending_timeout {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -914,20 +912,20 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
                             Modifier::new().height(SnackbarDefaults::ACTION_VERTICAL_SPACING),
                         ))
                     });
-                    let action_label_for_row = action_label.clone();
-                    let on_action_for_row = on_action.clone();
-                    let on_dismiss_for_row = on_dismiss.clone();
+                    let action_label = action_label.clone();
+                    let on_action = on_action.clone();
+                    let on_dismiss = on_dismiss.clone();
                     scope.child(move || {
-                        let action_label_for_row = action_label_for_row.clone();
-                        let on_action_for_row = on_action_for_row.clone();
-                        let on_dismiss_for_row = on_dismiss_for_row.clone();
+                        let action_label = action_label.clone();
+                        let on_action = on_action.clone();
+                        let on_dismiss = on_dismiss.clone();
                         row(&RowArgs::default()
                             .modifier(Modifier::new().fill_max_width())
                             .main_axis_alignment(MainAxisAlignment::End)
                             .cross_axis_alignment(CrossAxisAlignment::Center)
                             .children(move |row_scope| {
-                                if let Some(label) = action_label_for_row.clone() {
-                                    let on_action = on_action_for_row.clone();
+                                if let Some(label) = action_label.clone() {
+                                    let on_action = on_action.clone();
                                     row_scope.child(move || {
                                         render_action_button(
                                             label.clone(),
@@ -937,13 +935,13 @@ fn render_snackbar_column(args: SnackbarLayoutArgs) {
                                     });
                                 }
 
-                                if on_dismiss_for_row.is_some() {
+                                if on_dismiss.is_some() {
                                     row_scope.child(|| {
                                         spacer(&crate::spacer::SpacerArgs::new(
                                             Modifier::new().width(SnackbarDefaults::ACTION_SPACING),
                                         ));
                                     });
-                                    let on_dismiss = on_dismiss_for_row.clone();
+                                    let on_dismiss = on_dismiss.clone();
                                     row_scope.child(move || {
                                         render_dismiss_button(
                                             dismiss_action_color,
