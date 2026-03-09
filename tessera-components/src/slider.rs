@@ -1116,20 +1116,16 @@ fn measure_centered_slider(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::{Arc, Mutex};
 /// use tessera_components::modifier::ModifierExt as _;
 /// use tessera_components::slider::{SliderArgs, centered_slider};
-/// use tessera_ui::{Dp, Modifier};
+/// use tessera_ui::{Dp, Modifier, remember};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
-/// let current_value = Arc::new(Mutex::new(0.5));
+///
+/// let current_value = remember(|| 0.5f32);
 ///
 /// // Simulate a value change
-/// {
-///     let mut value_guard = current_value.lock().unwrap();
-///     *value_guard = 0.75;
-///     assert_eq!(*value_guard, 0.75);
-/// }
-/// let slider_value = current_value.clone();
+/// current_value.set(0.75);
+/// assert_eq!(current_value.get(), 0.75);
 ///
 /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
@@ -1137,11 +1133,9 @@ fn measure_centered_slider(
 /// centered_slider(
 ///     &SliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(*slider_value.lock().unwrap())
+///         .value(current_value.get())
 ///         .on_change(move |new_value| {
-///             // In a real app, you would update your state here.
-///             // For this example, we'll just check it after the simulated change.
-///             println!("Centered slider value changed to: {}", new_value);
+///             current_value.set(new_value);
 ///         }),
 /// );
 /// #     },
@@ -1149,11 +1143,8 @@ fn measure_centered_slider(
 /// # material_theme(&args);
 ///
 /// // Simulate another value change and check the state
-/// {
-///     let mut value_guard = current_value.lock().unwrap();
-///     *value_guard = 0.25;
-///     assert_eq!(*value_guard, 0.25);
-/// }
+/// current_value.set(0.25);
+/// assert_eq!(current_value.get(), 0.25);
 /// # }
 /// # component();
 /// ```
@@ -1450,12 +1441,11 @@ fn measure_range_slider(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::{Arc, Mutex};
 /// use tessera_components::modifier::ModifierExt as _;
 /// use tessera_components::slider::{RangeSliderArgs, range_slider};
-/// use tessera_ui::{Dp, Modifier};
+/// use tessera_ui::{Dp, Modifier, remember};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
-/// let range_value = Arc::new(Mutex::new((0.2, 0.8)));
+/// let range_value = remember(|| (0.2f32, 0.8f32));
 ///
 /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
 /// #     || MaterialTheme::default(),
@@ -1463,14 +1453,15 @@ fn measure_range_slider(
 /// range_slider(
 ///     &RangeSliderArgs::default()
 ///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(*range_value.lock().unwrap())
+///         .value(range_value.get())
 ///         .on_change(move |(start, end)| {
-///             println!("Range changed: {} - {}", start, end);
+///             range_value.set((start, end));
 ///         }),
 /// );
 /// #     },
 /// # );
 /// # material_theme(&args);
+/// assert_eq!(range_value.get(), (0.2, 0.8));
 /// # }
 /// # component();
 /// ```
