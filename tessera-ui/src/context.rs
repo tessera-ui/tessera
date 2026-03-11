@@ -6,110 +6,52 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
     marker::PhantomData,
-    sync::{Arc, OnceLock},
+    sync::Arc,
 };
 
 use im::HashMap as ImHashMap;
 use parking_lot::RwLock;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::runtime::{
-    RuntimePhase, compute_context_slot_key, current_component_instance_key_from_scope,
-    current_phase, ensure_build_phase, record_component_invalidation_for_instance_key,
+use crate::{
+    execution_context::{with_context_stack, with_context_stack_mut},
+    runtime::{
+        ContextReadDependencyKey, ContextReadDependencyTracker, ContextSlotEntry, ContextSlotKey,
+        ContextSlotTable, ContextSnapshotTracker, RuntimePhase, compute_context_slot_key,
+        current_component_instance_key_from_scope, current_phase, ensure_build_phase,
+        record_component_invalidation_for_instance_key, with_composition_runtime,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub(crate) struct ContextSnapshotEntry {
     slot: u32,
     generation: u64,
-    key: SlotKey,
+    key: ContextSlotKey,
 }
 
 pub(crate) type ContextMap = ImHashMap<TypeId, ContextSnapshotEntry>;
 
-thread_local! {
-    static CONTEXT_STACK: RefCell<Vec<ContextMap>> = RefCell::new(vec![ContextMap::new()]);
+fn slot_table() -> Arc<RwLock<ContextSlotTable>> {
+    with_composition_runtime(|runtime| runtime.context_slot_table())
 }
 
-#[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
-struct SlotKey {
-    instance_logic_id: u64,
-    slot_hash: u64,
-    type_id: TypeId,
+fn context_snapshot_tracker() -> Arc<RwLock<ContextSnapshotTracker>> {
+    with_composition_runtime(|runtime| runtime.context_snapshot_tracker())
 }
 
-struct SlotEntry {
-    key: SlotKey,
-    generation: u64,
-    value: Option<Arc<dyn Any + Send + Sync>>,
-    last_alive_epoch: u64,
-}
-
-#[derive(Default)]
-struct SlotTable {
-    entries: Vec<SlotEntry>,
-    free_list: Vec<u32>,
-    key_to_slot: HashMap<SlotKey, u32>,
-    epoch: u64,
-}
-
-impl SlotTable {
-    fn begin_epoch(&mut self) {
-        self.epoch = self.epoch.wrapping_add(1);
-    }
-}
-
-static SLOT_TABLE: OnceLock<RwLock<SlotTable>> = OnceLock::new();
-
-fn slot_table() -> &'static RwLock<SlotTable> {
-    SLOT_TABLE.get_or_init(|| RwLock::new(SlotTable::default()))
-}
-
-#[derive(Default)]
-struct ContextSnapshotTracker {
-    previous_by_instance_key: HashMap<u64, ContextMap>,
-    current_by_instance_key: HashMap<u64, ContextMap>,
-}
-
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-struct ContextReadDependencyKey {
-    slot: u32,
-    generation: u64,
-}
-
-#[derive(Default)]
-struct ContextReadDependencyTracker {
-    readers_by_context: HashMap<ContextReadDependencyKey, HashSet<u64>>,
-    contexts_by_reader: HashMap<u64, HashSet<ContextReadDependencyKey>>,
-}
-
-static CONTEXT_SNAPSHOT_TRACKER: OnceLock<RwLock<ContextSnapshotTracker>> = OnceLock::new();
-static CONTEXT_READ_DEPENDENCY_TRACKER: OnceLock<RwLock<ContextReadDependencyTracker>> =
-    OnceLock::new();
-
-fn context_snapshot_tracker() -> &'static RwLock<ContextSnapshotTracker> {
-    CONTEXT_SNAPSHOT_TRACKER.get_or_init(|| RwLock::new(ContextSnapshotTracker::default()))
-}
-
-fn context_read_dependency_tracker() -> &'static RwLock<ContextReadDependencyTracker> {
-    CONTEXT_READ_DEPENDENCY_TRACKER
-        .get_or_init(|| RwLock::new(ContextReadDependencyTracker::default()))
+fn context_read_dependency_tracker() -> Arc<RwLock<ContextReadDependencyTracker>> {
+    with_composition_runtime(|runtime| runtime.context_read_dependency_tracker())
 }
 
 fn current_context_map() -> ContextMap {
-    CONTEXT_STACK.with(|stack| {
-        stack
-            .borrow()
-            .last()
-            .cloned()
-            .unwrap_or_else(ContextMap::new)
-    })
+    with_context_stack(|stack| stack.last().cloned().unwrap_or_else(ContextMap::new))
 }
 
 fn resolve_snapshot_entry(entry: ContextSnapshotEntry) -> Option<ContextSnapshotEntry> {
-    let table = slot_table().read();
+    let slot_table = slot_table();
+    let table = slot_table.read();
     let live_entry = table.entries.get(entry.slot as usize);
     if let Some(live_entry) = live_entry
         && live_entry.value.is_some()
@@ -145,29 +87,31 @@ fn normalize_context_snapshot(snapshot: &ContextMap) -> ContextMap {
 }
 
 pub(crate) fn begin_frame_component_context_tracking() {
-    context_snapshot_tracker()
-        .write()
-        .current_by_instance_key
-        .clear();
+    let tracker = context_snapshot_tracker();
+    tracker.write().current_by_instance_key.clear();
 }
 
 pub(crate) fn finalize_frame_component_context_tracking() {
-    let mut tracker = context_snapshot_tracker().write();
+    let context_snapshot_tracker = context_snapshot_tracker();
+    let mut tracker = context_snapshot_tracker.write();
     tracker.previous_by_instance_key = std::mem::take(&mut tracker.current_by_instance_key);
 }
 
 pub(crate) fn finalize_frame_component_context_tracking_partial() {
-    let mut tracker = context_snapshot_tracker().write();
+    let context_snapshot_tracker = context_snapshot_tracker();
+    let mut tracker = context_snapshot_tracker.write();
     let current = std::mem::take(&mut tracker.current_by_instance_key);
     tracker.previous_by_instance_key.extend(current);
 }
 
 pub(crate) fn reset_component_context_tracking() {
-    *context_snapshot_tracker().write() = ContextSnapshotTracker::default();
+    let context_snapshot_tracker = context_snapshot_tracker();
+    *context_snapshot_tracker.write() = ContextSnapshotTracker::default();
 }
 
 pub(crate) fn previous_component_context_snapshots() -> HashMap<u64, ContextMap> {
-    context_snapshot_tracker()
+    let context_snapshot_tracker = context_snapshot_tracker();
+    context_snapshot_tracker
         .read()
         .previous_by_instance_key
         .clone()
@@ -179,7 +123,8 @@ pub(crate) fn context_from_previous_snapshot_for_instance<T>(
 where
     T: Send + Sync + 'static,
 {
-    let tracker = context_snapshot_tracker().read();
+    let context_snapshot_tracker = context_snapshot_tracker();
+    let tracker = context_snapshot_tracker.read();
     let map = tracker.previous_by_instance_key.get(&instance_key)?;
     map.get(&TypeId::of::<T>())
         .copied()
@@ -191,7 +136,8 @@ pub(crate) fn remove_previous_component_context_snapshots(instance_keys: &HashSe
     if instance_keys.is_empty() {
         return;
     }
-    let mut tracker = context_snapshot_tracker().write();
+    let context_snapshot_tracker = context_snapshot_tracker();
+    let mut tracker = context_snapshot_tracker.write();
     tracker
         .previous_by_instance_key
         .retain(|instance_key, _| !instance_keys.contains(instance_key));
@@ -204,7 +150,8 @@ pub(crate) fn remove_context_read_dependencies(instance_keys: &HashSet<u64>) {
     if instance_keys.is_empty() {
         return;
     }
-    let mut tracker = context_read_dependency_tracker().write();
+    let context_read_dependency_tracker = context_read_dependency_tracker();
+    let mut tracker = context_read_dependency_tracker.write();
     for instance_key in instance_keys {
         let Some(context_keys) = tracker.contexts_by_reader.remove(instance_key) else {
             continue;
@@ -242,18 +189,16 @@ pub(crate) fn with_context_snapshot<R>(snapshot: &ContextMap, f: impl FnOnce() -
     impl Drop for ContextSnapshotGuard {
         fn drop(&mut self) {
             if let Some(previous_stack) = self.previous_stack.take() {
-                CONTEXT_STACK.with(|stack| {
-                    *stack.borrow_mut() = previous_stack;
+                with_context_stack_mut(|stack| {
+                    *stack = previous_stack;
                 });
             }
         }
     }
 
     let normalized_snapshot = normalize_context_snapshot(snapshot);
-    let previous_stack = CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        std::mem::replace(&mut *stack, vec![normalized_snapshot])
-    });
+    let previous_stack =
+        with_context_stack_mut(|stack| std::mem::replace(stack, vec![normalized_snapshot]));
     let _guard = ContextSnapshotGuard {
         previous_stack: Some(previous_stack),
     };
@@ -270,7 +215,8 @@ fn track_context_read_dependency(slot: u32, generation: u64) {
     };
 
     let key = ContextReadDependencyKey { slot, generation };
-    let mut tracker = context_read_dependency_tracker().write();
+    let context_read_dependency_tracker = context_read_dependency_tracker();
+    let mut tracker = context_read_dependency_tracker.write();
     tracker
         .readers_by_context
         .entry(key)
@@ -285,7 +231,8 @@ fn track_context_read_dependency(slot: u32, generation: u64) {
 
 fn context_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
     let key = ContextReadDependencyKey { slot, generation };
-    context_read_dependency_tracker()
+    let context_read_dependency_tracker = context_read_dependency_tracker();
+    context_read_dependency_tracker
         .read()
         .readers_by_context
         .get(&key)
@@ -295,9 +242,9 @@ fn context_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
 
 pub(crate) fn begin_recompose_context_slot_epoch() {
     // Start a new context-slot epoch for the current recomposition pass.
-    slot_table().write().begin_epoch();
-    CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
+    let slot_table = slot_table();
+    slot_table.write().begin_epoch();
+    with_context_stack_mut(|stack| {
         stack.clear();
         stack.push(ContextMap::new());
     });
@@ -311,9 +258,10 @@ pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
     }
 
     // Recycle untouched context slots for logic ids recomposed in this pass.
-    let mut table = slot_table().write();
+    let slot_table = slot_table();
+    let mut table = slot_table.write();
     let epoch = table.epoch;
-    let mut freed: Vec<(u32, SlotKey)> = Vec::new();
+    let mut freed: Vec<(u32, ContextSlotKey)> = Vec::new();
     for (slot, entry) in table.entries.iter_mut().enumerate() {
         if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
             continue;
@@ -338,7 +286,8 @@ pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
 }
 
 pub(crate) fn live_context_slot_instance_logic_ids() -> HashSet<u64> {
-    let table = slot_table().read();
+    let slot_table = slot_table();
+    let table = slot_table.read();
     table
         .entries
         .iter()
@@ -352,8 +301,9 @@ pub(crate) fn drop_context_slots_for_instance_logic_ids(instance_logic_ids: &Has
         return;
     }
 
-    let mut table = slot_table().write();
-    let mut freed: Vec<(u32, SlotKey)> = Vec::new();
+    let slot_table = slot_table();
+    let mut table = slot_table.write();
+    let mut freed: Vec<(u32, ContextSlotKey)> = Vec::new();
     for (slot, entry) in table.entries.iter_mut().enumerate() {
         if entry.value.is_none() {
             continue;
@@ -436,7 +386,8 @@ where
     T: Send + Sync + 'static,
 {
     fn load_entry(&self) -> Arc<dyn Any + Send + Sync> {
-        let table = slot_table().read();
+        let slot_table = slot_table();
+        let table = slot_table.read();
         let entry = table
             .entries
             .get(self.slot as usize)
@@ -512,9 +463,8 @@ where
     }
 }
 
-fn push_context_layer(type_id: TypeId, slot: u32, generation: u64, key: SlotKey) {
-    CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
+fn push_context_layer(type_id: TypeId, slot: u32, generation: u64, key: ContextSlotKey) {
+    with_context_stack_mut(|stack| {
         let parent = stack.last().cloned().unwrap_or_else(ContextMap::new);
         let next = parent.update(
             type_id,
@@ -529,8 +479,7 @@ fn push_context_layer(type_id: TypeId, slot: u32, generation: u64, key: SlotKey)
 }
 
 fn pop_context_layer() {
-    CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
+    with_context_stack_mut(|stack| {
         let popped = stack.pop();
         debug_assert!(popped.is_some(), "Context stack underflow");
         if stack.is_empty() {
@@ -584,14 +533,15 @@ where
 
     let (instance_logic_id, slot_hash) = compute_context_slot_key();
     let type_id = TypeId::of::<T>();
-    let slot_key = SlotKey {
+    let slot_key = ContextSlotKey {
         instance_logic_id,
         slot_hash,
         type_id,
     };
 
     let (slot, generation) = {
-        let mut table = slot_table().write();
+        let slot_table = slot_table();
+        let mut table = slot_table.write();
         let epoch = table.epoch;
 
         if let Some(slot) = table.key_to_slot.get(&slot_key).copied() {
@@ -624,7 +574,7 @@ where
         } else {
             let generation = 0;
             let slot = table.entries.len() as u32;
-            table.entries.push(SlotEntry {
+            table.entries.push(ContextSlotEntry {
                 key: slot_key,
                 generation,
                 value: Some(Arc::new(RwLock::new(init()))),
@@ -674,8 +624,7 @@ where
 {
     ensure_build_phase();
 
-    CONTEXT_STACK.with(|stack| {
-        let stack = stack.borrow();
+    with_context_stack(|stack| {
         let map = stack
             .last()
             .expect("Context stack must always contain at least one layer");
@@ -684,7 +633,6 @@ where
             .map(|entry| Context::new(entry.slot, entry.generation))
     })
 }
-// (legacy comment removed)
 
 #[cfg(test)]
 mod tests {
@@ -695,162 +643,171 @@ mod tests {
 
     use parking_lot::RwLock;
 
-    use super::{
-        CONTEXT_STACK, ContextMap, ContextSnapshotEntry, SlotEntry, SlotKey, SlotTable, slot_table,
-        with_context_snapshot,
+    use super::{ContextMap, ContextSnapshotEntry, slot_table, with_context_snapshot};
+    use crate::execution_context::{with_context_stack, with_context_stack_mut};
+    use crate::runtime::{
+        ContextSlotEntry, ContextSlotKey, ContextSlotTable, RuntimePhase, push_phase,
     };
-    use crate::runtime::{RuntimePhase, push_phase};
+    use crate::testing::with_tessera;
 
     fn test_lock() -> std::sync::MutexGuard<'static, ()> {
         static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
         LOCK.get_or_init(|| Mutex::new(()))
             .lock()
-            .expect("test lock poisoned")
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
     }
 
     fn reset_test_state() {
-        *slot_table().write() = SlotTable::default();
-        CONTEXT_STACK.with(|stack| {
-            *stack.borrow_mut() = vec![ContextMap::new()];
+        *slot_table().write() = ContextSlotTable::default();
+        with_context_stack_mut(|stack| {
+            *stack = vec![ContextMap::new()];
         });
     }
 
     #[test]
     fn with_context_snapshot_restores_stack_after_panic() {
         let _lock = test_lock();
-        reset_test_state();
+        with_tessera(|| {
+            reset_test_state();
 
-        let base_layer = ContextMap::new();
-        let parent_layer = base_layer.update(
-            TypeId::of::<u8>(),
-            ContextSnapshotEntry {
-                slot: 1,
-                generation: 2,
-                key: SlotKey {
-                    instance_logic_id: 7,
-                    slot_hash: 11,
-                    type_id: TypeId::of::<u8>(),
+            let base_layer = ContextMap::new();
+            let parent_layer = base_layer.update(
+                TypeId::of::<u8>(),
+                ContextSnapshotEntry {
+                    slot: 1,
+                    generation: 2,
+                    key: ContextSlotKey {
+                        instance_logic_id: 7,
+                        slot_hash: 11,
+                        type_id: TypeId::of::<u8>(),
+                    },
                 },
-            },
-        );
-        let original_stack = vec![base_layer, parent_layer];
-        CONTEXT_STACK.with(|stack| {
-            *stack.borrow_mut() = original_stack.clone();
-        });
-
-        let snapshot = ContextMap::new().update(
-            TypeId::of::<u32>(),
-            ContextSnapshotEntry {
-                slot: 3,
-                generation: 4,
-                key: SlotKey {
-                    instance_logic_id: 17,
-                    slot_hash: 19,
-                    type_id: TypeId::of::<u32>(),
-                },
-            },
-        );
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            with_context_snapshot(&snapshot, || {
-                CONTEXT_STACK.with(|stack| {
-                    let stack = stack.borrow();
-                    assert_eq!(stack.len(), 1);
-                    assert!(stack.last().is_some());
-                });
-                panic!("expected panic in context snapshot test");
+            );
+            let original_stack = vec![base_layer, parent_layer];
+            with_context_stack_mut(|stack| {
+                *stack = original_stack.clone();
             });
-        }));
-        assert!(result.is_err());
 
-        CONTEXT_STACK.with(|stack| {
-            assert_eq!(*stack.borrow(), original_stack);
+            let snapshot = ContextMap::new().update(
+                TypeId::of::<u32>(),
+                ContextSnapshotEntry {
+                    slot: 3,
+                    generation: 4,
+                    key: ContextSlotKey {
+                        instance_logic_id: 17,
+                        slot_hash: 19,
+                        type_id: TypeId::of::<u32>(),
+                    },
+                },
+            );
+            let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                with_context_snapshot(&snapshot, || {
+                    with_context_stack(|stack| {
+                        assert_eq!(stack.len(), 1);
+                        assert!(stack.last().is_some());
+                    });
+                    panic!("expected panic in context snapshot test");
+                });
+            }));
+            assert!(result.is_err());
+
+            with_context_stack(|stack| {
+                assert_eq!(*stack, original_stack);
+            });
         });
     }
 
     #[test]
     fn with_context_snapshot_remaps_stale_generation() {
         let _lock = test_lock();
-        reset_test_state();
+        with_tessera(|| {
+            reset_test_state();
 
-        let key = SlotKey {
-            instance_logic_id: 31,
-            slot_hash: 37,
-            type_id: TypeId::of::<u8>(),
-        };
-        {
-            let mut table = slot_table().write();
-            *table = SlotTable::default();
-            table.entries.push(SlotEntry {
-                key,
-                generation: 2,
-                value: Some(Arc::new(RwLock::new(42_u8))),
-                last_alive_epoch: 1,
+            let key = ContextSlotKey {
+                instance_logic_id: 31,
+                slot_hash: 37,
+                type_id: TypeId::of::<u8>(),
+            };
+            {
+                let slot_table = slot_table();
+                let mut table = slot_table.write();
+                *table = ContextSlotTable::default();
+                table.entries.push(ContextSlotEntry {
+                    key,
+                    generation: 2,
+                    value: Some(Arc::new(RwLock::new(42_u8))),
+                    last_alive_epoch: 1,
+                });
+                table.key_to_slot.insert(key, 0);
+            }
+
+            let snapshot = ContextMap::new().update(
+                TypeId::of::<u8>(),
+                ContextSnapshotEntry {
+                    slot: 0,
+                    generation: 1,
+                    key,
+                },
+            );
+
+            let _phase_guard = push_phase(RuntimePhase::Build);
+            with_context_snapshot(&snapshot, || {
+                let context = super::use_context::<u8>().expect("context should be remapped");
+                assert_eq!(context.get(), 42);
             });
-            table.key_to_slot.insert(key, 0);
-        }
-
-        let snapshot = ContextMap::new().update(
-            TypeId::of::<u8>(),
-            ContextSnapshotEntry {
-                slot: 0,
-                generation: 1,
-                key,
-            },
-        );
-
-        let _phase_guard = push_phase(RuntimePhase::Build);
-        with_context_snapshot(&snapshot, || {
-            let context = super::use_context::<u8>().expect("context should be remapped");
-            assert_eq!(context.get(), 42);
         });
     }
 
     #[test]
     fn with_context_snapshot_remaps_stale_slot_by_key() {
         let _lock = test_lock();
-        reset_test_state();
+        with_tessera(|| {
+            reset_test_state();
 
-        let key = SlotKey {
-            instance_logic_id: 41,
-            slot_hash: 43,
-            type_id: TypeId::of::<u16>(),
-        };
-        let old_key = SlotKey {
-            instance_logic_id: 47,
-            slot_hash: 53,
-            type_id: TypeId::of::<u16>(),
-        };
-        {
-            let mut table = slot_table().write();
-            *table = SlotTable::default();
-            table.entries.push(SlotEntry {
-                key: old_key,
-                generation: 9,
-                value: None,
-                last_alive_epoch: 0,
+            let key = ContextSlotKey {
+                instance_logic_id: 41,
+                slot_hash: 43,
+                type_id: TypeId::of::<u16>(),
+            };
+            let old_key = ContextSlotKey {
+                instance_logic_id: 47,
+                slot_hash: 53,
+                type_id: TypeId::of::<u16>(),
+            };
+            {
+                let slot_table = slot_table();
+                let mut table = slot_table.write();
+                *table = ContextSlotTable::default();
+                table.entries.push(ContextSlotEntry {
+                    key: old_key,
+                    generation: 9,
+                    value: None,
+                    last_alive_epoch: 0,
+                });
+                table.entries.push(ContextSlotEntry {
+                    key,
+                    generation: 4,
+                    value: Some(Arc::new(RwLock::new(7_u16))),
+                    last_alive_epoch: 2,
+                });
+                table.key_to_slot.insert(key, 1);
+            }
+
+            let snapshot = ContextMap::new().update(
+                TypeId::of::<u16>(),
+                ContextSnapshotEntry {
+                    slot: 0,
+                    generation: 3,
+                    key,
+                },
+            );
+
+            let _phase_guard = push_phase(RuntimePhase::Build);
+            with_context_snapshot(&snapshot, || {
+                let context =
+                    super::use_context::<u16>().expect("context should be remapped by key");
+                assert_eq!(context.get(), 7);
             });
-            table.entries.push(SlotEntry {
-                key,
-                generation: 4,
-                value: Some(Arc::new(RwLock::new(7_u16))),
-                last_alive_epoch: 2,
-            });
-            table.key_to_slot.insert(key, 1);
-        }
-
-        let snapshot = ContextMap::new().update(
-            TypeId::of::<u16>(),
-            ContextSnapshotEntry {
-                slot: 0,
-                generation: 3,
-                key,
-            },
-        );
-
-        let _phase_guard = push_phase(RuntimePhase::Build);
-        with_context_snapshot(&snapshot, || {
-            let context = super::use_context::<u16>().expect("context should be remapped by key");
-            assert_eq!(context.get(), 7);
         });
     }
 }

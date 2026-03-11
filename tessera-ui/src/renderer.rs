@@ -60,18 +60,19 @@ use crate::{
     render_module::RenderModule,
     runtime::{
         TesseraRuntime, begin_frame_clock, begin_frame_component_replay_tracking,
-        begin_frame_layout_dirty_tracking, begin_recompose_slot_epoch, clear_frame_nanos_receivers,
-        clear_persistent_focus_handles, clear_redraw_waker, drop_slots_for_instance_logic_ids,
-        finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
-        finalize_frame_layout_dirty_tracking, has_pending_build_invalidations,
-        has_pending_frame_nanos_receivers, install_redraw_waker, previous_component_replay_nodes,
-        remove_focus_read_dependencies, remove_frame_nanos_receivers,
-        remove_previous_component_replay_nodes, remove_render_slot_read_dependencies,
-        remove_state_read_dependencies, reset_build_invalidations, reset_component_replay_tracking,
-        reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
-        reset_render_slot_read_dependencies, reset_state_read_dependencies,
-        retain_persistent_focus_handles, take_build_invalidations, take_layout_self_dirty_nodes,
-        tick_frame_nanos_receivers, with_build_dirty_instance_keys, with_replay_scope,
+        begin_frame_layout_dirty_tracking, begin_recompose_slot_epoch, bind_current_runtime,
+        clear_frame_nanos_receivers, clear_persistent_focus_handles, clear_redraw_waker,
+        drop_slots_for_instance_logic_ids, finalize_frame_component_replay_tracking,
+        finalize_frame_component_replay_tracking_partial, finalize_frame_layout_dirty_tracking,
+        has_pending_build_invalidations, has_pending_frame_nanos_receivers, install_redraw_waker,
+        previous_component_replay_nodes, remove_focus_read_dependencies,
+        remove_frame_nanos_receivers, remove_previous_component_replay_nodes,
+        remove_render_slot_read_dependencies, remove_state_read_dependencies,
+        reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
+        reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
+        reset_state_read_dependencies, retain_persistent_focus_handles, take_build_invalidations,
+        take_layout_self_dirty_nodes, tick_frame_nanos_receivers, with_build_dirty_instance_keys,
+        with_replay_scope,
     },
     thread_utils,
 };
@@ -462,6 +463,8 @@ impl Default for TesseraConfig {
 /// The renderer includes built-in performance monitoring that logs frame
 /// statistics when performance drops below 60 FPS.
 pub struct Renderer<F: Fn()> {
+    /// Runtime session owned by this renderer instance.
+    runtime: TesseraRuntime,
     /// The WGPU application context, initialized after window creation
     app: Option<RenderCore>,
     /// The entry point function that defines the root of your UI component tree
@@ -504,6 +507,11 @@ pub struct Renderer<F: Fn()> {
 }
 
 impl<F: Fn()> Renderer<F> {
+    fn with_runtime<R>(&mut self, f: impl FnOnce(&mut Self) -> R) -> R {
+        let _runtime_guard = bind_current_runtime(&mut self.runtime);
+        f(self)
+    }
+
     /// Runs the Tessera application with default configuration on desktop
     /// platforms.
     ///
@@ -607,6 +615,7 @@ impl<F: Fn()> Renderer<F> {
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let mut renderer = Self {
+            runtime: TesseraRuntime::default(),
             app,
             entry_point,
             cursor_state,
@@ -736,6 +745,7 @@ impl<F: Fn()> Renderer<F> {
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let mut renderer = Self {
+            runtime: TesseraRuntime::default(),
             app,
             entry_point,
             cursor_state,
@@ -2155,69 +2165,75 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
     /// and any custom shaders your application requires.
     #[tracing::instrument(level = "debug", skip(self, event_loop))]
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
-        event_loop.set_control_flow(ControlFlow::Wait);
-        #[cfg(feature = "profiling")]
-        submit_runtime_meta(RuntimeMeta {
-            kind: RuntimeEventKind::Resumed,
-        });
-        // Just return if the app is already created
-        if self.app.is_some() {
-            self.install_runtime_redraw_waker();
+        self.with_runtime(|renderer| {
+            event_loop.set_control_flow(ControlFlow::Wait);
             #[cfg(feature = "profiling")]
-            self.request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
-            #[cfg(not(feature = "profiling"))]
-            self.request_redraw_now();
-            return;
-        }
-
-        // Create a new window (initially hidden for AccessKit initialization)
-        let window_attributes = Window::default_attributes()
-            .with_title(&self.config.window_title)
-            .with_decorations(self.config.window.decorations)
-            .with_resizable(self.config.window.resizable)
-            .with_transparent(self.config.window.transparent)
-            .with_visible(false); // Hide initially for AccessKit
-        let window = match event_loop.create_window(window_attributes) {
-            Ok(window) => Arc::new(window),
-            Err(err) => {
-                error!("Failed to create window: {err}");
+            submit_runtime_meta(RuntimeMeta {
+                kind: RuntimeEventKind::Resumed,
+            });
+            // Just return if the app is already created
+            if renderer.app.is_some() {
+                renderer.install_runtime_redraw_waker();
+                #[cfg(feature = "profiling")]
+                renderer.request_redraw_with_reasons(
+                    WakeSource::Lifecycle,
+                    vec![RedrawReason::Startup],
+                );
+                #[cfg(not(feature = "profiling"))]
+                renderer.request_redraw_now();
                 return;
             }
-        };
 
-        // Initialize AccessKit adapter BEFORE showing the window
-        if let Some(proxy) = self.event_loop_proxy.clone() {
-            self.accessibility_adapter = Some(AccessKitAdapter::with_event_loop_proxy(
-                event_loop, &window, proxy,
+            // Create a new window (initially hidden for AccessKit initialization)
+            let window_attributes = Window::default_attributes()
+                .with_title(&renderer.config.window_title)
+                .with_decorations(renderer.config.window.decorations)
+                .with_resizable(renderer.config.window.resizable)
+                .with_transparent(renderer.config.window.transparent)
+                .with_visible(false); // Hide initially for AccessKit
+            let window = match event_loop.create_window(window_attributes) {
+                Ok(window) => Arc::new(window),
+                Err(err) => {
+                    error!("Failed to create window: {err}");
+                    return;
+                }
+            };
+
+            // Initialize AccessKit adapter BEFORE showing the window
+            if let Some(proxy) = renderer.event_loop_proxy.clone() {
+                renderer.accessibility_adapter = Some(AccessKitAdapter::with_event_loop_proxy(
+                    event_loop, &window, proxy,
+                ));
+            }
+
+            // Now show the window after AccessKit is initialized
+            window.set_visible(true);
+            renderer.update_native_window_shape(&window);
+
+            let mut render_core = pollster::block_on(RenderCore::new(
+                window.clone(),
+                renderer.config.sample_count,
+                renderer.config.window.transparent,
             ));
-        }
 
-        // Now show the window after AccessKit is initialized
-        window.set_visible(true);
-        self.update_native_window_shape(&window);
+            // Register pipelines
+            let mut context = PipelineContext::new(&mut render_core);
+            for module in &renderer.modules {
+                module.register_pipelines(&mut context);
+            }
 
-        let mut render_core = pollster::block_on(RenderCore::new(
-            window.clone(),
-            self.config.sample_count,
-            self.config.window.transparent,
-        ));
+            renderer.app = Some(render_core);
+            renderer.install_runtime_redraw_waker();
+            #[cfg(feature = "profiling")]
+            renderer
+                .request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
+            #[cfg(not(feature = "profiling"))]
+            renderer.request_redraw_now();
 
-        // Register pipelines
-        let mut context = PipelineContext::new(&mut render_core);
-        for module in &self.modules {
-            module.register_pipelines(&mut context);
-        }
-
-        self.app = Some(render_core);
-        self.install_runtime_redraw_waker();
-        #[cfg(feature = "profiling")]
-        self.request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
-        #[cfg(not(feature = "profiling"))]
-        self.request_redraw_now();
-
-        if let Some(context) = self.plugin_context(event_loop) {
-            self.plugins.resumed(&context);
-        }
+            if let Some(context) = renderer.plugin_context(event_loop) {
+                renderer.plugins.resumed(&context);
+            }
+        });
     }
 
     /// Called when the application is suspended.
@@ -2232,54 +2248,58 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
     /// - **Android**: Called when app goes to background
     /// - **iOS**: Called during app lifecycle transitions
     fn suspended(&mut self, event_loop: &ActiveEventLoop) {
-        debug!("Suspending renderer; tearing down WGPU resources.");
-        #[cfg(feature = "profiling")]
-        submit_runtime_meta(RuntimeMeta {
-            kind: RuntimeEventKind::Suspended,
+        self.with_runtime(|renderer| {
+            debug!("Suspending renderer; tearing down WGPU resources.");
+            #[cfg(feature = "profiling")]
+            submit_runtime_meta(RuntimeMeta {
+                kind: RuntimeEventKind::Suspended,
+            });
+
+            if let Some(context) = renderer.plugin_context(event_loop) {
+                renderer.plugins.suspended(&context);
+            }
+
+            if let Some(app) = renderer.app.take() {
+                app.compute_resource_manager().write().clear();
+            }
+
+            // Clean up AccessKit adapter
+            renderer.accessibility_adapter = None;
+
+            renderer.cursor_state = CursorState::default();
+            renderer.keyboard_state = KeyboardState::default();
+            renderer.ime_state = ImeState::default();
+            renderer.resize_in_progress = false;
+            renderer
+                .redraw_request_pending
+                .store(false, Ordering::Release);
+            #[cfg(target_os = "android")]
+            {
+                renderer.android_ime_opened = false;
+            }
+
+            TesseraRuntime::with_mut(|runtime| {
+                runtime.component_tree.reset();
+                runtime.cursor_icon_request = None;
+                runtime.window_minimized = false;
+                runtime.window_size = [0, 0];
+            });
+            clear_layout_snapshots();
+            reset_layout_dirty_tracking();
+            reset_component_replay_tracking();
+            reset_focus_read_dependencies();
+            reset_render_slot_read_dependencies();
+            reset_state_read_dependencies();
+            reset_component_context_tracking();
+            reset_context_read_dependencies();
+            reset_build_invalidations();
+            reset_frame_clock();
+            clear_redraw_waker();
+            clear_persistent_focus_handles();
+            crate::runtime::reset_slots();
+            #[cfg(feature = "profiling")]
+            renderer.pending_redraw_reasons.clear();
         });
-
-        if let Some(context) = self.plugin_context(event_loop) {
-            self.plugins.suspended(&context);
-        }
-
-        if let Some(app) = self.app.take() {
-            app.compute_resource_manager().write().clear();
-        }
-
-        // Clean up AccessKit adapter
-        self.accessibility_adapter = None;
-
-        self.cursor_state = CursorState::default();
-        self.keyboard_state = KeyboardState::default();
-        self.ime_state = ImeState::default();
-        self.resize_in_progress = false;
-        self.redraw_request_pending.store(false, Ordering::Release);
-        #[cfg(target_os = "android")]
-        {
-            self.android_ime_opened = false;
-        }
-
-        TesseraRuntime::with_mut(|runtime| {
-            runtime.component_tree.reset();
-            runtime.cursor_icon_request = None;
-            runtime.window_minimized = false;
-            runtime.window_size = [0, 0];
-        });
-        clear_layout_snapshots();
-        reset_layout_dirty_tracking();
-        reset_component_replay_tracking();
-        reset_focus_read_dependencies();
-        reset_render_slot_read_dependencies();
-        reset_state_read_dependencies();
-        reset_component_context_tracking();
-        reset_context_read_dependencies();
-        reset_build_invalidations();
-        reset_frame_clock();
-        clear_redraw_waker();
-        clear_persistent_focus_handles();
-        crate::runtime::reset_slots();
-        #[cfg(feature = "profiling")]
-        self.pending_redraw_reasons.clear();
     }
 
     #[tracing::instrument(level = "debug", skip(self, event_loop))]
@@ -2289,183 +2309,188 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
-        if self.pending_close_requested {
-            self.pending_close_requested = false;
-            self.handle_close_requested(event_loop);
-            return;
-        }
+        self.with_runtime(|renderer| {
+            if renderer.pending_close_requested {
+                renderer.pending_close_requested = false;
+                renderer.handle_close_requested(event_loop);
+                return;
+            }
 
-        // Forward event to AccessKit adapter
-        if let (Some(adapter), Some(app)) = (&mut self.accessibility_adapter, &self.app) {
-            adapter.process_event(app.window(), &event);
-        }
+            // Forward event to AccessKit adapter
+            if let (Some(adapter), Some(app)) = (&mut renderer.accessibility_adapter, &renderer.app)
+            {
+                adapter.process_event(app.window(), &event);
+            }
 
-        // Handle window events
-        let mut request_redraw = false;
-        #[cfg(feature = "profiling")]
-        let mut redraw_reasons = Vec::new();
-        match event {
-            WindowEvent::CloseRequested => {
-                self.handle_close_requested(event_loop);
-            }
-            WindowEvent::Resized(size) => {
-                self.handle_resized(size);
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::WindowResized);
-            }
-            WindowEvent::CursorMoved {
-                device_id: _,
-                position,
-            } => {
-                self.handle_cursor_moved(position);
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::CursorMoved);
-            }
-            WindowEvent::CursorLeft { device_id: _ } => {
-                self.handle_cursor_left();
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::CursorLeft);
-            }
-            WindowEvent::MouseInput {
-                device_id: _,
-                state,
-                button,
-            } => {
-                self.handle_mouse_input(state, button);
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::MouseInput);
-            }
-            WindowEvent::MouseWheel {
-                device_id: _,
-                delta,
-                phase: _,
-            } => {
-                self.handle_mouse_wheel(delta);
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::MouseWheel);
-            }
-            WindowEvent::Touch(touch_event) => {
-                self.handle_touch(touch_event);
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::TouchInput);
-            }
-            WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                if let Some(scale_factor_lock) = SCALE_FACTOR.get() {
-                    *scale_factor_lock.write() = scale_factor;
-                } else {
-                    let _ = SCALE_FACTOR.set(RwLock::new(scale_factor));
-                }
-                if let Some(app) = self.app.as_ref() {
-                    self.update_native_window_shape(app.window());
-                }
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::ScaleFactorChanged);
-            }
-            WindowEvent::KeyboardInput { event, .. } => {
-                self.handle_keyboard_input(event);
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::KeyboardInput);
-            }
-            WindowEvent::ModifiersChanged(modifiers) => {
-                debug!("Modifiers changed: {modifiers:?}");
-                self.keyboard_state.update_modifiers(modifiers.state());
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::ModifiersChanged);
-            }
-            WindowEvent::Ime(ime_event) => {
-                debug!("IME event: {ime_event:?}");
-                self.ime_state.push_event(ime_event);
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::ImeEvent);
-            }
-            WindowEvent::Focused(focused) => {
-                TesseraRuntime::with_mut(|runtime| {
-                    runtime
-                        .component_tree
-                        .focus_owner_mut()
-                        .set_owner_focused(focused);
-                });
-                flush_pending_focus_callbacks();
-                if self.resize_in_progress {
-                    self.resize_in_progress = false;
-                    self.cursor_state.clear();
-                }
-                request_redraw = true;
-                #[cfg(feature = "profiling")]
-                redraw_reasons.push(RedrawReason::FocusChanged);
-            }
-            WindowEvent::RedrawRequested => {
-                #[cfg(target_os = "android")]
-                self.handle_redraw_requested(event_loop);
-                #[cfg(not(target_os = "android"))]
-                self.handle_redraw_requested();
-            }
-            _ => (),
-        }
-
-        if request_redraw {
+            // Handle window events
+            let mut request_redraw = false;
             #[cfg(feature = "profiling")]
-            self.request_redraw_with_reasons(WakeSource::WindowEvent, redraw_reasons);
-            #[cfg(not(feature = "profiling"))]
-            self.request_redraw_now();
-        }
+            let mut redraw_reasons = Vec::new();
+            match event {
+                WindowEvent::CloseRequested => {
+                    renderer.handle_close_requested(event_loop);
+                }
+                WindowEvent::Resized(size) => {
+                    renderer.handle_resized(size);
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::WindowResized);
+                }
+                WindowEvent::CursorMoved {
+                    device_id: _,
+                    position,
+                } => {
+                    renderer.handle_cursor_moved(position);
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::CursorMoved);
+                }
+                WindowEvent::CursorLeft { device_id: _ } => {
+                    renderer.handle_cursor_left();
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::CursorLeft);
+                }
+                WindowEvent::MouseInput {
+                    device_id: _,
+                    state,
+                    button,
+                } => {
+                    renderer.handle_mouse_input(state, button);
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::MouseInput);
+                }
+                WindowEvent::MouseWheel {
+                    device_id: _,
+                    delta,
+                    phase: _,
+                } => {
+                    renderer.handle_mouse_wheel(delta);
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::MouseWheel);
+                }
+                WindowEvent::Touch(touch_event) => {
+                    renderer.handle_touch(touch_event);
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::TouchInput);
+                }
+                WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
+                    if let Some(scale_factor_lock) = SCALE_FACTOR.get() {
+                        *scale_factor_lock.write() = scale_factor;
+                    } else {
+                        let _ = SCALE_FACTOR.set(RwLock::new(scale_factor));
+                    }
+                    if let Some(app) = renderer.app.as_ref() {
+                        renderer.update_native_window_shape(app.window());
+                    }
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::ScaleFactorChanged);
+                }
+                WindowEvent::KeyboardInput { event, .. } => {
+                    renderer.handle_keyboard_input(event);
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::KeyboardInput);
+                }
+                WindowEvent::ModifiersChanged(modifiers) => {
+                    debug!("Modifiers changed: {modifiers:?}");
+                    renderer.keyboard_state.update_modifiers(modifiers.state());
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::ModifiersChanged);
+                }
+                WindowEvent::Ime(ime_event) => {
+                    debug!("IME event: {ime_event:?}");
+                    renderer.ime_state.push_event(ime_event);
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::ImeEvent);
+                }
+                WindowEvent::Focused(focused) => {
+                    TesseraRuntime::with_mut(|runtime| {
+                        runtime
+                            .component_tree
+                            .focus_owner_mut()
+                            .set_owner_focused(focused);
+                    });
+                    flush_pending_focus_callbacks();
+                    if renderer.resize_in_progress {
+                        renderer.resize_in_progress = false;
+                        renderer.cursor_state.clear();
+                    }
+                    request_redraw = true;
+                    #[cfg(feature = "profiling")]
+                    redraw_reasons.push(RedrawReason::FocusChanged);
+                }
+                WindowEvent::RedrawRequested => {
+                    #[cfg(target_os = "android")]
+                    renderer.handle_redraw_requested(event_loop);
+                    #[cfg(not(target_os = "android"))]
+                    renderer.handle_redraw_requested();
+                }
+                _ => (),
+            }
+
+            if request_redraw {
+                #[cfg(feature = "profiling")]
+                renderer.request_redraw_with_reasons(WakeSource::WindowEvent, redraw_reasons);
+                #[cfg(not(feature = "profiling"))]
+                renderer.request_redraw_now();
+            }
+        });
     }
 
     fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: RendererUserEvent) {
-        use accesskit_winit::WindowEvent as AccessKitWindowEvent;
+        self.with_runtime(|renderer| {
+            use accesskit_winit::WindowEvent as AccessKitWindowEvent;
 
-        match event {
-            RendererUserEvent::RuntimeRedrawWake => {
-                #[cfg(feature = "profiling")]
-                self.request_redraw_with_reasons(
-                    WakeSource::Runtime,
-                    vec![RedrawReason::RuntimeInvalidation],
-                );
-                #[cfg(not(feature = "profiling"))]
-                self.request_redraw_now();
-            }
-            RendererUserEvent::AccessKit(event) => {
-                if self.accessibility_adapter.is_none() {
-                    return;
+            match event {
+                RendererUserEvent::RuntimeRedrawWake => {
+                    #[cfg(feature = "profiling")]
+                    renderer.request_redraw_with_reasons(
+                        WakeSource::Runtime,
+                        vec![RedrawReason::RuntimeInvalidation],
+                    );
+                    #[cfg(not(feature = "profiling"))]
+                    renderer.request_redraw_now();
                 }
-                match event.window_event {
-                    AccessKitWindowEvent::InitialTreeRequested => {
-                        self.send_accessibility_update();
+                RendererUserEvent::AccessKit(event) => {
+                    if renderer.accessibility_adapter.is_none() {
+                        return;
                     }
-                    AccessKitWindowEvent::ActionRequested(action_request) => {
-                        // Dispatch action to the appropriate component handler
-                        let handled = TesseraRuntime::with_mut(|runtime| {
-                            let (tree, metadatas, focus_owner) =
-                                runtime.component_tree.accessibility_dispatch_context();
-                            crate::accessibility::dispatch_action(
-                                tree,
-                                metadatas,
-                                focus_owner,
-                                action_request,
-                            )
-                        });
-                        flush_pending_focus_callbacks();
+                    match event.window_event {
+                        AccessKitWindowEvent::InitialTreeRequested => {
+                            renderer.send_accessibility_update();
+                        }
+                        AccessKitWindowEvent::ActionRequested(action_request) => {
+                            // Dispatch action to the appropriate component handler
+                            let handled = TesseraRuntime::with_mut(|runtime| {
+                                let (tree, metadatas, focus_owner) =
+                                    runtime.component_tree.accessibility_dispatch_context();
+                                crate::accessibility::dispatch_action(
+                                    tree,
+                                    metadatas,
+                                    focus_owner,
+                                    action_request,
+                                )
+                            });
+                            flush_pending_focus_callbacks();
 
-                        if !handled {
-                            debug!("Action was not handled by any component");
+                            if !handled {
+                                debug!("Action was not handled by any component");
+                            }
+                        }
+                        AccessKitWindowEvent::AccessibilityDeactivated => {
+                            debug!("AccessKit deactivated");
                         }
                     }
-                    AccessKitWindowEvent::AccessibilityDeactivated => {
-                        debug!("AccessKit deactivated");
-                    }
                 }
             }
-        }
+        });
     }
 }
 
