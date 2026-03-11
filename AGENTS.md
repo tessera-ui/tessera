@@ -223,6 +223,17 @@ Example:
 - Aim for brevity and clarity. Examples should be minimal but assert meaningful behavior.
 - Keep references to `Args` and `State` types to avoid duplicating configuration
   documentation across multiple components.
+- Rustdoc examples that call runtime-sensitive APIs must use hidden rustdoc
+  setup lines that wrap the example in `tessera_ui::testing::with_tessera(...)`.
+- Prefer rustdoc hidden lines (`# ...`) for this setup so the rendered example
+  focuses on the user-facing code instead of testing harness boilerplate.
+- If a rustdoc example needs build-sensitive APIs such as `remember`,
+  `Callback::new`, `RenderSlot::new`, `use_context`, or direct component calls,
+  declare a hidden `#[tessera]` component inside `with_tessera(...)` and call
+  that component from the example.
+- Do not use internal runtime/build helpers in component crate examples or
+  tests. Component-facing examples and tests must go through
+  `tessera_ui::testing::with_tessera(...)`.
 
 ---
 

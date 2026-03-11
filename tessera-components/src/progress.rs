@@ -591,6 +591,8 @@ impl Default for LinearProgressIndicatorArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -606,6 +608,7 @@ impl Default for LinearProgressIndicatorArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
@@ -849,6 +852,8 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -866,6 +871,7 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn circular_progress_indicator(args: &CircularProgressIndicatorArgs) {
@@ -969,6 +975,8 @@ impl Default for ProgressArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -985,6 +993,7 @@ impl Default for ProgressArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn progress(args: &ProgressArgs) {

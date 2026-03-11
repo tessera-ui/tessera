@@ -336,6 +336,8 @@ impl TimePickerDialogArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -354,6 +356,7 @@ impl TimePickerDialogArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn time_picker(args: &TimePickerArgs) {
@@ -484,6 +487,8 @@ fn time_picker_inner(args: &TimePickerArgs) {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -503,6 +508,7 @@ fn time_picker_inner(args: &TimePickerArgs) {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn time_picker_dialog(args: &TimePickerDialogArgs) {

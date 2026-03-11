@@ -159,6 +159,8 @@ impl<'a> FlowRowScope<'a> {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::flow_row::{FlowRowArgs, flow_row};
 /// use tessera_components::text::text;
 /// use tessera_ui::{remember, tessera};
@@ -180,6 +182,7 @@ impl<'a> FlowRowScope<'a> {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn flow_row(args: &FlowRowArgs) {

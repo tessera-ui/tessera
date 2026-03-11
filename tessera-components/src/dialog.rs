@@ -500,6 +500,8 @@ impl LayoutSpec for DialogContentLayout {
 /// # Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -526,6 +528,7 @@ impl LayoutSpec for DialogContentLayout {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn dialog_provider(args: &DialogProviderArgs) {
@@ -719,6 +722,8 @@ impl BasicDialogArgs {
 /// # Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -746,6 +751,7 @@ impl BasicDialogArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn basic_dialog(args: &BasicDialogArgs) {

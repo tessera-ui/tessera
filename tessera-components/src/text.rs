@@ -104,6 +104,8 @@ impl From<&TextArgs> for TextArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::text::{TextArgs, text};
 /// use tessera_ui::{Color, Dp, tessera};
 ///
@@ -118,6 +120,7 @@ impl From<&TextArgs> for TextArgs {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn text(args: &TextArgs) {

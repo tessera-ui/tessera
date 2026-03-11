@@ -54,6 +54,8 @@ impl SpacerArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::{
 ///     row::{RowArgs, row},
 ///     spacer::{SpacerArgs, spacer},
@@ -72,6 +74,7 @@ impl SpacerArgs {
 /// }));
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn spacer(args: &SpacerArgs) {

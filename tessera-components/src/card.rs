@@ -485,6 +485,8 @@ impl Default for CardArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::card::{CardArgs, card};
 /// use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
@@ -501,6 +503,7 @@ impl Default for CardArgs {
 /// }
 ///
 /// component();
+/// # });
 /// ```
 #[tessera]
 pub fn card(args: &CardArgs) {

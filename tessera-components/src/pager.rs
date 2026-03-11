@@ -712,6 +712,8 @@ struct PagerRenderArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::pager::{PagerArgs, horizontal_pager};
 /// use tessera_components::text::{TextArgs, text};
 /// use tessera_ui::{remember, tessera};
@@ -733,6 +735,7 @@ struct PagerRenderArgs {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn horizontal_pager(args: &PagerArgs) {
@@ -760,6 +763,8 @@ pub fn horizontal_pager(args: &PagerArgs) {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::pager::{PagerArgs, vertical_pager};
 /// use tessera_components::text::{TextArgs, text};
 /// use tessera_ui::{remember, tessera};
@@ -776,6 +781,7 @@ pub fn horizontal_pager(args: &PagerArgs) {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn vertical_pager(args: &PagerArgs) {

@@ -295,6 +295,8 @@ impl Default for SegmentedButtonRowArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::segmented_buttons::{
 ///     SegmentedButtonArgs, SegmentedButtonDefaults, SegmentedButtonRowArgs, segmented_button,
 ///     single_choice_segmented_button_row,
@@ -340,6 +342,7 @@ impl Default for SegmentedButtonRowArgs {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn segmented_button(args: &SegmentedButtonArgs) {
@@ -475,6 +478,8 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::segmented_buttons::{
 ///     SegmentedButtonArgs, SegmentedButtonDefaults, SegmentedButtonRowArgs, segmented_button,
 ///     single_choice_segmented_button_row,
@@ -520,6 +525,7 @@ pub fn segmented_button(args: &SegmentedButtonArgs) {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn single_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {
@@ -557,6 +563,8 @@ pub fn single_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::segmented_buttons::{
 ///     SegmentedButtonArgs, SegmentedButtonDefaults, SegmentedButtonRowArgs,
 ///     multi_choice_segmented_button_row, segmented_button,
@@ -602,6 +610,7 @@ pub fn single_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn multi_choice_segmented_button_row(args: &SegmentedButtonRowArgs) {

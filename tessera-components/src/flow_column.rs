@@ -160,6 +160,8 @@ impl<'a> FlowColumnScope<'a> {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::flow_column::{FlowColumnArgs, flow_column};
 /// use tessera_components::text::text;
 /// use tessera_ui::{remember, tessera};
@@ -181,6 +183,7 @@ impl<'a> FlowColumnScope<'a> {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn flow_column(args: &FlowColumnArgs) {

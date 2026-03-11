@@ -434,6 +434,8 @@ impl Default for SwitchArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -450,6 +452,7 @@ impl Default for SwitchArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn switch(args: &SwitchArgs) {

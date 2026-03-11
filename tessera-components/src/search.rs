@@ -331,6 +331,8 @@ enum SearchBarLayoutKind {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
@@ -349,6 +351,7 @@ enum SearchBarLayoutKind {
 /// material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn search_bar(args: &SearchBarArgs) {
@@ -375,6 +378,8 @@ pub fn search_bar(args: &SearchBarArgs) {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
@@ -393,6 +398,7 @@ pub fn search_bar(args: &SearchBarArgs) {
 /// material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn docked_search_bar(args: &SearchBarArgs) {

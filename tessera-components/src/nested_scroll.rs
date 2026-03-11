@@ -221,24 +221,31 @@ mod tests {
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,
     };
-    use tessera_ui::{CallbackWith, ScrollEventSource};
+    use tessera_ui::{CallbackWith, Prop, ScrollEventSource, tessera, testing::with_tessera};
 
-    #[test]
-    fn pre_scroll_clamps_consumption_to_available_delta() {
-        let connection = NestedScrollConnection::new()
-            .with_pre_scroll_handler(CallbackWith::new(|_| ScrollDelta::new(0.0, 100.0)));
-
-        let consumed = connection.pre_scroll(ScrollDelta::new(0.0, 24.0), ScrollEventSource::Touch);
-
-        assert_eq!(consumed, ScrollDelta::new(0.0, 24.0));
+    #[derive(Clone, Prop)]
+    struct PreScrollClampArgs {
+        out: Arc<Mutex<Option<NestedScrollConnection>>>,
     }
 
-    #[test]
-    fn pre_scroll_chains_parent_with_remaining_delta() {
-        let child_inputs = Arc::new(Mutex::new(Vec::new()));
-        let parent_inputs = Arc::new(Mutex::new(Vec::new()));
+    #[tessera]
+    fn build_pre_scroll_clamp(args: &PreScrollClampArgs) {
+        let connection = NestedScrollConnection::new()
+            .with_pre_scroll_handler(CallbackWith::new(|_| ScrollDelta::new(0.0, 100.0)));
+        *args.out.lock().expect("output lock should not be poisoned") = Some(connection);
+    }
+
+    #[derive(Clone, Prop)]
+    struct ChainedPreScrollArgs {
+        out: Arc<Mutex<Option<NestedScrollConnection>>>,
+        child_inputs: Arc<Mutex<Vec<ScrollDelta>>>,
+        parent_inputs: Arc<Mutex<Vec<ScrollDelta>>>,
+    }
+
+    #[tessera]
+    fn build_chained_pre_scroll(args: &ChainedPreScrollArgs) {
         let parent = NestedScrollConnection::new().with_pre_scroll_handler({
-            let parent_inputs = Arc::clone(&parent_inputs);
+            let parent_inputs = Arc::clone(&args.parent_inputs);
             CallbackWith::new(move |input: PreScrollInput| {
                 parent_inputs
                     .lock()
@@ -249,7 +256,7 @@ mod tests {
         });
         let connection = NestedScrollConnection::new()
             .with_pre_scroll_handler({
-                let child_inputs = Arc::clone(&child_inputs);
+                let child_inputs = Arc::clone(&args.child_inputs);
                 CallbackWith::new(move |input: PreScrollInput| {
                     child_inputs
                         .lock()
@@ -259,31 +266,19 @@ mod tests {
                 })
             })
             .with_parent(Some(parent));
-
-        let consumed = connection.pre_scroll(ScrollDelta::new(0.0, 30.0), ScrollEventSource::Touch);
-
-        assert_eq!(consumed, ScrollDelta::new(0.0, 15.0));
-        assert_eq!(
-            child_inputs
-                .lock()
-                .expect("child inputs lock should not be poisoned")
-                .as_slice(),
-            &[ScrollDelta::new(0.0, 30.0)]
-        );
-        assert_eq!(
-            parent_inputs
-                .lock()
-                .expect("parent inputs lock should not be poisoned")
-                .as_slice(),
-            &[ScrollDelta::new(0.0, 20.0)]
-        );
+        *args.out.lock().expect("output lock should not be poisoned") = Some(connection);
     }
 
-    #[test]
-    fn post_scroll_passes_accumulated_consumed_delta_to_parent() {
-        let parent_inputs = Arc::new(Mutex::new(Vec::new()));
+    #[derive(Clone, Prop)]
+    struct ChainedPostScrollArgs {
+        out: Arc<Mutex<Option<NestedScrollConnection>>>,
+        parent_inputs: Arc<Mutex<Vec<(ScrollDelta, ScrollDelta)>>>,
+    }
+
+    #[tessera]
+    fn build_chained_post_scroll(args: &ChainedPostScrollArgs) {
         let parent = NestedScrollConnection::new().with_post_scroll_handler({
-            let parent_inputs = Arc::clone(&parent_inputs);
+            let parent_inputs = Arc::clone(&args.parent_inputs);
             CallbackWith::new(move |input: PostScrollInput| {
                 parent_inputs
                     .lock()
@@ -295,28 +290,19 @@ mod tests {
         let connection = NestedScrollConnection::new()
             .with_post_scroll_handler(CallbackWith::new(|_| ScrollDelta::new(0.0, 6.0)))
             .with_parent(Some(parent));
-
-        let consumed = connection.post_scroll(
-            ScrollDelta::new(0.0, 20.0),
-            ScrollDelta::new(0.0, 30.0),
-            ScrollEventSource::Touch,
-        );
-
-        assert_eq!(consumed, ScrollDelta::new(0.0, 10.0));
-        assert_eq!(
-            parent_inputs
-                .lock()
-                .expect("parent inputs lock should not be poisoned")
-                .as_slice(),
-            &[(ScrollDelta::new(0.0, 26.0), ScrollDelta::new(0.0, 24.0))]
-        );
+        *args.out.lock().expect("output lock should not be poisoned") = Some(connection);
     }
 
-    #[test]
-    fn pre_fling_chains_parent_with_remaining_velocity() {
-        let parent_inputs = Arc::new(Mutex::new(Vec::new()));
+    #[derive(Clone, Prop)]
+    struct ChainedPreFlingArgs {
+        out: Arc<Mutex<Option<NestedScrollConnection>>>,
+        parent_inputs: Arc<Mutex<Vec<ScrollVelocity>>>,
+    }
+
+    #[tessera]
+    fn build_chained_pre_fling(args: &ChainedPreFlingArgs) {
         let parent = NestedScrollConnection::new().with_pre_fling_handler({
-            let parent_inputs = Arc::clone(&parent_inputs);
+            let parent_inputs = Arc::clone(&args.parent_inputs);
             CallbackWith::new(move |input: PreFlingInput| {
                 parent_inputs
                     .lock()
@@ -328,16 +314,124 @@ mod tests {
         let connection = NestedScrollConnection::new()
             .with_pre_fling_handler(CallbackWith::new(|_| ScrollVelocity::new(0.0, 12.0)))
             .with_parent(Some(parent));
+        *args.out.lock().expect("output lock should not be poisoned") = Some(connection);
+    }
 
-        let consumed = connection.pre_fling(ScrollVelocity::new(0.0, 30.0));
-
-        assert_eq!(consumed, ScrollVelocity::new(0.0, 20.0));
-        assert_eq!(
-            parent_inputs
+    #[test]
+    fn pre_scroll_clamps_consumption_to_available_delta() {
+        with_tessera(|| {
+            let out = Arc::new(Mutex::new(None));
+            build_pre_scroll_clamp(&PreScrollClampArgs {
+                out: Arc::clone(&out),
+            });
+            let connection = out
                 .lock()
-                .expect("parent inputs lock should not be poisoned")
-                .as_slice(),
-            &[ScrollVelocity::new(0.0, 18.0)]
-        );
+                .expect("output lock should not be poisoned")
+                .take()
+                .expect("connection should be built");
+
+            let consumed =
+                connection.pre_scroll(ScrollDelta::new(0.0, 24.0), ScrollEventSource::Touch);
+
+            assert_eq!(consumed, ScrollDelta::new(0.0, 24.0));
+        });
+    }
+
+    #[test]
+    fn pre_scroll_chains_parent_with_remaining_delta() {
+        with_tessera(|| {
+            let child_inputs = Arc::new(Mutex::new(Vec::new()));
+            let parent_inputs = Arc::new(Mutex::new(Vec::new()));
+            let out = Arc::new(Mutex::new(None));
+            build_chained_pre_scroll(&ChainedPreScrollArgs {
+                out: Arc::clone(&out),
+                child_inputs: Arc::clone(&child_inputs),
+                parent_inputs: Arc::clone(&parent_inputs),
+            });
+            let connection = out
+                .lock()
+                .expect("output lock should not be poisoned")
+                .take()
+                .expect("connection should be built");
+
+            let consumed =
+                connection.pre_scroll(ScrollDelta::new(0.0, 30.0), ScrollEventSource::Touch);
+
+            assert_eq!(consumed, ScrollDelta::new(0.0, 15.0));
+            assert_eq!(
+                child_inputs
+                    .lock()
+                    .expect("child inputs lock should not be poisoned")
+                    .as_slice(),
+                &[ScrollDelta::new(0.0, 30.0)]
+            );
+            assert_eq!(
+                parent_inputs
+                    .lock()
+                    .expect("parent inputs lock should not be poisoned")
+                    .as_slice(),
+                &[ScrollDelta::new(0.0, 20.0)]
+            );
+        });
+    }
+
+    #[test]
+    fn post_scroll_passes_accumulated_consumed_delta_to_parent() {
+        with_tessera(|| {
+            let parent_inputs = Arc::new(Mutex::new(Vec::new()));
+            let out = Arc::new(Mutex::new(None));
+            build_chained_post_scroll(&ChainedPostScrollArgs {
+                out: Arc::clone(&out),
+                parent_inputs: Arc::clone(&parent_inputs),
+            });
+            let connection = out
+                .lock()
+                .expect("output lock should not be poisoned")
+                .take()
+                .expect("connection should be built");
+
+            let consumed = connection.post_scroll(
+                ScrollDelta::new(0.0, 20.0),
+                ScrollDelta::new(0.0, 30.0),
+                ScrollEventSource::Touch,
+            );
+
+            assert_eq!(consumed, ScrollDelta::new(0.0, 10.0));
+            assert_eq!(
+                parent_inputs
+                    .lock()
+                    .expect("parent inputs lock should not be poisoned")
+                    .as_slice(),
+                &[(ScrollDelta::new(0.0, 26.0), ScrollDelta::new(0.0, 24.0))]
+            );
+        });
+    }
+
+    #[test]
+    fn pre_fling_chains_parent_with_remaining_velocity() {
+        with_tessera(|| {
+            let parent_inputs = Arc::new(Mutex::new(Vec::new()));
+            let out = Arc::new(Mutex::new(None));
+            build_chained_pre_fling(&ChainedPreFlingArgs {
+                out: Arc::clone(&out),
+                parent_inputs: Arc::clone(&parent_inputs),
+            });
+            let connection = out
+                .lock()
+                .expect("output lock should not be poisoned")
+                .take()
+                .expect("connection should be built");
+
+            let consumed = connection.pre_fling(ScrollVelocity::new(0.0, 30.0));
+
+            assert_eq!(consumed, ScrollVelocity::new(0.0, 20.0));
+            assert_eq!(
+                parent_inputs
+                    .lock()
+                    .expect("parent inputs lock should not be poisoned")
+                    .as_slice(),
+                &[ScrollVelocity::new(0.0, 18.0)]
+            );
+        });
     }
 }

@@ -145,6 +145,8 @@ impl<'a> ColumnScope<'a> {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::column::{ColumnArgs, column};
 /// use tessera_components::spacer::spacer;
 /// use tessera_components::text::{TextArgs, text};
@@ -163,6 +165,7 @@ impl<'a> ColumnScope<'a> {
 /// }));
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn column(args: &ColumnArgs) {

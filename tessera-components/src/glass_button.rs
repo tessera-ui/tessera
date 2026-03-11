@@ -180,6 +180,8 @@ impl GlassButtonArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::{
 ///     glass_button::{GlassButtonArgs, glass_button},
 ///     text::{TextArgs, text},
@@ -197,6 +199,7 @@ impl GlassButtonArgs {
 /// );
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn glass_button(args: &GlassButtonArgs) {

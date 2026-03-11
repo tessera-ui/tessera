@@ -30,10 +30,14 @@ use crate::{
 /// # Example
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::fluid_glass::GlassBorder;
 /// use tessera_ui::Px;
 ///
 /// let border = GlassBorder::new(Px(2)); // Creates a border with 2 physical pixels width
+///
+/// # });
 /// ```
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub struct GlassBorder {
@@ -242,6 +246,8 @@ struct FluidGlassInnerArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::{
 ///     fluid_glass::{FluidGlassArgs, fluid_glass},
 ///     text::{TextArgs, text},
@@ -256,6 +262,7 @@ struct FluidGlassInnerArgs {
 /// fluid_glass(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn fluid_glass(args: &FluidGlassArgs) {

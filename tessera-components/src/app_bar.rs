@@ -122,6 +122,8 @@ impl AppBarArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -148,6 +150,7 @@ impl AppBarArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn app_bar(args: &AppBarArgs) {
@@ -284,6 +287,8 @@ impl TopAppBarArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -307,6 +312,7 @@ impl TopAppBarArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn top_app_bar(args: &TopAppBarArgs) {

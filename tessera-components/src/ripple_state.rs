@@ -114,11 +114,14 @@ fn ease_out_cubic(t: f32) -> f32 {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::interaction_state::InteractionState;
 /// let mut s = InteractionState::new();
 /// assert!(!s.is_hovered());
 /// s.set_hovered(true);
 /// assert!(s.is_hovered());
+/// # });
 /// ```
 pub struct RippleState {
     animation: Option<RippleAnimationState>,
@@ -144,8 +147,11 @@ impl RippleState {
     ///
     /// # Example
     /// ```
+    /// # use tessera_ui::testing::with_tessera;
+    /// # with_tessera(|| {
     /// use tessera_components::ripple_state::RippleState;
     /// let state = RippleState::new();
+    /// # });
     /// ```
     pub fn new() -> Self {
         Self {
@@ -166,9 +172,12 @@ impl RippleState {
     ///
     /// # Example
     /// ```
+    /// # use tessera_ui::testing::with_tessera;
+    /// # with_tessera(|| {
     /// use tessera_components::ripple_state::RippleState;
     /// let mut state = RippleState::new();
     /// state.start_animation([0.5, 0.5]);
+    /// # });
     /// ```
     pub fn start_animation(&mut self, click_pos: [f32; 2]) {
         let now = Instant::now();
@@ -275,12 +284,15 @@ impl RippleState {
     /// # Example
     ///
     /// ```
+    /// # use tessera_ui::testing::with_tessera;
+    /// # with_tessera(|| {
     /// use tessera_components::ripple_state::RippleState;
     /// let mut state = RippleState::new();
     /// state.start_animation([0.5, 0.5]);
     /// if let Some((progress, center)) = state.get_animation_progress() {
     ///     // Use progress and center for rendering
     /// }
+    /// # });
     /// ```
     pub fn get_animation_progress(&mut self) -> Option<(f32, [f32; 2])> {
         self.animation()

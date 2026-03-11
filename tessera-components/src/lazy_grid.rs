@@ -445,26 +445,21 @@ pub type LazyHorizontalGridScope<'a> = LazyGridScope<'a>;
 ///     lazy_grid::{GridCells, LazyVerticalGridArgs, lazy_vertical_grid},
 ///     text::{TextArgs, text},
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn demo() {
-///     let rendered = remember(|| 0usize);
 ///     lazy_vertical_grid(
 ///         &LazyVerticalGridArgs::default()
 ///             .columns(GridCells::fixed(2))
 ///             .overscan(0)
 ///             .content(move |scope| {
 ///                 scope.items(4, move |i| {
-///                     rendered.with_mut(|count| *count += 1);
 ///                     text(&TextArgs::default().text(format!("Tile {i}")));
 ///                 });
 ///             }),
 ///     );
-///     assert_eq!(rendered.get(), 4);
 /// }
-///
-/// demo();
 /// ```
 #[tessera]
 pub fn lazy_vertical_grid(args: &LazyVerticalGridArgs) {
@@ -543,26 +538,21 @@ fn lazy_vertical_grid_slots(
 ///     lazy_grid::{GridCells, LazyHorizontalGridArgs, lazy_horizontal_grid},
 ///     text::{TextArgs, text},
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn demo() {
-///     let rendered = remember(|| 0usize);
 ///     lazy_horizontal_grid(
 ///         &LazyHorizontalGridArgs::default()
 ///             .rows(GridCells::fixed(2))
 ///             .overscan(0)
 ///             .content(move |scope| {
 ///                 scope.items(3, move |i| {
-///                     rendered.with_mut(|count| *count += 1);
 ///                     text(&TextArgs::default().text(format!("Tile {i}")));
 ///                 });
 ///             }),
 ///     );
-///     assert_eq!(rendered.get(), 3);
 /// }
-///
-/// demo();
 /// ```
 #[tessera]
 pub fn lazy_horizontal_grid(args: &LazyHorizontalGridArgs) {

@@ -615,6 +615,8 @@ impl From<&SplitButtonTrailingArgs> for SplitButtonTrailingArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -649,6 +651,7 @@ impl From<&SplitButtonTrailingArgs> for SplitButtonTrailingArgs {
 /// material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
@@ -679,6 +682,8 @@ pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -699,6 +704,7 @@ pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
 /// material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
@@ -722,6 +728,8 @@ pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -742,6 +750,7 @@ pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
 /// material_theme(&args);
 /// # }
 /// # component();
+/// # });
 /// ```
 #[tessera]
 pub fn split_trailing_button(args: &SplitButtonTrailingArgs) {

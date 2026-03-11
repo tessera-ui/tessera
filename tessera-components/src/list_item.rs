@@ -339,6 +339,8 @@ impl Default for ListItemArgs {
 /// ## Examples
 ///
 /// ```
+/// # use tessera_ui::testing::with_tessera;
+/// # with_tessera(|| {
 /// use tessera_components::list_item::{ListItemArgs, list_item};
 /// use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
@@ -357,6 +359,7 @@ impl Default for ListItemArgs {
 /// }
 ///
 /// demo();
+/// # });
 /// ```
 #[tessera]
 pub fn list_item(args: &ListItemArgs) {
