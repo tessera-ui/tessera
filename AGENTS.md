@@ -231,9 +231,11 @@ Example:
   `Callback::new`, `RenderSlot::new`, `use_context`, or direct component calls,
   declare a hidden `#[tessera]` component inside `with_tessera(...)` and call
   that component from the example.
+- For synchronous component tests, prefer `#[tessera_ui::test]` instead of
+  writing `with_tessera(...)` by hand.
 - Do not use internal runtime/build helpers in component crate examples or
   tests. Component-facing examples and tests must go through
-  `tessera_ui::testing::with_tessera(...)`.
+  `tessera_ui::testing::with_tessera(...)` or `#[tessera_ui::test]`.
 
 ---
 

@@ -473,6 +473,61 @@ fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature,
     })
 }
 
+fn strict_test_signature(sig: &syn::Signature) -> syn::Result<()> {
+    if sig.constness.is_some() {
+        return Err(syn::Error::new_spanned(
+            sig.constness,
+            "#[tessera_ui::test] does not support const functions",
+        ));
+    }
+    if sig.asyncness.is_some() {
+        return Err(syn::Error::new_spanned(
+            sig.asyncness,
+            "#[tessera_ui::test] only supports synchronous functions",
+        ));
+    }
+    if sig.unsafety.is_some() {
+        return Err(syn::Error::new_spanned(
+            sig.unsafety,
+            "#[tessera_ui::test] does not support unsafe functions",
+        ));
+    }
+    if sig.abi.is_some() {
+        return Err(syn::Error::new_spanned(
+            &sig.abi,
+            "#[tessera_ui::test] does not support explicit ABI declarations",
+        ));
+    }
+    if sig.variadic.is_some() {
+        return Err(syn::Error::new_spanned(
+            &sig.variadic,
+            "#[tessera_ui::test] does not support variadic functions",
+        ));
+    }
+    if !sig.generics.params.is_empty() || sig.generics.where_clause.is_some() {
+        return Err(syn::Error::new_spanned(
+            &sig.generics,
+            "#[tessera_ui::test] does not support generic parameters",
+        ));
+    }
+    if !sig.inputs.is_empty() {
+        return Err(syn::Error::new_spanned(
+            &sig.inputs,
+            "#[tessera_ui::test] functions must not accept arguments",
+        ));
+    }
+    match &sig.output {
+        syn::ReturnType::Default => Ok(()),
+        syn::ReturnType::Type(_, ty) => match ty.as_ref() {
+            Type::Tuple(tuple) if tuple.elems.is_empty() => Ok(()),
+            _ => Err(syn::Error::new_spanned(
+                &sig.output,
+                "#[tessera_ui::test] functions must return `()`",
+            )),
+        },
+    }
+}
+
 /// Helper: tokens to attach replay metadata to the current component node.
 fn replay_register_tokens(
     crate_path: &syn::Path,
@@ -1597,6 +1652,63 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
     };
 
     expanded.into()
+}
+
+/// Run a test inside a Tessera testing session and build context.
+///
+/// This attribute is intended for synchronous component tests that need
+/// Tessera-only APIs such as `remember`, `Callback::new`, or direct component
+/// invocation. It expands to a normal `#[test]` wrapper that enters
+/// `tessera_ui::testing::with_tessera(...)` and runs the original body inside a
+/// hidden `#[tessera]` component.
+///
+/// `#[should_panic]`, `#[ignore]`, `#[cfg]`, and similar test attributes remain
+/// attached to the generated outer `#[test]` function.
+#[proc_macro_attribute]
+pub fn test(attr: TokenStream, item: TokenStream) -> TokenStream {
+    let crate_path: syn::Path = match parse_crate_path(attr) {
+        Ok(path) => path,
+        Err(err) => return err.to_compile_error().into(),
+    };
+    let input_fn = parse_macro_input!(item as ItemFn);
+    if let Some(conflicting_attr) = input_fn.attrs.iter().find(|attr| {
+        attr.path().is_ident("test")
+            || attr.path().is_ident("tessera")
+            || attr.path().is_ident("entry")
+            || attr.path().is_ident("shard")
+    }) {
+        return syn::Error::new_spanned(
+            conflicting_attr,
+            "#[tessera_ui::test] must not be combined with #[test], #[tessera], #[entry], or #[shard]",
+        )
+        .to_compile_error()
+        .into();
+    }
+    if let Err(err) = strict_test_signature(&input_fn.sig) {
+        return err.to_compile_error().into();
+    }
+
+    let outer_attrs = &input_fn.attrs;
+    let fn_vis = &input_fn.vis;
+    let fn_name = &input_fn.sig.ident;
+    let fn_block = &input_fn.block;
+    let inner_component_name = format_ident!("__{}_tessera_test_component", fn_name);
+
+    quote! {
+        #(#outer_attrs)*
+        #[test]
+        #fn_vis fn #fn_name() {
+            #crate_path::testing::with_tessera(|| {
+                #[#crate_path::tessera(#crate_path)]
+                fn #inner_component_name() {
+                    #fn_block
+                }
+
+                #inner_component_name();
+            });
+        }
+    }
+    .into()
 }
 
 /// Transforms a function into a *shard component* that can be navigated to via
