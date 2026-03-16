@@ -6,7 +6,6 @@
 //! input.
 
 use std::{
-    cell::RefCell,
     ptr::NonNull,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -16,6 +15,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::{
     NodeId, PxRect,
     component_tree::{ComponentNodeMetaDatas, ComponentNodeTree},
+    execution_context::{with_execution_context, with_execution_context_mut},
     prop::CallbackWith,
     px::PxSize,
     runtime::{
@@ -32,10 +32,6 @@ const ROOT_SCOPE_ID: FocusHandleId = 0;
 pub(crate) type FocusHandleId = u64;
 pub(crate) type FocusRequesterId = u64;
 
-thread_local! {
-    static CURRENT_FOCUS_OWNER_STACK: RefCell<Vec<NonNull<FocusOwner>>> = const { RefCell::new(Vec::new()) };
-}
-
 fn next_focus_handle_id() -> FocusHandleId {
     NEXT_FOCUS_TARGET_ID.fetch_add(1, Ordering::Relaxed)
 }
@@ -45,21 +41,17 @@ fn next_focus_requester_id() -> FocusRequesterId {
 }
 
 fn with_bound_focus_owner<R>(f: impl FnOnce(&FocusOwner) -> R) -> Option<R> {
-    CURRENT_FOCUS_OWNER_STACK.with(|stack| {
-        let ptr = stack.borrow().last().copied()?;
-        // SAFETY: The binding guard only pushes a pointer that remains valid for
-        // the duration of the handler dispatch on the current thread.
-        Some(unsafe { f(ptr.as_ref()) })
-    })
+    let ptr = with_execution_context(|context| context.current_focus_owner_stack.last().copied())?;
+    // SAFETY: The binding guard only pushes a pointer that remains valid for
+    // the duration of the handler dispatch on the current thread.
+    Some(unsafe { f(ptr.as_ref()) })
 }
 
 fn with_bound_focus_owner_mut<R>(f: impl FnOnce(&mut FocusOwner) -> R) -> Option<R> {
-    CURRENT_FOCUS_OWNER_STACK.with(|stack| {
-        let ptr = stack.borrow().last().copied()?;
-        // SAFETY: The binding guard only pushes a pointer that remains valid for
-        // the duration of the handler dispatch on the current thread.
-        Some(unsafe { f(&mut *ptr.as_ptr()) })
-    })
+    let ptr = with_execution_context(|context| context.current_focus_owner_stack.last().copied())?;
+    // SAFETY: The binding guard only pushes a pointer that remains valid for
+    // the duration of the handler dispatch on the current thread.
+    Some(unsafe { f(&mut *ptr.as_ptr()) })
 }
 
 fn with_focus_owner<R>(f: impl FnOnce(&FocusOwner) -> R) -> R {
@@ -101,8 +93,8 @@ impl Drop for FocusOwnerBindingGuard {
         if !self.active {
             return;
         }
-        CURRENT_FOCUS_OWNER_STACK.with(|stack| {
-            let popped = stack.borrow_mut().pop();
+        with_execution_context_mut(|context| {
+            let popped = context.current_focus_owner_stack.pop();
             debug_assert!(popped.is_some(), "focus owner binding stack underflow");
         });
         self.active = false;
@@ -110,8 +102,8 @@ impl Drop for FocusOwnerBindingGuard {
 }
 
 pub(crate) fn bind_focus_owner(owner: &mut FocusOwner) -> FocusOwnerBindingGuard {
-    CURRENT_FOCUS_OWNER_STACK.with(|stack| {
-        stack.borrow_mut().push(NonNull::from(owner));
+    with_execution_context_mut(|context| {
+        context.current_focus_owner_stack.push(NonNull::from(owner));
     });
     FocusOwnerBindingGuard { active: true }
 }

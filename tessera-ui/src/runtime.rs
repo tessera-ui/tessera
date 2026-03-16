@@ -2,7 +2,6 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
     hash::{Hash, Hasher},
     marker::PhantomData,
     sync::{Arc, OnceLock},
@@ -17,6 +16,7 @@ use smallvec::SmallVec;
 use crate::{
     NodeId,
     component_tree::ComponentTree,
+    execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
     focus::{
         FocusDirection, FocusGroupNode, FocusHandleId, FocusNode, FocusProperties,
         FocusRegistration, FocusRegistrationKind, FocusRequester, FocusRequesterId,
@@ -25,46 +25,6 @@ use crate::{
     layout::{LayoutSpec, LayoutSpecDyn},
     prop::{CallbackWith, ComponentReplayData, ErasedComponentRunner, Prop},
 };
-
-thread_local! {
-    /// Stack of currently executing component node ids for the current thread.
-    static NODE_CONTEXT_STACK: RefCell<Vec<NodeId>> = const { RefCell::new(Vec::new()) };
-    /// Control-flow grouping path for the current thread.
-    static GROUP_PATH_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
-    /// Component-instance logic identifier stack (one per component invocation).
-    static INSTANCE_LOGIC_ID_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
-    /// Current execution phase stack for the thread.
-    static PHASE_STACK: RefCell<Vec<RuntimePhase>> = const { RefCell::new(Vec::new()) };
-    /// Execution-order frames scoped to the current component/group nesting.
-    static ORDER_FRAME_STACK: RefCell<Vec<OrderFrame>> = const { RefCell::new(Vec::new()) };
-
-    /// Instance key stack: overrides instance identity inside `key` blocks.
-    static INSTANCE_KEY_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
-
-    /// Stack of currently executing component instance keys for the current thread.
-    ///
-    /// Unlike `current_instance_key()`, this remains stable for the whole
-    /// component body even when nested control-flow groups are entered.
-    static CURRENT_COMPONENT_INSTANCE_STACK: RefCell<Vec<u64>> = const { RefCell::new(Vec::new()) };
-
-    /// One-shot instance-logic-id override used by subtree replay.
-    ///
-    /// When set, the next `push_current_node` call will consume this value as
-    /// the component instance logic id instead of deriving it from parent stacks.
-    static NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE: RefCell<Option<u64>> = const { RefCell::new(None) };
-
-    /// Active reactive-dirty instance-key set for the current build pass.
-    static BUILD_DIRTY_INSTANCE_KEYS_STACK: RefCell<Vec<Arc<HashSet<u64>>>> = const { RefCell::new(Vec::new()) };
-}
-
-#[derive(Clone, Copy, Default)]
-struct OrderFrame {
-    remember: u64,
-    functor: u64,
-    context: u64,
-    instance: u64,
-    frame_receiver: u64,
-}
 
 #[derive(Clone, Copy)]
 enum OrderCounterKind {
@@ -75,21 +35,22 @@ enum OrderCounterKind {
 }
 
 fn push_order_frame() {
-    ORDER_FRAME_STACK.with(|stack| stack.borrow_mut().push(OrderFrame::default()));
+    with_execution_context_mut(|context| {
+        context.order_frame_stack.push(OrderFrame::default());
+    });
 }
 
 fn pop_order_frame(underflow_message: &str) {
-    ORDER_FRAME_STACK.with(|stack| {
-        let popped = stack.borrow_mut().pop();
+    with_execution_context_mut(|context| {
+        let popped = context.order_frame_stack.pop();
         debug_assert!(popped.is_some(), "{underflow_message}");
     });
 }
 
 fn next_order_counter(kind: OrderCounterKind, empty_message: &str) -> u64 {
-    ORDER_FRAME_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        debug_assert!(!stack.is_empty(), "{empty_message}");
-        let frame = stack.last_mut().expect(empty_message);
+    with_execution_context_mut(|context| {
+        debug_assert!(!context.order_frame_stack.is_empty(), "{empty_message}");
+        let frame = context.order_frame_stack.last_mut().expect(empty_message);
         match kind {
             OrderCounterKind::Remember => {
                 let counter = frame.remember;
@@ -116,9 +77,8 @@ fn next_order_counter(kind: OrderCounterKind, empty_message: &str) -> u64 {
 }
 
 fn next_child_instance_call_index() -> u64 {
-    ORDER_FRAME_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let Some(frame) = stack.last_mut() else {
+    with_execution_context_mut(|context| {
+        let Some(frame) = context.order_frame_stack.last_mut() else {
             return 0;
         };
         let index = frame.instance;
@@ -668,7 +628,7 @@ pub(crate) fn clear_redraw_waker() {
 }
 
 pub(crate) fn current_component_instance_key_from_scope() -> Option<u64> {
-    CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| stack.borrow().last().copied())
+    with_execution_context(|context| context.current_component_instance_stack.last().copied())
 }
 
 static PERSISTENT_FOCUS_HANDLE_STORE: OnceLock<RwLock<PersistentFocusHandleStore>> =
@@ -764,7 +724,7 @@ pub(crate) fn clear_persistent_focus_handles() {
 }
 
 fn take_next_node_instance_logic_id_override() -> Option<u64> {
-    NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| slot.borrow_mut().take())
+    with_execution_context_mut(|context| context.next_node_instance_logic_id_override.take())
 }
 
 /// Runs `f` inside a replay scope restored from a previously recorded component
@@ -789,37 +749,37 @@ pub(crate) fn with_replay_scope<R>(
     impl Drop for ReplayScopeGuard {
         fn drop(&mut self) {
             if let Some(previous_group_path) = self.previous_group_path.take() {
-                GROUP_PATH_STACK.with(|stack| {
-                    *stack.borrow_mut() = previous_group_path;
+                with_execution_context_mut(|context| {
+                    context.group_path_stack = previous_group_path;
                 });
             }
             if let Some(previous_instance_key_stack) = self.previous_instance_key_stack.take() {
-                INSTANCE_KEY_STACK.with(|stack| {
-                    *stack.borrow_mut() = previous_instance_key_stack;
+                with_execution_context_mut(|context| {
+                    context.instance_key_stack = previous_instance_key_stack;
                 });
             }
             if let Some(previous_instance_logic_id_override) =
                 self.previous_instance_logic_id_override.take()
             {
-                NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
-                    *slot.borrow_mut() = previous_instance_logic_id_override;
+                with_execution_context_mut(|context| {
+                    context.next_node_instance_logic_id_override =
+                        previous_instance_logic_id_override;
                 });
             }
         }
     }
 
-    let previous_group_path = GROUP_PATH_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        std::mem::replace(&mut *stack, group_path.to_vec())
+    let previous_group_path = with_execution_context_mut(|context| {
+        std::mem::replace(&mut context.group_path_stack, group_path.to_vec())
     });
-    let previous_instance_key_stack = INSTANCE_KEY_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
+    let previous_instance_key_stack = with_execution_context_mut(|context| {
         let next_stack = instance_key_override.into_iter().collect::<Vec<_>>();
-        std::mem::replace(&mut *stack, next_stack)
+        std::mem::replace(&mut context.instance_key_stack, next_stack)
     });
-    let previous_instance_logic_id_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
-        let mut slot = slot.borrow_mut();
-        (*slot).replace(instance_logic_id)
+    let previous_instance_logic_id_override = with_execution_context_mut(|context| {
+        context
+            .next_node_instance_logic_id_override
+            .replace(instance_logic_id)
     });
     let _guard = ReplayScopeGuard {
         previous_group_path: Some(previous_group_path),
@@ -843,9 +803,8 @@ pub(crate) fn with_build_dirty_instance_keys<R>(
             if self.popped {
                 return;
             }
-            BUILD_DIRTY_INSTANCE_KEYS_STACK.with(|stack| {
-                let mut stack = stack.borrow_mut();
-                let popped = stack.pop();
+            with_execution_context_mut(|context| {
+                let popped = context.build_dirty_instance_keys_stack.pop();
                 debug_assert!(
                     popped.is_some(),
                     "BUILD_DIRTY_INSTANCE_KEYS_STACK underflow: attempted to pop from empty stack"
@@ -855,9 +814,9 @@ pub(crate) fn with_build_dirty_instance_keys<R>(
         }
     }
 
-    BUILD_DIRTY_INSTANCE_KEYS_STACK.with(|stack| {
-        stack
-            .borrow_mut()
+    with_execution_context_mut(|context| {
+        context
+            .build_dirty_instance_keys_stack
             .push(Arc::new(dirty_instance_keys.clone()));
     });
     let _guard = BuildDirtyScopeGuard { popped: false };
@@ -865,9 +824,9 @@ pub(crate) fn with_build_dirty_instance_keys<R>(
 }
 
 pub(crate) fn is_instance_key_build_dirty(instance_key: u64) -> bool {
-    BUILD_DIRTY_INSTANCE_KEYS_STACK.with(|stack| {
-        stack
-            .borrow()
+    with_execution_context(|context| {
+        context
+            .build_dirty_instance_keys_stack
             .last()
             .is_some_and(|dirty_instance_keys| dirty_instance_keys.contains(&instance_key))
     })
@@ -2093,10 +2052,9 @@ pub fn push_current_node(
     #[cfg(not(feature = "profiling"))]
     let _ = fn_name;
     #[allow(unused_variables)]
-    let parent_node_id = NODE_CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let parent = stack.last().copied();
-        stack.push(node_id);
+    let parent_node_id = with_execution_context_mut(|context| {
+        let parent = context.node_context_stack.last().copied();
+        context.node_context_stack.push(node_id);
         parent
     });
 
@@ -2104,11 +2062,12 @@ pub fn push_current_node(
     // This distinguishes multiple calls to the same component (e.g., foo(1);
     // foo(2);)
     let parent_call_index = next_child_instance_call_index();
-    let parent_instance_logic_id =
-        INSTANCE_LOGIC_ID_STACK.with(|s| s.borrow().last().copied().unwrap_or(0));
+    let parent_instance_logic_id = with_execution_context(|context| {
+        context.instance_logic_id_stack.last().copied().unwrap_or(0)
+    });
 
     let group_path_hash = current_group_path_hash();
-    let has_group_path = GROUP_PATH_STACK.with(|stack| !stack.borrow().is_empty());
+    let has_group_path = with_execution_context(|context| !context.group_path_stack.is_empty());
 
     // Combine component_type_id with parent_instance_logic_id, the current
     // control-flow group path, and the call index local to that group. This
@@ -2143,7 +2102,9 @@ pub fn push_current_node(
             ])
         };
 
-    INSTANCE_LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
+    with_execution_context_mut(|context| {
+        context.instance_logic_id_stack.push(instance_logic_id);
+    });
 
     push_order_frame();
 
@@ -2176,16 +2137,17 @@ pub fn push_current_node_with_instance_logic_id(
     #[cfg(not(feature = "profiling"))]
     let _ = fn_name;
     #[allow(unused_variables)]
-    let parent_node_id = NODE_CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let parent = stack.last().copied();
-        stack.push(node_id);
+    let parent_node_id = with_execution_context_mut(|context| {
+        let parent = context.node_context_stack.last().copied();
+        context.node_context_stack.push(node_id);
         parent
     });
 
     let _ = next_child_instance_call_index();
 
-    INSTANCE_LOGIC_ID_STACK.with(|stack| stack.borrow_mut().push(instance_logic_id));
+    with_execution_context_mut(|context| {
+        context.instance_logic_id_stack.push(instance_logic_id);
+    });
     push_order_frame();
 
     #[cfg(feature = "profiling")]
@@ -2206,13 +2168,15 @@ pub fn push_current_node_with_instance_logic_id(
 
 /// Push the current component instance key for the active execution scope.
 pub fn push_current_component_instance_key(instance_key: u64) -> CurrentComponentInstanceGuard {
-    CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| stack.borrow_mut().push(instance_key));
+    with_execution_context_mut(|context| {
+        context.current_component_instance_stack.push(instance_key);
+    });
     CurrentComponentInstanceGuard { popped: false }
 }
 
 fn pop_current_component_instance_key() {
-    CURRENT_COMPONENT_INSTANCE_STACK.with(|stack| {
-        let popped = stack.borrow_mut().pop();
+    with_execution_context_mut(|context| {
+        let popped = context.current_component_instance_stack.pop();
         debug_assert!(
             popped.is_some(),
             "Attempted to pop current component instance key from an empty stack"
@@ -2221,9 +2185,8 @@ fn pop_current_component_instance_key() {
 }
 
 fn pop_current_node() {
-    NODE_CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let popped = stack.pop();
+    with_execution_context_mut(|context| {
+        let popped = context.node_context_stack.pop();
         debug_assert!(
             popped.is_some(),
             "Attempted to pop current node from an empty stack"
@@ -2234,11 +2197,11 @@ fn pop_current_node() {
 
 /// Get the node id at the top of the thread-local component stack.
 pub fn current_node_id() -> Option<NodeId> {
-    NODE_CONTEXT_STACK.with(|stack| stack.borrow().last().copied())
+    with_execution_context(|context| context.node_context_stack.last().copied())
 }
 
 fn current_instance_logic_id_opt() -> Option<u64> {
-    INSTANCE_LOGIC_ID_STACK.with(|stack| stack.borrow().last().copied())
+    with_execution_context(|context| context.instance_logic_id_stack.last().copied())
 }
 
 /// Returns the current component instance logic id.
@@ -2258,22 +2221,22 @@ pub fn current_instance_key() -> u64 {
 }
 
 fn pop_instance_logic_id() {
-    INSTANCE_LOGIC_ID_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let _ = stack.pop();
+    with_execution_context_mut(|context| {
+        let _ = context.instance_logic_id_stack.pop();
     });
 }
 
 /// Push an execution phase for the current thread.
 pub fn push_phase(phase: RuntimePhase) -> PhaseGuard {
-    PHASE_STACK.with(|stack| stack.borrow_mut().push(phase));
+    with_execution_context_mut(|context| {
+        context.phase_stack.push(phase);
+    });
     PhaseGuard { popped: false }
 }
 
 fn pop_phase() {
-    PHASE_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let popped = stack.pop();
+    with_execution_context_mut(|context| {
+        let popped = context.phase_stack.pop();
         debug_assert!(
             popped.is_some(),
             "Attempted to pop execution phase from an empty stack"
@@ -2282,19 +2245,20 @@ fn pop_phase() {
 }
 
 pub(crate) fn current_phase() -> Option<RuntimePhase> {
-    PHASE_STACK.with(|stack| stack.borrow().last().copied())
+    with_execution_context(|context| context.phase_stack.last().copied())
 }
 
 /// Push a group id onto the thread-local control-flow stack.
 pub(crate) fn push_group_id(group_id: u64) {
-    GROUP_PATH_STACK.with(|stack| stack.borrow_mut().push(group_id));
+    with_execution_context_mut(|context| {
+        context.group_path_stack.push(group_id);
+    });
 }
 
 /// Pop a group id from the thread-local control-flow stack.
 pub(crate) fn pop_group_id(expected_group_id: u64) {
-    GROUP_PATH_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        if let Some(popped) = stack.pop() {
+    with_execution_context_mut(|context| {
+        if let Some(popped) = context.group_path_stack.pop() {
             debug_assert_eq!(
                 popped, expected_group_id,
                 "Unbalanced GroupGuard stack: expected {}, got {}",
@@ -2308,18 +2272,15 @@ pub(crate) fn pop_group_id(expected_group_id: u64) {
 
 /// Get a clone of the current control-flow path.
 fn current_group_path() -> Vec<u64> {
-    GROUP_PATH_STACK.with(|stack| stack.borrow().clone())
+    with_execution_context(|context| context.group_path_stack.clone())
 }
 
 fn current_group_path_hash() -> u64 {
-    GROUP_PATH_STACK.with(|stack| {
-        let stack = stack.borrow();
-        hash_components(&[&stack[..]])
-    })
+    with_execution_context(|context| hash_components(&[&context.group_path_stack[..]]))
 }
 
 fn current_instance_key_override() -> Option<u64> {
-    INSTANCE_KEY_STACK.with(|stack| stack.borrow().last().copied())
+    with_execution_context(|context| context.instance_key_stack.last().copied())
 }
 
 /// RAII guard that tracks control-flow grouping for the current component node.
@@ -2379,16 +2340,17 @@ pub struct InstanceKeyGuard {
 impl InstanceKeyGuard {
     /// Push a key hash for instance identity.
     pub fn new(key_hash: u64) -> Self {
-        INSTANCE_KEY_STACK.with(|stack| stack.borrow_mut().push(key_hash));
+        with_execution_context_mut(|context| {
+            context.instance_key_stack.push(key_hash);
+        });
         Self { key_hash }
     }
 }
 
 impl Drop for InstanceKeyGuard {
     fn drop(&mut self) {
-        INSTANCE_KEY_STACK.with(|stack| {
-            let mut stack = stack.borrow_mut();
-            let popped = stack.pop();
+        with_execution_context_mut(|context| {
+            let popped = context.instance_key_stack.pop();
             debug_assert_eq!(
                 popped,
                 Some(self.key_hash),
@@ -3140,9 +3102,13 @@ mod tests {
     };
 
     use super::*;
+    use crate::execution_context::{
+        reset_execution_context, with_execution_context, with_execution_context_mut,
+    };
     use crate::prop::{Callback, RenderSlot};
 
     fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
+        reset_execution_context();
         let mut arena = crate::Arena::<()>::new();
         let node_id = arena.new_node(());
         let _phase_guard = push_phase(RuntimePhase::Build);
@@ -3237,14 +3203,14 @@ mod tests {
 
     #[test]
     fn with_replay_scope_restores_group_path_and_override() {
-        GROUP_PATH_STACK.with(|stack| {
-            *stack.borrow_mut() = vec![1, 2, 3];
+        with_execution_context_mut(|context| {
+            context.group_path_stack = vec![1, 2, 3];
         });
-        INSTANCE_KEY_STACK.with(|stack| {
-            *stack.borrow_mut() = vec![5];
+        with_execution_context_mut(|context| {
+            context.instance_key_stack = vec![5];
         });
-        NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
-            *slot.borrow_mut() = Some(9);
+        with_execution_context_mut(|context| {
+            context.next_node_instance_logic_id_override = Some(9);
         });
 
         with_replay_scope(42, &[7, 8], Some(11), || {
@@ -3256,20 +3222,21 @@ mod tests {
 
         assert_eq!(current_group_path(), vec![1, 2, 3]);
         assert_eq!(current_instance_key_override(), Some(5));
-        let restored_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
+        let restored_override =
+            with_execution_context(|context| context.next_node_instance_logic_id_override);
         assert_eq!(restored_override, Some(9));
     }
 
     #[test]
     fn with_replay_scope_restores_on_panic() {
-        GROUP_PATH_STACK.with(|stack| {
-            *stack.borrow_mut() = vec![5];
+        with_execution_context_mut(|context| {
+            context.group_path_stack = vec![5];
         });
-        INSTANCE_KEY_STACK.with(|stack| {
-            *stack.borrow_mut() = vec![13];
+        with_execution_context_mut(|context| {
+            context.instance_key_stack = vec![13];
         });
-        NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| {
-            *slot.borrow_mut() = None;
+        with_execution_context_mut(|context| {
+            context.next_node_instance_logic_id_override = None;
         });
 
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
@@ -3283,7 +3250,8 @@ mod tests {
 
         assert_eq!(current_group_path(), vec![5]);
         assert_eq!(current_instance_key_override(), Some(13));
-        let restored_override = NEXT_NODE_INSTANCE_LOGIC_ID_OVERRIDE.with(|slot| *slot.borrow());
+        let restored_override =
+            with_execution_context(|context| context.next_node_instance_logic_id_override);
         assert_eq!(restored_override, None);
     }
 

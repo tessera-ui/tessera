@@ -6,7 +6,6 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
     marker::PhantomData,
     sync::{Arc, OnceLock},
 };
@@ -15,9 +14,12 @@ use im::HashMap as ImHashMap;
 use parking_lot::RwLock;
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::runtime::{
-    RuntimePhase, compute_context_slot_key, current_component_instance_key_from_scope,
-    current_phase, ensure_build_phase, record_component_invalidation_for_instance_key,
+use crate::{
+    execution_context::{with_execution_context, with_execution_context_mut},
+    runtime::{
+        RuntimePhase, compute_context_slot_key, current_component_instance_key_from_scope,
+        current_phase, ensure_build_phase, record_component_invalidation_for_instance_key,
+    },
 };
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -28,10 +30,6 @@ pub(crate) struct ContextSnapshotEntry {
 }
 
 pub(crate) type ContextMap = ImHashMap<TypeId, ContextSnapshotEntry>;
-
-thread_local! {
-    static CONTEXT_STACK: RefCell<Vec<ContextMap>> = RefCell::new(vec![ContextMap::new()]);
-}
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy, Debug)]
 struct SlotKey {
@@ -99,9 +97,9 @@ fn context_read_dependency_tracker() -> &'static RwLock<ContextReadDependencyTra
 }
 
 fn current_context_map() -> ContextMap {
-    CONTEXT_STACK.with(|stack| {
-        stack
-            .borrow()
+    with_execution_context(|context| {
+        context
+            .context_stack
             .last()
             .cloned()
             .unwrap_or_else(ContextMap::new)
@@ -242,17 +240,16 @@ pub(crate) fn with_context_snapshot<R>(snapshot: &ContextMap, f: impl FnOnce() -
     impl Drop for ContextSnapshotGuard {
         fn drop(&mut self) {
             if let Some(previous_stack) = self.previous_stack.take() {
-                CONTEXT_STACK.with(|stack| {
-                    *stack.borrow_mut() = previous_stack;
+                with_execution_context_mut(|context| {
+                    context.context_stack = previous_stack;
                 });
             }
         }
     }
 
     let normalized_snapshot = normalize_context_snapshot(snapshot);
-    let previous_stack = CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        std::mem::replace(&mut *stack, vec![normalized_snapshot])
+    let previous_stack = with_execution_context_mut(|context| {
+        std::mem::replace(&mut context.context_stack, vec![normalized_snapshot])
     });
     let _guard = ContextSnapshotGuard {
         previous_stack: Some(previous_stack),
@@ -296,10 +293,9 @@ fn context_read_subscribers(slot: u32, generation: u64) -> Vec<u64> {
 pub(crate) fn begin_recompose_context_slot_epoch() {
     // Start a new context-slot epoch for the current recomposition pass.
     slot_table().write().begin_epoch();
-    CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        stack.clear();
-        stack.push(ContextMap::new());
+    with_execution_context_mut(|context| {
+        context.context_stack.clear();
+        context.context_stack.push(ContextMap::new());
     });
 }
 
@@ -513,9 +509,12 @@ where
 }
 
 fn push_context_layer(type_id: TypeId, slot: u32, generation: u64, key: SlotKey) {
-    CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let parent = stack.last().cloned().unwrap_or_else(ContextMap::new);
+    with_execution_context_mut(|context| {
+        let parent = context
+            .context_stack
+            .last()
+            .cloned()
+            .unwrap_or_else(ContextMap::new);
         let next = parent.update(
             type_id,
             ContextSnapshotEntry {
@@ -524,17 +523,16 @@ fn push_context_layer(type_id: TypeId, slot: u32, generation: u64, key: SlotKey)
                 key,
             },
         );
-        stack.push(next);
+        context.context_stack.push(next);
     });
 }
 
 fn pop_context_layer() {
-    CONTEXT_STACK.with(|stack| {
-        let mut stack = stack.borrow_mut();
-        let popped = stack.pop();
+    with_execution_context_mut(|context| {
+        let popped = context.context_stack.pop();
         debug_assert!(popped.is_some(), "Context stack underflow");
-        if stack.is_empty() {
-            stack.push(ContextMap::new());
+        if context.context_stack.is_empty() {
+            context.context_stack.push(ContextMap::new());
         }
     });
 }
@@ -674,9 +672,9 @@ where
 {
     ensure_build_phase();
 
-    CONTEXT_STACK.with(|stack| {
-        let stack = stack.borrow();
-        let map = stack
+    with_execution_context(|context| {
+        let map = context
+            .context_stack
             .last()
             .expect("Context stack must always contain at least one layer");
         map.get(&TypeId::of::<T>())
@@ -696,8 +694,11 @@ mod tests {
     use parking_lot::RwLock;
 
     use super::{
-        CONTEXT_STACK, ContextMap, ContextSnapshotEntry, SlotEntry, SlotKey, SlotTable, slot_table,
+        ContextMap, ContextSnapshotEntry, SlotEntry, SlotKey, SlotTable, slot_table,
         with_context_snapshot,
+    };
+    use crate::execution_context::{
+        reset_execution_context, with_execution_context, with_execution_context_mut,
     };
     use crate::runtime::{RuntimePhase, push_phase};
 
@@ -710,8 +711,9 @@ mod tests {
 
     fn reset_test_state() {
         *slot_table().write() = SlotTable::default();
-        CONTEXT_STACK.with(|stack| {
-            *stack.borrow_mut() = vec![ContextMap::new()];
+        reset_execution_context();
+        with_execution_context_mut(|context| {
+            context.context_stack = vec![ContextMap::new()];
         });
     }
 
@@ -734,8 +736,8 @@ mod tests {
             },
         );
         let original_stack = vec![base_layer, parent_layer];
-        CONTEXT_STACK.with(|stack| {
-            *stack.borrow_mut() = original_stack.clone();
+        with_execution_context_mut(|context| {
+            context.context_stack = original_stack.clone();
         });
 
         let snapshot = ContextMap::new().update(
@@ -752,18 +754,17 @@ mod tests {
         );
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             with_context_snapshot(&snapshot, || {
-                CONTEXT_STACK.with(|stack| {
-                    let stack = stack.borrow();
-                    assert_eq!(stack.len(), 1);
-                    assert!(stack.last().is_some());
+                with_execution_context(|context| {
+                    assert_eq!(context.context_stack.len(), 1);
+                    assert!(context.context_stack.last().is_some());
                 });
                 panic!("expected panic in context snapshot test");
             });
         }));
         assert!(result.is_err());
 
-        CONTEXT_STACK.with(|stack| {
-            assert_eq!(*stack.borrow(), original_stack);
+        with_execution_context(|context| {
+            assert_eq!(context.context_stack, original_stack);
         });
     }
 
