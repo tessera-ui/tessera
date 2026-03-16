@@ -18,7 +18,7 @@ debug-dirty-overlay = []
 [dependencies]
 bytemuck = { version = "1.24.0", features = ["derive"] }
 tracing = "0.1.44"
-tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
 pollster = "0.4.0"
 wgpu = "28.0.0"
