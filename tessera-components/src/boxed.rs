@@ -193,8 +193,6 @@ fn compute_child_offset(
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::alignment::Alignment;
 /// use tessera_components::boxed::{BoxedArgs, boxed};
 /// use tessera_components::text::{TextArgs, text};
@@ -214,7 +212,6 @@ fn compute_child_offset(
 /// }));
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn boxed(args: &BoxedArgs) {

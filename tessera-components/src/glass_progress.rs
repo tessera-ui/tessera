@@ -161,8 +161,6 @@ impl LayoutSpec for GlassProgressFillLayout {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::glass_progress::{GlassProgressArgs, glass_progress};
 ///
 /// # use tessera_ui::tessera;
@@ -172,7 +170,6 @@ impl LayoutSpec for GlassProgressFillLayout {
 /// glass_progress(&GlassProgressArgs::default().value(0.75));
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn glass_progress(args: &GlassProgressArgs) {

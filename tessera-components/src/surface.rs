@@ -794,8 +794,6 @@ impl LayoutSpec for SurfaceLayout {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -819,7 +817,6 @@ impl LayoutSpec for SurfaceLayout {
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 /// Renders a styled surface container.
 #[tessera]

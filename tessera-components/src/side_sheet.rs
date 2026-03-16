@@ -185,8 +185,6 @@ impl SideSheetProviderArgs {
 /// # Example
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::side_sheet::SideSheetController;
 ///
 /// let mut controller = SideSheetController::new(false);
@@ -195,7 +193,6 @@ impl SideSheetProviderArgs {
 /// assert!(controller.is_open());
 /// controller.close();
 /// assert!(!controller.is_open());
-/// # });
 /// ```
 #[derive(Clone, PartialEq)]
 pub struct SideSheetController {
@@ -574,8 +571,6 @@ fn place_side_sheet_if_present(
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
@@ -595,7 +590,6 @@ fn place_side_sheet_if_present(
 /// material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn modal_side_sheet_provider(args: &SideSheetProviderArgs) {
@@ -636,8 +630,6 @@ pub fn modal_side_sheet_provider(args: &SideSheetProviderArgs) {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
@@ -657,7 +649,6 @@ pub fn modal_side_sheet_provider(args: &SideSheetProviderArgs) {
 /// material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn standard_side_sheet_provider(args: &SideSheetProviderArgs) {

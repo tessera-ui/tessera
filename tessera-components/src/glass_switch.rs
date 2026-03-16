@@ -216,8 +216,6 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::glass_switch::{GlassSwitchArgs, GlassSwitchController, glass_switch};
 /// use tessera_ui::{remember, tessera};
 ///
@@ -234,7 +232,6 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// }
 ///
 /// demo();
-/// # });
 /// ```
 #[tessera]
 pub fn glass_switch(args: &GlassSwitchArgs) {

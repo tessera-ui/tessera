@@ -221,8 +221,6 @@ impl LayoutSpec for RowLayout {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::{
 ///     row::{RowArgs, row},
 ///     spacer::spacer,
@@ -243,7 +241,6 @@ impl LayoutSpec for RowLayout {
 /// }));
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn row(args: &RowArgs) {

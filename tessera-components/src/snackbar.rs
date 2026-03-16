@@ -611,8 +611,6 @@ impl SnackbarHostArgs {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::snackbar::{SnackbarArgs, snackbar};
 /// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::tessera;
@@ -635,7 +633,6 @@ impl SnackbarHostArgs {
 /// }
 ///
 /// demo();
-/// # });
 /// ```
 #[tessera]
 pub fn snackbar(args: &SnackbarArgs) {
@@ -753,8 +750,6 @@ pub fn snackbar(args: &SnackbarArgs) {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::snackbar::{SnackbarHostArgs, SnackbarHostState, snackbar_host};
 /// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::{remember, tessera};
@@ -776,7 +771,6 @@ pub fn snackbar(args: &SnackbarArgs) {
 /// }
 ///
 /// demo();
-/// # });
 /// ```
 #[tessera]
 pub fn snackbar_host(args: &SnackbarHostArgs) {

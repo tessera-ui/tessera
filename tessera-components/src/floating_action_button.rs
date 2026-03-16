@@ -323,8 +323,6 @@ impl Default for FloatingActionButtonArgs {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::floating_action_button::{
 ///     FloatingActionButtonArgs, floating_action_button,
 /// };
@@ -350,7 +348,6 @@ impl Default for FloatingActionButtonArgs {
 /// }
 ///
 /// component();
-/// # });
 /// ```
 #[tessera]
 pub fn floating_action_button(args: &FloatingActionButtonArgs) {

@@ -389,21 +389,26 @@ pub type LazyHorizontalStaggeredGridScope<'a> = LazyStaggeredGridScope<'a>;
 ///     },
 ///     text::{TextArgs, text},
 /// };
-/// use tessera_ui::tessera;
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
+///     let rendered = remember(|| 0usize);
 ///     lazy_vertical_staggered_grid(
 ///         &LazyVerticalStaggeredGridArgs::default()
 ///             .columns(StaggeredGridCells::fixed(2))
 ///             .overscan(0)
 ///             .content(move |scope| {
 ///                 scope.items(4, move |i| {
+///                     rendered.with_mut(|count| *count += 1);
 ///                     text(&TextArgs::default().text(format!("Tile {i}")));
 ///                 });
 ///             }),
 ///     );
+///     assert_eq!(rendered.get(), 4);
 /// }
+///
+/// demo();
 /// ```
 #[tessera]
 pub fn lazy_vertical_staggered_grid(args: &LazyVerticalStaggeredGridArgs) {
@@ -484,21 +489,26 @@ fn lazy_vertical_staggered_grid_slots(
 ///     },
 ///     text::{TextArgs, text},
 /// };
-/// use tessera_ui::tessera;
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
+///     let rendered = remember(|| 0usize);
 ///     lazy_horizontal_staggered_grid(
 ///         &LazyHorizontalStaggeredGridArgs::default()
 ///             .rows(StaggeredGridCells::fixed(2))
 ///             .overscan(0)
 ///             .content(move |scope| {
 ///                 scope.items(3, move |i| {
+///                     rendered.with_mut(|count| *count += 1);
 ///                     text(&TextArgs::default().text(format!("Tile {i}")));
 ///                 });
 ///             }),
 ///     );
+///     assert_eq!(rendered.get(), 3);
 /// }
+///
+/// demo();
 /// ```
 #[tessera]
 pub fn lazy_horizontal_staggered_grid(args: &LazyHorizontalStaggeredGridArgs) {

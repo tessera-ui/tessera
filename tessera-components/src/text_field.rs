@@ -1150,8 +1150,6 @@ fn configure_text_field_menu(
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -1171,7 +1169,6 @@ fn configure_text_field_menu(
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn text_field(args: &TextFieldArgs) {

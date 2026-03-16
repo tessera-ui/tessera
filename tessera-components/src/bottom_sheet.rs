@@ -732,8 +732,6 @@ fn bottom_sheet_content_wrapper(args: &BottomSheetContentWrapperArgs) {
 /// # Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -753,7 +751,6 @@ fn bottom_sheet_content_wrapper(args: &BottomSheetContentWrapperArgs) {
 /// # ));
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn bottom_sheet_provider(args: &BottomSheetProviderArgs) {

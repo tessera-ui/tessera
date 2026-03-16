@@ -204,8 +204,6 @@ impl Default for TextInputArgs {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -223,7 +221,6 @@ impl Default for TextInputArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn text_input(args: &TextInputArgs) {
@@ -867,8 +864,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -880,7 +875,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn simple() -> Self {
         TextInputArgs::default()
@@ -914,8 +908,6 @@ impl TextInputArgs {
     ///
     /// # Example
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -927,7 +919,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn outlined() -> Self {
         Self::simple()
@@ -941,8 +932,6 @@ impl TextInputArgs {
     ///
     /// # Example
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -954,7 +943,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn minimal() -> Self {
         TextInputArgs::default()
@@ -976,8 +964,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -990,7 +976,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_min_width(mut self, min_width: Dp) -> Self {
         self.min_width = Some(min_width);
@@ -1002,8 +987,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1016,7 +999,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_min_height(mut self, min_height: Dp) -> Self {
         self.min_height = Some(min_height);
@@ -1027,8 +1009,6 @@ impl TextInputArgs {
     ///
     /// # Example
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1041,7 +1021,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_background_color(mut self, color: Color) -> Self {
         self.background_color = Some(color);
@@ -1053,8 +1032,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1068,7 +1045,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_border_width(mut self, width: Dp) -> Self {
         self.border_width = width;
@@ -1080,8 +1056,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1094,7 +1068,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_border_color(mut self, color: Color) -> Self {
         self.border_color = Some(color);
@@ -1106,8 +1079,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1126,7 +1097,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_shape(mut self, shape: Shape) -> Self {
         self.shape = shape;
@@ -1138,8 +1108,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1152,7 +1120,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_padding(mut self, padding: Dp) -> Self {
         self.padding = padding;
@@ -1164,8 +1131,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1178,7 +1143,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_focus_border_color(mut self, color: Color) -> Self {
         self.focus_border_color = Some(color);
@@ -1190,8 +1154,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1204,7 +1166,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_focus_background_color(mut self, color: Color) -> Self {
         self.focus_background_color = Some(color);
@@ -1216,8 +1177,6 @@ impl TextInputArgs {
     /// # Example
     ///
     /// ```
-    /// # use tessera_ui::testing::with_tessera;
-    /// # with_tessera(|| {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
@@ -1230,7 +1189,6 @@ impl TextInputArgs {
     /// # material_theme(&args);
     /// # }
     /// # component();
-    /// # });
     /// ```
     pub fn with_selection_color(mut self, color: Color) -> Self {
         self.selection_color = Some(color);

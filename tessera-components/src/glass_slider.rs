@@ -258,8 +258,6 @@ fn process_pointer_gestures(
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::glass_slider::{GlassSliderArgs, GlassSliderController, glass_slider};
 /// use tessera_ui::{remember, tessera};
 ///
@@ -281,7 +279,6 @@ fn process_pointer_gestures(
 /// }
 ///
 /// demo();
-/// # });
 /// ```
 #[tessera]
 pub fn glass_slider(args: &GlassSliderArgs) {

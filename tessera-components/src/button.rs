@@ -193,8 +193,6 @@ impl Default for ButtonArgs {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -213,7 +211,6 @@ impl Default for ButtonArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 /// Renders a Material button.
 #[tessera]

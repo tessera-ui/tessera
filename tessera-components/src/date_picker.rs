@@ -536,8 +536,6 @@ impl DatePickerDialogArgs {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -556,7 +554,6 @@ impl DatePickerDialogArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn date_picker(args: &DatePickerArgs) {
@@ -704,8 +701,6 @@ fn date_picker_inner(args: &DatePickerArgs) {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -725,7 +720,6 @@ fn date_picker_inner(args: &DatePickerArgs) {
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn date_picker_dialog(args: &DatePickerDialogArgs) {

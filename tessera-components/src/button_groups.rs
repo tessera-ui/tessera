@@ -276,8 +276,6 @@ impl ButtonGroupsState {
 /// # Example
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// use tessera_components::{
 ///     button_groups::{ButtonGroupsArgs, button_groups},
 ///     text::{TextArgs, text},
@@ -334,7 +332,6 @@ impl ButtonGroupsState {
 ///     material_theme(&args);
 /// }
 /// # demo();
-/// # });
 /// ```
 #[tessera]
 pub fn button_groups(args: &ButtonGroupsArgs) {

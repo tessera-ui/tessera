@@ -542,8 +542,6 @@ fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Cal
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -572,7 +570,6 @@ fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Cal
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn menu_provider(args: &MenuProviderArgs) {

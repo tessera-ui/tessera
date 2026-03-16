@@ -500,8 +500,6 @@ impl Default for ChipArgs {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -522,7 +520,6 @@ impl Default for ChipArgs {
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn chip(args: &ChipArgs) {

@@ -787,8 +787,6 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -814,7 +812,6 @@ fn range_slider_colors(args: &RangeSliderArgs) -> SliderColors {
 /// # material_theme(&args);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn slider(args: &SliderArgs) {
@@ -1116,8 +1113,6 @@ fn measure_centered_slider(
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -1152,7 +1147,6 @@ fn measure_centered_slider(
 /// assert_eq!(current_value.get(), 0.25);
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn centered_slider(args: &SliderArgs) {
@@ -1444,8 +1438,6 @@ fn measure_range_slider(
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::testing::with_tessera;
-/// # with_tessera(|| {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
@@ -1472,7 +1464,6 @@ fn measure_range_slider(
 /// assert_eq!(range_value.get(), (0.2, 0.8));
 /// # }
 /// # component();
-/// # });
 /// ```
 #[tessera]
 pub fn range_slider(args: &RangeSliderArgs) {
