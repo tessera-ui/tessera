@@ -124,283 +124,99 @@ fn focus_navigation_page(args: &FocusNavigationPageArgs) {
                     .modifier(Modifier::new().fill_max_size())
                     .controller(page_controller)
                     .content_padding(Dp(24.0))
+                    .item_spacing(Dp(20.0))
                     .estimated_item_size(Dp(1600.0))
                     .cross_axis_alignment(CrossAxisAlignment::Stretch)
                     .content(move |scope| {
                         scope.item(move || {
-                            column(
-                                    &ColumnArgs::default()
-                                        .modifier(Modifier::new().fill_max_width())
-                                        .cross_axis_alignment(CrossAxisAlignment::Start)
-                                        .children(move |scope| {
-                                            scope.child(|| {
-                                                text(
-                                                    &TextArgs::default()
-                                                        .text("Focus & Keyboard Navigation")
-                                                        .size(Dp(24.0)),
-                                                );
-                                            });
-                                            scope.child(|| {
-                                                text(
-                                                    &TextArgs::default()
-                                                        .text("Use Tab and Shift+Tab for global traversal. Use arrows inside radio groups, segmented rows, tabs, pagers, menus, and navigation bars. Open the modal surfaces to verify trap and restore behavior.")
-                                                        .size(Dp(14.0))
-                                                        .color(section_supporting_color()),
-                                                );
-                                            });
-                                            scope.child(|| {
-                                                spacer(&SpacerArgs::new(
-                                                    Modifier::new().height(Dp(20.0)),
-                                                ));
-                                            });
-                                            scope.child(move || {
-                                                showcase_section(&ShowcaseSectionArgs {
-                                                    title: "Traversal Basics".into(),
-                                                    description: "These controls should participate in the global focus order and activate from Enter or Space.".into(),
-                                                    child: RenderSlot::new(move || {
-                                                        column(
-                                                            &ColumnArgs::default()
-                                                                .modifier(Modifier::new().fill_max_width())
-                                                                .cross_axis_alignment(CrossAxisAlignment::Start)
-                                                                .children(move |section_scope| {
-                                                                    section_scope.child(move || {
-                                                                        row(&RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center).children(move |row_scope| {
-                                                                            row_scope.child(move || {
-                                                                                demo_button(&DemoButtonArgs {
-                                                                                    label: "Primary Action".into(),
-                                                                                    on_click: Callback::new(move || {
-                                                                                        action_count.with_mut(|count| *count += 1);
-                                                                                    }),
-                                                                                });
-                                                                            });
-                                                                            row_scope.child(|| {
-                                                                                spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0))));
-                                                                            });
-                                                                            row_scope.child(move || {
-                                                                                text(&TextArgs::default().text(format!("Button activations: {}", action_count.get())));
-                                                                            });
-                                                                        }));
-                                                                    });
-                                                                    section_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0)))));
-                                                                    section_scope.child(move || {
-                                                                        row(&RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center).children(move |row_scope| {
-                                                                            row_scope.child(move || {
-                                                                                checkbox(&CheckboxArgs::default().checked(checkbox_value.get()).on_toggle(move |value| {
-                                                                                    checkbox_value.set(value);
-                                                                                }));
-                                                                            });
-                                                                            row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0)))));
-                                                                            row_scope.child(move || {
-                                                                                text(&TextArgs::default().text(format!("Checkbox is {}", if checkbox_value.get() { "checked" } else { "unchecked" })));
-                                                                            });
-                                                                        }));
-                                                                    });
-                                                                    section_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0)))));
-                                                                    section_scope.child(move || {
-                                                                        row(&RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center).children(move |row_scope| {
-                                                                            row_scope.child(move || {
-                                                                                switch(&SwitchArgs::default().controller(switch_controller).on_toggle(|_| {}));
-                                                                            });
-                                                                            row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0)))));
-                                                                            row_scope.child(move || {
-                                                                                text(&TextArgs::default().text(format!("Switch is {}", if switch_controller.with(|controller| controller.is_checked()) { "on" } else { "off" })));
-                                                                            });
-                                                                        }));
-                                                                    });
-                                                                    section_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0)))));
-                                                                    section_scope.child(move || {
-                                                                        list_item(
-                                                                            &ListItemArgs::new("Focusable list row")
-                                                                                .supporting_text(format!("Selected item: {}", selected_list_item.get()))
-                                                                                .on_click(move || {
-                                                                                    selected_list_item.set("Focusable list row".to_string());
-                                                                                })
-                                                                                .leading(|| {
-                                                                                    icon(&IconArgs::default().vector(filled::LIST_SVG).size(Dp(20.0)));
-                                                                                }),
-                                                                        );
-                                                                    });
-                                                                }),
-                                                        );
-                                                    }),
-                                                });
-                                            });
-                                            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                            scope.child(move || {
-                                                showcase_section(&ShowcaseSectionArgs {
-                                                    title: "Radio Group".into(),
-                                                    description: "Use Up and Down to move through the group. Focus movement should also update the selected radio.".into(),
-                                                    child: RenderSlot::new(move || {
-                                                        column(&ColumnArgs::default().modifier(Modifier::new().fill_max_width()).cross_axis_alignment(CrossAxisAlignment::Start).children(move |section_scope| {
-                                                            section_scope.child(move || {
-                                                                radio_group(
-                                                                    &RadioGroupArgs::default()
-                                                                        .orientation(RadioGroupOrientation::Vertical)
-                                                                        .content(move || {
-                                                                            column(&ColumnArgs::default().cross_axis_alignment(CrossAxisAlignment::Start).children(move |radio_scope| {
-                                                                                radio_scope.child(move || radio_option_row(&RadioOptionRowArgs { label: "Inbox".to_string(), selected_index: radio_selection, index: 0 }));
-                                                                                radio_scope.child(move || radio_option_row(&RadioOptionRowArgs { label: "Mentions".to_string(), selected_index: radio_selection, index: 1 }));
-                                                                                radio_scope.child(move || radio_option_row(&RadioOptionRowArgs { label: "Archived".to_string(), selected_index: radio_selection, index: 2 }));
-                                                                            }));
-                                                                        }),
-                                                                );
-                                                            });
-                                                            section_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0)))));
-                                                            section_scope.child(move || {
-                                                                let label = match radio_selection.get() { 0 => "Inbox", 1 => "Mentions", _ => "Archived" };
-                                                                text(&TextArgs::default().text(format!("Selected radio: {label}")));
-                                                            });
-                                                        }));
-                                                    }),
-                                                });
-                                            });
-                                            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                            scope.child(move || {
-                                                showcase_section(&ShowcaseSectionArgs {
-                                                    title: "Tabs, Segmented Rows, And Navigation".into(),
-                                                    description: "Tabs and single-choice segmented rows should behave like roving-focus groups. Navigation bar should cycle with Left and Right.".into(),
-                                                    child: RenderSlot::new(move || {
-                                                        let base_shape = SegmentedButtonDefaults::shape();
-                                                        let navigation_bar_controller = remember(|| NavigationBarController::new(0));
-                                                        column(&ColumnArgs::default().modifier(Modifier::new().fill_max_width()).cross_axis_alignment(CrossAxisAlignment::Start).children(move |section_scope| {
-                                                            section_scope.child(move || {
-                                                                tabs(
-                                                                    &TabsArgs::default()
-                                                                        .modifier(Modifier::new().fill_max_width())
-                                                                        .variant(TabsVariant::Primary)
-                                                                        .children(|tabs_scope| {
-                                                                            tabs_scope.child_label("Overview", || text(&TextArgs::from("Overview content")));
-                                                                            tabs_scope.child_label("Activity", || text(&TextArgs::from("Activity content")));
-                                                                            tabs_scope.child_label("Files", || text(&TextArgs::from("Files content")));
-                                                                        }),
-                                                                );
-                                                            });
-                                                            section_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                                            section_scope.child(move || {
-                                                                single_choice_segmented_button_row(
-                                                                    &SegmentedButtonRowArgs::default().content(move || {
-                                                                        for (index, label) in ["Day", "Week", "Month"].iter().enumerate() {
-                                                                            segmented_button(
-                                                                                &SegmentedButtonArgs::new((*label).to_string())
-                                                                                    .selected(segmented_single.get() == index)
-                                                                                    .shape(SegmentedButtonDefaults::item_shape(index, 3, base_shape))
-                                                                                    .on_click(move || segmented_single.set(index)),
-                                                                            );
-                                                                        }
-                                                                    }),
-                                                                );
-                                                            });
-                                                            section_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0)))));
-                                                            section_scope.child(move || {
-                                                                text(&TextArgs::default().text(format!("Single choice: {}", ["Day", "Week", "Month"][segmented_single.get()])));
-                                                            });
-                                                            section_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                                            section_scope.child(move || {
-                                                                multi_choice_segmented_button_row(
-                                                                    &SegmentedButtonRowArgs::default().content(move || {
-                                                                        for (index, label) in ["Email", "Push", "SMS"].iter().enumerate() {
-                                                                            segmented_button(
-                                                                                &SegmentedButtonArgs::new((*label).to_string())
-                                                                                    .selected(segmented_multi.with(|values| values[index]))
-                                                                                    .shape(SegmentedButtonDefaults::item_shape(index, 3, base_shape))
-                                                                                    .on_click(move || {
-                                                                                        segmented_multi.with_mut(|values| values[index] = !values[index]);
-                                                                                    }),
-                                                                            );
-                                                                        }
-                                                                    }),
-                                                                );
-                                                            });
-                                                            section_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                                            section_scope.child(move || {
-                                                                surface(&SurfaceArgs::with_child(
-                                                                    SurfaceArgs::default().modifier(Modifier::new().fill_max_width()).shape(Shape::rounded_rectangle(Dp(20.0))),
-                                                                    move || {
-                                                                        navigation_bar(
-                                                                            &NavigationBarArgs::default()
-                                                                                .controller(navigation_bar_controller)
-                                                                                .item(NavigationBarItem::new("Home").icon(|| icon(&IconArgs::default().vector(filled::HOME_SVG).size(Dp(20.0)))))
-                                                                                .item(NavigationBarItem::new("Search").icon(|| icon(&IconArgs::default().vector(filled::SEARCH_SVG).size(Dp(20.0)))))
-                                                                                .item(NavigationBarItem::new("Profile").icon(|| icon(&IconArgs::default().vector(filled::PERSON_SVG).size(Dp(20.0))))),
-                                                                        );
-                                                                    },
-                                                                ));
-                                                            });
-                                                        }));
-                                                    }),
-                                                });
-                                            });
-                                            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                            scope.child(move || {
-                                                showcase_section(&ShowcaseSectionArgs {
-                                                    title: "Menus And Submenus".into(),
-                                                    description: "Open the menu, use Up and Down to move, Right to enter the submenu, and Left to return.".into(),
-                                                    child: RenderSlot::new(submenu_demo_section),
-                                                });
-                                            });
-                                            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                            scope.child(move || {
-                                                showcase_section(&ShowcaseSectionArgs {
-                                                    title: "Pager Navigation".into(),
-                                                    description: "Tab to the pager viewport, then use Left and Right, PageUp and PageDown, or Home and End to change pages.".into(),
-                                                    child: RenderSlot::new(move || {
-                                                        pager_demo_section(&PagerDemoSectionArgs {
-                                                            controller: pager_controller,
-                                                        });
-                                                    }),
-                                                });
-                                            });
-                                            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                            scope.child(move || {
-                                                showcase_section(&ShowcaseSectionArgs {
-                                                    title: "Modal Focus Trap".into(),
-                                                    description: "Open the dialog, bottom sheet, and side sheet. Tab should stay inside each surface until you close it.".into(),
-                                                    child: RenderSlot::new(move || {
-                                                        row(&RowArgs::default().cross_axis_alignment(CrossAxisAlignment::Center).children(move |row_scope| {
-                                                            row_scope.child(move || {
-                                                                demo_button(&DemoButtonArgs {
-                                                                    label: "Open Dialog".into(),
-                                                                    on_click: Callback::new(move || {
-                                                                        dialog_controller.with_mut(|controller| controller.open());
-                                                                    }),
-                                                                });
-                                                            });
-                                                            row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0)))));
-                                                            row_scope.child(move || {
-                                                                demo_button(&DemoButtonArgs {
-                                                                    label: "Open Bottom Sheet".into(),
-                                                                    on_click: Callback::new(move || {
-                                                                        bottom_sheet_controller.with_mut(|controller| controller.open());
-                                                                    }),
-                                                                });
-                                                            });
-                                                            row_scope.child(|| spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0)))));
-                                                            row_scope.child(move || {
-                                                                demo_button(&DemoButtonArgs {
-                                                                    label: "Open Side Sheet".into(),
-                                                                    on_click: Callback::new(move || {
-                                                                        side_sheet_controller.with_mut(|controller| controller.open());
-                                                                    }),
-                                                                });
-                                                            });
-                                                        }));
-                                                    }),
-                                                });
-                                            });
-                                            scope.child(|| spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0)))));
-                                            scope.child(move || {
-                                                showcase_section(&ShowcaseSectionArgs {
-                                                    title: "Lazy Reveal".into(),
-                                                    description: "Tab through this inner lazy column until focus moves beyond the viewport. The container should reveal the focused row automatically.".into(),
-                                                    child: RenderSlot::new(move || {
-                                                        reveal_demo_section(&RevealDemoSectionArgs {
-                                                            selected_row: reveal_selection,
-                                                        });
-                                                    }),
-                                                });
-                                            });
-                                        }),
-                                );
+                            focus_navigation_intro();
+                        });
+                        scope.item(move || {
+                            showcase_section(&ShowcaseSectionArgs {
+                                title: "Traversal Basics".into(),
+                                description: "These controls should participate in the global focus order and activate from Enter or Space.".into(),
+                                child: RenderSlot::new(move || {
+                                    traversal_basics_section_content(
+                                        &TraversalBasicsSectionContentArgs {
+                                            action_count,
+                                            checkbox_value,
+                                            switch_controller,
+                                            selected_list_item,
+                                        },
+                                    );
+                                }),
+                            });
+                        });
+                        scope.item(move || {
+                            showcase_section(&ShowcaseSectionArgs {
+                                title: "Radio Group".into(),
+                                description: "Use Up and Down to move through the group. Focus movement should also update the selected radio.".into(),
+                                child: RenderSlot::new(move || {
+                                    radio_group_section_content(
+                                        &RadioGroupSectionContentArgs {
+                                            selected_index: radio_selection,
+                                        },
+                                    );
+                                }),
+                            });
+                        });
+                        scope.item(move || {
+                            showcase_section(&ShowcaseSectionArgs {
+                                title: "Tabs, Segmented Rows, And Navigation".into(),
+                                description: "Tabs and single-choice segmented rows should behave like roving-focus groups. Navigation bar should cycle with Left and Right.".into(),
+                                child: RenderSlot::new(move || {
+                                    composite_navigation_section_content(
+                                        &CompositeNavigationSectionContentArgs {
+                                            segmented_single,
+                                            segmented_multi,
+                                        },
+                                    );
+                                }),
+                            });
+                        });
+                        scope.item(move || {
+                            showcase_section(&ShowcaseSectionArgs {
+                                title: "Menus And Submenus".into(),
+                                description: "Open the menu, use Up and Down to move, Right to enter the submenu, and Left to return.".into(),
+                                child: RenderSlot::new(submenu_demo_section),
+                            });
+                        });
+                        scope.item(move || {
+                            showcase_section(&ShowcaseSectionArgs {
+                                title: "Pager Navigation".into(),
+                                description: "Tab to the pager viewport, then use Left and Right, PageUp and PageDown, or Home and End to change pages.".into(),
+                                child: RenderSlot::new(move || {
+                                    pager_demo_section(&PagerDemoSectionArgs {
+                                        controller: pager_controller,
+                                    });
+                                }),
+                            });
+                        });
+                        scope.item(move || {
+                            showcase_section(&ShowcaseSectionArgs {
+                                title: "Modal Focus Trap".into(),
+                                description: "Open the dialog, bottom sheet, and side sheet. Tab should stay inside each surface until you close it.".into(),
+                                child: RenderSlot::new(move || {
+                                    modal_trap_section_content(
+                                        &ModalTrapSectionContentArgs {
+                                            dialog_controller,
+                                            bottom_sheet_controller,
+                                            side_sheet_controller,
+                                        },
+                                    );
+                                }),
+                            });
+                        });
+                        scope.item(move || {
+                            showcase_section(&ShowcaseSectionArgs {
+                                title: "Lazy Reveal".into(),
+                                description: "Tab through this inner lazy column until focus moves beyond the viewport. The container should reveal the focused row automatically.".into(),
+                                child: RenderSlot::new(move || {
+                                    reveal_demo_section(&RevealDemoSectionArgs {
+                                        selected_row: reveal_selection,
+                                    });
+                                }),
+                            });
                         });
                     }),
             );
@@ -419,20 +235,23 @@ struct ShowcaseSectionArgs {
 
 #[tessera]
 fn showcase_section(args: &ShowcaseSectionArgs) {
-    let container_color = use_context::<MaterialTheme>()
+    let color_scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
-        .color_scheme
-        .surface_container_low;
+        .color_scheme;
+    let container_color = color_scheme.surface_container_low;
+    let border_color = color_scheme.outline_variant.with_alpha(0.45);
     let title = args.title.clone();
     let description = args.description.clone();
     let child = args.child.clone();
     surface(&SurfaceArgs::with_child(
         SurfaceArgs::default()
-            .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
+            .modifier(Modifier::new().fill_max_width())
             .shape(Shape::rounded_rectangle(Dp(24.0)))
-            .style(SurfaceStyle::Filled {
-                color: container_color,
+            .style(SurfaceStyle::FilledOutlined {
+                fill_color: container_color,
+                border_color,
+                border_width: Dp(1.0),
             }),
         move || {
             let title = title.clone();
@@ -440,7 +259,7 @@ fn showcase_section(args: &ShowcaseSectionArgs) {
             let child = child.clone();
             column(
                 &ColumnArgs::default()
-                    .modifier(Modifier::new().fill_max_width())
+                    .modifier(Modifier::new().fill_max_width().padding_all(Dp(16.0)))
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .children(move |scope| {
                         scope.child({
@@ -472,6 +291,32 @@ fn showcase_section(args: &ShowcaseSectionArgs) {
     ));
 }
 
+#[derive(Clone, Prop)]
+struct DemoFrameArgs {
+    modifier: Modifier,
+    style: SurfaceStyle,
+    shape: Shape,
+    child: RenderSlot,
+}
+
+#[tessera]
+fn demo_frame(args: &DemoFrameArgs) {
+    let modifier = args.modifier.clone();
+    let style = args.style.clone();
+    let shape = args.shape;
+    let child = args.child.clone();
+
+    surface(&SurfaceArgs::with_child(
+        SurfaceArgs::default()
+            .modifier(modifier)
+            .shape(shape)
+            .style(style),
+        move || {
+            child.render();
+        },
+    ));
+}
+
 fn section_supporting_color() -> tessera_ui::Color {
     use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -499,6 +344,418 @@ fn demo_button(args: &DemoButtonArgs) {
             text(&TextArgs::from(label.clone()));
         },
     ));
+}
+
+#[tessera]
+fn focus_navigation_intro() {
+    column(
+        &ColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .children(move |scope| {
+                scope.child(|| {
+                    text(
+                        &TextArgs::default()
+                            .text("Focus & Keyboard Navigation")
+                            .size(Dp(24.0)),
+                    );
+                });
+                scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
+                });
+                scope.child(|| {
+                    text(
+                        &TextArgs::default()
+                            .text("Use Tab and Shift+Tab for global traversal. Use arrows inside radio groups, segmented rows, tabs, pagers, menus, and navigation bars. Open the modal surfaces to verify trap and restore behavior.")
+                            .size(Dp(14.0))
+                            .color(section_supporting_color()),
+                    );
+                });
+            }),
+    );
+}
+
+#[derive(Clone, Prop)]
+struct TraversalBasicsSectionContentArgs {
+    action_count: State<usize>,
+    checkbox_value: State<bool>,
+    switch_controller: State<SwitchController>,
+    selected_list_item: State<String>,
+}
+
+#[tessera]
+fn traversal_basics_section_content(args: &TraversalBasicsSectionContentArgs) {
+    let action_count = args.action_count;
+    let checkbox_value = args.checkbox_value;
+    let switch_controller = args.switch_controller;
+    let selected_list_item = args.selected_list_item;
+
+    column(
+        &ColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .children(move |section_scope| {
+                section_scope.child(move || {
+                    row(&RowArgs::default()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |row_scope| {
+                            row_scope.child(move || {
+                                demo_button(&DemoButtonArgs {
+                                    label: "Primary Action".into(),
+                                    on_click: Callback::new(move || {
+                                        action_count.with_mut(|count| *count += 1);
+                                    }),
+                                });
+                            });
+                            row_scope.child(|| {
+                                spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0))));
+                            });
+                            row_scope.child(move || {
+                                text(
+                                    &TextArgs::default().text(format!(
+                                        "Button activations: {}",
+                                        action_count.get()
+                                    )),
+                                );
+                            });
+                        }));
+                });
+                section_scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
+                });
+                section_scope.child(move || {
+                    row(&RowArgs::default()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |row_scope| {
+                            row_scope.child(move || {
+                                checkbox(
+                                    &CheckboxArgs::default()
+                                        .checked(checkbox_value.get())
+                                        .on_toggle(move |value| {
+                                            checkbox_value.set(value);
+                                        }),
+                                );
+                            });
+                            row_scope.child(|| {
+                                spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0))));
+                            });
+                            row_scope.child(move || {
+                                text(&TextArgs::default().text(format!(
+                                    "Checkbox is {}",
+                                    if checkbox_value.get() {
+                                        "checked"
+                                    } else {
+                                        "unchecked"
+                                    }
+                                )));
+                            });
+                        }));
+                });
+                section_scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
+                });
+                section_scope.child(move || {
+                    row(&RowArgs::default()
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move |row_scope| {
+                            row_scope.child(move || {
+                                switch(
+                                    &SwitchArgs::default()
+                                        .controller(switch_controller)
+                                        .on_toggle(|_| {}),
+                                );
+                            });
+                            row_scope.child(|| {
+                                spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0))));
+                            });
+                            row_scope.child(move || {
+                                text(&TextArgs::default().text(format!(
+                                    "Switch is {}",
+                                    if switch_controller.with(|controller| controller.is_checked())
+                                    {
+                                        "on"
+                                    } else {
+                                        "off"
+                                    }
+                                )));
+                            });
+                        }));
+                });
+                section_scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
+                });
+                section_scope.child(move || {
+                    list_item(
+                        &ListItemArgs::new("Focusable list row")
+                            .supporting_text(format!("Selected item: {}", selected_list_item.get()))
+                            .on_click(move || {
+                                selected_list_item.set("Focusable list row".to_string());
+                            })
+                            .leading(|| {
+                                icon(&IconArgs::default().vector(filled::LIST_SVG).size(Dp(20.0)));
+                            }),
+                    );
+                });
+            }),
+    );
+}
+
+#[derive(Clone, Prop)]
+struct RadioGroupSectionContentArgs {
+    selected_index: State<usize>,
+}
+
+#[tessera]
+fn radio_group_section_content(args: &RadioGroupSectionContentArgs) {
+    let selected_index = args.selected_index;
+
+    column(
+        &ColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .children(move |section_scope| {
+                section_scope.child(move || {
+                    radio_group(
+                        &RadioGroupArgs::default()
+                            .orientation(RadioGroupOrientation::Vertical)
+                            .content(move || {
+                                column(
+                                    &ColumnArgs::default()
+                                        .cross_axis_alignment(CrossAxisAlignment::Start)
+                                        .children(move |radio_scope| {
+                                            radio_scope.child(move || {
+                                                radio_option_row(&RadioOptionRowArgs {
+                                                    label: "Inbox".to_string(),
+                                                    selected_index,
+                                                    index: 0,
+                                                })
+                                            });
+                                            radio_scope.child(|| {
+                                                spacer(&SpacerArgs::new(
+                                                    Modifier::new().height(Dp(8.0)),
+                                                ));
+                                            });
+                                            radio_scope.child(move || {
+                                                radio_option_row(&RadioOptionRowArgs {
+                                                    label: "Mentions".to_string(),
+                                                    selected_index,
+                                                    index: 1,
+                                                })
+                                            });
+                                            radio_scope.child(|| {
+                                                spacer(&SpacerArgs::new(
+                                                    Modifier::new().height(Dp(8.0)),
+                                                ));
+                                            });
+                                            radio_scope.child(move || {
+                                                radio_option_row(&RadioOptionRowArgs {
+                                                    label: "Archived".to_string(),
+                                                    selected_index,
+                                                    index: 2,
+                                                })
+                                            });
+                                        }),
+                                );
+                            }),
+                    );
+                });
+                section_scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
+                });
+                section_scope.child(move || {
+                    let label = match selected_index.get() {
+                        0 => "Inbox",
+                        1 => "Mentions",
+                        _ => "Archived",
+                    };
+                    text(&TextArgs::default().text(format!("Selected radio: {label}")));
+                });
+            }),
+    );
+}
+
+#[derive(Clone, Prop)]
+struct CompositeNavigationSectionContentArgs {
+    segmented_single: State<usize>,
+    segmented_multi: State<[bool; 3]>,
+}
+
+#[tessera]
+fn composite_navigation_section_content(args: &CompositeNavigationSectionContentArgs) {
+    let segmented_single = args.segmented_single;
+    let segmented_multi = args.segmented_multi;
+    let base_shape = SegmentedButtonDefaults::shape();
+    let navigation_bar_controller = remember(|| NavigationBarController::new(0));
+    let navigation_bar_color = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme
+        .surface_container;
+
+    column(
+        &ColumnArgs::default()
+            .modifier(Modifier::new().fill_max_width())
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .children(move |section_scope| {
+                section_scope.child(move || {
+                    tabs(
+                        &TabsArgs::default()
+                            .modifier(Modifier::new().fill_max_width())
+                            .variant(TabsVariant::Primary)
+                            .children(|tabs_scope| {
+                                tabs_scope.child_label("Overview", || {
+                                    text(&TextArgs::from("Overview content"))
+                                });
+                                tabs_scope.child_label("Activity", || {
+                                    text(&TextArgs::from("Activity content"))
+                                });
+                                tabs_scope.child_label("Files", || {
+                                    text(&TextArgs::from("Files content"))
+                                });
+                            }),
+                    );
+                });
+                section_scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
+                });
+                section_scope.child(move || {
+                    single_choice_segmented_button_row(&SegmentedButtonRowArgs::default().content(
+                        move || {
+                            for (index, label) in ["Day", "Week", "Month"].iter().enumerate() {
+                                segmented_button(
+                                    &SegmentedButtonArgs::new((*label).to_string())
+                                        .selected(segmented_single.get() == index)
+                                        .shape(SegmentedButtonDefaults::item_shape(
+                                            index, 3, base_shape,
+                                        ))
+                                        .on_click(move || segmented_single.set(index)),
+                                );
+                            }
+                        },
+                    ));
+                });
+                section_scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
+                });
+                section_scope.child(move || {
+                    text(&TextArgs::default().text(format!(
+                        "Single choice: {}",
+                        ["Day", "Week", "Month"][segmented_single.get()]
+                    )));
+                });
+                section_scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
+                });
+                section_scope.child(move || {
+                    multi_choice_segmented_button_row(&SegmentedButtonRowArgs::default().content(
+                        move || {
+                            for (index, label) in ["Email", "Push", "SMS"].iter().enumerate() {
+                                segmented_button(
+                                    &SegmentedButtonArgs::new((*label).to_string())
+                                        .selected(segmented_multi.with(|values| values[index]))
+                                        .shape(SegmentedButtonDefaults::item_shape(
+                                            index, 3, base_shape,
+                                        ))
+                                        .on_click(move || {
+                                            segmented_multi.with_mut(|values| {
+                                                values[index] = !values[index];
+                                            });
+                                        }),
+                                );
+                            }
+                        },
+                    ));
+                });
+                section_scope.child(|| {
+                    spacer(&SpacerArgs::new(Modifier::new().height(Dp(16.0))));
+                });
+                section_scope.child(move || {
+                    demo_frame(&DemoFrameArgs {
+                        modifier: Modifier::new().fill_max_width(),
+                        style: SurfaceStyle::Filled {
+                            color: navigation_bar_color,
+                        },
+                        shape: Shape::rounded_rectangle(Dp(20.0)),
+                        child: RenderSlot::new(move || {
+                            navigation_bar(
+                                &NavigationBarArgs::default()
+                                    .controller(navigation_bar_controller)
+                                    .item(NavigationBarItem::new("Home").icon(|| {
+                                        icon(
+                                            &IconArgs::default()
+                                                .vector(filled::HOME_SVG)
+                                                .size(Dp(20.0)),
+                                        )
+                                    }))
+                                    .item(NavigationBarItem::new("Search").icon(|| {
+                                        icon(
+                                            &IconArgs::default()
+                                                .vector(filled::SEARCH_SVG)
+                                                .size(Dp(20.0)),
+                                        )
+                                    }))
+                                    .item(NavigationBarItem::new("Profile").icon(|| {
+                                        icon(
+                                            &IconArgs::default()
+                                                .vector(filled::PERSON_SVG)
+                                                .size(Dp(20.0)),
+                                        )
+                                    })),
+                            );
+                        }),
+                    });
+                });
+            }),
+    );
+}
+
+#[derive(Clone, Prop)]
+struct ModalTrapSectionContentArgs {
+    dialog_controller: State<DialogController>,
+    bottom_sheet_controller: State<BottomSheetController>,
+    side_sheet_controller: State<SideSheetController>,
+}
+
+#[tessera]
+fn modal_trap_section_content(args: &ModalTrapSectionContentArgs) {
+    let dialog_controller = args.dialog_controller;
+    let bottom_sheet_controller = args.bottom_sheet_controller;
+    let side_sheet_controller = args.side_sheet_controller;
+
+    row(&RowArgs::default()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move |row_scope| {
+            row_scope.child(move || {
+                demo_button(&DemoButtonArgs {
+                    label: "Open Dialog".into(),
+                    on_click: Callback::new(move || {
+                        dialog_controller.with_mut(|controller| controller.open());
+                    }),
+                });
+            });
+            row_scope.child(|| {
+                spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0))));
+            });
+            row_scope.child(move || {
+                demo_button(&DemoButtonArgs {
+                    label: "Open Bottom Sheet".into(),
+                    on_click: Callback::new(move || {
+                        bottom_sheet_controller.with_mut(|controller| controller.open());
+                    }),
+                });
+            });
+            row_scope.child(|| {
+                spacer(&SpacerArgs::new(Modifier::new().width(Dp(12.0))));
+            });
+            row_scope.child(move || {
+                demo_button(&DemoButtonArgs {
+                    label: "Open Side Sheet".into(),
+                    on_click: Callback::new(move || {
+                        side_sheet_controller.with_mut(|controller| controller.open());
+                    }),
+                });
+            });
+        }));
 }
 
 #[derive(Clone, Prop)]
@@ -653,12 +910,11 @@ fn pager_demo_section(args: &PagerDemoSectionArgs) {
                     spacer(&SpacerArgs::new(Modifier::new().height(Dp(12.0))));
                 });
                 scope.child(move || {
-                    surface(&SurfaceArgs::with_child(
-                        SurfaceArgs::default()
-                            .modifier(Modifier::new().fill_max_width().height(Dp(220.0)))
-                            .shape(Shape::rounded_rectangle(Dp(20.0)))
-                            .style(SurfaceStyle::Filled { color }),
-                        move || {
+                    demo_frame(&DemoFrameArgs {
+                        modifier: Modifier::new().fill_max_width().height(Dp(220.0)),
+                        style: SurfaceStyle::Filled { color },
+                        shape: Shape::rounded_rectangle(Dp(20.0)),
+                        child: RenderSlot::new(move || {
                             horizontal_pager(
                                 &PagerArgs::default()
                                     .page_count(5)
@@ -674,8 +930,8 @@ fn pager_demo_section(args: &PagerDemoSectionArgs) {
                                         );
                                     }),
                             );
-                        },
-                    ));
+                        }),
+                    });
                 });
             }),
     );
@@ -697,16 +953,16 @@ fn focus_navigation_pager_page(args: &FocusNavigationPagerPageArgs) {
         filled::HOME_SVG,
     ];
 
-    surface(&SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().fill_max_size())
-            .shape(Shape::rounded_rectangle(Dp(18.0)))
-            .style(section_supporting_color().with_alpha(0.12).into())
-            .content_alignment(tessera_components::alignment::Alignment::Center),
-        move || {
+    demo_frame(&DemoFrameArgs {
+        modifier: Modifier::new().fill_max_size(),
+        style: section_supporting_color().with_alpha(0.12).into(),
+        shape: Shape::rounded_rectangle(Dp(18.0)),
+        child: RenderSlot::new(move || {
             column(
                 &ColumnArgs::default()
+                    .modifier(Modifier::new().fill_max_size().padding_all(Dp(16.0)))
                     .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .main_axis_alignment(MainAxisAlignment::Center)
                     .children(move |scope| {
                         scope.child(move || {
                             icon(
@@ -735,8 +991,8 @@ fn focus_navigation_pager_page(args: &FocusNavigationPagerPageArgs) {
                         });
                     }),
             );
-        },
-    ));
+        }),
+    });
 }
 
 #[derive(Clone, Prop)]
@@ -753,12 +1009,11 @@ fn reveal_demo_section(args: &RevealDemoSectionArgs) {
         .get()
         .color_scheme
         .surface_container;
-    surface(&SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().fill_max_width().height(Dp(280.0)))
-            .shape(Shape::rounded_rectangle(Dp(20.0)))
-            .style(SurfaceStyle::Filled { color }),
-        move || {
+    demo_frame(&DemoFrameArgs {
+        modifier: Modifier::new().fill_max_width().height(Dp(280.0)),
+        style: SurfaceStyle::Filled { color },
+        shape: Shape::rounded_rectangle(Dp(20.0)),
+        child: RenderSlot::new(move || {
             lazy_column(
                 &LazyColumnArgs::default()
                     .modifier(Modifier::new().fill_max_size())
@@ -790,8 +1045,8 @@ fn reveal_demo_section(args: &RevealDemoSectionArgs) {
                         });
                     }),
             );
-        },
-    ));
+        }),
+    });
 }
 
 #[derive(Clone, Prop)]
@@ -809,14 +1064,14 @@ fn dialog_focus_content(args: &DialogFocusContentArgs) {
     });
     let checkbox_value = remember(|| true);
 
-    surface(&SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().width(Dp(420.0)).padding_all(Dp(24.0)))
-            .shape(Shape::rounded_rectangle(Dp(28.0))),
-        move || {
+    demo_frame(&DemoFrameArgs {
+        modifier: Modifier::new().width(Dp(420.0)),
+        style: SurfaceStyle::default(),
+        shape: Shape::rounded_rectangle(Dp(28.0)),
+        child: RenderSlot::new(move || {
             column(
                 &ColumnArgs::default()
-                    .modifier(Modifier::new().fill_max_width())
+                    .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .children(move |scope| {
                         scope.child(|| {
@@ -889,8 +1144,8 @@ fn dialog_focus_content(args: &DialogFocusContentArgs) {
                         });
                     }),
             );
-        },
-    ));
+        }),
+    });
 }
 
 #[derive(Clone, Prop)]
@@ -909,7 +1164,7 @@ fn bottom_sheet_focus_content(args: &BottomSheetFocusContentArgs) {
 
     column(
         &ColumnArgs::default()
-            .modifier(Modifier::new().fill_max_width().padding_all(Dp(20.0)))
+            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .children(move |scope| {
                 scope.child(|| {
@@ -958,7 +1213,7 @@ fn side_sheet_focus_content(args: &SideSheetFocusContentArgs) {
 
     column(
         &ColumnArgs::default()
-            .modifier(Modifier::new().fill_max_width().padding_all(Dp(20.0)))
+            .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .children(move |scope| {
                 scope.child(|| {
