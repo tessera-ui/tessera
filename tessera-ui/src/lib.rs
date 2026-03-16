@@ -47,8 +47,7 @@
 //! # Testing and Documentation
 //!
 //! Use [`testing::with_tessera`] for tests and rustdoc examples that need an
-//! isolated Tessera session. For synchronous component tests, prefer
-//! [`#[tessera_ui::test]`](crate::test).
+//! isolated Tessera session.
 //!
 //! ```rust
 //! use tessera_ui::testing::with_tessera;
@@ -390,7 +389,7 @@ pub mod router;
 
 pub use accesskit;
 pub use indextree::{Arena, NodeId};
-pub use tessera_macros::{Prop, entry, tessera, test};
+pub use tessera_macros::{Prop, entry, tessera};
 pub use wgpu;
 pub use winit;
 

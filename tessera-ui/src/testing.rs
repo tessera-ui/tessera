@@ -7,9 +7,7 @@
 //! runtime-sensitive APIs. When a build context is also required, declare a
 //! hidden `#[tessera]` component inside the closure and call it there. In
 //! rustdoc, prefer hidden setup lines (`# ...`) so examples stay focused on the
-//! public API being demonstrated. For synchronous component tests, prefer
-//! [`#[tessera_ui::test]`](crate::test) and keep `with_tessera(...)` for
-//! documentation and ad-hoc runtime harnessing.
+//! public API being demonstrated.
 
 use crate::runtime::{TesseraRuntime, bind_current_runtime};
 
@@ -23,8 +21,7 @@ use crate::runtime::{TesseraRuntime, bind_current_runtime};
 /// Wrap examples that need a Tessera session. If the example also needs build
 /// semantics, declare and call a hidden `#[tessera]` component inside the
 /// closure. In rustdoc examples, prefer hidden setup lines (`# ...`) for the
-/// `with_tessera(...)` wrapper and helper component declarations. For
-/// synchronous component tests, prefer [`#[tessera_ui::test]`](crate::test).
+/// `with_tessera(...)` wrapper and helper component declarations.
 ///
 /// ## Parameters
 ///
@@ -58,21 +55,4 @@ pub fn with_tessera<R>(f: impl FnOnce() -> R) -> R {
     let mut runtime = Box::new(TesseraRuntime::default());
     let _binding = bind_current_runtime(runtime.as_mut());
     f()
-}
-
-#[cfg(test)]
-mod tests {
-    #[crate::test(crate)]
-    fn tessera_test_runs_inside_build_context() {
-        let count = crate::remember(|| 1);
-        assert_eq!(count.get(), 1);
-        let callback = crate::Callback::new(|| {});
-        callback.call();
-    }
-
-    #[crate::test(crate)]
-    #[should_panic(expected = "boom")]
-    fn tessera_test_preserves_test_attributes() {
-        panic!("boom");
-    }
 }
