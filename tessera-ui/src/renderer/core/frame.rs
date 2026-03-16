@@ -1290,10 +1290,17 @@ fn apply_clip_to_batch_rect(
     current_batch_draw_rect: &mut Option<PxRect>,
     target_size: PxSize,
 ) -> (Option<PxRect>, bool) {
-    let clipped_rect = clip_stack
-        .last()
-        .copied()
-        .and_then(|rect| clamp_rect_to_target(rect, target_size));
+    let clipped_rect = if clip_stack.is_empty() {
+        None
+    } else {
+        clip_stack.iter().copied().try_fold(
+            PxRect::from_position_size(PxPosition::ZERO, target_size),
+            |current, rect| {
+                let clamped = clamp_rect_to_target(rect, target_size)?;
+                current.intersection(&clamped)
+            },
+        )
+    };
 
     let Some(current_rect) = current_batch_draw_rect.as_ref() else {
         return (clipped_rect, false);
@@ -1303,6 +1310,11 @@ fn apply_clip_to_batch_rect(
         *current_batch_draw_rect = None;
         return (clipped_rect, false);
     };
+
+    if !clip_stack.is_empty() && clipped_rect.is_none() {
+        *current_batch_draw_rect = None;
+        return (None, false);
+    }
 
     if let Some(clip_rect) = clipped_rect {
         if let Some(intersection) = final_rect.intersection(&clip_rect) {
@@ -1331,4 +1343,49 @@ fn can_merge_into_batch(last_command_type_id: &Option<TypeId>, next_type_id: Typ
 /// Merge the existing optional batch rect with a new command rect.
 fn merge_batch_rect(current: Option<PxRect>, next: PxRect) -> PxRect {
     current.map(|dr| dr.union(&next)).unwrap_or(next)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn apply_clip_to_batch_rect_intersects_full_clip_stack() {
+        let target_size = PxSize::new(Px(400), Px(400));
+        let clip_stack = [
+            PxRect::new(Px(0), Px(0), Px(200), Px(200)),
+            PxRect::new(Px(50), Px(50), Px(200), Px(200)),
+        ];
+        let mut batch_rect = Some(PxRect::new(Px(25), Px(25), Px(200), Px(200)));
+
+        let (clip_rect, should_submit) =
+            apply_clip_to_batch_rect(&clip_stack, &mut batch_rect, target_size);
+
+        assert!(should_submit);
+        assert_eq!(
+            clip_rect,
+            Some(PxRect::new(Px(50), Px(50), Px(150), Px(150)))
+        );
+        assert_eq!(
+            batch_rect,
+            Some(PxRect::new(Px(50), Px(50), Px(150), Px(150)))
+        );
+    }
+
+    #[test]
+    fn apply_clip_to_batch_rect_drops_batch_when_nested_clips_do_not_overlap() {
+        let target_size = PxSize::new(Px(400), Px(400));
+        let clip_stack = [
+            PxRect::new(Px(0), Px(0), Px(100), Px(100)),
+            PxRect::new(Px(200), Px(200), Px(100), Px(100)),
+        ];
+        let mut batch_rect = Some(PxRect::new(Px(0), Px(0), Px(300), Px(300)));
+
+        let (clip_rect, should_submit) =
+            apply_clip_to_batch_rect(&clip_stack, &mut batch_rect, target_size);
+
+        assert!(!should_submit);
+        assert_eq!(clip_rect, None);
+        assert_eq!(batch_rect, None);
+    }
 }
