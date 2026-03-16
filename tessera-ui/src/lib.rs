@@ -44,26 +44,6 @@
 //! }
 //! ```
 //!
-//! # Testing and Documentation
-//!
-//! Use [`testing::with_tessera`] for tests and rustdoc examples that need an
-//! isolated Tessera session.
-//!
-//! ```rust
-//! use tessera_ui::testing::with_tessera;
-//! use tessera_ui::{Callback, tessera};
-//!
-//! with_tessera(|| {
-//!     #[tessera]
-//!     fn demo() {
-//!         let callback = Callback::new(|| {});
-//!         callback.call();
-//!     }
-//!
-//!     demo();
-//! });
-//! ```
-//!
 //! # Memoized state
 //!
 //! Components in tessera are functions. To persist state across frames within a
@@ -360,7 +340,6 @@ mod cursor;
 pub mod dp;
 pub mod entry_point;
 pub mod entry_registry;
-mod execution_context;
 pub mod focus;
 mod ime_state;
 mod keyboard_state;
@@ -381,7 +360,6 @@ pub mod render_scene;
 pub mod renderer;
 #[doc(hidden)]
 pub mod runtime;
-pub mod testing;
 mod thread_utils;
 
 #[cfg(feature = "shard")]
