@@ -68,7 +68,7 @@ fn cursor_visual(args: &CursorArgs) {
     let elapsed_nanos = args
         .current_frame_nanos
         .saturating_sub(args.blink_start_frame_nanos);
-    let visible = elapsed_nanos % 1_000_000_000 >= 500_000_000;
+    let visible = elapsed_nanos % 1_000_000_000 < 500_000_000;
 
     layout(CursorLayout {
         height: args.height_px,

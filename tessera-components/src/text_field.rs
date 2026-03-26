@@ -3,15 +3,11 @@
 //! ## Usage
 //!
 //! Collect short-form inputs like names, passwords, or search queries.
-use glyphon::{
-    Action as GlyphonAction, Cursor, Edit,
-    cosmic_text::{self, Selection},
-};
-use tessera_platform::clipboard;
+use glyphon::Action as GlyphonAction;
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
-    LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition, RenderSlot,
-    State, provide_context, remember, tessera, use_context, winit,
+    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput,
+    LayoutOutput, LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition,
+    RenderSlot, State, provide_context, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -24,7 +20,6 @@ use crate::{
         menu_provider,
     },
     modifier::{ModifierExt as _, Padding},
-    pipelines::text::pipeline::write_font_system,
     pos_misc::is_position_inside_bounds,
     row::{RowArgs, row},
     shape_def::{RoundedCorner, Shape},
@@ -33,7 +28,8 @@ use crate::{
     text::{TextArgs, text},
     text_edit_core::DisplayTransform,
     text_input::{
-        TextInputArgs, TextInputController, create_surface_args, handle_action, text_input_core,
+        DisplayTransformText, TextInputArgs, TextInputController, create_surface_args,
+        text_input_core,
     },
     theme::{ContentColor, MaterialColorScheme, MaterialTheme, TextSelectionColors},
 };
@@ -145,6 +141,9 @@ pub struct TextFieldArgs {
     /// content and returns the updated content.
     #[prop(skip_setter)]
     pub on_change: CallbackWith<String, String>,
+    /// Called when the user submits a single-line field with the Enter key.
+    #[prop(skip_setter)]
+    pub on_submit: Callback,
     /// Minimum width in density-independent pixels.
     pub min_width: Option<Dp>,
     /// Minimum height in density-independent pixels.
@@ -242,6 +241,21 @@ impl TextFieldArgs {
     /// Set the text change handler using a shared callback.
     pub fn on_change_shared(mut self, on_change: CallbackWith<String, String>) -> Self {
         self.on_change = on_change;
+        self
+    }
+
+    /// Set the single-line submit handler.
+    pub fn on_submit<F>(mut self, on_submit: F) -> Self
+    where
+        F: Fn() + Send + Sync + 'static,
+    {
+        self.on_submit = Callback::new(on_submit);
+        self
+    }
+
+    /// Set the single-line submit handler using a shared callback.
+    pub fn on_submit_shared(mut self, on_submit: Callback) -> Self {
+        self.on_submit = on_submit;
         self
     }
 
@@ -403,6 +417,7 @@ impl Default for TextFieldArgs {
             read_only: false,
             modifier: Modifier::new(),
             on_change: CallbackWith::identity(),
+            on_submit: Callback::noop(),
             min_width: Some(TextFieldDefaults::MIN_WIDTH),
             min_height: Some(TextFieldDefaults::MIN_HEIGHT),
             background_color: Some(scheme.surface_container_highest),
@@ -503,6 +518,7 @@ fn build_editor_args(
         read_only: args.read_only,
         modifier: args.modifier.clone(),
         on_change: args.on_change,
+        on_submit: args.on_submit,
         min_width: args.min_width,
         min_height: args.min_height,
         background_color: args.background_color,
@@ -521,6 +537,7 @@ fn build_editor_args(
         initial_text: args.initial_text.clone(),
         font_size: args.font_size,
         line_height: args.line_height,
+        single_line: matches!(args.line_limit, TextFieldLineLimit::SingleLine),
         input_transform,
         display_transform,
         controller: None,
@@ -528,15 +545,7 @@ fn build_editor_args(
 }
 
 fn editor_content_len(controller: &State<TextInputController>) -> usize {
-    controller.with(|c| {
-        c.editor().with_buffer(|buffer| {
-            buffer
-                .lines
-                .iter()
-                .map(|line| line.text().len() + line.ending().as_str().len())
-                .sum()
-        })
-    })
+    controller.with(|c| c.text().len())
 }
 
 fn label_floating_text_style(theme: &MaterialTheme) -> (Dp, Option<Dp>) {
@@ -618,6 +627,40 @@ fn resolve_text_field_menu_policy(
         menu.allow_paste = false;
     }
     menu
+}
+
+fn field_text_content_origin(args: &TextFieldArgs, focused: bool) -> PxPosition {
+    let padding_px: Px = args.padding.into();
+    let border_width_px = Px(resolve_border_width(args, focused).to_pixels_u32() as i32);
+    PxPosition::new(padding_px + border_width_px, padding_px + border_width_px)
+}
+
+fn field_click_pointer_position(
+    cursor_pos: PxPosition,
+    size: ComputedData,
+    args: &TextFieldArgs,
+    controller: &State<TextInputController>,
+) -> PxPosition {
+    let text_origin =
+        field_text_content_origin(args, controller.with(|c| c.focus_handler().is_focused()));
+    let (horizontal_scroll, vertical_scroll) = controller.with(|s| {
+        (
+            Px(s.scroll_state().horizontal().round() as i32),
+            Px(s.scroll_state().vertical().round() as i32),
+        )
+    });
+    let viewport_width = (size.width - text_origin.x - text_origin.x).max(Px::ZERO);
+    let viewport_height = (size.height - text_origin.y - text_origin.y).max(Px::ZERO);
+    let text_relative_x = (cursor_pos.x - text_origin.x)
+        .max(Px::ZERO)
+        .min(viewport_width);
+    let text_relative_y = (cursor_pos.y - text_origin.y)
+        .max(Px::ZERO)
+        .min(viewport_height);
+    PxPosition::new(
+        text_relative_x + horizontal_scroll,
+        text_relative_y + vertical_scroll,
+    )
 }
 #[derive(Clone, Prop)]
 struct OutlinedFloatingLabelArgs {
@@ -1013,55 +1056,28 @@ fn apply_menu_action(
     }
     match action {
         TextFieldMenuAction::Copy => {
-            let selected =
-                controller.with_mut(|c| c.with_editor_mut(|editor| editor.copy_selection()));
-            if let Some(text) = selected {
-                clipboard::set_text(&text);
-            }
+            controller.with(|c| {
+                c.copy_selection_to_clipboard();
+            });
         }
         TextFieldMenuAction::Cut => {
             if read_only {
                 return;
             }
-            let selected =
-                controller.with_mut(|c| c.with_editor_mut(|editor| editor.copy_selection()));
-            if let Some(text) = selected {
-                clipboard::set_text(&text);
-                handle_action(
-                    &controller,
-                    GlyphonAction::Backspace,
-                    on_change,
-                    input_transform,
-                );
-            }
+            controller.with_mut(|c| {
+                c.cut_selection_with_pipeline(on_change, input_transform);
+            });
         }
         TextFieldMenuAction::Paste => {
             if read_only {
                 return;
             }
-            let Some(text) = clipboard::get_text() else {
-                return;
-            };
-            for ch in text.chars() {
-                handle_action(
-                    &controller,
-                    GlyphonAction::Insert(ch),
-                    on_change,
-                    input_transform,
-                );
-            }
+            controller.with_mut(|c| {
+                c.paste_from_clipboard_with_pipeline(on_change, input_transform);
+            });
         }
         TextFieldMenuAction::SelectAll => {
-            controller.with_mut(|c| {
-                c.with_editor_mut(|editor| {
-                    editor.set_cursor(Cursor::new(0, 0));
-                    editor.set_selection(Selection::Normal(Cursor::new(0, 0)));
-                    editor.action(
-                        &mut write_font_system(),
-                        GlyphonAction::Motion(cosmic_text::Motion::BufferEnd),
-                    );
-                });
-            });
+            controller.with_mut(|c| c.select_all());
         }
     }
 }
@@ -1093,7 +1109,7 @@ fn configure_text_field_menu(
         return;
     }
 
-    let selection_available = controller.with(|c| c.editor().selection_bounds().is_some());
+    let selection_available = controller.with(|c| c.has_selection());
 
     if menu.allow_cut {
         menu_item(
@@ -1190,7 +1206,9 @@ pub fn text_field(args: &TextFieldArgs) {
     let action_state = remember(|| None::<TextFieldMenuAction>);
     let input_transform = merge_input_transforms(args.line_limit, args.input_transform);
     let display_transform = args.obfuscation_char.map(|mask| {
-        CallbackWith::new(move |value: String| obfuscate_text(&value, mask)) as DisplayTransform
+        CallbackWith::new(move |value: String| {
+            DisplayTransformText::from_strings(&value, obfuscate_text(&value, mask))
+        }) as DisplayTransform
     });
     let editor_args = build_editor_args(&args, input_transform, display_transform);
     let menu_policy = resolve_text_field_menu_policy(args.context_menu, enabled, read_only);
@@ -1270,8 +1288,33 @@ pub fn text_field(args: &TextFieldArgs) {
                 input.requests.cursor_icon = winit::window::CursorIcon::Text;
             }
 
-            if focus_tap_result.pressed && cursor_pos.is_some() && is_inside {
+            if focus_tap_result.pressed
+                && let Some(cursor_pos) = cursor_pos
+                && is_inside
+            {
+                let press_timestamp = focus_tap_result.press_timestamp;
                 controller.with_mut(|c| c.focus_handler_mut().request_focus());
+                let inner_handled_click = press_timestamp
+                    .map(|timestamp| controller.with(|c| c.last_click_time() == Some(timestamp)))
+                    .unwrap_or(false);
+                if !inner_handled_click {
+                    let click_position = field_click_pointer_position(
+                        cursor_pos,
+                        input.computed_data,
+                        &args,
+                        &controller,
+                    );
+                    controller.with_mut(|c| {
+                        if input.key_modifiers.shift_key() {
+                            c.extend_selection_to_point(click_position);
+                        } else {
+                            c.apply_pointer_action(GlyphonAction::Click {
+                                x: click_position.x.0,
+                                y: click_position.y.0,
+                            });
+                        }
+                    });
+                }
             }
         }
 
