@@ -34,7 +34,7 @@ use winit::{
 };
 
 use crate::{
-    ImeState, PxPosition,
+    ImeRequest, ImeState, PxPosition,
     component_tree::{
         LayoutFrameDiagnostics, ReplayReplaceError, WindowAction, WindowRequests,
         clear_layout_snapshots,
@@ -472,6 +472,8 @@ pub struct Renderer<F: Fn()> {
     keyboard_state: KeyboardState,
     /// Tracks Input Method Editor (IME) state for international text input
     ime_state: ImeState,
+    /// Tracks the renderer-side IME bridge snapshot and platform lifecycle.
+    ime_bridge_state: RendererImeBridgeState,
     /// Render modules providing pipelines.
     modules: Vec<Box<dyn RenderModule>>,
     /// Lifecycle hooks for registered plugins.
@@ -604,6 +606,7 @@ impl<F: Fn()> Renderer<F> {
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
+        let ime_bridge_state = RendererImeBridgeState::default();
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let mut renderer = Self {
@@ -614,6 +617,7 @@ impl<F: Fn()> Renderer<F> {
             modules,
             plugins: PluginHost::new(),
             ime_state,
+            ime_bridge_state,
             config,
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
@@ -733,6 +737,7 @@ impl<F: Fn()> Renderer<F> {
         let cursor_state = CursorState::default();
         let keyboard_state = KeyboardState::default();
         let ime_state = ImeState::default();
+        let ime_bridge_state = RendererImeBridgeState::default();
         #[cfg(feature = "profiling")]
         crate::profiler::set_output_path(resolve_profiler_output_path(&config));
         let mut renderer = Self {
@@ -743,6 +748,7 @@ impl<F: Fn()> Renderer<F> {
             modules,
             plugins: PluginHost::new(),
             ime_state,
+            ime_bridge_state,
             android_ime_opened: false,
             config,
             accessibility_adapter: None,
@@ -765,6 +771,7 @@ struct RenderFrameArgs<'a> {
     pub cursor_state: &'a mut CursorState,
     pub keyboard_state: &'a mut KeyboardState,
     pub ime_state: &'a mut ImeState,
+    pub ime_bridge_state: &'a mut RendererImeBridgeState,
     #[cfg(target_os = "android")]
     pub android_ime_opened: &'a mut bool,
     pub app: &'a mut RenderCore,
@@ -789,6 +796,57 @@ struct RenderFrameOutcome {
     runtime_pending_work: RuntimePendingWork,
     #[cfg(feature = "debug-dirty-overlay")]
     overlay_clear_pending: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct RendererImeBridgeState {
+    current_request: Option<ImeRequest>,
+    ime_allowed: bool,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+struct RendererImeBridgeUpdate {
+    allowed: Option<bool>,
+    cursor_area: Option<(PxPosition, PxSize)>,
+    request: Option<ImeRequest>,
+    snapshot_changed: bool,
+}
+
+impl RendererImeBridgeState {
+    #[cfg(test)]
+    fn request(&self) -> Option<&ImeRequest> {
+        self.current_request.as_ref()
+    }
+
+    fn reset(&mut self) {
+        *self = Self::default();
+    }
+
+    fn update_request(&mut self, request: Option<ImeRequest>) -> RendererImeBridgeUpdate {
+        let snapshot_changed = self.current_request != request;
+        let allowed = (self.ime_allowed != request.is_some()).then_some(request.is_some());
+        let cursor_area = request.as_ref().and_then(|next_request| {
+            let previous_area = self.current_request.as_ref().and_then(|previous_request| {
+                previous_request
+                    .position
+                    .map(|position| (position, previous_request.size))
+            });
+            let next_area = next_request
+                .position
+                .map(|position| (position, next_request.size));
+            (previous_area != next_area).then_some(next_area).flatten()
+        });
+
+        self.ime_allowed = request.is_some();
+        self.current_request = request.clone();
+
+        RendererImeBridgeUpdate {
+            allowed,
+            cursor_area,
+            request,
+            snapshot_changed,
+        }
+    }
 }
 
 impl<F: Fn()> Renderer<F> {
@@ -1714,35 +1772,36 @@ Fps: {:.2}
 
         let window_action = window_requests.window_action;
 
-        if let Some(ime_request) = window_requests.ime_request {
+        let ime_bridge_update = args
+            .ime_bridge_state
+            .update_request(window_requests.ime_request);
+        if let Some(allowed) = ime_bridge_update.allowed {
             #[cfg(not(target_os = "android"))]
-            args.app.window().set_ime_allowed(true);
+            args.app.window().set_ime_allowed(allowed);
             #[cfg(target_os = "android")]
             {
-                if !*args.android_ime_opened {
-                    args.app.window().set_ime_allowed(true);
-                    show_soft_input(true, args.event_loop.android_app());
-                    *args.android_ime_opened = true;
-                }
-            }
-            if let Some(position) = ime_request.position {
-                args.app
-                    .window()
-                    .set_ime_cursor_area::<PxPosition, PxSize>(position, ime_request.size);
-            } else {
-                warn!("IME request missing position; skipping IME cursor area update");
-            }
-        } else {
-            #[cfg(not(target_os = "android"))]
-            args.app.window().set_ime_allowed(false);
-            #[cfg(target_os = "android")]
-            {
-                if *args.android_ime_opened {
+                if allowed {
+                    if !*args.android_ime_opened {
+                        args.app.window().set_ime_allowed(true);
+                        show_soft_input(true, args.event_loop.android_app());
+                        *args.android_ime_opened = true;
+                    }
+                } else if *args.android_ime_opened {
                     args.app.window().set_ime_allowed(false);
                     hide_soft_input(args.event_loop.android_app());
                     *args.android_ime_opened = false;
                 }
             }
+        }
+        if let Some((position, size)) = ime_bridge_update.cursor_area {
+            args.app
+                .window()
+                .set_ime_cursor_area::<PxPosition, PxSize>(position, size);
+        } else if ime_bridge_update.snapshot_changed
+            && let Some(ime_request) = ime_bridge_update.request
+            && ime_request.position.is_none()
+        {
+            warn!("IME request missing position; skipping IME cursor area update");
         }
 
         // End of frame cleanup
@@ -2075,6 +2134,7 @@ impl<F: Fn()> Renderer<F> {
                 cursor_state: &mut self.cursor_state,
                 keyboard_state: &mut self.keyboard_state,
                 ime_state: &mut self.ime_state,
+                ime_bridge_state: &mut self.ime_bridge_state,
                 #[cfg(target_os = "android")]
                 android_ime_opened: &mut self.android_ime_opened,
                 app: &mut app,
@@ -2252,6 +2312,7 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
         self.cursor_state = CursorState::default();
         self.keyboard_state = KeyboardState::default();
         self.ime_state = ImeState::default();
+        self.ime_bridge_state.reset();
         self.resize_in_progress = false;
         self.redraw_request_pending.store(false, Ordering::Release);
         #[cfg(target_os = "android")]
@@ -2466,6 +2527,125 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RendererImeBridgeState, RendererImeBridgeUpdate};
+    use crate::{ImeRequest, Px, PxPosition, px::PxSize};
+
+    fn positioned_request(
+        position: PxPosition,
+        size: PxSize,
+        selection_range: Option<std::ops::Range<usize>>,
+        composition_range: Option<std::ops::Range<usize>>,
+    ) -> ImeRequest {
+        let mut request = ImeRequest::new(size)
+            .with_local_position(position)
+            .with_selection_range(selection_range)
+            .with_composition_range(composition_range);
+        request.position = Some(position);
+        request
+    }
+
+    #[test]
+    fn ime_bridge_enables_and_updates_cursor_area_for_first_request() {
+        let mut bridge = RendererImeBridgeState::default();
+        let request = positioned_request(
+            PxPosition::new(Px(12), Px(18)),
+            PxSize::new(Px(7), Px(13)),
+            Some(2..6),
+            Some(3..5),
+        );
+
+        let update = bridge.update_request(Some(request.clone()));
+
+        assert_eq!(
+            update,
+            RendererImeBridgeUpdate {
+                allowed: Some(true),
+                cursor_area: Some((PxPosition::new(Px(12), Px(18)), PxSize::new(Px(7), Px(13)))),
+                request: Some(request.clone()),
+                snapshot_changed: true,
+            }
+        );
+        assert_eq!(bridge.request(), Some(&request));
+    }
+
+    #[test]
+    fn ime_bridge_reuses_identical_request_without_window_updates() {
+        let request = positioned_request(
+            PxPosition::new(Px(12), Px(18)),
+            PxSize::new(Px(7), Px(13)),
+            Some(2..6),
+            Some(3..5),
+        );
+        let mut bridge = RendererImeBridgeState::default();
+        bridge.update_request(Some(request.clone()));
+
+        let update = bridge.update_request(Some(request.clone()));
+
+        assert_eq!(
+            update,
+            RendererImeBridgeUpdate {
+                allowed: None,
+                cursor_area: None,
+                request: Some(request.clone()),
+                snapshot_changed: false,
+            }
+        );
+        assert_eq!(bridge.request(), Some(&request));
+    }
+
+    #[test]
+    fn ime_bridge_preserves_selection_and_composition_changes_without_cursor_reapply() {
+        let size = PxSize::new(Px(7), Px(13));
+        let mut bridge = RendererImeBridgeState::default();
+        bridge.update_request(Some(positioned_request(
+            PxPosition::new(Px(12), Px(18)),
+            size,
+            Some(2..6),
+            Some(3..5),
+        )));
+        let next_request = positioned_request(
+            PxPosition::new(Px(12), Px(18)),
+            size,
+            Some(4..8),
+            Some(5..7),
+        );
+
+        let update = bridge.update_request(Some(next_request.clone()));
+
+        assert_eq!(update.allowed, None);
+        assert_eq!(update.cursor_area, None);
+        assert!(update.snapshot_changed);
+        assert_eq!(bridge.request(), Some(&next_request));
+    }
+
+    #[test]
+    fn ime_bridge_disables_and_clears_snapshot_when_request_is_removed() {
+        let request = positioned_request(
+            PxPosition::new(Px(12), Px(18)),
+            PxSize::new(Px(7), Px(13)),
+            Some(2..6),
+            Some(3..5),
+        );
+        let mut bridge = RendererImeBridgeState::default();
+        bridge.update_request(Some(request));
+
+        let update = bridge.update_request(None);
+
+        assert_eq!(
+            update,
+            RendererImeBridgeUpdate {
+                allowed: Some(false),
+                cursor_area: None,
+                request: None,
+                snapshot_changed: true,
+            }
+        );
+        assert_eq!(bridge.request(), None);
     }
 }
 

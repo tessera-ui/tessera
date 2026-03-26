@@ -1077,7 +1077,7 @@ fn attach_ime_position_if_needed(window_requests: &mut WindowRequests, abs_pos: 
     if let Some(ref mut ime_request) = window_requests.ime_request
         && ime_request.position.is_none()
     {
-        ime_request.position = Some(abs_pos);
+        ime_request.position = Some(abs_pos + ime_request.local_position);
     }
 }
 

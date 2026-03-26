@@ -634,10 +634,16 @@ pub enum WindowAction {
 
 /// A request to the windowing system to open an Input Method Editor (IME).
 /// This is typically used for text input components.
-#[derive(Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ImeRequest {
     /// The size of the area where the IME is requested.
     pub size: PxSize,
+    /// The position of the IME anchor relative to the requesting node.
+    pub local_position: PxPosition,
+    /// The current ordered selection range in the backing text buffer.
+    pub selection_range: Option<std::ops::Range<usize>>,
+    /// The current ordered composition range in the backing text buffer.
+    pub composition_range: Option<std::ops::Range<usize>>,
     /// The absolute position where the IME should be placed.
     /// This is set internally by the component tree during the compute pass.
     pub(crate) position: Option<PxPosition>, // should be setted in tessera node tree compute
@@ -650,8 +656,32 @@ impl ImeRequest {
     pub fn new(size: PxSize) -> Self {
         Self {
             size,
+            local_position: PxPosition::ZERO,
+            selection_range: None,
+            composition_range: None,
             position: None, // Position will be set during the compute phase
         }
+    }
+
+    /// Sets the position of the IME anchor relative to the requesting node.
+    pub fn with_local_position(mut self, local_position: PxPosition) -> Self {
+        self.local_position = local_position;
+        self
+    }
+
+    /// Sets the current ordered text selection range.
+    pub fn with_selection_range(mut self, selection_range: Option<std::ops::Range<usize>>) -> Self {
+        self.selection_range = selection_range;
+        self
+    }
+
+    /// Sets the current ordered text composition range.
+    pub fn with_composition_range(
+        mut self,
+        composition_range: Option<std::ops::Range<usize>>,
+    ) -> Self {
+        self.composition_range = composition_range;
+        self
     }
 }
 
