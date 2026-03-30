@@ -12,16 +12,15 @@ use std::{
 
 use tessera_ui::{
     Callback, CallbackWith, ComputedData, Constraint, DimensionValue, Dp, FocusDirection,
-    MeasurementError, Modifier, NodeId, ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember,
-    runtime::TesseraRuntime,
-    tessera,
+    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, Slot, State, key,
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout_primitive},
+    modifier::FocusModifierExt as _,
+    remember, tessera,
 };
 
 use crate::{
     alignment::CrossAxisAlignment,
-    scrollable::{ScrollableArgs, ScrollableController, scrollable},
+    scrollable::{ScrollableController, scrollable},
 };
 
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
@@ -39,25 +38,16 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 /// # Examples
 ///
 /// ```
-/// use tessera_components::lazy_list::{LazyColumnArgs, LazyListController, lazy_column};
-/// use tessera_ui::{Prop, retain_with_key, tessera};
-///
-/// #[derive(Clone, Prop)]
-/// struct ScrollablePageArgs {
-///     page_id: String,
-/// }
+/// use tessera_components::lazy_list::{LazyListController, lazy_column};
+/// use tessera_ui::{retain_with_key, tessera};
 ///
 /// #[tessera]
-/// fn scrollable_page(args: &ScrollablePageArgs) {
+/// fn scrollable_page(page_id: String) {
 ///     // Both scroll position and measurement cache persist across navigation
-///     let controller = retain_with_key(args.page_id.clone(), LazyListController::new);
-///     lazy_column(
-///         &LazyColumnArgs::default()
-///             .controller(controller)
-///             .content(|scope| {
-///                 scope.items(100, |i| { /* ... */ });
-///             }),
-///     );
+///     let controller = retain_with_key(page_id.clone(), LazyListController::new);
+///     lazy_column().controller(controller).content(|scope| {
+///         scope.items(100, |i| { /* ... */ });
+///     });
 /// }
 /// ```
 pub struct LazyListController {
@@ -89,138 +79,6 @@ impl LazyListController {
     /// Returns a mutable reference to the underlying scroll controller.
     pub fn scroll_controller_mut(&mut self) -> &mut ScrollableController {
         &mut self.scroll
-    }
-}
-
-/// Arguments shared between lazy lists.
-#[derive(Clone, Prop)]
-pub struct LazyColumnArgs {
-    /// Modifier for the scroll container.
-    pub modifier: Modifier,
-    /// How children are aligned along the cross axis (horizontal for columns).
-    pub cross_axis_alignment: CrossAxisAlignment,
-    /// Gap between successive items.
-    pub item_spacing: Dp,
-    /// Number of extra items instantiated before/after the viewport.
-    pub overscan: usize,
-    /// Estimated main-axis size for each item, used before real measurements
-    /// exist.
-    pub estimated_item_size: Dp,
-    /// Symmetric padding applied around the lazy list content.
-    pub content_padding: Dp,
-    /// Maximum viewport length reported back to parents. Prevents gigantic
-    /// textures when nesting the list inside wrap/auto-sized surfaces.
-    pub max_viewport_main: Option<Px>,
-    /// Optional external controller for scroll position and cache.
-    #[prop(skip_setter)]
-    pub controller: Option<State<LazyListController>>,
-    /// Optional slot builder for lazy list content.
-    #[prop(skip_setter)]
-    pub content: Option<LazyListContentSlot>,
-}
-
-impl Default for LazyColumnArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new(),
-            cross_axis_alignment: CrossAxisAlignment::Start,
-            item_spacing: Dp(0.0),
-            overscan: 2,
-            estimated_item_size: Dp(48.0),
-            content_padding: Dp(0.0),
-            max_viewport_main: Some(Px(8192)),
-            controller: None,
-            content: None,
-        }
-    }
-}
-
-impl LazyColumnArgs {
-    /// Sets an external lazy list controller.
-    pub fn controller(mut self, controller: State<LazyListController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-
-    /// Sets the lazy list content builder.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
-    {
-        self.content = Some(LazyListContentSlot::new(content));
-        self
-    }
-
-    /// Sets the lazy list content builder using a shared slot.
-    pub fn content_shared(mut self, content: impl Into<LazyListContentSlot>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-}
-
-/// Arguments for `lazy_row`. Identical to [`LazyColumnArgs`] but horizontal
-/// scrolling is enforced.
-#[derive(Clone, Prop)]
-pub struct LazyRowArgs {
-    /// Modifier for the scroll container.
-    pub modifier: Modifier,
-    /// How children are aligned along the cross axis (vertical for rows).
-    pub cross_axis_alignment: CrossAxisAlignment,
-    /// Gap between successive items.
-    pub item_spacing: Dp,
-    /// Number of extra items instantiated before/after the viewport.
-    pub overscan: usize,
-    /// Estimated main-axis size for each item, used before real measurements
-    /// exist.
-    pub estimated_item_size: Dp,
-    /// Symmetric padding applied around the lazy list content.
-    pub content_padding: Dp,
-    /// Maximum viewport length reported back to parents for horizontal lists.
-    pub max_viewport_main: Option<Px>,
-    /// Optional external controller for scroll position and cache.
-    #[prop(skip_setter)]
-    pub controller: Option<State<LazyListController>>,
-    /// Optional slot builder for lazy list content.
-    #[prop(skip_setter)]
-    pub content: Option<LazyListContentSlot>,
-}
-
-impl Default for LazyRowArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new(),
-            cross_axis_alignment: CrossAxisAlignment::Start,
-            item_spacing: Dp(0.0),
-            overscan: 2,
-            estimated_item_size: Dp(48.0),
-            content_padding: Dp(0.0),
-            max_viewport_main: Some(Px(8192)),
-            controller: None,
-            content: None,
-        }
-    }
-}
-
-impl LazyRowArgs {
-    /// Sets an external lazy list controller.
-    pub fn controller(mut self, controller: State<LazyListController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-
-    /// Sets the lazy list content builder.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
-    {
-        self.content = Some(LazyListContentSlot::new(content));
-        self
-    }
-
-    /// Sets the lazy list content builder using a shared slot.
-    pub fn content_shared(mut self, content: impl Into<LazyListContentSlot>) -> Self {
-        self.content = Some(content.into());
-        self
     }
 }
 
@@ -256,6 +114,58 @@ where
 {
     fn from(value: F) -> Self {
         Self::new(value)
+    }
+}
+
+#[allow(missing_docs)]
+impl LazyColumnBuilder {
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
+        self
+    }
+
+    pub fn controller(mut self, controller: State<LazyListController>) -> Self {
+        self.props.controller = Some(controller);
+        self
+    }
+
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
+    {
+        self.props.content = Some(LazyListContentSlot::new(content));
+        self
+    }
+
+    pub fn content_shared(mut self, content: impl Into<LazyListContentSlot>) -> Self {
+        self.props.content = Some(content.into());
+        self
+    }
+}
+
+#[allow(missing_docs)]
+impl LazyRowBuilder {
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
+        self
+    }
+
+    pub fn controller(mut self, controller: State<LazyListController>) -> Self {
+        self.props.controller = Some(controller);
+        self
+    }
+
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
+    {
+        self.props.content = Some(LazyListContentSlot::new(content));
+        self
+    }
+
+    pub fn content_shared(mut self, content: impl Into<LazyListContentSlot>) -> Self {
+        self.props.content = Some(content.into());
+        self
     }
 }
 
@@ -427,40 +337,61 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the list's layout and scrolling behavior; see
-///   [`LazyColumnArgs`].
+/// - `modifier` — optional modifier for the scroll container.
+/// - `cross_axis_alignment` — how items align along the cross axis.
+/// - `item_spacing` — gap between successive items.
+/// - `overscan` — number of extra items instantiated before and after the
+///   viewport.
+/// - `estimated_item_size` — estimated main-axis size used before real
+///   measurements exist.
+/// - `content_padding` — symmetric padding around the lazy list content.
+/// - `max_viewport_main` — optional maximum viewport length reported back to
+///   parents.
+/// - `controller` — optional external controller for scroll position and cache.
+/// - `content` — optional slot builder for lazy list content.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{
-///     lazy_list::{LazyColumnArgs, lazy_column},
-///     text::{TextArgs, text},
-/// };
+/// use tessera_components::{lazy_list::lazy_column, text::text};
 /// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn demo() {
-///     lazy_column(&LazyColumnArgs::default().content(|scope| {
+///     lazy_column().content(|scope| {
 ///         scope.items(1000, |i| {
 ///             let text_content = format!("Item #{i}");
-///             text(&TextArgs::default().text(text_content));
+///             text().content(text_content);
 ///         });
-///     }));
+///     });
 /// }
 /// ```
 #[tessera]
-pub fn lazy_column(args: &LazyColumnArgs) {
-    let args = args.clone();
-    let content = args
-        .content
-        .clone()
-        .unwrap_or_else(|| LazyListContentSlot::new(|_| {}));
+pub fn lazy_column(
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    cross_axis_alignment: CrossAxisAlignment,
+    item_spacing: Dp,
+    overscan: usize,
+    estimated_item_size: Dp,
+    content_padding: Dp,
+    max_viewport_main: Option<Px>,
+    #[prop(skip_setter)] controller: Option<State<LazyListController>>,
+    #[prop(skip_setter)] content: Option<LazyListContentSlot>,
+) {
+    let content = content.unwrap_or_else(|| LazyListContentSlot::new(|_| {}));
     let slots = collect_column_slots(content);
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(LazyListController::new));
-    lazy_column_slots(args, controller, slots);
+    let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
+    lazy_column_slots(LazyListSlotsArgs {
+        modifier: modifier.unwrap_or_default(),
+        cross_axis_alignment,
+        item_spacing,
+        overscan,
+        estimated_item_size,
+        content_padding,
+        max_viewport_main,
+        controller,
+        slots,
+    });
 }
 
 fn collect_column_slots(content: LazyListContentSlot) -> Vec<LazySlot> {
@@ -472,12 +403,21 @@ fn collect_column_slots(content: LazyListContentSlot) -> Vec<LazySlot> {
     slots
 }
 
-fn lazy_column_slots(
-    args: LazyColumnArgs,
+#[derive(Clone)]
+struct LazyListSlotsArgs {
+    modifier: Modifier,
+    cross_axis_alignment: CrossAxisAlignment,
+    item_spacing: Dp,
+    overscan: usize,
+    estimated_item_size: Dp,
+    content_padding: Dp,
+    max_viewport_main: Option<Px>,
     controller: State<LazyListController>,
     slots: Vec<LazySlot>,
-) {
-    let scrollable_args = ScrollableArgs::default()
+}
+
+fn lazy_column_slots(args: LazyListSlotsArgs) {
+    let scrollable_builder = scrollable()
         .modifier(args.modifier)
         .vertical(true)
         .horizontal(false);
@@ -486,43 +426,43 @@ fn lazy_column_slots(
     let scroll_controller = remember(ScrollableController::default);
 
     // Restore saved position from controller on first mount.
-    let saved_position = controller.with(|c| c.scroll.child_position());
+    let saved_position = args.controller.with(|c| c.scroll.child_position());
     let should_restore_position = scroll_controller
         .with(|sc| sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO);
     if should_restore_position {
         scroll_controller.with_mut(|sc| sc.set_scroll_position(saved_position));
     }
 
-    let view_args = LazyListViewArgs {
-        axis: LazyListAxis::Vertical,
-        cross_axis_alignment: args.cross_axis_alignment,
-        item_spacing: sanitize_spacing(Px::from(args.item_spacing)),
-        estimated_item_main: ensure_positive_px(Px::from(args.estimated_item_size)),
-        overscan: args.overscan,
-        max_viewport_main: args.max_viewport_main,
-        padding_main: sanitize_spacing(Px::from(args.content_padding)),
-        padding_cross: sanitize_spacing(Px::from(args.content_padding)),
-        controller,
-        slots,
-        scroll_controller,
-    };
+    let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
+    let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
+    let padding_main = sanitize_spacing(Px::from(args.content_padding));
+    let padding_cross = sanitize_spacing(Px::from(args.content_padding));
 
-    let scrollable_args = scrollable_args
-        .controller(view_args.scroll_controller)
+    scrollable_builder
+        .controller(scroll_controller)
         .child(move || {
             // Sync scroll position back to controller
-            let current_pos = view_args.scroll_controller.with(|sc| sc.child_position());
-            let should_sync_position = view_args
+            let current_pos = scroll_controller.with(|sc| sc.child_position());
+            let should_sync_position = args
                 .controller
                 .with(|c| c.scroll.child_position() != current_pos);
             if should_sync_position {
-                view_args
-                    .controller
+                args.controller
                     .with_mut(|c| c.scroll.set_scroll_position(current_pos));
             }
-            lazy_list_view(&view_args);
+            lazy_list_view()
+                .axis(LazyListAxis::Vertical)
+                .cross_axis_alignment(args.cross_axis_alignment)
+                .item_spacing(item_spacing)
+                .estimated_item_main(estimated_item_main)
+                .overscan(args.overscan)
+                .padding_main(padding_main)
+                .padding_cross(padding_cross)
+                .slots(args.slots.clone())
+                .controller_internal(args.controller)
+                .scroll_controller_internal(scroll_controller)
+                .max_viewport_main_internal(args.max_viewport_main);
         });
-    scrollable(&scrollable_args);
 }
 
 /// # lazy_row
@@ -537,40 +477,61 @@ fn lazy_column_slots(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the list's layout and scrolling behavior; see
-///   [`LazyRowArgs`].
+/// - `modifier` — optional modifier for the scroll container.
+/// - `cross_axis_alignment` — how items align along the cross axis.
+/// - `item_spacing` — gap between successive items.
+/// - `overscan` — number of extra items instantiated before and after the
+///   viewport.
+/// - `estimated_item_size` — estimated main-axis size used before real
+///   measurements exist.
+/// - `content_padding` — symmetric padding around the lazy list content.
+/// - `max_viewport_main` — optional maximum viewport length reported back to
+///   parents.
+/// - `controller` — optional external controller for scroll position and cache.
+/// - `content` — optional slot builder for lazy list content.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{
-///     lazy_list::{LazyRowArgs, lazy_row},
-///     text::{TextArgs, text},
-/// };
+/// use tessera_components::{lazy_list::lazy_row, text::text};
 /// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn demo() {
-///     lazy_row(&LazyRowArgs::default().content(|scope| {
+///     lazy_row().content(|scope| {
 ///         scope.items(100, |i| {
 ///             let text_content = format!("Item {i}");
-///             text(&TextArgs::default().text(text_content));
+///             text().content(text_content);
 ///         });
-///     }));
+///     });
 /// }
 /// ```
 #[tessera]
-pub fn lazy_row(args: &LazyRowArgs) {
-    let args = args.clone();
-    let content = args
-        .content
-        .clone()
-        .unwrap_or_else(|| LazyListContentSlot::new(|_| {}));
+pub fn lazy_row(
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    cross_axis_alignment: CrossAxisAlignment,
+    item_spacing: Dp,
+    overscan: usize,
+    estimated_item_size: Dp,
+    content_padding: Dp,
+    max_viewport_main: Option<Px>,
+    #[prop(skip_setter)] controller: Option<State<LazyListController>>,
+    #[prop(skip_setter)] content: Option<LazyListContentSlot>,
+) {
+    let content = content.unwrap_or_else(|| LazyListContentSlot::new(|_| {}));
     let slots = collect_row_slots(content);
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(LazyListController::new));
-    lazy_row_slots(args, controller, slots);
+    let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
+    lazy_row_slots(LazyListSlotsArgs {
+        modifier: modifier.unwrap_or_default(),
+        cross_axis_alignment,
+        item_spacing,
+        overscan,
+        estimated_item_size,
+        content_padding,
+        max_viewport_main,
+        controller,
+        slots,
+    });
 }
 
 fn collect_row_slots(content: LazyListContentSlot) -> Vec<LazySlot> {
@@ -582,8 +543,8 @@ fn collect_row_slots(content: LazyListContentSlot) -> Vec<LazySlot> {
     slots
 }
 
-fn lazy_row_slots(args: LazyRowArgs, controller: State<LazyListController>, slots: Vec<LazySlot>) {
-    let scrollable_args = ScrollableArgs::default()
+fn lazy_row_slots(args: LazyListSlotsArgs) {
+    let scrollable_builder = scrollable()
         .modifier(args.modifier)
         .vertical(false)
         .horizontal(true);
@@ -592,46 +553,67 @@ fn lazy_row_slots(args: LazyRowArgs, controller: State<LazyListController>, slot
     let scroll_controller = remember(ScrollableController::default);
 
     // Restore saved position from controller on first mount.
-    let saved_position = controller.with(|c| c.scroll.child_position());
+    let saved_position = args.controller.with(|c| c.scroll.child_position());
     let should_restore_position = scroll_controller
         .with(|sc| sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO);
     if should_restore_position {
         scroll_controller.with_mut(|sc| sc.set_scroll_position(saved_position));
     }
 
-    let view_args = LazyListViewArgs {
-        axis: LazyListAxis::Horizontal,
-        cross_axis_alignment: args.cross_axis_alignment,
-        item_spacing: sanitize_spacing(Px::from(args.item_spacing)),
-        estimated_item_main: ensure_positive_px(Px::from(args.estimated_item_size)),
-        overscan: args.overscan,
-        max_viewport_main: args.max_viewport_main,
-        padding_main: sanitize_spacing(Px::from(args.content_padding)),
-        padding_cross: sanitize_spacing(Px::from(args.content_padding)),
-        controller,
-        slots,
-        scroll_controller,
-    };
+    let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
+    let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
+    let padding_main = sanitize_spacing(Px::from(args.content_padding));
+    let padding_cross = sanitize_spacing(Px::from(args.content_padding));
 
-    let scrollable_args = scrollable_args
-        .controller(view_args.scroll_controller)
+    scrollable_builder
+        .controller(scroll_controller)
         .child(move || {
             // Sync scroll position back to controller
-            let current_pos = view_args.scroll_controller.with(|sc| sc.child_position());
-            let should_sync_position = view_args
+            let current_pos = scroll_controller.with(|sc| sc.child_position());
+            let should_sync_position = args
                 .controller
                 .with(|c| c.scroll.child_position() != current_pos);
             if should_sync_position {
-                view_args
-                    .controller
+                args.controller
                     .with_mut(|c| c.scroll.set_scroll_position(current_pos));
             }
-            lazy_list_view(&view_args);
+            lazy_list_view()
+                .axis(LazyListAxis::Horizontal)
+                .cross_axis_alignment(args.cross_axis_alignment)
+                .item_spacing(item_spacing)
+                .estimated_item_main(estimated_item_main)
+                .overscan(args.overscan)
+                .padding_main(padding_main)
+                .padding_cross(padding_cross)
+                .slots(args.slots.clone())
+                .controller_internal(args.controller)
+                .scroll_controller_internal(scroll_controller)
+                .max_viewport_main_internal(args.max_viewport_main);
         });
-    scrollable(&scrollable_args);
 }
-#[derive(Clone, Prop)]
-struct LazyListViewArgs {
+
+impl LazyListViewBuilder {
+    fn controller_internal(mut self, controller: State<LazyListController>) -> Self {
+        self.props.controller = Some(controller);
+        self
+    }
+
+    fn scroll_controller_internal(
+        mut self,
+        scroll_controller: State<ScrollableController>,
+    ) -> Self {
+        self.props.scroll_controller = Some(scroll_controller);
+        self
+    }
+
+    fn max_viewport_main_internal(mut self, max_viewport_main: Option<Px>) -> Self {
+        self.props.max_viewport_main = max_viewport_main;
+        self
+    }
+}
+
+#[tessera]
+fn lazy_list_view(
     axis: LazyListAxis,
     cross_axis_alignment: CrossAxisAlignment,
     item_spacing: Px,
@@ -640,90 +622,77 @@ struct LazyListViewArgs {
     max_viewport_main: Option<Px>,
     padding_main: Px,
     padding_cross: Px,
-    controller: State<LazyListController>,
+    #[prop(skip_setter)] controller: Option<State<LazyListController>>,
     slots: Vec<LazySlot>,
-    scroll_controller: State<ScrollableController>,
-}
-
-#[tessera]
-fn lazy_list_view(args: &LazyListViewArgs) {
-    let args = args.clone();
-    let plan = LazySlotPlan::new(args.slots.clone());
+    #[prop(skip_setter)] scroll_controller: Option<State<ScrollableController>>,
+) {
+    let controller = controller.expect("lazy_list_view requires controller");
+    let scroll_controller = scroll_controller.expect("lazy_list_view requires scroll_controller");
+    let plan = LazySlotPlan::new(slots.clone());
     let total_count = plan.total_count();
 
-    let item_count_changed = args.controller.with(|c| c.cache.total_items != total_count);
+    let item_count_changed = controller.with(|c| c.cache.total_items != total_count);
     if item_count_changed {
-        args.controller
-            .with_mut(|c| c.cache.set_item_count(total_count));
+        controller.with_mut(|c| c.cache.set_item_count(total_count));
     }
 
-    let scroll_offset = args
-        .axis
-        .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
-    let padding_main = args.padding_main;
+    let scroll_offset = axis.scroll_offset(scroll_controller.with(|s| s.child_position()));
     let viewport_span = resolve_viewport_span(
-        args.axis
-            .visible_span(args.scroll_controller.with(|s| s.visible_size())),
-        args.estimated_item_main,
-        args.item_spacing,
+        axis.visible_span(scroll_controller.with(|s| s.visible_size())),
+        estimated_item_main,
+        item_spacing,
     );
     let viewport_span = (viewport_span - (padding_main * 2)).max(Px::ZERO);
-    let total_main = args.controller.with(|c| {
-        c.cache
-            .total_main_size(args.estimated_item_main, args.item_spacing)
-    });
+    let total_main =
+        controller.with(|c| c.cache.total_main_size(estimated_item_main, item_spacing));
     let total_main_with_padding = total_main + padding_main + padding_main;
-    let visible_cross = args
-        .axis
-        .cross(&args.scroll_controller.with(|s| s.visible_size()));
+    let visible_cross = axis.cross(&scroll_controller.with(|s| s.visible_size()));
     // Only the main axis affects lazy-list scroll extents. Cross-axis size is
     // finalized during measurement (with real child sizes), so keep the
     // existing cross value here to avoid view/measure override oscillation.
-    let current_child_cross = args
-        .axis
-        .cross(&args.scroll_controller.with(|s| s.child_size()));
+    let current_child_cross = axis.cross(&scroll_controller.with(|s| s.child_size()));
     let estimated_cross = if current_child_cross > Px::ZERO {
         current_child_cross
     } else {
         visible_cross
     };
-    let scroll_child_size = args
-        .axis
-        .pack_size(total_main_with_padding, estimated_cross);
-    let needs_scroll_child_size_update = args
-        .scroll_controller
-        .with(|c| c.child_size() != scroll_child_size);
+    let scroll_child_size = axis.pack_size(total_main_with_padding, estimated_cross);
+    let needs_scroll_child_size_update =
+        scroll_controller.with(|c| c.child_size() != scroll_child_size);
     if needs_scroll_child_size_update {
-        args.scroll_controller
-            .with_mut(|c| c.override_child_size(scroll_child_size));
+        scroll_controller.with_mut(|c| c.override_child_size(scroll_child_size));
     }
 
-    let visible_children = args.controller.with(|c| {
+    let visible_children = controller.with(|c| {
         compute_visible_children(
             &plan,
             &c.cache,
             total_count,
             scroll_offset,
             viewport_span,
-            args.overscan,
-            args.estimated_item_main,
-            args.item_spacing,
+            overscan,
+            estimated_item_main,
+            item_spacing,
         )
     });
 
     if visible_children.children.is_empty() {
-        layout(ZeroLayout);
+        layout_primitive().layout_policy(ZeroLayout);
         return;
     }
 
-    register_lazy_list_focus_beyond_bounds_handler(
-        &args,
+    let focus_modifier = lazy_list_focus_beyond_bounds_modifier(LazyListFocusArgs {
+        axis,
+        controller,
+        scroll_controller,
         total_count,
         total_main,
         viewport_span,
         scroll_offset,
-        visible_children.range.clone(),
-    );
+        visible_range: visible_children.range.clone(),
+        estimated_item_main,
+        item_spacing,
+    });
 
     let viewport_limit = viewport_span + padding_main + padding_main;
     let visible_item_indices = visible_children
@@ -732,33 +701,38 @@ fn lazy_list_view(args: &LazyListViewArgs) {
         .map(|visible| visible.item_index)
         .collect();
 
-    layout(LazyListLayout {
-        axis: args.axis,
-        cross_axis_alignment: args.cross_axis_alignment,
-        item_spacing: args.item_spacing,
-        estimated_item_main: args.estimated_item_main,
-        max_viewport_main: args.max_viewport_main,
-        padding_main,
-        padding_cross: args.padding_cross,
-        viewport_limit,
-        visible_item_indices,
-        sticky_indices: plan.sticky_indices().to_vec(),
-        scroll_offset,
-        controller: args.controller,
-        scroll_controller: args.scroll_controller,
-    });
-
-    for child in visible_children.children {
-        key(child.key_hash, || {
-            child.builder.call(child.local_index);
+    let children = visible_children.children;
+    layout_primitive()
+        .modifier(focus_modifier)
+        .layout_policy(LazyListLayout {
+            axis,
+            cross_axis_alignment,
+            item_spacing,
+            estimated_item_main,
+            max_viewport_main,
+            padding_main,
+            padding_cross,
+            viewport_limit,
+            visible_item_indices,
+            sticky_indices: plan.sticky_indices().to_vec(),
+            scroll_offset,
+            controller,
+            scroll_controller,
+        })
+        .child(move || {
+            for child in &children {
+                let child = child.clone();
+                key(child.key_hash, || {
+                    child.builder.call(child.local_index);
+                });
+            }
         });
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ZeroLayout;
 
-impl LayoutSpec for ZeroLayout {
+impl LayoutPolicy for ZeroLayout {
     fn measure(
         &self,
         _input: &LayoutInput<'_>,
@@ -801,7 +775,7 @@ impl PartialEq for LazyListLayout {
     }
 }
 
-impl LayoutSpec for LazyListLayout {
+impl LayoutPolicy for LazyListLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -925,6 +899,91 @@ impl LayoutSpec for LazyListLayout {
 
         Ok(self.axis.pack_size(reported_main, cross_with_padding))
     }
+
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.axis == other.axis
+            && self.cross_axis_alignment == other.cross_axis_alignment
+            && self.item_spacing == other.item_spacing
+            && self.estimated_item_main == other.estimated_item_main
+            && self.max_viewport_main == other.max_viewport_main
+            && self.padding_main == other.padding_main
+            && self.padding_cross == other.padding_cross
+            && self.viewport_limit == other.viewport_limit
+            && self.visible_item_indices == other.visible_item_indices
+            && self.sticky_indices == other.sticky_indices
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.axis == other.axis
+            && self.cross_axis_alignment == other.cross_axis_alignment
+            && self.item_spacing == other.item_spacing
+            && self.estimated_item_main == other.estimated_item_main
+            && self.max_viewport_main == other.max_viewport_main
+            && self.padding_main == other.padding_main
+            && self.padding_cross == other.padding_cross
+            && self.viewport_limit == other.viewport_limit
+            && self.visible_item_indices == other.visible_item_indices
+            && self.sticky_indices == other.sticky_indices
+            && self.scroll_offset == other.scroll_offset
+    }
+
+    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
+        if input.children_ids().len() != self.visible_item_indices.len() {
+            return false;
+        }
+
+        let mut placements = Vec::with_capacity(self.visible_item_indices.len());
+        let mut inner_cross = Px::ZERO;
+        for (&item_index, &child_id) in self
+            .visible_item_indices
+            .iter()
+            .zip(input.children_ids().iter())
+        {
+            let Some(child_size) = input.child_size(child_id) else {
+                return false;
+            };
+            let measured_cross = self.axis.cross(&child_size);
+            inner_cross = inner_cross.max(measured_cross);
+            let offset_main = self.controller.with(|c| {
+                c.cache
+                    .offset_for(item_index, self.estimated_item_main, self.item_spacing)
+            });
+            placements.push(Placement {
+                item_index,
+                child_id,
+                offset_main,
+                size: child_size,
+            });
+        }
+
+        for placement in &placements {
+            let cross_offset = compute_cross_offset(
+                inner_cross,
+                self.axis.cross(&placement.size),
+                self.cross_axis_alignment,
+            );
+            let mut main_offset = placement.offset_main + self.padding_main;
+            if self.is_sticky(placement.item_index) {
+                let sticky_start = self.scroll_offset + self.padding_main;
+                main_offset = main_offset.max(sticky_start);
+                if let Some(next_index) = self.next_sticky_after(placement.item_index) {
+                    let next_offset = self.controller.with(|c| {
+                        c.cache
+                            .offset_for(next_index, self.estimated_item_main, self.item_spacing)
+                    });
+                    let max_offset =
+                        next_offset + self.padding_main - self.axis.main(&placement.size);
+                    main_offset = main_offset.min(max_offset);
+                }
+            }
+            let position = self
+                .axis
+                .position(main_offset, self.padding_cross + cross_offset);
+            output.place_child(placement.child_id, position);
+        }
+
+        true
+    }
 }
 
 impl LazyListLayout {
@@ -1017,8 +1076,9 @@ fn compute_cross_offset(final_cross: Px, child_cross: Px, alignment: CrossAxisAl
     }
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
 enum LazyListAxis {
+    #[default]
     Vertical,
     Horizontal,
 }
@@ -1151,76 +1211,76 @@ impl VisibleChildrenPlan {
     }
 }
 
-fn register_lazy_list_focus_beyond_bounds_handler(
-    args: &LazyListViewArgs,
+struct LazyListFocusArgs {
+    axis: LazyListAxis,
+    controller: State<LazyListController>,
+    scroll_controller: State<ScrollableController>,
     total_count: usize,
     total_main: Px,
     viewport_span: Px,
     scroll_offset: Px,
     visible_range: Range<usize>,
-) {
-    let axis = args.axis;
-    let controller = args.controller;
-    let scroll_controller = args.scroll_controller;
-    let estimated_item_main = args.estimated_item_main;
-    let item_spacing = args.item_spacing;
-    let max_scroll = (total_main - viewport_span).max(Px::ZERO);
+    estimated_item_main: Px,
+    item_spacing: Px,
+}
 
-    TesseraRuntime::with_mut(|runtime| {
-        runtime.set_current_focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
-            let Some(scroll_direction) = axis.focus_scroll_direction(direction) else {
-                return false;
-            };
-            if total_count == 0 || viewport_span <= Px::ZERO {
-                return false;
-            }
+fn lazy_list_focus_beyond_bounds_modifier(args: LazyListFocusArgs) -> Modifier {
+    let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
+    Modifier::new().focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
+        let Some(scroll_direction) = args.axis.focus_scroll_direction(direction) else {
+            return false;
+        };
+        if args.total_count == 0 || args.viewport_span <= Px::ZERO {
+            return false;
+        }
 
-            let target_index = match scroll_direction {
-                FocusScrollDirection::Forward => {
-                    if visible_range.end >= total_count {
-                        return false;
-                    }
-                    visible_range.end
+        let target_index = match scroll_direction {
+            FocusScrollDirection::Forward => {
+                if args.visible_range.end >= args.total_count {
+                    return false;
                 }
-                FocusScrollDirection::Backward => {
-                    let Some(index) = visible_range.start.checked_sub(1) else {
-                        return false;
-                    };
-                    index
-                }
-            };
-
-            let (target_offset, target_main) = controller.with(|c| {
-                (
-                    c.cache
-                        .offset_for(target_index, estimated_item_main, item_spacing),
-                    c.cache
-                        .measured_main
-                        .get(target_index)
-                        .copied()
-                        .flatten()
-                        .unwrap_or(estimated_item_main),
-                )
-            });
-
-            let desired_scroll = match scroll_direction {
-                FocusScrollDirection::Forward => {
-                    (target_offset + target_main - viewport_span).max(Px::ZERO)
-                }
-                FocusScrollDirection::Backward => target_offset,
+                args.visible_range.end
             }
-            .min(max_scroll);
-
-            if desired_scroll == scroll_offset {
-                return false;
+            FocusScrollDirection::Backward => {
+                let Some(index) = args.visible_range.start.checked_sub(1) else {
+                    return false;
+                };
+                index
             }
+        };
 
-            let position = axis.scroll_position(desired_scroll);
-            scroll_controller.with_mut(|c| c.set_scroll_position(position));
-            controller.with_mut(|c| c.scroll.set_scroll_position(position));
-            true
-        }));
-    });
+        let (target_offset, target_main) = args.controller.with(|c| {
+            (
+                c.cache
+                    .offset_for(target_index, args.estimated_item_main, args.item_spacing),
+                c.cache
+                    .measured_main
+                    .get(target_index)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(args.estimated_item_main),
+            )
+        });
+
+        let desired_scroll = match scroll_direction {
+            FocusScrollDirection::Forward => {
+                (target_offset + target_main - args.viewport_span).max(Px::ZERO)
+            }
+            FocusScrollDirection::Backward => target_offset,
+        }
+        .min(max_scroll);
+
+        if desired_scroll == args.scroll_offset {
+            return false;
+        }
+
+        let position = args.axis.scroll_position(desired_scroll);
+        args.scroll_controller
+            .with_mut(|c| c.set_scroll_position(position));
+        args.controller
+            .with_mut(|c| c.scroll.set_scroll_position(position));
+        true
+    }))
 }
 
 #[derive(Clone, PartialEq)]
@@ -1569,4 +1629,261 @@ fn shrink_dimension_max(dim: DimensionValue, amount: Px) -> DimensionValue {
 
 fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
     Px(lhs.0.saturating_sub(rhs.0))
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        Modifier, NoopRenderPolicy, Px, PxPosition, layout::layout_primitive, remember, tessera,
+    };
+
+    use crate::{
+        alignment::CrossAxisAlignment,
+        modifier::{ModifierExt as _, SemanticsArgs},
+    };
+
+    use super::{LazyListController, lazy_column, lazy_row};
+
+    #[derive(Clone, PartialEq)]
+    struct FixedTestLayout {
+        width: i32,
+        height: i32,
+    }
+
+    impl LayoutPolicy for FixedTestLayout {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    #[tessera]
+    fn fixed_test_box(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn lazy_column_layout_case() {
+        lazy_column()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(60))),
+                Some(DimensionValue::Fixed(Px::new(50))),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .item_spacing(Px::new(3).into())
+            .estimated_item_size(Px::new(10).into())
+            .content_padding(Px::new(4).into())
+            .content(|scope| {
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_first".to_string())
+                        .width(20)
+                        .height(10);
+                });
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_second".to_string())
+                        .width(18)
+                        .height(12);
+                });
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_third".to_string())
+                        .width(16)
+                        .height(8);
+                });
+            });
+    }
+
+    #[tessera]
+    fn lazy_row_layout_case() {
+        lazy_row()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(70))),
+                Some(DimensionValue::Fixed(Px::new(30))),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .item_spacing(Px::new(3).into())
+            .estimated_item_size(Px::new(10).into())
+            .content_padding(Px::new(4).into())
+            .content(|scope| {
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_row_first".to_string())
+                        .width(20)
+                        .height(10);
+                });
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_row_second".to_string())
+                        .width(15)
+                        .height(12);
+                });
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_row_third".to_string())
+                        .width(18)
+                        .height(8);
+                });
+            });
+    }
+
+    #[tessera]
+    fn lazy_column_scrolled_layout_case() {
+        let controller = remember(LazyListController::new);
+        let target_position = PxPosition::new(Px::ZERO, Px::new(-5));
+        if controller.with(|c| c.scroll_controller().child_position()) != target_position {
+            controller.with_mut(|c| {
+                c.scroll_controller_mut()
+                    .set_scroll_position(target_position);
+            });
+        }
+
+        lazy_column()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(60))),
+                Some(DimensionValue::Fixed(Px::new(50))),
+            ))
+            .controller(controller)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .item_spacing(Px::new(3).into())
+            .estimated_item_size(Px::new(10).into())
+            .content_padding(Px::new(4).into())
+            .content(|scope| {
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_scrolled_first".to_string())
+                        .width(20)
+                        .height(10);
+                });
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_scrolled_second".to_string())
+                        .width(18)
+                        .height(12);
+                });
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_scrolled_third".to_string())
+                        .width(16)
+                        .height(8);
+                });
+            });
+    }
+
+    #[tessera]
+    fn lazy_column_sticky_layout_case() {
+        let controller = remember(LazyListController::new);
+        let target_position = PxPosition::new(Px::ZERO, Px::new(-6));
+        if controller.with(|c| c.scroll_controller().child_position()) != target_position {
+            controller.with_mut(|c| {
+                c.scroll_controller_mut()
+                    .set_scroll_position(target_position);
+            });
+        }
+
+        lazy_column()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(60))),
+                Some(DimensionValue::Fixed(Px::new(40))),
+            ))
+            .controller(controller)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .item_spacing(Px::new(3).into())
+            .estimated_item_size(Px::new(10).into())
+            .content_padding(Px::new(4).into())
+            .content(|scope| {
+                scope.sticky_header(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_sticky_header".to_string())
+                        .width(20)
+                        .height(10);
+                });
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_sticky_body".to_string())
+                        .width(18)
+                        .height(12);
+                });
+                scope.item(|| {
+                    fixed_test_box()
+                        .tag("lazy_column_sticky_tail".to_string())
+                        .width(16)
+                        .height(8);
+                });
+            });
+    }
+
+    #[test]
+    fn lazy_column_positions_items_with_padding_and_spacing() {
+        tessera_ui::assert_layout! {
+            viewport: (80, 60),
+            content: {
+                lazy_column_layout_case();
+            },
+            expect: {
+                node("lazy_column_first").position(4, 4).size(20, 10);
+                node("lazy_column_second").position(4, 17).size(18, 12);
+                node("lazy_column_third").position(4, 32).size(16, 8);
+            }
+        }
+    }
+
+    #[test]
+    fn lazy_row_positions_items_with_padding_and_spacing() {
+        tessera_ui::assert_layout! {
+            viewport: (90, 40),
+            content: {
+                lazy_row_layout_case();
+            },
+            expect: {
+                node("lazy_row_first").position(4, 4).size(20, 10);
+                node("lazy_row_second").position(27, 4).size(15, 12);
+                node("lazy_row_third").position(45, 4).size(18, 8);
+            }
+        }
+    }
+
+    #[test]
+    fn lazy_column_scroll_offset_repositions_visible_items() {
+        tessera_ui::assert_layout! {
+            viewport: (80, 60),
+            content: {
+                lazy_column_scrolled_layout_case();
+            },
+            expect: {
+                node("lazy_column_scrolled_first").position(4, -1).size(20, 10);
+                node("lazy_column_scrolled_second").position(4, 12).size(18, 12);
+                node("lazy_column_scrolled_third").position(4, 27).size(16, 8);
+            }
+        }
+    }
+
+    #[test]
+    fn lazy_column_sticky_header_stays_pinned_to_padding() {
+        tessera_ui::assert_layout! {
+            viewport: (80, 50),
+            content: {
+                lazy_column_sticky_layout_case();
+            },
+            expect: {
+                node("lazy_column_sticky_header").position(4, 4).size(20, 10);
+                node("lazy_column_sticky_body").position(4, 11).size(18, 12);
+                node("lazy_column_sticky_tail").position(4, 26).size(16, 8);
+            }
+        }
+    }
 }

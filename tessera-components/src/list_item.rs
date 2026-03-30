@@ -5,20 +5,20 @@
 //! Present rows of content in settings, inboxes, or selection lists.
 
 use tessera_ui::{
-    Callback, Color, DimensionValue, Dp, Modifier, Prop, Px, RenderSlot, State, accesskit::Role,
+    Callback, Color, DimensionValue, Dp, Modifier, Px, RenderSlot, State, accesskit::Role,
     provide_context, tessera, use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    boxed::{BoxedArgs, boxed},
-    column::{ColumnArgs, column},
+    boxed::boxed,
+    column::column,
     modifier::{InteractionState, ModifierExt as _, Padding},
-    row::{RowArgs, row},
+    row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
-    text::{TextArgs, text},
+    surface::{SurfaceStyle, surface},
+    text::text,
     theme::{ContentColor, MaterialAlpha, MaterialTheme, provide_text_style},
 };
 
@@ -196,132 +196,6 @@ impl ListItemDefaults {
     }
 }
 
-/// Arguments for the [`list_item`] component.
-#[derive(Clone, Prop)]
-pub struct ListItemArgs {
-    /// Modifier chain applied to the list item container.
-    pub modifier: Modifier,
-    /// Whether the list item is enabled for interaction.
-    pub enabled: bool,
-    /// Whether the list item is selected.
-    pub selected: bool,
-    /// Headline text displayed as the primary label.
-    #[prop(into)]
-    pub headline: String,
-    /// Optional overline text displayed above the headline.
-    #[prop(into)]
-    pub overline_text: Option<String>,
-    /// Optional supporting text displayed below the headline.
-    #[prop(into)]
-    pub supporting_text: Option<String>,
-    /// Optional leading slot content (icon/avatar/etc.).
-    #[prop(skip_setter)]
-    pub leading: Option<RenderSlot>,
-    /// Optional trailing slot content (icon/switch/etc.).
-    #[prop(skip_setter)]
-    pub trailing: Option<RenderSlot>,
-    /// Colors used to render the list item.
-    pub colors: ListItemColors,
-    /// Shape of the list item container.
-    pub shape: Shape,
-    /// Inner padding applied to the list item content.
-    pub content_padding: Padding,
-    /// Tonal elevation applied to the list item surface.
-    pub tonal_elevation: Dp,
-    /// Shadow elevation applied to the list item surface.
-    pub shadow_elevation: Dp,
-    /// Optional minimum height override for the container.
-    pub min_height: Option<Dp>,
-    /// Optional click handler for the list item.
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// Optional shared interaction state for hover/press feedback.
-    pub interaction_state: Option<State<InteractionState>>,
-    /// Optional accessibility label announced by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional accessibility description announced by assistive technologies.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-}
-
-impl ListItemArgs {
-    /// Create args with the required headline text.
-    pub fn new(headline: impl Into<String>) -> Self {
-        Self::default().headline(headline)
-    }
-
-    /// Set the leading slot content.
-    pub fn leading<F>(mut self, leading: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.leading = Some(RenderSlot::new(leading));
-        self
-    }
-
-    /// Set the leading slot content using a shared callback.
-    pub fn leading_shared(mut self, leading: impl Into<RenderSlot>) -> Self {
-        self.leading = Some(leading.into());
-        self
-    }
-
-    /// Set the trailing slot content.
-    pub fn trailing<F>(mut self, trailing: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.trailing = Some(RenderSlot::new(trailing));
-        self
-    }
-
-    /// Set the trailing slot content using a shared callback.
-    pub fn trailing_shared(mut self, trailing: impl Into<RenderSlot>) -> Self {
-        self.trailing = Some(trailing.into());
-        self
-    }
-
-    /// Set the click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Some(Callback::new(on_click));
-        self
-    }
-
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
-        self
-    }
-}
-
-impl Default for ListItemArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new().fill_max_width(),
-            enabled: true,
-            selected: false,
-            headline: String::new(),
-            overline_text: None,
-            supporting_text: None,
-            leading: None,
-            trailing: None,
-            colors: ListItemDefaults::colors(),
-            shape: ListItemDefaults::shape(),
-            content_padding: ListItemDefaults::CONTENT_PADDING,
-            tonal_elevation: ListItemDefaults::TONAL_ELEVATION,
-            shadow_elevation: ListItemDefaults::SHADOW_ELEVATION,
-            min_height: None,
-            on_click: None,
-            interaction_state: None,
-            accessibility_label: None,
-            accessibility_description: None,
-        }
-    }
-}
-
 /// # list_item
 ///
 /// Render a Material list row with optional leading/trailing slots and
@@ -333,58 +207,85 @@ impl Default for ListItemArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures list item content, colors, and interaction; see
-///   [`ListItemArgs`].
+/// - `modifier` — optional modifier chain applied to the list item container.
+/// - `enabled` — optional enabled state; defaults to `true`.
+/// - `selected` — whether the list item is selected.
+/// - `headline` — primary headline text.
+/// - `overline_text` — optional overline text.
+/// - `supporting_text` — optional supporting text.
+/// - `leading` — optional leading slot.
+/// - `trailing` — optional trailing slot.
+/// - `colors` — optional color palette override.
+/// - `shape` — optional container shape override.
+/// - `content_padding` — optional inner padding override.
+/// - `tonal_elevation` — optional tonal elevation override.
+/// - `shadow_elevation` — optional shadow elevation override.
+/// - `min_height` — optional minimum height override.
+/// - `on_click` — optional click callback.
+/// - `interaction_state` — optional shared interaction state.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::list_item::{ListItemArgs, list_item};
+/// use tessera_components::list_item::list_item;
 /// use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
-/// #     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #         || MaterialTheme::default(),
-/// #         || {
-///     let args = ListItemArgs::new("Inbox").supporting_text("3 new messages");
-///     assert_eq!(args.headline, "Inbox");
-///     list_item(&args);
-/// #         },
-/// #     );
-/// #     material_theme(&args);
+///     material_theme().content(|| {
+///         list_item()
+///             .headline("Inbox")
+///             .supporting_text("3 new messages");
+///     });
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn list_item(args: &ListItemArgs) {
-    let args = args.clone();
+pub fn list_item(
+    modifier: Option<Modifier>,
+    enabled: Option<bool>,
+    selected: bool,
+    #[prop(into)] headline: String,
+    #[prop(into)] overline_text: Option<String>,
+    #[prop(into)] supporting_text: Option<String>,
+    leading: Option<RenderSlot>,
+    trailing: Option<RenderSlot>,
+    colors: Option<ListItemColors>,
+    shape: Option<Shape>,
+    content_padding: Option<Padding>,
+    tonal_elevation: Option<Dp>,
+    shadow_elevation: Option<Dp>,
+    min_height: Option<Dp>,
+    on_click: Option<Callback>,
+    interaction_state: Option<State<InteractionState>>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
     let typography = theme.typography;
+    let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_width());
+    let enabled = enabled.unwrap_or(true);
+    let colors = colors.unwrap_or_else(ListItemDefaults::colors);
+    let shape = shape.unwrap_or_else(ListItemDefaults::shape);
+    let content_padding = content_padding.unwrap_or(ListItemDefaults::CONTENT_PADDING);
+    let tonal_elevation = tonal_elevation.unwrap_or(ListItemDefaults::TONAL_ELEVATION);
+    let shadow_elevation = shadow_elevation.unwrap_or(ListItemDefaults::SHADOW_ELEVATION);
 
-    let overline_text = args.overline_text.clone().filter(|value| !value.is_empty());
-    let supporting_text = args
-        .supporting_text
-        .clone()
-        .filter(|value| !value.is_empty());
+    let overline_text = overline_text.filter(|value| !value.is_empty());
+    let supporting_text = supporting_text.filter(|value| !value.is_empty());
     let has_overline = overline_text.is_some();
     let has_supporting = supporting_text.is_some();
-    let min_height = args
-        .min_height
-        .unwrap_or_else(|| ListItemDefaults::min_height(has_overline, has_supporting));
-    let content_min_height = content_min_height(
-        min_height,
-        args.content_padding.top,
-        args.content_padding.bottom,
-    );
+    let min_height =
+        min_height.unwrap_or_else(|| ListItemDefaults::min_height(has_overline, has_supporting));
+    let content_min_height =
+        content_min_height(min_height, content_padding.top, content_padding.bottom);
 
-    let enabled = args.enabled;
-    let selected = args.selected;
-    let colors = args.colors;
     let container_color = colors.container_color(enabled, selected);
     let headline_color = colors.headline_color(enabled, selected);
     let overline_color = colors.overline_color(enabled, selected);
@@ -392,218 +293,193 @@ pub fn list_item(args: &ListItemArgs) {
     let leading_color = colors.leading_color(enabled, selected);
     let trailing_color = colors.trailing_color(enabled, selected);
 
-    let accessibility_label = args
-        .accessibility_label
-        .clone()
-        .or_else(|| (!args.headline.is_empty()).then(|| args.headline.clone()));
-    let accessibility_description = args
-        .accessibility_description
-        .clone()
+    let accessibility_label =
+        accessibility_label.or_else(|| (!headline.is_empty()).then(|| headline.clone()));
+    let accessibility_description = accessibility_description
         .or_else(|| supporting_text.clone())
         .or_else(|| overline_text.clone());
-
-    let mut surface_args = SurfaceArgs::default()
-        .modifier(args.modifier)
-        .style(SurfaceStyle::Filled {
-            color: container_color,
-        })
-        .shape(args.shape)
-        .content_color(headline_color)
-        .enabled(enabled)
-        .ripple_color(headline_color)
-        .tonal_elevation(args.tonal_elevation)
-        .accessibility_role(Role::ListItem);
-
-    if args.shadow_elevation.0 > 0.0 {
-        surface_args = surface_args.elevation(args.shadow_elevation);
-    }
-
-    if let Some(state) = args.interaction_state {
-        surface_args = surface_args.interaction_state(state);
-    }
-
-    if let Some(on_click) = args.on_click {
-        surface_args = surface_args
-            .on_click_shared(on_click)
-            .accessibility_focusable(true);
-    }
-
-    if let Some(label) = accessibility_label {
-        surface_args = surface_args.accessibility_label(label);
-    }
-    if let Some(description) = accessibility_description {
-        surface_args = surface_args.accessibility_description(description);
-    }
-
-    let headline = args.headline;
-    let leading = args.leading;
-    let trailing = args.trailing;
     let internal_spacing = ListItemDefaults::INTERNAL_SPACING;
-    let content_padding = args.content_padding;
+    list_item_surface(ListItemSurfaceArgs {
+        modifier,
+        container_color,
+        shape,
+        headline_color,
+        enabled,
+        tonal_elevation,
+        shadow_elevation,
+        interaction_state,
+        on_click,
+        accessibility_label,
+        accessibility_description,
+    })
+    .with_child(move || {
+        let headline = headline.clone();
+        let leading = leading.clone();
+        let trailing = trailing.clone();
+        let overline_text = overline_text.clone();
+        let supporting_text = supporting_text.clone();
+        let row_modifier = Modifier::new()
+            .constrain(
+                None,
+                Some(DimensionValue::Wrap {
+                    min: Some(Px::from(content_min_height)),
+                    max: None,
+                }),
+            )
+            .padding(content_padding)
+            .fill_max_width();
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        surface_args,
-        move || {
-            let headline = headline.clone();
-            let leading = leading.clone();
-            let trailing = trailing.clone();
-            let overline_text = overline_text.clone();
-            let supporting_text = supporting_text.clone();
-            let row_modifier = Modifier::new()
-                .constrain(
-                    None,
-                    Some(DimensionValue::Wrap {
-                        min: Some(Px::from(content_min_height)),
-                        max: None,
-                    }),
-                )
-                .padding(content_padding)
-                .fill_max_width();
+        row()
+            .modifier(row_modifier)
+            .main_axis_alignment(MainAxisAlignment::Start)
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .children(move || {
+                if let Some(leading) = leading.clone() {
+                    let color = leading_color;
+                    {
+                        render_slot()
+                            .content_shared(leading.clone())
+                            .color(color)
+                            .min_size(ListItemDefaults::LEADING_MIN_SIZE);
+                    };
+                    {
+                        spacer().modifier(Modifier::new().width(internal_spacing));
+                    };
+                }
 
-            row(&RowArgs::default()
-                .modifier(row_modifier)
-                .main_axis_alignment(MainAxisAlignment::Start)
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .children(move |row_scope| {
-                    if let Some(leading) = leading.clone() {
-                        let color = leading_color;
-                        row_scope.child(move || {
-                            render_slot(&RenderSlotArgs {
-                                content: leading.clone(),
-                                color,
-                                min_size: ListItemDefaults::LEADING_MIN_SIZE,
-                            });
-                        });
-                        row_scope.child(move || {
-                            spacer(&crate::spacer::SpacerArgs::new(
-                                Modifier::new().width(internal_spacing),
-                            ));
-                        });
-                    }
+                let overline_text = overline_text.clone();
+                let supporting_text = supporting_text.clone();
+                let headline_text = headline.clone();
+                column()
+                    .modifier(Modifier::new().fill_max_width().weight(1.0))
+                    .main_axis_alignment(MainAxisAlignment::Start)
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .children(move || {
+                        if let Some(overline) = overline_text.clone() {
+                            let color = overline_color;
+                            render_text_line()
+                                .text_value(overline.clone())
+                                .style(typography.label_small)
+                                .color(color);
+                        }
 
-                    let overline_text = overline_text.clone();
-                    let supporting_text = supporting_text.clone();
-                    let headline_text = headline.clone();
-                    row_scope.child_weighted(
-                        move || {
-                            let overline_text = overline_text.clone();
-                            let supporting_text = supporting_text.clone();
-                            let headline_text = headline_text.clone();
-                            column(
-                                &ColumnArgs::default()
-                                    .modifier(Modifier::new().fill_max_width())
-                                    .main_axis_alignment(MainAxisAlignment::Start)
-                                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                                    .children(move |column_scope| {
-                                        if let Some(overline) = overline_text.clone() {
-                                            let color = overline_color;
-                                            column_scope.child(move || {
-                                                render_text_line(&RenderTextLineArgs {
-                                                    text_value: overline.clone(),
-                                                    style: typography.label_small,
-                                                    color,
-                                                });
-                                            });
-                                        }
+                        let color = headline_color;
+                        if headline_text.is_empty() {
+                            spacer().modifier(Modifier::new());
+                        } else {
+                            render_text_line()
+                                .text_value(headline_text.clone())
+                                .style(typography.body_large)
+                                .color(color);
+                        }
 
-                                        let color = headline_color;
-                                        column_scope.child(move || {
-                                            if headline_text.is_empty() {
-                                                spacer(&crate::spacer::SpacerArgs::new(
-                                                    Modifier::new(),
-                                                ));
-                                            } else {
-                                                render_text_line(&RenderTextLineArgs {
-                                                    text_value: headline_text.clone(),
-                                                    style: typography.body_large,
-                                                    color,
-                                                });
-                                            }
-                                        });
+                        if let Some(supporting) = supporting_text.clone() {
+                            let color = supporting_color;
+                            render_text_line()
+                                .text_value(supporting.clone())
+                                .style(typography.body_medium)
+                                .color(color);
+                        }
+                    });
 
-                                        if let Some(supporting) = supporting_text.clone() {
-                                            let color = supporting_color;
-                                            column_scope.child(move || {
-                                                render_text_line(&RenderTextLineArgs {
-                                                    text_value: supporting.clone(),
-                                                    style: typography.body_medium,
-                                                    color,
-                                                });
-                                            });
-                                        }
-                                    }),
-                            );
-                        },
-                        1.0,
-                    );
-
-                    if let Some(trailing) = trailing.clone() {
-                        row_scope.child(move || {
-                            spacer(&crate::spacer::SpacerArgs::new(
-                                Modifier::new().width(internal_spacing),
-                            ));
-                        });
-                        let color = trailing_color;
-                        row_scope.child(move || {
-                            render_slot(&RenderSlotArgs {
-                                content: trailing.clone(),
-                                color,
-                                min_size: ListItemDefaults::TRAILING_MIN_SIZE,
-                            });
-                        });
-                    }
-                }));
-        },
-    ));
-}
-
-#[derive(Clone, Prop)]
-struct RenderTextLineArgs {
-    #[prop(into)]
-    text_value: String,
-    style: crate::theme::TextStyle,
-    color: Color,
-}
-
-#[tessera]
-fn render_text_line(args: &RenderTextLineArgs) {
-    let text_value = args.text_value.clone();
-    let style = args.style;
-    let color = args.color;
-    provide_text_style(style, move || {
-        text(&crate::text::TextArgs::from(
-            &TextArgs::default().text(text_value.clone()).color(color),
-        ));
+                if let Some(trailing) = trailing.clone() {
+                    {
+                        spacer().modifier(Modifier::new().width(internal_spacing));
+                    };
+                    let color = trailing_color;
+                    {
+                        render_slot()
+                            .content_shared(trailing.clone())
+                            .color(color)
+                            .min_size(ListItemDefaults::TRAILING_MIN_SIZE);
+                    };
+                }
+            });
     });
 }
 
-#[derive(Clone, Prop)]
-struct RenderSlotArgs {
-    content: RenderSlot,
+#[tessera]
+fn render_text_line(
+    #[prop(into)] text_value: String,
+    style: crate::theme::TextStyle,
     color: Color,
-    min_size: Dp,
+) {
+    provide_text_style(style, move || {
+        text().content(text_value.clone()).color(color);
+    });
 }
 
 #[tessera]
-fn render_slot(args: &RenderSlotArgs) {
-    let content = args.content.clone();
-    let color = args.color;
-    let min_size = args.min_size;
+fn render_slot(content: Option<RenderSlot>, color: Color, min_size: Dp) {
+    let content = content.unwrap_or_else(RenderSlot::empty);
     provide_context(
         || ContentColor { current: color },
         move || {
-            boxed(
-                &BoxedArgs::default()
-                    .alignment(Alignment::Center)
-                    .modifier(Modifier::new().size_in(Some(min_size), None, Some(min_size), None))
-                    .children(move |scope| {
-                        scope.child(move || {
-                            content.render();
-                        });
-                    }),
-            );
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(Modifier::new().size_in(Some(min_size), None, Some(min_size), None))
+                .children(move || {
+                    {
+                        content.render();
+                    };
+                });
         },
     );
+}
+
+struct ListItemSurfaceArgs {
+    modifier: Modifier,
+    container_color: Color,
+    shape: Shape,
+    headline_color: Color,
+    enabled: bool,
+    tonal_elevation: Dp,
+    shadow_elevation: Dp,
+    interaction_state: Option<State<InteractionState>>,
+    on_click: Option<Callback>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+}
+
+fn list_item_surface(args: ListItemSurfaceArgs) -> crate::surface::SurfaceBuilder {
+    let builder = surface()
+        .modifier(args.modifier)
+        .style(SurfaceStyle::Filled {
+            color: args.container_color,
+        })
+        .shape(args.shape)
+        .content_color(args.headline_color)
+        .enabled(args.enabled)
+        .ripple_color(args.headline_color)
+        .tonal_elevation(args.tonal_elevation)
+        .accessibility_role(Role::ListItem);
+    let builder = if args.shadow_elevation.0 > 0.0 {
+        builder.elevation(args.shadow_elevation)
+    } else {
+        builder
+    };
+    let builder = if let Some(interaction_state) = args.interaction_state {
+        builder.interaction_state(interaction_state)
+    } else {
+        builder
+    };
+    let builder = if let Some(on_click) = args.on_click {
+        builder
+            .on_click_shared(on_click)
+            .accessibility_focusable(true)
+    } else {
+        builder
+    };
+    let builder = if let Some(accessibility_label) = args.accessibility_label {
+        builder.accessibility_label(accessibility_label)
+    } else {
+        builder
+    };
+    if let Some(accessibility_description) = args.accessibility_description {
+        builder.accessibility_description(accessibility_description)
+    } else {
+        builder
+    }
 }
 
 fn content_min_height(min_height: Dp, top_padding: Dp, bottom_padding: Dp) -> Dp {

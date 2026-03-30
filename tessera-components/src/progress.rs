@@ -7,9 +7,11 @@ use std::time::Instant;
 
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    ParentConstraint, Prop, Px, PxPosition,
+    ParentConstraint, Px, PxPosition,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    layout::{
+        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
+    },
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -17,7 +19,7 @@ use crate::{
     modifier::{ModifierExt as _, SemanticsArgs},
     pipelines::progress_arc::command::{ProgressArcCap, ProgressArcCommand},
     shape_def::Shape,
-    surface::{SurfaceArgs, surface},
+    surface::surface,
     theme::MaterialTheme,
 };
 
@@ -46,7 +48,7 @@ struct LinearProgressLayout {
     animation_cycle: Option<f32>,
 }
 
-impl LayoutSpec for LinearProgressLayout {
+impl LayoutPolicy for LinearProgressLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -226,7 +228,7 @@ struct CircularProgressLayout {
     animation_start: Instant,
 }
 
-impl LayoutSpec for CircularProgressLayout {
+impl LayoutPolicy for CircularProgressLayout {
     fn measure(
         &self,
         _input: &LayoutInput<'_>,
@@ -238,7 +240,9 @@ impl LayoutSpec for CircularProgressLayout {
             height: diameter_px,
         })
     }
+}
 
+impl RenderPolicy for CircularProgressLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let diameter_px = self.diameter.to_px();
         let stroke_px = self.stroke_width.to_px();
@@ -517,61 +521,41 @@ fn stop_indicator_bounds(width: Px, height: Px) -> (PxPosition, Px) {
     )
 }
 
-/// Arguments for configuring a Material Design linear progress indicator.
-#[derive(Clone, Debug, Prop)]
-pub struct LinearProgressIndicatorArgs {
-    /// Current progress in the range 0.0..=1.0.
-    ///
-    /// When omitted, the indicator renders in an indeterminate mode.
-    pub progress: Option<f32>,
+impl LinearProgressIndicatorBuilder {
+    /// Sets the modifier chain applied to the indicator subtree.
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
+        self
+    }
 
-    /// Modifier chain applied to the indicator subtree.
-    pub modifier: Modifier,
+    /// Sets the active indicator color.
+    pub fn color(mut self, color: Color) -> Self {
+        self.props.color = Some(color);
+        self
+    }
 
-    /// Color of the active indicator.
-    pub color: Color,
+    /// Sets the inactive track color.
+    pub fn track_color(mut self, track_color: Color) -> Self {
+        self.props.track_color = Some(track_color);
+        self
+    }
 
-    /// Color of the inactive track.
-    pub track_color: Color,
+    /// Sets the stroke cap used for the indicator ends.
+    pub fn stroke_cap(mut self, stroke_cap: ProgressStrokeCap) -> Self {
+        self.props.stroke_cap = Some(stroke_cap);
+        self
+    }
 
-    /// Stroke cap used for the indicator ends.
-    pub stroke_cap: ProgressStrokeCap,
+    /// Sets the gap size between the active indicator and the track.
+    pub fn gap_size(mut self, gap_size: Dp) -> Self {
+        self.props.gap_size = Some(gap_size);
+        self
+    }
 
-    /// Size of the gap between the active indicator and the track.
-    pub gap_size: Dp,
-
-    /// Whether to draw a stop indicator at the end of the track.
-    pub draw_stop_indicator: bool,
-
-    /// Optional accessibility label read by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-
-    /// Optional accessibility description.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-}
-
-impl Default for LinearProgressIndicatorArgs {
-    fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        Self {
-            progress: None,
-            modifier: Modifier::new().size(
-                ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH,
-                ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT,
-            ),
-            color: scheme.primary,
-            track_color: scheme.secondary_container,
-            stroke_cap: ProgressStrokeCap::default(),
-            gap_size: ProgressIndicatorDefaults::LINEAR_INDICATOR_TRACK_GAP_SIZE,
-            draw_stop_indicator: true,
-            accessibility_label: None,
-            accessibility_description: None,
-        }
+    /// Sets whether to draw a stop indicator at the end of the track.
+    pub fn draw_stop_indicator(mut self, draw_stop_indicator: bool) -> Self {
+        self.props.draw_stop_indicator = Some(draw_stop_indicator);
+        self
     }
 }
 
@@ -586,7 +570,16 @@ impl Default for LinearProgressIndicatorArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the indicator; see [`LinearProgressIndicatorArgs`].
+/// - `progress` — current progress in the range `0.0..=1.0`; `None` renders the
+///   indeterminate indicator.
+/// - `modifier` — optional modifier chain for size and layout.
+/// - `color` — optional active indicator color.
+/// - `track_color` — optional inactive track color.
+/// - `stroke_cap` — optional stroke cap style.
+/// - `gap_size` — optional gap size between the active indicator and the track.
+/// - `draw_stop_indicator` — optional stop-indicator toggle.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
 ///
 /// ## Examples
 ///
@@ -594,28 +587,49 @@ impl Default for LinearProgressIndicatorArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::progress::{LinearProgressIndicatorArgs, linear_progress_indicator};
+/// use tessera_components::progress::linear_progress_indicator;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// linear_progress_indicator(&LinearProgressIndicatorArgs::default().progress(0.75));
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// linear_progress_indicator().progress(0.75);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
-    let args: LinearProgressIndicatorArgs = args.clone();
-    let modifier = args.modifier.clone();
-    modifier.run(move || {
+pub fn linear_progress_indicator(
+    progress: Option<f32>,
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    #[prop(skip_setter)] color: Option<Color>,
+    #[prop(skip_setter)] track_color: Option<Color>,
+    #[prop(skip_setter)] stroke_cap: Option<ProgressStrokeCap>,
+    #[prop(skip_setter)] gap_size: Option<Dp>,
+    #[prop(skip_setter)] draw_stop_indicator: Option<bool>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let modifier = modifier.unwrap_or_else(|| {
+        Modifier::new().size(
+            ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH,
+            ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT,
+        )
+    });
+    let color = color.unwrap_or(scheme.primary);
+    let track_color = track_color.unwrap_or(scheme.secondary_container);
+    let stroke_cap = stroke_cap.unwrap_or_default();
+    let gap_size = gap_size.unwrap_or(ProgressIndicatorDefaults::LINEAR_INDICATOR_TRACK_GAP_SIZE);
+    let draw_stop_indicator = draw_stop_indicator.unwrap_or(true);
+
+    layout_primitive().modifier(modifier).child(move || {
         let animation_start = remember(Instant::now);
         let frame_tick = remember(|| 0_u64);
-        let should_receive_frames = remember(|| args.progress.is_none());
-        should_receive_frames.set(args.progress.is_none());
+        let should_receive_frames = remember(|| progress.is_none());
+        should_receive_frames.set(progress.is_none());
 
         if should_receive_frames.get() {
             receive_frame_nanos(move |frame_nanos| {
@@ -627,148 +641,121 @@ pub fn linear_progress_indicator(args: &LinearProgressIndicatorArgs) {
             });
         }
 
-        let segment_shape = if args.stroke_cap == ProgressStrokeCap::Butt {
+        let segment_shape = if stroke_cap == ProgressStrokeCap::Butt {
             Shape::RECTANGLE
         } else {
             Shape::capsule()
         };
 
-        let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
-        if let Some(label) = args.accessibility_label.clone() {
-            semantics = semantics.label(label);
-        }
-        if let Some(description) = args.accessibility_description.clone() {
-            semantics = semantics.description(description);
-        }
-        if let Some(progress) = args.progress {
+        let mut semantics = SemanticsArgs {
+            role: Some(Role::ProgressIndicator),
+            label: accessibility_label.clone(),
+            description: accessibility_description.clone(),
+            ..Default::default()
+        };
+        if let Some(progress) = progress {
             let progress = if progress.is_nan() {
                 0.0
             } else {
                 progress.clamp(0.0, 1.0)
             };
-            semantics = semantics
-                .numeric_range(0.0, 1.0)
-                .numeric_value(progress as f64);
+            semantics.numeric_range = Some((0.0, 1.0));
+            semantics.numeric_value = Some(progress as f64);
         }
 
-        let layout_args = args.clone();
+        let stop_shape = if stroke_cap == ProgressStrokeCap::Butt {
+            Shape::RECTANGLE
+        } else {
+            Shape::Ellipse
+        };
+        let animation_cycle = if progress.is_some() {
+            None
+        } else {
+            Some(linear_cycle_progress(animation_start.get(), 1750))
+        };
 
-        Modifier::new().semantics(semantics).run(move || {
-            if args.progress.is_some() {
-                surface(&crate::surface::SurfaceArgs::with_child(
-                    SurfaceArgs::default()
-                        .style(args.track_color.into())
+        layout_primitive()
+            .modifier(Modifier::new().semantics(semantics))
+            .layout_policy(LinearProgressLayout {
+                progress,
+                stroke_cap,
+                gap_size,
+                draw_stop_indicator,
+                animation_cycle,
+            })
+            .child(move || {
+                if progress.is_some() {
+                    surface()
+                        .style(track_color.into())
                         .shape(segment_shape)
-                        .modifier(Modifier::new().fill_max_size()),
-                    || {},
-                ));
-                surface(&crate::surface::SurfaceArgs::with_child(
-                    SurfaceArgs::default()
-                        .style(args.color.into())
+                        .modifier(Modifier::new().fill_max_size())
+                        .with_child(|| {});
+                    surface()
+                        .style(color.into())
                         .shape(segment_shape)
-                        .modifier(Modifier::new().fill_max_size()),
-                    || {},
-                ));
-                if args.draw_stop_indicator {
-                    let stop_shape = if args.stroke_cap == ProgressStrokeCap::Butt {
-                        Shape::RECTANGLE
-                    } else {
-                        Shape::Ellipse
-                    };
-                    surface(&crate::surface::SurfaceArgs::with_child(
-                        SurfaceArgs::default()
-                            .style(args.color.into())
+                        .modifier(Modifier::new().fill_max_size())
+                        .with_child(|| {});
+                    if draw_stop_indicator {
+                        surface()
+                            .style(color.into())
                             .shape(stop_shape)
-                            .modifier(Modifier::new().fill_max_size()),
-                        || {},
-                    ));
-                }
-            } else {
-                for (color, shape) in [
-                    (args.track_color, segment_shape),
-                    (args.color, segment_shape),
-                    (args.track_color, segment_shape),
-                    (args.color, segment_shape),
-                    (args.track_color, segment_shape),
-                ] {
-                    surface(&crate::surface::SurfaceArgs::with_child(
-                        SurfaceArgs::default()
+                            .modifier(Modifier::new().fill_max_size())
+                            .with_child(|| {});
+                    }
+                } else {
+                    for (color, shape) in [
+                        (track_color, segment_shape),
+                        (color, segment_shape),
+                        (track_color, segment_shape),
+                        (color, segment_shape),
+                        (track_color, segment_shape),
+                    ] {
+                        surface()
                             .style(color.into())
                             .shape(shape)
-                            .modifier(Modifier::new().fill_max_size()),
-                        || {},
-                    ));
+                            .modifier(Modifier::new().fill_max_size())
+                            .with_child(|| {});
+                    }
                 }
-            }
-
-            let animation_cycle = if layout_args.progress.is_some() {
-                None
-            } else {
-                Some(linear_cycle_progress(animation_start.get(), 1750))
-            };
-            layout(LinearProgressLayout {
-                progress: layout_args.progress,
-                stroke_cap: layout_args.stroke_cap,
-                gap_size: layout_args.gap_size,
-                draw_stop_indicator: layout_args.draw_stop_indicator,
-                animation_cycle,
             });
-        });
     });
 }
 
-/// Arguments for configuring a Material Design circular progress indicator.
-#[derive(Clone, Debug, Prop)]
-pub struct CircularProgressIndicatorArgs {
-    /// Current progress in the range 0.0..=1.0.
-    ///
-    /// When omitted, the indicator renders in an indeterminate mode.
-    pub progress: Option<f32>,
+impl CircularProgressIndicatorBuilder {
+    /// Sets the indicator diameter.
+    pub fn diameter(mut self, diameter: Dp) -> Self {
+        self.props.diameter = Some(diameter);
+        self
+    }
 
-    /// Diameter of the indicator.
-    pub diameter: Dp,
+    /// Sets the indicator stroke width.
+    pub fn stroke_width(mut self, stroke_width: Dp) -> Self {
+        self.props.stroke_width = Some(stroke_width);
+        self
+    }
 
-    /// Stroke width of the indicator.
-    pub stroke_width: Dp,
+    /// Sets the active indicator color.
+    pub fn color(mut self, color: Color) -> Self {
+        self.props.color = Some(color);
+        self
+    }
 
-    /// Color of the active indicator.
-    pub color: Color,
+    /// Sets the track color.
+    pub fn track_color(mut self, track_color: Color) -> Self {
+        self.props.track_color = Some(track_color);
+        self
+    }
 
-    /// Color of the track behind the indicator.
-    pub track_color: Color,
+    /// Sets the stroke cap.
+    pub fn stroke_cap(mut self, stroke_cap: ProgressStrokeCap) -> Self {
+        self.props.stroke_cap = Some(stroke_cap);
+        self
+    }
 
-    /// Stroke cap used for the arc ends.
-    pub stroke_cap: ProgressStrokeCap,
-
-    /// Gap between the indicator and the track.
-    pub gap_size: Dp,
-
-    /// Optional accessibility label read by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-
-    /// Optional accessibility description.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-}
-
-impl Default for CircularProgressIndicatorArgs {
-    fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        Self {
-            progress: None,
-            diameter: ProgressIndicatorDefaults::CIRCULAR_INDICATOR_DIAMETER,
-            stroke_width: ProgressIndicatorDefaults::CIRCULAR_STROKE_WIDTH,
-            color: scheme.primary,
-            track_color: scheme.secondary_container,
-            stroke_cap: ProgressStrokeCap::default(),
-            gap_size: ProgressIndicatorDefaults::CIRCULAR_INDICATOR_TRACK_GAP_SIZE,
-            accessibility_label: None,
-            accessibility_description: None,
-        }
+    /// Sets the gap size between the active indicator and the track.
+    pub fn gap_size(mut self, gap_size: Dp) -> Self {
+        self.props.gap_size = Some(gap_size);
+        self
     }
 }
 
@@ -844,7 +831,16 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the indicator; see [`CircularProgressIndicatorArgs`].
+/// - `progress` — current progress in the range `0.0..=1.0`; `None` renders the
+///   indeterminate indicator.
+/// - `diameter` — optional indicator diameter.
+/// - `stroke_width` — optional stroke width.
+/// - `color` — optional active indicator color.
+/// - `track_color` — optional track color.
+/// - `stroke_cap` — optional stroke cap style.
+/// - `gap_size` — optional gap size between the indicator and the track.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
 ///
 /// ## Examples
 ///
@@ -852,28 +848,42 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::progress::{
-///     CircularProgressIndicatorArgs, circular_progress_indicator,
-/// };
+/// use tessera_components::progress::circular_progress_indicator;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// circular_progress_indicator(&CircularProgressIndicatorArgs::default().progress(0.6));
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// circular_progress_indicator().progress(0.6);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn circular_progress_indicator(args: &CircularProgressIndicatorArgs) {
-    let args: CircularProgressIndicatorArgs = args.clone();
+pub fn circular_progress_indicator(
+    progress: Option<f32>,
+    #[prop(skip_setter)] diameter: Option<Dp>,
+    #[prop(skip_setter)] stroke_width: Option<Dp>,
+    #[prop(skip_setter)] color: Option<Color>,
+    #[prop(skip_setter)] track_color: Option<Color>,
+    #[prop(skip_setter)] stroke_cap: Option<ProgressStrokeCap>,
+    #[prop(skip_setter)] gap_size: Option<Dp>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let diameter = diameter.unwrap_or(ProgressIndicatorDefaults::CIRCULAR_INDICATOR_DIAMETER);
+    let stroke_width = stroke_width.unwrap_or(ProgressIndicatorDefaults::CIRCULAR_STROKE_WIDTH);
+    let color = color.unwrap_or(scheme.primary);
+    let track_color = track_color.unwrap_or(scheme.secondary_container);
+    let stroke_cap = stroke_cap.unwrap_or_default();
+    let gap_size = gap_size.unwrap_or(ProgressIndicatorDefaults::CIRCULAR_INDICATOR_TRACK_GAP_SIZE);
     let animation_start = remember(Instant::now);
     let frame_tick = remember(|| 0_u64);
-    let should_receive_frames = remember(|| args.progress.is_none());
-    should_receive_frames.set(args.progress.is_none());
+    let should_receive_frames = remember(|| progress.is_none());
+    should_receive_frames.set(progress.is_none());
 
     if should_receive_frames.get() {
         receive_frame_nanos(move |frame_nanos| {
@@ -885,70 +895,55 @@ pub fn circular_progress_indicator(args: &CircularProgressIndicatorArgs) {
         });
     }
 
-    let mut semantics = SemanticsArgs::new().role(Role::ProgressIndicator);
-    if let Some(label) = args.accessibility_label.clone() {
-        semantics = semantics.label(label);
-    }
-    if let Some(description) = args.accessibility_description.clone() {
-        semantics = semantics.description(description);
-    }
-    if let Some(progress) = args.progress {
+    let mut semantics = SemanticsArgs {
+        role: Some(Role::ProgressIndicator),
+        label: accessibility_label.clone(),
+        description: accessibility_description.clone(),
+        ..Default::default()
+    };
+    if let Some(progress) = progress {
         let progress = if progress.is_nan() {
             0.0
         } else {
             progress.clamp(0.0, 1.0)
         };
-        semantics = semantics
-            .numeric_range(0.0, 1.0)
-            .numeric_value(progress as f64);
+        semantics.numeric_range = Some((0.0, 1.0));
+        semantics.numeric_value = Some(progress as f64);
     }
 
-    Modifier::new().semantics(semantics).run(move || {
-        let animation_start = animation_start.get();
-        layout(CircularProgressLayout {
-            progress: args.progress,
-            diameter: args.diameter,
-            stroke_width: args.stroke_width,
-            color: args.color,
-            track_color: args.track_color,
-            stroke_cap: args.stroke_cap,
-            gap_size: args.gap_size,
-            animation_start,
-        });
-    });
+    let policy = CircularProgressLayout {
+        progress,
+        diameter,
+        stroke_width,
+        color,
+        track_color,
+        stroke_cap,
+        gap_size,
+        animation_start: animation_start.get(),
+    };
+    layout_primitive()
+        .modifier(Modifier::new().semantics(semantics))
+        .layout_policy(policy.clone())
+        .render_policy(policy);
 }
 
-/// Arguments for the `progress` component.
-#[derive(Clone, Debug, Prop)]
-pub struct ProgressArgs {
-    /// The current value of the progress bar, ranging from 0.0 to 1.0.
-    pub value: f32,
+impl ProgressBuilder {
+    /// Sets the modifier chain applied to the progress bar subtree.
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
+        self
+    }
 
-    /// Modifier chain applied to the progress bar subtree.
-    pub modifier: Modifier,
+    /// Sets the active part color.
+    pub fn progress_color(mut self, progress_color: Color) -> Self {
+        self.props.progress_color = Some(progress_color);
+        self
+    }
 
-    /// The color of the active part of the track.
-    pub progress_color: Color,
-
-    /// The color of the inactive part of the track.
-    pub track_color: Color,
-}
-
-impl Default for ProgressArgs {
-    fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        Self {
-            value: 0.0,
-            modifier: Modifier::new().size(
-                ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH,
-                ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT,
-            ),
-            progress_color: scheme.primary,
-            track_color: scheme.surface_variant,
-        }
+    /// Sets the inactive track color.
+    pub fn track_color(mut self, track_color: Color) -> Self {
+        self.props.track_color = Some(track_color);
+        self
     }
 }
 
@@ -963,8 +958,10 @@ impl Default for ProgressArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the progress bar's value and appearance; see
-///   [`ProgressArgs`].
+/// - `value` — current progress value in the range `0.0..=1.0`.
+/// - `modifier` — optional modifier chain for size and layout.
+/// - `progress_color` — optional active track color.
+/// - `track_color` — optional inactive track color.
 ///
 /// ## Examples
 ///
@@ -972,28 +969,44 @@ impl Default for ProgressArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::progress::{ProgressArgs, progress};
+/// use tessera_components::progress::progress;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// // Creates a progress bar that is 75% complete.
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// progress(&ProgressArgs::default().value(0.75));
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// progress().value(0.75);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn progress(args: &ProgressArgs) {
-    let args: ProgressArgs = args.clone();
-    linear_progress_indicator(
-        &LinearProgressIndicatorArgs::default()
-            .progress(args.value)
-            .modifier(args.modifier)
-            .color(args.progress_color)
-            .track_color(args.track_color),
-    );
+pub fn progress(
+    value: f32,
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    #[prop(skip_setter)] progress_color: Option<Color>,
+    #[prop(skip_setter)] track_color: Option<Color>,
+) {
+    linear_progress_indicator()
+        .progress(value)
+        .modifier(modifier.unwrap_or_else(|| {
+            Modifier::new().size(
+                ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH,
+                ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT,
+            )
+        }))
+        .color(progress_color.unwrap_or_else(|| {
+            use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .primary
+        }))
+        .track_color(track_color.unwrap_or_else(|| {
+            use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .surface_variant
+        }));
 }

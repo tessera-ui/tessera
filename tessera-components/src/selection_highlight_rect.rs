@@ -4,8 +4,8 @@
 //!
 //! Highlight selected text ranges or focusable regions inside editors.
 use tessera_ui::{
-    Color, ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Prop, Px,
-    RenderInput, tessera,
+    Color, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
+    RenderInput, RenderPolicy, layout::layout_primitive, tessera,
 };
 
 use crate::pipelines::shape::command::ShapeCommand;
@@ -27,31 +27,15 @@ use crate::pipelines::shape::command::ShapeCommand;
 /// - `color`: The fill color of the rectangle, including alpha for transparency
 ///   (`Color`).
 #[tessera]
-pub fn selection_highlight_rect(args: &SelectionHighlightRectArgs) {
-    layout(SelectionHighlightLayout {
-        width: args.width,
-        height: args.height,
-        color: args.color,
-    });
-}
-
-#[derive(Clone, Prop)]
-/// Props for [`selection_highlight_rect`].
-pub struct SelectionHighlightRectArgs {
-    width: Px,
-    height: Px,
-    color: Color,
-}
-
-impl SelectionHighlightRectArgs {
-    /// Creates selection highlight rectangle props.
-    pub fn new(width: Px, height: Px, color: Color) -> Self {
-        Self {
-            width,
-            height,
-            color,
-        }
-    }
+pub fn selection_highlight_rect(width: Px, height: Px, color: Color) {
+    let policy = SelectionHighlightLayout {
+        width,
+        height,
+        color,
+    };
+    layout_primitive()
+        .layout_policy(policy.clone())
+        .render_policy(policy);
 }
 #[derive(Clone, PartialEq)]
 struct SelectionHighlightLayout {
@@ -60,7 +44,7 @@ struct SelectionHighlightLayout {
     color: Color,
 }
 
-impl LayoutSpec for SelectionHighlightLayout {
+impl LayoutPolicy for SelectionHighlightLayout {
     fn measure(
         &self,
         _input: &LayoutInput<'_>,
@@ -71,7 +55,9 @@ impl LayoutSpec for SelectionHighlightLayout {
             height: self.height,
         })
     }
+}
 
+impl RenderPolicy for SelectionHighlightLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let drawable = ShapeCommand::Rect {
             color: self.color,

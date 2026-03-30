@@ -22,54 +22,11 @@
 //! See [`CheckmarkArgs`] for configuration options and usage examples in the
 //! [`checkmark`] function documentation.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Prop, Px,
-    RenderInput, tessera,
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
+    RenderInput, RenderPolicy, layout::layout_primitive, tessera,
 };
 
 use crate::pipelines::checkmark::command::CheckmarkCommand;
-
-/// Arguments for the `checkmark` component.
-#[derive(Clone, Prop)]
-pub struct CheckmarkArgs {
-    /// Color of the checkmark stroke
-    pub color: Color,
-
-    /// Width of the checkmark stroke in pixels
-    pub stroke_width: f32,
-
-    /// Animation progress from 0.0 (not drawn) to 1.0 (fully drawn)
-    pub progress: f32,
-
-    /// Padding around the checkmark within its bounds
-    pub padding: [f32; 2], // [horizontal, vertical]
-
-    /// Size of the checkmark area
-    pub size: Dp,
-}
-
-impl std::fmt::Debug for CheckmarkArgs {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("CheckmarkArgs")
-            .field("color", &self.color)
-            .field("stroke_width", &self.stroke_width)
-            .field("progress", &self.progress)
-            .field("padding", &self.padding)
-            .field("size", &self.size)
-            .finish()
-    }
-}
-
-impl Default for CheckmarkArgs {
-    fn default() -> Self {
-        Self {
-            color: Color::new(0.0, 0.6, 0.0, 1.0),
-            stroke_width: 5.0,
-            progress: 1.0,
-            padding: [2.0, 2.0],
-            size: Dp(20.0),
-        }
-    }
-}
 
 #[derive(Clone, PartialEq)]
 struct CheckmarkLayout {
@@ -80,7 +37,7 @@ struct CheckmarkLayout {
     padding: [f32; 2],
 }
 
-impl LayoutSpec for CheckmarkLayout {
+impl LayoutPolicy for CheckmarkLayout {
     fn measure(
         &self,
         _input: &LayoutInput<'_>,
@@ -91,7 +48,9 @@ impl LayoutSpec for CheckmarkLayout {
             height: self.size,
         })
     }
+}
 
+impl RenderPolicy for CheckmarkLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let command = CheckmarkCommand::new()
             .with_color(self.color)
@@ -127,13 +86,27 @@ impl LayoutSpec for CheckmarkLayout {
 /// * `size`: The size of the checkmark area as a `Dp` value. Defaults to
 ///   `Dp(20.0)`.
 #[tessera]
-pub fn checkmark(args: &CheckmarkArgs) {
-    let size_px = args.size.to_px();
-    layout(CheckmarkLayout {
+pub fn checkmark(
+    color: Option<Color>,
+    stroke_width: Option<f32>,
+    progress: Option<f32>,
+    padding: Option<[f32; 2]>,
+    size: Option<Dp>,
+) {
+    let color = color.unwrap_or(Color::new(0.0, 0.6, 0.0, 1.0));
+    let stroke_width = stroke_width.unwrap_or(5.0);
+    let progress = progress.unwrap_or(1.0);
+    let padding = padding.unwrap_or([2.0, 2.0]);
+    let size = size.unwrap_or(Dp(20.0));
+    let size_px = size.to_px();
+    let policy = CheckmarkLayout {
         size: Px::new(size_px.to_f32() as i32),
-        color: args.color,
-        stroke_width: args.stroke_width,
-        progress: args.progress,
-        padding: args.padding,
-    });
+        color,
+        stroke_width,
+        progress,
+        padding,
+    };
+    layout_primitive()
+        .layout_policy(policy.clone())
+        .render_policy(policy);
 }

@@ -7,26 +7,27 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Callback, Color, ComputedData, DimensionValue, Dp, FocusRequester, FocusTraversalPolicy,
-    MeasurementError, Modifier, ParentConstraint, Prop, Px, PxPosition, PxSize, RenderSlot, Slot,
-    State,
+    Callback, Color, ComputedData, DimensionValue, Dp, FocusRequester, FocusScopeNode,
+    FocusTraversalPolicy, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, PxSize,
+    RenderSlot, State,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
     modifier::FocusModifierExt as _,
-    remember, tessera, use_context, winit,
+    provide_context, remember, tessera, use_context, winit,
 };
 
 use crate::{
     alignment::CrossAxisAlignment,
-    checkmark::{CheckmarkArgs, checkmark},
-    column::{ColumnArgs, column},
-    modifier::ModifierExt as _,
+    checkmark::checkmark,
+    column::column,
+    icon::{IconContent, icon},
+    modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
     pos_misc::is_position_in_rect,
-    row::{RowArgs, row},
+    row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
-    text::{TextArgs, text},
+    surface::{SurfaceStyle, surface},
+    text::text,
     theme::{MaterialAlpha, MaterialTheme},
 };
 
@@ -38,26 +39,6 @@ const MENU_HORIZONTAL_PADDING: Dp = Dp(16.0);
 const MENU_LEADING_SIZE: Dp = Dp(20.0);
 const MENU_ITEM_HEIGHT: Dp = Dp(48.0);
 const MENU_TRAILING_SPACING: Dp = Dp(16.0);
-
-type MenuContentBuilder = dyn for<'a, 'b> Fn(&mut MenuScope<'a, 'b>) + Send + Sync;
-
-/// Shared menu content renderer.
-#[derive(Clone, PartialEq)]
-pub struct MenuContentSlot(Slot<MenuContentBuilder>);
-
-impl MenuContentSlot {
-    /// Creates a new menu content slot.
-    pub fn new(
-        content: impl for<'a, 'b> Fn(&mut MenuScope<'a, 'b>) + Send + Sync + 'static,
-    ) -> Self {
-        Self(Slot::from_shared(Arc::new(content)))
-    }
-
-    fn render<'a, 'b>(&self, scope: &mut MenuScope<'a, 'b>) {
-        let render = self.0.shared();
-        render(scope);
-    }
-}
 
 fn default_menu_width() -> DimensionValue {
     DimensionValue::Wrap {
@@ -88,41 +69,6 @@ fn default_menu_color() -> Color {
 
 fn default_scrim_color() -> Color {
     Color::new(0.0, 0.0, 0.0, 0.0)
-}
-
-/// Scope for adding items inside a [`menu`].
-pub struct MenuScope<'a, 'b> {
-    scope: &'a mut crate::column::ColumnScope<'b>,
-    controller: State<MenuController>,
-}
-
-impl<'a, 'b> MenuScope<'a, 'b> {
-    /// Adds a menu child (typically a menu item).
-    pub fn item<F>(&mut self, child: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.scope.child(child);
-    }
-
-    /// Adds a menu item to the menu.
-    pub fn menu_item(&mut self, args: &MenuItemArgs) {
-        let mut args = args.clone();
-        if args.close_on_click && args.submenu_content.is_none() {
-            let prev = args.on_click;
-            let controller = self.controller;
-            args.on_click = Some(Callback::new(move || {
-                if let Some(f) = &prev {
-                    f.call();
-                }
-                controller.with_mut(|c| c.close());
-            }));
-        }
-        self.scope.child(move || {
-            let render_args = args.clone();
-            menu_item_inner(&render_args);
-        });
-    }
 }
 
 /// Describes the anchor rectangle used to position a menu.
@@ -226,110 +172,27 @@ pub enum MenuPlacement {
     LeftStart,
 }
 
-/// Configuration for the menu overlay/provider.
-#[derive(Clone, Prop)]
-pub struct MenuProviderArgs {
-    /// How the menu is aligned relative to the provided anchor.
+#[derive(Clone, PartialEq)]
+struct MenuProviderConfig {
     pub placement: MenuPlacement,
-    /// Additional x/y offset applied after placement relative to the anchor.
     pub offset: [Dp; 2],
-    /// Layout modifiers applied to the menu container. Defaults to the Material
-    /// 112–280 dp width range.
     pub modifier: Modifier,
-    /// Maximum height of the menu before scrolling is required.
     pub max_height: Option<Px>,
-    /// Shape of the menu container.
     pub shape: Shape,
-    /// Elevation of the menu. Defaults to level 2 (3.0.dp).
     pub elevation: Dp,
-    /// Background color of the menu container.
     pub container_color: Color,
-    /// Color of the invisible background layer. Defaults to transparent (menus
-    /// do not dim content).
     pub scrim_color: Color,
-    /// Whether a background click should dismiss the menu.
     pub close_on_background: bool,
-    /// Whether pressing Escape dismisses the menu.
     pub close_on_escape: bool,
-    /// Optional callback invoked before the menu closes (background or Escape).
-    #[prop(skip_setter)]
     pub on_dismiss: Option<Callback>,
-    /// Whether the menu is currently open.
     pub is_open: bool,
-    /// Optional external controller for open/close and anchor state.
-    #[prop(skip_setter)]
     pub controller: Option<State<MenuController>>,
-    /// Optional fallback focus target restored when this menu closes.
-    #[prop(skip_setter)]
     pub focus_restorer_fallback: Option<FocusRequester>,
-    /// Optional main content rendered behind the menu.
-    #[prop(skip_setter)]
     pub main_content: Option<RenderSlot>,
-    /// Optional menu content builder.
-    #[prop(skip_setter)]
-    pub menu_content: Option<MenuContentSlot>,
+    pub menu_content: Option<RenderSlot>,
 }
 
-impl MenuProviderArgs {
-    /// Set the dismiss callback.
-    pub fn on_dismiss<F>(mut self, on_dismiss: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_dismiss = Some(Callback::new(on_dismiss));
-        self
-    }
-
-    /// Set the dismiss callback using a shared callback.
-    pub fn on_dismiss_shared(mut self, on_dismiss: impl Into<Callback>) -> Self {
-        self.on_dismiss = Some(on_dismiss.into());
-        self
-    }
-
-    /// Sets an external menu controller.
-    pub fn controller(mut self, controller: State<MenuController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-
-    /// Sets the fallback focus target restored when the menu closes.
-    pub fn focus_restorer_fallback(mut self, fallback: FocusRequester) -> Self {
-        self.focus_restorer_fallback = Some(fallback);
-        self
-    }
-
-    /// Sets the main content slot.
-    pub fn main_content<F>(mut self, main_content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.main_content = Some(RenderSlot::new(main_content));
-        self
-    }
-
-    /// Sets the main content slot using a shared render slot.
-    pub fn main_content_shared(mut self, main_content: impl Into<RenderSlot>) -> Self {
-        self.main_content = Some(main_content.into());
-        self
-    }
-
-    /// Sets the menu content slot.
-    pub fn menu_content<F>(mut self, menu_content: F) -> Self
-    where
-        F: for<'a, 'b> Fn(&mut MenuScope<'a, 'b>) + Send + Sync + 'static,
-    {
-        self.menu_content = Some(MenuContentSlot::new(menu_content));
-        self
-    }
-
-    /// Sets the menu content slot using a shared content slot.
-    pub fn menu_content_shared(mut self, menu_content: MenuContentSlot) -> Self {
-        self.menu_content = Some(menu_content);
-        self
-    }
-}
-
-impl Default for MenuProviderArgs {
+impl Default for MenuProviderConfig {
     fn default() -> Self {
         Self {
             placement: MenuPlacement::default(),
@@ -351,17 +214,6 @@ impl Default for MenuProviderArgs {
         }
     }
 }
-
-#[derive(Clone, Prop)]
-struct MenuPanelArgs {
-    provider: MenuProviderArgs,
-    controller: State<MenuController>,
-    menu_content: MenuContentSlot,
-    just_opened: bool,
-}
-
-/// Backward compatibility alias for earlier menu args naming.
-pub type MenuArgs = MenuProviderArgs;
 
 #[derive(Clone, PartialEq, Copy)]
 struct MenuBounds {
@@ -394,7 +246,7 @@ impl PartialEq for MenuLayout {
     }
 }
 
-impl LayoutSpec for MenuLayout {
+impl LayoutPolicy for MenuLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -536,8 +388,22 @@ fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Cal
 ///
 /// ## Parameters
 ///
-/// - `args` — configures placement, styling, and dismissal behavior; see
-///   [`MenuProviderArgs`].
+/// - `placement` — how the menu aligns relative to its anchor
+/// - `offset` — additional x/y offset after placement
+/// - `modifier` — extra layout modifiers for the menu container
+/// - `max_height` — optional maximum menu height before scrolling
+/// - `shape` — shape of the surfaced menu panel
+/// - `elevation` — menu elevation level
+/// - `container_color` — background color of the menu panel
+/// - `scrim_color` — background color behind the menu
+/// - `close_on_background` — whether outside clicks dismiss the menu
+/// - `close_on_escape` — whether Escape dismisses the menu
+/// - `on_dismiss` — optional callback before dismissal
+/// - `is_open` — whether the menu is currently visible
+/// - `controller` — optional external controller for open state and anchor
+/// - `focus_restorer_fallback` — optional fallback focus target on dismiss
+/// - `main_content` — optional content rendered behind the menu
+/// - `menu_content` — optional menu content slot
 ///
 /// ## Examples
 ///
@@ -546,34 +412,67 @@ fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Cal
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     menus::{
-///         MenuAnchor, MenuItemArgs, MenuPlacement, MenuProviderArgs, MenuScope, menu_provider,
-///     },
+///     menus::{MenuPlacement, menu_item, menu_provider},
 ///     text::text,
 /// };
-/// use tessera_ui::Dp;
+/// use tessera_ui::{Callback, Dp};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-/// let args = MenuProviderArgs::default()
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// menu_provider()
 ///     .placement(MenuPlacement::BelowStart)
 ///     .is_open(true)
 ///     .main_content(|| {
-///         text(&tessera_components::text::TextArgs::default().text("Main content"));
+///         text().content("Main content");
 ///     })
-///     .menu_content(move |menu_scope: &mut MenuScope<'_, '_>| {
-///         menu_scope.menu_item(&MenuItemArgs::default().label("Edit").on_click(|| {}));
+///     .menu_content(|| {
+///         menu_item()
+///             .label("Edit")
+///             .on_click(Callback::noop());
 ///     });
-///
-/// menu_provider(&args);
 /// # });
-/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn menu_provider(args: &MenuProviderArgs) {
-    let provider_args = args.clone();
+pub fn menu_provider(
+    placement: Option<MenuPlacement>,
+    offset: Option<[Dp; 2]>,
+    modifier: Option<Modifier>,
+    max_height: Option<Px>,
+    shape: Option<Shape>,
+    elevation: Option<Dp>,
+    container_color: Option<Color>,
+    scrim_color: Option<Color>,
+    close_on_background: Option<bool>,
+    close_on_escape: Option<bool>,
+    on_dismiss: Option<Callback>,
+    is_open: bool,
+    controller: Option<State<MenuController>>,
+    focus_restorer_fallback: Option<FocusRequester>,
+    main_content: Option<RenderSlot>,
+    menu_content: Option<RenderSlot>,
+) {
+    let provider_args = MenuProviderConfig {
+        placement: placement.unwrap_or_default(),
+        offset: offset.unwrap_or([Dp(0.0), MENU_VERTICAL_GAP]),
+        modifier: modifier.unwrap_or_else(default_menu_modifier),
+        max_height: max_height.or_else(default_max_height),
+        shape: shape.unwrap_or_else(default_menu_shape),
+        elevation: elevation.unwrap_or(Dp(3.0)),
+        container_color: container_color.unwrap_or_else(default_menu_color),
+        scrim_color: scrim_color.unwrap_or_else(default_scrim_color),
+        close_on_background: close_on_background.unwrap_or(true),
+        close_on_escape: close_on_escape.unwrap_or(true),
+        on_dismiss,
+        is_open,
+        controller,
+        focus_restorer_fallback,
+        main_content,
+        menu_content,
+    };
     let controller = provider_args
         .controller
         .unwrap_or_else(|| remember(MenuController::new));
@@ -593,11 +492,8 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     let menu_content = provider_args
         .menu_content
         .clone()
-        .unwrap_or_else(|| MenuContentSlot::new(|_| {}));
+        .unwrap_or_else(RenderSlot::empty);
     let menu_open_state = remember(|| false);
-
-    // Render underlying content first.
-    main_content.render();
 
     let (is_open, anchor) = controller.with(|c| c.snapshot());
     let mut just_opened = false;
@@ -612,31 +508,12 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     // Track menu bounds for outside-click detection.
     let bounds: Arc<RwLock<Option<MenuBounds>>> = Arc::new(RwLock::new(None));
 
-    // Background layer (non-dimming by default).
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .style(SurfaceStyle::Filled {
-                color: provider_args.scrim_color,
-            })
-            .modifier(Modifier::new().fill_max_size())
-            .block_input(true),
-        || {},
-    ));
-
-    // Menu panel.
-    menu_panel(&MenuPanelArgs {
-        provider: provider_args.clone(),
-        controller,
-        menu_content,
-        just_opened,
-    });
-
     // Parent pointer handler: block propagation and close on background click.
     let bounds = bounds.clone();
     let on_dismiss = provider_args.on_dismiss;
     let close_on_escape = provider_args.close_on_escape;
     let close_on_background = provider_args.close_on_background;
-    pointer_input_handler({
+    let mut modifier = with_pointer_input(Modifier::new(), {
         let bounds = bounds.clone();
         move |mut input| {
             let cursor_position = input.cursor_position_rel;
@@ -656,7 +533,7 @@ pub fn menu_provider(args: &MenuProviderArgs) {
 
     if close_on_escape {
         let on_dismiss = provider_args.on_dismiss;
-        keyboard_input_handler(move |mut input| {
+        modifier = with_keyboard_input(modifier, move |mut input| {
             let should_close_escape = input.keyboard_events.iter().any(|event| {
                 event.state == winit::event::ElementState::Pressed
                     && matches!(
@@ -672,162 +549,159 @@ pub fn menu_provider(args: &MenuProviderArgs) {
     }
 
     // Measurement: place main content, background, and menu based on anchor.
-    layout(MenuLayout {
-        placement: provider_args.placement,
-        offset: provider_args.offset,
-        anchor,
-        bounds,
-    });
-}
-
-#[tessera]
-fn menu_panel(args: &MenuPanelArgs) {
-    let args = args.clone();
-    let controller = args.controller;
-    let menu_content = args.menu_content.clone();
-    let focus_scope = remember_focus_scope();
-    let on_dismiss = args.provider.on_dismiss;
-    let placement = args.provider.placement;
-    let just_opened = args.just_opened;
-
-    Modifier::new()
-        .focus_restorer_with(focus_scope, args.provider.focus_restorer_fallback)
-        .focus_traversal_policy(
-            FocusTraversalPolicy::vertical()
-                .wrap(true)
-                .tab_navigation(true),
-        )
-        .run(move || {
-            if just_opened {
-                focus_scope.restore_focus();
-            }
-
-            keyboard_input_handler(move |mut input| {
-                if input.key_modifiers.control_key()
-                    || input.key_modifiers.alt_key()
-                    || input.key_modifiers.super_key()
-                {
-                    return;
-                }
-
-                let mut handled = false;
-                for event in input.keyboard_events.iter() {
-                    if event.state != winit::event::ElementState::Pressed {
-                        continue;
-                    }
-
-                    handled = match event.logical_key {
-                        winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowLeft)
-                            if placement == MenuPlacement::RightStart =>
-                        {
-                            apply_close_action(controller, &on_dismiss);
-                            true
-                        }
-                        winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowRight)
-                            if placement == MenuPlacement::LeftStart =>
-                        {
-                            apply_close_action(controller, &on_dismiss);
-                            true
-                        }
-                        _ => false,
-                    };
-
-                    if handled {
-                        break;
-                    }
-                }
-
-                if handled {
-                    input.block_keyboard();
-                }
-            });
-
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(MenuLayout {
+            placement: provider_args.placement,
+            offset: provider_args.offset,
+            anchor,
+            bounds,
+        })
+        .child(move || {
             let menu_content = menu_content.clone();
-            surface(&crate::surface::SurfaceArgs::with_child(
-                SurfaceArgs::default()
-                    .style(SurfaceStyle::Filled {
-                        color: args.provider.container_color,
-                    })
-                    .shape(args.provider.shape)
-                    .modifier(
-                        args.provider
-                            .modifier
-                            .clone()
-                            .constrain(
-                                None,
-                                Some(DimensionValue::Wrap {
-                                    min: None,
-                                    max: args.provider.max_height,
-                                }),
-                            )
-                            .clip_to_bounds(),
-                    )
-                    .accessibility_role(Role::Menu)
-                    .block_input(true)
-                    .elevation(args.provider.elevation),
-                move || {
-                    let menu_content = menu_content.clone();
-                    column(
-                        &ColumnArgs::default()
-                            .modifier(Modifier::new().fill_max_width())
-                            .cross_axis_alignment(CrossAxisAlignment::Start)
-                            .children({
-                                move |scope| {
-                                    let mut menu_scope = MenuScope { scope, controller };
-                                    menu_content.render(&mut menu_scope);
-                                }
-                            }),
-                    );
-                },
-            ));
+            main_content.render();
+
+            surface()
+                .style(SurfaceStyle::Filled {
+                    color: provider_args.scrim_color,
+                })
+                .modifier(Modifier::new().fill_max_size())
+                .block_input(true)
+                .with_child(|| {});
+
+            menu_panel()
+                .provider(provider_args.clone())
+                .controller(controller)
+                .menu_content_shared(menu_content)
+                .just_opened(just_opened);
         });
 }
 
-/// Defines the configuration for an individual menu item.
-#[derive(Clone, Prop)]
-pub struct MenuItemArgs {
-    /// Primary label text for the item.
-    #[prop(into)]
+#[tessera]
+fn menu_panel(
+    provider: MenuProviderConfig,
+    controller: Option<State<MenuController>>,
+    menu_content: Option<RenderSlot>,
+    just_opened: bool,
+) {
+    let controller = controller.expect("menu_panel requires controller");
+    let menu_content = menu_content.expect("menu_panel requires menu content");
+    let focus_scope = remember(FocusScopeNode::new).get();
+    let on_dismiss = provider.on_dismiss;
+    let placement = provider.placement;
+
+    let modifier = with_keyboard_input(
+        Modifier::new()
+            .focus_restorer_with(focus_scope, provider.focus_restorer_fallback)
+            .focus_traversal_policy(
+                FocusTraversalPolicy::vertical()
+                    .wrap(true)
+                    .tab_navigation(true),
+            ),
+        move |mut input| {
+            if input.key_modifiers.control_key()
+                || input.key_modifiers.alt_key()
+                || input.key_modifiers.super_key()
+            {
+                return;
+            }
+
+            let mut handled = false;
+            for event in input.keyboard_events.iter() {
+                if event.state != winit::event::ElementState::Pressed {
+                    continue;
+                }
+
+                handled = match event.logical_key {
+                    winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowLeft)
+                        if placement == MenuPlacement::RightStart =>
+                    {
+                        apply_close_action(controller, &on_dismiss);
+                        true
+                    }
+                    winit::keyboard::Key::Named(winit::keyboard::NamedKey::ArrowRight)
+                        if placement == MenuPlacement::LeftStart =>
+                    {
+                        apply_close_action(controller, &on_dismiss);
+                        true
+                    }
+                    _ => false,
+                };
+
+                if handled {
+                    break;
+                }
+            }
+
+            if handled {
+                input.block_keyboard();
+            }
+        },
+    );
+    if just_opened {
+        focus_scope.restore_focus();
+    }
+
+    layout_primitive().modifier(modifier).child(move || {
+        let menu_content = menu_content.clone();
+        surface()
+            .style(SurfaceStyle::Filled {
+                color: provider.container_color,
+            })
+            .shape(provider.shape)
+            .modifier(
+                provider
+                    .modifier
+                    .clone()
+                    .constrain(
+                        None,
+                        Some(DimensionValue::Wrap {
+                            min: None,
+                            max: provider.max_height,
+                        }),
+                    )
+                    .clip_to_bounds(),
+            )
+            .accessibility_role(Role::Menu)
+            .block_input(true)
+            .elevation(provider.elevation)
+            .with_child(move || {
+                let menu_content = menu_content.clone();
+                provide_context(
+                    || controller,
+                    move || {
+                        column()
+                            .modifier(Modifier::new().fill_max_width())
+                            .cross_axis_alignment(CrossAxisAlignment::Start)
+                            .children(move || {
+                                menu_content.render();
+                            });
+                    },
+                );
+            });
+    });
+}
+
+#[derive(Clone, PartialEq)]
+struct MenuItemConfig {
     pub label: String,
-    /// Optional supporting text displayed under the label.
-    #[prop(into)]
     pub supporting_text: Option<String>,
-    /// Optional trailing text (e.g., keyboard shortcut).
-    #[prop(into)]
     pub trailing_text: Option<String>,
-    /// Leading icon displayed when the item is not selected.
-    #[prop(into)]
-    pub leading_icon: Option<crate::icon::IconArgs>,
-    /// Trailing icon displayed on the right edge.
-    #[prop(into)]
-    pub trailing_icon: Option<crate::icon::IconArgs>,
-    /// Optional submenu content opened from this item.
-    #[prop(skip_setter)]
-    pub submenu_content: Option<MenuContentSlot>,
-    /// Placement used when showing the submenu.
+    pub leading_icon: Option<IconContent>,
+    pub trailing_icon: Option<IconContent>,
+    pub submenu_content: Option<RenderSlot>,
     pub submenu_placement: MenuPlacement,
-    /// Whether the item is currently selected (renders a checkmark instead of a
-    /// leading icon).
     pub selected: bool,
-    /// Whether the item can be interacted with.
     pub enabled: bool,
-    /// Whether the menu should close after the item is activated.
     pub close_on_click: bool,
-    /// Height of the item row.
     pub height: Dp,
-    /// Tint applied to the label text.
     pub label_color: Color,
-    /// Tint applied to supporting or trailing text.
     pub supporting_color: Color,
-    /// Tint applied when the item is disabled.
     pub disabled_color: Color,
-    /// Callback invoked when the item is activated.
-    #[prop(skip_setter)]
     pub on_click: Option<Callback>,
 }
 
-impl MenuItemArgs {
-    /// Creates menu item arguments with the required label.
+impl MenuItemConfig {
     pub fn new(label: impl Into<String>) -> Self {
         let scheme = use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
@@ -853,76 +727,149 @@ impl MenuItemArgs {
             on_click: None,
         }
     }
-
-    /// Set the click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Some(Callback::new(on_click));
-        self
-    }
-
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
-        self
-    }
-
-    /// Sets the submenu content slot.
-    pub fn submenu_content<F>(mut self, submenu_content: F) -> Self
-    where
-        F: for<'a, 'b> Fn(&mut MenuScope<'a, 'b>) + Send + Sync + 'static,
-    {
-        self.submenu_content = Some(MenuContentSlot::new(submenu_content));
-        self
-    }
-
-    /// Sets the submenu content slot using a shared slot.
-    pub fn submenu_content_shared(mut self, submenu_content: MenuContentSlot) -> Self {
-        self.submenu_content = Some(submenu_content);
-        self
-    }
 }
 
-impl Default for MenuItemArgs {
+impl Default for MenuItemConfig {
     fn default() -> Self {
         Self::new("")
     }
 }
 
-fn render_leading(args: &MenuItemArgs, enabled: bool) {
-    if args.selected {
-        checkmark(
-            &CheckmarkArgs::default()
-                .color(if enabled {
-                    args.label_color
-                } else {
-                    args.disabled_color
-                })
-                .size(MENU_LEADING_SIZE)
-                .padding([2.0, 2.0]),
-        );
-    } else if let Some(icon) = args.leading_icon.clone() {
-        let width = icon
-            .width
-            .unwrap_or_else(|| DimensionValue::Fixed(Px::from(MENU_LEADING_SIZE)));
-        let height = icon
-            .height
-            .unwrap_or_else(|| DimensionValue::Fixed(Px::from(MENU_LEADING_SIZE)));
-        crate::icon::icon(&icon.width(width).height(height).tint(if enabled {
-            args.supporting_color
-        } else {
-            args.disabled_color
+/// # menu_item
+///
+/// Material Design 3 menu item for use inside [`menu_provider`].
+///
+/// ## Usage
+///
+/// Build contextual or overflow menu actions inside
+/// `menu_provider().menu_content(...)`.
+///
+/// ## Parameters
+///
+/// - `label` — primary text shown for the menu action
+/// - `supporting_text` — optional supporting text below the label
+/// - `trailing_text` — optional trailing text such as a shortcut hint
+/// - `leading_icon` — optional icon shown on the leading side
+/// - `trailing_icon` — optional icon shown on the trailing side
+/// - `submenu_content` — optional submenu content opened from this item
+/// - `submenu_placement` — optional submenu placement override
+/// - `selected` — whether the item renders as selected
+/// - `enabled` — whether the item can be activated
+/// - `close_on_click` — whether activation closes the surrounding menu
+/// - `height` — optional item height override
+/// - `label_color` — optional label text color override
+/// - `supporting_color` — optional supporting or trailing text color override
+/// - `disabled_color` — optional disabled content color override
+/// - `on_click` — optional activation callback
+///
+/// ## Examples
+/// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// use tessera_components::{
+///     menus::{menu_item, menu_provider},
+///     text::text,
+/// };
+///
+/// menu_provider()
+///     .is_open(true)
+///     .menu_content(|| {
+///         menu_item().label("Open");
+///     })
+///     .main_content(|| {
+///         text().content("Main content");
+///     });
+/// # }
+/// # component();
+/// ```
+#[tessera]
+pub fn menu_item(
+    #[prop(into)] label: String,
+    #[prop(into)] supporting_text: Option<String>,
+    #[prop(into)] trailing_text: Option<String>,
+    #[prop(into)] leading_icon: Option<IconContent>,
+    #[prop(into)] trailing_icon: Option<IconContent>,
+    submenu_content: Option<RenderSlot>,
+    submenu_placement: Option<MenuPlacement>,
+    selected: bool,
+    enabled: Option<bool>,
+    close_on_click: Option<bool>,
+    height: Option<Dp>,
+    label_color: Option<Color>,
+    supporting_color: Option<Color>,
+    disabled_color: Option<Color>,
+    on_click: Option<Callback>,
+) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+
+    let mut args = MenuItemConfig {
+        label,
+        supporting_text,
+        trailing_text,
+        leading_icon,
+        trailing_icon,
+        submenu_content,
+        submenu_placement: submenu_placement.unwrap_or(MenuPlacement::RightStart),
+        selected,
+        enabled: enabled.unwrap_or(true),
+        close_on_click: close_on_click.unwrap_or(true),
+        height: height.unwrap_or(MENU_ITEM_HEIGHT),
+        label_color: label_color.unwrap_or(scheme.on_surface),
+        supporting_color: supporting_color.unwrap_or(scheme.on_surface_variant),
+        disabled_color: disabled_color.unwrap_or(
+            scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+        ),
+        on_click,
+    };
+
+    if args.close_on_click
+        && args.submenu_content.is_none()
+        && let Some(controller_context) = use_context::<State<MenuController>>()
+    {
+        let controller = controller_context.get();
+        let previous = args.on_click;
+        args.on_click = Some(Callback::new(move || {
+            if let Some(callback) = previous {
+                callback.call();
+            }
+            controller.with_mut(|menu| menu.close());
         }));
+    }
+
+    menu_item_inner().args(args);
+}
+
+fn render_leading(args: &MenuItemConfig, enabled: bool) {
+    if args.selected {
+        checkmark()
+            .color(if enabled {
+                args.label_color
+            } else {
+                args.disabled_color
+            })
+            .size(MENU_LEADING_SIZE)
+            .padding([2.0, 2.0]);
+    } else if let Some(icon) = args.leading_icon.clone() {
+        render_menu_icon(
+            icon,
+            if enabled {
+                args.supporting_color
+            } else {
+                args.disabled_color
+            },
+        );
     } else {
-        spacer(&crate::spacer::SpacerArgs::new(
-            Modifier::new().size(MENU_LEADING_SIZE, MENU_LEADING_SIZE),
-        ));
+        spacer().modifier(Modifier::new().size(MENU_LEADING_SIZE, MENU_LEADING_SIZE));
     }
 }
 
-fn render_labels(args: &MenuItemArgs, enabled: bool) {
+fn render_labels(args: &MenuItemConfig, enabled: bool) {
     let label_color = if enabled {
         args.label_color
     } else {
@@ -936,88 +883,76 @@ fn render_labels(args: &MenuItemArgs, enabled: bool) {
     let label_text = args.label.clone();
     let supporting_text = args.supporting_text.clone();
 
-    column(
-        &ColumnArgs::default()
-            .modifier(Modifier::new().constrain(Some(DimensionValue::WRAP), None))
-            .cross_axis_alignment(CrossAxisAlignment::Start)
-            .children(|scope| {
-                scope.child(move || {
-                    let text_value = label_text.clone();
-                    let color = label_color;
-                    text(&crate::text::TextArgs::from(
-                        &TextArgs::default()
-                            .text(&text_value)
-                            .size(Dp(16.0))
-                            .color(color),
-                    ));
-                });
-                if let Some(supporting) = supporting_text {
-                    scope.child(move || {
-                        let supporting_value = supporting.clone();
-                        let color = supporting_color;
-                        text(&crate::text::TextArgs::from(
-                            &TextArgs::default()
-                                .text(&supporting_value)
-                                .size(Dp(14.0))
-                                .color(color),
-                        ));
-                    });
-                }
-            }),
-    );
+    column()
+        .modifier(Modifier::new().constrain(Some(DimensionValue::WRAP), None))
+        .cross_axis_alignment(CrossAxisAlignment::Start)
+        .children(move || {
+            {
+                let text_value = label_text.clone();
+                let color = label_color;
+                text().content(text_value).size(Dp(16.0)).color(color);
+            };
+            if let Some(supporting) = supporting_text.as_ref() {
+                {
+                    let supporting_value = supporting.clone();
+                    let color = supporting_color;
+                    text().content(supporting_value).size(Dp(14.0)).color(color);
+                };
+            }
+        });
 }
 
-fn render_trailing(args: &MenuItemArgs, enabled: bool) {
+fn render_trailing(args: &MenuItemConfig, enabled: bool) {
     if let Some(trailing_icon) = args.trailing_icon.clone() {
-        let width = trailing_icon.width.unwrap_or(DimensionValue::WRAP);
-        let height = trailing_icon.height.unwrap_or(DimensionValue::WRAP);
-        crate::icon::icon(&trailing_icon.width(width).height(height).tint(if enabled {
+        render_menu_icon(
+            trailing_icon,
+            if enabled {
+                args.supporting_color
+            } else {
+                args.disabled_color
+            },
+        );
+    } else if let Some(trailing_text) = args.trailing_text.clone() {
+        text()
+            .content(trailing_text)
+            .size(Dp(14.0))
+            .color(if enabled {
+                args.supporting_color
+            } else {
+                args.disabled_color
+            });
+    } else if args.submenu_content.is_some() {
+        text().content(">").size(Dp(14.0)).color(if enabled {
             args.supporting_color
         } else {
             args.disabled_color
-        }));
-    } else if let Some(trailing_text) = args.trailing_text.clone() {
-        text(&crate::text::TextArgs::from(
-            &TextArgs::default()
-                .text(&trailing_text)
-                .size(Dp(14.0))
-                .color(if enabled {
-                    args.supporting_color
-                } else {
-                    args.disabled_color
-                }),
-        ));
-    } else if args.submenu_content.is_some() {
-        text(&crate::text::TextArgs::from(
-            &TextArgs::default()
-                .text(">")
-                .size(Dp(14.0))
-                .color(if enabled {
-                    args.supporting_color
-                } else {
-                    args.disabled_color
-                }),
-        ));
+        });
     }
 }
 
-#[derive(Clone, Prop)]
-struct MenuItemSurfaceArgs {
-    item: MenuItemArgs,
-    submenu_controller: Option<State<MenuController>>,
-    focus_requester: Option<FocusRequester>,
+fn render_menu_icon(content: IconContent, tint: Color) {
+    match content {
+        IconContent::Vector(data) => {
+            icon().vector(data).size(MENU_LEADING_SIZE).tint(tint);
+        }
+        IconContent::Raster(data) => {
+            icon().raster(data).size(MENU_LEADING_SIZE).tint(tint);
+        }
+    }
 }
 
 #[tessera]
-fn menu_item_surface(args: &MenuItemSurfaceArgs) {
-    let args = args.clone();
-    let item = args.item.clone();
+fn menu_item_surface(
+    item: MenuItemConfig,
+    submenu_controller: Option<State<MenuController>>,
+    focus_requester: Option<FocusRequester>,
+) {
     let enabled = item.enabled && (item.on_click.is_some() || item.submenu_content.is_some());
     let has_submenu = item.submenu_content.is_some();
-    let submenu_controller = args.submenu_controller;
-
-    if let Some(submenu_controller) = submenu_controller {
-        keyboard_input_handler(move |mut input| {
+    let keyboard_submenu_controller = submenu_controller;
+    let click_submenu_controller = submenu_controller;
+    let modifier = if let Some(submenu_controller) = keyboard_submenu_controller {
+        with_keyboard_input(Modifier::new(), move |mut input| {
             if input.key_modifiers.control_key()
                 || input.key_modifiers.alt_key()
                 || input.key_modifiers.super_key()
@@ -1053,161 +988,145 @@ fn menu_item_surface(args: &MenuItemSurfaceArgs) {
             if handled {
                 input.block_keyboard();
             }
-        });
-    }
-
-    let mut surface_args = SurfaceArgs::default()
-        .style(SurfaceStyle::Filled {
-            color: Color::TRANSPARENT,
         })
-        .enabled(enabled)
-        .modifier(Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Wrap {
-                min: Some(Px::from(item.height)),
-                max: None,
-            }),
-        ))
-        .accessibility_role(Role::MenuItem)
-        .accessibility_label(item.label.clone())
-        .block_input(true)
-        .ripple_color(
-            use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get()
-                .color_scheme
-                .on_surface
-                .with_alpha(1.0),
-        );
+    } else {
+        Modifier::new()
+    };
 
-    if let Some(focus_requester) = args.focus_requester {
-        surface_args = surface_args.focus_requester(focus_requester);
-    }
+    layout_primitive().modifier(modifier).child(move || {
+        let mut surface_args = surface()
+            .style(SurfaceStyle::Filled {
+                color: Color::TRANSPARENT,
+            })
+            .enabled(enabled)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::FILLED),
+                Some(DimensionValue::Wrap {
+                    min: Some(Px::from(item.height)),
+                    max: None,
+                }),
+            ))
+            .accessibility_role(Role::MenuItem)
+            .accessibility_label(item.label.clone())
+            .block_input(true)
+            .ripple_color(
+                use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
+                    .get()
+                    .color_scheme
+                    .on_surface
+                    .with_alpha(1.0),
+            );
 
-    if has_submenu {
-        let submenu_controller = submenu_controller.expect("submenu item requires controller");
-        surface_args = surface_args.on_click_shared(move || {
-            submenu_controller.with_mut(|controller| controller.open());
-        });
-    } else if let Some(on_click) = item.on_click {
-        surface_args = surface_args.on_click_shared(on_click);
-    }
+        if let Some(focus_requester) = focus_requester {
+            surface_args = surface_args.focus_requester(focus_requester);
+        }
 
-    if let Some(description) = item.supporting_text.clone() {
-        surface_args = surface_args.accessibility_description(description);
-    }
+        if has_submenu {
+            let submenu_controller =
+                click_submenu_controller.expect("submenu item requires controller");
+            surface_args = surface_args.on_click_shared(move || {
+                submenu_controller.with_mut(|controller| controller.open());
+            });
+        } else if let Some(on_click) = item.on_click {
+            surface_args = surface_args.on_click_shared(on_click);
+        }
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        surface_args,
-        move || {
-            row(&RowArgs::default()
+        if let Some(description) = item.supporting_text.clone() {
+            surface_args = surface_args.accessibility_description(description);
+        }
+
+        let item_for_child = item.clone();
+        surface_args.with_child(move || {
+            let item_for_row = item_for_child.clone();
+            row()
                 .modifier(Modifier::new().constrain(
                     Some(DimensionValue::FILLED),
                     Some(DimensionValue::Wrap {
-                        min: Some(Px::from(item.height)),
+                        min: Some(Px::from(item_for_child.height)),
                         max: None,
                     }),
                 ))
                 .cross_axis_alignment(CrossAxisAlignment::Center)
-                .children(|row_scope| {
-                    // Leading padding
-                    row_scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
-                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
-                            None,
-                        )));
-                    });
-
-                    // Leading indicator / icon.
-                    let leading_args = item.clone();
-                    row_scope.child(move || {
-                        render_leading(&leading_args, enabled);
-                    });
-
-                    // Gap after leading.
-                    row_scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
-                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
-                            None,
-                        )));
-                    });
-
-                    // Labels column.
-                    let label_args = item.clone();
-                    row_scope.child(move || {
-                        render_labels(&label_args, enabled);
-                    });
-
-                    // Flexible spacer.
-                    row_scope.child_weighted(
-                        || {
-                            spacer(&crate::spacer::SpacerArgs::new(
-                                Modifier::new().fill_max_width(),
-                            ));
-                        },
-                        1.0,
-                    );
-
-                    // Trailing text/icon if any.
-                    if item.trailing_icon.is_some()
-                        || item.trailing_text.is_some()
-                        || item.submenu_content.is_some()
+                .children(move || {
+                    let item_for_child = item_for_row.clone();
                     {
-                        let trailing_args = item.clone();
-                        row_scope.child(move || {
-                            render_trailing(&trailing_args, enabled);
-                        });
+                        spacer().modifier(Modifier::new().constrain(
+                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                            None,
+                        ));
+                    };
 
-                        row_scope.child(|| {
-                            spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
+                    let leading_args = item_for_child.clone();
+                    {
+                        render_leading(&leading_args, enabled);
+                    };
+
+                    {
+                        spacer().modifier(Modifier::new().constrain(
+                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                            None,
+                        ));
+                    };
+
+                    let label_args = item_for_child.clone();
+                    {
+                        render_labels(&label_args, enabled);
+                    };
+
+                    spacer().modifier(Modifier::new().fill_max_width().weight(1.0));
+
+                    if item_for_child.trailing_icon.is_some()
+                        || item_for_child.trailing_text.is_some()
+                        || item_for_child.submenu_content.is_some()
+                    {
+                        let trailing_args = item_for_child.clone();
+                        {
+                            render_trailing(&trailing_args, enabled);
+                        };
+
+                        {
+                            spacer().modifier(Modifier::new().constrain(
                                 Some(DimensionValue::Fixed(Px::from(MENU_TRAILING_SPACING))),
                                 None,
-                            )));
-                        });
+                            ));
+                        };
                     } else {
-                        row_scope.child(|| {
-                            spacer(&crate::spacer::SpacerArgs::new(Modifier::new().constrain(
+                        {
+                            spacer().modifier(Modifier::new().constrain(
                                 Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
                                 None,
-                            )));
-                        });
+                            ));
+                        };
                     }
-                }));
-        },
-    ));
+                });
+        });
+    });
 }
 
 #[tessera]
-fn menu_item_inner(args: &MenuItemArgs) {
-    let args = args.clone();
+fn menu_item_inner(args: MenuItemConfig) {
     let submenu_content = args.submenu_content.clone();
 
     if let Some(submenu_content) = submenu_content {
         let submenu_controller = remember(MenuController::new);
-        let focus_requester = remember_focus_requester();
-        menu_provider(
-            &MenuProviderArgs::default()
-                .placement(args.submenu_placement)
-                .offset([Dp::ZERO, Dp::ZERO])
-                .controller(submenu_controller)
-                .focus_restorer_fallback(focus_requester)
-                .main_content({
-                    let args = args.clone();
-                    move || {
-                        menu_item_surface(&MenuItemSurfaceArgs {
-                            item: args.clone(),
-                            submenu_controller: Some(submenu_controller),
-                            focus_requester: Some(focus_requester),
-                        });
-                    }
-                })
-                .menu_content_shared(submenu_content),
-        );
+        let focus_requester = remember(FocusRequester::new).get();
+        menu_provider()
+            .placement(args.submenu_placement)
+            .offset([Dp::ZERO, Dp::ZERO])
+            .controller(submenu_controller)
+            .focus_restorer_fallback(focus_requester)
+            .main_content({
+                let args = args.clone();
+                move || {
+                    menu_item_surface()
+                        .item(args.clone())
+                        .submenu_controller(submenu_controller)
+                        .focus_requester(focus_requester);
+                }
+            })
+            .menu_content_shared(submenu_content);
     } else {
-        menu_item_surface(&MenuItemSurfaceArgs {
-            item: args,
-            submenu_controller: None,
-            focus_requester: None,
-        });
+        menu_item_surface().item(args);
     }
 }

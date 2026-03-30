@@ -5,14 +5,14 @@
 //! Group related content into a single, elevated or outlined container.
 
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, Prop, RenderSlot, State, accesskit::Role, receive_frame_nanos,
+    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, receive_frame_nanos,
     remember, tessera, use_context,
 };
 
 use crate::{
     modifier::InteractionState,
     shape_def::Shape,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
+    surface::{SurfaceStyle, surface},
     theme::{ContentColor, MaterialAlpha, MaterialTheme, content_color_for},
 };
 
@@ -373,99 +373,18 @@ impl CardDefaults {
     }
 }
 
-/// Arguments for the [`card`] component.
-#[derive(Clone, Prop)]
-pub struct CardArgs {
-    /// Optional modifier chain applied to the card subtree.
-    pub modifier: Modifier,
-    /// Card variant controlling default tokens.
-    pub variant: CardVariant,
-    /// Whether the card is enabled for user interaction.
-    pub enabled: bool,
-    /// Optional click handler for a clickable card.
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// Optional shared interaction state for elevation and state layers.
-    pub interaction_state: Option<State<InteractionState>>,
-    /// Optional container shape override.
-    pub shape: Option<Shape>,
-    /// Optional colors override.
-    pub colors: Option<CardColors>,
-    /// Optional elevation override.
-    pub elevation: Option<CardElevation>,
-    /// Optional border stroke for the card container.
-    pub border: Option<CardBorder>,
-    /// Content rendered inside the card container.
-    #[prop(skip_setter)]
-    pub content: Option<RenderSlot>,
-}
-
-impl CardArgs {
-    /// Set the click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Some(Callback::new(on_click));
-        self
-    }
-
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
-        self
-    }
-
-    /// Set the card content slot.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = Some(RenderSlot::new(content));
-        self
-    }
-
-    /// Set the card content slot using a shared slot.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-}
-
-impl CardArgs {
-    /// Creates a filled card configuration using default tokens.
-    pub fn filled() -> Self {
-        CardArgs::default().variant(CardVariant::Filled)
-    }
-
-    /// Creates an elevated card configuration using default tokens.
-    pub fn elevated() -> Self {
-        CardArgs::default().variant(CardVariant::Elevated)
-    }
-
-    /// Creates an outlined card configuration using default tokens.
-    pub fn outlined() -> Self {
-        CardArgs::default()
-            .variant(CardVariant::Outlined)
-            .border(CardDefaults::outlined_card_border(true))
-    }
-}
-
-impl Default for CardArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new(),
-            variant: CardVariant::default(),
-            enabled: true,
-            on_click: None,
-            interaction_state: None,
-            shape: None,
-            colors: None,
-            elevation: None,
-            border: None,
-            content: None,
-        }
-    }
+#[derive(Clone)]
+struct CardResolvedArgs {
+    modifier: Modifier,
+    variant: CardVariant,
+    enabled: bool,
+    on_click: Option<Callback>,
+    interaction_state: Option<State<InteractionState>>,
+    shape: Option<Shape>,
+    colors: Option<CardColors>,
+    elevation: Option<CardElevation>,
+    border: Option<CardBorder>,
+    content: Option<RenderSlot>,
 }
 
 /// # card
@@ -479,32 +398,60 @@ impl Default for CardArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the card variant, colors, elevation, and interaction;
-///   see [`CardArgs`].
+/// - `modifier` — modifier chain applied to the card subtree.
+/// - `variant` — optional card variant controlling default tokens.
+/// - `enabled` — optional enabled flag.
+/// - `on_click` — optional click callback.
+/// - `interaction_state` — optional shared interaction state.
+/// - `shape` — optional shape override.
+/// - `colors` — optional color override set.
+/// - `elevation` — optional elevation override.
+/// - `border` — optional border override.
+/// - `content` — optional content render slot.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::card::{CardArgs, card};
+/// use tessera_components::card::card;
 /// use tessera_ui::tessera;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn component() {
-/// #     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #         || MaterialTheme::default(),
-/// #         || {
-///     card(&CardArgs::filled().content(|| {}));
-/// #         },
-/// #     );
-/// #     material_theme(&args);
+/// #     material_theme()
+/// #         .theme(|| MaterialTheme::default())
+/// #         .child(|| {
+///     card().filled().content(|| {});
+/// #         });
 /// }
 ///
 /// component();
 /// ```
 #[tessera]
-pub fn card(args: &CardArgs) {
-    let args = args.clone();
+pub fn card(
+    modifier: Modifier,
+    variant: Option<CardVariant>,
+    enabled: Option<bool>,
+    on_click: Option<Callback>,
+    interaction_state: Option<State<InteractionState>>,
+    shape: Option<Shape>,
+    colors: Option<CardColors>,
+    elevation: Option<CardElevation>,
+    border: Option<CardBorder>,
+    content: Option<RenderSlot>,
+) {
+    let args = CardResolvedArgs {
+        modifier,
+        variant: variant.unwrap_or_default(),
+        enabled: enabled.unwrap_or(true),
+        on_click,
+        interaction_state,
+        shape,
+        colors,
+        elevation,
+        border,
+        content,
+    };
     let content = args.content.unwrap_or_else(RenderSlot::empty);
 
     let shape = args.shape.unwrap_or_else(|| match args.variant {
@@ -589,7 +536,7 @@ pub fn card(args: &CardArgs) {
     let container_color = colors.container_color(args.enabled);
     let content_color = colors.content_color(args.enabled);
 
-    let mut surface_args = SurfaceArgs::default()
+    let mut surface_args = surface()
         .shape(shape)
         .modifier(args.modifier)
         .content_color(content_color)
@@ -620,10 +567,28 @@ pub fn card(args: &CardArgs) {
             .accessibility_focusable(true);
     }
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        surface_args,
-        move || {
-            content.render();
-        },
-    ));
+    surface_args.child_shared(content);
+}
+
+impl CardBuilder {
+    /// Creates props from base args and a content render function.
+    pub fn with_content(self, content: impl Fn() + Send + Sync + 'static) -> Self {
+        self.content(content)
+    }
+
+    /// Applies the filled card preset.
+    pub fn filled(self) -> Self {
+        self.variant(CardVariant::Filled)
+    }
+
+    /// Applies the elevated card preset.
+    pub fn elevated(self) -> Self {
+        self.variant(CardVariant::Elevated)
+    }
+
+    /// Applies the outlined card preset.
+    pub fn outlined(self) -> Self {
+        self.variant(CardVariant::Outlined)
+            .border(CardDefaults::outlined_card_border(true))
+    }
 }

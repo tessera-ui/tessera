@@ -3,13 +3,13 @@
 //! ## Usage
 //!
 //! Use for compact actions where an icon is sufficient to convey the meaning.
-use tessera_ui::{Callback, Color, Dp, Modifier, Prop, tessera, use_context};
+use tessera_ui::{Callback, Color, Dp, Modifier, tessera, use_context};
 
 use crate::{
-    button::{ButtonArgs, ButtonDefaults, button},
-    glass_button::{GlassButtonArgs, glass_button},
-    icon::{IconArgs, icon},
-    modifier::ModifierExt,
+    button::{ButtonDefaults, button},
+    glass_button::glass_button,
+    icon::{IconContent, icon},
+    modifier::ModifierExt as _,
     shape_def::Shape,
     theme::MaterialTheme,
 };
@@ -28,154 +28,130 @@ pub enum IconButtonVariant {
     Outlined,
 }
 
-/// Arguments for [`icon_button`].
-#[derive(Clone, Prop)]
-pub struct IconButtonArgs {
-    /// The variant of the icon button.
-    pub variant: IconButtonVariant,
-    /// Icon that will be rendered at the center of the button.
-    #[prop(into)]
-    pub icon: IconArgs,
-    /// The click callback function.
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// Whether the button is enabled.
-    pub enabled: bool,
-    /// Optional override for the container color.
-    pub color: Option<Color>,
-    /// Optional override for the content (icon) color.
-    pub content_color: Option<Color>,
-}
-
-impl IconButtonArgs {
-    /// Creates a new icon button configuration with the required icon.
-    pub fn new(icon: impl Into<IconArgs>) -> Self {
-        Self {
-            variant: IconButtonVariant::default(),
-            icon: icon.into(),
-            on_click: None,
-            enabled: true,
-            color: None,
-            content_color: None,
-        }
-    }
-
-    /// Sets the on_click handler.
-    pub fn on_click(mut self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_click = Some(Callback::new(on_click));
+impl IconButtonBuilder {
+    /// Sets the icon content using any supported icon source.
+    pub fn icon(mut self, icon: impl Into<IconContent>) -> Self {
+        self.props.icon = Some(icon.into());
         self
     }
 
-    /// Sets the on_click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
+    /// Applies the standard icon button preset.
+    pub fn standard(self) -> Self {
+        self.variant(IconButtonVariant::Standard)
+    }
+
+    /// Applies the filled icon button preset.
+    pub fn filled(self) -> Self {
+        self.variant(IconButtonVariant::Filled)
+    }
+
+    /// Applies the filled tonal icon button preset.
+    pub fn filled_tonal(self) -> Self {
+        self.variant(IconButtonVariant::FilledTonal)
+    }
+
+    /// Applies the outlined icon button preset.
+    pub fn outlined(self) -> Self {
+        self.variant(IconButtonVariant::Outlined)
+    }
+}
+
+impl GlassIconButtonBuilder {
+    /// Sets the icon content using any supported icon source.
+    pub fn icon(mut self, icon: impl Into<IconContent>) -> Self {
+        self.props.icon = Some(icon.into());
         self
     }
 }
 
-/// Lifted [`glass_button`] counterpart for icon buttons.
-#[derive(Clone, Prop)]
-pub struct GlassIconButtonArgs {
-    /// Appearance/behavior settings for the underlying [`glass_button`].
-    #[prop(into)]
-    pub button: GlassButtonArgs,
-    /// Icon rendered at the center of the glass button.
-    #[prop(into)]
-    pub icon: IconArgs,
-}
+fn render_icon_content(content: IconContent, tint: Color) {
+    let builder = match content {
+        IconContent::Vector(data) => icon().vector(data),
+        IconContent::Raster(data) => icon().raster(data),
+    };
 
-impl GlassIconButtonArgs {
-    /// Creates a new glass icon button configuration with the required icon.
-    pub fn new(icon: impl Into<IconArgs>) -> Self {
-        Self {
-            button: GlassButtonArgs::default(),
-            icon: icon.into(),
-        }
-    }
+    builder.size(Dp(24.0)).tint(tint);
 }
 
 /// # icon_button
 ///
 /// Renders a Material Design 3 icon button.
 ///
-/// Specs:
-/// - Container: 40dp x 40dp
-/// - Icon: 24dp
-/// - Shape: Circle
-/// - Touch Target: Should ideally be 48dp (currently 40dp visual & touch)
+/// ## Usage
+///
+/// Use for compact icon-only actions.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the button variant, icon, and behavior; see
-///   [`IconButtonArgs`].
+/// - `variant` — optional icon button visual variant.
+/// - `icon` — optional icon content shown at the center.
+/// - `on_click` — optional click callback.
+/// - `enabled` — optional enabled flag.
+/// - `color` — optional container color override.
+/// - `content_color` — optional icon color override.
 ///
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::{
-///     icon::IconArgs,
-///     icon_button::{IconButtonArgs, IconButtonVariant, icon_button},
-///     material_icons::filled,
-/// };
+/// use tessera_components::{icon_button::icon_button, material_icons::filled};
+/// use tessera_ui::tessera;
 ///
-/// let icon_args = IconArgs::default().vector(filled::STAR_SVG);
-///
-/// icon_button(
-///     &IconButtonArgs::new(icon_args)
-///         .variant(IconButtonVariant::Filled)
-///         .on_click(|| println!("Clicked!")),
-/// );
-/// # }
+/// #[tessera]
+/// fn component() {
+///     icon_button()
+///         .icon(filled::STAR_SVG)
+///         .filled()
+///         .on_click(|| println!("Clicked!"));
+/// }
 /// ```
-/// Render an icon button.
 #[tessera]
-pub fn icon_button(args: &IconButtonArgs) {
-    let args: IconButtonArgs = args.clone();
+pub fn icon_button(
+    variant: Option<IconButtonVariant>,
+    #[prop(skip_setter)] icon: Option<IconContent>,
+    on_click: Option<Callback>,
+    enabled: Option<bool>,
+    color: Option<Color>,
+    content_color: Option<Color>,
+) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
+    let variant = variant.unwrap_or_default();
+    let enabled = enabled.unwrap_or(true);
 
-    // Determine colors based on variant
-    let (default_container_color, default_content_color, border_width, border_color) =
-        match args.variant {
-            IconButtonVariant::Filled => (scheme.primary, scheme.on_primary, Dp(0.0), None),
-            IconButtonVariant::FilledTonal => (
-                scheme.secondary_container,
-                scheme.on_secondary_container,
-                Dp(0.0),
-                None,
-            ),
-            IconButtonVariant::Outlined => (
-                Color::TRANSPARENT,
-                scheme.on_surface_variant,
-                Dp(1.0),
-                Some(scheme.outline),
-            ),
-            IconButtonVariant::Standard => {
-                (Color::TRANSPARENT, scheme.on_surface_variant, Dp(0.0), None)
-            }
-        };
+    let (default_container_color, default_content_color, border_width, border_color) = match variant
+    {
+        IconButtonVariant::Filled => (scheme.primary, scheme.on_primary, Dp(0.0), None),
+        IconButtonVariant::FilledTonal => (
+            scheme.secondary_container,
+            scheme.on_secondary_container,
+            Dp(0.0),
+            None,
+        ),
+        IconButtonVariant::Outlined => (
+            Color::TRANSPARENT,
+            scheme.on_surface_variant,
+            Dp(1.0),
+            Some(scheme.outline),
+        ),
+        IconButtonVariant::Standard => {
+            (Color::TRANSPARENT, scheme.on_surface_variant, Dp(0.0), None)
+        }
+    };
 
-    // Apply overrides
-    let container_color = args.color.unwrap_or(default_container_color);
-    let content_color = args.content_color.unwrap_or(default_content_color);
-
-    // Use state-layer + ripple derived from the current content color.
+    let container_color = color.unwrap_or(default_container_color);
+    let content_color = content_color.unwrap_or(default_content_color);
     let ripple_color = content_color;
 
-    // Construct ButtonArgs
-    let mut button_args = ButtonArgs::default()
+    let mut builder = button()
         .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)))
         .padding(Dp(8.0))
         .shape(Shape::rounded_rectangle(Dp(20.0)))
         .color(container_color)
         .content_color(content_color)
-        .enabled(args.enabled)
-        .disabled_container_color(match args.variant {
+        .enabled(enabled)
+        .disabled_container_color(match variant {
             IconButtonVariant::Standard | IconButtonVariant::Outlined => Color::TRANSPARENT,
             IconButtonVariant::Filled | IconButtonVariant::FilledTonal => {
                 ButtonDefaults::disabled_container_color(&scheme)
@@ -186,68 +162,128 @@ pub fn icon_button(args: &IconButtonArgs) {
         .ripple_color(ripple_color)
         .border_width(border_width);
 
-    if let Some(bc) = border_color {
-        button_args = button_args.border_color(bc);
+    if let Some(border_color) = border_color {
+        builder = builder.border_color(border_color);
+    }
+    if let Some(on_click) = on_click {
+        builder = builder.on_click_shared(on_click);
+    }
+    if let Some(icon) = icon {
+        builder = builder.child(move || render_icon_content(icon.clone(), content_color));
     }
 
-    if let Some(on_click) = args.on_click {
-        button_args = button_args.on_click_shared(on_click);
-    }
-
-    // Prepare IconArgs
-    let mut icon_args = args.icon;
-    icon_args.size = Dp(24.0);
-    icon_args.tint = content_color;
-
-    button(&crate::button::ButtonArgs::with_child(
-        button_args,
-        move || {
-            icon(&icon_args.clone());
-        },
-    ));
+    drop(builder);
 }
 
 /// # glass_icon_button
 ///
-/// Renders a button with a glass effect and an icon as its content.
+/// Renders a glass button with an icon as its content.
 ///
 /// ## Usage
 ///
-/// Use for prominent icon-based actions in a modern, layered UI.
+/// Use for prominent icon-based actions in a layered UI.
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the underlying glass button and the icon; see
-///   [`GlassIconButtonArgs`].
+/// - `icon` — optional icon content shown at the center.
+/// - `modifier` — modifier chain applied to the glass button.
+/// - `on_click` — optional click callback.
+/// - `padding` — optional inner padding.
+/// - `tint_color` — optional glass tint color.
+/// - `shape` — optional shape override.
+/// - `blur_radius` — optional blur radius.
+/// - `dispersion_height` — optional chromatic dispersion height.
+/// - `chroma_multiplier` — optional chromatic multiplier.
+/// - `refraction_height` — optional refraction height.
+/// - `refraction_amount` — optional refraction amount.
+/// - `noise_amount` — optional noise amount.
+/// - `noise_scale` — optional noise scale.
+/// - `time` — optional animated time input.
+/// - `contrast` — optional contrast override.
+/// - `border` — optional glass border override.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `accessibility_focusable` — optional accessibility focusable flag.
+/// - `content_color` — optional icon tint override.
 ///
 /// ## Examples
 ///
 /// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::{
-///     glass_button::GlassButtonArgs,
-///     icon::IconArgs,
-///     icon_button::{GlassIconButtonArgs, glass_icon_button},
-///     material_icons::filled,
-/// };
+/// use tessera_components::{icon_button::glass_icon_button, material_icons::filled};
+/// use tessera_ui::tessera;
 ///
-/// let icon_args = IconArgs::default().vector(filled::STAR_SVG);
-///
-/// glass_icon_button(
-///     &GlassIconButtonArgs::new(icon_args).button(GlassButtonArgs::default().on_click(|| {})),
-/// );
-/// # }
+/// #[tessera]
+/// fn component() {
+///     glass_icon_button()
+///         .icon(filled::STAR_SVG)
+///         .on_click(|| {})
+///         .tint_color(tessera_ui::Color::new(0.2, 0.5, 0.8, 0.2));
+/// }
 /// ```
-/// Render a glass icon button.
 #[tessera]
-pub fn glass_icon_button(args: &GlassIconButtonArgs) {
-    let args: GlassIconButtonArgs = args.clone();
-    let icon_args = args.icon;
+pub fn glass_icon_button(
+    #[prop(skip_setter)] icon: Option<IconContent>,
+    modifier: Modifier,
+    on_click: Option<Callback>,
+    padding: Option<Dp>,
+    tint_color: Option<Color>,
+    shape: Option<Shape>,
+    blur_radius: Option<Dp>,
+    dispersion_height: Option<Dp>,
+    chroma_multiplier: Option<f32>,
+    refraction_height: Option<Dp>,
+    refraction_amount: Option<f32>,
+    noise_amount: Option<f32>,
+    noise_scale: Option<f32>,
+    time: Option<f32>,
+    contrast: Option<f32>,
+    border: Option<crate::fluid_glass::GlassBorder>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    accessibility_focusable: Option<bool>,
+    content_color: Option<Color>,
+) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let content_color = content_color.unwrap_or(scheme.on_surface);
 
-    let button_args = args.button.child(move || {
-        icon(&icon_args.clone());
-    });
-    glass_button(&button_args);
+    let mut builder = glass_button()
+        .modifier(modifier)
+        .padding(padding.unwrap_or(Dp(12.0)))
+        .tint_color(tint_color.unwrap_or(Color::new(0.5, 0.5, 0.5, 0.1)))
+        .shape(shape.unwrap_or(Shape::rounded_rectangle(Dp(25.0))))
+        .blur_radius(blur_radius.unwrap_or(Dp(0.0)))
+        .dispersion_height(dispersion_height.unwrap_or(Dp(25.0)))
+        .chroma_multiplier(chroma_multiplier.unwrap_or(1.1))
+        .refraction_height(refraction_height.unwrap_or(Dp(24.0)))
+        .refraction_amount(refraction_amount.unwrap_or(32.0))
+        .noise_amount(noise_amount.unwrap_or(0.0))
+        .noise_scale(noise_scale.unwrap_or(1.0))
+        .time(time.unwrap_or(0.0));
+
+    if let Some(on_click) = on_click {
+        builder = builder.on_click_shared(on_click);
+    }
+    if let Some(contrast) = contrast {
+        builder = builder.contrast(contrast);
+    }
+    if let Some(border) = border {
+        builder = builder.border(border);
+    }
+    if let Some(label) = accessibility_label {
+        builder = builder.accessibility_label(label);
+    }
+    if let Some(description) = accessibility_description {
+        builder = builder.accessibility_description(description);
+    }
+    if accessibility_focusable.unwrap_or(false) {
+        builder = builder.accessibility_focusable(true);
+    }
+    if let Some(icon) = icon {
+        builder = builder.child(move || render_icon_content(icon.clone(), content_color));
+    }
+
+    drop(builder);
 }

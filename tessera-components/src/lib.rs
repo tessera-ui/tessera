@@ -6,13 +6,15 @@
 //! at application entry.
 //!
 //! ```no_run
-//! use tessera_components::theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme};
+//! use tessera_components::theme::{MaterialTheme, material_theme};
 //!
 //! fn app() {
-//!     let args = MaterialThemeProviderArgs::new(MaterialTheme::default, || {
+//!     material_theme()
+//!         .theme(|| MaterialTheme::default())
+//!         .child(|| {
 //!         // Your app code here
 //!     });
-//!     material_theme(&args);
+//!         });
 //! }
 //!
 //! use tessera_ui::EntryPoint;
@@ -36,29 +38,28 @@
 //! # #[tessera]
 //! # fn component() {
 //! use tessera_components::{
-//!     button::{ButtonArgs, button},
+//!     button::button,
 //!     text::text,
-//!     text_input::{TextInputArgs, text_input},
+//!     text_input::text_input,
 //! };
-//! use tessera_ui::Dp;
-//! # use tessera_components::theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme};
-//! # material_theme(&MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
+//! # use tessera_components::theme::{MaterialTheme, material_theme};
+//! # material_theme()
+//! #     .theme(|| MaterialTheme::default())
+//! #     .child(|| {
 //!
 //! // Button example
-//! let button_args = ButtonArgs::filled(|| { /* Handle click */ }).child(|| {
-//!     text(&tessera_components::text::TextArgs::default().text("Click me"));
+//! button().on_click(|| {}).child(|| {
+//!     text().content("Click me");
 //! });
-//! button(&button_args);
 //!
 //! // Text editor example
-//! text_input(&TextInputArgs::default());
-//! # }));
+//! text_input();
+//! #     });
 //! # }
 //! # component();
 //! ```
 #![deny(missing_docs, clippy::unwrap_used)]
 
-pub mod alignment;
 mod animation;
 pub mod app_bar;
 pub mod badge;
@@ -114,7 +115,6 @@ pub mod search;
 pub mod segmented_buttons;
 mod selection_highlight_rect;
 pub mod shadow;
-pub mod shape_def;
 pub mod side_sheet;
 pub mod slider;
 pub mod snackbar;
@@ -132,6 +132,8 @@ pub mod time_picker;
 
 use tessera_platform::PlatformPackage;
 use tessera_ui::{EntryRegistry, PipelineContext, RenderModule, TesseraPackage};
+
+pub use tessera_foundation::{alignment, shape_def};
 
 pub use pipelines::shape::command::RippleProps;
 pub use ripple_state::RippleState;

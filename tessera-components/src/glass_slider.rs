@@ -5,22 +5,75 @@
 //! Use to select a value from a continuous range.
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, FocusProperties,
-    FocusRequester, MeasurementError, Modifier, Prop, Px, PxPosition, State,
+    FocusRequester, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px,
+    PxPosition, State,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    modifier::FocusModifierExt as _,
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera,
     winit::window::CursorIcon,
 };
 
 use crate::{
-    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
+    fluid_glass::{GlassBorder, fluid_glass},
     gesture_recognizer::{DragRecognizer, TapRecognizer},
     modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
 };
 
 const ACCESSIBILITY_STEP: f32 = 0.05;
+
+struct GlassSliderPointerModifierNode {
+    controller: State<GlassSliderController>,
+    args: GlassSliderConfig,
+    tap_recognizer: State<TapRecognizer>,
+    drag_recognizer: State<DragRecognizer>,
+}
+
+impl PointerInputModifierNode for GlassSliderPointerModifierNode {
+    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
+        if self.args.disabled {
+            return;
+        }
+
+        let is_in_component = cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
+
+        if is_in_component || self.controller.with(|controller| controller.is_dragging()) {
+            let width_f = input.computed_data.width.0 as f32;
+
+            if let Some(value) = process_pointer_gestures(
+                self.controller,
+                self.tap_recognizer,
+                self.drag_recognizer,
+                &mut input,
+                width_f,
+            ) && (value - self.args.value).abs() > f32::EPSILON
+            {
+                self.args.on_change.call(value);
+            }
+        }
+    }
+}
+
+fn apply_glass_slider_pointer_modifier(
+    base: Modifier,
+    controller: State<GlassSliderController>,
+    args: GlassSliderConfig,
+    tap_recognizer: State<TapRecognizer>,
+    drag_recognizer: State<DragRecognizer>,
+) -> Modifier {
+    let modifier = if !args.disabled {
+        base.hover_cursor_icon(CursorIcon::Pointer)
+    } else {
+        base
+    };
+    modifier.push_pointer_input(GlassSliderPointerModifierNode {
+        controller,
+        args,
+        tap_recognizer,
+        drag_recognizer,
+    })
+}
 
 /// Controller for the `glass_slider` component.
 pub struct GlassSliderController {
@@ -70,8 +123,8 @@ impl Default for GlassSliderController {
 }
 
 /// Arguments for the `glass_slider` component.
-#[derive(Clone, Prop)]
-pub struct GlassSliderArgs {
+#[derive(Clone, PartialEq)]
+struct GlassSliderConfig {
     /// The current value of the slider, ranging from 0.0 to 1.0.
     pub value: f32,
 
@@ -79,7 +132,6 @@ pub struct GlassSliderArgs {
     pub modifier: Modifier,
 
     /// Callback function triggered when the slider's value changes.
-    #[prop(skip_setter)]
     pub on_change: CallbackWith<f32>,
 
     /// The height of the slider track.
@@ -100,43 +152,17 @@ pub struct GlassSliderArgs {
     /// Disable interaction.
     pub disabled: bool,
     /// Optional accessibility label read by assistive technologies.
-    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional accessibility description.
-    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Optional external controller for drag and focus state.
     ///
     /// When this is `None`, `glass_slider` creates and owns an internal
     /// controller.
-    #[prop(skip_setter)]
     pub controller: Option<State<GlassSliderController>>,
 }
 
-impl GlassSliderArgs {
-    /// Sets the on_change handler.
-    pub fn on_change<F>(mut self, on_change: F) -> Self
-    where
-        F: Fn(f32) + Send + Sync + 'static,
-    {
-        self.on_change = CallbackWith::new(on_change);
-        self
-    }
-
-    /// Sets the on_change handler using a shared callback.
-    pub fn on_change_shared(mut self, on_change: impl Into<CallbackWith<f32>>) -> Self {
-        self.on_change = on_change.into();
-        self
-    }
-
-    /// Sets an external glass slider controller.
-    pub fn controller(mut self, controller: State<GlassSliderController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-}
-
-impl Default for GlassSliderArgs {
+impl Default for GlassSliderConfig {
     fn default() -> Self {
         Self {
             value: 0.0,
@@ -155,11 +181,41 @@ impl Default for GlassSliderArgs {
     }
 }
 
-#[derive(Clone, Prop)]
-struct GlassSliderProgressFillArgs {
+struct GlassSliderParams {
     value: f32,
-    tint_color: Color,
-    blur_radius: Dp,
+    modifier: Option<Modifier>,
+    on_change: Option<CallbackWith<f32>>,
+    track_height: Option<Dp>,
+    track_tint_color: Option<Color>,
+    progress_tint_color: Option<Color>,
+    blur_radius: Option<Dp>,
+    track_border_width: Option<Dp>,
+    disabled: bool,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    controller: Option<State<GlassSliderController>>,
+}
+
+fn glass_slider_config_from_params(params: GlassSliderParams) -> GlassSliderConfig {
+    let defaults = GlassSliderConfig::default();
+    GlassSliderConfig {
+        value: params.value,
+        modifier: params.modifier.unwrap_or(defaults.modifier),
+        on_change: params.on_change.unwrap_or_else(CallbackWith::default_value),
+        track_height: params.track_height.unwrap_or(defaults.track_height),
+        track_tint_color: params.track_tint_color.unwrap_or(defaults.track_tint_color),
+        progress_tint_color: params
+            .progress_tint_color
+            .unwrap_or(defaults.progress_tint_color),
+        blur_radius: params.blur_radius.unwrap_or(defaults.blur_radius),
+        track_border_width: params
+            .track_border_width
+            .unwrap_or(defaults.track_border_width),
+        disabled: params.disabled,
+        accessibility_label: params.accessibility_label,
+        accessibility_description: params.accessibility_description,
+        controller: params.controller,
+    }
 }
 
 fn default_slider_modifier() -> Modifier {
@@ -251,14 +307,14 @@ fn process_pointer_gestures(
 /// ## Parameters
 ///
 /// - `args` — configures the slider's value, appearance, and `on_change`
-///   callback; see [`GlassSliderArgs`].
+///   callback; see [`GlassSliderConfig`].
 /// - `controller` — optional controller; use [`glass_slider`] to provide your
 ///   own.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::glass_slider::{GlassSliderArgs, GlassSliderController, glass_slider};
+/// use tessera_components::glass_slider::{GlassSliderController, glass_slider};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
@@ -266,14 +322,12 @@ fn process_pointer_gestures(
 ///     let slider_value = remember(|| 0.5f32);
 ///     let slider_controller = remember(GlassSliderController::new);
 ///
-///     let args = GlassSliderArgs::default()
+///     glass_slider()
 ///         .value(slider_value.get())
 ///         .on_change(move |new_value| {
 ///             slider_value.set(new_value);
 ///         })
 ///         .controller(slider_controller);
-///
-///     glass_slider(&args);
 ///
 ///     assert_eq!(slider_value.get(), 0.5);
 /// }
@@ -281,31 +335,52 @@ fn process_pointer_gestures(
 /// demo();
 /// ```
 #[tessera]
-pub fn glass_slider(args: &GlassSliderArgs) {
-    let mut slider_args = args.clone();
+pub fn glass_slider(
+    value: f32,
+    modifier: Option<Modifier>,
+    on_change: Option<CallbackWith<f32>>,
+    track_height: Option<Dp>,
+    track_tint_color: Option<Color>,
+    progress_tint_color: Option<Color>,
+    blur_radius: Option<Dp>,
+    track_border_width: Option<Dp>,
+    disabled: bool,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    controller: Option<State<GlassSliderController>>,
+) {
+    let mut slider_args = glass_slider_config_from_params(GlassSliderParams {
+        value,
+        modifier,
+        on_change,
+        track_height,
+        track_tint_color,
+        progress_tint_color,
+        blur_radius,
+        track_border_width,
+        disabled,
+        accessibility_label,
+        accessibility_description,
+        controller,
+    });
     let controller = slider_args
         .controller
         .unwrap_or_else(|| remember(GlassSliderController::new));
     slider_args.controller = Some(controller);
-    glass_slider_render(&slider_args);
+    render_glass_slider(slider_args);
 }
 
 #[tessera]
-fn glass_slider_progress_fill(args: &GlassSliderProgressFillArgs) {
-    let value = args.value;
-    let tint_color = args.tint_color;
-    let blur_radius = args.blur_radius;
-    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-        FluidGlassArgs::default()
-            .tint_color(tint_color)
-            .blur_radius(blur_radius)
-            .shape(Shape::capsule())
-            .refraction_amount(0.0),
-        || {},
-    ));
+fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
+    fluid_glass()
+        .tint_color(tint_color)
+        .blur_radius(blur_radius)
+        .shape(Shape::capsule())
+        .refraction_amount(0.0)
+        .with_child(|| {});
 
     let clamped = value.clamp(0.0, 1.0);
-    layout(GlassSliderFillLayout { value: clamped });
+    layout_primitive().layout_policy(GlassSliderFillLayout { value: clamped });
 }
 
 #[derive(Clone, PartialEq)]
@@ -313,7 +388,7 @@ struct GlassSliderFillLayout {
     value: f32,
 }
 
-impl LayoutSpec for GlassSliderFillLayout {
+impl LayoutPolicy for GlassSliderFillLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -355,126 +430,62 @@ impl LayoutSpec for GlassSliderFillLayout {
     }
 }
 
-#[tessera]
-fn glass_slider_render(args: &GlassSliderArgs) {
-    let args = args.clone();
+fn render_glass_slider(args: GlassSliderConfig) {
     let controller = args
         .controller
-        .expect("glass_slider_render requires controller to be set");
+        .expect("render_glass_slider requires controller to be set");
     let mut modifier = args.modifier.clone();
-    let mut semantics = SemanticsArgs::new().role(Role::Slider);
-    if let Some(label) = args.accessibility_label.clone() {
-        semantics = semantics.label(label);
-    }
-    if let Some(description) = args.accessibility_description.clone() {
-        semantics = semantics.description(description);
-    }
-    semantics = semantics
-        .numeric_range(0.0, 1.0)
-        .numeric_value(args.value as f64)
-        .numeric_value_step(ACCESSIBILITY_STEP as f64);
-    semantics = if args.disabled {
-        semantics.disabled(true)
-    } else {
-        semantics.focusable(true)
+    let semantics = SemanticsArgs {
+        role: Some(Role::Slider),
+        label: args.accessibility_label.clone(),
+        description: args.accessibility_description.clone(),
+        numeric_value: Some(args.value as f64),
+        numeric_range: Some((0.0, 1.0)),
+        focusable: !args.disabled,
+        disabled: args.disabled,
+        numeric_value_step: Some(ACCESSIBILITY_STEP as f64),
+        ..Default::default()
     };
     modifier = modifier.semantics(semantics);
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
+    let modifier = apply_glass_slider_pointer_modifier(
+        modifier.then(
+            Modifier::new()
+                .focus_requester(controller.with(|c| c.focus))
+                .focusable()
+                .focus_properties(
+                    FocusProperties::new()
+                        .can_focus(!args.disabled)
+                        .can_request_focus(!args.disabled),
+                ),
+        ),
+        controller,
+        args.clone(),
+        tap_recognizer,
+        drag_recognizer,
+    );
 
-    modifier.run(move || {
-        let mut inner_args = args.clone();
-        inner_args.controller = Some(controller);
-        glass_slider_inner(&inner_args);
-    });
-}
-
-#[tessera]
-fn glass_slider_inner(args: &GlassSliderArgs) {
-    let args = args.clone();
-    let controller = args
-        .controller
-        .expect("glass_slider_inner requires controller to be set");
-    Modifier::new()
-        .focus_requester(controller.with(|c| c.focus))
-        .focusable()
-        .focus_properties(
-            FocusProperties::new()
-                .can_focus(!args.disabled)
-                .can_request_focus(!args.disabled),
-        )
-        .run(move || {
-            fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-                FluidGlassArgs::default()
-                    .modifier(Modifier::new().fill_max_size())
-                    .tint_color(args.track_tint_color)
-                    .blur_radius(args.blur_radius)
-                    .shape(Shape::capsule())
-                    .border(GlassBorder::new(args.track_border_width.into()))
-                    .padding(args.track_border_width),
-                move || {
-                    let fill_args = GlassSliderProgressFillArgs {
-                        value: args.value,
-                        tint_color: args.progress_tint_color,
-                        blur_radius: args.blur_radius,
-                    };
-                    glass_slider_progress_fill(&fill_args);
-                },
-            ));
-
-            let on_change = args.on_change;
-            let handler_args = args.clone();
-            let tap_recognizer = remember(TapRecognizer::default);
-            let drag_recognizer = remember(DragRecognizer::default);
-
-            pointer_input_handler(move |mut input| {
-                if !handler_args.disabled {
-                    let is_in_component =
-                        cursor_within_bounds(input.cursor_position_rel, &input.computed_data);
-
-                    if is_in_component {
-                        input.requests.cursor_icon = CursorIcon::Pointer;
-                    }
-
-                    if is_in_component || controller.with(|c| c.is_dragging()) {
-                        let width_f = input.computed_data.width.0 as f32;
-
-                        if let Some(v) = process_pointer_gestures(
-                            controller,
-                            tap_recognizer,
-                            drag_recognizer,
-                            &mut input,
-                            width_f,
-                        ) && (v - handler_args.value).abs() > f32::EPSILON
-                        {
-                            on_change.call(v);
-                        }
-                    }
-                }
-            });
-            let mut semantics = SemanticsArgs::new().role(Role::Slider);
-            if let Some(label) = args.accessibility_label.clone() {
-                semantics = semantics.label(label);
-            }
-            if let Some(description) = args.accessibility_description.clone() {
-                semantics = semantics.description(description);
-            }
-            semantics = semantics
-                .numeric_range(0.0, 1.0)
-                .numeric_value(args.value as f64)
-                .numeric_value_step(ACCESSIBILITY_STEP as f64);
-            semantics = if args.disabled {
-                semantics.disabled(true)
-            } else {
-                semantics.focusable(true)
-            };
-            let _modifier = Modifier::new().semantics(semantics);
-
-            let track_height = args.track_height.to_px();
-            let fallback_width = Dp(200.0).to_px();
-
-            layout(GlassSliderLayout {
-                track_height,
-                fallback_width,
-            });
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(GlassSliderLayout {
+            track_height: args.track_height.to_px(),
+            fallback_width: Dp(200.0).to_px(),
+        })
+        .child(move || {
+            fluid_glass()
+                .modifier(Modifier::new().fill_max_size())
+                .tint_color(args.track_tint_color)
+                .blur_radius(args.blur_radius)
+                .shape(Shape::capsule())
+                .border(GlassBorder::new(args.track_border_width.into()))
+                .padding(args.track_border_width)
+                .with_child(move || {
+                    glass_slider_progress_fill()
+                        .value(args.value)
+                        .tint_color(args.progress_tint_color)
+                        .blur_radius(args.blur_radius);
+                });
         });
 }
 
@@ -484,7 +495,7 @@ struct GlassSliderLayout {
     fallback_width: Px,
 }
 
-impl LayoutSpec for GlassSliderLayout {
+impl LayoutPolicy for GlassSliderLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,

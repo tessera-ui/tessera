@@ -5,36 +5,33 @@
 //! Attach layout and drawing behavior like padding and opacity to any subtree.
 
 mod interaction;
-mod layout;
-mod semantics;
 mod shadow;
 mod visual;
 
+use tessera_foundation::modifier::ModifierExt as FoundationModifierExt;
 use tessera_ui::{
-    Color, DimensionValue, Dp, Modifier, ModifierChild, Px, RenderSlot, WindowAction, use_context,
+    Callback, CallbackWith, Color, DimensionValue, Dp, Modifier, WindowAction,
+    modifier::ModifierCapabilityExt as _, use_context,
 };
 
-use crate::shape_def::Shape;
+pub use tessera_foundation::modifier::{
+    ClickableArgs, InteractionState, MinimumInteractiveComponentEnforcement, Padding,
+    PointerEventContext, SelectableArgs, SemanticsArgs, ToggleableArgs,
+};
+
+pub(crate) use tessera_foundation::modifier::{AlignmentParentData, WeightParentData};
+
+use crate::{alignment::Alignment, shape_def::Shape};
 
 use interaction::{
-    modifier_block_touch_propagation, modifier_clickable, modifier_selectable, modifier_toggleable,
-    modifier_window_action, modifier_window_drag_region,
+    apply_block_touch_propagation_modifier, apply_clickable_modifier, apply_selectable_modifier,
+    apply_toggleable_modifier, apply_window_action_modifier, apply_window_drag_region_modifier,
 };
-use layout::{
-    modifier_constraints, modifier_minimum_interactive_size, modifier_offset, modifier_padding,
-};
-use visual::{modifier_alpha, modifier_background, modifier_border, modifier_clip_to_bounds};
+use visual::{AlphaModifierNode, BackgroundModifierNode, BorderModifierNode, ClipModifierNode};
 
-pub use interaction::{
-    ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs,
-};
-pub use layout::{MinimumInteractiveComponentEnforcement, Padding};
-pub use semantics::SemanticsArgs;
 pub use shadow::ShadowArgs;
 
-fn replayable_modifier_child(child: ModifierChild) -> RenderSlot {
-    RenderSlot::new(child)
-}
+pub(crate) use interaction::{with_keyboard_input, with_pointer_input};
 
 /// Extensions for composing reusable wrapper behavior around component
 /// subtrees.
@@ -105,6 +102,12 @@ pub trait ModifierExt {
     /// Enforces a minimum interactive size by expanding and centering content.
     fn minimum_interactive_component_size(self) -> Modifier;
 
+    /// Provides weighted parent data for row and column layouts.
+    fn weight(self, weight: f32) -> Modifier;
+
+    /// Provides alignment parent data for layered boxed layouts.
+    fn align(self, alignment: Alignment) -> Modifier;
+
     /// Prevents cursor events from propagating to components behind this
     /// subtree.
     fn block_touch_propagation(self) -> Modifier;
@@ -117,13 +120,28 @@ pub trait ModifierExt {
 
     /// Makes the subtree clickable with optional ripple feedback and an
     /// accessibility click action.
-    fn clickable(self, args: ClickableArgs) -> Modifier;
+    fn clickable<C>(self, on_click: C) -> Modifier
+    where
+        C: Into<Callback>;
+
+    /// Makes the subtree clickable with advanced configuration options.
+    fn clickable_with(self, args: ClickableArgs) -> Modifier;
 
     /// Makes the subtree toggleable with optional ripple/state-layer feedback.
-    fn toggleable(self, args: ToggleableArgs) -> Modifier;
+    fn toggleable<C>(self, value: bool, on_value_change: C) -> Modifier
+    where
+        C: Into<CallbackWith<bool, ()>>;
+
+    /// Makes the subtree toggleable with advanced configuration options.
+    fn toggleable_with(self, args: ToggleableArgs) -> Modifier;
 
     /// Makes the subtree selectable with optional ripple/state-layer feedback.
-    fn selectable(self, args: SelectableArgs) -> Modifier;
+    fn selectable<C>(self, selected: bool, on_click: C) -> Modifier
+    where
+        C: Into<Callback>;
+
+    /// Makes the subtree selectable with advanced configuration options.
+    fn selectable_with(self, args: SelectableArgs) -> Modifier;
 
     /// Marks this subtree as a draggable window region.
     fn window_drag_region(self) -> Modifier;
@@ -134,29 +152,19 @@ pub trait ModifierExt {
 
 impl ModifierExt for Modifier {
     fn padding(self, padding: Padding) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_padding(padding, child.clone());
-            }
-        })
+        FoundationModifierExt::padding(self, padding)
     }
 
     fn padding_all(self, padding: Dp) -> Modifier {
-        self.padding(Padding::all(padding))
+        FoundationModifierExt::padding(self, Padding::all(padding))
     }
 
     fn padding_symmetric(self, horizontal: Dp, vertical: Dp) -> Modifier {
-        self.padding(Padding::symmetric(horizontal, vertical))
+        FoundationModifierExt::padding(self, Padding::symmetric(horizontal, vertical))
     }
 
     fn offset(self, x: Dp, y: Dp) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_offset(x, y, child.clone());
-            }
-        })
+        FoundationModifierExt::offset(self, x, y)
     }
 
     fn alpha(self, alpha: f32) -> Modifier {
@@ -165,21 +173,11 @@ impl ModifierExt for Modifier {
             return self;
         }
 
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_alpha(alpha, child.clone());
-            }
-        })
+        self.push_draw(AlphaModifierNode { alpha })
     }
 
     fn clip_to_bounds(self) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_clip_to_bounds(child.clone());
-            }
-        })
+        self.push_draw(ClipModifierNode)
     }
 
     fn background(self, color: Color) -> Modifier {
@@ -191,12 +189,7 @@ impl ModifierExt for Modifier {
             return self;
         }
 
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_background(color, shape, child.clone());
-            }
-        })
+        self.push_draw(BackgroundModifierNode { color, shape })
     }
 
     fn border(self, width: Dp, color: Color) -> Modifier {
@@ -208,11 +201,10 @@ impl ModifierExt for Modifier {
             return self;
         }
 
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_border(width, color, shape, child.clone());
-            }
+        self.push_draw(BorderModifierNode {
+            width,
+            color,
+            shape,
         })
     }
 
@@ -221,58 +213,15 @@ impl ModifierExt for Modifier {
     }
 
     fn size(self, width: Dp, height: Dp) -> Modifier {
-        let width_px: Px = width.into();
-        let height_px: Px = height.into();
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_constraints(
-                    Some(DimensionValue::Wrap {
-                        min: Some(width_px),
-                        max: Some(width_px),
-                    }),
-                    Some(DimensionValue::Wrap {
-                        min: Some(height_px),
-                        max: Some(height_px),
-                    }),
-                    child.clone(),
-                );
-            }
-        })
+        FoundationModifierExt::size(self, width, height)
     }
 
     fn width(self, width: Dp) -> Modifier {
-        let width_px: Px = width.into();
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_constraints(
-                    Some(DimensionValue::Wrap {
-                        min: Some(width_px),
-                        max: Some(width_px),
-                    }),
-                    None,
-                    child.clone(),
-                );
-            }
-        })
+        FoundationModifierExt::width(self, width)
     }
 
     fn height(self, height: Dp) -> Modifier {
-        let height_px: Px = height.into();
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_constraints(
-                    None,
-                    Some(DimensionValue::Wrap {
-                        min: Some(height_px),
-                        max: Some(height_px),
-                    }),
-                    child.clone(),
-                );
-            }
-        })
+        FoundationModifierExt::height(self, height)
     }
 
     fn size_in(
@@ -282,60 +231,23 @@ impl ModifierExt for Modifier {
         min_height: Option<Dp>,
         max_height: Option<Dp>,
     ) -> Modifier {
-        let width = DimensionValue::Wrap {
-            min: min_width.map(Into::into),
-            max: max_width.map(Into::into),
-        };
-        let height = DimensionValue::Wrap {
-            min: min_height.map(Into::into),
-            max: max_height.map(Into::into),
-        };
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_constraints(Some(width), Some(height), child.clone());
-            }
-        })
+        FoundationModifierExt::size_in(self, min_width, max_width, min_height, max_height)
     }
 
     fn constrain(self, width: Option<DimensionValue>, height: Option<DimensionValue>) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_constraints(width, height, child.clone());
-            }
-        })
+        FoundationModifierExt::constrain(self, width, height)
     }
 
     fn fill_max_width(self) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_constraints(Some(DimensionValue::FILLED), None, child.clone());
-            }
-        })
+        FoundationModifierExt::fill_max_width(self)
     }
 
     fn fill_max_height(self) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_constraints(None, Some(DimensionValue::FILLED), child.clone());
-            }
-        })
+        FoundationModifierExt::fill_max_height(self)
     }
 
     fn fill_max_size(self) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_constraints(
-                    Some(DimensionValue::FILLED),
-                    Some(DimensionValue::FILLED),
-                    child.clone(),
-                );
-            }
-        })
+        FoundationModifierExt::fill_max_size(self)
     }
 
     fn minimum_interactive_component_size(self) -> Modifier {
@@ -346,83 +258,79 @@ impl ModifierExt for Modifier {
             return self;
         }
 
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_minimum_interactive_size(child.clone());
-            }
-        })
+        FoundationModifierExt::minimum_interactive_component_size(self)
+    }
+
+    fn weight(self, weight: f32) -> Modifier {
+        FoundationModifierExt::weight(self, weight)
+    }
+
+    fn align(self, alignment: Alignment) -> Modifier {
+        FoundationModifierExt::align(self, alignment)
     }
 
     fn block_touch_propagation(self) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_block_touch_propagation(child.clone());
-            }
-        })
+        apply_block_touch_propagation_modifier(self)
     }
 
     fn semantics(self, args: SemanticsArgs) -> Modifier {
-        self.push_wrapper(move |child| {
-            let args = args.clone();
-            let child = replayable_modifier_child(child);
-            move || {
-                semantics::modifier_semantics(args.clone(), child.clone());
-            }
-        })
+        FoundationModifierExt::semantics(self, args)
     }
 
     fn clear_and_set_semantics(self, mut args: SemanticsArgs) -> Modifier {
         args.merge_descendants = false;
-        self.semantics(args)
+        FoundationModifierExt::semantics(self, args)
     }
 
-    fn clickable(self, args: ClickableArgs) -> Modifier {
-        self.push_wrapper(move |child| {
-            let args = args.clone();
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_clickable(args.clone(), child.clone());
-            }
+    fn clickable<C>(self, on_click: C) -> Modifier
+    where
+        C: Into<Callback>,
+    {
+        self.clickable_with(ClickableArgs {
+            on_click: on_click.into(),
+            ..Default::default()
         })
     }
 
-    fn toggleable(self, args: ToggleableArgs) -> Modifier {
-        self.push_wrapper(move |child| {
-            let args = args.clone();
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_toggleable(args.clone(), child.clone());
-            }
+    fn clickable_with(self, args: ClickableArgs) -> Modifier {
+        apply_clickable_modifier(self, args)
+    }
+
+    fn toggleable<C>(self, value: bool, on_value_change: C) -> Modifier
+    where
+        C: Into<CallbackWith<bool, ()>>,
+    {
+        self.toggleable_with(ToggleableArgs {
+            value,
+            on_value_change: on_value_change.into(),
+            ..Default::default()
         })
     }
 
-    fn selectable(self, args: SelectableArgs) -> Modifier {
-        self.push_wrapper(move |child| {
-            let args = args.clone();
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_selectable(args.clone(), child.clone());
-            }
+    fn toggleable_with(self, args: ToggleableArgs) -> Modifier {
+        apply_toggleable_modifier(self, args)
+    }
+
+    fn selectable<C>(self, selected: bool, on_click: C) -> Modifier
+    where
+        C: Into<Callback>,
+    {
+        self.selectable_with(SelectableArgs {
+            selected,
+            on_click: on_click.into(),
+            ..Default::default()
         })
+    }
+
+    fn selectable_with(self, args: SelectableArgs) -> Modifier {
+        apply_selectable_modifier(self, args)
     }
 
     fn window_drag_region(self) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_window_drag_region(child.clone());
-            }
-        })
+        apply_window_drag_region_modifier(self)
     }
 
     fn window_action(self, action: WindowAction) -> Modifier {
-        self.push_wrapper(move |child| {
-            let child = replayable_modifier_child(child);
-            move || {
-                modifier_window_action(action, child.clone());
-            }
-        })
+        apply_window_action_modifier(self, action)
     }
 }

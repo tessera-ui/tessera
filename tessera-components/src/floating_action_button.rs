@@ -4,7 +4,7 @@
 //!
 //! Emphasize a primary action with a prominent floating button.
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, Prop, RenderSlot, State, accesskit::Role, remember, tessera,
+    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera,
     use_context,
 };
 
@@ -12,7 +12,7 @@ use crate::{
     alignment::Alignment,
     modifier::{InteractionState, ModifierExt as _},
     shape_def::Shape,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
+    surface::{SurfaceStyle, surface},
     theme::{
         ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for,
         provide_text_style,
@@ -183,126 +183,23 @@ impl FloatingActionButtonDefaults {
     }
 }
 
-/// Arguments for configuring [`floating_action_button`].
-#[derive(Clone, Prop)]
-pub struct FloatingActionButtonArgs {
-    /// The size variant of the floating action button.
-    pub size: FloatingActionButtonSize,
-    /// Optional modifier chain applied to the button.
-    pub modifier: Modifier,
-    /// Whether the button is enabled for interaction.
-    pub enabled: bool,
-    /// Container color when enabled.
-    pub container_color: Color,
-    /// Optional explicit content color override.
-    pub content_color: Option<Color>,
-    /// Optional shape override for the button container.
-    pub shape: Option<Shape>,
-    /// Elevation profile used for interaction states.
-    pub elevation: FloatingActionButtonElevation,
-    /// Optional click handler for the button.
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// Container color when disabled.
-    pub disabled_container_color: Color,
-    /// Content color when disabled.
-    pub disabled_content_color: Color,
-    /// Optional shared interaction state for hover/press feedback.
-    pub interaction_state: Option<State<InteractionState>>,
-    /// Optional ripple color override.
-    pub ripple_color: Option<Color>,
-    /// Optional accessibility label announced by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional accessibility description announced by assistive technologies.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-    /// Optional child render slot.
-    #[prop(skip_setter)]
-    pub content: Option<RenderSlot>,
-}
-
-impl FloatingActionButtonArgs {
-    /// Creates props from base args and a content render function.
-    pub fn with_content(
-        args: FloatingActionButtonArgs,
-        content: impl Fn() + Send + Sync + 'static,
-    ) -> Self {
-        args.content(content)
-    }
-
-    /// Creates a configuration with the required click handler.
-    pub fn new(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::default().on_click(on_click)
-    }
-
-    /// Creates a small floating action button configuration.
-    pub fn small(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::new(on_click).size(FloatingActionButtonSize::Small)
-    }
-
-    /// Creates a large floating action button configuration.
-    pub fn large(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::new(on_click).size(FloatingActionButtonSize::Large)
-    }
-
-    /// Sets the click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Some(Callback::new(on_click));
-        self
-    }
-
-    /// Sets the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
-        self
-    }
-
-    /// Sets the FAB content render slot.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = Some(RenderSlot::new(content));
-        self
-    }
-
-    /// Sets the FAB content render slot using a shared callback.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-}
-
-impl Default for FloatingActionButtonArgs {
-    fn default() -> Self {
-        let theme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get();
-        let scheme = theme.color_scheme;
-        Self {
-            size: FloatingActionButtonSize::default(),
-            modifier: Modifier::new(),
-            enabled: true,
-            container_color: FloatingActionButtonDefaults::container_color(&scheme),
-            content_color: None,
-            shape: None,
-            elevation: FloatingActionButtonDefaults::elevation(),
-            on_click: None,
-            disabled_container_color: FloatingActionButtonDefaults::disabled_container_color(
-                &scheme,
-            ),
-            disabled_content_color: FloatingActionButtonDefaults::disabled_content_color(&scheme),
-            interaction_state: None,
-            ripple_color: None,
-            accessibility_label: None,
-            accessibility_description: None,
-            content: None,
-        }
-    }
+#[derive(Clone)]
+struct FloatingActionButtonResolvedArgs {
+    size: FloatingActionButtonSize,
+    modifier: Modifier,
+    enabled: bool,
+    container_color: Color,
+    content_color: Option<Color>,
+    shape: Option<Shape>,
+    elevation: FloatingActionButtonElevation,
+    on_click: Option<Callback>,
+    disabled_container_color: Color,
+    disabled_content_color: Color,
+    interaction_state: Option<State<InteractionState>>,
+    ripple_color: Option<Color>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    content: Option<RenderSlot>,
 }
 
 /// # floating_action_button
@@ -316,46 +213,93 @@ impl Default for FloatingActionButtonArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` - configures size, colors, elevation, and click behavior; see
-///   [`FloatingActionButtonArgs`].
-/// - `content` - closure that renders the FAB content, typically an icon.
+/// - `size` - optional floating action button size variant.
+/// - `modifier` - modifier chain applied to the button.
+/// - `enabled` - optional enabled flag.
+/// - `container_color` - optional container color override.
+/// - `content_color` - optional content color override.
+/// - `shape` - optional shape override.
+/// - `elevation` - optional elevation profile override.
+/// - `on_click` - optional click callback.
+/// - `disabled_container_color` - optional disabled container color override.
+/// - `disabled_content_color` - optional disabled content color override.
+/// - `interaction_state` - optional shared interaction state.
+/// - `ripple_color` - optional ripple tint override.
+/// - `accessibility_label` - optional accessibility label.
+/// - `accessibility_description` - optional accessibility description.
+/// - `content` - optional content render slot, typically an icon.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::floating_action_button::{
-///     FloatingActionButtonArgs, floating_action_button,
-/// };
+/// use tessera_components::floating_action_button::floating_action_button;
 /// use tessera_ui::{Callback, remember, tessera};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn component() {
-/// #     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #         || MaterialTheme::default(),
-/// #         || {
+/// #     material_theme()
+/// #         .theme(|| MaterialTheme::default())
+/// #         .child(|| {
 ///     let clicked = remember(|| false);
 ///     let on_click = Callback::new({ move || clicked.with_mut(|value| *value = true) });
-///     let args = FloatingActionButtonArgs::default().on_click_shared(on_click.clone());
+///     let on_click_shared = on_click.clone();
 ///     on_click.call();
 ///
 ///     assert!(clicked.with(|value| *value));
 ///
-///     floating_action_button(&args.content(|| {}));
-/// #         },
-/// #     );
-/// #     material_theme(&args);
+///     floating_action_button()
+///         .on_click_shared(on_click_shared)
+///         .content(|| {});
+/// #         });
 /// }
 ///
 /// component();
 /// ```
 #[tessera]
-pub fn floating_action_button(args: &FloatingActionButtonArgs) {
-    let args = args.clone();
-    let content = args.content.clone();
+pub fn floating_action_button(
+    size: Option<FloatingActionButtonSize>,
+    modifier: Modifier,
+    enabled: Option<bool>,
+    container_color: Option<Color>,
+    content_color: Option<Color>,
+    shape: Option<Shape>,
+    elevation: Option<FloatingActionButtonElevation>,
+    on_click: Option<Callback>,
+    disabled_container_color: Option<Color>,
+    disabled_content_color: Option<Color>,
+    interaction_state: Option<State<InteractionState>>,
+    ripple_color: Option<Color>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    content: Option<RenderSlot>,
+) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
+    let args = FloatingActionButtonResolvedArgs {
+        size: size.unwrap_or_default(),
+        modifier,
+        enabled: enabled.unwrap_or(true),
+        container_color: container_color
+            .unwrap_or_else(|| FloatingActionButtonDefaults::container_color(&theme.color_scheme)),
+        content_color,
+        shape,
+        elevation: elevation.unwrap_or_else(FloatingActionButtonDefaults::elevation),
+        on_click,
+        disabled_container_color: disabled_container_color.unwrap_or_else(|| {
+            FloatingActionButtonDefaults::disabled_container_color(&theme.color_scheme)
+        }),
+        disabled_content_color: disabled_content_color.unwrap_or_else(|| {
+            FloatingActionButtonDefaults::disabled_content_color(&theme.color_scheme)
+        }),
+        interaction_state,
+        ripple_color,
+        accessibility_label,
+        accessibility_description,
+        content,
+    };
+    let content = args.content.clone();
     let shape = args
         .shape
         .unwrap_or_else(|| shape_from_size(args.size, &theme));
@@ -395,7 +339,7 @@ pub fn floating_action_button(args: &FloatingActionButtonArgs) {
     let shadow_elevation = elevation.shadow_elevation(args.enabled, interaction_state);
     let tonal_elevation = elevation.tonal_elevation();
 
-    let mut surface_args = SurfaceArgs::default()
+    let mut surface_args = surface()
         .modifier(args.modifier.size_in(Some(size), None, Some(size), None))
         .style(SurfaceStyle::Filled {
             color: container_color,
@@ -426,7 +370,7 @@ pub fn floating_action_button(args: &FloatingActionButtonArgs) {
         surface_args = surface_args.accessibility_description(description);
     }
 
-    surface(&surface_args.child({
+    surface_args.child({
         let content = content.clone();
         move || {
             let content = content.clone();
@@ -436,7 +380,31 @@ pub fn floating_action_button(args: &FloatingActionButtonArgs) {
                 }
             });
         }
-    }));
+    });
+}
+
+impl FloatingActionButtonBuilder {
+    /// Creates props from base args and a content render function.
+    pub fn with_content(self, content: impl Fn() + Send + Sync + 'static) -> Self {
+        self.content(content)
+    }
+
+    /// Creates a configuration with the required click handler.
+    pub fn new(on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        Self::default().on_click(on_click)
+    }
+
+    /// Applies the small floating action button preset.
+    pub fn small(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.on_click(on_click)
+            .size(FloatingActionButtonSize::Small)
+    }
+
+    /// Applies the large floating action button preset.
+    pub fn large(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.on_click(on_click)
+            .size(FloatingActionButtonSize::Large)
+    }
 }
 
 fn shape_from_size(size: FloatingActionButtonSize, theme: &MaterialTheme) -> Shape {

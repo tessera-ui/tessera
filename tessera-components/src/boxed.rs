@@ -4,122 +4,11 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, tessera,
+    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, layout::layout_primitive, tessera,
 };
 
 use crate::alignment::Alignment;
-
-/// Arguments for the `Boxed` component.
-#[derive(Clone, Prop)]
-pub struct BoxedArgs {
-    /// The alignment of children within the `Boxed` container.
-    pub alignment: Alignment,
-    /// Modifier chain applied to the boxed subtree.
-    pub modifier: Modifier,
-    /// Child slots rendered by this container.
-    #[prop(skip_setter)]
-    pub children: Vec<RenderSlot>,
-    /// Optional per-child alignment override (same index as `children`).
-    pub child_alignments: Vec<Option<Alignment>>,
-}
-
-impl Default for BoxedArgs {
-    fn default() -> Self {
-        Self {
-            alignment: Alignment::default(),
-            modifier: Modifier::new(),
-            children: Vec::new(),
-            child_alignments: Vec::new(),
-        }
-    }
-}
-
-impl BoxedArgs {
-    /// Adds a child using the container alignment.
-    pub fn child<F>(mut self, child_closure: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_alignments.push(None);
-        self
-    }
-
-    /// Adds a child using the container alignment with a shared slot.
-    pub fn child_shared(mut self, child_closure: impl Into<RenderSlot>) -> Self {
-        self.children.push(child_closure.into());
-        self.child_alignments.push(None);
-        self
-    }
-
-    /// Adds a child with an explicit alignment override.
-    pub fn child_with_alignment<F>(mut self, alignment: Alignment, child_closure: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_alignments.push(Some(alignment));
-        self
-    }
-
-    /// Adds a child with an explicit alignment override using a shared slot.
-    pub fn child_with_alignment_shared(
-        mut self,
-        alignment: Alignment,
-        child_closure: impl Into<RenderSlot>,
-    ) -> Self {
-        self.children.push(child_closure.into());
-        self.child_alignments.push(Some(alignment));
-        self
-    }
-
-    /// Builds children using the scope DSL.
-    pub fn children<F>(mut self, scope_config: F) -> Self
-    where
-        F: FnOnce(&mut BoxedScope),
-    {
-        let mut child_closures: Vec<RenderSlot> = Vec::new();
-        let mut child_alignments: Vec<Option<Alignment>> = Vec::new();
-        {
-            let mut scope = BoxedScope {
-                child_closures: &mut child_closures,
-                child_alignments: &mut child_alignments,
-            };
-            scope_config(&mut scope);
-        }
-        self.children = child_closures;
-        self.child_alignments = child_alignments;
-        self
-    }
-}
-
-/// A scope for declaratively adding children to a `boxed` component.
-pub struct BoxedScope<'a> {
-    child_closures: &'a mut Vec<RenderSlot>,
-    child_alignments: &'a mut Vec<Option<Alignment>>,
-}
-
-impl<'a> BoxedScope<'a> {
-    /// Adds a child component to the box.
-    pub fn child<F>(&mut self, child_closure: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_alignments.push(None);
-    }
-
-    /// Adds a child component with a custom alignment overriding the container
-    /// default.
-    pub fn child_with_alignment<F>(&mut self, alignment: Alignment, child_closure: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_alignments.push(Some(alignment));
-    }
-}
 
 fn resolve_final_dimension(dv: DimensionValue, largest_child: Px) -> Px {
     match dv {
@@ -188,69 +77,51 @@ fn compute_child_offset(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures default alignment and modifiers; see [`BoxedArgs`].
+/// - `alignment` — default alignment applied to children without parent data.
+/// - `modifier` — modifier chain applied to the boxed container.
+/// - `children` — child slot rendered inside the boxed container.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::alignment::Alignment;
-/// use tessera_components::boxed::{BoxedArgs, boxed};
-/// use tessera_components::text::{TextArgs, text};
+/// use tessera_components::{alignment::Alignment, boxed::boxed, modifier::ModifierExt as _, text::text};
+/// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// boxed(&BoxedArgs::default().children(|scope| {
-///     // Add a child that will be in the background (rendered first).
-///     scope.child(|| {
-///         text(&TextArgs::default().text("Background"));
-///     });
-///     // Add another child aligned to the center, which will appear on top.
-///     scope.child_with_alignment(Alignment::Center, || {
-///         text(&TextArgs::default().text("Foreground"));
-///     });
-/// }));
+/// boxed().children(|| {
+///     text().content("Background");
+///     text()
+///         .content("Foreground")
+///         .modifier(Modifier::new().align(Alignment::Center));
+/// });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn boxed(args: &BoxedArgs) {
-    let args = args.clone();
-    let child_len = args.children.len();
-    let mut child_alignments = args.child_alignments;
-    if child_alignments.len() < child_len {
-        child_alignments.resize(child_len, None);
-    } else if child_alignments.len() > child_len {
-        child_alignments.truncate(child_len);
-    }
-    let children = args.children;
-    let modifier = args.modifier;
-    let alignment = args.alignment;
-    modifier.run(move || {
-        layout(BoxedLayout {
-            alignment,
-            child_alignments: child_alignments.clone(),
+pub fn boxed(alignment: Alignment, modifier: Modifier, children: RenderSlot) {
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(BoxedLayout { alignment })
+        .child(move || {
+            children.render();
         });
-
-        for child_closure in &children {
-            child_closure.render();
-        }
-    });
 }
 
 #[derive(Clone, PartialEq)]
 struct BoxedLayout {
     alignment: Alignment,
-    child_alignments: Vec<Option<Alignment>>,
 }
 
-impl LayoutSpec for BoxedLayout {
+impl LayoutPolicy for BoxedLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let n = self.child_alignments.len();
+        let child_alignments = collect_child_alignments(input);
+        let n = child_alignments.len();
         debug_assert_eq!(
             input.children_ids().len(),
             n,
@@ -288,7 +159,7 @@ impl LayoutSpec for BoxedLayout {
         for (i, child_size_opt) in children_sizes.iter().enumerate() {
             if let Some(child_size) = child_size_opt {
                 let child_id = input.children_ids()[i];
-                let child_alignment = self.child_alignments[i].unwrap_or(self.alignment);
+                let child_alignment = child_alignments[i].unwrap_or(self.alignment);
                 let (x, y) = compute_child_offset(
                     child_alignment,
                     final_width,
@@ -304,5 +175,139 @@ impl LayoutSpec for BoxedLayout {
             width: final_width,
             height: final_height,
         })
+    }
+}
+
+fn collect_child_alignments(input: &LayoutInput<'_>) -> Vec<Option<Alignment>> {
+    input
+        .children_ids()
+        .iter()
+        .map(|&child_id| {
+            input
+                .child_parent_data::<crate::modifier::AlignmentParentData>(child_id)
+                .map(|data| data.alignment)
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+    };
+
+    use crate::{
+        alignment::Alignment,
+        modifier::{ModifierExt as _, SemanticsArgs},
+    };
+
+    use super::boxed;
+
+    #[derive(Clone, PartialEq)]
+    struct FixedTestLayout {
+        width: i32,
+        height: i32,
+    }
+
+    impl LayoutPolicy for FixedTestLayout {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    #[tessera]
+    fn fixed_test_box(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn boxed_layout_case() {
+        boxed()
+            .alignment(Alignment::TopStart)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(100))),
+                Some(DimensionValue::Fixed(Px::new(80))),
+            ))
+            .children(|| {
+                boxed_start_box();
+                layout_primitive()
+                    .modifier(Modifier::new().align(Alignment::BottomEnd))
+                    .child(|| {
+                        boxed_end_box();
+                    });
+            });
+    }
+
+    #[tessera]
+    fn boxed_start_box() {
+        fixed_test_box()
+            .tag("boxed_start".to_string())
+            .width(20)
+            .height(10);
+    }
+
+    #[tessera]
+    fn boxed_end_box() {
+        fixed_test_box()
+            .tag("boxed_end".to_string())
+            .width(30)
+            .height(15);
+    }
+
+    #[tessera]
+    fn boxed_center_case() {
+        boxed()
+            .alignment(Alignment::Center)
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(100))),
+                Some(DimensionValue::Fixed(Px::new(80))),
+            ))
+            .children(|| {
+                fixed_test_box()
+                    .tag("boxed_center".to_string())
+                    .width(20)
+                    .height(10);
+            });
+    }
+
+    #[test]
+    fn boxed_honors_child_alignment_override() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 100),
+            content: {
+                boxed_layout_case();
+            },
+            expect: {
+                node("boxed_start").position(0, 0).size(20, 10);
+                node("boxed_end").position(70, 65).size(30, 15);
+            }
+        }
+    }
+
+    #[test]
+    fn boxed_uses_default_alignment_for_children_without_parent_data() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 100),
+            content: {
+                boxed_center_case();
+            },
+            expect: {
+                node("boxed_center").position(40, 35).size(20, 10);
+            }
+        }
     }
 }

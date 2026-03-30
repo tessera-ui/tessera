@@ -7,8 +7,8 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CallbackWith, Color, DimensionValue, Dp, FocusState, FocusTraversalPolicy, Modifier, Prop, Px,
-    PxSize, RenderSlot, State, accesskit::Role, current_frame_nanos,
+    Callback, CallbackWith, Color, DimensionValue, Dp, FocusState, FocusTraversalPolicy, Modifier,
+    Px, PxSize, RenderSlot, State, accesskit::Role, current_frame_nanos, layout::layout_primitive,
     modifier::FocusModifierExt as _, provide_context, receive_frame_nanos, remember, tessera,
     use_context,
 };
@@ -16,11 +16,11 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     animation,
-    boxed::{BoxedArgs, boxed},
+    boxed::boxed,
     modifier::{InteractionState, ModifierExt as _, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
+    surface::{SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialTheme},
 };
 
@@ -129,144 +129,6 @@ impl RadioButtonController {
     }
 }
 
-/// Arguments for configuring the `radio_button` component.
-#[derive(Clone, Prop)]
-pub struct RadioButtonArgs {
-    /// Optional modifier chain applied to the radio button subtree.
-    pub modifier: Modifier,
-    /// Callback invoked when the radio transitions to the selected state.
-    #[prop(skip_setter)]
-    pub on_select: CallbackWith<bool, ()>,
-    /// Whether the radio button is currently selected.
-    pub selected: bool,
-    /// Visual diameter of the radio glyph (outer ring) in density-independent
-    /// pixels.
-    pub size: Dp,
-    /// Minimum interactive touch target for the control.
-    pub touch_target_size: Dp,
-    /// Stroke width applied to the outer ring.
-    pub stroke_width: Dp,
-    /// Diameter of the inner dot when fully selected.
-    pub dot_size: Dp,
-    /// Ring and dot color when selected.
-    pub selected_color: Color,
-    /// Ring color when not selected.
-    pub unselected_color: Color,
-    /// Ring and dot color when disabled but selected.
-    pub disabled_selected_color: Color,
-    /// Ring color when disabled and not selected.
-    pub disabled_unselected_color: Color,
-    /// Whether the control is interactive.
-    pub enabled: bool,
-    /// Optional accessibility label read by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional accessibility description.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-    /// Optional external controller for selection state and animation.
-    ///
-    /// When this is `None`, `radio_button` creates and owns an internal
-    /// controller.
-    #[prop(skip_setter)]
-    pub controller: Option<State<RadioButtonController>>,
-}
-
-impl RadioButtonArgs {
-    /// Sets the on_select handler.
-    pub fn on_select<F>(mut self, on_select: F) -> Self
-    where
-        F: Fn(bool) + Send + Sync + 'static,
-    {
-        self.on_select = CallbackWith::new(on_select);
-        self
-    }
-
-    /// Sets the on_select handler using a shared callback.
-    pub fn on_select_shared(mut self, on_select: impl Into<CallbackWith<bool, ()>>) -> Self {
-        self.on_select = on_select.into();
-        self
-    }
-
-    /// Sets an external radio button controller.
-    pub fn controller(mut self, controller: State<RadioButtonController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-}
-
-impl Default for RadioButtonArgs {
-    fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        Self {
-            modifier: Modifier::new(),
-            on_select: CallbackWith::default_value(),
-            selected: false,
-            size: Dp(20.0),
-            touch_target_size: Dp(48.0),
-            stroke_width: Dp(2.0),
-            dot_size: Dp(10.0),
-            selected_color: scheme.primary,
-            unselected_color: scheme.on_surface_variant,
-            disabled_selected_color: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
-            disabled_unselected_color: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
-            enabled: true,
-            accessibility_label: None,
-            accessibility_description: None,
-            controller: None,
-        }
-    }
-}
-
-/// Arguments for [`radio_group`].
-#[derive(Clone, Prop)]
-pub struct RadioGroupArgs {
-    /// Modifier chain applied to the group container.
-    pub modifier: Modifier,
-    /// Direction used for keyboard traversal inside the group.
-    pub orientation: RadioGroupOrientation,
-    /// Whether traversal wraps when it reaches either end.
-    pub wrap: bool,
-    /// Radios rendered inside the group.
-    #[prop(skip_setter)]
-    pub content: Option<RenderSlot>,
-}
-
-impl RadioGroupArgs {
-    /// Sets the content slot.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = Some(RenderSlot::new(content));
-        self
-    }
-
-    /// Sets the content slot using a shared render slot.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-}
-
-impl Default for RadioGroupArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new(),
-            orientation: RadioGroupOrientation::default(),
-            wrap: true,
-            content: None,
-        }
-    }
-}
-
 fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
     let factor = t.clamp(0.0, 1.0);
     Color {
@@ -289,56 +151,54 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures orientation, wrapping, and group content; see
-///   [`RadioGroupArgs`].
+/// - `modifier` — modifier chain applied to the group container.
+/// - `orientation` — optional traversal direction.
+/// - `wrap` — whether traversal wraps when it reaches either end.
+/// - `content` — optional group content slot.
 ///
 /// ## Examples
 ///
-/// ```
-/// use tessera_components::radio_button::{
-///     RadioButtonArgs, RadioGroupArgs, radio_button, radio_group,
-/// };
+/// ```rust
+/// use tessera_components::radio_button::{radio_button, radio_group};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn radio_group_demo() {
 ///     let selected = remember(|| 0usize);
-///     radio_group(&RadioGroupArgs::default().content(move || {
-///         radio_button(
-///             &RadioButtonArgs::default()
-///                 .selected(selected.get() == 0)
-///                 .on_select({ move |_| selected.set(0) }),
-///         );
-///         radio_button(
-///             &RadioButtonArgs::default()
-///                 .selected(selected.get() == 1)
-///                 .on_select({ move |_| selected.set(1) }),
-///         );
-///     }));
+///     radio_group().content(move || {
+///         radio_button()
+///             .selected(selected.get() == 0)
+///             .on_select({ move |_| selected.set(0) });
+///         radio_button()
+///             .selected(selected.get() == 1)
+///             .on_select({ move |_| selected.set(1) });
+///     });
 /// }
 /// ```
 #[tessera]
-pub fn radio_group(args: &RadioGroupArgs) {
-    let args = args.clone();
-    let content = args.content.unwrap_or_else(RenderSlot::empty);
-    args.modifier
-        .focus_group()
-        .focus_traversal_policy(
-            match args.orientation {
-                RadioGroupOrientation::Horizontal => FocusTraversalPolicy::horizontal(),
-                RadioGroupOrientation::Vertical => FocusTraversalPolicy::vertical(),
-            }
-            .wrap(args.wrap),
-        )
-        .run(move || {
-            let content = content.clone();
-            provide_context(
-                || RadioGroupContext,
-                move || {
-                    content.render();
-                },
-            );
-        });
+pub fn radio_group(
+    modifier: Modifier,
+    orientation: Option<RadioGroupOrientation>,
+    wrap: bool,
+    content: Option<RenderSlot>,
+) {
+    let content = content.unwrap_or_else(RenderSlot::empty);
+    let modifier = modifier.focus_group().focus_traversal_policy(
+        match orientation.unwrap_or_default() {
+            RadioGroupOrientation::Horizontal => FocusTraversalPolicy::horizontal(),
+            RadioGroupOrientation::Vertical => FocusTraversalPolicy::vertical(),
+        }
+        .wrap(wrap),
+    );
+    layout_primitive().modifier(modifier).child(move || {
+        let content = content.clone();
+        provide_context(
+            || RadioGroupContext,
+            move || {
+                content.render();
+            },
+        );
+    });
 }
 
 /// # radio_button
@@ -352,42 +212,128 @@ pub fn radio_group(args: &RadioGroupArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures sizing, colors, and callbacks; see
-///   [`RadioButtonArgs`].
+/// - `modifier` — optional modifier chain applied to the radio button subtree.
+/// - `on_select` — optional callback invoked when the radio transitions to the
+///   selected state.
+/// - `selected` — whether the radio button is currently selected.
+/// - `size` — optional visual diameter of the radio glyph.
+/// - `touch_target_size` — optional minimum interactive touch target.
+/// - `stroke_width` — optional stroke width applied to the outer ring.
+/// - `dot_size` — optional diameter of the inner dot when fully selected.
+/// - `selected_color` — optional ring and dot color when selected.
+/// - `unselected_color` — optional ring color when not selected.
+/// - `disabled_selected_color` — optional ring and dot color when disabled but
+///   selected.
+/// - `disabled_unselected_color` — optional ring color when disabled and not
+///   selected.
+/// - `enabled` — whether the control is interactive.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `controller` — optional external controller for selection state and
+///   animation.
 ///
 /// ## Examples
 ///
-/// ```
-/// use tessera_components::radio_button::{RadioButtonArgs, radio_button};
+/// ```rust
+/// use tessera_components::radio_button::radio_button;
 /// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn radio_demo() {
-///     radio_button(&RadioButtonArgs::default().selected(true));
+///     radio_button().selected(true);
 /// }
 /// ```
 #[tessera]
-pub fn radio_button(args: &RadioButtonArgs) {
-    let mut args: RadioButtonArgs = args.clone();
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(|| RadioButtonController::new(args.selected)));
+pub fn radio_button(
+    modifier: Modifier,
+    on_select: Option<CallbackWith<bool, ()>>,
+    selected: bool,
+    size: Option<Dp>,
+    touch_target_size: Option<Dp>,
+    stroke_width: Option<Dp>,
+    dot_size: Option<Dp>,
+    selected_color: Option<Color>,
+    unselected_color: Option<Color>,
+    disabled_selected_color: Option<Color>,
+    disabled_unselected_color: Option<Color>,
+    enabled: bool,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    controller: Option<State<RadioButtonController>>,
+) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let size = size.unwrap_or(Dp(20.0));
+    let touch_target_size = touch_target_size.unwrap_or(Dp(48.0));
+    let stroke_width = stroke_width.unwrap_or(Dp(2.0));
+    let dot_size = dot_size.unwrap_or(Dp(10.0));
+    let selected_color = selected_color.unwrap_or(scheme.primary);
+    let unselected_color = unselected_color.unwrap_or(scheme.on_surface_variant);
+    let disabled_selected_color = disabled_selected_color.unwrap_or(
+        scheme
+            .on_surface
+            .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+    );
+    let disabled_unselected_color = disabled_unselected_color.unwrap_or(
+        scheme
+            .on_surface
+            .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+    );
+    let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
 
-    if controller.with(|c| c.is_selected()) != args.selected {
-        controller.with_mut(|c| c.set_selected(args.selected));
+    let controller =
+        controller.unwrap_or_else(|| remember(|| RadioButtonController::new(selected)));
+
+    if controller.with(|c| c.is_selected()) != selected {
+        controller.with_mut(|c| c.set_selected(selected));
     }
 
-    args.controller = Some(controller);
-    radio_button_inner(&args);
+    let mut builder = radio_button_inner()
+        .modifier(modifier)
+        .on_select_shared(on_select)
+        .selected(selected)
+        .size(size)
+        .touch_target_size(touch_target_size)
+        .stroke_width(stroke_width)
+        .dot_size(dot_size)
+        .selected_color(selected_color)
+        .unselected_color(unselected_color)
+        .disabled_selected_color(disabled_selected_color)
+        .disabled_unselected_color(disabled_unselected_color)
+        .enabled(enabled)
+        .controller(controller);
+    if let Some(label) = accessibility_label {
+        builder = builder.accessibility_label(label);
+    }
+    if let Some(description) = accessibility_description {
+        builder = builder.accessibility_description(description);
+    }
+    drop(builder);
 }
 
 #[tessera]
-fn radio_button_inner(args: &RadioButtonArgs) {
-    let args = args.clone();
+fn radio_button_inner(
+    modifier: Modifier,
+    on_select: Option<CallbackWith<bool, ()>>,
+    selected: bool,
+    size: Dp,
+    touch_target_size: Dp,
+    stroke_width: Dp,
+    dot_size: Dp,
+    selected_color: Color,
+    unselected_color: Color,
+    disabled_selected_color: Color,
+    disabled_unselected_color: Color,
+    enabled: bool,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    controller: Option<State<RadioButtonController>>,
+) {
+    let _ = selected;
     let radio_group = use_context::<RadioGroupContext>().map(|context| context.get());
-    let controller = args
-        .controller
-        .expect("radio_button_inner requires controller to be set");
+    let controller = controller.expect("radio_button_inner requires controller to be set");
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller.with_mut(|controller| {
@@ -404,73 +350,48 @@ fn radio_button_inner(args: &RadioButtonArgs) {
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
     let is_selected = controller.with(|c| c.is_selected());
-    let interaction_state = args.enabled.then(|| remember(InteractionState::new));
-    let ripple_state = args.enabled.then(|| remember(RippleState::new));
+    let interaction_state = enabled.then(|| remember(InteractionState::new));
+    let ripple_state = enabled.then(|| remember(RippleState::new));
+    let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
 
-    let target_size = Dp(args.touch_target_size.0.max(args.size.0));
+    let target_size = Dp(touch_target_size.0.max(size.0));
 
-    let ring_color = if args.enabled {
-        interpolate_color(args.unselected_color, args.selected_color, progress)
+    let ring_color = if enabled {
+        interpolate_color(unselected_color, selected_color, progress)
     } else if is_selected {
-        args.disabled_selected_color
+        disabled_selected_color
     } else {
-        args.disabled_unselected_color
+        disabled_unselected_color
     };
 
-    let base_state_layer_color = if args.enabled {
+    let base_state_layer_color = if enabled {
         ring_color
     } else if is_selected {
-        args.disabled_selected_color
+        disabled_selected_color
     } else {
-        args.disabled_unselected_color
+        disabled_unselected_color
     };
 
     let ripple_color = base_state_layer_color;
 
-    let target_dot_color = if args.enabled {
-        args.selected_color
+    let target_dot_color = if enabled {
+        selected_color
     } else {
-        args.disabled_selected_color
+        disabled_selected_color
     };
     let active_dot_color = interpolate_color(Color::TRANSPARENT, target_dot_color, eased_progress);
 
-    let ring_style = SurfaceStyle::Outlined {
-        color: ring_color,
-        width: args.stroke_width,
-    };
-
-    let on_click = {
-        let on_select = args.on_select;
-        move || {
-            if controller.with_mut(|c| c.select()) {
-                on_select.call(true);
-            }
+    let on_click = move || {
+        if controller.with_mut(|c| c.select()) {
+            on_select.call(true);
         }
     };
 
     let state_layer_size = RadioButtonDefaults::STATE_LAYER_SIZE;
     let state_layer_radius = Dp(state_layer_size.0 / 2.0);
 
-    let mut state_layer_args = SurfaceArgs::default()
-        .modifier(Modifier::new().size(state_layer_size, state_layer_size))
-        .shape(Shape::Ellipse)
-        .enabled(args.enabled)
-        .style(SurfaceStyle::Filled {
-            color: Color::TRANSPARENT,
-        })
-        .ripple_bounded(false)
-        .ripple_radius(state_layer_radius)
-        .ripple_color(ripple_color);
-
-    if let Some(state) = interaction_state {
-        state_layer_args = state_layer_args.interaction_state(state);
-    }
-
-    state_layer_args.set_ripple_state(ripple_state);
-
-    let mut modifier = args.modifier.clone().size(target_size, target_size);
-    if args.enabled && radio_group.is_some() {
-        let on_select = args.on_select;
+    let mut modifier = modifier.size(target_size, target_size);
+    if enabled && radio_group.is_some() {
         modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
             if focus_state.has_focus() && controller.with_mut(|controller| controller.select()) {
                 on_select.call(true);
@@ -478,7 +399,7 @@ fn radio_button_inner(args: &RadioButtonArgs) {
         });
     }
 
-    if args.enabled {
+    if enabled {
         let ripple_spec = RippleSpec {
             bounded: false,
             radius: Some(state_layer_radius),
@@ -493,101 +414,84 @@ fn radio_button_inner(args: &RadioButtonArgs) {
         });
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
-        let mut selectable_args = SelectableArgs::new(is_selected, on_click)
-            .enabled(true)
-            .role(Role::RadioButton);
-        if let Some(label) = args.accessibility_label.clone() {
-            selectable_args = selectable_args.label(label);
-        }
-        if let Some(desc) = args.accessibility_description.clone() {
-            selectable_args = selectable_args.description(desc);
-        }
-        if let Some(state) = interaction_state {
-            selectable_args = selectable_args.interaction_state(state);
-        }
-        if let Some(handler) = press_handler {
-            selectable_args = selectable_args.on_press(handler);
-        }
-        if let Some(handler) = release_handler {
-            selectable_args = selectable_args.on_release(handler);
-        }
-        modifier = modifier.selectable(selectable_args);
+        let selectable_args = SelectableArgs {
+            selected: is_selected,
+            on_click: Callback::new(on_click),
+            enabled: true,
+            role: Some(Role::RadioButton),
+            label: accessibility_label.clone(),
+            description: accessibility_description.clone(),
+            interaction_state,
+            on_press: press_handler.map(Into::into),
+            on_release: release_handler.map(Into::into),
+            ..Default::default()
+        };
+        modifier = modifier.selectable_with(selectable_args);
     }
 
-    boxed(&BoxedArgs::default()
-            .modifier(modifier)
-            .alignment(Alignment::Center).children(move |scope| {
-            let args = args.clone();
-            let ring_style = ring_style.clone();
-            scope.child(move || {
-                let args = args.clone();
-                let ring_style = ring_style.clone();
-                let state_layer_args = state_layer_args.clone();
-                surface(&crate::surface::SurfaceArgs::with_child(state_layer_args, move || {
-                    let args = args.clone();
-                    let ring_style = ring_style.clone();
-                    boxed(&BoxedArgs::default()
-                            .alignment(Alignment::Center)
-                            .modifier(Modifier::new().fill_max_size()).children(move |center| {
-                            let args = args.clone();
-                            let ring_style = ring_style.clone();
-                            center.child(move || {
-                                let args = args.clone();
-                                surface(&crate::surface::SurfaceArgs::with_child(
-                                    SurfaceArgs::default()
-                                        .modifier(Modifier::new().size(args.size, args.size))
-                                        .shape(Shape::Ellipse)
-                                        .style(ring_style.clone()),
-                                    {
-                                        let dot_size_px = args.dot_size.to_px();
-                                        move || {
-                                            let animated_size =
-                                                (dot_size_px.0 as f32 * eased_progress).round()
-                                                    as i32;
-                                            if animated_size > 0 {
-                                                boxed(&BoxedArgs::default()
-                                                        .alignment(Alignment::Center)
-                                                        .modifier(Modifier::new().size(
-                                                            args.size,
-                                                            args.size,
-                                                        )).children(|dot_scope| {
-                                                        dot_scope.child({
-                                                            let dot_color = active_dot_color;
-                                                            move || {
-                                                                surface(&crate::surface::SurfaceArgs::with_child(
-                                                                    SurfaceArgs::default()
-                                                                        .modifier(
-                                                                            Modifier::new().constrain(
-                                                                                Some(
-                                                                                    DimensionValue::Fixed(
-                                                                                        Px(animated_size),
-                                                                                    ),
-                                                                                ),
-                                                                                Some(
-                                                                                    DimensionValue::Fixed(
-                                                                                        Px(animated_size),
-                                                                                    ),
-                                                                                ),
-                                                                            ),
-                                                                        )
-                                                                        .shape(Shape::Ellipse)
-                                                                        .style(
-                                                                            SurfaceStyle::Filled {
-                                                                                color: dot_color,
-                                                                            },
-                                                                        ),
-                                                                    || {},
-                                                                ));
-                                                            }
-                                                        });
-                                                    }));
-                                            }
+    boxed()
+        .modifier(modifier)
+        .alignment(Alignment::Center)
+        .children(move || {
+            let interaction_state = interaction_state;
+            let ripple_state = ripple_state;
+            let mut builder = surface()
+                .modifier(Modifier::new().size(state_layer_size, state_layer_size))
+                .shape(Shape::Ellipse)
+                .enabled(enabled)
+                .style(SurfaceStyle::Filled {
+                    color: Color::TRANSPARENT,
+                })
+                .ripple_bounded(false)
+                .ripple_radius(state_layer_radius)
+                .ripple_color(ripple_color);
+            if let Some(state) = interaction_state {
+                builder = builder.interaction_state(state);
+            }
+            builder.set_ripple_state(ripple_state);
+            builder.with_child({
+                move || {
+                    boxed()
+                        .alignment(Alignment::Center)
+                        .modifier(Modifier::new().fill_max_size())
+                        .children(move || {
+                            surface()
+                                .modifier(Modifier::new().size(size, size))
+                                .shape(Shape::Ellipse)
+                                .style(SurfaceStyle::Outlined {
+                                    color: ring_color,
+                                    width: stroke_width,
+                                })
+                                .with_child({
+                                    move || {
+                                        let animated_size =
+                                            (dot_size.to_px().0 as f32 * eased_progress).round()
+                                                as i32;
+                                        if animated_size > 0 {
+                                            boxed()
+                                                .alignment(Alignment::Center)
+                                                .modifier(Modifier::new().size(size, size))
+                                                .children(move || {
+                                                    surface()
+                                                        .modifier(Modifier::new().constrain(
+                                                            Some(DimensionValue::Fixed(Px(
+                                                                animated_size,
+                                                            ))),
+                                                            Some(DimensionValue::Fixed(Px(
+                                                                animated_size,
+                                                            ))),
+                                                        ))
+                                                        .shape(Shape::Ellipse)
+                                                        .style(SurfaceStyle::Filled {
+                                                            color: active_dot_color,
+                                                        })
+                                                        .with_child(|| {});
+                                                });
                                         }
-                                    },
-                                ));
-                            });
-                        }));
-                }));
+                                    }
+                                });
+                        });
+                }
             });
-        }));
+        });
 }

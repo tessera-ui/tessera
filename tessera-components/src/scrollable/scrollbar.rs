@@ -2,20 +2,21 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px,
-    PxPosition, State,
+    AccessibilityActionHandler, AccessibilityNode, Color, ComputedData, Constraint, DimensionValue,
+    Dp, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout_primitive},
+    modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
     gesture_recognizer::{DragRecognizer, TapRecognizer},
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, with_pointer_input},
     scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgs, surface},
+    surface::surface,
 };
 
 #[derive(Clone, PartialEq, Copy)]
@@ -36,7 +37,7 @@ struct ScrollBarVLayout {
     thumb_offset: Px,
 }
 
-impl LayoutSpec for ScrollBarVLayout {
+impl LayoutPolicy for ScrollBarVLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -52,6 +53,26 @@ impl LayoutSpec for ScrollBarVLayout {
 
         Ok(size)
     }
+
+    fn measure_eq(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.thumb_offset == other.thumb_offset
+    }
+
+    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
+        let Some(&track_node_id) = input.children_ids().first() else {
+            return true;
+        };
+        output.place_child(track_node_id, PxPosition::ZERO);
+        let Some(&thumb_node_id) = input.children_ids().get(1) else {
+            return true;
+        };
+        output.place_child(thumb_node_id, PxPosition::new(Px::ZERO, self.thumb_offset));
+        true
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -59,7 +80,7 @@ struct ScrollBarHLayout {
     thumb_offset: Px,
 }
 
-impl LayoutSpec for ScrollBarHLayout {
+impl LayoutPolicy for ScrollBarHLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -75,31 +96,39 @@ impl LayoutSpec for ScrollBarHLayout {
 
         Ok(size)
     }
+
+    fn measure_eq(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.thumb_offset == other.thumb_offset
+    }
+
+    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
+        let Some(&track_node_id) = input.children_ids().first() else {
+            return true;
+        };
+        output.place_child(track_node_id, PxPosition::ZERO);
+        let Some(&thumb_node_id) = input.children_ids().get(1) else {
+            return true;
+        };
+        output.place_child(thumb_node_id, PxPosition::new(self.thumb_offset, Px::ZERO));
+        true
+    }
 }
-#[derive(Clone, Prop)]
-pub struct ScrollBarArgs {
-    /// The total size of the scrollable content.
-    pub total: Px,
-    /// The size of the visible area.
-    pub visible: Px,
-    /// The current scroll offset.
-    pub offset: Px,
-    /// The thickness of the scrollbar
-    pub thickness: Dp,
-    /// The scrollable's state, used for interaction.
-    pub state: State<ScrollableController>,
-    /// The behavior of the scrollbar visibility.
-    pub scrollbar_behavior: ScrollBarBehavior,
-    /// The color of the scrollbar track.
-    pub track_color: Color,
-    /// The color of the scrollbar thumb.
-    pub thumb_color: Color,
-    /// The color of the scrollbar thumb when hovered.
-    pub thumb_hover_color: Color,
-    /// Optional external state for hover/drag visibility behavior.
-    ///
-    /// When this is `None`, the scrollbar creates and owns an internal state.
-    pub scrollbar_state: Option<ScrollBarState>,
+#[derive(Clone, PartialEq)]
+struct ScrollBarConfig {
+    total: Px,
+    visible: Px,
+    offset: Px,
+    thickness: Dp,
+    state: State<ScrollableController>,
+    scrollbar_behavior: ScrollBarBehavior,
+    track_color: Color,
+    thumb_color: Color,
+    thumb_hover_color: Color,
+    scrollbar_state: Option<ScrollBarState>,
 }
 
 #[derive(PartialEq, Default)]
@@ -231,7 +260,7 @@ fn calculate_target_pos_h(
 /// implementations.
 fn compute_thumb_color(
     state_lock: &ScrollBarState,
-    args: &ScrollBarArgs,
+    args: &ScrollBarConfig,
     frame_nanos: u64,
 ) -> Color {
     let state = state_lock.read();
@@ -251,83 +280,75 @@ fn compute_thumb_color(
 }
 /// Render a rounded surface for a vertical track (radius based on width).
 fn render_track_surface_v(width: Px, height: Px, color: Color) {
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(width)),
-                Some(DimensionValue::Fixed(height)),
-            ))
-            .style(color.into())
-            .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::ZERO,
-                bottom_left: RoundedCorner::Capsule,
-                bottom_right: RoundedCorner::ZERO,
-            }),
-        || {},
-    ));
+    surface()
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Fixed(width)),
+            Some(DimensionValue::Fixed(height)),
+        ))
+        .style(color.into())
+        .shape(Shape::RoundedRectangle {
+            top_left: RoundedCorner::Capsule,
+            top_right: RoundedCorner::ZERO,
+            bottom_left: RoundedCorner::Capsule,
+            bottom_right: RoundedCorner::ZERO,
+        })
+        .with_child(|| {});
 }
 
 /// Render a rounded surface for a vertical thumb (radius based on width).
 fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(width)),
-                Some(DimensionValue::Fixed(height)),
-            ))
-            .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::ZERO,
-                bottom_left: RoundedCorner::Capsule,
-                bottom_right: RoundedCorner::ZERO,
-            })
-            .style(color.into()),
-        || {},
-    ));
+    surface()
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Fixed(width)),
+            Some(DimensionValue::Fixed(height)),
+        ))
+        .shape(Shape::RoundedRectangle {
+            top_left: RoundedCorner::Capsule,
+            top_right: RoundedCorner::ZERO,
+            bottom_left: RoundedCorner::Capsule,
+            bottom_right: RoundedCorner::ZERO,
+        })
+        .style(color.into())
+        .with_child(|| {});
 }
 
 /// Render a rounded surface for a horizontal track (radius based on height).
 fn render_track_surface_h(width: Px, height: Px, color: Color) {
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(width)),
-                Some(DimensionValue::Fixed(height)),
-            ))
-            .style(color.into())
-            .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::Capsule,
-                bottom_left: RoundedCorner::ZERO,
-                bottom_right: RoundedCorner::ZERO,
-            }),
-        || {},
-    ));
+    surface()
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Fixed(width)),
+            Some(DimensionValue::Fixed(height)),
+        ))
+        .style(color.into())
+        .shape(Shape::RoundedRectangle {
+            top_left: RoundedCorner::Capsule,
+            top_right: RoundedCorner::Capsule,
+            bottom_left: RoundedCorner::ZERO,
+            bottom_right: RoundedCorner::ZERO,
+        })
+        .with_child(|| {});
 }
 
 /// Render a rounded surface for a horizontal thumb (radius based on height).
 fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(width)),
-                Some(DimensionValue::Fixed(height)),
-            ))
-            .shape(Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::Capsule,
-                bottom_left: RoundedCorner::ZERO,
-                bottom_right: RoundedCorner::ZERO,
-            })
-            .style(color.into()),
-        || {},
-    ));
+    surface()
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Fixed(width)),
+            Some(DimensionValue::Fixed(height)),
+        ))
+        .shape(Shape::RoundedRectangle {
+            top_left: RoundedCorner::Capsule,
+            top_right: RoundedCorner::Capsule,
+            bottom_left: RoundedCorner::ZERO,
+            bottom_right: RoundedCorner::ZERO,
+        })
+        .style(color.into())
+        .with_child(|| {});
 }
 
 /// Decide whether the scrollbar should be shown according to behavior and
 /// state.
-fn should_show_scrollbar(args: &ScrollBarArgs, state: &ScrollBarState) -> bool {
+fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarState) -> bool {
     match args.scrollbar_behavior {
         ScrollBarBehavior::AlwaysVisible => true,
         ScrollBarBehavior::Hidden => false,
@@ -339,7 +360,7 @@ fn should_show_scrollbar(args: &ScrollBarArgs, state: &ScrollBarState) -> bool {
 }
 
 /// Handle AutoHide behavior: hide the scrollbar after a timeout if no activity.
-fn handle_autohide_if_needed(args: &ScrollBarArgs, state: &ScrollBarState, frame_nanos: u64) {
+fn handle_autohide_if_needed(args: &ScrollBarConfig, state: &ScrollBarState, frame_nanos: u64) {
     if matches!(args.scrollbar_behavior, ScrollBarBehavior::AutoHide) {
         let mut state_guard = state.write();
         if let Some(last_scroll_activity_frame_nanos) = state_guard.last_scroll_activity_frame_nanos
@@ -355,7 +376,7 @@ fn handle_autohide_if_needed(args: &ScrollBarArgs, state: &ScrollBarState, frame
 }
 
 fn needs_scrollbar_frame_tick(
-    args: &ScrollBarArgs,
+    args: &ScrollBarConfig,
     state: &ScrollBarState,
     frame_nanos: u64,
 ) -> bool {
@@ -457,32 +478,34 @@ fn is_on_track_h(cursor_pos: PxPosition, thickness: Px, track_width: Px) -> bool
         && cursor_pos.x <= track_width
 }
 
-fn apply_scrollbar_accessibility(
-    input: &mut tessera_ui::PointerInput<'_>,
-    args: &ScrollBarArgs,
+fn apply_scrollbar_semantics(
+    accessibility: &mut AccessibilityNode,
+    action_handler: &mut Option<AccessibilityActionHandler>,
+    args: &ScrollBarConfig,
     state: &ScrollBarState,
     orientation: ScrollOrientation,
 ) {
-    let mut builder = input.accessibility().role(Role::ScrollBar);
-    let label = match orientation {
-        ScrollOrientation::Vertical => "Vertical scrollbar",
-        ScrollOrientation::Horizontal => "Horizontal scrollbar",
-    };
-    builder = builder.label(label.to_string());
+    accessibility.role = Some(Role::ScrollBar);
+    accessibility.label = Some(
+        match orientation {
+            ScrollOrientation::Vertical => "Vertical scrollbar",
+            ScrollOrientation::Horizontal => "Horizontal scrollbar",
+        }
+        .to_string(),
+    );
 
     let progress = compute_thumb_progress(args.offset, args.total).clamp(0.0, 1.0);
-    builder = builder
-        .numeric_value(progress as f64)
-        .numeric_range(0.0, 1.0)
-        .focusable()
-        .action(Action::Increment)
-        .action(Action::Decrement);
-
-    builder.commit();
+    accessibility.numeric_value = Some(progress as f64);
+    accessibility.min_numeric_value = Some(0.0);
+    accessibility.max_numeric_value = Some(1.0);
+    accessibility.focusable = true;
+    accessibility.actions.clear();
+    accessibility.actions.push(Action::Increment);
+    accessibility.actions.push(Action::Decrement);
 
     let args_clone = args.clone();
     let state_clone = state.clone();
-    input.set_accessibility_action_handler(move |action| match action {
+    *action_handler = Some(Box::new(move |action| match action {
         Action::Increment => {
             scroll_accessibility_step(&args_clone, &state_clone, orientation, true)
         }
@@ -490,11 +513,33 @@ fn apply_scrollbar_accessibility(
             scroll_accessibility_step(&args_clone, &state_clone, orientation, false)
         }
         _ => {}
-    });
+    }));
+}
+
+struct ScrollbarSemanticsModifierNode {
+    args: ScrollBarConfig,
+    state: ScrollBarState,
+    orientation: ScrollOrientation,
+}
+
+impl SemanticsModifierNode for ScrollbarSemanticsModifierNode {
+    fn apply(
+        &self,
+        accessibility: &mut AccessibilityNode,
+        action_handler: &mut Option<AccessibilityActionHandler>,
+    ) {
+        apply_scrollbar_semantics(
+            accessibility,
+            action_handler,
+            &self.args,
+            &self.state,
+            self.orientation,
+        );
+    }
 }
 
 fn scroll_accessibility_step(
-    args: &ScrollBarArgs,
+    args: &ScrollBarConfig,
     state: &ScrollBarState,
     orientation: ScrollOrientation,
     increment: bool,
@@ -520,11 +565,35 @@ fn scroll_accessibility_step(
     mark_scroll_activity(state, &args.scrollbar_behavior, current_frame_nanos());
 }
 
+impl ScrollbarVBuilder {
+    pub(crate) fn state_internal(mut self, state: State<ScrollableController>) -> Self {
+        self.props.state = Some(state);
+        self
+    }
+
+    pub(crate) fn scrollbar_state_internal(mut self, scrollbar_state: ScrollBarState) -> Self {
+        self.props.scrollbar_state = Some(scrollbar_state);
+        self
+    }
+}
+
+impl ScrollbarHBuilder {
+    pub(crate) fn state_internal(mut self, state: State<ScrollableController>) -> Self {
+        self.props.state = Some(state);
+        self
+    }
+
+    pub(crate) fn scrollbar_state_internal(mut self, scrollbar_state: ScrollBarState) -> Self {
+        self.props.scrollbar_state = Some(scrollbar_state);
+        self
+    }
+}
+
 /// Update dragging behavior for vertical axis.
 fn update_drag_vertical(
     input: &tessera_ui::PointerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
-    args: &ScrollBarArgs,
+    args: &ScrollBarConfig,
     state: &ScrollBarState,
     frame_nanos: u64,
 ) {
@@ -559,7 +628,7 @@ struct ScrollBarTrackMetrics {
 }
 
 fn handle_state_v(
-    args: &ScrollBarArgs,
+    args: &ScrollBarConfig,
     state: &ScrollBarState,
     metrics: ScrollBarTrackMetrics,
     tap_recognizer: State<TapRecognizer>,
@@ -645,7 +714,7 @@ fn handle_state_v(
 fn update_drag_horizontal(
     input: &tessera_ui::PointerInput,
     calculate_target: &dyn Fn(Px) -> PxPosition,
-    args: &ScrollBarArgs,
+    args: &ScrollBarConfig,
     state: &ScrollBarState,
     frame_nanos: u64,
 ) {
@@ -661,7 +730,7 @@ fn update_drag_horizontal(
 }
 
 fn handle_state_h(
-    args: &ScrollBarArgs,
+    args: &ScrollBarConfig,
     state: &ScrollBarState,
     metrics: ScrollBarTrackMetrics,
     tap_recognizer: State<TapRecognizer>,
@@ -743,8 +812,31 @@ fn handle_state_h(
 }
 
 #[tessera]
-pub fn scrollbar_v(args: &ScrollBarArgs) {
-    let args = args.clone();
+pub fn scrollbar_v(
+    total: Px,
+    visible: Px,
+    offset: Px,
+    thickness: Dp,
+    #[prop(skip_setter)] state: Option<State<ScrollableController>>,
+    scrollbar_behavior: ScrollBarBehavior,
+    track_color: Color,
+    thumb_color: Color,
+    thumb_hover_color: Color,
+    #[prop(skip_setter)] scrollbar_state: Option<ScrollBarState>,
+) {
+    let state = state.expect("scrollbar_v requires state");
+    let args = ScrollBarConfig {
+        total,
+        visible,
+        offset,
+        thickness,
+        state,
+        scrollbar_behavior,
+        track_color,
+        thumb_color,
+        thumb_hover_color,
+        scrollbar_state,
+    };
     let state = args.scrollbar_state.clone().unwrap_or_else(|| {
         let remembered = remember(ScrollBarState::new);
         remembered.with(|s| s.clone())
@@ -790,31 +882,11 @@ pub fn scrollbar_v(args: &ScrollBarArgs) {
         args.track_color.with_alpha(0.0)
     };
 
-    // track surface
-    render_track_surface_v(width, track_height, track_color);
-
-    let thumb_color = if has_vertical_overflow {
-        compute_thumb_color(&state, &args, frame_nanos)
-    } else {
-        args.thumb_color.with_alpha(0.0)
-    };
-
-    // thumb surface
-    render_thumb_surface_v(width, thumb_height, thumb_color);
-
-    // Calculate the position of the thumb based on the scroll offset and total size
-    let progress = compute_thumb_progress(args.offset, args.total);
-    let thumb_y = args.visible.to_f32() * progress;
-
-    layout(ScrollBarVLayout {
-        thumb_offset: Px::from_f32(thumb_y),
-    });
-
     let handler_args = args.clone();
     let handler_state = state.clone();
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
-    pointer_input_handler(move |mut input| {
+    let modifier = with_pointer_input(Modifier::new(), move |mut input| {
         let frame_nanos = current_frame_nanos();
         handle_state_v(
             &handler_args,
@@ -828,18 +900,58 @@ pub fn scrollbar_v(args: &ScrollBarArgs) {
             &mut input,
             frame_nanos,
         );
-        apply_scrollbar_accessibility(
-            &mut input,
-            &handler_args,
-            &handler_state,
-            ScrollOrientation::Vertical,
-        );
+    })
+    .push_semantics(ScrollbarSemanticsModifierNode {
+        args: args.clone(),
+        state: state.clone(),
+        orientation: ScrollOrientation::Vertical,
     });
+
+    let thumb_color = if has_vertical_overflow {
+        compute_thumb_color(&state, &args, frame_nanos)
+    } else {
+        args.thumb_color.with_alpha(0.0)
+    };
+    let progress = compute_thumb_progress(args.offset, args.total);
+    let thumb_y = args.visible.to_f32() * progress;
+
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(ScrollBarVLayout {
+            thumb_offset: Px::from_f32(thumb_y),
+        })
+        .child(move || {
+            render_track_surface_v(width, track_height, track_color);
+            render_thumb_surface_v(width, thumb_height, thumb_color);
+        });
 }
 
 #[tessera]
-pub fn scrollbar_h(args: &ScrollBarArgs) {
-    let args = args.clone();
+pub fn scrollbar_h(
+    total: Px,
+    visible: Px,
+    offset: Px,
+    thickness: Dp,
+    #[prop(skip_setter)] state: Option<State<ScrollableController>>,
+    scrollbar_behavior: ScrollBarBehavior,
+    track_color: Color,
+    thumb_color: Color,
+    thumb_hover_color: Color,
+    #[prop(skip_setter)] scrollbar_state: Option<ScrollBarState>,
+) {
+    let state = state.expect("scrollbar_h requires state");
+    let args = ScrollBarConfig {
+        total,
+        visible,
+        offset,
+        thickness,
+        state,
+        scrollbar_behavior,
+        track_color,
+        thumb_color,
+        thumb_hover_color,
+        scrollbar_state,
+    };
     let state = args.scrollbar_state.clone().unwrap_or_else(|| {
         let remembered = remember(ScrollBarState::new);
         remembered.with(|s| s.clone())
@@ -885,31 +997,11 @@ pub fn scrollbar_h(args: &ScrollBarArgs) {
         args.track_color.with_alpha(0.0)
     };
 
-    // track surface
-    render_track_surface_h(track_width, height, track_color);
-
-    let thumb_color = if has_horizontal_overflow {
-        compute_thumb_color(&state, &args, frame_nanos)
-    } else {
-        args.thumb_color.with_alpha(0.0)
-    };
-
-    // thumb surface
-    render_thumb_surface_h(thumb_width, height, thumb_color);
-
-    // Calculate the position of the thumb based on the scroll offset and total size
-    let progress = compute_thumb_progress(args.offset, args.total);
-    let thumb_x = args.visible.to_f32() * progress;
-
-    layout(ScrollBarHLayout {
-        thumb_offset: Px::from_f32(thumb_x),
-    });
-
     let handler_args = args.clone();
     let handler_state = state.clone();
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
-    pointer_input_handler(move |mut input| {
+    let modifier = with_pointer_input(Modifier::new(), move |mut input| {
         let frame_nanos = current_frame_nanos();
         handle_state_h(
             &handler_args,
@@ -923,11 +1015,28 @@ pub fn scrollbar_h(args: &ScrollBarArgs) {
             &mut input,
             frame_nanos,
         );
-        apply_scrollbar_accessibility(
-            &mut input,
-            &handler_args,
-            &handler_state,
-            ScrollOrientation::Horizontal,
-        );
+    })
+    .push_semantics(ScrollbarSemanticsModifierNode {
+        args: args.clone(),
+        state: state.clone(),
+        orientation: ScrollOrientation::Horizontal,
     });
+
+    let thumb_color = if has_horizontal_overflow {
+        compute_thumb_color(&state, &args, frame_nanos)
+    } else {
+        args.thumb_color.with_alpha(0.0)
+    };
+    let progress = compute_thumb_progress(args.offset, args.total);
+    let thumb_x = args.visible.to_f32() * progress;
+
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(ScrollBarHLayout {
+            thumb_offset: Px::from_f32(thumb_x),
+        })
+        .child(move || {
+            render_track_surface_h(track_width, height, track_color);
+            render_thumb_surface_h(thumb_width, height, thumb_color);
+        });
 }

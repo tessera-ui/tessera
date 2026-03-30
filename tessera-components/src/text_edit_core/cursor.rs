@@ -4,8 +4,8 @@
 //!
 //! Show insertion point feedback inside text editing components.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Prop, Px,
-    RenderInput, tessera,
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
+    RenderInput, RenderPolicy, layout::layout_primitive, tessera,
 };
 
 use crate::pipelines::shape::command::ShapeCommand;
@@ -20,7 +20,7 @@ struct CursorLayout {
     color: Color,
 }
 
-impl LayoutSpec for CursorLayout {
+impl LayoutPolicy for CursorLayout {
     fn measure(
         &self,
         _input: &LayoutInput<'_>,
@@ -31,7 +31,9 @@ impl LayoutSpec for CursorLayout {
             height: self.height,
         })
     }
+}
 
+impl RenderPolicy for CursorLayout {
     fn record(&self, input: &RenderInput<'_>) {
         if !self.visible {
             return;
@@ -64,25 +66,23 @@ impl LayoutSpec for CursorLayout {
 /// * `blink_start_frame_nanos` - Frame timestamp where the blink cycle starts
 /// * `current_frame_nanos` - Current frame timestamp used to sample visibility
 #[tessera]
-fn cursor_visual(args: &CursorArgs) {
-    let elapsed_nanos = args
-        .current_frame_nanos
-        .saturating_sub(args.blink_start_frame_nanos);
-    let visible = elapsed_nanos % 1_000_000_000 < 500_000_000;
-
-    layout(CursorLayout {
-        height: args.height_px,
-        visible,
-        color: args.color,
-    });
-}
-
-#[derive(Clone, Prop)]
-struct CursorArgs {
+fn cursor_visual(
     height_px: Px,
     blink_start_frame_nanos: u64,
     current_frame_nanos: u64,
     color: Color,
+) {
+    let elapsed_nanos = current_frame_nanos.saturating_sub(blink_start_frame_nanos);
+    let visible = elapsed_nanos % 1_000_000_000 < 500_000_000;
+
+    let policy = CursorLayout {
+        height: height_px,
+        visible,
+        color,
+    };
+    layout_primitive()
+        .layout_policy(policy.clone())
+        .render_policy(policy);
 }
 
 pub(super) fn cursor(
@@ -91,11 +91,9 @@ pub(super) fn cursor(
     current_frame_nanos: u64,
     color: Color,
 ) {
-    let args = CursorArgs {
-        height_px,
-        blink_start_frame_nanos,
-        current_frame_nanos,
-        color,
-    };
-    cursor_visual(&args);
+    cursor_visual()
+        .height_px(height_px)
+        .blink_start_frame_nanos(blink_start_frame_nanos)
+        .current_frame_nanos(current_frame_nanos)
+        .color(color);
 }

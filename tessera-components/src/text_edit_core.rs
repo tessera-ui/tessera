@@ -29,9 +29,11 @@ use glyphon::{
 };
 use tessera_platform::clipboard;
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, DimensionValue, Dp, FocusRequester, MeasurementError, Prop,
-    Px, PxPosition, State, current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    CallbackWith, Color, ComputedData, DimensionValue, Dp, FocusRequester, MeasurementError, Px,
+    PxPosition, State, current_frame_nanos,
+    layout::{
+        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
+    },
     receive_frame_nanos, tessera, winit,
 };
 use winit::keyboard::NamedKey;
@@ -41,7 +43,7 @@ use crate::{
         command::{TextCommand, TextConstraint},
         pipeline::{TextData, write_font_system},
     },
-    selection_highlight_rect::{SelectionHighlightRectArgs, selection_highlight_rect},
+    selection_highlight_rect::selection_highlight_rect,
     text_edit_core::cursor::CURSOR_WIDRH,
 };
 
@@ -3254,7 +3256,7 @@ impl PartialEq for TextEditLayout {
     }
 }
 
-impl LayoutSpec for TextEditLayout {
+impl LayoutPolicy for TextEditLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -3389,10 +3391,12 @@ impl LayoutSpec for TextEditLayout {
 
         Ok(computed_data)
     }
+}
 
+impl RenderPolicy for TextEditLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
-        metadata.clips_children = true;
+        metadata.set_clips_children(true);
         if let Some(text_data) = self.controller.with(|c| c.current_text_data()) {
             let drawable = TextCommand {
                 data: text_data,
@@ -3414,83 +3418,72 @@ impl LayoutSpec for TextEditLayout {
 ///
 /// * `controller` - Shared controller for the text editor.
 #[tessera]
-pub fn text_edit_core(args: &TextEditCoreArgs) {
-    let controller = args.controller;
-
-    // text rendering with constraints from parent container
+pub fn text_edit_core(controller: Option<State<TextEditorController>>) {
+    let controller = controller.expect("text_edit_core requires a controller");
     let layout_version = controller.with(|c| c.layout_version());
-    layout(TextEditLayout {
+    let policy = TextEditLayout {
         controller,
         layout_version,
-    });
+    };
+    layout_primitive()
+        .layout_policy(policy.clone())
+        .render_policy(policy)
+        .child(move || {
+            {
+                let (rect_definitions, color_for_selection) = controller
+                    .with(|c| (c.current_selection_rects().to_vec(), c.selection_color()));
 
-    // Selection highlighting
-    {
-        let (rect_definitions, color_for_selection) =
-            controller.with(|c| (c.current_selection_rects().to_vec(), c.selection_color()));
+                for def in rect_definitions {
+                    selection_highlight_rect()
+                        .width(def.width)
+                        .height(def.height)
+                        .color(color_for_selection);
+                }
+            }
 
-        for def in rect_definitions {
-            let render_args =
-                SelectionHighlightRectArgs::new(def.width, def.height, color_for_selection);
-            selection_highlight_rect(&render_args);
-        }
-    }
+            {
+                let (rect_definitions, color_for_composition) =
+                    controller.with(|c| (c.current_composition_rects().to_vec(), c.cursor_color()));
 
-    {
-        let (rect_definitions, color_for_composition) =
-            controller.with(|c| (c.current_composition_rects().to_vec(), c.cursor_color()));
+                for def in rect_definitions {
+                    selection_highlight_rect()
+                        .width(def.width)
+                        .height(def.height)
+                        .color(color_for_composition);
+                }
+            }
 
-        for def in rect_definitions {
-            let render_args =
-                SelectionHighlightRectArgs::new(def.width, def.height, color_for_composition);
-            selection_highlight_rect(&render_args);
-        }
-    }
-
-    // Cursor rendering (only when focused)
-    if controller.with(|c| c.focus_handler().is_focused()) {
-        let frame_nanos = current_frame_nanos();
-        controller.with_mut(|controller| controller.update_frame_nanos(frame_nanos));
-        receive_frame_nanos(move |frame_nanos| {
-            let is_focused = controller.with_mut(|controller| {
-                controller.update_frame_nanos(frame_nanos);
-                controller.focus_handler().is_focused()
-            });
-            if is_focused {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
+            if controller.with(|c| c.focus_handler().is_focused()) {
+                let frame_nanos = current_frame_nanos();
+                controller.with_mut(|controller| controller.update_frame_nanos(frame_nanos));
+                receive_frame_nanos(move |frame_nanos| {
+                    let is_focused = controller.with_mut(|controller| {
+                        controller.update_frame_nanos(frame_nanos);
+                        controller.focus_handler().is_focused()
+                    });
+                    if is_focused {
+                        tessera_ui::FrameNanosControl::Continue
+                    } else {
+                        tessera_ui::FrameNanosControl::Stop
+                    }
+                });
+                let (line_height, blink_start_frame_nanos, frame_nanos, cursor_color) = controller
+                    .with(|c| {
+                        (
+                            c.line_height(),
+                            c.blink_start_frame_nanos(),
+                            c.current_frame_nanos(),
+                            c.cursor_color(),
+                        )
+                    });
+                cursor::cursor(
+                    line_height,
+                    blink_start_frame_nanos,
+                    frame_nanos,
+                    cursor_color,
+                );
             }
         });
-        let (line_height, blink_start_frame_nanos, frame_nanos, cursor_color) =
-            controller.with(|c| {
-                (
-                    c.line_height(),
-                    c.blink_start_frame_nanos(),
-                    c.current_frame_nanos(),
-                    c.cursor_color(),
-                )
-            });
-        cursor::cursor(
-            line_height,
-            blink_start_frame_nanos,
-            frame_nanos,
-            cursor_color,
-        );
-    }
-}
-
-#[derive(Clone, Prop)]
-pub struct TextEditCoreArgs {
-    /// Shared controller for text content, cursor, and selection state.
-    pub controller: State<TextEditorController>,
-}
-
-impl TextEditCoreArgs {
-    /// Creates text editor core component props.
-    pub fn new(controller: State<TextEditorController>) -> Self {
-        Self { controller }
-    }
 }
 
 #[cfg(test)]

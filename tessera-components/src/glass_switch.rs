@@ -7,16 +7,16 @@ use std::time::Duration;
 
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    Prop, Px, PxPosition, State,
+    Px, PxPosition, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout_primitive},
     receive_frame_nanos, remember, tessera,
 };
 
 use crate::{
     animation,
-    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
+    fluid_glass::{GlassBorder, fluid_glass},
     modifier::{InteractionState, ModifierExt as _, ToggleableArgs},
     shape_def::Shape,
 };
@@ -97,100 +97,6 @@ impl Default for GlassSwitchController {
     }
 }
 
-/// Arguments for the `glass_switch` component.
-#[derive(Clone, Prop)]
-pub struct GlassSwitchArgs {
-    /// Optional modifier chain applied to the switch subtree.
-    pub modifier: Modifier,
-    /// Optional callback invoked when the switch toggles.
-    #[prop(skip_setter)]
-    pub on_toggle: Option<CallbackWith<bool, ()>>,
-    /// Initial checked state.
-    pub checked: bool,
-
-    /// Total width of the switch track.
-    pub width: Dp,
-
-    /// Total height of the switch track (including padding).
-    pub height: Dp,
-
-    /// Track color when switch is ON
-    pub track_on_color: Color,
-    /// Track color when switch is OFF
-    pub track_off_color: Color,
-
-    /// Thumb alpha when switch is ON (opacity when ON)
-    pub thumb_on_alpha: f32,
-    /// Thumb alpha when switch is OFF (opacity when OFF)
-    pub thumb_off_alpha: f32,
-
-    /// Border for the thumb
-    pub thumb_border: Option<GlassBorder>,
-
-    /// Border for the track
-    pub track_border: Option<GlassBorder>,
-
-    /// Padding around the thumb
-    pub thumb_padding: Dp,
-    /// Optional accessibility label read by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional accessibility description.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-    /// Optional external controller for checked state and animation.
-    ///
-    /// When this is `None`, `glass_switch` creates and owns an internal
-    /// controller.
-    #[prop(skip_setter)]
-    pub controller: Option<State<GlassSwitchController>>,
-}
-
-impl GlassSwitchArgs {
-    /// Sets the on_toggle handler.
-    pub fn on_toggle<F>(mut self, on_toggle: F) -> Self
-    where
-        F: Fn(bool) + Send + Sync + 'static,
-    {
-        self.on_toggle = Some(CallbackWith::new(on_toggle));
-        self
-    }
-
-    /// Sets the on_toggle handler using a shared callback.
-    pub fn on_toggle_shared(mut self, on_toggle: impl Into<CallbackWith<bool, ()>>) -> Self {
-        self.on_toggle = Some(on_toggle.into());
-        self
-    }
-
-    /// Sets an external glass switch controller.
-    pub fn controller(mut self, controller: State<GlassSwitchController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-}
-
-impl Default for GlassSwitchArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new(),
-            on_toggle: None,
-            checked: false,
-            width: Dp(52.0),
-            height: Dp(32.0),
-            track_on_color: Color::new(0.2, 0.7, 1.0, 0.5),
-            track_off_color: Color::new(0.8, 0.8, 0.8, 0.5),
-            thumb_on_alpha: 0.5,
-            thumb_off_alpha: 1.0,
-            thumb_border: None,
-            track_border: None,
-            thumb_padding: Dp(3.0),
-            accessibility_label: None,
-            accessibility_description: None,
-            controller: None,
-        }
-    }
-}
-
 fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
     Color {
         r: off.r + (on.r - off.r) * progress,
@@ -210,13 +116,27 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the switch's appearance and `on_toggle` callback; see
-///   [`GlassSwitchArgs`].
+/// - `modifier` — optional modifier chain applied to the switch subtree.
+/// - `on_toggle` — optional callback invoked when the switch toggles.
+/// - `checked` — initial checked state.
+/// - `width` — optional track width override.
+/// - `height` — optional track height override.
+/// - `track_on_color` — optional track tint when checked.
+/// - `track_off_color` — optional track tint when unchecked.
+/// - `thumb_on_alpha` — optional thumb alpha when checked.
+/// - `thumb_off_alpha` — optional thumb alpha when unchecked.
+/// - `thumb_border` — optional thumb border override.
+/// - `track_border` — optional track border override.
+/// - `thumb_padding` — optional thumb padding.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `controller` — optional external controller.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::glass_switch::{GlassSwitchArgs, GlassSwitchController, glass_switch};
+/// use tessera_components::glass_switch::{GlassSwitchController, glass_switch};
+/// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
@@ -224,8 +144,11 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 ///     let controller = remember(|| GlassSwitchController::new(false));
 ///     assert!(!controller.with(|c| c.is_checked()));
 ///
-///     let args = GlassSwitchArgs::default().controller(controller);
-///     glass_switch(&args);
+///     material_theme()
+///         .theme(|| MaterialTheme::default())
+///         .child(move || {
+///             glass_switch().checked(controller.with(|c| c.is_checked()));
+///         });
 ///
 ///     controller.with_mut(|c| c.toggle());
 ///     assert!(controller.with(|c| c.is_checked()));
@@ -234,57 +157,64 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// demo();
 /// ```
 #[tessera]
-pub fn glass_switch(args: &GlassSwitchArgs) {
-    let mut switch_args = args.clone();
-    let controller = switch_args
-        .controller
-        .unwrap_or_else(|| remember(|| GlassSwitchController::new(switch_args.checked)));
-    if controller.with(|c| c.is_checked()) != switch_args.checked {
-        controller.with_mut(|c| c.set_checked(switch_args.checked));
+pub fn glass_switch(
+    modifier: Option<Modifier>,
+    on_toggle: Option<CallbackWith<bool, ()>>,
+    checked: bool,
+    width: Option<Dp>,
+    height: Option<Dp>,
+    track_on_color: Option<Color>,
+    track_off_color: Option<Color>,
+    thumb_on_alpha: Option<f32>,
+    thumb_off_alpha: Option<f32>,
+    thumb_border: Option<GlassBorder>,
+    track_border: Option<GlassBorder>,
+    thumb_padding: Option<Dp>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    #[prop(skip_setter)] controller: Option<State<GlassSwitchController>>,
+) {
+    let width = width.unwrap_or(Dp(52.0));
+    let height = height.unwrap_or(Dp(32.0));
+    let track_on_color = track_on_color.unwrap_or(Color::new(0.2, 0.7, 1.0, 0.5));
+    let track_off_color = track_off_color.unwrap_or(Color::new(0.8, 0.8, 0.8, 0.5));
+    let thumb_on_alpha = thumb_on_alpha.unwrap_or(0.5);
+    let thumb_off_alpha = thumb_off_alpha.unwrap_or(1.0);
+    let thumb_padding = thumb_padding.unwrap_or(Dp(3.0));
+    let controller = controller.unwrap_or_else(|| remember(|| GlassSwitchController::new(checked)));
+    if controller.with(|c| c.is_checked()) != checked {
+        controller.with_mut(|c| c.set_checked(checked));
     }
-    switch_args.controller = Some(controller);
-    glass_switch_inner(&switch_args);
-}
+    let mut modifier = modifier.unwrap_or_default();
 
-#[tessera]
-fn glass_switch_inner(args: &GlassSwitchArgs) {
-    let args = args.clone();
-    let controller = args
-        .controller
-        .expect("glass_switch_inner requires controller to be set");
-    let mut modifier = args.modifier;
-
-    let on_toggle = args.on_toggle;
     let enabled = on_toggle.is_some();
     let interaction_state = enabled.then(|| remember(InteractionState::new));
     let checked = controller.with(|c| c.is_checked());
     if enabled {
         modifier = modifier.minimum_interactive_component_size();
-        let mut toggle_args = ToggleableArgs::new(checked, move |_| {
-            controller.with_mut(|c| c.toggle());
-            let checked = controller.with(|c| c.is_checked());
-            if let Some(on_toggle) = on_toggle.as_ref() {
-                on_toggle.call(checked);
-            }
-        })
-        .enabled(true)
-        .role(Role::Switch);
-        if let Some(label) = args.accessibility_label.clone() {
-            toggle_args = toggle_args.label(label);
-        }
-        if let Some(desc) = args.accessibility_description.clone() {
-            toggle_args = toggle_args.description(desc);
-        }
-        if let Some(state) = interaction_state {
-            toggle_args = toggle_args.interaction_state(state);
-        }
-        modifier = modifier.toggleable(toggle_args);
+        let toggle_args = ToggleableArgs {
+            value: checked,
+            on_value_change: CallbackWith::new(move |_| {
+                controller.with_mut(|c| c.toggle());
+                let checked = controller.with(|c| c.is_checked());
+                if let Some(on_toggle) = on_toggle.as_ref() {
+                    on_toggle.call(checked);
+                }
+            }),
+            enabled: true,
+            role: Some(Role::Switch),
+            label: accessibility_label.clone(),
+            description: accessibility_description.clone(),
+            interaction_state,
+            ..Default::default()
+        };
+        modifier = modifier.toggleable_with(toggle_args);
     }
 
     // Precompute pixel sizes to avoid repeated conversions
-    let width_px = args.width.to_px();
-    let height_px = args.height.to_px();
-    let thumb_dp = Dp(args.height.0 - (args.thumb_padding.0 * 2.0));
+    let width_px = width.to_px();
+    let height_px = height.to_px();
+    let thumb_dp = Dp(height.0 - (thumb_padding.0 * 2.0));
     let thumb_px = thumb_dp.to_px();
 
     // Track tint color interpolation based on progress
@@ -302,54 +232,47 @@ fn glass_switch_inner(args: &GlassSwitchArgs) {
         });
     }
     let progress = controller.with(|c| c.animation_progress());
-    let track_color = interpolate_color(args.track_off_color, args.track_on_color, progress);
+    let track_color = interpolate_color(track_off_color, track_on_color, progress);
 
-    modifier.run(move || {
-        // Build and render track
-        let mut track_args = FluidGlassArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(width_px)),
-                Some(DimensionValue::Fixed(height_px)),
-            ))
-            .tint_color(track_color)
-            .shape(Shape::capsule())
-            .blur_radius(Dp(8.0));
-        if let Some(border) = args.track_border {
-            track_args = track_args.border(border);
-        }
-        fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-            &track_args,
-            || {},
-        ));
-
-        // Build and render thumb
-        let thumb_alpha =
-            args.thumb_off_alpha + (args.thumb_on_alpha - args.thumb_off_alpha) * progress;
-        let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
-        let mut thumb_args = FluidGlassArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(thumb_px)),
-                Some(DimensionValue::Fixed(thumb_px)),
-            ))
-            .tint_color(thumb_color)
-            .refraction_height(Dp(1.0))
-            .shape(Shape::Ellipse);
-        if let Some(border) = args.thumb_border {
-            thumb_args = thumb_args.border(border);
-        }
-        fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-            &thumb_args,
-            || {},
-        ));
-
-        // Measurement and placement
-        layout(GlassSwitchLayout {
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(GlassSwitchLayout {
             width: width_px,
             height: height_px,
-            thumb_padding: args.thumb_padding.to_px(),
+            thumb_padding: thumb_padding.to_px(),
             progress,
+        })
+        .child(move || {
+            let track = fluid_glass()
+                .modifier(Modifier::new().constrain(
+                    Some(DimensionValue::Fixed(width_px)),
+                    Some(DimensionValue::Fixed(height_px)),
+                ))
+                .tint_color(track_color)
+                .shape(Shape::capsule())
+                .blur_radius(Dp(8.0));
+            if let Some(border) = track_border {
+                track.border(border).with_child(|| {});
+            } else {
+                track.with_child(|| {});
+            }
+
+            let thumb_alpha = thumb_off_alpha + (thumb_on_alpha - thumb_off_alpha) * progress;
+            let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
+            let thumb = fluid_glass()
+                .modifier(Modifier::new().constrain(
+                    Some(DimensionValue::Fixed(thumb_px)),
+                    Some(DimensionValue::Fixed(thumb_px)),
+                ))
+                .tint_color(thumb_color)
+                .refraction_height(Dp(1.0))
+                .shape(Shape::Ellipse);
+            if let Some(border) = thumb_border {
+                thumb.border(border).with_child(|| {});
+            } else {
+                thumb.with_child(|| {});
+            }
         });
-    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -360,7 +283,7 @@ struct GlassSwitchLayout {
     progress: f32,
 }
 
-impl LayoutSpec for GlassSwitchLayout {
+impl LayoutPolicy for GlassSwitchLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -406,5 +329,41 @@ impl LayoutSpec for GlassSwitchLayout {
             width: self.width,
             height: self.height,
         })
+    }
+
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.width == other.width
+            && self.height == other.height
+            && self.thumb_padding == other.thumb_padding
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.width == other.width
+            && self.height == other.height
+            && self.thumb_padding == other.thumb_padding
+            && self.progress == other.progress
+    }
+
+    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
+        let ids = input.children_ids();
+        if ids.len() < 2 {
+            return true;
+        }
+        let track_id = ids[0];
+        let thumb_id = ids[1];
+        let Some(thumb_size) = input.child_size(thumb_id) else {
+            return false;
+        };
+
+        let eased_progress = animation::easing(self.progress);
+        output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+
+        let start_x = self.thumb_padding;
+        let end_x = self.width - thumb_size.width - self.thumb_padding;
+        let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased_progress;
+        let thumb_y = (self.height - thumb_size.height) / 2;
+
+        output.place_child(thumb_id, PxPosition::new(Px(thumb_x as i32), thumb_y));
+        true
     }
 }

@@ -11,17 +11,16 @@ use std::{
 };
 
 use tessera_ui::{
-    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, FocusDirection, MeasurementError,
-    NodeId, ParentConstraint, Prop, Px, PxPosition, Slot, State, key,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
-    remember,
-    runtime::TesseraRuntime,
-    tessera,
+    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, FocusDirection,
+    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, Slot, State, key,
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    modifier::FocusModifierExt as _,
+    remember, tessera,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
-    scrollable::{ScrollableArgs, ScrollableController, scrollable},
+    scrollable::{ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable},
 };
 
 const DEFAULT_VIEWPORT_LINES: usize = 8;
@@ -87,6 +86,12 @@ impl GridCells {
     }
 }
 
+impl Default for GridCells {
+    fn default() -> Self {
+        Self::fixed(2)
+    }
+}
+
 /// Persistent state shared by lazy grid components.
 pub struct LazyGridController {
     cache: LazyGridCache,
@@ -104,152 +109,6 @@ impl LazyGridController {
         Self {
             cache: LazyGridCache::default(),
         }
-    }
-}
-
-/// Arguments shared between lazy vertical grids.
-#[derive(Clone, Prop)]
-pub struct LazyVerticalGridArgs {
-    /// Scroll container arguments. Vertical scrolling is enforced.
-    pub scrollable: ScrollableArgs,
-    /// Grid cell definition for columns.
-    pub columns: GridCells,
-    /// Spacing between rows.
-    pub main_axis_spacing: Dp,
-    /// Spacing between columns.
-    pub cross_axis_spacing: Dp,
-    /// How columns are arranged when extra horizontal space is available.
-    pub cross_axis_alignment: MainAxisAlignment,
-    /// Alignment of items within each cell along the cross axis.
-    pub item_alignment: CrossAxisAlignment,
-    /// Number of extra rows instantiated before/after the viewport.
-    pub overscan: usize,
-    /// Estimated main-axis size for each row.
-    pub estimated_item_size: Dp,
-    /// Symmetric padding applied around the grid content.
-    pub content_padding: Dp,
-    /// Maximum viewport length reported back to parents.
-    pub max_viewport_main: Option<Px>,
-    /// Optional external controller for scroll position and cache.
-    #[prop(skip_setter)]
-    pub controller: Option<State<LazyGridController>>,
-    /// Optional slot builder for lazy grid content.
-    #[prop(skip_setter)]
-    pub content: Option<LazyGridContentSlot>,
-}
-
-impl Default for LazyVerticalGridArgs {
-    fn default() -> Self {
-        Self {
-            scrollable: ScrollableArgs::default(),
-            columns: GridCells::fixed(2),
-            main_axis_spacing: Dp(0.0),
-            cross_axis_spacing: Dp(0.0),
-            cross_axis_alignment: MainAxisAlignment::Start,
-            item_alignment: CrossAxisAlignment::Stretch,
-            overscan: 2,
-            estimated_item_size: Dp(48.0),
-            content_padding: Dp(0.0),
-            max_viewport_main: Some(Px(8192)),
-            controller: None,
-            content: None,
-        }
-    }
-}
-
-impl LazyVerticalGridArgs {
-    /// Sets an external lazy grid controller.
-    pub fn controller(mut self, controller: State<LazyGridController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-
-    /// Sets the lazy grid content builder.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync + 'static,
-    {
-        self.content = Some(LazyGridContentSlot::new(content));
-        self
-    }
-
-    /// Sets the lazy grid content builder using a shared slot.
-    pub fn content_shared(mut self, content: impl Into<LazyGridContentSlot>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-}
-
-/// Arguments shared between lazy horizontal grids.
-#[derive(Clone, Prop)]
-pub struct LazyHorizontalGridArgs {
-    /// Scroll container arguments. Horizontal scrolling is enforced.
-    pub scrollable: ScrollableArgs,
-    /// Grid cell definition for rows.
-    pub rows: GridCells,
-    /// Spacing between columns.
-    pub main_axis_spacing: Dp,
-    /// Spacing between rows.
-    pub cross_axis_spacing: Dp,
-    /// How rows are arranged when extra vertical space is available.
-    pub cross_axis_alignment: MainAxisAlignment,
-    /// Alignment of items within each cell along the cross axis.
-    pub item_alignment: CrossAxisAlignment,
-    /// Number of extra columns instantiated before/after the viewport.
-    pub overscan: usize,
-    /// Estimated main-axis size for each column.
-    pub estimated_item_size: Dp,
-    /// Symmetric padding applied around the grid content.
-    pub content_padding: Dp,
-    /// Maximum viewport length reported back to parents.
-    pub max_viewport_main: Option<Px>,
-    /// Optional external controller for scroll position and cache.
-    #[prop(skip_setter)]
-    pub controller: Option<State<LazyGridController>>,
-    /// Optional slot builder for lazy grid content.
-    #[prop(skip_setter)]
-    pub content: Option<LazyGridContentSlot>,
-}
-
-impl Default for LazyHorizontalGridArgs {
-    fn default() -> Self {
-        Self {
-            scrollable: ScrollableArgs::default(),
-            rows: GridCells::fixed(2),
-            main_axis_spacing: Dp(0.0),
-            cross_axis_spacing: Dp(0.0),
-            cross_axis_alignment: MainAxisAlignment::Start,
-            item_alignment: CrossAxisAlignment::Stretch,
-            overscan: 2,
-            estimated_item_size: Dp(48.0),
-            content_padding: Dp(0.0),
-            max_viewport_main: Some(Px(8192)),
-            controller: None,
-            content: None,
-        }
-    }
-}
-
-impl LazyHorizontalGridArgs {
-    /// Sets an external lazy grid controller.
-    pub fn controller(mut self, controller: State<LazyGridController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-
-    /// Sets the lazy grid content builder.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync + 'static,
-    {
-        self.content = Some(LazyGridContentSlot::new(content));
-        self
-    }
-
-    /// Sets the lazy grid content builder using a shared slot.
-    pub fn content_shared(mut self, content: impl Into<LazyGridContentSlot>) -> Self {
-        self.content = Some(content.into());
-        self
     }
 }
 
@@ -285,6 +144,249 @@ where
 {
     fn from(value: F) -> Self {
         Self::new(value)
+    }
+}
+
+#[allow(missing_docs)]
+impl LazyVerticalGridBuilder {
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
+        self
+    }
+
+    pub fn scrollbar_track_color(mut self, color: Color) -> Self {
+        self.props.scrollbar_track_color = Some(color);
+        self
+    }
+
+    pub fn scrollbar_thumb_color(mut self, color: Color) -> Self {
+        self.props.scrollbar_thumb_color = Some(color);
+        self
+    }
+
+    pub fn scrollbar_thumb_hover_color(mut self, color: Color) -> Self {
+        self.props.scrollbar_thumb_hover_color = Some(color);
+        self
+    }
+
+    pub fn controller(mut self, controller: State<LazyGridController>) -> Self {
+        self.props.controller = Some(controller);
+        self
+    }
+
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync + 'static,
+    {
+        self.props.content = Some(LazyGridContentSlot::new(content));
+        self
+    }
+
+    pub fn content_shared(mut self, content: impl Into<LazyGridContentSlot>) -> Self {
+        self.props.content = Some(content.into());
+        self
+    }
+}
+
+#[allow(missing_docs)]
+impl LazyHorizontalGridBuilder {
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
+        self
+    }
+
+    pub fn scrollbar_track_color(mut self, color: Color) -> Self {
+        self.props.scrollbar_track_color = Some(color);
+        self
+    }
+
+    pub fn scrollbar_thumb_color(mut self, color: Color) -> Self {
+        self.props.scrollbar_thumb_color = Some(color);
+        self
+    }
+
+    pub fn scrollbar_thumb_hover_color(mut self, color: Color) -> Self {
+        self.props.scrollbar_thumb_hover_color = Some(color);
+        self
+    }
+
+    pub fn controller(mut self, controller: State<LazyGridController>) -> Self {
+        self.props.controller = Some(controller);
+        self
+    }
+
+    pub fn content<F>(mut self, content: F) -> Self
+    where
+        F: for<'a> Fn(&mut LazyGridScope<'a>) + Send + Sync + 'static,
+    {
+        self.props.content = Some(LazyGridContentSlot::new(content));
+        self
+    }
+
+    pub fn content_shared(mut self, content: impl Into<LazyGridContentSlot>) -> Self {
+        self.props.content = Some(content.into());
+        self
+    }
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct ZeroLayout;
+
+impl LayoutPolicy for ZeroLayout {
+    fn measure(
+        &self,
+        _input: &LayoutInput<'_>,
+        _output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        Ok(ComputedData::ZERO)
+    }
+}
+
+#[derive(Clone, PartialEq, Eq)]
+struct VisibleGridLayoutItem {
+    line_index: usize,
+    slot_index: usize,
+}
+
+#[derive(Clone)]
+struct LazyGridLayout {
+    axis: LazyGridAxis,
+    item_alignment: CrossAxisAlignment,
+    estimated_line_main: Px,
+    main_spacing: Px,
+    max_viewport_main: Option<Px>,
+    padding_main: Px,
+    padding_cross: Px,
+    viewport_limit: Px,
+    line_range: Range<usize>,
+    slots: GridSlots,
+    visible_items: Vec<VisibleGridLayoutItem>,
+    controller: State<LazyGridController>,
+    scroll_controller: State<ScrollableController>,
+}
+
+impl PartialEq for LazyGridLayout {
+    fn eq(&self, other: &Self) -> bool {
+        self.axis == other.axis
+            && self.item_alignment == other.item_alignment
+            && self.estimated_line_main == other.estimated_line_main
+            && self.main_spacing == other.main_spacing
+            && self.max_viewport_main == other.max_viewport_main
+            && self.padding_main == other.padding_main
+            && self.padding_cross == other.padding_cross
+            && self.viewport_limit == other.viewport_limit
+            && self.line_range == other.line_range
+            && self.slots == other.slots
+            && self.visible_items == other.visible_items
+    }
+}
+
+impl LayoutPolicy for LazyGridLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        if input.children_ids().len() != self.visible_items.len() {
+            return Err(MeasurementError::MeasureFnFailed(
+                "Lazy grid measured child count mismatch".into(),
+            ));
+        }
+
+        let mut measured_items = Vec::with_capacity(self.visible_items.len());
+        let line_count = self.line_range.end.saturating_sub(self.line_range.start);
+        let mut line_max = vec![Px::ZERO; line_count];
+
+        for (visible, child_id) in self.visible_items.iter().zip(input.children_ids().iter()) {
+            let cell_cross = self
+                .slots
+                .sizes
+                .get(visible.slot_index)
+                .copied()
+                .unwrap_or(Px::ZERO);
+            let child_constraint = self.axis.child_constraint(cell_cross, self.item_alignment);
+            let child_size = input.measure_child(*child_id, &child_constraint)?;
+            let line_idx = visible.line_index - self.line_range.start;
+            if let Some(line_value) = line_max.get_mut(line_idx) {
+                *line_value = (*line_value).max(self.axis.main(&child_size));
+            }
+            measured_items.push(MeasuredGridItem {
+                child_id: *child_id,
+                line_index: visible.line_index,
+                slot_index: visible.slot_index,
+                size: child_size,
+            });
+        }
+
+        let (placements, total_main) = self.controller.with_mut(|c| {
+            for (offset, line_main) in line_max.iter().enumerate() {
+                let line_index = self.line_range.start + offset;
+                c.cache
+                    .record_line_measurement(line_index, *line_main, self.estimated_line_main);
+            }
+
+            let mut placements = Vec::with_capacity(measured_items.len());
+            for item in &measured_items {
+                let line_offset = c.cache.offset_for_line(
+                    item.line_index,
+                    self.estimated_line_main,
+                    self.main_spacing,
+                );
+                let cell_cross = self
+                    .slots
+                    .sizes
+                    .get(item.slot_index)
+                    .copied()
+                    .unwrap_or(Px::ZERO);
+                let cell_offset = compute_cell_offset(
+                    cell_cross,
+                    self.axis.cross(&item.size),
+                    self.item_alignment,
+                );
+                let cross_offset = self.padding_cross
+                    + self
+                        .slots
+                        .positions
+                        .get(item.slot_index)
+                        .copied()
+                        .unwrap_or(Px::ZERO)
+                    + cell_offset;
+                let position = self
+                    .axis
+                    .position(line_offset + self.padding_main, cross_offset);
+                placements.push(GridPlacement {
+                    child_id: item.child_id,
+                    position,
+                });
+            }
+
+            let total_main = c
+                .cache
+                .total_main_size(self.estimated_line_main, self.main_spacing);
+            Ok::<_, MeasurementError>((placements, total_main))
+        })?;
+
+        let total_main_with_padding = total_main + self.padding_main + self.padding_main;
+        let cross_with_padding = self.slots.cross_size + self.padding_cross + self.padding_cross;
+        let size = self
+            .axis
+            .pack_size(total_main_with_padding, cross_with_padding);
+        self.scroll_controller
+            .with_mut(|c| c.override_child_size(size));
+
+        let reported_main = clamp_reported_main(
+            self.axis,
+            input.parent_constraint(),
+            total_main_with_padding,
+            self.viewport_limit,
+            self.max_viewport_main,
+        );
+
+        for placement in placements {
+            output.place_child(placement.child_id, placement.position);
+        }
+
+        Ok(self.axis.pack_size(reported_main, cross_with_padding))
     }
 }
 
@@ -435,49 +537,101 @@ pub type LazyHorizontalGridScope<'a> = LazyGridScope<'a>;
 ///
 /// ## Parameters
 ///
-/// - `args` - configures the grid's layout and scrolling behavior; see
-///   [`LazyVerticalGridArgs`].
+/// - `modifier` - optional modifier for the scroll container.
+/// - `scroll_smoothing` - interpolation factor used when animating scroll
+///   position.
+/// - `scrollbar_behavior` - visibility behavior of the scrollbars.
+/// - `scrollbar_track_color` - optional scrollbar track color override.
+/// - `scrollbar_thumb_color` - optional scrollbar thumb color override.
+/// - `scrollbar_thumb_hover_color` - optional scrollbar thumb hover color
+///   override.
+/// - `scrollbar_layout` - whether scrollbars are overlaid or laid out alongside
+///   content.
+/// - `columns` - grid cell definition for columns.
+/// - `main_axis_spacing` - spacing between rows.
+/// - `cross_axis_spacing` - spacing between columns.
+/// - `cross_axis_alignment` - how columns are arranged when extra horizontal
+///   space is available.
+/// - `item_alignment` - alignment of items within each cell.
+/// - `overscan` - number of extra rows instantiated before and after the
+///   viewport.
+/// - `estimated_item_size` - estimated main-axis size for each row.
+/// - `content_padding` - symmetric padding applied around the grid content.
+/// - `max_viewport_main` - optional maximum viewport length reported back to
+///   parents.
+/// - `controller` - optional external controller for scroll position and cache.
+/// - `content` - optional slot builder for lazy grid content.
 ///
 /// ## Examples
 ///
 /// ```
 /// use tessera_components::{
-///     lazy_grid::{GridCells, LazyVerticalGridArgs, lazy_vertical_grid},
-///     text::{TextArgs, text},
+///     lazy_grid::{GridCells, lazy_vertical_grid},
+///     text::text,
 /// };
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
-///     lazy_vertical_grid(
-///         &LazyVerticalGridArgs::default()
-///             .columns(GridCells::fixed(2))
-///             .overscan(0)
-///             .content(move |scope| {
-///                 scope.items(4, move |i| {
-///                     rendered.with_mut(|count| *count += 1);
-///                     text(&TextArgs::default().text(format!("Tile {i}")));
-///                 });
-///             }),
-///     );
+///     lazy_vertical_grid()
+///         .columns(GridCells::fixed(2))
+///         .overscan(0)
+///         .content(move |scope| {
+///             scope.items(4, move |i| {
+///                 rendered.with_mut(|count| *count += 1);
+///                 text().content(format!("Tile {i}"));
+///             });
+///         });
 ///     assert_eq!(rendered.get(), 4);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn lazy_vertical_grid(args: &LazyVerticalGridArgs) {
-    let args = args.clone();
-    let content = args
-        .content
-        .clone()
-        .unwrap_or_else(|| LazyGridContentSlot::new(|_| {}));
+pub fn lazy_vertical_grid(
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    scroll_smoothing: f32,
+    scrollbar_behavior: ScrollBarBehavior,
+    #[prop(skip_setter)] scrollbar_track_color: Option<Color>,
+    #[prop(skip_setter)] scrollbar_thumb_color: Option<Color>,
+    #[prop(skip_setter)] scrollbar_thumb_hover_color: Option<Color>,
+    scrollbar_layout: ScrollBarLayout,
+    columns: GridCells,
+    main_axis_spacing: Dp,
+    cross_axis_spacing: Dp,
+    cross_axis_alignment: MainAxisAlignment,
+    item_alignment: CrossAxisAlignment,
+    overscan: usize,
+    estimated_item_size: Dp,
+    content_padding: Dp,
+    max_viewport_main: Option<Px>,
+    #[prop(skip_setter)] controller: Option<State<LazyGridController>>,
+    #[prop(skip_setter)] content: Option<LazyGridContentSlot>,
+) {
+    let content = content.unwrap_or_else(|| LazyGridContentSlot::new(|_| {}));
     let slots = collect_vertical_grid_slots(content);
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(LazyGridController::new));
-    lazy_vertical_grid_slots(args, controller, slots);
+    let controller = controller.unwrap_or_else(|| remember(LazyGridController::new));
+    lazy_vertical_grid_slots(LazyGridSlotsArgs {
+        modifier: modifier.unwrap_or_default(),
+        scroll_smoothing,
+        scrollbar_behavior,
+        scrollbar_track_color,
+        scrollbar_thumb_color,
+        scrollbar_thumb_hover_color,
+        scrollbar_layout,
+        grid_cells: columns,
+        main_axis_spacing,
+        cross_axis_spacing,
+        cross_axis_alignment,
+        item_alignment,
+        overscan,
+        estimated_item_size,
+        content_padding,
+        max_viewport_main,
+        controller,
+        slots,
+    });
 }
 
 fn collect_vertical_grid_slots(content: LazyGridContentSlot) -> Vec<LazySlot> {
@@ -489,38 +643,69 @@ fn collect_vertical_grid_slots(content: LazyGridContentSlot) -> Vec<LazySlot> {
     slots
 }
 
-fn lazy_vertical_grid_slots(
-    args: LazyVerticalGridArgs,
+#[derive(Clone)]
+struct LazyGridSlotsArgs {
+    modifier: Modifier,
+    scroll_smoothing: f32,
+    scrollbar_behavior: ScrollBarBehavior,
+    scrollbar_track_color: Option<Color>,
+    scrollbar_thumb_color: Option<Color>,
+    scrollbar_thumb_hover_color: Option<Color>,
+    scrollbar_layout: ScrollBarLayout,
+    grid_cells: GridCells,
+    main_axis_spacing: Dp,
+    cross_axis_spacing: Dp,
+    cross_axis_alignment: MainAxisAlignment,
+    item_alignment: CrossAxisAlignment,
+    overscan: usize,
+    estimated_item_size: Dp,
+    content_padding: Dp,
+    max_viewport_main: Option<Px>,
     controller: State<LazyGridController>,
     slots: Vec<LazySlot>,
-) {
-    let mut scrollable_args = args.scrollable.clone();
-    scrollable_args.vertical = true;
-    scrollable_args.horizontal = false;
+}
 
+fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
     let scroll_controller = remember(ScrollableController::default);
-    let view_args = LazyGridViewArgs {
-        axis: LazyGridAxis::Vertical,
-        grid_cells: args.columns,
-        main_axis_spacing: sanitize_spacing(Px::from(args.main_axis_spacing)),
-        cross_axis_spacing: sanitize_spacing(Px::from(args.cross_axis_spacing)),
-        cross_axis_alignment: args.cross_axis_alignment,
-        item_alignment: args.item_alignment,
-        estimated_line_main: ensure_positive_px(Px::from(args.estimated_item_size)),
-        overscan: args.overscan,
-        max_viewport_main: args.max_viewport_main,
-        padding_main: sanitize_spacing(Px::from(args.content_padding)),
-        padding_cross: sanitize_spacing(Px::from(args.content_padding)),
-        controller,
-        slots,
-        scroll_controller,
-    };
-    let scrollable_args = scrollable_args
-        .controller(scroll_controller)
-        .child(move || {
-            lazy_grid_view(&view_args);
-        });
-    scrollable(&scrollable_args);
+    let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
+    let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
+    let estimated_line_main = ensure_positive_px(Px::from(args.estimated_item_size));
+    let padding_main = sanitize_spacing(Px::from(args.content_padding));
+    let padding_cross = sanitize_spacing(Px::from(args.content_padding));
+    let mut scrollable_builder = scrollable()
+        .modifier(args.modifier)
+        .vertical(true)
+        .horizontal(false)
+        .scroll_smoothing(args.scroll_smoothing)
+        .scrollbar_behavior(args.scrollbar_behavior)
+        .scrollbar_layout(args.scrollbar_layout)
+        .controller(scroll_controller);
+    if let Some(color) = args.scrollbar_track_color {
+        scrollable_builder = scrollable_builder.scrollbar_track_color(color);
+    }
+    if let Some(color) = args.scrollbar_thumb_color {
+        scrollable_builder = scrollable_builder.scrollbar_thumb_color(color);
+    }
+    if let Some(color) = args.scrollbar_thumb_hover_color {
+        scrollable_builder = scrollable_builder.scrollbar_thumb_hover_color(color);
+    }
+    scrollable_builder.child(move || {
+        lazy_grid_view()
+            .axis(LazyGridAxis::Vertical)
+            .grid_cells(args.grid_cells.clone())
+            .main_axis_spacing(main_axis_spacing)
+            .cross_axis_spacing(cross_axis_spacing)
+            .cross_axis_alignment(args.cross_axis_alignment)
+            .item_alignment(args.item_alignment)
+            .estimated_line_main(estimated_line_main)
+            .overscan(args.overscan)
+            .padding_main(padding_main)
+            .padding_cross(padding_cross)
+            .slots(args.slots.clone())
+            .controller_internal(args.controller)
+            .scroll_controller_internal(scroll_controller)
+            .max_viewport_main_internal(args.max_viewport_main);
+    });
 }
 /// # lazy_horizontal_grid
 ///
@@ -533,49 +718,101 @@ fn lazy_vertical_grid_slots(
 ///
 /// ## Parameters
 ///
-/// - `args` - configures the grid's layout and scrolling behavior; see
-///   [`LazyHorizontalGridArgs`].
+/// - `modifier` - optional modifier for the scroll container.
+/// - `scroll_smoothing` - interpolation factor used when animating scroll
+///   position.
+/// - `scrollbar_behavior` - visibility behavior of the scrollbars.
+/// - `scrollbar_track_color` - optional scrollbar track color override.
+/// - `scrollbar_thumb_color` - optional scrollbar thumb color override.
+/// - `scrollbar_thumb_hover_color` - optional scrollbar thumb hover color
+///   override.
+/// - `scrollbar_layout` - whether scrollbars are overlaid or laid out alongside
+///   content.
+/// - `rows` - grid cell definition for rows.
+/// - `main_axis_spacing` - spacing between columns.
+/// - `cross_axis_spacing` - spacing between rows.
+/// - `cross_axis_alignment` - how rows are arranged when extra vertical space
+///   is available.
+/// - `item_alignment` - alignment of items within each cell.
+/// - `overscan` - number of extra columns instantiated before and after the
+///   viewport.
+/// - `estimated_item_size` - estimated main-axis size for each column.
+/// - `content_padding` - symmetric padding applied around the grid content.
+/// - `max_viewport_main` - optional maximum viewport length reported back to
+///   parents.
+/// - `controller` - optional external controller for scroll position and cache.
+/// - `content` - optional slot builder for lazy grid content.
 ///
 /// ## Examples
 ///
 /// ```
 /// use tessera_components::{
-///     lazy_grid::{GridCells, LazyHorizontalGridArgs, lazy_horizontal_grid},
-///     text::{TextArgs, text},
+///     lazy_grid::{GridCells, lazy_horizontal_grid},
+///     text::text,
 /// };
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
-///     lazy_horizontal_grid(
-///         &LazyHorizontalGridArgs::default()
-///             .rows(GridCells::fixed(2))
-///             .overscan(0)
-///             .content(move |scope| {
-///                 scope.items(3, move |i| {
-///                     rendered.with_mut(|count| *count += 1);
-///                     text(&TextArgs::default().text(format!("Tile {i}")));
-///                 });
-///             }),
-///     );
+///     lazy_horizontal_grid()
+///         .rows(GridCells::fixed(2))
+///         .overscan(0)
+///         .content(move |scope| {
+///             scope.items(3, move |i| {
+///                 rendered.with_mut(|count| *count += 1);
+///                 text().content(format!("Tile {i}"));
+///             });
+///         });
 ///     assert_eq!(rendered.get(), 3);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn lazy_horizontal_grid(args: &LazyHorizontalGridArgs) {
-    let args = args.clone();
-    let content = args
-        .content
-        .clone()
-        .unwrap_or_else(|| LazyGridContentSlot::new(|_| {}));
+pub fn lazy_horizontal_grid(
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    scroll_smoothing: f32,
+    scrollbar_behavior: ScrollBarBehavior,
+    #[prop(skip_setter)] scrollbar_track_color: Option<Color>,
+    #[prop(skip_setter)] scrollbar_thumb_color: Option<Color>,
+    #[prop(skip_setter)] scrollbar_thumb_hover_color: Option<Color>,
+    scrollbar_layout: ScrollBarLayout,
+    rows: GridCells,
+    main_axis_spacing: Dp,
+    cross_axis_spacing: Dp,
+    cross_axis_alignment: MainAxisAlignment,
+    item_alignment: CrossAxisAlignment,
+    overscan: usize,
+    estimated_item_size: Dp,
+    content_padding: Dp,
+    max_viewport_main: Option<Px>,
+    #[prop(skip_setter)] controller: Option<State<LazyGridController>>,
+    #[prop(skip_setter)] content: Option<LazyGridContentSlot>,
+) {
+    let content = content.unwrap_or_else(|| LazyGridContentSlot::new(|_| {}));
     let slots = collect_horizontal_grid_slots(content);
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(LazyGridController::new));
-    lazy_horizontal_grid_slots(args, controller, slots);
+    let controller = controller.unwrap_or_else(|| remember(LazyGridController::new));
+    lazy_horizontal_grid_slots(LazyGridSlotsArgs {
+        modifier: modifier.unwrap_or_default(),
+        scroll_smoothing,
+        scrollbar_behavior,
+        scrollbar_track_color,
+        scrollbar_thumb_color,
+        scrollbar_thumb_hover_color,
+        scrollbar_layout,
+        grid_cells: rows,
+        main_axis_spacing,
+        cross_axis_spacing,
+        cross_axis_alignment,
+        item_alignment,
+        overscan,
+        estimated_item_size,
+        content_padding,
+        max_viewport_main,
+        controller,
+        slots,
+    });
 }
 
 fn collect_horizontal_grid_slots(content: LazyGridContentSlot) -> Vec<LazySlot> {
@@ -587,41 +824,78 @@ fn collect_horizontal_grid_slots(content: LazyGridContentSlot) -> Vec<LazySlot> 
     slots
 }
 
-fn lazy_horizontal_grid_slots(
-    args: LazyHorizontalGridArgs,
-    controller: State<LazyGridController>,
-    slots: Vec<LazySlot>,
-) {
-    let mut scrollable_args = args.scrollable.clone();
-    scrollable_args.vertical = false;
-    scrollable_args.horizontal = true;
-
+fn lazy_horizontal_grid_slots(args: LazyGridSlotsArgs) {
     let scroll_controller = remember(ScrollableController::default);
-    let view_args = LazyGridViewArgs {
-        axis: LazyGridAxis::Horizontal,
-        grid_cells: args.rows,
-        main_axis_spacing: sanitize_spacing(Px::from(args.main_axis_spacing)),
-        cross_axis_spacing: sanitize_spacing(Px::from(args.cross_axis_spacing)),
-        cross_axis_alignment: args.cross_axis_alignment,
-        item_alignment: args.item_alignment,
-        estimated_line_main: ensure_positive_px(Px::from(args.estimated_item_size)),
-        overscan: args.overscan,
-        max_viewport_main: args.max_viewport_main,
-        padding_main: sanitize_spacing(Px::from(args.content_padding)),
-        padding_cross: sanitize_spacing(Px::from(args.content_padding)),
-        controller,
-        slots,
-        scroll_controller,
-    };
-    let scrollable_args = scrollable_args
-        .controller(scroll_controller)
-        .child(move || {
-            lazy_grid_view(&view_args);
-        });
-    scrollable(&scrollable_args);
+    let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
+    let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
+    let estimated_line_main = ensure_positive_px(Px::from(args.estimated_item_size));
+    let padding_main = sanitize_spacing(Px::from(args.content_padding));
+    let padding_cross = sanitize_spacing(Px::from(args.content_padding));
+    let mut scrollable_builder = scrollable()
+        .modifier(args.modifier)
+        .vertical(false)
+        .horizontal(true)
+        .scroll_smoothing(args.scroll_smoothing)
+        .scrollbar_behavior(args.scrollbar_behavior)
+        .scrollbar_layout(args.scrollbar_layout)
+        .controller(scroll_controller);
+    if let Some(color) = args.scrollbar_track_color {
+        scrollable_builder = scrollable_builder.scrollbar_track_color(color);
+    }
+    if let Some(color) = args.scrollbar_thumb_color {
+        scrollable_builder = scrollable_builder.scrollbar_thumb_color(color);
+    }
+    if let Some(color) = args.scrollbar_thumb_hover_color {
+        scrollable_builder = scrollable_builder.scrollbar_thumb_hover_color(color);
+    }
+    scrollable_builder.child(move || {
+        lazy_grid_view()
+            .axis(LazyGridAxis::Horizontal)
+            .grid_cells(args.grid_cells.clone())
+            .main_axis_spacing(main_axis_spacing)
+            .cross_axis_spacing(cross_axis_spacing)
+            .cross_axis_alignment(args.cross_axis_alignment)
+            .item_alignment(args.item_alignment)
+            .estimated_line_main(estimated_line_main)
+            .overscan(args.overscan)
+            .padding_main(padding_main)
+            .padding_cross(padding_cross)
+            .slots(args.slots.clone())
+            .controller_internal(args.controller)
+            .scroll_controller_internal(scroll_controller)
+            .max_viewport_main_internal(args.max_viewport_main);
+    });
 }
-#[derive(Clone, Prop)]
-struct LazyGridViewArgs {
+
+impl LazyGridViewBuilder {
+    fn controller_internal(mut self, controller: State<LazyGridController>) -> Self {
+        self.props.controller = Some(controller);
+        self
+    }
+
+    fn scroll_controller_internal(
+        mut self,
+        scroll_controller: State<ScrollableController>,
+    ) -> Self {
+        self.props.scroll_controller = Some(scroll_controller);
+        self
+    }
+
+    fn max_viewport_main_internal(mut self, max_viewport_main: Option<Px>) -> Self {
+        self.props.max_viewport_main = max_viewport_main;
+        self
+    }
+}
+
+#[derive(Clone, Copy, PartialEq, Eq, Default)]
+enum LazyGridAxis {
+    #[default]
+    Vertical,
+    Horizontal,
+}
+
+#[tessera]
+fn lazy_grid_view(
     axis: LazyGridAxis,
     grid_cells: GridCells,
     main_axis_spacing: Px,
@@ -633,216 +907,47 @@ struct LazyGridViewArgs {
     max_viewport_main: Option<Px>,
     padding_main: Px,
     padding_cross: Px,
-    controller: State<LazyGridController>,
+    #[prop(skip_setter)] controller: Option<State<LazyGridController>>,
     slots: Vec<LazySlot>,
-    scroll_controller: State<ScrollableController>,
-}
+    #[prop(skip_setter)] scroll_controller: Option<State<ScrollableController>>,
+) {
+    let controller = controller.expect("lazy_grid_view requires controller");
+    let scroll_controller = scroll_controller.expect("lazy_grid_view requires scroll_controller");
 
-#[derive(Clone, Copy, Default, PartialEq, Eq)]
-struct ZeroLayout;
-
-impl LayoutSpec for ZeroLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData::ZERO)
-    }
-}
-
-#[derive(Clone, PartialEq, Eq)]
-struct VisibleGridLayoutItem {
-    line_index: usize,
-    slot_index: usize,
-}
-
-#[derive(Clone)]
-struct LazyGridLayout {
-    axis: LazyGridAxis,
-    item_alignment: CrossAxisAlignment,
-    estimated_line_main: Px,
-    main_spacing: Px,
-    max_viewport_main: Option<Px>,
-    padding_main: Px,
-    padding_cross: Px,
-    viewport_limit: Px,
-    line_range: Range<usize>,
-    slots: GridSlots,
-    visible_items: Vec<VisibleGridLayoutItem>,
-    controller: State<LazyGridController>,
-    scroll_controller: State<ScrollableController>,
-}
-
-impl PartialEq for LazyGridLayout {
-    fn eq(&self, other: &Self) -> bool {
-        self.axis == other.axis
-            && self.item_alignment == other.item_alignment
-            && self.estimated_line_main == other.estimated_line_main
-            && self.main_spacing == other.main_spacing
-            && self.max_viewport_main == other.max_viewport_main
-            && self.padding_main == other.padding_main
-            && self.padding_cross == other.padding_cross
-            && self.viewport_limit == other.viewport_limit
-            && self.line_range == other.line_range
-            && self.slots == other.slots
-            && self.visible_items == other.visible_items
-    }
-}
-
-impl LayoutSpec for LazyGridLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        if input.children_ids().len() != self.visible_items.len() {
-            return Err(MeasurementError::MeasureFnFailed(
-                "Lazy grid measured child count mismatch".into(),
-            ));
-        }
-
-        let mut measured_items = Vec::with_capacity(self.visible_items.len());
-        let line_count = self.line_range.end.saturating_sub(self.line_range.start);
-        let mut line_max = vec![Px::ZERO; line_count];
-
-        for (visible, child_id) in self.visible_items.iter().zip(input.children_ids().iter()) {
-            let cell_cross = self
-                .slots
-                .sizes
-                .get(visible.slot_index)
-                .copied()
-                .unwrap_or(Px::ZERO);
-            let child_constraint = self.axis.child_constraint(cell_cross, self.item_alignment);
-            let child_size = input.measure_child(*child_id, &child_constraint)?;
-            let line_idx = visible.line_index - self.line_range.start;
-            if let Some(line_value) = line_max.get_mut(line_idx) {
-                *line_value = (*line_value).max(self.axis.main(&child_size));
-            }
-            measured_items.push(MeasuredGridItem {
-                child_id: *child_id,
-                line_index: visible.line_index,
-                slot_index: visible.slot_index,
-                size: child_size,
-            });
-        }
-
-        let (placements, total_main) = self.controller.with_mut(|c| {
-            for (offset, line_main) in line_max.iter().enumerate() {
-                let line_index = self.line_range.start + offset;
-                c.cache
-                    .record_line_measurement(line_index, *line_main, self.estimated_line_main);
-            }
-
-            let mut placements = Vec::with_capacity(measured_items.len());
-            for item in &measured_items {
-                let line_offset = c.cache.offset_for_line(
-                    item.line_index,
-                    self.estimated_line_main,
-                    self.main_spacing,
-                );
-                let cell_cross = self
-                    .slots
-                    .sizes
-                    .get(item.slot_index)
-                    .copied()
-                    .unwrap_or(Px::ZERO);
-                let cell_offset = compute_cell_offset(
-                    cell_cross,
-                    self.axis.cross(&item.size),
-                    self.item_alignment,
-                );
-                let cross_offset = self.padding_cross
-                    + self
-                        .slots
-                        .positions
-                        .get(item.slot_index)
-                        .copied()
-                        .unwrap_or(Px::ZERO)
-                    + cell_offset;
-                let position = self
-                    .axis
-                    .position(line_offset + self.padding_main, cross_offset);
-                placements.push(GridPlacement {
-                    child_id: item.child_id,
-                    position,
-                });
-            }
-
-            let total_main = c
-                .cache
-                .total_main_size(self.estimated_line_main, self.main_spacing);
-            Ok::<_, MeasurementError>((placements, total_main))
-        })?;
-
-        let total_main_with_padding = total_main + self.padding_main + self.padding_main;
-        let cross_with_padding = self.slots.cross_size + self.padding_cross + self.padding_cross;
-        let size = self
-            .axis
-            .pack_size(total_main_with_padding, cross_with_padding);
-        self.scroll_controller
-            .with_mut(|c| c.override_child_size(size));
-
-        let reported_main = clamp_reported_main(
-            self.axis,
-            input.parent_constraint(),
-            total_main_with_padding,
-            self.viewport_limit,
-            self.max_viewport_main,
-        );
-
-        for placement in placements {
-            output.place_child(placement.child_id, placement.position);
-        }
-
-        Ok(self.axis.pack_size(reported_main, cross_with_padding))
-    }
-}
-
-#[tessera]
-fn lazy_grid_view(args: &LazyGridViewArgs) {
-    let args = args.clone();
-    let plan = LazySlotPlan::new(args.slots.clone());
+    let plan = LazySlotPlan::new(slots.clone());
     let total_count = plan.total_count();
 
-    let visible_size = args.scroll_controller.with(|s| s.visible_size());
-    let available_cross = args.axis.visible_cross(visible_size);
-    let available_cross = (available_cross - args.padding_cross * 2).max(Px::ZERO);
+    let visible_size = scroll_controller.with(|s| s.visible_size());
+    let available_cross = axis.visible_cross(visible_size);
+    let available_cross = (available_cross - padding_cross * 2).max(Px::ZERO);
     let grid_slots = resolve_grid_slots(
         available_cross,
-        &args.grid_cells,
-        args.cross_axis_spacing,
-        args.cross_axis_alignment,
+        &grid_cells,
+        cross_axis_spacing,
+        cross_axis_alignment,
     );
     let slots_per_line = grid_slots.len();
 
-    args.controller
-        .with_mut(|c| c.cache.set_item_count(total_count, slots_per_line));
-    let total_main = args.controller.with(|c| {
+    controller.with_mut(|c| c.cache.set_item_count(total_count, slots_per_line));
+    let total_main = controller.with(|c| {
         c.cache
-            .total_main_size(args.estimated_line_main, args.main_axis_spacing)
+            .total_main_size(estimated_line_main, main_axis_spacing)
     });
-    let total_main_with_padding = total_main + args.padding_main + args.padding_main;
-    let cross_with_padding = grid_slots.cross_size + args.padding_cross + args.padding_cross;
-    args.scroll_controller.with_mut(|c| {
-        c.override_child_size(
-            args.axis
-                .pack_size(total_main_with_padding, cross_with_padding),
-        );
+    let total_main_with_padding = total_main + padding_main + padding_main;
+    let cross_with_padding = grid_slots.cross_size + padding_cross + padding_cross;
+    scroll_controller.with_mut(|c| {
+        c.override_child_size(axis.pack_size(total_main_with_padding, cross_with_padding));
     });
 
-    let scroll_offset = args
-        .axis
-        .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
-    let padding_main = args.padding_main;
+    let scroll_offset = axis.scroll_offset(scroll_controller.with(|s| s.child_position()));
     let viewport_span = resolve_viewport_span(
-        args.axis.visible_span(visible_size),
-        args.estimated_line_main,
-        args.main_axis_spacing,
+        axis.visible_span(visible_size),
+        estimated_line_main,
+        main_axis_spacing,
     );
     let viewport_span = (viewport_span - (padding_main * 2)).max(Px::ZERO);
 
-    let visible_plan = args.controller.with(|c| {
+    let visible_plan = controller.with(|c| {
         compute_visible_items(
             &plan,
             &c.cache,
@@ -850,24 +955,28 @@ fn lazy_grid_view(args: &LazyGridViewArgs) {
             slots_per_line,
             scroll_offset,
             viewport_span,
-            args.overscan,
-            args.estimated_line_main,
-            args.main_axis_spacing,
+            overscan,
+            estimated_line_main,
+            main_axis_spacing,
         )
     });
 
     if visible_plan.items.is_empty() {
-        layout(ZeroLayout);
+        layout_primitive().layout_policy(ZeroLayout);
         return;
     }
 
-    register_lazy_grid_focus_beyond_bounds_handler(
-        &args,
+    let focus_modifier = lazy_grid_focus_beyond_bounds_modifier(LazyGridFocusArgs {
+        axis,
+        controller,
+        scroll_controller,
+        estimated_line_main,
+        main_axis_spacing,
         total_main,
         viewport_span,
-        visible_plan.line_range.clone(),
-        args.controller.with(|c| c.cache.line_count()),
-    );
+        visible_line_range: visible_plan.line_range.clone(),
+        total_lines: controller.with(|c| c.cache.line_count()),
+    });
 
     let viewport_limit = viewport_span + padding_main + padding_main;
     let visible_layout_items = visible_plan
@@ -879,27 +988,33 @@ fn lazy_grid_view(args: &LazyGridViewArgs) {
         })
         .collect();
 
-    layout(LazyGridLayout {
-        axis: args.axis,
-        item_alignment: args.item_alignment,
-        estimated_line_main: args.estimated_line_main,
-        main_spacing: args.main_axis_spacing,
-        max_viewport_main: args.max_viewport_main,
-        padding_main,
-        padding_cross: args.padding_cross,
-        viewport_limit,
-        line_range: visible_plan.line_range.clone(),
-        slots: grid_slots.clone(),
-        visible_items: visible_layout_items,
-        controller: args.controller,
-        scroll_controller: args.scroll_controller,
-    });
-
-    for child in visible_plan.items {
-        key(child.key_hash, || {
-            child.builder.call(child.local_index);
+    let items = visible_plan.items;
+    let line_range = visible_plan.line_range.clone();
+    layout_primitive()
+        .modifier(focus_modifier)
+        .layout_policy(LazyGridLayout {
+            axis,
+            item_alignment,
+            estimated_line_main,
+            main_spacing: main_axis_spacing,
+            max_viewport_main,
+            padding_main,
+            padding_cross,
+            viewport_limit,
+            line_range,
+            slots: grid_slots.clone(),
+            visible_items: visible_layout_items,
+            controller,
+            scroll_controller,
+        })
+        .child(move || {
+            for child in &items {
+                let child = child.clone();
+                key(child.key_hash, || {
+                    child.builder.call(child.local_index);
+                });
+            }
         });
-    }
 }
 
 fn resolve_viewport_span(current: Px, estimated: Px, spacing: Px) -> Px {
@@ -991,12 +1106,6 @@ fn compute_cell_offset(cell_cross: Px, child_cross: Px, alignment: CrossAxisAlig
         CrossAxisAlignment::Center => (cell_cross - child_cross).max(Px::ZERO) / 2,
         CrossAxisAlignment::End => (cell_cross - child_cross).max(Px::ZERO),
     }
-}
-
-#[derive(Clone, Copy, PartialEq, Eq)]
-enum LazyGridAxis {
-    Vertical,
-    Horizontal,
 }
 
 #[derive(Clone, Copy)]
@@ -1335,77 +1444,79 @@ impl VisibleGridPlan {
     }
 }
 
-fn register_lazy_grid_focus_beyond_bounds_handler(
-    args: &LazyGridViewArgs,
+struct LazyGridFocusArgs {
+    axis: LazyGridAxis,
+    controller: State<LazyGridController>,
+    scroll_controller: State<ScrollableController>,
+    estimated_line_main: Px,
+    main_axis_spacing: Px,
     total_main: Px,
     viewport_span: Px,
     visible_line_range: Range<usize>,
     total_lines: usize,
-) {
-    let axis = args.axis;
-    let controller = args.controller;
-    let scroll_controller = args.scroll_controller;
-    let estimated_line_main = args.estimated_line_main;
-    let main_axis_spacing = args.main_axis_spacing;
+}
+
+fn lazy_grid_focus_beyond_bounds_modifier(args: LazyGridFocusArgs) -> Modifier {
     let current_scroll_offset = args
         .axis
         .scroll_offset(args.scroll_controller.with(|s| s.child_position()));
-    let max_scroll = (total_main - viewport_span).max(Px::ZERO);
+    let max_scroll = (args.total_main - args.viewport_span).max(Px::ZERO);
+    Modifier::new().focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
+        let Some(scroll_direction) = args.axis.focus_scroll_direction(direction) else {
+            return false;
+        };
+        if args.total_lines == 0 || args.viewport_span <= Px::ZERO {
+            return false;
+        }
 
-    TesseraRuntime::with_mut(|runtime| {
-        runtime.set_current_focus_beyond_bounds_handler(CallbackWith::new(move |direction| {
-            let Some(scroll_direction) = axis.focus_scroll_direction(direction) else {
-                return false;
-            };
-            if total_lines == 0 || viewport_span <= Px::ZERO {
-                return false;
-            }
-
-            let target_line = match scroll_direction {
-                FocusScrollDirection::Forward => {
-                    if visible_line_range.end >= total_lines {
-                        return false;
-                    }
-                    visible_line_range.end
+        let target_line = match scroll_direction {
+            FocusScrollDirection::Forward => {
+                if args.visible_line_range.end >= args.total_lines {
+                    return false;
                 }
-                FocusScrollDirection::Backward => {
-                    let Some(line) = visible_line_range.start.checked_sub(1) else {
-                        return false;
-                    };
-                    line
-                }
-            };
-
-            let (target_offset, target_main) = controller.with(|c| {
-                (
-                    c.cache
-                        .offset_for_line(target_line, estimated_line_main, main_axis_spacing),
-                    c.cache
-                        .measured_line_main
-                        .get(target_line)
-                        .copied()
-                        .flatten()
-                        .unwrap_or(estimated_line_main),
-                )
-            });
-
-            let desired_scroll = match scroll_direction {
-                FocusScrollDirection::Forward => {
-                    (target_offset + target_main - viewport_span).max(Px::ZERO)
-                }
-                FocusScrollDirection::Backward => target_offset,
+                args.visible_line_range.end
             }
-            .min(max_scroll);
-
-            if desired_scroll == current_scroll_offset {
-                return false;
+            FocusScrollDirection::Backward => {
+                let Some(line) = args.visible_line_range.start.checked_sub(1) else {
+                    return false;
+                };
+                line
             }
+        };
 
-            let position = axis.scroll_position(desired_scroll);
-            scroll_controller.with_mut(|c| c.set_scroll_position(position));
-            true
-        }));
-    });
+        let (target_offset, target_main) = args.controller.with(|c| {
+            (
+                c.cache.offset_for_line(
+                    target_line,
+                    args.estimated_line_main,
+                    args.main_axis_spacing,
+                ),
+                c.cache
+                    .measured_line_main
+                    .get(target_line)
+                    .copied()
+                    .flatten()
+                    .unwrap_or(args.estimated_line_main),
+            )
+        });
+
+        let desired_scroll = match scroll_direction {
+            FocusScrollDirection::Forward => {
+                (target_offset + target_main - args.viewport_span).max(Px::ZERO)
+            }
+            FocusScrollDirection::Backward => target_offset,
+        }
+        .min(max_scroll);
+
+        if desired_scroll == current_scroll_offset {
+            return false;
+        }
+
+        let position = args.axis.scroll_position(desired_scroll);
+        args.scroll_controller
+            .with_mut(|c| c.set_scroll_position(position));
+        true
+    }))
 }
 #[derive(PartialEq, Default)]
 struct LazyGridCache {
@@ -1569,4 +1680,278 @@ fn ensure_positive_px(px: Px) -> Px {
 
 fn sanitize_spacing(px: Px) -> Px {
     if px < Px::ZERO { Px::ZERO } else { px }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        Modifier, NoopRenderPolicy, Px, PxPosition, layout::layout_primitive, remember, tessera,
+    };
+
+    use crate::{
+        alignment::{CrossAxisAlignment, MainAxisAlignment},
+        modifier::{ModifierExt as _, SemanticsArgs},
+        scrollable::{ScrollableController, scrollable},
+    };
+
+    use super::{GridCells, LazyGridAxis, LazyGridController, lazy_grid_view};
+
+    #[derive(Clone, PartialEq)]
+    struct FixedTestLayout {
+        width: i32,
+        height: i32,
+    }
+
+    impl LayoutPolicy for FixedTestLayout {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    #[tessera]
+    fn fixed_test_box(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn lazy_vertical_grid_layout_case() {
+        let controller = remember(LazyGridController::new);
+        let scroll_controller = remember(ScrollableController::default);
+        scroll_controller.with_mut(|c| {
+            c.set_visible_size_for_test(ComputedData {
+                width: Px::new(60),
+                height: Px::new(60),
+            });
+        });
+
+        lazy_grid_view()
+            .axis(LazyGridAxis::Vertical)
+            .grid_cells(GridCells::fixed(2))
+            .main_axis_spacing(Px::new(3))
+            .cross_axis_spacing(Px::new(3))
+            .cross_axis_alignment(MainAxisAlignment::Start)
+            .item_alignment(CrossAxisAlignment::Start)
+            .estimated_line_main(Px::new(10))
+            .overscan(0)
+            .padding_main(Px::new(4))
+            .padding_cross(Px::new(4))
+            .slots(vec![super::LazySlot::items(
+                4,
+                |index| match index {
+                    0 => {
+                        fixed_test_box()
+                            .tag("lazy_grid_v_first".to_string())
+                            .width(10)
+                            .height(10);
+                    }
+                    1 => {
+                        fixed_test_box()
+                            .tag("lazy_grid_v_second".to_string())
+                            .width(12)
+                            .height(8);
+                    }
+                    2 => {
+                        fixed_test_box()
+                            .tag("lazy_grid_v_third".to_string())
+                            .width(11)
+                            .height(12);
+                    }
+                    _ => {
+                        fixed_test_box()
+                            .tag("lazy_grid_v_fourth".to_string())
+                            .width(9)
+                            .height(9);
+                    }
+                },
+                None,
+            )])
+            .controller_internal(controller)
+            .scroll_controller_internal(scroll_controller);
+    }
+
+    #[tessera]
+    fn lazy_horizontal_grid_layout_case() {
+        let controller = remember(LazyGridController::new);
+        let scroll_controller = remember(ScrollableController::default);
+        scroll_controller.with_mut(|c| {
+            c.set_visible_size_for_test(ComputedData {
+                width: Px::new(70),
+                height: Px::new(40),
+            });
+        });
+
+        lazy_grid_view()
+            .axis(LazyGridAxis::Horizontal)
+            .grid_cells(GridCells::fixed(2))
+            .main_axis_spacing(Px::new(3))
+            .cross_axis_spacing(Px::new(3))
+            .cross_axis_alignment(MainAxisAlignment::Start)
+            .item_alignment(CrossAxisAlignment::Start)
+            .estimated_line_main(Px::new(10))
+            .overscan(0)
+            .padding_main(Px::new(4))
+            .padding_cross(Px::new(4))
+            .slots(vec![super::LazySlot::items(
+                4,
+                |index| match index {
+                    0 => {
+                        fixed_test_box()
+                            .tag("lazy_grid_h_first".to_string())
+                            .width(20)
+                            .height(10);
+                    }
+                    1 => {
+                        fixed_test_box()
+                            .tag("lazy_grid_h_second".to_string())
+                            .width(15)
+                            .height(12);
+                    }
+                    2 => {
+                        fixed_test_box()
+                            .tag("lazy_grid_h_third".to_string())
+                            .width(18)
+                            .height(8);
+                    }
+                    _ => {
+                        fixed_test_box()
+                            .tag("lazy_grid_h_fourth".to_string())
+                            .width(16)
+                            .height(9);
+                    }
+                },
+                None,
+            )])
+            .controller_internal(controller)
+            .scroll_controller_internal(scroll_controller);
+    }
+
+    #[tessera]
+    fn lazy_vertical_grid_scrolled_layout_case() {
+        let controller = remember(LazyGridController::new);
+        let scroll_controller = remember(ScrollableController::default);
+        let target_position = PxPosition::new(Px::ZERO, Px::new(-5));
+        scroll_controller.with_mut(|c| {
+            c.set_visible_size_for_test(ComputedData {
+                width: Px::new(60),
+                height: Px::new(60),
+            });
+            c.set_scroll_position(target_position);
+        });
+
+        scrollable()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(60))),
+                Some(DimensionValue::Fixed(Px::new(60))),
+            ))
+            .vertical(true)
+            .horizontal(false)
+            .controller(scroll_controller)
+            .child(move || {
+                lazy_grid_view()
+                    .axis(LazyGridAxis::Vertical)
+                    .grid_cells(GridCells::fixed(2))
+                    .main_axis_spacing(Px::new(3))
+                    .cross_axis_spacing(Px::new(3))
+                    .cross_axis_alignment(MainAxisAlignment::Start)
+                    .item_alignment(CrossAxisAlignment::Start)
+                    .estimated_line_main(Px::new(10))
+                    .overscan(0)
+                    .padding_main(Px::new(4))
+                    .padding_cross(Px::new(4))
+                    .slots(vec![super::LazySlot::items(
+                        4,
+                        |index| match index {
+                            0 => {
+                                fixed_test_box()
+                                    .tag("lazy_grid_scroll_first".to_string())
+                                    .width(10)
+                                    .height(10);
+                            }
+                            1 => {
+                                fixed_test_box()
+                                    .tag("lazy_grid_scroll_second".to_string())
+                                    .width(12)
+                                    .height(8);
+                            }
+                            2 => {
+                                fixed_test_box()
+                                    .tag("lazy_grid_scroll_third".to_string())
+                                    .width(11)
+                                    .height(12);
+                            }
+                            _ => {
+                                fixed_test_box()
+                                    .tag("lazy_grid_scroll_fourth".to_string())
+                                    .width(9)
+                                    .height(9);
+                            }
+                        },
+                        None,
+                    )])
+                    .controller_internal(controller)
+                    .scroll_controller_internal(scroll_controller);
+            });
+    }
+
+    #[test]
+    fn lazy_vertical_grid_positions_items_with_padding_and_spacing() {
+        tessera_ui::assert_layout! {
+            viewport: (80, 80),
+            content: {
+                lazy_vertical_grid_layout_case();
+            },
+            expect: {
+                node("lazy_grid_v_first").position(4, 4).size(10, 10);
+                node("lazy_grid_v_second").position(32, 4).size(12, 8);
+                node("lazy_grid_v_third").position(4, 17).size(11, 12);
+                node("lazy_grid_v_fourth").position(32, 17).size(9, 9);
+            }
+        }
+    }
+
+    #[test]
+    fn lazy_horizontal_grid_positions_items_with_padding_and_spacing() {
+        tessera_ui::assert_layout! {
+            viewport: (90, 50),
+            content: {
+                lazy_horizontal_grid_layout_case();
+            },
+            expect: {
+                node("lazy_grid_h_first").position(4, 4).size(20, 10);
+                node("lazy_grid_h_second").position(4, 22).size(15, 12);
+                node("lazy_grid_h_third").position(27, 4).size(18, 8);
+                node("lazy_grid_h_fourth").position(27, 22).size(16, 9);
+            }
+        }
+    }
+
+    #[test]
+    fn lazy_vertical_grid_scroll_offset_repositions_visible_items() {
+        tessera_ui::assert_layout! {
+            viewport: (80, 80),
+            content: {
+                lazy_vertical_grid_scrolled_layout_case();
+            },
+            expect: {
+                node("lazy_grid_scroll_first").position(4, -1).size(10, 10);
+                node("lazy_grid_scroll_second").position(32, -1).size(12, 8);
+                node("lazy_grid_scroll_third").position(4, 12).size(11, 12);
+                node("lazy_grid_scroll_fourth").position(32, 12).size(9, 9);
+            }
+        }
+    }
 }

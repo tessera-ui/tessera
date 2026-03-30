@@ -6,8 +6,10 @@
 use std::sync::{Arc, OnceLock};
 
 use tessera_ui::{
-    AssetExt, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Prop, Px,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    AssetExt, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px,
+    layout::{
+        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
+    },
     tessera, use_context,
 };
 
@@ -21,10 +23,31 @@ use crate::{
     theme::{ContentColor, MaterialTheme},
 };
 
+/// Icon payload used by [`icon`] to render either vector or raster content.
 #[derive(Debug, Clone, PartialEq, Eq)]
-enum IconContent {
+pub enum IconContent {
+    /// Vector icon content backed by decoded vector geometry.
     Vector(Arc<ImageVectorData>),
+    /// Raster icon content backed by decoded image pixels.
     Raster(Arc<ImageData>),
+}
+
+impl From<Arc<ImageVectorData>> for IconContent {
+    fn from(data: Arc<ImageVectorData>) -> Self {
+        Self::Vector(data)
+    }
+}
+
+impl From<Arc<ImageData>> for IconContent {
+    fn from(data: Arc<ImageData>) -> Self {
+        Self::Raster(data)
+    }
+}
+
+impl From<crate::material_icons::Asset> for IconContent {
+    fn from(asset: crate::material_icons::Asset) -> Self {
+        Self::Vector(asset.into())
+    }
 }
 
 fn placeholder_raster_data() -> Arc<ImageData> {
@@ -48,56 +71,16 @@ fn default_tint_color() -> Color {
         .unwrap_or_else(|| ContentColor::default().current)
 }
 
-/// Arguments for the [`icon`] component.
-#[derive(Debug, Prop, Clone)]
-pub struct IconArgs {
-    /// Icon content, internally tracked as either vector geometry or raster
-    /// pixels.
-    #[prop(skip_setter)]
-    content: IconContent,
-    /// Logical size of the icon. Applied to both width and height unless
-    /// explicit overrides are provided through [`width`](IconArgs::width) /
-    /// [`height`](IconArgs::height).
-    pub size: Dp,
-    /// Optional width override. Handy when the icon should `Fill` or `Wrap`
-    /// differently from the default square sizing.
-    pub width: Option<DimensionValue>,
-    /// Optional height override. Handy when the icon should `Fill` or `Wrap`
-    /// differently from the default square sizing.
-    pub height: Option<DimensionValue>,
-    /// Tint color applied to vector icons. Defaults to the current content
-    /// color. Raster icons ignore this field.
-    pub tint: Color,
-    /// How the tint is applied to vector icons.
-    pub tint_mode: TintMode,
-    /// Rotation angle in degrees.
-    pub rotation: f32,
-}
-
-impl Default for IconArgs {
-    fn default() -> Self {
-        Self {
-            content: IconContent::Raster(placeholder_raster_data()),
-            size: Dp(24.0),
-            width: None,
-            height: None,
-            tint: default_tint_color(),
-            tint_mode: TintMode::default(),
-            rotation: 0.0,
-        }
-    }
-}
-
-impl IconArgs {
+impl IconBuilder {
     /// Sets vector icon content using already-decoded vector geometry.
     pub fn vector(mut self, data: impl Into<Arc<ImageVectorData>>) -> Self {
-        self.content = IconContent::Vector(data.into());
+        self.props.content = Some(IconContent::Vector(data.into()));
         self
     }
 
     /// Sets raster icon content using already-decoded image pixels.
     pub fn raster(mut self, data: impl Into<Arc<ImageData>>) -> Self {
-        self.content = IconContent::Raster(data.into());
+        self.props.content = Some(IconContent::Raster(data.into()));
         self
     }
 
@@ -106,7 +89,7 @@ impl IconArgs {
     where
         T: TryIntoImageVectorData,
     {
-        self.content = IconContent::Vector(source.try_into_image_vector_data()?);
+        self.props.content = Some(IconContent::Vector(source.try_into_image_vector_data()?));
         Ok(self)
     }
 
@@ -115,7 +98,7 @@ impl IconArgs {
     where
         T: TryIntoImageData,
     {
-        self.content = IconContent::Raster(Arc::new(source.try_into_image_data()?));
+        self.props.content = Some(IconContent::Raster(Arc::new(source.try_into_image_data()?)));
         Ok(self)
     }
 
@@ -127,7 +110,9 @@ impl IconArgs {
         let bytes = asset
             .read()
             .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
-        self.content = IconContent::Vector(bytes.as_ref().try_into_image_vector_data()?);
+        self.props.content = Some(IconContent::Vector(
+            bytes.as_ref().try_into_image_vector_data()?,
+        ));
         Ok(self)
     }
 
@@ -139,32 +124,10 @@ impl IconArgs {
         let bytes = asset
             .read()
             .map_err(|source| ImageLoadError::AssetRead { source })?;
-        self.content = IconContent::Raster(Arc::new(bytes.as_ref().try_into_image_data()?));
+        self.props.content = Some(IconContent::Raster(Arc::new(
+            bytes.as_ref().try_into_image_data()?,
+        )));
         Ok(self)
-    }
-}
-
-impl From<ImageVectorData> for IconArgs {
-    fn from(data: ImageVectorData) -> Self {
-        Self::default().vector(Arc::new(data))
-    }
-}
-
-impl From<Arc<ImageVectorData>> for IconArgs {
-    fn from(data: Arc<ImageVectorData>) -> Self {
-        Self::default().vector(data)
-    }
-}
-
-impl From<ImageData> for IconArgs {
-    fn from(data: ImageData) -> Self {
-        Self::default().raster(Arc::new(data))
-    }
-}
-
-impl From<Arc<ImageData>> for IconArgs {
-    fn from(data: Arc<ImageData>) -> Self {
-        Self::default().raster(data)
     }
 }
 
@@ -173,12 +136,6 @@ impl From<crate::material_icons::Asset> for Arc<ImageVectorData> {
         asset
             .try_into_image_vector_data()
             .expect("bundled material icon svg should load")
-    }
-}
-
-impl From<crate::material_icons::Asset> for IconArgs {
-    fn from(asset: crate::material_icons::Asset) -> Self {
-        Self::default().vector(asset)
     }
 }
 
@@ -193,7 +150,7 @@ struct IconLayout {
     rotation: f32,
 }
 
-impl LayoutSpec for IconLayout {
+impl LayoutPolicy for IconLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -246,7 +203,9 @@ impl LayoutSpec for IconLayout {
 
         Ok(ComputedData { width, height })
     }
+}
 
+impl RenderPolicy for IconLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
         match &self.content {
@@ -281,7 +240,12 @@ impl LayoutSpec for IconLayout {
 ///
 /// ## Parameters
 ///
-/// - `args` - configures the icon content, size, and tint; see [`IconArgs`].
+/// - `content` - optional vector or raster icon payload.
+/// - `size` - optional preferred square size.
+/// - `width` / `height` - optional explicit layout dimensions.
+/// - `tint` - optional tint override for vector icons.
+/// - `tint_mode` - tint blending mode for vector icons.
+/// - `rotation` - clockwise rotation in degrees.
 ///
 /// ## Examples
 ///
@@ -290,30 +254,42 @@ impl LayoutSpec for IconLayout {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     icon::{IconArgs, icon},
+///     icon::icon,
 ///     material_icons::filled,
 /// };
 /// use tessera_ui::Color;
 ///
-/// let args = IconArgs::default()
+/// icon()
 ///     .vector(filled::STAR_SVG)
 ///     .size(tessera_ui::Dp(20.0))
 ///     .tint(Color::new(0.2, 0.5, 0.8, 1.0));
-///
-/// icon(&args);
 /// # }
 /// ```
 #[tessera]
-pub fn icon(args: &IconArgs) {
-    layout(IconLayout {
-        content: args.content.clone(),
-        size: args.size,
-        width: args.width,
-        height: args.height,
-        tint: args.tint,
-        tint_mode: args.tint_mode,
-        rotation: args.rotation,
-    });
+pub fn icon(
+    #[prop(skip_setter)] content: Option<IconContent>,
+    size: Option<Dp>,
+    width: Option<DimensionValue>,
+    height: Option<DimensionValue>,
+    tint: Option<Color>,
+    tint_mode: TintMode,
+    rotation: f32,
+) {
+    let content = content.unwrap_or_else(|| IconContent::Raster(placeholder_raster_data()));
+    let size = size.unwrap_or(Dp(24.0));
+    let tint = tint.unwrap_or_else(default_tint_color);
+    let policy = IconLayout {
+        content,
+        size,
+        width,
+        height,
+        tint,
+        tint_mode,
+        rotation,
+    };
+    layout_primitive()
+        .layout_policy(policy.clone())
+        .render_policy(policy);
 }
 
 fn intrinsic_dimensions(content: &IconContent) -> (Px, Px) {

@@ -7,10 +7,10 @@ use std::time::Duration;
 
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusTraversalPolicy,
-    MeasurementError, Modifier, Prop, Px, PxPosition, PxSize, RenderSlot, State,
+    MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -18,14 +18,14 @@ use tessera_ui::{
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation,
-    column::{ColumnArgs, column},
+    column::column,
     modifier::{InteractionState, ModifierExt, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
-    row::{RowArgs, row},
+    row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
-    text::{TextArgs, text},
+    surface::{SurfaceStyle, surface},
+    text::text,
     theme::{ContentColor, MaterialTheme, provide_text_style},
 };
 
@@ -38,47 +38,33 @@ const ITEM_HORIZONTAL_SPACING: Dp = Dp(8.0);
 const INDICATOR_TO_LABEL_PADDING: Dp = Dp(4.0);
 const INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
 
-#[derive(Clone, Prop)]
-struct NavigationBarItemContentArgs {
-    item: NavigationBarItem,
-    is_selected: bool,
-    was_selected: bool,
-    animation_progress: f32,
-    interaction_state: State<InteractionState>,
-    ripple_state: State<RippleState>,
-}
-
-#[derive(Clone, Prop)]
-struct NavigationBarItemArgs {
-    controller: State<NavigationBarController>,
-    index: usize,
-    item: NavigationBarItem,
-    selected_index: usize,
-    previous_index: usize,
-    animation_progress: f32,
-}
-
-/// Arguments for [`navigation_bar`].
-#[derive(Clone, Default, Prop)]
-pub struct NavigationBarArgs {
-    /// Optional external controller.
-    pub controller: Option<State<NavigationBarController>>,
-    /// Navigation items rendered in order.
-    pub items: Vec<NavigationBarItem>,
-}
-
-impl NavigationBarArgs {
-    /// Append a navigation item.
+#[allow(missing_docs)]
+impl NavigationBarBuilder {
     pub fn item(mut self, item: impl Into<NavigationBarItem>) -> Self {
-        self.items.push(item.into());
+        self.props.items.push(item.into());
         self
     }
 }
 
-#[derive(Clone, Prop)]
-struct NavigationBarRenderArgs {
-    controller: State<NavigationBarController>,
-    items: Vec<NavigationBarItem>,
+#[allow(missing_docs)]
+impl NavigationBarItemContentBuilder {
+    fn interaction_state_internal(mut self, interaction_state: State<InteractionState>) -> Self {
+        self.props.interaction_state = Some(interaction_state);
+        self
+    }
+
+    fn ripple_state_internal(mut self, ripple_state: State<RippleState>) -> Self {
+        self.props.ripple_state = Some(ripple_state);
+        self
+    }
+}
+
+#[allow(missing_docs)]
+impl NavigationBarItemBuilder {
+    fn controller_internal(mut self, controller: State<NavigationBarController>) -> Self {
+        self.props.controller = Some(controller);
+        self
+    }
 }
 
 fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
@@ -91,14 +77,16 @@ fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
 }
 
 #[tessera]
-fn navigation_bar_item_content(args: &NavigationBarItemContentArgs) {
-    let item = args.item.clone();
-    let is_selected = args.is_selected;
-    let was_selected = args.was_selected;
-    let animation_progress = args.animation_progress;
-    let interaction_state = args.interaction_state;
-    let ripple_state = args.ripple_state;
-
+fn navigation_bar_item_content(
+    item: NavigationBarItem,
+    is_selected: bool,
+    was_selected: bool,
+    animation_progress: f32,
+    #[prop(skip_setter)] interaction_state: Option<State<InteractionState>>,
+    #[prop(skip_setter)] ripple_state: Option<State<RippleState>>,
+) {
+    let interaction_state = interaction_state.expect("interaction_state must be set");
+    let ripple_state = ripple_state.expect("ripple_state must be set");
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -145,75 +133,68 @@ fn navigation_bar_item_content(args: &NavigationBarItemContentArgs) {
         .round()
         .max(0.0) as i32);
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .style(SurfaceStyle::Filled {
-                color: indicator_color,
-            })
-            .shape(Shape::capsule())
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(animated_indicator_width_px)),
-                Some(DimensionValue::Fixed(INDICATOR_HEIGHT.to_px())),
-            ))
-            .show_state_layer(false)
-            .show_ripple(false),
-        || {},
-    ));
-
-    let indicator_args = SurfaceArgs::default()
-        .style(SurfaceStyle::Filled {
-            color: Color::TRANSPARENT,
+    layout_primitive()
+        .layout_policy(NavigationBarItemLayout {
+            selection_fraction,
+            always_show_label,
+            has_label,
+            has_icon,
         })
-        .shape(Shape::capsule())
-        .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
-        .enabled(true)
-        .interaction_state(interaction_state)
-        .ripple_color(ripple_color);
-    surface(&crate::surface::SurfaceArgs::with_child(
-        indicator_args,
-        move || {
-            surface(&crate::surface::SurfaceArgs::with_child(
-                SurfaceArgs::default()
-                    .style(SurfaceStyle::Filled {
-                        color: Color::TRANSPARENT,
-                    })
-                    .shape(Shape::capsule())
-                    .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
-                    .enabled(true)
-                    .ripple_color(ripple_color)
-                    .show_state_layer(false)
-                    .ripple_state(ripple_state),
-                || {},
-            ));
-        },
-    ));
+        .child(move || {
+            surface()
+                .style(SurfaceStyle::Filled {
+                    color: indicator_color,
+                })
+                .shape(Shape::capsule())
+                .modifier(Modifier::new().constrain(
+                    Some(DimensionValue::Fixed(animated_indicator_width_px)),
+                    Some(DimensionValue::Fixed(INDICATOR_HEIGHT.to_px())),
+                ))
+                .show_state_layer(false)
+                .show_ripple(false)
+                .with_child(|| {});
 
-    if let Some(draw_icon) = item.icon {
-        provide_context(
-            || ContentColor {
-                current: icon_color,
-            },
-            || {
-                draw_icon.render();
-            },
-        );
-    }
+            surface()
+                .style(SurfaceStyle::Filled {
+                    color: Color::TRANSPARENT,
+                })
+                .shape(Shape::capsule())
+                .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
+                .enabled(true)
+                .interaction_state(interaction_state)
+                .ripple_color(ripple_color)
+                .with_child(move || {
+                    surface()
+                        .style(SurfaceStyle::Filled {
+                            color: Color::TRANSPARENT,
+                        })
+                        .shape(Shape::capsule())
+                        .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
+                        .enabled(true)
+                        .ripple_color(ripple_color)
+                        .show_state_layer(false)
+                        .ripple_state(ripple_state)
+                        .with_child(|| {});
+                });
 
-    if has_label {
-        let label = item.label.clone();
-        provide_text_style(typography.label_medium, move || {
-            text(&crate::text::TextArgs::from(
-                &TextArgs::default().text(label.clone()).color(label_color),
-            ));
+            if let Some(draw_icon) = item.icon.clone() {
+                provide_context(
+                    || ContentColor {
+                        current: icon_color,
+                    },
+                    || {
+                        draw_icon.render();
+                    },
+                );
+            }
+
+            if has_label {
+                let label = item.label.clone();
+                provide_text_style(typography.label_medium, move || {
+                    text().content(label.clone()).color(label_color);
+                });
+            }
         });
-    }
-
-    layout(NavigationBarItemLayout {
-        selection_fraction,
-        always_show_label,
-        has_label,
-        has_icon,
-    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -224,7 +205,7 @@ struct NavigationBarItemLayout {
     has_icon: bool,
 }
 
-impl LayoutSpec for NavigationBarItemLayout {
+impl LayoutPolicy for NavigationBarItemLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -376,14 +357,15 @@ impl LayoutSpec for NavigationBarItemLayout {
 }
 
 #[tessera]
-fn navigation_bar_item(args: &NavigationBarItemArgs) {
-    let controller = args.controller;
-    let index = args.index;
-    let item = args.item.clone();
-    let selected_index = args.selected_index;
-    let previous_index = args.previous_index;
-    let animation_progress = args.animation_progress;
-
+fn navigation_bar_item(
+    #[prop(skip_setter)] controller: Option<State<NavigationBarController>>,
+    index: usize,
+    item: NavigationBarItem,
+    selected_index: usize,
+    previous_index: usize,
+    animation_progress: f32,
+) {
+    let controller = controller.expect("controller must be set");
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
 
@@ -414,26 +396,29 @@ fn navigation_bar_item(args: &NavigationBarItemArgs) {
         on_click_item.call();
     };
 
-    let selectable_args = SelectableArgs::new(is_selected, on_click)
-        .enabled(true)
-        .role(Role::Tab)
-        .label(label)
-        .interaction_state(interaction_state)
-        .on_press(on_press)
-        .on_release(on_release);
+    let selectable_args = SelectableArgs {
+        selected: is_selected,
+        on_click: on_click.into(),
+        enabled: true,
+        role: Some(Role::Tab),
+        label: Some(label),
+        interaction_state: Some(interaction_state),
+        on_press: Some(on_press.into()),
+        on_release: Some(on_release.into()),
+        ..Default::default()
+    };
 
-    Modifier::new().selectable(selectable_args).run({
+    let modifier = Modifier::new().selectable_with(selectable_args);
+    layout_primitive().modifier(modifier).child({
         let item = item.clone();
         move || {
-            let content_args = NavigationBarItemContentArgs {
-                item: item.clone(),
-                is_selected,
-                was_selected,
-                animation_progress,
-                interaction_state,
-                ripple_state,
-            };
-            navigation_bar_item_content(&content_args);
+            navigation_bar_item_content()
+                .item(item.clone())
+                .is_selected(is_selected)
+                .was_selected(was_selected)
+                .animation_progress(animation_progress)
+                .interaction_state_internal(interaction_state)
+                .ripple_state_internal(ripple_state);
         }
     });
 }
@@ -448,16 +433,13 @@ pub enum NavigationBarLabelBehavior {
 }
 
 /// Item configuration for [`navigation_bar`].
-#[derive(Clone, Prop)]
+#[derive(Clone, PartialEq)]
 pub struct NavigationBarItem {
     /// Text label shown under the icon.
-    #[prop(into)]
     pub label: String,
     /// Optional icon rendered above the label.
-    #[prop(skip_setter)]
     pub icon: Option<RenderSlot>,
     /// Callback invoked after selection changes to this item.
-    #[prop(skip_setter)]
     pub on_click: Callback,
     /// Whether the label is always visible or only appears when selected.
     pub label_behavior: NavigationBarLabelBehavior,
@@ -472,36 +454,6 @@ impl NavigationBarItem {
             on_click: Callback::noop(),
             label_behavior: NavigationBarLabelBehavior::AlwaysShow,
         }
-    }
-
-    /// Set the icon drawing callback.
-    pub fn icon<F>(mut self, icon: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.icon = Some(RenderSlot::new(icon));
-        self
-    }
-
-    /// Set the icon drawing callback using a shared callback.
-    pub fn icon_shared(mut self, icon: impl Into<RenderSlot>) -> Self {
-        self.icon = Some(icon.into());
-        self
-    }
-
-    /// Set the click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Callback::new(on_click);
-        self
-    }
-
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = on_click.into();
-        self
     }
 }
 
@@ -521,42 +473,28 @@ impl Default for NavigationBarItem {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures controller and items; see [`NavigationBarArgs`].
+/// - `controller` — optional external controller.
+/// - `items` — navigation items rendered in order.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::navigation_bar::{
-///     NavigationBarArgs, NavigationBarItem, navigation_bar,
-/// };
+/// use tessera_components::navigation_bar::{NavigationBarItem, navigation_bar};
 /// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn demo() {
-///     navigation_bar(
-///         &NavigationBarArgs::default()
-///             .item(NavigationBarItem::new("Home"))
-///             .item(NavigationBarItem::new("Search")),
-///     );
+///     navigation_bar()
+///         .item(NavigationBarItem::new("Home"))
+///         .item(NavigationBarItem::new("Search"));
 /// }
 /// ```
 #[tessera]
-pub fn navigation_bar(args: &NavigationBarArgs) {
-    let args = args.clone();
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(|| NavigationBarController::new(0)));
-    let render_args = NavigationBarRenderArgs {
-        controller,
-        items: args.items,
-    };
-    navigation_bar_render(&render_args);
-}
-
-#[tessera]
-fn navigation_bar_render(args: &NavigationBarRenderArgs) {
-    let controller = args.controller;
-    let items = args.items.clone();
+pub fn navigation_bar(
+    controller: Option<State<NavigationBarController>>,
+    items: Vec<NavigationBarItem>,
+) {
+    let controller = controller.unwrap_or_else(|| remember(|| NavigationBarController::new(0)));
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -579,90 +517,65 @@ fn navigation_bar_render(args: &NavigationBarRenderArgs) {
     let selected_index = controller.with(|c| c.selected());
     let previous_index = controller.with(|c| c.previous_selected());
 
-    Modifier::new()
+    let modifier = Modifier::new()
         .focus_group()
-        .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true))
-        .run({
+        .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
+    layout_primitive().modifier(modifier).child({
+        let items = items.clone();
+        move || {
             let items = items.clone();
-            move || {
-                let items = items.clone();
-                surface(&crate::surface::SurfaceArgs::with_child(
-                    SurfaceArgs::default()
-                        .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
-                        .style(scheme.surface_container.into())
-                        .elevation(Dp(3.0))
-                        .block_input(true),
-                    move || {
-                        let items = items.clone();
-                        let separator_color = scheme.outline_variant.with_alpha(0.12);
-                        column(
-                            &ColumnArgs::default()
-                                .modifier(Modifier::new().fill_max_size())
-                                .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                                .children(move |column_scope| {
-                                    column_scope.child(move || {
-                                        surface(&crate::surface::SurfaceArgs::with_child(
-                                            SurfaceArgs::default()
-                                                .modifier(
-                                                    Modifier::new()
-                                                        .fill_max_width()
-                                                        .height(DIVIDER_HEIGHT),
-                                                )
-                                                .style(separator_color.into()),
-                                            || {},
-                                        ));
-                                    });
+            surface()
+                .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
+                .style(scheme.surface_container.into())
+                .elevation(Dp(3.0))
+                .block_input(true)
+                .with_child(move || {
+                    let items = items.clone();
+                    let separator_color = scheme.outline_variant.with_alpha(0.12);
+                    column()
+                        .modifier(Modifier::new().fill_max_size())
+                        .cross_axis_alignment(CrossAxisAlignment::Stretch)
+                        .children(move || {
+                            {
+                                surface()
+                                    .modifier(
+                                        Modifier::new().fill_max_width().height(DIVIDER_HEIGHT),
+                                    )
+                                    .style(separator_color.into())
+                                    .with_child(|| {});
+                            };
 
-                                    column_scope.child_weighted(
-                                        move || {
-                                            let items = items.clone();
-                                            row(&RowArgs::default()
-                                                .modifier(Modifier::new().fill_max_size())
-                                                .main_axis_alignment(MainAxisAlignment::Start)
-                                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                                .children(move |row_scope| {
-                                                    let last_index = items.len().saturating_sub(1);
-                                                    for (index, item) in
-                                                        items.iter().cloned().enumerate()
-                                                    {
-                                                        row_scope.child_weighted(
-                                                            move || {
-                                                                let item_args =
-                                                                    NavigationBarItemArgs {
-                                                                        controller,
-                                                                        index,
-                                                                        item: item.clone(),
-                                                                        selected_index,
-                                                                        previous_index,
-                                                                        animation_progress,
-                                                                    };
-                                                                navigation_bar_item(&item_args);
-                                                            },
-                                                            1.0,
-                                                        );
+                            let items = items.clone();
+                            row()
+                                .modifier(Modifier::new().fill_max_size().weight(1.0))
+                                .main_axis_alignment(MainAxisAlignment::Start)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    let last_index = items.len().saturating_sub(1);
+                                    for (index, item) in items.iter().cloned().enumerate() {
+                                        layout_primitive()
+                                            .modifier(Modifier::new().weight(1.0))
+                                            .child(move || {
+                                                navigation_bar_item()
+                                                    .controller_internal(controller)
+                                                    .index(index)
+                                                    .item(item.clone())
+                                                    .selected_index(selected_index)
+                                                    .previous_index(previous_index)
+                                                    .animation_progress(animation_progress);
+                                            });
 
-                                                        if index != last_index {
-                                                            row_scope.child(|| {
-                                                                spacer(
-                                                                    &crate::spacer::SpacerArgs::new(
-                                                                        Modifier::new().width(
-                                                                            ITEM_HORIZONTAL_SPACING,
-                                                                        ),
-                                                                    ),
-                                                                );
-                                                            });
-                                                        }
-                                                    }
-                                                }));
-                                        },
-                                        1.0,
-                                    );
-                                }),
-                        );
-                    },
-                ));
-            }
-        });
+                                        if index != last_index {
+                                            spacer().modifier(
+                                                Modifier::new().width(ITEM_HORIZONTAL_SPACING),
+                                            );
+                                        }
+                                    }
+                                });
+                        });
+                });
+        }
+    });
 }
 
 /// Controller for the `navigation_bar` component.

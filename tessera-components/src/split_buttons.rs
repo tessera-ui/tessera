@@ -6,8 +6,8 @@
 
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
-    LayoutSpec, MeasurementError, Modifier, Prop, Px, PxPosition, RenderSlot, accesskit::Role,
-    tessera, use_context,
+    LayoutPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, accesskit::Role,
+    layout::layout_primitive, tessera, use_context,
 };
 
 use crate::{
@@ -15,7 +15,7 @@ use crate::{
     button::ButtonDefaults,
     modifier::{ModifierExt as _, Padding},
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgs, SurfaceStyle, surface},
+    surface::{SurfaceStyle, surface},
     theme::{MaterialTheme, provide_text_style},
 };
 
@@ -97,6 +97,7 @@ impl SplitButtonColors {
 /// Defaults for split buttons.
 pub struct SplitButtonDefaults;
 
+#[allow(missing_docs)]
 impl SplitButtonDefaults {
     /// Minimum width of split button items.
     pub const MIN_WIDTH: Dp = Dp(48.0);
@@ -265,338 +266,120 @@ impl SplitButtonDefaults {
     }
 }
 
-/// Arguments for [`split_button_layout`].
-#[derive(Clone, Prop)]
-pub struct SplitButtonLayoutArgs {
-    /// Modifier chain applied to the split button layout.
-    pub modifier: Modifier,
-    /// Spacing between leading and trailing buttons.
-    pub spacing: Dp,
-    /// Optional leading button slot.
-    #[prop(skip_setter)]
-    pub leading_button: Option<RenderSlot>,
-    /// Optional trailing button slot.
-    #[prop(skip_setter)]
-    pub trailing_button: Option<RenderSlot>,
+fn default_split_button_layout_modifier() -> Modifier {
+    Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
 }
 
-impl Default for SplitButtonLayoutArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new()
-                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
-            spacing: SplitButtonDefaults::SPACING,
-            leading_button: None,
-            trailing_button: None,
-        }
-    }
-}
-
-impl From<&SplitButtonLayoutArgs> for SplitButtonLayoutArgs {
-    fn from(value: &SplitButtonLayoutArgs) -> Self {
-        value.clone()
-    }
-}
-
-impl SplitButtonLayoutArgs {
-    /// Sets the leading button slot.
-    pub fn leading_button<F>(mut self, leading_button: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.leading_button = Some(RenderSlot::new(leading_button));
+#[allow(missing_docs)]
+impl SplitButtonLayoutBuilder {
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
         self
     }
 
-    /// Sets the leading button slot using a shared render slot.
-    pub fn leading_button_shared(mut self, leading_button: impl Into<RenderSlot>) -> Self {
-        self.leading_button = Some(leading_button.into());
-        self
-    }
-
-    /// Sets the trailing button slot.
-    pub fn trailing_button<F>(mut self, trailing_button: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.trailing_button = Some(RenderSlot::new(trailing_button));
-        self
-    }
-
-    /// Sets the trailing button slot using a shared render slot.
-    pub fn trailing_button_shared(mut self, trailing_button: impl Into<RenderSlot>) -> Self {
-        self.trailing_button = Some(trailing_button.into());
+    pub fn spacing(mut self, spacing: Dp) -> Self {
+        self.props.spacing = Some(spacing);
         self
     }
 }
 
-/// Arguments for [`split_leading_button`].
-#[derive(Clone, Prop)]
-pub struct SplitButtonLeadingArgs {
-    /// Whether the button is enabled.
-    pub enabled: bool,
-    /// Modifier chain applied to the leading button.
-    pub modifier: Modifier,
-    /// Shape of the leading button.
-    pub shape: Shape,
-    /// Colors used to render the leading button.
-    pub colors: SplitButtonColors,
-    /// Border width for the leading button.
-    pub border_width: Dp,
-    /// Inner padding for the leading button content.
-    pub content_padding: Padding,
-    /// Minimum width for the leading button.
-    pub min_width: Dp,
-    /// Container height for the leading button.
-    pub container_height: Dp,
-    /// Optional shadow elevation.
-    pub elevation: Option<Dp>,
-    /// Tonal elevation applied to the surface.
-    pub tonal_elevation: Dp,
-    /// Click handler for the button.
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// Optional accessibility label.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional accessibility description.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-    /// Optional content rendered inside the leading button.
-    #[prop(skip_setter)]
-    pub content: Option<RenderSlot>,
-}
-
-impl SplitButtonLeadingArgs {
-    fn with_variant(variant: SplitButtonVariant) -> Self {
-        let size = SplitButtonSize::default();
-        Self {
-            enabled: true,
-            modifier: Modifier::new(),
-            shape: SplitButtonDefaults::leading_shape(size),
-            colors: SplitButtonDefaults::colors(variant),
-            border_width: SplitButtonDefaults::border_width(variant),
-            content_padding: SplitButtonDefaults::leading_content_padding(size),
-            min_width: SplitButtonDefaults::MIN_WIDTH,
-            container_height: SplitButtonDefaults::container_height(size),
-            elevation: SplitButtonDefaults::elevation(variant),
-            tonal_elevation: SplitButtonDefaults::tonal_elevation(variant),
-            on_click: None,
-            accessibility_label: None,
-            accessibility_description: None,
-            content: None,
-        }
-    }
-
-    /// Create a filled leading split button configuration.
-    pub fn filled(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::with_variant(SplitButtonVariant::Filled).on_click(on_click)
-    }
-
-    /// Create a tonal leading split button configuration.
-    pub fn tonal(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::with_variant(SplitButtonVariant::Tonal).on_click(on_click)
-    }
-
-    /// Create an elevated leading split button configuration.
-    pub fn elevated(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::with_variant(SplitButtonVariant::Elevated).on_click(on_click)
-    }
-
-    /// Create an outlined leading split button configuration.
-    pub fn outlined(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::with_variant(SplitButtonVariant::Outlined).on_click(on_click)
-    }
-
-    /// Update the visual variant for the leading split button.
-    pub fn variant(mut self, variant: SplitButtonVariant) -> Self {
-        self.colors = SplitButtonDefaults::colors(variant);
-        self.border_width = SplitButtonDefaults::border_width(variant);
-        self.elevation = SplitButtonDefaults::elevation(variant);
-        self.tonal_elevation = SplitButtonDefaults::tonal_elevation(variant);
+#[allow(missing_docs)]
+impl SplitLeadingButtonBuilder {
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.props.enabled = Some(enabled);
         self
     }
 
-    /// Update the size-related defaults for the leading split button.
-    pub fn size(mut self, size: SplitButtonSize) -> Self {
-        self.shape = SplitButtonDefaults::leading_shape(size);
-        self.content_padding = SplitButtonDefaults::leading_content_padding(size);
-        self.container_height = SplitButtonDefaults::container_height(size);
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
         self
     }
 
-    /// Set the click handler.
-    pub fn on_click(mut self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_click = Some(Callback::new(on_click));
+    pub fn accessibility_label(mut self, accessibility_label: impl Into<String>) -> Self {
+        self.props.accessibility_label = Some(accessibility_label.into());
         self
     }
 
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
+    pub fn accessibility_description(
+        mut self,
+        accessibility_description: impl Into<String>,
+    ) -> Self {
+        self.props.accessibility_description = Some(accessibility_description.into());
         self
     }
 
-    /// Sets the leading button content.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = Some(RenderSlot::new(content));
-        self
+    pub fn filled(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.variant(SplitButtonVariant::Filled)
+            .enabled(true)
+            .on_click(on_click)
     }
 
-    /// Sets the leading button content using a shared render slot.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = Some(content.into());
-        self
+    pub fn tonal(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.variant(SplitButtonVariant::Tonal)
+            .enabled(true)
+            .on_click(on_click)
+    }
+
+    pub fn elevated(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.variant(SplitButtonVariant::Elevated)
+            .enabled(true)
+            .on_click(on_click)
+    }
+
+    pub fn outlined(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.variant(SplitButtonVariant::Outlined)
+            .enabled(true)
+            .on_click(on_click)
     }
 }
 
-impl Default for SplitButtonLeadingArgs {
-    fn default() -> Self {
-        Self::with_variant(SplitButtonVariant::Filled)
-    }
-}
-
-impl From<&SplitButtonLeadingArgs> for SplitButtonLeadingArgs {
-    fn from(value: &SplitButtonLeadingArgs) -> Self {
-        value.clone()
-    }
-}
-
-/// Arguments for [`split_trailing_button`].
-#[derive(Clone, Prop)]
-pub struct SplitButtonTrailingArgs {
-    /// Whether the button is enabled.
-    pub enabled: bool,
-    /// Modifier chain applied to the trailing button.
-    pub modifier: Modifier,
-    /// Shape of the trailing button.
-    pub shape: Shape,
-    /// Colors used to render the trailing button.
-    pub colors: SplitButtonColors,
-    /// Border width for the trailing button.
-    pub border_width: Dp,
-    /// Inner padding for the trailing button content.
-    pub content_padding: Padding,
-    /// Minimum width for the trailing button.
-    pub min_width: Dp,
-    /// Container height for the trailing button.
-    pub container_height: Dp,
-    /// Optional shadow elevation.
-    pub elevation: Option<Dp>,
-    /// Tonal elevation applied to the surface.
-    pub tonal_elevation: Dp,
-    /// Click handler for the button.
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// Optional accessibility label.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional accessibility description.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-    /// Optional content rendered inside the trailing button.
-    #[prop(skip_setter)]
-    pub content: Option<RenderSlot>,
-}
-
-impl SplitButtonTrailingArgs {
-    fn with_variant(variant: SplitButtonVariant) -> Self {
-        let size = SplitButtonSize::default();
-        Self {
-            enabled: true,
-            modifier: Modifier::new(),
-            shape: SplitButtonDefaults::trailing_shape(size),
-            colors: SplitButtonDefaults::colors(variant),
-            border_width: SplitButtonDefaults::border_width(variant),
-            content_padding: SplitButtonDefaults::trailing_content_padding(size),
-            min_width: SplitButtonDefaults::MIN_WIDTH,
-            container_height: SplitButtonDefaults::container_height(size),
-            elevation: SplitButtonDefaults::elevation(variant),
-            tonal_elevation: SplitButtonDefaults::tonal_elevation(variant),
-            on_click: None,
-            accessibility_label: None,
-            accessibility_description: None,
-            content: None,
-        }
-    }
-
-    /// Create a filled trailing split button configuration.
-    pub fn filled(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::with_variant(SplitButtonVariant::Filled).on_click(on_click)
-    }
-
-    /// Create a tonal trailing split button configuration.
-    pub fn tonal(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::with_variant(SplitButtonVariant::Tonal).on_click(on_click)
-    }
-
-    /// Create an elevated trailing split button configuration.
-    pub fn elevated(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::with_variant(SplitButtonVariant::Elevated).on_click(on_click)
-    }
-
-    /// Create an outlined trailing split button configuration.
-    pub fn outlined(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        Self::with_variant(SplitButtonVariant::Outlined).on_click(on_click)
-    }
-
-    /// Update the visual variant for the trailing split button.
-    pub fn variant(mut self, variant: SplitButtonVariant) -> Self {
-        self.colors = SplitButtonDefaults::colors(variant);
-        self.border_width = SplitButtonDefaults::border_width(variant);
-        self.elevation = SplitButtonDefaults::elevation(variant);
-        self.tonal_elevation = SplitButtonDefaults::tonal_elevation(variant);
+#[allow(missing_docs)]
+impl SplitTrailingButtonBuilder {
+    pub fn enabled(mut self, enabled: bool) -> Self {
+        self.props.enabled = Some(enabled);
         self
     }
 
-    /// Update the size-related defaults for the trailing split button.
-    pub fn size(mut self, size: SplitButtonSize) -> Self {
-        self.shape = SplitButtonDefaults::trailing_shape(size);
-        self.content_padding = SplitButtonDefaults::trailing_content_padding(size);
-        self.container_height = SplitButtonDefaults::container_height(size);
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
         self
     }
 
-    /// Set the click handler.
-    pub fn on_click(mut self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        self.on_click = Some(Callback::new(on_click));
+    pub fn accessibility_label(mut self, accessibility_label: impl Into<String>) -> Self {
+        self.props.accessibility_label = Some(accessibility_label.into());
         self
     }
 
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
+    pub fn accessibility_description(
+        mut self,
+        accessibility_description: impl Into<String>,
+    ) -> Self {
+        self.props.accessibility_description = Some(accessibility_description.into());
         self
     }
 
-    /// Sets the trailing button content.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = Some(RenderSlot::new(content));
-        self
+    pub fn filled(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.variant(SplitButtonVariant::Filled)
+            .enabled(true)
+            .on_click(on_click)
     }
 
-    /// Sets the trailing button content using a shared render slot.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = Some(content.into());
-        self
+    pub fn tonal(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.variant(SplitButtonVariant::Tonal)
+            .enabled(true)
+            .on_click(on_click)
     }
-}
 
-impl Default for SplitButtonTrailingArgs {
-    fn default() -> Self {
-        Self::with_variant(SplitButtonVariant::Filled)
+    pub fn elevated(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.variant(SplitButtonVariant::Elevated)
+            .enabled(true)
+            .on_click(on_click)
     }
-}
 
-impl From<&SplitButtonTrailingArgs> for SplitButtonTrailingArgs {
-    fn from(value: &SplitButtonTrailingArgs) -> Self {
-        value.clone()
+    pub fn outlined(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.variant(SplitButtonVariant::Outlined)
+            .enabled(true)
+            .on_click(on_click)
     }
 }
 
@@ -610,7 +393,10 @@ impl From<&SplitButtonTrailingArgs> for SplitButtonTrailingArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — props for this component; see [`SplitButtonLayoutArgs`].
+/// - `modifier` — optional modifier chain applied to the split button layout.
+/// - `spacing` — optional spacing between the leading and trailing buttons.
+/// - `leading_button` — optional leading button slot.
+/// - `trailing_button` — optional trailing button slot.
 ///
 /// ## Examples
 ///
@@ -619,49 +405,45 @@ impl From<&SplitButtonTrailingArgs> for SplitButtonTrailingArgs {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     split_buttons::{
-///         SplitButtonLayoutArgs, SplitButtonLeadingArgs, SplitButtonTrailingArgs,
-///         split_button_layout, split_leading_button, split_trailing_button,
-///     },
+///     split_buttons::{split_button_layout, split_leading_button, split_trailing_button},
 ///     text::text,
 ///     theme::{MaterialTheme, material_theme},
 /// };
 ///
-/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-///     || MaterialTheme::default(),
-///     || {
-///         let render_args = SplitButtonLayoutArgs::default()
-///             .leading_button(|| {
-///                 let leading_args = SplitButtonLeadingArgs::default().content(|| {
-///                     text(&tessera_components::text::TextArgs::default().text("Create"))
-///                 });
-///                 split_leading_button(&leading_args);
-///             })
-///             .trailing_button(|| {
-///                 let trailing_args = SplitButtonTrailingArgs::default().content(|| {
-///                     text(&tessera_components::text::TextArgs::default().text("More"))
-///                 });
-///                 split_trailing_button(&trailing_args);
+/// material_theme().content(|| {
+///     split_button_layout()
+///         .leading_button(|| {
+///             split_leading_button().filled(|| {}).content(|| {
+///                 text().content("Create");
 ///             });
-///         split_button_layout(&render_args);
-///     },
-/// );
-/// material_theme(&args);
+///         })
+///         .trailing_button(|| {
+///             split_trailing_button().filled(|| {}).content(|| {
+///                 text().content("More");
+///             });
+///         });
+/// });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
-    let args = args.clone();
-    let modifier = args.modifier;
-    let leading_button = args.leading_button.unwrap_or_else(RenderSlot::empty);
-    let trailing_button = args.trailing_button.unwrap_or_else(RenderSlot::empty);
-    modifier.run(move || {
-        let spacing = Px::from(args.spacing).max(Px::ZERO);
-        layout(SplitButtonLayoutSpec { spacing });
-        leading_button.render();
-        trailing_button.render();
-    });
+pub fn split_button_layout(
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    #[prop(skip_setter)] spacing: Option<Dp>,
+    leading_button: Option<RenderSlot>,
+    trailing_button: Option<RenderSlot>,
+) {
+    let modifier = modifier.unwrap_or_else(default_split_button_layout_modifier);
+    let leading_button = leading_button.unwrap_or_else(RenderSlot::empty);
+    let trailing_button = trailing_button.unwrap_or_else(RenderSlot::empty);
+    let spacing = Px::from(spacing.unwrap_or(SplitButtonDefaults::SPACING)).max(Px::ZERO);
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(SplitButtonLayoutPolicy { spacing })
+        .child(move || {
+            leading_button.render();
+            trailing_button.render();
+        });
 }
 
 /// # split_leading_button
@@ -674,7 +456,14 @@ pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — props for this component; see [`SplitButtonLeadingArgs`].
+/// - `variant` — visual emphasis variant.
+/// - `size` — split button size preset.
+/// - `enabled` — optional enabled state; defaults to `true`.
+/// - `modifier` — optional modifier chain applied to the leading button.
+/// - `on_click` — optional click callback.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `content` — optional slot rendered inside the leading button.
 ///
 /// ## Examples
 ///
@@ -683,28 +472,43 @@ pub fn split_button_layout(args: &SplitButtonLayoutArgs) {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     split_buttons::{SplitButtonLeadingArgs, split_leading_button},
+///     split_buttons::split_leading_button,
 ///     text::text,
 ///     theme::{MaterialTheme, material_theme},
 /// };
 ///
-/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-///     || MaterialTheme::default(),
-///     || {
-///         let render_args = SplitButtonLeadingArgs::default()
-///             .content(|| text(&tessera_components::text::TextArgs::default().text("Create")));
-///         split_leading_button(&render_args);
-///     },
-/// );
-/// material_theme(&args);
+/// material_theme().content(|| {
+///     split_leading_button().filled(|| {}).content(|| {
+///         text().content("Create");
+///     });
+/// });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
-    let args = args.clone();
-    let content = args.content.clone().unwrap_or_else(RenderSlot::empty);
-    render_split_button(args.into(), content);
+pub fn split_leading_button(
+    variant: SplitButtonVariant,
+    size: SplitButtonSize,
+    #[prop(skip_setter)] enabled: Option<bool>,
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    on_click: Option<Callback>,
+    #[prop(skip_setter)] accessibility_label: Option<String>,
+    #[prop(skip_setter)] accessibility_description: Option<String>,
+    content: Option<RenderSlot>,
+) {
+    let content = content.unwrap_or_else(RenderSlot::empty);
+    render_split_button(
+        SplitButtonItemArgs::leading(
+            variant,
+            size,
+            enabled.unwrap_or(true),
+            modifier.unwrap_or_default(),
+            on_click,
+            accessibility_label,
+            accessibility_description,
+        ),
+        content,
+    );
 }
 
 /// # split_trailing_button
@@ -717,7 +521,14 @@ pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — props for this component; see [`SplitButtonTrailingArgs`].
+/// - `variant` — visual emphasis variant.
+/// - `size` — split button size preset.
+/// - `enabled` — optional enabled state; defaults to `true`.
+/// - `modifier` — optional modifier chain applied to the trailing button.
+/// - `on_click` — optional click callback.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `content` — optional slot rendered inside the trailing button.
 ///
 /// ## Examples
 ///
@@ -726,30 +537,45 @@ pub fn split_leading_button(args: &SplitButtonLeadingArgs) {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     split_buttons::{SplitButtonTrailingArgs, split_trailing_button},
+///     split_buttons::split_trailing_button,
 ///     text::text,
 ///     theme::{MaterialTheme, material_theme},
 /// };
 ///
-/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-///     || MaterialTheme::default(),
-///     || {
-///         let render_args = SplitButtonTrailingArgs::default()
-///             .content(|| text(&tessera_components::text::TextArgs::default().text("More")));
-///         split_trailing_button(&render_args);
-///     },
-/// );
-/// material_theme(&args);
+/// material_theme().content(|| {
+///     split_trailing_button().filled(|| {}).content(|| {
+///         text().content("More");
+///     });
+/// });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn split_trailing_button(args: &SplitButtonTrailingArgs) {
-    let args = args.clone();
-    let content = args.content.clone().unwrap_or_else(RenderSlot::empty);
-    render_split_button(args.into(), content);
+pub fn split_trailing_button(
+    variant: SplitButtonVariant,
+    size: SplitButtonSize,
+    #[prop(skip_setter)] enabled: Option<bool>,
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    on_click: Option<Callback>,
+    #[prop(skip_setter)] accessibility_label: Option<String>,
+    #[prop(skip_setter)] accessibility_description: Option<String>,
+    content: Option<RenderSlot>,
+) {
+    let content = content.unwrap_or_else(RenderSlot::empty);
+    render_split_button(
+        SplitButtonItemArgs::trailing(
+            variant,
+            size,
+            enabled.unwrap_or(true),
+            modifier.unwrap_or_default(),
+            on_click,
+            accessibility_label,
+            accessibility_description,
+        ),
+        content,
+    );
 }
-#[derive(Clone, Prop)]
+#[derive(Clone)]
 struct SplitButtonItemArgs {
     enabled: bool,
     modifier: Modifier,
@@ -766,52 +592,66 @@ struct SplitButtonItemArgs {
     accessibility_description: Option<String>,
 }
 
-impl From<SplitButtonLeadingArgs> for SplitButtonItemArgs {
-    fn from(args: SplitButtonLeadingArgs) -> Self {
+impl SplitButtonItemArgs {
+    fn leading(
+        variant: SplitButtonVariant,
+        size: SplitButtonSize,
+        enabled: bool,
+        modifier: Modifier,
+        on_click: Option<Callback>,
+        accessibility_label: Option<String>,
+        accessibility_description: Option<String>,
+    ) -> Self {
         Self {
-            enabled: args.enabled,
-            modifier: args.modifier,
-            shape: args.shape,
-            colors: args.colors,
-            border_width: args.border_width,
-            content_padding: args.content_padding,
-            min_width: args.min_width,
-            container_height: args.container_height,
-            elevation: args.elevation,
-            tonal_elevation: args.tonal_elevation,
-            on_click: args.on_click,
-            accessibility_label: args.accessibility_label,
-            accessibility_description: args.accessibility_description,
+            enabled,
+            modifier,
+            shape: SplitButtonDefaults::leading_shape(size),
+            colors: SplitButtonDefaults::colors(variant),
+            border_width: SplitButtonDefaults::border_width(variant),
+            content_padding: SplitButtonDefaults::leading_content_padding(size),
+            min_width: SplitButtonDefaults::MIN_WIDTH,
+            container_height: SplitButtonDefaults::container_height(size),
+            elevation: SplitButtonDefaults::elevation(variant),
+            tonal_elevation: SplitButtonDefaults::tonal_elevation(variant),
+            on_click,
+            accessibility_label,
+            accessibility_description,
         }
     }
-}
 
-impl From<SplitButtonTrailingArgs> for SplitButtonItemArgs {
-    fn from(args: SplitButtonTrailingArgs) -> Self {
+    fn trailing(
+        variant: SplitButtonVariant,
+        size: SplitButtonSize,
+        enabled: bool,
+        modifier: Modifier,
+        on_click: Option<Callback>,
+        accessibility_label: Option<String>,
+        accessibility_description: Option<String>,
+    ) -> Self {
         Self {
-            enabled: args.enabled,
-            modifier: args.modifier,
-            shape: args.shape,
-            colors: args.colors,
-            border_width: args.border_width,
-            content_padding: args.content_padding,
-            min_width: args.min_width,
-            container_height: args.container_height,
-            elevation: args.elevation,
-            tonal_elevation: args.tonal_elevation,
-            on_click: args.on_click,
-            accessibility_label: args.accessibility_label,
-            accessibility_description: args.accessibility_description,
+            enabled,
+            modifier,
+            shape: SplitButtonDefaults::trailing_shape(size),
+            colors: SplitButtonDefaults::colors(variant),
+            border_width: SplitButtonDefaults::border_width(variant),
+            content_padding: SplitButtonDefaults::trailing_content_padding(size),
+            min_width: SplitButtonDefaults::MIN_WIDTH,
+            container_height: SplitButtonDefaults::container_height(size),
+            elevation: SplitButtonDefaults::elevation(variant),
+            tonal_elevation: SplitButtonDefaults::tonal_elevation(variant),
+            on_click,
+            accessibility_label,
+            accessibility_description,
         }
     }
 }
 
 #[derive(Clone, PartialEq)]
-struct SplitButtonLayoutSpec {
+struct SplitButtonLayoutPolicy {
     spacing: Px,
 }
 
-impl LayoutSpec for SplitButtonLayoutSpec {
+impl LayoutPolicy for SplitButtonLayoutPolicy {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -925,6 +765,58 @@ fn center_offset(child: Px, container: Px) -> Px {
     }
 }
 
+struct SplitButtonSurfaceArgs {
+    modifier: Modifier,
+    style: SurfaceStyle,
+    shape: Shape,
+    content_color: Color,
+    enabled: bool,
+    tonal_elevation: Dp,
+    elevation: Option<Dp>,
+    on_click: Option<Callback>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+}
+
+fn split_button_surface(args: SplitButtonSurfaceArgs) -> crate::surface::SurfaceBuilder {
+    let builder = surface()
+        .modifier(args.modifier)
+        .style(args.style)
+        .shape(args.shape)
+        .content_alignment(Alignment::Center)
+        .content_color(args.content_color)
+        .enabled(args.enabled)
+        .ripple_color(args.content_color)
+        .tonal_elevation(args.tonal_elevation);
+
+    let builder = if let Some(elevation) = args.elevation {
+        builder.elevation(elevation)
+    } else {
+        builder
+    };
+
+    let builder = if let Some(on_click) = args.on_click {
+        builder
+            .on_click_shared(on_click)
+            .accessibility_role(Role::Button)
+            .accessibility_focusable(true)
+    } else {
+        builder
+    };
+
+    let builder = if let Some(label) = args.accessibility_label {
+        builder.accessibility_label(label)
+    } else {
+        builder
+    };
+
+    if let Some(description) = args.accessibility_description {
+        builder.accessibility_description(description)
+    } else {
+        builder
+    }
+}
+
 fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -968,43 +860,26 @@ fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
         }
     };
 
-    let mut surface_args = SurfaceArgs::default()
-        .modifier(modifier.size_in(Some(min_width), None, Some(container_height), None))
-        .style(style)
-        .shape(shape)
-        .content_alignment(Alignment::Center)
-        .content_color(content_color)
-        .enabled(enabled)
-        .ripple_color(content_color)
-        .tonal_elevation(tonal_elevation);
-
-    if let Some(elevation) = elevation {
-        surface_args = surface_args.elevation(elevation);
-    }
-
-    if let Some(on_click) = on_click {
-        surface_args = surface_args
-            .on_click_shared(on_click)
-            .accessibility_role(Role::Button)
-            .accessibility_focusable(true);
-    }
-
-    if let Some(label) = accessibility_label {
-        surface_args = surface_args.accessibility_label(label);
-    }
-    if let Some(description) = accessibility_description {
-        surface_args = surface_args.accessibility_description(description);
-    }
-
-    surface(&crate::surface::SurfaceArgs::with_child(
-        surface_args,
-        move || {
-            let content = content.clone();
-            provide_text_style(typography.label_large, move || {
-                Modifier::new().padding(content_padding).run(move || {
+    split_button_surface(SplitButtonSurfaceArgs {
+        modifier: modifier.size_in(Some(min_width), None, Some(container_height), None),
+        style,
+        shape,
+        content_color,
+        enabled,
+        tonal_elevation,
+        elevation,
+        on_click,
+        accessibility_label,
+        accessibility_description,
+    })
+    .with_child(move || {
+        let content = content.clone();
+        provide_text_style(typography.label_large, move || {
+            layout_primitive()
+                .modifier(Modifier::new().padding(content_padding))
+                .child(move || {
                     content.render();
                 });
-            });
-        },
-    ));
+        });
+    });
 }

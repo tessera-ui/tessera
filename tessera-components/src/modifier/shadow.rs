@@ -1,7 +1,6 @@
 use tessera_ui::{
-    Color, ComputedData, Dp, MeasurementError, Modifier, Prop, PxPosition, PxSize, RenderSlot,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
-    tessera, use_context,
+    Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, PxSize,
+    modifier::ModifierCapabilityExt as _, use_context,
 };
 
 use crate::{
@@ -15,8 +14,7 @@ use crate::{
 use super::ModifierExt;
 
 /// Arguments for the `shadow` modifier.
-#[derive(Clone, Debug, Prop)]
-#[prop(skip_setter)]
+#[derive(Clone, Debug)]
 pub struct ShadowArgs {
     /// The elevation of the shadow.
     pub elevation: Dp,
@@ -24,9 +22,9 @@ pub struct ShadowArgs {
     pub shape: Shape,
     /// Whether to clip the content to the shape.
     pub clip: bool,
-    /// Color of the ambient shadow. If None, uses the theme default.
+    /// Color of the ambient shadow. If `None`, uses the theme default.
     pub ambient_color: Option<Color>,
-    /// Color of the spot shadow. If None, uses the theme default.
+    /// Color of the spot shadow. If `None`, uses the theme default.
     pub spot_color: Option<Color>,
 }
 
@@ -42,43 +40,28 @@ impl Default for ShadowArgs {
     }
 }
 
-impl ShadowArgs {
-    /// Creates a default `ShadowArgs` with the given elevation.
-    pub fn new(elevation: Dp) -> Self {
-        Self {
-            elevation,
-            ..Default::default()
-        }
-    }
-
-    /// Sets the shape.
-    pub fn shape(mut self, shape: Shape) -> Self {
-        self.shape = shape;
-        self
-    }
-
-    /// Sets whether to clip the content.
-    pub fn clip(mut self, clip: bool) -> Self {
-        self.clip = clip;
-        self
-    }
-
-    /// Sets the ambient shadow color.
-    pub fn ambient_color(mut self, color: Color) -> Self {
-        self.ambient_color = Some(color);
-        self
-    }
-
-    /// Sets the spot shadow color.
-    pub fn spot_color(mut self, color: Color) -> Self {
-        self.spot_color = Some(color);
-        self
-    }
+#[derive(Clone)]
+pub(crate) struct ShadowModifierNode {
+    pub shadow: ShadowLayers,
+    pub shape: Shape,
 }
 
-impl From<Dp> for ShadowArgs {
-    fn from(elevation: Dp) -> Self {
-        Self::new(elevation)
+impl DrawModifierNode for ShadowModifierNode {
+    fn draw(&self, ctx: &mut DrawModifierContext<'_>, content: &mut dyn DrawModifierContent) {
+        let mut metadata = ctx.render_input.metadata_mut();
+        let Some(size) = metadata.computed_data() else {
+            return;
+        };
+        let size = PxSize::from(size);
+        if size.width.0 > 0 && size.height.0 > 0 {
+            record_md3_shadow(
+                metadata.fragment_mut(),
+                self.shadow,
+                self.shape.resolve_for_size(size),
+            );
+        }
+        drop(metadata);
+        content.draw(ctx.render_input);
     }
 }
 
@@ -100,12 +83,9 @@ pub(super) fn apply_shadow_modifier(base: Modifier, args: ShadowArgs) -> Modifie
         layer.color = spot;
     }
 
-    let mut modifier = base.push_wrapper(move |child| {
-        let shape = args.shape;
-        let child = RenderSlot::new(child);
-        move || {
-            modifier_shadow_layers(layers, shape, child.clone());
-        }
+    let mut modifier = base.push_draw(ShadowModifierNode {
+        shadow: layers,
+        shape: args.shape,
     });
 
     if args.clip {
@@ -114,70 +94,6 @@ pub(super) fn apply_shadow_modifier(base: Modifier, args: ShadowArgs) -> Modifie
     }
 
     modifier
-}
-
-#[derive(Clone, PartialEq)]
-struct ShadowLayout {
-    shadow: ShadowLayers,
-    shape: Shape,
-}
-
-impl LayoutSpec for ShadowLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let child_id = input
-            .children_ids()
-            .first()
-            .copied()
-            .expect("modifier_shadow expects exactly one child");
-        let child_measurement = input.measure_child_in_parent_constraint(child_id)?;
-        output.place_child(child_id, PxPosition::ZERO);
-        Ok(child_measurement)
-    }
-
-    fn record(&self, input: &RenderInput<'_>) {
-        let mut metadata = input.metadata_mut();
-        let Some(size) = metadata.computed_data else {
-            return;
-        };
-        let size = PxSize::from(size);
-        if size.width.0 <= 0 || size.height.0 <= 0 {
-            return;
-        }
-        record_md3_shadow(
-            metadata.fragment_mut(),
-            self.shadow,
-            self.shape.resolve_for_size(size),
-        );
-    }
-}
-
-#[derive(Clone, Prop)]
-struct ModifierShadowLayersArgs {
-    shadow: ShadowLayers,
-    shape: Shape,
-    child: RenderSlot,
-}
-
-pub(super) fn modifier_shadow_layers(shadow: ShadowLayers, shape: Shape, child: RenderSlot) {
-    let args = ModifierShadowLayersArgs {
-        shadow,
-        shape,
-        child,
-    };
-    modifier_shadow_layers_wrapper(&args);
-}
-
-#[tessera]
-fn modifier_shadow_layers_wrapper(args: &ModifierShadowLayersArgs) {
-    layout(ShadowLayout {
-        shadow: args.shadow,
-        shape: args.shape,
-    });
-    args.child.render();
 }
 
 fn record_md3_shadow(

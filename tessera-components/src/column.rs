@@ -4,130 +4,15 @@
 //!
 //! Use to stack children vertically.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, NodeId, ParentConstraint, Prop, Px, PxPosition, RenderSlot,
-    tessera,
+    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy,
+    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot,
+    layout::layout_primitive, tessera,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     modifier::ModifierExt as _,
 };
-
-/// Arguments for the `column` component.
-#[derive(Clone, Prop)]
-pub struct ColumnArgs {
-    /// Modifier chain applied to the column subtree.
-    pub modifier: Modifier,
-    /// Main axis alignment (vertical alignment).
-    pub main_axis_alignment: MainAxisAlignment,
-    /// Cross axis alignment (horizontal alignment).
-    pub cross_axis_alignment: CrossAxisAlignment,
-    /// Child slots rendered by the column.
-    #[prop(skip_setter)]
-    pub children: Vec<RenderSlot>,
-    /// Optional weight per child (same index as `children`).
-    pub child_weights: Vec<Option<f32>>,
-}
-
-impl Default for ColumnArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new()
-                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
-            main_axis_alignment: MainAxisAlignment::Start,
-            cross_axis_alignment: CrossAxisAlignment::Start,
-            children: Vec::new(),
-            child_weights: Vec::new(),
-        }
-    }
-}
-
-impl ColumnArgs {
-    /// Adds a child without weight.
-    pub fn child<F>(mut self, child_closure: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_weights.push(None);
-        self
-    }
-
-    /// Adds a child without weight using a shared slot.
-    pub fn child_shared(mut self, child_closure: impl Into<RenderSlot>) -> Self {
-        self.children.push(child_closure.into());
-        self.child_weights.push(None);
-        self
-    }
-
-    /// Adds a child with weight.
-    pub fn child_weighted<F>(mut self, child_closure: F, weight: f32) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_weights.push(Some(weight));
-        self
-    }
-
-    /// Adds a child with weight using a shared slot.
-    pub fn child_weighted_shared(
-        mut self,
-        child_closure: impl Into<RenderSlot>,
-        weight: f32,
-    ) -> Self {
-        self.children.push(child_closure.into());
-        self.child_weights.push(Some(weight));
-        self
-    }
-
-    /// Builds children using the scope DSL.
-    pub fn children<F>(mut self, scope_config: F) -> Self
-    where
-        F: FnOnce(&mut ColumnScope),
-    {
-        let mut child_closures: Vec<RenderSlot> = Vec::new();
-        let mut child_weights: Vec<Option<f32>> = Vec::new();
-        {
-            let mut scope = ColumnScope {
-                child_closures: &mut child_closures,
-                child_weights: &mut child_weights,
-            };
-            scope_config(&mut scope);
-        }
-        self.children = child_closures;
-        self.child_weights = child_weights;
-        self
-    }
-}
-
-/// A scope for declaratively adding children to a `column` component.
-pub struct ColumnScope<'a> {
-    child_closures: &'a mut Vec<RenderSlot>,
-    child_weights: &'a mut Vec<Option<f32>>,
-}
-
-impl<'a> ColumnScope<'a> {
-    /// Adds a child component to the column.
-    pub fn child<F>(&mut self, child_closure: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_weights.push(None);
-    }
-
-    /// Adds a child component to the column with a specified weight for
-    /// flexible space distribution.
-    pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_weights.push(Some(weight));
-    }
-}
 
 /// # column
 ///
@@ -140,71 +25,63 @@ impl<'a> ColumnScope<'a> {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures alignment and modifiers; see [`ColumnArgs`].
+/// - `modifier` — modifier chain applied to the column container.
+/// - `main_axis_alignment` — alignment along the vertical axis.
+/// - `cross_axis_alignment` — alignment along the horizontal axis.
+/// - `children` — child slot rendered inside the column.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::column::{ColumnArgs, column};
-/// use tessera_components::spacer::spacer;
-/// use tessera_components::text::{TextArgs, text};
+/// use tessera_components::{column::column, modifier::ModifierExt as _, spacer::spacer, text::text};
 /// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// column(&ColumnArgs::default().children(|scope| {
-///     scope.child(|| text(&TextArgs::default().text("First item")));
-///     scope.child_weighted(
-///         || spacer(&tessera_components::spacer::SpacerArgs::new(Modifier::new())),
-///         1.0,
-///     ); // This spacer will be flexible
-///     scope.child(|| text(&TextArgs::default().text("Last item")));
-/// }));
+/// column().children(|| {
+///     text().content("First item");
+///     spacer().modifier(Modifier::new().weight(1.0));
+///     text().content("Last item");
+/// });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn column(args: &ColumnArgs) {
-    let args = args.clone();
-    let child_len = args.children.len();
-    let mut child_weights = args.child_weights;
-    if child_weights.len() < child_len {
-        child_weights.resize(child_len, None);
-    } else if child_weights.len() > child_len {
-        child_weights.truncate(child_len);
-    }
-    let children = args.children;
-    let modifier = args.modifier;
-    let main_axis_alignment = args.main_axis_alignment;
-    let cross_axis_alignment = args.cross_axis_alignment;
-    modifier.run(move || {
-        layout(ColumnLayout {
+pub fn column(
+    modifier: Option<Modifier>,
+    main_axis_alignment: MainAxisAlignment,
+    cross_axis_alignment: CrossAxisAlignment,
+    children: RenderSlot,
+) {
+    let modifier = modifier.unwrap_or_else(|| {
+        Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
+    });
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(ColumnLayout {
             main_axis_alignment,
             cross_axis_alignment,
-            child_weights: child_weights.clone(),
+        })
+        .child(move || {
+            children.render();
         });
-
-        for child_closure in &children {
-            child_closure.render();
-        }
-    });
 }
 
 #[derive(Clone, PartialEq)]
 struct ColumnLayout {
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,
-    child_weights: Vec<Option<f32>>,
 }
 
-impl LayoutSpec for ColumnLayout {
+impl LayoutPolicy for ColumnLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let n = self.child_weights.len();
+        let child_weights = collect_child_weights(input);
+        let n = child_weights.len();
         assert_eq!(
             input.children_ids().len(),
             n,
@@ -219,7 +96,7 @@ impl LayoutSpec for ColumnLayout {
         let mut children_sizes = vec![None; n];
         let mut max_child_width = Px(0);
 
-        let has_weighted_children = self.child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
+        let has_weighted_children = child_weights.iter().any(|&weight| weight > 0.0);
         let should_use_weight_for_height = has_weighted_children
             && matches!(
                 column_effective_constraint.height,
@@ -232,7 +109,7 @@ impl LayoutSpec for ColumnLayout {
             if should_use_weight_for_height {
                 measure_weighted_column(
                     input,
-                    &self.child_weights,
+                    &child_weights,
                     &column_effective_constraint,
                     &mut children_sizes,
                     &mut max_child_width,
@@ -281,18 +158,14 @@ struct PlaceChildrenArgs<'a> {
 
 /// Helper: classify children into weighted / unweighted and compute total
 /// weight.
-fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, f32) {
+fn classify_children(child_weights: &[f32]) -> (Vec<usize>, Vec<usize>, f32) {
     let mut weighted_indices = Vec::new();
     let mut unweighted_indices = Vec::new();
     let mut total_weight = 0.0;
-    for (i, weight_opt) in child_weights.iter().enumerate() {
-        if let Some(w) = weight_opt {
-            if *w > 0.0 {
-                weighted_indices.push(i);
-                total_weight += w;
-            } else {
-                unweighted_indices.push(i);
-            }
+    for (i, &weight) in child_weights.iter().enumerate() {
+        if weight > 0.0 {
+            weighted_indices.push(i);
+            total_weight += weight;
         } else {
             unweighted_indices.push(i);
         }
@@ -350,7 +223,7 @@ struct WeightedColumnMeasureContext<'a> {
     children_sizes: &'a mut [Option<ComputedData>],
     max_child_width: &'a mut Px,
     column_effective_constraint: &'a Constraint,
-    child_weights: &'a [Option<f32>],
+    child_weights: &'a [f32],
 }
 
 fn measure_weighted_children_for_column(
@@ -366,7 +239,7 @@ fn measure_weighted_children_for_column(
     let children_to_measure: Vec<_> = weighted_indices
         .iter()
         .map(|&child_idx| {
-            let child_weight = ctx.child_weights[child_idx].unwrap_or(0.0);
+            let child_weight = ctx.child_weights[child_idx];
             let allocated_height =
                 Px((remaining_height.0 as f32 * (child_weight / total_weight)) as i32);
             let child_id = ctx.input.children_ids()[child_idx];
@@ -460,7 +333,7 @@ fn calculate_final_column_width(
 /// Returns (final_width, final_height, total_measured_children_height)
 fn measure_weighted_column(
     input: &LayoutInput<'_>,
-    child_weights: &[Option<f32>],
+    child_weights: &[f32],
     column_effective_constraint: &Constraint,
     children_sizes: &mut [Option<ComputedData>],
     max_child_width: &mut Px,
@@ -515,6 +388,19 @@ fn measure_weighted_column(
         final_column_height,
         total_measured_children_height,
     ))
+}
+
+fn collect_child_weights(input: &LayoutInput<'_>) -> Vec<f32> {
+    input
+        .children_ids()
+        .iter()
+        .map(|&child_id| {
+            input
+                .child_parent_data::<crate::modifier::WeightParentData>(child_id)
+                .map(|data| data.weight)
+                .unwrap_or(0.0)
+        })
+        .collect()
 }
 
 fn measure_unweighted_column(
@@ -649,5 +535,173 @@ fn calculate_cross_axis_offset_for_column(
         CrossAxisAlignment::Center => (final_column_width - child_actual_size.width).max(Px(0)) / 2,
         CrossAxisAlignment::End => (final_column_width - child_actual_size.width).max(Px(0)),
         CrossAxisAlignment::Stretch => Px(0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+    };
+
+    use crate::{
+        alignment::{CrossAxisAlignment, MainAxisAlignment},
+        modifier::{ModifierExt as _, SemanticsArgs},
+    };
+
+    use super::column;
+
+    #[derive(Clone, PartialEq)]
+    struct FixedTestLayout {
+        width: i32,
+        height: i32,
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct FillHeightTestLayout {
+        width: i32,
+    }
+
+    impl LayoutPolicy for FixedTestLayout {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    impl LayoutPolicy for FillHeightTestLayout {
+        fn measure(
+            &self,
+            input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            let height = match input.parent_constraint().height() {
+                DimensionValue::Fixed(height) => height,
+                DimensionValue::Wrap {
+                    max: Some(height), ..
+                }
+                | DimensionValue::Fill {
+                    max: Some(height), ..
+                } => height,
+                _ => panic!("FillHeightTestLayout requires a bounded height constraint"),
+            };
+
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height,
+            })
+        }
+    }
+
+    #[tessera]
+    fn fixed_test_box(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn fill_height_test_box(tag: String, width: i32) {
+        layout_primitive()
+            .layout_policy(FillHeightTestLayout { width })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn column_layout_case() {
+        column()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(100))),
+                Some(DimensionValue::Fixed(Px::new(60))),
+            ))
+            .main_axis_alignment(MainAxisAlignment::Start)
+            .cross_axis_alignment(CrossAxisAlignment::Center)
+            .children(|| {
+                column_first_box();
+                column_second_box();
+            });
+    }
+
+    #[tessera]
+    fn column_first_box() {
+        fixed_test_box()
+            .tag("column_first".to_string())
+            .width(20)
+            .height(10);
+    }
+
+    #[tessera]
+    fn column_second_box() {
+        fixed_test_box()
+            .tag("column_second".to_string())
+            .width(40)
+            .height(15);
+    }
+
+    #[tessera]
+    fn column_weighted_case() {
+        column()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(60))),
+                Some(DimensionValue::Fixed(Px::new(90))),
+            ))
+            .main_axis_alignment(MainAxisAlignment::Start)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .children(|| {
+                fixed_test_box()
+                    .tag("column_weighted_fixed".to_string())
+                    .width(20)
+                    .height(10);
+                layout_primitive()
+                    .modifier(Modifier::new().weight(1.0))
+                    .child(|| {
+                        fill_height_test_box()
+                            .tag("column_weighted_fill".to_string())
+                            .width(15);
+                    });
+            });
+    }
+
+    #[test]
+    fn column_centers_children_on_cross_axis() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 80),
+            content: {
+                column_layout_case();
+            },
+            expect: {
+                node("column_first").position(40, 0).size(20, 10);
+                node("column_second").position(30, 10).size(40, 15);
+            }
+        }
+    }
+
+    #[test]
+    fn column_allocates_remaining_height_to_weighted_child() {
+        tessera_ui::assert_layout! {
+            viewport: (100, 100),
+            content: {
+                column_weighted_case();
+            },
+            expect: {
+                node("column_weighted_fixed").position(0, 0).size(20, 10);
+                node("column_weighted_fill").position(0, 10).size(15, 80);
+            }
+        }
     }
 }

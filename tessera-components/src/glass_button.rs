@@ -3,161 +3,70 @@
 //! ## Usage
 //!
 //! Use for visually distinctive actions in layered or modern UIs.
-use tessera_ui::{Callback, Color, DimensionValue, Dp, Modifier, Prop, RenderSlot, tessera};
+use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, layout::layout_primitive, tessera};
 
 use crate::{
     button::ButtonDefaults,
-    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
+    fluid_glass::{GlassBorder, fluid_glass},
     modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
 };
 
-/// Arguments for the `glass_button` component.
-#[derive(Clone, Prop)]
-pub struct GlassButtonArgs {
-    /// Optional modifier chain applied to the button node.
-    pub modifier: Modifier,
-    /// The click callback function
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// The ripple color (RGB) for the button.
-    pub ripple_color: Color,
-    /// The padding of the button.
-    pub padding: Dp,
-    /// Tint color applied to the glass surface.
-    pub tint_color: Color,
-    /// Shape used for the button background.
-    pub shape: Shape,
-    /// Blur radius applied to the captured background.
-    pub blur_radius: Dp,
-    /// Virtual height of the chromatic dispersion effect.
-    pub dispersion_height: Dp,
-    /// Multiplier controlling the strength of chromatic aberration.
-    pub chroma_multiplier: f32,
-    /// Virtual height used when calculating refraction distortion.
-    pub refraction_height: Dp,
-    /// Amount of refraction to apply to the background.
-    pub refraction_amount: f32,
-    /// Strength of the grain/noise applied across the surface.
-    pub noise_amount: f32,
-    /// Scale factor for the generated noise texture.
-    pub noise_scale: f32,
-    /// Time value for animating noise or other procedural effects.
-    pub time: f32,
-    /// Optional contrast adjustment applied to the glass rendering.
-    pub contrast: Option<f32>,
-    /// Optional outline configuration for the glass shape.
-    pub border: Option<GlassBorder>,
-    /// Optional label announced by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional longer description for assistive technologies.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-    /// Whether the button should remain focusable even when no click handler is
-    /// provided.
-    pub accessibility_focusable: bool,
-    /// Content rendered inside the glass button.
-    #[prop(skip_setter)]
-    pub child: RenderSlot,
+#[derive(Clone)]
+struct GlassButtonResolvedArgs {
+    modifier: Modifier,
+    on_click: Option<Callback>,
+    padding: Dp,
+    tint_color: Color,
+    shape: Shape,
+    blur_radius: Dp,
+    dispersion_height: Dp,
+    chroma_multiplier: f32,
+    refraction_height: Dp,
+    refraction_amount: f32,
+    noise_amount: f32,
+    noise_scale: f32,
+    time: f32,
+    contrast: Option<f32>,
+    border: Option<GlassBorder>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    accessibility_focusable: bool,
+    child: Option<RenderSlot>,
 }
 
-impl GlassButtonArgs {
-    /// Set the click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Some(Callback::new(on_click));
-        self
+impl GlassButtonBuilder {
+    /// Sets the child content slot.
+    pub fn with_child(self, child: impl Fn() + Send + Sync + 'static) -> Self {
+        self.child(child)
     }
 
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
-        self
-    }
-
-    /// Set the child content slot.
-    pub fn child<F>(mut self, child: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child = RenderSlot::new(child);
-        self
-    }
-
-    /// Set the child content slot using a shared render slot.
-    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
-        self.child = child.into();
-        self
-    }
-}
-
-impl Default for GlassButtonArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new(),
-            on_click: None,
-            ripple_color: Color::from_rgb(1.0, 1.0, 1.0),
-            padding: Dp(12.0),
-            tint_color: Color::new(0.5, 0.5, 0.5, 0.1),
-            shape: Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(Dp(25.0), 3.0),
-                top_right: RoundedCorner::manual(Dp(25.0), 3.0),
-                bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
-                bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
-            },
-            blur_radius: Dp(0.0),
-            dispersion_height: Dp(25.0),
-            chroma_multiplier: 1.1,
-            refraction_height: Dp(24.0),
-            refraction_amount: 32.0,
-            noise_amount: 0.0,
-            noise_scale: 1.0,
-            time: 0.0,
-            contrast: None,
-            border: None,
-            accessibility_label: None,
-            accessibility_description: None,
-            accessibility_focusable: false,
-            child: RenderSlot::empty(),
-        }
-    }
-}
-
-/// Convenience constructors for common glass button styles
-impl GlassButtonArgs {
-    /// Create a primary glass button with default blue tint
-    pub fn primary(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        GlassButtonArgs::default()
-            .on_click(on_click)
-            .tint_color(Color::new(0.2, 0.5, 0.8, 0.2)) // Blue tint
+    /// Applies the primary glass button preset.
+    pub fn primary(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.tint_color(Color::new(0.2, 0.5, 0.8, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
+            .on_click(on_click)
     }
 
-    /// Create a secondary glass button with gray tint
-    pub fn secondary(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        GlassButtonArgs::default()
-            .on_click(on_click)
-            .tint_color(Color::new(0.6, 0.6, 0.6, 0.2)) // Gray tint
+    /// Applies the secondary glass button preset.
+    pub fn secondary(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.tint_color(Color::new(0.6, 0.6, 0.6, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
+            .on_click(on_click)
     }
 
-    /// Create a success glass button with green tint
-    pub fn success(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        GlassButtonArgs::default()
-            .on_click(on_click)
-            .tint_color(Color::new(0.1, 0.7, 0.3, 0.2)) // Green tint
+    /// Applies the success glass button preset.
+    pub fn success(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.tint_color(Color::new(0.1, 0.7, 0.3, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
+            .on_click(on_click)
     }
 
-    /// Create a danger glass button with red tint
-    pub fn danger(on_click: impl Fn() + Send + Sync + 'static) -> Self {
-        GlassButtonArgs::default()
-            .on_click(on_click)
-            .tint_color(Color::new(0.8, 0.2, 0.2, 0.2)) // Red tint
+    /// Applies the danger glass button preset.
+    pub fn danger(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.tint_color(Color::new(0.8, 0.2, 0.2, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
+            .on_click(on_click)
     }
 }
 
@@ -172,54 +81,102 @@ impl GlassButtonArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the button's glass appearance and `on_click` handler;
-///   see [`GlassButtonArgs`].
-/// - `child` — a closure that renders the button's content (e.g., text or an
-///   icon).
+/// - `modifier` — modifier chain applied to the button subtree.
+/// - `on_click` — optional click callback.
+/// - `padding` — optional inner padding.
+/// - `tint_color` — optional glass tint color.
+/// - `shape` — optional shape override.
+/// - `blur_radius` — optional blur radius.
+/// - `dispersion_height` — optional chromatic dispersion height.
+/// - `chroma_multiplier` — optional chromatic multiplier.
+/// - `refraction_height` — optional refraction height.
+/// - `refraction_amount` — optional refraction amount.
+/// - `noise_amount` — optional noise amount.
+/// - `noise_scale` — optional noise scale.
+/// - `time` — optional animated time input.
+/// - `contrast` — optional contrast override.
+/// - `border` — optional glass border override.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `accessibility_focusable` — optional accessibility focusable flag.
+/// - `child` — optional child render slot.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{
-///     glass_button::{GlassButtonArgs, glass_button},
-///     text::{TextArgs, text},
-/// };
-/// use tessera_ui::Color;
+/// use tessera_components::{glass_button::glass_button, text::text};
+/// use tessera_ui::tessera;
 ///
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// glass_button(
-///     &GlassButtonArgs::default()
-///         .on_click(|| println!("Button clicked!"))
-///         .tint_color(Color::new(0.2, 0.3, 0.8, 0.3))
-///         .child(|| text(&TextArgs::default().text("Click Me"))),
-/// );
-/// # }
-/// # component();
+/// #[tessera]
+/// fn component() {
+///     glass_button()
+///         .primary(|| println!("Button clicked!"))
+///         .with_child(|| {
+///             text().content("Click Me");
+///         });
+/// }
+///
+/// component();
 /// ```
 #[tessera]
-pub fn glass_button(args: &GlassButtonArgs) {
-    let button_args = args.clone();
-    let child = button_args.child.clone();
-    let outer_modifier = button_args
-        .modifier
-        .clone()
-        .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
-        .size_in(
-            Some(ButtonDefaults::MIN_WIDTH),
-            None,
-            Some(ButtonDefaults::MIN_HEIGHT),
-            None,
-        );
+pub fn glass_button(
+    modifier: Modifier,
+    on_click: Option<Callback>,
+    padding: Option<Dp>,
+    tint_color: Option<Color>,
+    shape: Option<Shape>,
+    blur_radius: Option<Dp>,
+    dispersion_height: Option<Dp>,
+    chroma_multiplier: Option<f32>,
+    refraction_height: Option<Dp>,
+    refraction_amount: Option<f32>,
+    noise_amount: Option<f32>,
+    noise_scale: Option<f32>,
+    time: Option<f32>,
+    contrast: Option<f32>,
+    border: Option<GlassBorder>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    accessibility_focusable: Option<bool>,
+    child: Option<RenderSlot>,
+) {
+    let button_args = GlassButtonResolvedArgs {
+        modifier,
+        on_click,
+        padding: padding.unwrap_or(Dp(12.0)),
+        tint_color: tint_color.unwrap_or(Color::new(0.5, 0.5, 0.5, 0.1)),
+        shape: shape.unwrap_or(Shape::RoundedRectangle {
+            top_left: RoundedCorner::manual(Dp(25.0), 3.0),
+            top_right: RoundedCorner::manual(Dp(25.0), 3.0),
+            bottom_right: RoundedCorner::manual(Dp(25.0), 3.0),
+            bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
+        }),
+        blur_radius: blur_radius.unwrap_or(Dp(0.0)),
+        dispersion_height: dispersion_height.unwrap_or(Dp(25.0)),
+        chroma_multiplier: chroma_multiplier.unwrap_or(1.1),
+        refraction_height: refraction_height.unwrap_or(Dp(24.0)),
+        refraction_amount: refraction_amount.unwrap_or(32.0),
+        noise_amount: noise_amount.unwrap_or(0.0),
+        noise_scale: noise_scale.unwrap_or(1.0),
+        time: time.unwrap_or(0.0),
+        contrast,
+        border,
+        accessibility_label,
+        accessibility_description,
+        accessibility_focusable: accessibility_focusable.unwrap_or(false),
+        child,
+    };
 
-    outer_modifier.run(move || {
-        let mut glass_args = FluidGlassArgs::default();
-        if let Some(contrast) = button_args.contrast {
-            glass_args = glass_args.contrast(contrast);
-        }
+    let child = button_args.child.unwrap_or_else(RenderSlot::empty);
+    let outer_modifier = button_args.modifier.clone().size_in(
+        Some(ButtonDefaults::MIN_WIDTH),
+        None,
+        Some(ButtonDefaults::MIN_HEIGHT),
+        None,
+    );
 
-        let mut glass_args = glass_args
+    layout_primitive().modifier(outer_modifier).child(move || {
+        let mut builder = fluid_glass()
             .modifier(Modifier::new())
             .tint_color(button_args.tint_color)
             .shape(button_args.shape)
@@ -231,32 +188,28 @@ pub fn glass_button(args: &GlassButtonArgs) {
             .noise_amount(button_args.noise_amount)
             .noise_scale(button_args.noise_scale)
             .time(button_args.time)
-            .padding(button_args.padding);
+            .padding(button_args.padding)
+            .child_shared(child.clone());
 
+        if let Some(contrast) = button_args.contrast {
+            builder = builder.contrast(contrast);
+        }
         if let Some(on_click) = button_args.on_click {
-            glass_args = glass_args.on_click_shared(on_click);
+            builder = builder.on_click_shared(on_click);
         }
-
         if let Some(border) = button_args.border {
-            glass_args = glass_args.border(border);
+            builder = builder.border(border);
         }
-
         if let Some(label) = button_args.accessibility_label.clone() {
-            glass_args = glass_args.accessibility_label(label);
+            builder = builder.accessibility_label(label);
         }
-
         if let Some(description) = button_args.accessibility_description.clone() {
-            glass_args = glass_args.accessibility_description(description);
+            builder = builder.accessibility_description(description);
         }
-
         if button_args.accessibility_focusable {
-            glass_args = glass_args.accessibility_focusable(true);
+            builder = builder.accessibility_focusable(true);
         }
 
-        let child = child.clone();
-        fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-            &glass_args,
-            move || child.render(),
-        ));
+        drop(builder);
     });
 }

@@ -5,15 +5,15 @@
 //! Highlight counts or status markers on top of icons and other UI elements.
 
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Prop, Px, PxPosition, PxSize, RenderInput, RenderSlot, provide_context,
-    tessera, use_context,
+    Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
+    MeasurementError, Px, PxPosition, PxSize, RenderInput, RenderPolicy, RenderSlot,
+    layout::layout_primitive, provide_context, tessera, use_context,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     pipelines::shape::command::ShapeCommand,
-    row::{RowArgs, row},
+    row::row,
     shape_def::{ResolvedShape, Shape},
     theme::{ContentColor, MaterialTheme, content_color_for, provide_text_style},
 };
@@ -65,7 +65,7 @@ fn relax_min_constraint(dim: DimensionValue) -> DimensionValue {
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 struct BadgedBoxLayout;
 
-impl LayoutSpec for BadgedBoxLayout {
+impl LayoutPolicy for BadgedBoxLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -138,7 +138,7 @@ struct BadgeLayout {
     container_color: Color,
 }
 
-impl LayoutSpec for BadgeLayout {
+impl LayoutPolicy for BadgeLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -162,11 +162,13 @@ impl LayoutSpec for BadgeLayout {
 
         Ok(ComputedData { width, height })
     }
+}
 
+impl RenderPolicy for BadgeLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
         let size = metadata
-            .computed_data
+            .computed_data()
             .expect("badge must have computed size before record");
 
         let ResolvedShape::Rounded {
@@ -193,7 +195,7 @@ struct BadgeWithContentLayout {
     padding_px: Px,
 }
 
-impl LayoutSpec for BadgeWithContentLayout {
+impl LayoutPolicy for BadgeWithContentLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -248,11 +250,13 @@ impl LayoutSpec for BadgeWithContentLayout {
 
         Ok(ComputedData { width, height })
     }
+}
 
+impl RenderPolicy for BadgeWithContentLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
         let size = metadata
-            .computed_data
+            .computed_data()
             .expect("badge_with_content must have computed size before record");
 
         let ResolvedShape::Rounded {
@@ -306,99 +310,6 @@ impl BadgeDefaults {
     }
 }
 
-/// Arguments for [`badge`] and [`badge_with_content`].
-#[derive(Clone, Prop)]
-pub struct BadgeArgs {
-    /// Background color of the badge.
-    pub container_color: Color,
-    /// Preferred content color for badge descendants.
-    ///
-    /// When `None`, the badge derives a matching content color from the theme.
-    pub content_color: Option<Color>,
-    /// Optional content rendered by [`badge_with_content`].
-    #[prop(skip_setter)]
-    pub content: Option<RenderSlot>,
-}
-
-impl BadgeArgs {
-    /// Set the content slot used by [`badge_with_content`].
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = Some(RenderSlot::new(content));
-        self
-    }
-
-    /// Set the content slot used by [`badge_with_content`] with a shared slot.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-}
-
-impl Default for BadgeArgs {
-    fn default() -> Self {
-        Self {
-            container_color: BadgeDefaults::container_color(),
-            content_color: None,
-            content: None,
-        }
-    }
-}
-
-/// Arguments for [`badged_box`].
-#[derive(Clone, Prop)]
-pub struct BadgedBoxArgs {
-    /// Badge slot rendered on top of content.
-    #[prop(skip_setter)]
-    pub badge: RenderSlot,
-    /// Anchor content slot.
-    #[prop(skip_setter)]
-    pub content: RenderSlot,
-}
-
-impl BadgedBoxArgs {
-    /// Set the badge slot.
-    pub fn badge<F>(mut self, badge: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.badge = RenderSlot::new(badge);
-        self
-    }
-
-    /// Set the badge slot using a shared slot.
-    pub fn badge_shared(mut self, badge: impl Into<RenderSlot>) -> Self {
-        self.badge = badge.into();
-        self
-    }
-
-    /// Set the content slot.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = RenderSlot::new(content);
-        self
-    }
-
-    /// Set the content slot using a shared slot.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = content.into();
-        self
-    }
-}
-
-impl Default for BadgedBoxArgs {
-    fn default() -> Self {
-        Self {
-            badge: RenderSlot::empty(),
-            content: RenderSlot::empty(),
-        }
-    }
-}
-
 /// # badged_box
 ///
 /// Positions a badge relative to an anchor element.
@@ -410,21 +321,24 @@ impl Default for BadgedBoxArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures badge and anchor slots; see [`BadgedBoxArgs`].
+/// - `badge` — badge slot rendered on top of content.
+/// - `content` — anchor content slot.
 ///
 /// ## Examples
 ///
-/// ```
+/// ```rust
 /// use tessera_components::badge::BadgeDefaults;
 /// use tessera_ui::Dp;
 /// assert_eq!(BadgeDefaults::OFFSET, Dp(6.0));
 /// ```
 #[tessera]
-pub fn badged_box(args: &BadgedBoxArgs) {
-    let args = args.clone();
-    layout(BadgedBoxLayout);
-    args.content.render();
-    args.badge.render();
+pub fn badged_box(badge: Option<RenderSlot>, content: Option<RenderSlot>) {
+    layout_primitive()
+        .layout_policy(BadgedBoxLayout)
+        .child(move || {
+            content.clone().unwrap_or_else(RenderSlot::empty).render();
+            badge.clone().unwrap_or_else(RenderSlot::empty).render();
+        });
 }
 
 /// # badge
@@ -437,27 +351,34 @@ pub fn badged_box(args: &BadgedBoxArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures badge colors; see [`BadgeArgs`].
+/// - `container_color` — optional background color of the badge.
+/// - `content_color` — optional preferred content color for descendants.
 ///
 /// ## Examples
 ///
-/// ```
-/// use tessera_components::badge::BadgeArgs;
+/// ```rust
+/// use tessera_components::badge::badge;
 /// use tessera_ui::Color;
-///
-/// let args = BadgeArgs {
-///     container_color: Color::RED,
-///     content_color: None,
-///     content: None,
-/// }
-/// .content_color(Color::WHITE);
-/// assert_eq!(args.content_color, Some(Color::WHITE));
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// badge().content_color(Color::WHITE);
+/// #     });
+/// # }
+/// # component();
 /// ```
 #[tessera]
-pub fn badge(args: &BadgeArgs) {
-    let args = args.clone();
-    let container_color = args.container_color;
-    layout(BadgeLayout { container_color });
+pub fn badge(container_color: Option<Color>, content_color: Option<Color>) {
+    let _ = content_color;
+    let container_color = container_color.unwrap_or_else(BadgeDefaults::container_color);
+    let policy = BadgeLayout { container_color };
+    layout_primitive()
+        .layout_policy(policy)
+        .render_policy(policy);
 }
 
 /// # badge_with_content
@@ -471,34 +392,44 @@ pub fn badge(args: &BadgeArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures badge colors and content slot; see [`BadgeArgs`].
+/// - `container_color` — optional background color of the badge.
+/// - `content_color` — optional preferred content color for descendants.
+/// - `content` — optional content slot rendered inside the badge.
 ///
 /// ## Examples
 ///
-/// ```
-/// use tessera_components::badge::BadgeArgs;
+/// ```rust
+/// use tessera_components::badge::badge_with_content;
 /// use tessera_ui::Color;
-///
-/// let args = BadgeArgs {
-///     container_color: Color::RED,
-///     content_color: None,
-///     content: None,
-/// }
-/// .content_color(Color::WHITE);
-/// assert_eq!(args.container_color, Color::RED);
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// badge_with_content()
+///     .content_color(Color::WHITE)
+///     .content(|| {});
+/// #     });
+/// # }
+/// # component();
 /// ```
 #[tessera]
-pub fn badge_with_content(args: &BadgeArgs) {
-    let args = args.clone();
-    let content = args.content.unwrap_or_else(RenderSlot::empty);
+pub fn badge_with_content(
+    container_color: Option<Color>,
+    content_color: Option<Color>,
+    content: Option<RenderSlot>,
+) {
+    let content = content.unwrap_or_else(RenderSlot::empty);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
-    let container_color = args.container_color;
-    let content_color = args.content_color.unwrap_or_else(|| {
+    let container_color = container_color.unwrap_or_else(BadgeDefaults::container_color);
+    let content_color = content_color.unwrap_or_else(|| {
         content_color_for(container_color, &scheme).unwrap_or(
             use_context::<ContentColor>()
                 .map(|c| c.get().current)
@@ -507,22 +438,27 @@ pub fn badge_with_content(args: &BadgeArgs) {
     });
 
     let padding_px = BadgeDefaults::WITH_CONTENT_HORIZONTAL_PADDING.to_px();
-    layout(BadgeWithContentLayout {
+    let policy = BadgeWithContentLayout {
         container_color,
         padding_px,
-    });
-
-    provide_context(
-        || ContentColor {
-            current: content_color,
-        },
-        || {
-            provide_text_style(typography.label_small, || {
-                row(&RowArgs::default()
-                    .main_axis_alignment(MainAxisAlignment::Center)
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .child_shared(content));
-            });
-        },
-    );
+    };
+    layout_primitive()
+        .layout_policy(policy)
+        .render_policy(policy)
+        .child(move || {
+            let content = content.clone();
+            provide_context(
+                || ContentColor {
+                    current: content_color,
+                },
+                || {
+                    provide_text_style(typography.label_small, move || {
+                        row()
+                            .main_axis_alignment(MainAxisAlignment::Center)
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children_shared(content.clone());
+                    });
+                },
+            );
+        });
 }

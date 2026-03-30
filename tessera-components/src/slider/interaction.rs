@@ -1,7 +1,7 @@
 use tessera_ui::{
-    CallbackWith, ComputedData, FocusRequester, PointerInput, Px, PxPosition, State,
+    AccessibilityActionHandler, AccessibilityNode, CallbackWith, ComputedData, FocusRequester,
+    PointerInput, Px, PxPosition, State,
     accesskit::{Action, Role},
-    winit::window::CursorIcon,
 };
 
 use crate::gesture_recognizer::{DragRecognizer, TapRecognizer};
@@ -113,10 +113,6 @@ pub(super) fn handle_slider_state(
         });
     }
 
-    if is_in_component {
-        input.requests.cursor_icon = CursorIcon::Pointer;
-    }
-
     let tap_result = tap_recognizer.with_mut(|recognizer| {
         recognizer.update(
             input.pass,
@@ -211,43 +207,31 @@ fn notify_on_change(new_value: Option<f32>, args: &SliderArgs) {
     }
 }
 
-pub(super) fn apply_slider_accessibility(
-    input: &mut PointerInput<'_>,
+pub(super) fn apply_slider_semantics(
+    accessibility: &mut AccessibilityNode,
+    action_handler: &mut Option<AccessibilityActionHandler>,
     args: &SliderArgs,
     current_value: f32,
     on_change: &CallbackWith<f32>,
 ) {
-    let mut builder = input.accessibility().role(Role::Slider);
-
-    if let Some(label) = args.accessibility_label.as_ref() {
-        builder = builder.label(label.clone());
-    }
-    if let Some(description) = args.accessibility_description.as_ref() {
-        builder = builder.description(description.clone());
-    }
-
-    builder = builder
-        .numeric_value(current_value as f64)
-        .numeric_range(0.0, 1.0);
+    accessibility.role = Some(Role::Slider);
+    accessibility.label = args.accessibility_label.clone();
+    accessibility.description = args.accessibility_description.clone();
+    accessibility.numeric_value = Some(current_value as f64);
+    accessibility.min_numeric_value = Some(0.0);
+    accessibility.max_numeric_value = Some(1.0);
+    accessibility.focusable = !args.disabled;
+    accessibility.disabled = args.disabled;
+    accessibility.actions.clear();
 
     if args.disabled {
-        builder = builder.disabled();
-    } else {
-        builder = builder
-            .focusable()
-            .action(Action::Increment)
-            .action(Action::Decrement);
-    }
-
-    builder.commit();
-
-    if args.disabled {
+        *action_handler = None;
         return;
     }
 
     let on_change = *on_change;
     let steps = args.steps;
-    input.set_accessibility_action_handler(move |action| {
+    *action_handler = Some(Box::new(move |action| {
         let delta = if steps == 0 {
             ACCESSIBILITY_STEP
         } else {
@@ -264,7 +248,9 @@ pub(super) fn apply_slider_accessibility(
         {
             on_change.call(new_value);
         }
-    });
+    }));
+    accessibility.actions.push(Action::Increment);
+    accessibility.actions.push(Action::Decrement);
 }
 
 /// Controller for the `range_slider` component.
@@ -333,10 +319,6 @@ pub(super) fn handle_range_slider_state(
         state.with_mut(|inner| {
             inner.is_hovered = is_in_component;
         });
-    }
-
-    if is_in_component {
-        input.requests.cursor_icon = CursorIcon::Pointer;
     }
 
     let tap_result = tap_recognizer.with_mut(|recognizer| {
@@ -457,16 +439,15 @@ fn choose_range_slider_handle(
     }
 }
 
-pub(super) fn apply_range_slider_accessibility(
-    input: &mut PointerInput<'_>,
+pub(super) fn apply_range_slider_semantics(
+    accessibility: &mut AccessibilityNode,
     args: &super::RangeSliderArgs,
     _current_start: f32,
     _current_end: f32,
     _on_change: &CallbackWith<(f32, f32)>,
 ) {
-    let mut builder = input.accessibility().hidden();
+    accessibility.hidden = true;
     if args.disabled {
-        builder = builder.disabled();
+        accessibility.disabled = true;
     }
-    builder.commit();
 }

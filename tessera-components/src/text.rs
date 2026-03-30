@@ -4,9 +4,9 @@
 //!
 //! Display labels, headings, and other text content.
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, Prop, Px, PxPosition, RenderInput, accesskit::Role, tessera,
-    use_context,
+    Color, ComputedData, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
+    MeasurementError, Modifier, Px, PxPosition, RenderInput, RenderPolicy, accesskit::Role,
+    layout::layout_primitive, tessera, use_context,
 };
 
 use crate::{
@@ -20,74 +20,6 @@ use crate::{
 
 pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 
-/// Configuration arguments for the `text` component.
-#[derive(Debug, Prop, Clone)]
-pub struct TextArgs {
-    /// Optional modifier chain applied to the text.
-    pub modifier: Modifier,
-
-    /// The text content to be rendered.
-    #[prop(into)]
-    pub text: String,
-
-    /// The color of the text.
-    pub color: Color,
-
-    /// The font size in density-independent pixels (dp).
-    pub size: Dp,
-
-    /// Optional override for line height in density-independent pixels (dp).
-    pub line_height: Option<Dp>,
-
-    /// Optional label announced by assistive technologies. Defaults to the text
-    /// content.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-
-    /// Optional description announced by assistive technologies.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-}
-
-impl Default for TextArgs {
-    fn default() -> Self {
-        let theme = use_context::<MaterialTheme>();
-        Self {
-            modifier: Modifier::new(),
-            text: String::new(),
-            color: use_context::<ContentColor>()
-                .map(|c| c.get().current)
-                .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
-                .unwrap_or_else(|| ContentColor::default().current),
-            size: use_context::<TextStyle>()
-                .map(|s| s.get().font_size)
-                .or_else(|| theme.map(|t| t.get().typography.body_large.font_size))
-                .unwrap_or_else(|| TextStyle::default().font_size),
-            line_height: None,
-            accessibility_label: None,
-            accessibility_description: None,
-        }
-    }
-}
-
-impl From<String> for TextArgs {
-    fn from(val: String) -> Self {
-        TextArgs::default().text(val)
-    }
-}
-
-impl From<&str> for TextArgs {
-    fn from(val: &str) -> Self {
-        TextArgs::default().text(val)
-    }
-}
-
-impl From<&TextArgs> for TextArgs {
-    fn from(val: &TextArgs) -> Self {
-        val.clone()
-    }
-}
-
 /// # text
 ///
 /// Renders a block of text with a single, uniform style.
@@ -99,67 +31,73 @@ impl From<&TextArgs> for TextArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — props for this component; see [`TextArgs`].
+/// - `modifier` — modifier chain applied to the text node.
+/// - `content` — text content to display.
+/// - `color` — optional text color override.
+/// - `size` — optional font size override.
+/// - `line_height` — optional line height override.
+/// - `accessibility_label` — optional accessibility label override.
+/// - `accessibility_description` — optional accessibility description override.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::text::{TextArgs, text};
+/// use tessera_components::text::text;
 /// use tessera_ui::{Color, Dp, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
-///     let args = TextArgs::default()
-///         .text("Hello, world!")
+///     text()
+///         .content("Hello, world!")
 ///         .color(Color::new(0.2, 0.5, 0.8, 1.0))
 ///         .size(Dp(32.0));
-///     assert_eq!(args.text, "Hello, world!");
-///     text(&args);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn text(args: &TextArgs) {
-    let text_args = args.clone();
-    let accessibility_label = text_args
-        .accessibility_label
+pub fn text(
+    modifier: Modifier,
+    #[prop(into)] content: String,
+    color: Option<Color>,
+    size: Option<Dp>,
+    line_height: Option<Dp>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+) {
+    let theme = use_context::<MaterialTheme>();
+    let color = color
+        .or_else(|| use_context::<ContentColor>().map(|c| c.get().current))
+        .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
+        .unwrap_or_else(|| ContentColor::default().current);
+    let size = size
+        .or_else(|| use_context::<TextStyle>().map(|s| s.get().font_size))
+        .or_else(|| theme.map(|t| t.get().typography.body_large.font_size))
+        .unwrap_or_else(|| TextStyle::default().font_size);
+    let accessibility_label = accessibility_label
         .clone()
-        .or_else(|| (!text_args.text.is_empty()).then(|| text_args.text.clone()));
-    let accessibility_description = text_args.accessibility_description.clone();
-    let mut semantics = SemanticsArgs::new().role(Role::Label);
-    if let Some(label) = accessibility_label {
-        semantics = semantics.label(label);
-    }
-    if let Some(description) = accessibility_description {
-        semantics = semantics.description(description);
-    }
-    text_args
-        .modifier
-        .clone()
-        .semantics(semantics)
-        .run(move || {
-            text_inner(&text_args);
-        });
-}
+        .or_else(|| (!content.is_empty()).then(|| content.clone()));
+    let semantics = SemanticsArgs {
+        role: Some(Role::Label),
+        label: accessibility_label,
+        description: accessibility_description,
+        ..Default::default()
+    };
+    let inherited_style = use_context::<TextStyle>().map(|s| s.get());
+    let line_height = line_height
+        .or_else(|| inherited_style.and_then(|style| style.line_height))
+        .unwrap_or(Dp(size.0 * 1.2));
 
-#[tessera]
-fn text_inner(args: &TextArgs) {
-    let inherited_style = use_context::<TextStyle>()
-        .map(|s| s.get())
-        .unwrap_or_default();
-
-    let line_height = args
-        .line_height
-        .or(inherited_style.line_height)
-        .unwrap_or(Dp(args.size.0 * 1.2));
-
-    layout(TextLayout {
-        text: args.text.clone(),
-        color: args.color,
-        size: args.size,
+    let policy = TextLayout {
+        text: content.clone(),
+        color,
+        size,
         line_height,
-    });
+    };
+    layout_primitive()
+        .modifier(modifier.semantics(semantics))
+        .layout_policy(policy.clone())
+        .render_policy(policy);
 }
 
 #[derive(Clone)]
@@ -179,7 +117,7 @@ impl PartialEq for TextLayout {
     }
 }
 
-impl LayoutSpec for TextLayout {
+impl LayoutPolicy for TextLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -213,11 +151,13 @@ impl LayoutSpec for TextLayout {
             height: info.size[1].into(),
         })
     }
+}
 
+impl RenderPolicy for TextLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let metadata = input.metadata_mut();
         let computed = metadata
-            .computed_data
+            .computed_data()
             .expect("ComputedData must exist during record");
         drop(metadata);
 

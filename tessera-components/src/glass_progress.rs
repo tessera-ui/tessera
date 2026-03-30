@@ -4,56 +4,17 @@
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px,
+    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px,
     PxPosition,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
     tessera,
 };
 
 use crate::{
-    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
+    fluid_glass::{GlassBorder, fluid_glass},
     modifier::ModifierExt as _,
     shape_def::{RoundedCorner, Shape},
 };
-
-/// Arguments for the `glass_progress` component.
-#[derive(Clone, Debug, Prop)]
-pub struct GlassProgressArgs {
-    /// The current value of the progress bar, ranging from 0.0 to 1.0.
-    pub value: f32,
-
-    /// Layout modifiers applied to the progress bar.
-    pub modifier: Modifier,
-
-    /// The height of the progress bar.
-    pub height: Dp,
-
-    /// Glass tint color for the track background.
-    pub track_tint_color: Color,
-
-    /// Glass tint color for the progress fill.
-    pub progress_tint_color: Color,
-
-    /// Glass blur radius for all components.
-    pub blur_radius: Dp,
-
-    /// Border width for the track.
-    pub track_border_width: Dp,
-}
-
-impl Default for GlassProgressArgs {
-    fn default() -> Self {
-        Self {
-            value: 0.0,
-            modifier: default_progress_modifier(),
-            height: Dp(12.0),
-            track_tint_color: Color::new(0.3, 0.3, 0.3, 0.15),
-            progress_tint_color: Color::new(0.5, 0.7, 1.0, 0.25),
-            blur_radius: Dp(8.0),
-            track_border_width: Dp(1.0),
-        }
-    }
-}
 
 fn default_progress_modifier() -> Modifier {
     Modifier::new().width(Dp(200.0))
@@ -70,31 +31,52 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
     }
 }
 
-#[derive(Clone, Prop)]
-struct GlassProgressFillArgs {
-    value: f32,
-    tint_color: Color,
-    blur_radius: Dp,
-    shape: Shape,
+#[allow(missing_docs)]
+impl GlassProgressBuilder {
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
+        self
+    }
+
+    pub fn height(mut self, height: Dp) -> Self {
+        self.props.height = Some(height);
+        self
+    }
+
+    pub fn track_tint_color(mut self, track_tint_color: Color) -> Self {
+        self.props.track_tint_color = Some(track_tint_color);
+        self
+    }
+
+    pub fn progress_tint_color(mut self, progress_tint_color: Color) -> Self {
+        self.props.progress_tint_color = Some(progress_tint_color);
+        self
+    }
+
+    pub fn blur_radius(mut self, blur_radius: Dp) -> Self {
+        self.props.blur_radius = Some(blur_radius);
+        self
+    }
+
+    pub fn track_border_width(mut self, track_border_width: Dp) -> Self {
+        self.props.track_border_width = Some(track_border_width);
+        self
+    }
 }
 
 #[tessera]
-fn glass_progress_fill(args: &GlassProgressFillArgs) {
-    let value = args.value;
-    let tint_color = args.tint_color;
-    let blur_radius = args.blur_radius;
-    let shape = args.shape;
-    fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-        FluidGlassArgs::default()
-            .tint_color(tint_color)
-            .blur_radius(blur_radius)
-            .shape(shape)
-            .refraction_amount(0.0),
-        || {},
-    ));
-
+fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Shape) {
     let value = value.clamp(0.0, 1.0);
-    layout(GlassProgressFillLayout { value });
+    layout_primitive()
+        .layout_policy(GlassProgressFillLayout { value })
+        .child(move || {
+            fluid_glass()
+                .tint_color(tint_color)
+                .blur_radius(blur_radius)
+                .shape(shape)
+                .refraction_amount(0.0)
+                .with_child(|| {});
+        });
 }
 
 #[derive(Clone, PartialEq)]
@@ -102,7 +84,7 @@ struct GlassProgressFillLayout {
     value: f32,
 }
 
-impl LayoutSpec for GlassProgressFillLayout {
+impl LayoutPolicy for GlassProgressFillLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -155,52 +137,65 @@ impl LayoutSpec for GlassProgressFillLayout {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the progress bar's value and appearance; see
-///   [`GlassProgressArgs`].
+/// - `value` — progress value in the range `0.0..=1.0`.
+/// - `modifier` — optional modifier chain for width and layout.
+/// - `height` — optional progress bar height.
+/// - `track_tint_color` — optional glass tint color for the track background.
+/// - `progress_tint_color` — optional glass tint color for the progress fill.
+/// - `blur_radius` — optional blur radius for the glass effect.
+/// - `track_border_width` — optional border width for the track.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::glass_progress::{GlassProgressArgs, glass_progress};
+/// use tessera_components::glass_progress::glass_progress;
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
 /// // Render a progress bar at 75% completion.
-/// glass_progress(&GlassProgressArgs::default().value(0.75));
+/// glass_progress().value(0.75);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn glass_progress(args: &GlassProgressArgs) {
-    let args = args.clone();
-    let modifier = args.modifier.clone();
+pub fn glass_progress(
+    value: f32,
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    #[prop(skip_setter)] height: Option<Dp>,
+    #[prop(skip_setter)] track_tint_color: Option<Color>,
+    #[prop(skip_setter)] progress_tint_color: Option<Color>,
+    #[prop(skip_setter)] blur_radius: Option<Dp>,
+    #[prop(skip_setter)] track_border_width: Option<Dp>,
+) {
+    let modifier = modifier.unwrap_or_else(default_progress_modifier);
+    let height = height.unwrap_or(Dp(12.0));
+    let track_tint_color = track_tint_color.unwrap_or(Color::new(0.3, 0.3, 0.3, 0.15));
+    let progress_tint_color = progress_tint_color.unwrap_or(Color::new(0.5, 0.7, 1.0, 0.25));
+    let blur_radius = blur_radius.unwrap_or(Dp(8.0));
+    let track_border_width = track_border_width.unwrap_or(Dp(1.0));
+    let height_px = height.to_px();
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(GlassProgressLayout { height: height_px })
+        .child(move || {
+            let effective_height = Dp((height.0 - (track_border_width.0 * 2.0)).max(0.0));
+            let fill_shape = capsule_shape_for_height(effective_height);
 
-    modifier.run(move || {
-        let effective_height = Dp((args.height.0 - (args.track_border_width.0 * 2.0)).max(0.0));
-        let fill_shape = capsule_shape_for_height(effective_height);
-
-        fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-            FluidGlassArgs::default()
-                .tint_color(args.track_tint_color)
-                .blur_radius(args.blur_radius)
-                .shape(capsule_shape_for_height(args.height))
-                .border(GlassBorder::new(args.track_border_width.into()))
-                .padding(args.track_border_width),
-            move || {
-                let fill_args = GlassProgressFillArgs {
-                    value: args.value,
-                    tint_color: args.progress_tint_color,
-                    blur_radius: args.blur_radius,
-                    shape: fill_shape,
-                };
-                glass_progress_fill(&fill_args);
-            },
-        ));
-
-        let height = args.height.to_px();
-        layout(GlassProgressLayout { height });
-    });
+            fluid_glass()
+                .tint_color(track_tint_color)
+                .blur_radius(blur_radius)
+                .shape(capsule_shape_for_height(height))
+                .border(GlassBorder::new(track_border_width.into()))
+                .padding(track_border_width)
+                .with_child(move || {
+                    glass_progress_fill()
+                        .value(value)
+                        .tint_color(progress_tint_color)
+                        .blur_radius(blur_radius)
+                        .shape(fill_shape);
+                });
+        });
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -208,7 +203,7 @@ struct GlassProgressLayout {
     height: Px,
 }
 
-impl LayoutSpec for GlassProgressLayout {
+impl LayoutPolicy for GlassProgressLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,

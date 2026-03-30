@@ -3,151 +3,31 @@
 //! ## Usage
 //!
 //! Layer top/bottom bars, floating buttons, and snackbars above app content.
-use tessera_ui::{Dp, Modifier, Prop, RenderSlot, tessera};
+use tessera_ui::{Dp, Modifier, RenderSlot, layout::layout_primitive, tessera};
 
 use crate::{
     alignment::Alignment,
-    boxed::{BoxedArgs, boxed},
+    boxed::boxed,
     modifier::{ModifierExt as _, Padding},
 };
 
-/// Configuration arguments for [`scaffold`].
-#[derive(Clone, Prop)]
-pub struct ScaffoldArgs {
-    /// Modifier chain applied to the scaffold container.
-    pub modifier: Modifier,
-    /// Padding applied around the content area.
-    pub content_padding: Padding,
-    /// Main content slot.
-    #[prop(skip_setter)]
-    pub content: Option<RenderSlot>,
-    /// Reserved height for the top bar.
-    pub top_bar_height: Dp,
-    /// Reserved height for the bottom bar.
-    pub bottom_bar_height: Dp,
-    /// Optional top bar slot.
-    #[prop(skip_setter)]
-    pub top_bar: Option<RenderSlot>,
-    /// Optional bottom bar slot.
-    #[prop(skip_setter)]
-    pub bottom_bar: Option<RenderSlot>,
-    /// Optional floating action button slot.
-    #[prop(skip_setter)]
-    pub floating_action_button: Option<RenderSlot>,
-    /// Alignment used for the floating action button.
-    pub floating_action_button_alignment: Alignment,
-    /// Additional x/y offset applied to the floating action button.
-    pub floating_action_button_offset: [Dp; 2],
-    /// Optional snackbar host slot.
-    #[prop(skip_setter)]
-    pub snackbar_host: Option<RenderSlot>,
-    /// Alignment used for the snackbar host.
-    pub snackbar_alignment: Alignment,
-    /// Additional x/y offset applied to the snackbar host.
-    pub snackbar_offset: [Dp; 2],
-}
-
-impl Default for ScaffoldArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new().fill_max_size(),
-            content_padding: Padding::all(Dp(0.0)),
-            content: None,
-            top_bar_height: Dp(0.0),
-            bottom_bar_height: Dp(0.0),
-            top_bar: None,
-            bottom_bar: None,
-            floating_action_button: None,
-            floating_action_button_alignment: Alignment::BottomEnd,
-            floating_action_button_offset: [Dp(0.0), Dp(0.0)],
-            snackbar_host: None,
-            snackbar_alignment: Alignment::BottomCenter,
-            snackbar_offset: [Dp(0.0), Dp(0.0)],
-        }
-    }
-}
-
-impl ScaffoldArgs {
-    /// Creates props from base args and a content render function.
-    pub fn with_content(args: ScaffoldArgs, content: impl Fn() + Send + Sync + 'static) -> Self {
-        args.content(content)
-    }
-
-    /// Sets the main content slot.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = Some(RenderSlot::new(content));
+#[allow(missing_docs)]
+impl ScaffoldBuilder {
+    pub fn modifier(mut self, modifier: Modifier) -> Self {
+        self.props.modifier = Some(modifier);
         self
     }
 
-    /// Sets the main content slot using a shared callback.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-
-    /// Sets the top bar slot content.
-    pub fn top_bar<F>(mut self, top_bar: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.top_bar = Some(RenderSlot::new(top_bar));
-        self
-    }
-
-    /// Sets the top bar slot content using a shared callback.
-    pub fn top_bar_shared(mut self, top_bar: impl Into<RenderSlot>) -> Self {
-        self.top_bar = Some(top_bar.into());
-        self
-    }
-
-    /// Sets the bottom bar slot content.
-    pub fn bottom_bar<F>(mut self, bottom_bar: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.bottom_bar = Some(RenderSlot::new(bottom_bar));
-        self
-    }
-
-    /// Sets the bottom bar slot content using a shared callback.
-    pub fn bottom_bar_shared(mut self, bottom_bar: impl Into<RenderSlot>) -> Self {
-        self.bottom_bar = Some(bottom_bar.into());
-        self
-    }
-
-    /// Sets the floating action button slot content.
-    pub fn floating_action_button<F>(mut self, floating_action_button: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.floating_action_button = Some(RenderSlot::new(floating_action_button));
-        self
-    }
-
-    /// Sets the floating action button slot content using a shared callback.
-    pub fn floating_action_button_shared(
+    pub fn floating_action_button_alignment(
         mut self,
-        floating_action_button: impl Into<RenderSlot>,
+        floating_action_button_alignment: Alignment,
     ) -> Self {
-        self.floating_action_button = Some(floating_action_button.into());
+        self.props.floating_action_button_alignment = Some(floating_action_button_alignment);
         self
     }
 
-    /// Sets the snackbar host slot content.
-    pub fn snackbar_host<F>(mut self, snackbar_host: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.snackbar_host = Some(RenderSlot::new(snackbar_host));
-        self
-    }
-
-    /// Sets the snackbar host slot content using a shared callback.
-    pub fn snackbar_host_shared(mut self, snackbar_host: impl Into<RenderSlot>) -> Self {
-        self.snackbar_host = Some(snackbar_host.into());
+    pub fn snackbar_alignment(mut self, snackbar_alignment: Alignment) -> Self {
+        self.props.snackbar_alignment = Some(snackbar_alignment);
         self
     }
 }
@@ -182,113 +62,216 @@ fn overlay_offset(alignment: Alignment, offset: [Dp; 2], bottom_bar_height: Dp) 
 ///
 /// ## Parameters
 ///
-/// - `args` — configures slots, insets, and padding; see [`ScaffoldArgs`].
+/// - `modifier` — optional modifier chain applied to the scaffold container.
+/// - `content_padding` — padding applied around the content area.
+/// - `content` — optional main content slot.
+/// - `top_bar_height` — reserved height for the top bar.
+/// - `bottom_bar_height` — reserved height for the bottom bar.
+/// - `top_bar` — optional top bar slot.
+/// - `bottom_bar` — optional bottom bar slot.
+/// - `floating_action_button` — optional floating action button slot.
+/// - `floating_action_button_alignment` — optional floating action button
+///   alignment.
+/// - `floating_action_button_offset` — additional x/y offset applied to the
+///   floating action button.
+/// - `snackbar_host` — optional snackbar host slot.
+/// - `snackbar_alignment` — optional snackbar host alignment.
+/// - `snackbar_offset` — additional x/y offset applied to the snackbar host.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::app_bar::{AppBarDefaults, TopAppBarArgs, top_app_bar};
-/// use tessera_components::scaffold::{ScaffoldArgs, scaffold};
-/// use tessera_components::text::{TextArgs, text};
-/// use tessera_components::theme::{MaterialTheme, MaterialThemeProviderArgs, material_theme};
+/// use tessera_components::app_bar::{AppBarDefaults, top_app_bar};
+/// use tessera_components::scaffold::scaffold;
+/// use tessera_components::text::text;
+/// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
-///     material_theme(&MaterialThemeProviderArgs::new(
-///         || MaterialTheme::default(),
-///         || {
+///     material_theme()
+///         .theme(|| MaterialTheme::default())
+///         .child(|| {
 ///             let counter = remember(|| 1u32);
-///             scaffold(
-///                 &ScaffoldArgs::default()
-///                     .top_bar_height(AppBarDefaults::TOP_APP_BAR_HEIGHT)
-///                     .top_bar(|| {
-///                         top_app_bar(&TopAppBarArgs::new("Inbox"));
-///                     })
-///                     .content(|| {
-///                         text(&TextArgs::default().text("Hello scaffold"));
-///                     }),
-///             );
+///             scaffold()
+///                 .top_bar_height(AppBarDefaults::TOP_APP_BAR_HEIGHT)
+///                 .top_bar(|| {
+///                     top_app_bar().title("Inbox");
+///                 })
+///                 .content(|| {
+///                     text().content("Hello scaffold");
+///                 });
 ///             assert_eq!(counter.get(), 1);
-///         },
-///     ));
+///         });
 /// }
 /// ```
 #[tessera]
-pub fn scaffold(args: &ScaffoldArgs) {
-    let args = args.clone();
-    let content = args.content.clone();
-    let modifier = args.modifier;
-    let content_padding = scaffold_content_padding(
-        args.content_padding,
-        args.top_bar_height,
-        args.bottom_bar_height,
-    );
-    let top_bar = args.top_bar;
-    let bottom_bar = args.bottom_bar;
-    let floating_action_button = args.floating_action_button;
-    let fab_alignment = args.floating_action_button_alignment;
+pub fn scaffold(
+    #[prop(skip_setter)] modifier: Option<Modifier>,
+    content_padding: Padding,
+    content: Option<RenderSlot>,
+    top_bar_height: Dp,
+    bottom_bar_height: Dp,
+    top_bar: Option<RenderSlot>,
+    bottom_bar: Option<RenderSlot>,
+    floating_action_button: Option<RenderSlot>,
+    #[prop(skip_setter)] floating_action_button_alignment: Option<Alignment>,
+    floating_action_button_offset: [Dp; 2],
+    snackbar_host: Option<RenderSlot>,
+    #[prop(skip_setter)] snackbar_alignment: Option<Alignment>,
+    snackbar_offset: [Dp; 2],
+) {
+    let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_size());
+    let content_padding =
+        scaffold_content_padding(content_padding, top_bar_height, bottom_bar_height);
+    let fab_alignment = floating_action_button_alignment.unwrap_or(Alignment::BottomEnd);
     let fab_offset = overlay_offset(
         fab_alignment,
-        args.floating_action_button_offset,
-        args.bottom_bar_height,
+        floating_action_button_offset,
+        bottom_bar_height,
     );
-    let snackbar_host = args.snackbar_host;
-    let snackbar_alignment = args.snackbar_alignment;
-    let snackbar_offset = overlay_offset(
-        snackbar_alignment,
-        args.snackbar_offset,
-        args.bottom_bar_height,
-    );
+    let snackbar_alignment = snackbar_alignment.unwrap_or(Alignment::BottomCenter);
+    let snackbar_offset = overlay_offset(snackbar_alignment, snackbar_offset, bottom_bar_height);
 
-    modifier.run(move || {
+    layout_primitive().modifier(modifier).child(move || {
         let content = content.clone();
         let bottom_bar = bottom_bar.clone();
         let top_bar = top_bar.clone();
         let snackbar_host = snackbar_host.clone();
         let floating_action_button = floating_action_button.clone();
-        boxed(&BoxedArgs::default().children(|scope| {
+        boxed().children(move || {
             if let Some(content) = content.clone() {
-                scope.child(move || {
-                    let content = content.clone();
-                    Modifier::new()
-                        .padding(content_padding)
-                        .fill_max_size()
-                        .run(move || {
-                            content.render();
-                        });
-                });
+                let content = content.clone();
+                layout_primitive()
+                    .modifier(Modifier::new().padding(content_padding).fill_max_size())
+                    .child(move || {
+                        content.render();
+                    });
             }
             if let Some(bottom_bar) = bottom_bar.clone() {
-                scope.child_with_alignment(Alignment::BottomCenter, move || {
-                    bottom_bar.render();
-                });
+                layout_primitive()
+                    .modifier(Modifier::new().align(Alignment::BottomCenter))
+                    .child(move || {
+                        bottom_bar.render();
+                    });
             }
             if let Some(top_bar) = top_bar.clone() {
-                scope.child_with_alignment(Alignment::TopCenter, move || {
-                    top_bar.render();
-                });
+                layout_primitive()
+                    .modifier(Modifier::new().align(Alignment::TopCenter))
+                    .child(move || {
+                        top_bar.render();
+                    });
             }
             if let Some(snackbar_host) = snackbar_host.clone() {
-                scope.child_with_alignment(snackbar_alignment, move || {
-                    let snackbar_host = snackbar_host.clone();
-                    Modifier::new()
-                        .offset(snackbar_offset[0], snackbar_offset[1])
-                        .run(move || {
-                            snackbar_host.render();
-                        });
-                });
+                let snackbar_host = snackbar_host.clone();
+                layout_primitive()
+                    .modifier(
+                        Modifier::new()
+                            .align(snackbar_alignment)
+                            .offset(snackbar_offset[0], snackbar_offset[1]),
+                    )
+                    .child(move || {
+                        snackbar_host.render();
+                    });
             }
             if let Some(floating_action_button) = floating_action_button.clone() {
-                scope.child_with_alignment(fab_alignment, move || {
-                    let floating_action_button = floating_action_button.clone();
-                    Modifier::new()
-                        .offset(fab_offset[0], fab_offset[1])
-                        .run(move || {
-                            floating_action_button.render();
-                        });
-                });
+                let floating_action_button = floating_action_button.clone();
+                layout_primitive()
+                    .modifier(
+                        Modifier::new()
+                            .align(fab_alignment)
+                            .offset(fab_offset[0], fab_offset[1]),
+                    )
+                    .child(move || {
+                        floating_action_button.render();
+                    });
             }
-        }));
+        });
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
+        NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+    };
+
+    use crate::modifier::{ModifierExt as _, SemanticsArgs};
+
+    use super::scaffold;
+
+    #[derive(Clone, PartialEq)]
+    struct FixedTestLayout {
+        width: i32,
+        height: i32,
+    }
+
+    impl LayoutPolicy for FixedTestLayout {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    #[tessera]
+    fn fixed_test_box(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn scaffold_layout_case() {
+        scaffold()
+            .modifier(Modifier::new().constrain(
+                Some(tessera_ui::DimensionValue::Fixed(Px::new(100))),
+                Some(tessera_ui::DimensionValue::Fixed(Px::new(80))),
+            ))
+            .top_bar_height(Px::new(10).into())
+            .bottom_bar_height(Px::new(12).into())
+            .top_bar(|| {
+                fixed_test_box()
+                    .tag("scaffold_top".to_string())
+                    .width(100)
+                    .height(10);
+            })
+            .bottom_bar(|| {
+                fixed_test_box()
+                    .tag("scaffold_bottom".to_string())
+                    .width(100)
+                    .height(12);
+            })
+            .content(|| {
+                fixed_test_box()
+                    .tag("scaffold_content".to_string())
+                    .width(20)
+                    .height(8);
+            });
+    }
+
+    #[test]
+    fn scaffold_positions_top_bottom_and_content_slots() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 100),
+            content: {
+                scaffold_layout_case();
+            },
+            expect: {
+                node("scaffold_top").position(0, 0).size(100, 10);
+                node("scaffold_content").position(0, 10).size(20, 8);
+                node("scaffold_bottom").position(0, 68).size(100, 12);
+            }
+        }
+    }
 }

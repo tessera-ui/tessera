@@ -5,10 +5,12 @@
 //! Embed as a bare text input surface when you need to build custom styling.
 use glyphon::Action as GlyphonAction;
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Dp, ImeRequest, Modifier, Prop, Px, PxPosition,
-    PxSize, State,
+    AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData, Dp,
+    ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput, KeyboardInputModifierNode, Modifier,
+    PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, SemanticsModifierNode, State,
     accesskit::{Action, Role},
-    modifier::FocusModifierExt as _,
+    layout::layout_primitive,
+    modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context, winit,
 };
 
@@ -17,10 +19,9 @@ use crate::{
     modifier::ModifierExt as _,
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgs, surface},
+    surface::surface,
     text_edit_core::{
-        ClickType, ImeEditResult, PlannedImeEvent, RectDef, TextEditCoreArgs, TextSelection,
-        text_edit_core,
+        ClickType, ImeEditResult, PlannedImeEvent, RectDef, TextSelection, text_edit_core,
     },
     theme::{MaterialTheme, TextSelectionColors},
 };
@@ -35,9 +36,91 @@ pub use crate::text_edit_core::{
     TransformedText as DisplayTransformText,
 };
 
-/// Arguments for configuring the [`text_input`] component.
-#[derive(Clone, Prop)]
-pub struct TextInputArgs {
+struct TextInputPointerModifierNode {
+    args: TextInputProps,
+    controller: State<TextInputController>,
+    tap_recognizer: State<TapRecognizer>,
+    scroll_recognizer: State<ScrollRecognizer>,
+}
+
+impl PointerInputModifierNode for TextInputPointerModifierNode {
+    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
+        handle_text_input(
+            &mut input,
+            &self.args,
+            &self.controller,
+            self.tap_recognizer,
+            self.scroll_recognizer,
+        );
+    }
+}
+
+struct TextInputKeyboardModifierNode {
+    args: TextInputProps,
+    controller: State<TextInputController>,
+}
+
+impl KeyboardInputModifierNode for TextInputKeyboardModifierNode {
+    fn on_keyboard_input(&self, mut input: KeyboardInput<'_>) {
+        handle_text_input_keyboard(
+            &mut input,
+            &self.args,
+            &self.controller,
+            &self.args.on_change,
+            &self.args.input_transform,
+        );
+    }
+}
+
+struct TextInputImeModifierNode {
+    args: TextInputProps,
+    controller: State<TextInputController>,
+}
+
+impl ImeInputModifierNode for TextInputImeModifierNode {
+    fn on_ime_input(&self, mut input: ImeInput<'_>) {
+        handle_text_input_ime(
+            &mut input,
+            &self.args,
+            &self.controller,
+            &self.args.on_change,
+            &self.args.input_transform,
+        );
+    }
+}
+
+fn apply_text_input_input_modifiers(
+    base: Modifier,
+    args: TextInputProps,
+    controller: State<TextInputController>,
+    tap_recognizer: State<TapRecognizer>,
+    scroll_recognizer: State<ScrollRecognizer>,
+) -> Modifier {
+    let modifier = if args.enabled {
+        base.hover_cursor_icon(winit::window::CursorIcon::Text)
+    } else {
+        base
+    };
+    modifier
+        .push_semantics(TextInputSemanticsModifierNode {
+            args: args.clone(),
+            controller,
+        })
+        .push_pointer_input(TextInputPointerModifierNode {
+            args: args.clone(),
+            controller,
+            tap_recognizer,
+            scroll_recognizer,
+        })
+        .push_keyboard_input(TextInputKeyboardModifierNode {
+            args: args.clone(),
+            controller,
+        })
+        .push_ime_input(TextInputImeModifierNode { args, controller })
+}
+
+#[derive(Clone, PartialEq)]
+pub(crate) struct TextInputProps {
     /// Whether the editor is enabled for user input.
     pub enabled: bool,
     /// Whether the editor is read-only.
@@ -46,10 +129,8 @@ pub struct TextInputArgs {
     pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
     /// content and returns the updated content.
-    #[prop(skip_setter)]
     pub on_change: CallbackWith<String, String>,
     /// Called when the user submits a single-line field with the Enter key.
-    #[prop(skip_setter)]
     pub on_submit: Callback,
     /// Minimum width in density-independent pixels. Defaults to 120dp if not
     /// specified.
@@ -81,13 +162,10 @@ pub struct TextInputArgs {
     /// Color of the text cursor. Defaults to the theme primary color.
     pub cursor_color: Option<Color>,
     /// Optional label announced by assistive technologies.
-    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional description announced by assistive technologies.
-    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Initial text content.
-    #[prop(into)]
     pub initial_text: Option<String>,
     /// Font size in Dp. Defaults to 14.0.
     pub font_size: Dp,
@@ -99,99 +177,17 @@ pub struct TextInputArgs {
     /// horizontal scrolling semantics.
     pub single_line: bool,
     /// Optional transform applied to text changes before on_change.
-    #[prop(skip_setter)]
     pub input_transform: Option<CallbackWith<String, String>>,
     /// Optional transform applied only for display.
-    #[prop(skip_setter)]
     pub display_transform: Option<DisplayTransform>,
     /// Optional external controller for text, cursor, and selection state.
     ///
     /// When this is `None`, `text_input` creates and owns an internal
     /// controller.
-    #[prop(skip_setter)]
     pub controller: Option<State<TextInputController>>,
 }
 
-impl TextInputArgs {
-    /// Set the text change handler.
-    pub fn on_change<F>(mut self, on_change: F) -> Self
-    where
-        F: Fn(String) -> String + Send + Sync + 'static,
-    {
-        self.on_change = CallbackWith::new(on_change);
-        self
-    }
-
-    /// Set the text change handler using a shared callback.
-    pub fn on_change_shared(mut self, on_change: CallbackWith<String, String>) -> Self {
-        self.on_change = on_change;
-        self
-    }
-
-    /// Set the single-line submit handler.
-    pub fn on_submit<F>(mut self, on_submit: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_submit = Callback::new(on_submit);
-        self
-    }
-
-    /// Set the single-line submit handler using a shared callback.
-    pub fn on_submit_shared(mut self, on_submit: Callback) -> Self {
-        self.on_submit = on_submit;
-        self
-    }
-
-    /// Set an input transform applied before the change handler.
-    pub fn input_transform<F>(mut self, transform: F) -> Self
-    where
-        F: Fn(String) -> String + Send + Sync + 'static,
-    {
-        self.input_transform = Some(CallbackWith::new(transform));
-        self
-    }
-
-    /// Set an input transform using a shared callback.
-    pub fn input_transform_shared(mut self, transform: CallbackWith<String, String>) -> Self {
-        self.input_transform = Some(transform);
-        self
-    }
-
-    /// Set a display-only transform applied at render time.
-    pub fn display_transform<F>(mut self, transform: F) -> Self
-    where
-        F: Fn(&str) -> String + Send + Sync + 'static,
-    {
-        self.display_transform = Some(CallbackWith::new(move |value: String| {
-            DisplayTransformText::from_strings(&value, transform(&value))
-        }));
-        self
-    }
-
-    /// Set a display-only transform using a shared callback.
-    pub fn display_transform_shared(mut self, transform: DisplayTransform) -> Self {
-        self.display_transform = Some(transform);
-        self
-    }
-
-    /// Set a display-only transform with explicit offset mapping.
-    pub fn display_transform_mapped<F>(mut self, transform: F) -> Self
-    where
-        F: Fn(&str) -> DisplayTransformText + Send + Sync + 'static,
-    {
-        self.display_transform = Some(CallbackWith::new(move |value: String| transform(&value)));
-        self
-    }
-
-    /// Sets an external text input controller.
-    pub fn controller(mut self, controller: State<TextInputController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-}
-
-impl Default for TextInputArgs {
+impl Default for TextInputProps {
     fn default() -> Self {
         let scheme = use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
@@ -245,8 +241,8 @@ impl Default for TextInputArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the editor's appearance and layout; see
-///   [`TextInputArgs`].
+/// - Parameters configure the editor's appearance, layout, transforms, and
+///   controller state.
 ///
 /// ## Examples
 ///
@@ -254,23 +250,144 @@ impl Default for TextInputArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::text_input::{TextInputArgs, text_input};
+/// use tessera_components::text_input::text_input;
 /// use tessera_ui::Dp;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-/// text_input(&
-///     TextInputArgs::default()
-///         .padding(Dp(8.0))
-///         .initial_text("Hello World"),
-/// );
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// text_input().padding(Dp(8.0)).initial_text("Hello World");
 /// # });
-/// # material_theme(&args);
+/// # }
+/// # component();
+/// ```
+impl TextInputBuilder {
+    /// Set a display-only transform with explicit offset mapping.
+    pub fn display_transform_mapped<F>(mut self, transform: F) -> Self
+    where
+        F: Fn(&str) -> DisplayTransformText + Send + Sync + 'static,
+    {
+        self.props.display_transform =
+            Some(CallbackWith::new(move |value: String| transform(&value)));
+        self
+    }
+}
+
+/// # text_input
+///
+/// Renders a multi-line, editable text field.
+///
+/// ## Usage
+///
+/// Create an interactive text input for forms, note-taking, or other text
+/// input scenarios.
+///
+/// ## Parameters
+///
+/// - `enabled` — whether the editor is enabled for user input.
+/// - `read_only` — whether the editor is read-only.
+/// - `modifier` — optional modifier chain applied to the editor container.
+/// - `on_change` — called when text changes.
+/// - `on_submit` — called when the user submits a single-line field.
+/// - `min_width` — optional minimum width.
+/// - `min_height` — optional minimum height.
+/// - `background_color` — optional background color.
+/// - `border_width` — border width in Dp.
+/// - `border_color` — optional border color.
+/// - `shape` — container shape.
+/// - `padding` — internal padding.
+/// - `focus_border_color` — optional focused border color.
+/// - `focus_border_width` — optional focused border width.
+/// - `focus_background_color` — optional focused background color.
+/// - `selection_color` — optional selection highlight color.
+/// - `text_color` — optional text color.
+/// - `cursor_color` — optional cursor color.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `initial_text` — optional initial text content.
+/// - `font_size` — font size in Dp.
+/// - `line_height` — optional line height in Dp.
+/// - `single_line` — whether the editor behaves as a single-line field.
+/// - `input_transform` — optional transform applied to text changes before
+///   `on_change`.
+/// - `display_transform` — optional display-only transform.
+/// - `controller` — optional external controller for text, cursor, and
+///   selection state.
+///
+/// ## Examples
+/// ```rust
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// use tessera_components::text_input::text_input;
+/// use tessera_ui::Dp;
+///
+/// text_input().padding(Dp(8.0)).initial_text("Hello World");
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn text_input(args: &TextInputArgs) {
+pub fn text_input(
+    #[default(true)] enabled: bool,
+    read_only: bool,
+    modifier: Modifier,
+    on_change: Option<CallbackWith<String, String>>,
+    on_submit: Option<Callback>,
+    min_width: Option<Dp>,
+    min_height: Option<Dp>,
+    #[default(TextInputProps::default().background_color)] background_color: Option<Color>,
+    #[default(TextInputProps::default().border_width)] border_width: Dp,
+    #[default(TextInputProps::default().border_color)] border_color: Option<Color>,
+    #[default(TextInputProps::default().shape)] shape: Shape,
+    #[default(TextInputProps::default().padding)] padding: Dp,
+    #[default(TextInputProps::default().focus_border_color)] focus_border_color: Option<Color>,
+    focus_border_width: Option<Dp>,
+    #[default(TextInputProps::default().focus_background_color)] focus_background_color: Option<
+        Color,
+    >,
+    #[default(TextInputProps::default().selection_color)] selection_color: Option<Color>,
+    #[default(TextInputProps::default().text_color)] text_color: Option<Color>,
+    #[default(TextInputProps::default().cursor_color)] cursor_color: Option<Color>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    #[prop(into)] initial_text: Option<String>,
+    #[default(TextInputProps::default().font_size)] font_size: Dp,
+    line_height: Option<Dp>,
+    single_line: bool,
+    input_transform: Option<CallbackWith<String, String>>,
+    display_transform: Option<DisplayTransform>,
+    controller: Option<State<TextInputController>>,
+) {
+    let args = TextInputProps {
+        enabled,
+        read_only,
+        modifier,
+        on_change: on_change.unwrap_or_else(CallbackWith::default_value),
+        on_submit: on_submit.unwrap_or_else(Callback::noop),
+        min_width,
+        min_height,
+        background_color,
+        border_width,
+        border_color,
+        shape,
+        padding,
+        focus_border_color,
+        focus_border_width,
+        focus_background_color,
+        selection_color,
+        text_color,
+        cursor_color,
+        accessibility_label,
+        accessibility_description,
+        initial_text,
+        font_size,
+        line_height,
+        single_line,
+        input_transform,
+        display_transform,
+        controller,
+    };
     let controller = args.controller.unwrap_or_else(|| {
         remember(|| {
             let mut c = TextInputController::new(args.font_size, args.line_height);
@@ -288,148 +405,88 @@ pub fn text_input(args: &TextInputArgs) {
     }
     sync_text_input_controller(&controller, &editor_args);
     let focus = controller.with(|c| *c.focus_handler());
-    Modifier::new()
-        .focus_requester(focus)
-        .focusable()
-        .focus_properties(
-            tessera_ui::FocusProperties::new()
-                .can_focus(editor_args.enabled)
-                .can_request_focus(editor_args.enabled),
-        )
-        .run(move || {
-            {
-                let surface_args = editor_args.clone();
-                surface(&crate::surface::SurfaceArgs::with_child(
-                    create_surface_args(&surface_args, &controller),
-                    move || {
-                        let padding = surface_args.padding;
-                        Modifier::new().padding_all(padding).run(move || {
-                            let core_args = TextEditCoreArgs::new(controller);
-                            text_edit_core(&core_args);
-                        });
-                    },
-                ));
-            }
+    let tap_recognizer = remember(TapRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
+    let modifier = apply_text_input_input_modifiers(
+        Modifier::new()
+            .focus_requester(focus)
+            .focusable()
+            .focus_properties(
+                tessera_ui::FocusProperties::new()
+                    .can_focus(editor_args.enabled)
+                    .can_request_focus(editor_args.enabled),
+            ),
+        editor_args.clone(),
+        controller,
+        tap_recognizer,
+        scroll_recognizer,
+    );
 
-            let handler_args = editor_args.clone();
-            let tap_recognizer = remember(TapRecognizer::default);
-            let scroll_recognizer = remember(ScrollRecognizer::default);
-            pointer_input_handler(move |mut input| {
-                handle_text_input(
-                    &mut input,
-                    &handler_args,
-                    &controller,
-                    tap_recognizer,
-                    scroll_recognizer,
-                );
-            });
-
-            let keyboard_args = editor_args.clone();
-            let on_change = editor_args.on_change;
-            let input_transform = editor_args.input_transform;
-            keyboard_input_handler(move |mut input| {
-                handle_text_input_keyboard(
-                    &mut input,
-                    &keyboard_args,
-                    &controller,
-                    &on_change,
-                    &input_transform,
-                );
-            });
-
-            let ime_args = editor_args.clone();
-            let on_change = editor_args.on_change;
-            let input_transform = editor_args.input_transform;
-            ime_input_handler(move |mut input| {
-                handle_text_input_ime(
-                    &mut input,
-                    &ime_args,
-                    &controller,
-                    &on_change,
-                    &input_transform,
-                );
-            });
+    layout_primitive().modifier(modifier).child(move || {
+        let surface_args = editor_args.clone();
+        create_surface_args(&surface_args, &controller).with_child(move || {
+            text_input_padded_content()
+                .padding(surface_args.padding)
+                .controller(controller);
         });
+    });
 }
 
 #[tessera]
-fn text_input_editor(args: &TextInputArgs) {
-    let controller = args
+fn text_input_editor(props: TextInputProps) {
+    let controller = props
         .controller
         .expect("text_input_editor requires controller to be set");
-    let editor_args: TextInputArgs = args.clone();
+    let editor_args: TextInputProps = props.clone();
 
     if !editor_args.enabled {
         controller.with_mut(|c| c.focus_handler_mut().unfocus());
     }
     sync_text_input_controller(&controller, &editor_args);
     let focus = controller.with(|c| *c.focus_handler());
-    Modifier::new()
-        .focus_requester(focus)
-        .focusable()
-        .focus_properties(
-            tessera_ui::FocusProperties::new()
-                .can_focus(editor_args.enabled)
-                .can_request_focus(editor_args.enabled),
-        )
-        .run(move || {
-            let modifier = editor_args.modifier.clone();
-            let padding = editor_args.padding;
-            modifier.run(move || {
-                Modifier::new().padding_all(padding).run(move || {
-                    let core_args = TextEditCoreArgs::new(controller);
-                    text_edit_core(&core_args);
-                });
-            });
+    let tap_recognizer = remember(TapRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
+    let modifier = apply_text_input_input_modifiers(
+        editor_args.modifier.clone().then(
+            Modifier::new()
+                .focus_requester(focus)
+                .focusable()
+                .focus_properties(
+                    tessera_ui::FocusProperties::new()
+                        .can_focus(editor_args.enabled)
+                        .can_request_focus(editor_args.enabled),
+                ),
+        ),
+        editor_args.clone(),
+        controller,
+        tap_recognizer,
+        scroll_recognizer,
+    );
 
-            let handler_args = editor_args.clone();
-            let tap_recognizer = remember(TapRecognizer::default);
-            let scroll_recognizer = remember(ScrollRecognizer::default);
-            pointer_input_handler(move |mut input| {
-                handle_text_input(
-                    &mut input,
-                    &handler_args,
-                    &controller,
-                    tap_recognizer,
-                    scroll_recognizer,
-                );
-            });
+    layout_primitive().modifier(modifier).child(move || {
+        text_input_padded_content()
+            .padding(editor_args.padding)
+            .controller(controller);
+    });
+}
 
-            let keyboard_args = editor_args.clone();
-            let on_change = editor_args.on_change;
-            let input_transform = editor_args.input_transform;
-            keyboard_input_handler(move |mut input| {
-                handle_text_input_keyboard(
-                    &mut input,
-                    &keyboard_args,
-                    &controller,
-                    &on_change,
-                    &input_transform,
-                );
-            });
-
-            let ime_args = editor_args.clone();
-            let on_change = editor_args.on_change;
-            let input_transform = editor_args.input_transform;
-            ime_input_handler(move |mut input| {
-                handle_text_input_ime(
-                    &mut input,
-                    &ime_args,
-                    &controller,
-                    &on_change,
-                    &input_transform,
-                );
-            });
+#[tessera]
+fn text_input_padded_content(padding: Dp, controller: Option<State<TextInputController>>) {
+    let controller = controller.expect("text_input_padded_content requires controller to be set");
+    layout_primitive()
+        .modifier(Modifier::new().padding_all(padding))
+        .child(move || {
+            text_edit_core().controller(controller);
         });
 }
 
-pub(crate) fn text_input_core(args: &TextInputArgs, controller: State<TextInputController>) {
+pub(crate) fn text_input_core(args: &TextInputProps, controller: State<TextInputController>) {
     let mut core_args = args.clone();
     core_args.controller = Some(controller);
-    text_input_editor(&core_args);
+    text_input_editor().props(core_args);
 }
 
-fn sync_text_input_controller(controller: &State<TextInputController>, args: &TextInputArgs) {
+fn sync_text_input_controller(controller: &State<TextInputController>, args: &TextInputProps) {
     if let Some(selection_color) = args.selection_color {
         let needs_update = controller.with(|c| c.selection_color() != selection_color);
         if needs_update {
@@ -462,13 +519,12 @@ fn sync_text_input_controller(controller: &State<TextInputController>, args: &Te
 
 fn handle_text_input(
     input: &mut tessera_ui::PointerInput<'_>,
-    args: &TextInputArgs,
+    args: &TextInputProps,
     controller: &State<TextInputController>,
     tap_recognizer: State<TapRecognizer>,
     scroll_recognizer: State<ScrollRecognizer>,
 ) {
     if !args.enabled {
-        apply_text_input_accessibility(input, args, controller);
         return;
     }
     let size = input.computed_data; // This is the full surface size
@@ -485,11 +541,6 @@ fn handle_text_input(
         )
     });
 
-    // Set text input cursor when hovering
-    if is_cursor_in_editor {
-        input.requests.cursor_icon = winit::window::CursorIcon::Text;
-    }
-
     // Handle click events - now we have a full clickable area from surface
     if is_cursor_in_editor {
         if tap_result.pressed {
@@ -505,7 +556,6 @@ fn handle_text_input(
                 let text_relative_pos =
                     click_selection_pointer_position(cursor_pos, args, controller, size);
                 let Some(click_timestamp) = tap_result.press_timestamp else {
-                    apply_text_input_accessibility(input, args, controller);
                     return;
                 };
                 // Determine click type and handle accordingly
@@ -608,23 +658,23 @@ fn handle_text_input(
     }
 
     if args.enabled && !args.read_only && controller.with(|s| s.focus_handler().is_focused()) {
-        input.requests.ime_request =
-            Some(current_ime_request(args, controller, input.computed_data));
+        let computed_data = input.computed_data;
+        input
+            .ime_session()
+            .update(current_ime_request(args, controller, computed_data));
     }
-
-    apply_text_input_accessibility(input, args, controller);
 }
 
 fn click_selection_pointer_position(
     cursor_pos: PxPosition,
-    args: &TextInputArgs,
+    args: &TextInputProps,
     controller: &State<TextInputController>,
     size: ComputedData,
 ) -> PxPosition {
     drag_selection_pointer_position(cursor_pos, args, controller, size).position
 }
 
-fn text_content_origin(args: &TextInputArgs) -> PxPosition {
+fn text_content_origin(args: &TextInputProps) -> PxPosition {
     let padding_px: Px = args.padding.into();
     let border_width_px = Px(args.border_width.to_pixels_u32() as i32);
     text_content_origin_from_values(padding_px, border_width_px)
@@ -643,7 +693,7 @@ struct DragSelectionPointerPosition {
 
 fn drag_selection_pointer_position(
     cursor_pos: PxPosition,
-    args: &TextInputArgs,
+    args: &TextInputProps,
     controller: &State<TextInputController>,
     size: ComputedData,
 ) -> DragSelectionPointerPosition {
@@ -731,7 +781,7 @@ fn single_line_scroll_delta(scroll_result: &ScrollResult) -> f32 {
 
 fn handle_text_input_keyboard(
     input: &mut tessera_ui::KeyboardInput<'_>,
-    args: &TextInputArgs,
+    args: &TextInputProps,
     controller: &State<TextInputController>,
     on_change: &CallbackWith<String, String>,
     input_transform: &Option<CallbackWith<String, String>>,
@@ -857,8 +907,10 @@ fn handle_text_input_keyboard(
     }
 
     if !args.read_only && controller.with(|s| s.focus_handler().is_focused()) {
-        input.requests.ime_request =
-            Some(current_ime_request(args, controller, input.computed_data));
+        let computed_data = input.computed_data;
+        input
+            .ime_session()
+            .update(current_ime_request(args, controller, computed_data));
     }
 
     if should_block_keyboard {
@@ -868,7 +920,7 @@ fn handle_text_input_keyboard(
 
 fn handle_text_input_ime(
     input: &mut tessera_ui::ImeInput<'_>,
-    args: &TextInputArgs,
+    args: &TextInputProps,
     controller: &State<TextInputController>,
     on_change: &CallbackWith<String, String>,
     input_transform: &Option<CallbackWith<String, String>>,
@@ -907,12 +959,15 @@ fn handle_text_input_ime(
         }
     }
 
-    input.requests.ime_request = Some(current_ime_request(args, controller, input.computed_data));
+    let computed_data = input.computed_data;
+    input
+        .ime_session()
+        .update(current_ime_request(args, controller, computed_data));
     input.block_ime();
 }
 
 fn current_ime_request(
-    args: &TextInputArgs,
+    args: &TextInputProps,
     controller: &State<TextInputController>,
     computed_data: ComputedData,
 ) -> ImeRequest {
@@ -1059,6 +1114,21 @@ fn replace_text_range_with_selection(
     })
 }
 
+struct TextInputSemanticsModifierNode {
+    args: TextInputProps,
+    controller: State<TextInputController>,
+}
+
+impl SemanticsModifierNode for TextInputSemanticsModifierNode {
+    fn apply(
+        &self,
+        accessibility: &mut AccessibilityNode,
+        action_handler: &mut Option<AccessibilityActionHandler>,
+    ) {
+        apply_text_input_semantics(accessibility, action_handler, &self.args, &self.controller);
+    }
+}
+
 #[cfg(test)]
 fn editor_selection(editor: &glyphon::Editor<'_>) -> TextSelection {
     match editor.selection() {
@@ -1128,9 +1198,9 @@ fn is_editing_action(action: &GlyphonAction) -> bool {
 
 /// Create surface arguments based on editor configuration and state
 pub(crate) fn create_surface_args(
-    args: &TextInputArgs,
+    args: &TextInputProps,
     state: &State<TextInputController>,
-) -> crate::surface::SurfaceArgs {
+) -> crate::surface::SurfaceBuilder {
     let border_width = determine_border_width(args, state);
     let style = if border_width.to_pixels_f32() > 0.0 {
         crate::surface::SurfaceStyle::FilledOutlined {
@@ -1150,7 +1220,7 @@ pub(crate) fn create_surface_args(
         modifier = modifier.size_in(args.min_width, None, args.min_height, None);
     }
 
-    SurfaceArgs::default()
+    surface()
         .style(style)
         .shape(args.shape)
         .block_input(!args.enabled)
@@ -1158,7 +1228,7 @@ pub(crate) fn create_surface_args(
 }
 
 /// Determine background color based on focus state
-fn determine_background_color(args: &TextInputArgs, state: &State<TextInputController>) -> Color {
+fn determine_background_color(args: &TextInputProps, state: &State<TextInputController>) -> Color {
     if state.with(|c| c.focus_handler().is_focused()) {
         args.focus_background_color
             .or(args.background_color)
@@ -1182,7 +1252,7 @@ fn determine_background_color(args: &TextInputArgs, state: &State<TextInputContr
 
 /// Determine border color based on focus state
 fn determine_border_color(
-    args: &TextInputArgs,
+    args: &TextInputProps,
     state: &State<TextInputController>,
 ) -> Option<Color> {
     if state.with(|c| c.focus_handler().is_focused()) {
@@ -1204,7 +1274,7 @@ fn determine_border_color(
     }
 }
 
-fn determine_border_width(args: &TextInputArgs, state: &State<TextInputController>) -> Dp {
+fn determine_border_width(args: &TextInputProps, state: &State<TextInputController>) -> Dp {
     if state.with(|c| c.focus_handler().is_focused()) {
         args.focus_border_width.unwrap_or(args.border_width)
     } else {
@@ -1213,7 +1283,7 @@ fn determine_border_width(args: &TextInputArgs, state: &State<TextInputControlle
 }
 
 /// Convenience constructors for common use cases
-impl TextInputArgs {
+impl TextInputBuilder {
     /// Creates a simple text input with default styling.
     ///
     /// - Minimum width: 120dp
@@ -1226,17 +1296,18 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple();
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple();
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
     pub fn simple() -> Self {
-        TextInputArgs::default()
+        text_input()
             .min_width(Dp(120.0))
             .background_color(
                 use_context::<MaterialTheme>()
@@ -1270,13 +1341,14 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::outlined();
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::outlined();
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
     pub fn outlined() -> Self {
@@ -1294,17 +1366,18 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::minimal();
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::minimal();
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
     pub fn minimal() -> Self {
-        TextInputArgs::default()
+        text_input()
             .min_width(Dp(120.0))
             .background_color(Color::WHITE)
             .shape(Shape::RoundedRectangle {
@@ -1317,7 +1390,7 @@ impl TextInputArgs {
 }
 
 /// Builder methods for fluent API
-impl TextInputArgs {
+impl TextInputBuilder {
     /// Sets the minimum width in Dp.
     ///
     /// # Example
@@ -1326,19 +1399,19 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Dp;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_min_width(Dp(80.0));
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_min_width(Dp(80.0));
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_min_width(mut self, min_width: Dp) -> Self {
-        self.min_width = Some(min_width);
-        self
+    pub fn with_min_width(self, min_width: Dp) -> Self {
+        self.min_width(min_width)
     }
 
     /// Sets the minimum height in Dp.
@@ -1349,19 +1422,19 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Dp;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_min_height(Dp(40.0));
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_min_height(Dp(40.0));
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_min_height(mut self, min_height: Dp) -> Self {
-        self.min_height = Some(min_height);
-        self
+    pub fn with_min_height(self, min_height: Dp) -> Self {
+        self.min_height(min_height)
     }
 
     /// Sets the background color.
@@ -1371,19 +1444,19 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Color;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_background_color(Color::WHITE);
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_background_color(Color::WHITE);
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_background_color(mut self, color: Color) -> Self {
-        self.background_color = Some(color);
-        self
+    pub fn with_background_color(self, color: Color) -> Self {
+        self.background_color(color)
     }
 
     /// Sets the border width in pixels.
@@ -1394,20 +1467,20 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Dp;
     ///
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_border_width(Dp(1.0));
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_border_width(Dp(1.0));
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_border_width(mut self, width: Dp) -> Self {
-        self.border_width = width;
-        self
+    pub fn with_border_width(self, width: Dp) -> Self {
+        self.border_width(width)
     }
 
     /// Sets the border color.
@@ -1418,19 +1491,19 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Color;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_border_color(Color::BLACK);
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_border_color(Color::BLACK);
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_border_color(mut self, color: Color) -> Self {
-        self.border_color = Some(color);
-        self
+    pub fn with_border_color(self, color: Color) -> Self {
+        self.border_color(color)
     }
 
     /// Sets the shape of the editor container.
@@ -1442,24 +1515,24 @@ impl TextInputArgs {
     /// # #[tessera]
     /// # fn component() {
     /// use tessera_components::shape_def::{RoundedCorner, Shape};
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Dp;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_shape(Shape::RoundedRectangle {
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_shape(Shape::RoundedRectangle {
     ///     top_left: RoundedCorner::manual(Dp(8.0), 3.0),
     ///     top_right: RoundedCorner::manual(Dp(8.0), 3.0),
     ///     bottom_right: RoundedCorner::manual(Dp(8.0), 3.0),
     ///     bottom_left: RoundedCorner::manual(Dp(8.0), 3.0),
     /// });
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_shape(mut self, shape: Shape) -> Self {
-        self.shape = shape;
-        self
+    pub fn with_shape(self, shape: Shape) -> Self {
+        self.shape(shape)
     }
 
     /// Sets the inner padding in Dp.
@@ -1470,19 +1543,19 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Dp;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_padding(Dp(12.0));
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_padding(Dp(12.0));
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_padding(mut self, padding: Dp) -> Self {
-        self.padding = padding;
-        self
+    pub fn with_padding(self, padding: Dp) -> Self {
+        self.padding(padding)
     }
 
     /// Sets the border color when focused.
@@ -1493,19 +1566,19 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Color;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0));
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0));
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_focus_border_color(mut self, color: Color) -> Self {
-        self.focus_border_color = Some(color);
-        self
+    pub fn with_focus_border_color(self, color: Color) -> Self {
+        self.focus_border_color(color)
     }
 
     /// Sets the background color when focused.
@@ -1516,19 +1589,19 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Color;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_focus_background_color(Color::WHITE);
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_focus_background_color(Color::WHITE);
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_focus_background_color(mut self, color: Color) -> Self {
-        self.focus_background_color = Some(color);
-        self
+    pub fn with_focus_background_color(self, color: Color) -> Self {
+        self.focus_background_color(color)
     }
 
     /// Sets the selection highlight color.
@@ -1539,25 +1612,26 @@ impl TextInputArgs {
     /// # use tessera_ui::tessera;
     /// # #[tessera]
     /// # fn component() {
-    /// use tessera_components::text_input::TextInputArgs;
+    /// use tessera_components::text_input::TextInputBuilder;
     /// use tessera_ui::Color;
     /// # use tessera_components::theme::{MaterialTheme, material_theme};
-    /// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-    /// let args = TextInputArgs::simple().with_selection_color(Color::new(0.5, 0.7, 1.0, 0.4));
+    /// # material_theme()
+    /// #     .theme(|| MaterialTheme::default())
+    /// #     .child(|| {
+    /// let args = TextInputBuilder::simple().with_selection_color(Color::new(0.5, 0.7, 1.0, 0.4));
     /// # });
-    /// # material_theme(&args);
-    /// # }
+        /// # }
     /// # component();
     /// ```
-    pub fn with_selection_color(mut self, color: Color) -> Self {
-        self.selection_color = Some(color);
-        self
+    pub fn with_selection_color(self, color: Color) -> Self {
+        self.selection_color(color)
     }
 }
 
-fn apply_text_input_accessibility(
-    input: &mut tessera_ui::PointerInput<'_>,
-    args: &TextInputArgs,
+fn apply_text_input_semantics(
+    accessibility: &mut AccessibilityNode,
+    action_handler: &mut Option<AccessibilityActionHandler>,
+    args: &TextInputProps,
     state: &State<TextInputController>,
 ) {
     let focus = state.with(|c| *c.focus_handler());
@@ -1566,38 +1640,24 @@ fn apply_text_input_accessibility(
         focus.is_focused(),
         args.on_submit != Callback::noop(),
     );
-    let mut builder = input
-        .accessibility()
-        .role(text_input_accessibility_role(args.single_line));
-    if !args.enabled {
-        builder = builder.disabled();
-    }
-
-    if let Some(label) = args.accessibility_label.as_ref() {
-        builder = builder.label(label.clone());
-    }
-
-    if let Some(description) = args.accessibility_description.as_ref() {
-        builder = builder.description(description.clone());
-    }
+    accessibility.role = Some(text_input_accessibility_role(args.single_line));
+    accessibility.disabled = !args.enabled;
+    accessibility.label = args.accessibility_label.clone();
+    accessibility.description = args.accessibility_description.clone();
 
     let current_text = state.with(|c| c.text());
-    if !current_text.is_empty() {
-        builder = builder.value(current_text);
-    }
+    accessibility.value = (!current_text.is_empty()).then_some(current_text);
 
-    builder = builder.editable_text(args.enabled && !args.read_only);
-    if args.enabled {
-        builder = builder.focusable();
-        if submit_action_enabled {
-            builder = builder.action(Action::Click);
-        }
+    accessibility.is_editable_text = args.enabled && !args.read_only;
+    accessibility.focusable = args.enabled;
+    accessibility.actions.clear();
+    if args.enabled && submit_action_enabled {
+        accessibility.actions.push(Action::Click);
     }
-    builder.commit();
 
     if args.enabled {
         let on_submit = args.on_submit;
-        input.set_accessibility_action_handler(move |action| match action {
+        *action_handler = Some(Box::new(move |action| match action {
             Action::Focus => focus.request_focus(),
             Action::Blur => focus.clear_focus(),
             Action::Click => {
@@ -1608,7 +1668,9 @@ fn apply_text_input_accessibility(
                 }
             }
             _ => {}
-        });
+        }));
+    } else {
+        *action_handler = None;
     }
 }
 

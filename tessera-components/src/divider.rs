@@ -4,8 +4,9 @@
 //!
 //! Separate sections in lists, menus, and settings screens.
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Prop, Px, RenderInput, tessera, use_context,
+    Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
+    MeasurementError, Px, RenderInput, RenderPolicy, layout::layout_primitive, tessera,
+    use_context,
 };
 
 use crate::{pipelines::simple_rect::command::SimpleRectCommand, theme::MaterialTheme};
@@ -55,26 +56,6 @@ impl DividerDefaults {
     }
 }
 
-/// Arguments for [`horizontal_divider`] and [`vertical_divider`].
-#[derive(Clone, Debug, Prop)]
-pub struct DividerArgs {
-    /// Thickness of the divider line.
-    ///
-    /// Use `Dp::ZERO` to request a single physical pixel thickness.
-    pub thickness: Dp,
-    /// Color of the divider line.
-    pub color: Color,
-}
-
-impl Default for DividerArgs {
-    fn default() -> Self {
-        Self {
-            thickness: DividerDefaults::THICKNESS,
-            color: DividerDefaults::color(),
-        }
-    }
-}
-
 #[derive(Clone, Copy, PartialEq)]
 enum DividerOrientation {
     Horizontal,
@@ -88,7 +69,7 @@ struct DividerLayout {
     orientation: DividerOrientation,
 }
 
-impl LayoutSpec for DividerLayout {
+impl LayoutPolicy for DividerLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -119,7 +100,9 @@ impl LayoutSpec for DividerLayout {
 
         Ok(ComputedData { width, height })
     }
+}
 
+impl RenderPolicy for DividerLayout {
     fn record(&self, input: &RenderInput<'_>) {
         input
             .metadata_mut()
@@ -138,30 +121,32 @@ impl LayoutSpec for DividerLayout {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures divider thickness and color; see [`DividerArgs`].
+/// - `thickness` — optional line thickness in density-independent pixels.
+/// - `color` — optional line color override.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::divider::DividerArgs;
+/// use tessera_components::divider::horizontal_divider;
 /// use tessera_ui::{Color, Dp};
 ///
-/// let args = DividerArgs {
-///     thickness: Dp::ZERO,
-///     color: Color::BLACK,
-/// };
-/// assert_eq!(args.thickness, Dp::ZERO);
+/// horizontal_divider()
+///     .thickness(Dp::ZERO)
+///     .color(Color::BLACK);
 /// ```
 #[tessera]
-pub fn horizontal_divider(args: &DividerArgs) {
-    let thickness_px = resolve_thickness_px(args.thickness);
-    let color = args.color;
+pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
+    let thickness_px = resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS));
+    let color = color.unwrap_or_else(DividerDefaults::color);
 
-    layout(DividerLayout {
+    let policy = DividerLayout {
         thickness: thickness_px,
         color,
         orientation: DividerOrientation::Horizontal,
-    });
+    };
+    layout_primitive()
+        .layout_policy(policy)
+        .render_policy(policy);
 }
 
 /// # vertical_divider
@@ -174,28 +159,30 @@ pub fn horizontal_divider(args: &DividerArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures divider thickness and color; see [`DividerArgs`].
+/// - `thickness` — optional line thickness in density-independent pixels.
+/// - `color` — optional line color override.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::divider::DividerArgs;
+/// use tessera_components::divider::vertical_divider;
 /// use tessera_ui::{Color, Dp};
 ///
-/// let args = DividerArgs {
-///     thickness: Dp(2.0),
-///     color: Color::BLACK,
-/// };
-/// assert_eq!(args.thickness, Dp(2.0));
+/// vertical_divider()
+///     .thickness(Dp(2.0))
+///     .color(Color::BLACK);
 /// ```
 #[tessera]
-pub fn vertical_divider(args: &DividerArgs) {
-    let thickness_px = resolve_thickness_px(args.thickness);
-    let color = args.color;
+pub fn vertical_divider(thickness: Option<Dp>, color: Option<Color>) {
+    let thickness_px = resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS));
+    let color = color.unwrap_or_else(DividerDefaults::color);
 
-    layout(DividerLayout {
+    let policy = DividerLayout {
         thickness: thickness_px,
         color,
         orientation: DividerOrientation::Vertical,
-    });
+    };
+    layout_primitive()
+        .layout_policy(policy)
+        .render_policy(policy);
 }

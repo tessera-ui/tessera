@@ -4,15 +4,19 @@
 //!
 //! Use for screen titles, navigation affordances, and primary actions at the
 //! top of a view.
-use tessera_ui::{Color, Dp, Modifier, Prop, RenderSlot, provide_context, tessera, use_context};
+use tessera_ui::{
+    Color, Dp, Modifier, RenderSlot, WindowAction, provide_context, tessera, use_context,
+};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
+    icon::{IconContent, icon},
+    material_icons::filled,
     modifier::{ModifierExt as _, Padding},
-    row::{RowArgs, RowScope, row},
+    row::row,
     spacer::spacer,
-    surface::{SurfaceArgs, surface},
-    text::{TextArgs, text},
+    surface::surface,
+    text::text,
     theme::{ContentColor, MaterialColorScheme, MaterialTheme, provide_text_style},
 };
 
@@ -32,6 +36,8 @@ impl AppBarDefaults {
     pub const ACTIONS_SPACING: Dp = Dp(0.0);
     /// Default padding applied to app bar content.
     pub const CONTENT_PADDING: Padding = Padding::symmetric(Self::HORIZONTAL_PADDING, Dp(0.0));
+    /// Default padding applied to standard top app bar content.
+    pub const TOP_APP_BAR_CONTENT_PADDING: Padding = Padding::symmetric(Dp(16.0), Dp(0.0));
 
     /// Container color for app bars.
     pub fn container_color(scheme: &MaterialColorScheme) -> Color {
@@ -54,57 +60,88 @@ impl AppBarDefaults {
     }
 }
 
-/// Configuration arguments for [`app_bar`].
-#[derive(Clone, Prop)]
-pub struct AppBarArgs {
-    /// Modifier chain applied to the app bar container.
-    pub modifier: Modifier,
-    /// Container color for the app bar surface.
-    pub container_color: Color,
-    /// Default content color propagated to descendants.
-    pub content_color: Color,
-    /// Elevation applied to the app bar surface.
-    pub elevation: Dp,
-    /// Padding applied to the app bar content row.
-    pub content_padding: Padding,
-    /// Main axis alignment for the content row.
-    pub main_axis_alignment: MainAxisAlignment,
-    /// Cross axis alignment for the content row.
-    pub cross_axis_alignment: CrossAxisAlignment,
-    /// Row content rendered inside the app bar.
-    pub content: Option<RowArgs>,
-}
-
-impl Default for AppBarArgs {
-    fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        Self {
-            modifier: Modifier::new()
-                .fill_max_width()
-                .height(AppBarDefaults::TOP_APP_BAR_HEIGHT),
-            container_color: AppBarDefaults::container_color(&scheme),
-            content_color: AppBarDefaults::title_color(&scheme),
-            elevation: AppBarDefaults::TOP_APP_BAR_ELEVATION,
-            content_padding: AppBarDefaults::CONTENT_PADDING,
-            main_axis_alignment: MainAxisAlignment::Start,
-            cross_axis_alignment: CrossAxisAlignment::Center,
-            content: None,
-        }
-    }
-}
-
-impl AppBarArgs {
-    /// Build row content using a [`RowScope`] closure.
-    pub fn content_children<F>(mut self, scope_config: F) -> Self
-    where
-        F: FnOnce(&mut RowScope),
-    {
-        self.content = Some(RowArgs::default().children(scope_config));
+impl WindowControlButtonBuilder {
+    /// Sets the icon content using any supported icon source.
+    pub fn icon(mut self, icon: impl Into<IconContent>) -> Self {
+        self.props.icon = Some(icon.into());
         self
     }
+}
+
+fn render_window_control_icon(content: IconContent, tint: Color) {
+    let builder = match content {
+        IconContent::Vector(data) => icon().vector(data),
+        IconContent::Raster(data) => icon().raster(data),
+    };
+
+    builder.size(Dp(18.0)).tint(tint);
+}
+
+/// # window_control_button
+///
+/// Render a desktop window control button for minimize, maximize, and close
+/// actions.
+///
+/// ## Usage
+///
+/// Use in custom desktop title bars or top app bars for undecorated windows.
+///
+/// ## Parameters
+///
+/// - `modifier` — modifier chain applied before the default button size and
+///   window action.
+/// - `action` — optional window action requested when the button is activated.
+/// - `icon` — optional icon content shown at the center of the button.
+/// - `tint` — optional icon tint override.
+///
+/// ## Examples
+/// ```rust
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// use tessera_components::{app_bar::window_control_button, material_icons::filled};
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// use tessera_ui::WindowAction;
+///
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// window_control_button()
+///     .action(WindowAction::Close)
+///     .icon(filled::CLOSE_SVG);
+/// #     });
+/// # }
+/// # component();
+/// ```
+#[tessera]
+pub fn window_control_button(
+    modifier: Modifier,
+    action: Option<WindowAction>,
+    #[prop(skip_setter)] icon: Option<IconContent>,
+    tint: Option<Color>,
+) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let action = action.expect("window_control_button action must be provided");
+    let icon = icon.expect("window_control_button icon must be provided");
+    let tint = tint.unwrap_or_else(|| match action {
+        WindowAction::Close => scheme.error,
+        WindowAction::DragWindow
+        | WindowAction::Minimize
+        | WindowAction::Maximize
+        | WindowAction::ToggleMaximize => scheme.on_surface_variant,
+    });
+
+    surface()
+        .modifier(modifier.size(Dp(40.0), Dp(32.0)).window_action(action))
+        .style(Color::TRANSPARENT.into())
+        .content_color(tint)
+        .content_alignment(Alignment::Center)
+        .with_child(move || {
+            render_window_control_icon(icon.clone(), tint);
+        });
 }
 
 /// # app_bar
@@ -117,155 +154,126 @@ impl AppBarArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures container appearance and layout; see [`AppBarArgs`].
+/// - `modifier` — modifier chain applied to the app bar container.
+/// - `container_color` — optional app bar surface color.
+/// - `content_color` — optional default content color propagated to
+///   descendants.
+/// - `elevation` — optional surface elevation.
+/// - `content_padding` — optional padding applied to the row content.
+/// - `main_axis_alignment` — optional main-axis alignment for the row.
+/// - `cross_axis_alignment` — optional cross-axis alignment for the row.
+/// - `content` — optional row content slot.
 ///
 /// ## Examples
-///
-/// ```
+/// ```rust
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::{
-///     app_bar::{AppBarArgs, AppBarDefaults, app_bar},
-///     text::{TextArgs, text},
-/// };
+/// use tessera_components::{app_bar::app_bar, text::text};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// let args = AppBarArgs::default();
-/// assert_eq!(
-///     args.content_padding.left,
-///     AppBarDefaults::HORIZONTAL_PADDING
-/// );
-///
-/// app_bar(&args.content_children(|scope| {
-///     scope.child(|| text(&TextArgs::default().text("Inbox")));
-/// }));
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// app_bar().content(|| {
+///     text().content("Inbox");
+/// });
+/// #     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn app_bar(args: &AppBarArgs) {
-    let args: AppBarArgs = args.clone();
-    let content_row = args.content.unwrap_or_default();
+pub fn app_bar(
+    modifier: Modifier,
+    container_color: Option<Color>,
+    content_color: Option<Color>,
+    elevation: Option<Dp>,
+    content_padding: Option<Padding>,
+    main_axis_alignment: Option<MainAxisAlignment>,
+    cross_axis_alignment: Option<CrossAxisAlignment>,
+    content: Option<RenderSlot>,
+) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let container_color =
+        container_color.unwrap_or_else(|| AppBarDefaults::container_color(&scheme));
+    let content_color = content_color.unwrap_or_else(|| AppBarDefaults::title_color(&scheme));
+    let elevation = elevation.unwrap_or(AppBarDefaults::TOP_APP_BAR_ELEVATION);
+    let content_padding = content_padding.unwrap_or(AppBarDefaults::CONTENT_PADDING);
+    let main_axis_alignment = main_axis_alignment.unwrap_or(MainAxisAlignment::Start);
+    let cross_axis_alignment = cross_axis_alignment.unwrap_or(CrossAxisAlignment::Center);
+    let content = content.unwrap_or_else(RenderSlot::empty);
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .style(args.container_color.into())
-            .content_color(args.content_color)
-            .content_alignment(Alignment::CenterStart)
-            .elevation(args.elevation)
-            .tonal_elevation(args.elevation)
-            .modifier(args.modifier),
-        move || {
-            row(&content_row
-                .clone()
-                .modifier(
-                    Modifier::new()
-                        .fill_max_size()
-                        .padding(args.content_padding),
-                )
-                .main_axis_alignment(args.main_axis_alignment)
-                .cross_axis_alignment(args.cross_axis_alignment));
-        },
-    ));
+    surface()
+        .style(container_color.into())
+        .content_color(content_color)
+        .content_alignment(Alignment::CenterStart)
+        .elevation(elevation)
+        .tonal_elevation(elevation)
+        .modifier(
+            modifier
+                .fill_max_width()
+                .height(AppBarDefaults::TOP_APP_BAR_HEIGHT),
+        )
+        .with_child(move || {
+            let content = content.clone();
+            row()
+                .modifier(Modifier::new().fill_max_size().padding(content_padding))
+                .main_axis_alignment(main_axis_alignment)
+                .cross_axis_alignment(cross_axis_alignment)
+                .children_shared(content);
+        });
 }
 
-/// Configuration arguments for [`top_app_bar`].
-#[derive(Clone, Prop)]
-pub struct TopAppBarArgs {
-    /// Base container configuration for the app bar; see [`AppBarArgs`].
-    pub app_bar: AppBarArgs,
-    /// Title text displayed in the bar.
-    #[prop(into)]
-    pub title: String,
-    /// Modifier chain applied to the title text.
-    pub title_modifier: Modifier,
-    /// Optional navigation icon rendered at the leading edge.
-    #[prop(skip_setter)]
-    pub navigation_icon: Option<RenderSlot>,
-    /// Actions rendered at the trailing edge.
-    #[prop(skip_setter)]
-    pub actions: Vec<RenderSlot>,
-    /// Color applied to the navigation icon slot.
-    pub navigation_icon_color: Color,
-    /// Color applied to the trailing action slot.
-    pub action_icon_color: Color,
-    /// Total start inset applied to the title when no navigation icon is
-    /// present.
-    pub title_inset: Dp,
-    /// Horizontal spacing inserted between action items.
-    pub actions_spacing: Dp,
-}
-
-impl Default for TopAppBarArgs {
-    fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        Self {
-            app_bar: AppBarArgs::default(),
-            title: String::new(),
-            title_modifier: Modifier::new(),
-            navigation_icon: None,
-            actions: Vec::new(),
-            navigation_icon_color: AppBarDefaults::navigation_icon_color(&scheme),
-            action_icon_color: AppBarDefaults::action_icon_color(&scheme),
-            title_inset: AppBarDefaults::TITLE_INSET,
-            actions_spacing: AppBarDefaults::ACTIONS_SPACING,
-        }
-    }
-}
-
-impl TopAppBarArgs {
-    /// Create args with the required title text.
-    pub fn new(title: impl Into<String>) -> Self {
-        Self {
-            title: title.into(),
-            ..Self::default()
-        }
-    }
-
-    /// Set the navigation icon slot content.
-    pub fn navigation_icon<F>(mut self, navigation_icon: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.navigation_icon = Some(RenderSlot::new(navigation_icon));
-        self
-    }
-
-    /// Set the navigation icon slot content using a shared callback.
-    pub fn navigation_icon_shared(mut self, navigation_icon: impl Into<RenderSlot>) -> Self {
-        self.navigation_icon = Some(navigation_icon.into());
-        self
-    }
-
+impl TopAppBarBuilder {
     /// Append a trailing action item.
     pub fn action<F>(mut self, action: F) -> Self
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.actions.push(RenderSlot::new(action));
+        self.props.actions.push(RenderSlot::new(action));
         self
     }
 
     /// Append a trailing action item using a shared callback.
     pub fn action_shared(mut self, action: impl Into<RenderSlot>) -> Self {
-        self.actions.push(action.into());
+        self.props.actions.push(action.into());
         self
     }
 
     /// Replace the trailing actions with shared callbacks.
     pub fn actions_shared(mut self, actions: Vec<RenderSlot>) -> Self {
-        self.actions = actions;
+        self.props.actions = actions;
         self
+    }
+
+    /// Appends a desktop minimize window control button.
+    pub fn window_control_minimize(self) -> Self {
+        self.action(|| {
+            window_control_button()
+                .action(WindowAction::Minimize)
+                .icon(filled::MINIMIZE_SVG);
+        })
+    }
+
+    /// Appends a desktop maximize or restore window control button.
+    pub fn window_control_toggle_maximize(self) -> Self {
+        self.action(|| {
+            window_control_button()
+                .action(WindowAction::ToggleMaximize)
+                .icon(filled::FULLSCREEN_SVG);
+        })
+    }
+
+    /// Appends a desktop close window control button.
+    pub fn window_control_close(self) -> Self {
+        self.action(|| {
+            window_control_button()
+                .action(WindowAction::Close)
+                .icon(filled::CLOSE_SVG);
+        })
     }
 }
 
@@ -279,137 +287,143 @@ impl TopAppBarArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures content, colors, and layout; see [`TopAppBarArgs`].
+/// - `modifier` — modifier chain applied to the surface.
+/// - `container_color` — optional app bar surface color.
+/// - `content_color` — optional default title color.
+/// - `elevation` — optional surface elevation.
+/// - `content_padding` — optional padding applied to app bar content.
+/// - `title` — title text displayed in the bar.
+/// - `title_area_modifier` — modifier chain applied to the weighted title area.
+/// - `navigation_icon` — optional leading icon slot.
+/// - `actions` — trailing action slots.
+/// - `navigation_icon_color` — optional color for the navigation icon slot.
+/// - `action_icon_color` — optional color for trailing action slots.
+/// - `title_inset` — optional total title inset when no navigation icon is
+///   present.
+/// - `actions_spacing` — optional spacing inserted between action items.
 ///
 /// ## Examples
-///
-/// ```
+/// ```rust
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::{
-///     app_bar::{TopAppBarArgs, top_app_bar},
-///     text::{TextArgs, text},
-/// };
+/// use tessera_components::{app_bar::top_app_bar, text::text};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// let args = TopAppBarArgs::new("Inbox").action(|| {
-///     text(&TextArgs::default().text("Edit"));
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// top_app_bar().title("Inbox").action(|| {
+///     text().content("Edit");
 /// });
-/// assert_eq!(args.title, "Inbox");
-///
-/// top_app_bar(&args);
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// #     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn top_app_bar(args: &TopAppBarArgs) {
-    let args: TopAppBarArgs = args.clone();
-    let typography = use_context::<MaterialTheme>()
+pub fn top_app_bar(
+    modifier: Modifier,
+    container_color: Option<Color>,
+    content_color: Option<Color>,
+    elevation: Option<Dp>,
+    content_padding: Option<Padding>,
+    #[prop(into)] title: String,
+    title_area_modifier: Modifier,
+    navigation_icon: Option<RenderSlot>,
+    #[prop(skip_setter)] actions: Vec<RenderSlot>,
+    navigation_icon_color: Option<Color>,
+    action_icon_color: Option<Color>,
+    title_inset: Option<Dp>,
+    actions_spacing: Option<Dp>,
+) {
+    let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
-        .get()
-        .typography;
+        .get();
+    let scheme = theme.color_scheme;
+    let typography = theme.typography;
 
-    let TopAppBarArgs {
-        app_bar: app_bar_args,
-        title,
-        title_modifier,
-        navigation_icon,
-        actions,
-        navigation_icon_color,
-        action_icon_color,
-        title_inset,
-        actions_spacing,
-    } = args;
+    let container_color =
+        container_color.unwrap_or_else(|| AppBarDefaults::container_color(&scheme));
+    let content_color = content_color.unwrap_or_else(|| AppBarDefaults::title_color(&scheme));
+    let content_padding = content_padding.unwrap_or(AppBarDefaults::TOP_APP_BAR_CONTENT_PADDING);
+    let navigation_icon_color =
+        navigation_icon_color.unwrap_or_else(|| AppBarDefaults::navigation_icon_color(&scheme));
+    let action_icon_color =
+        action_icon_color.unwrap_or_else(|| AppBarDefaults::action_icon_color(&scheme));
+    let title_inset = title_inset.unwrap_or(AppBarDefaults::TITLE_INSET);
+    let actions_spacing = actions_spacing.unwrap_or(AppBarDefaults::ACTIONS_SPACING);
 
-    let start_padding = app_bar_args.content_padding.left;
+    let start_padding = content_padding.left;
     let extra_inset = Dp((title_inset.0 - start_padding.0).max(0.0));
     let title_style = typography.title_large;
 
-    let app_bar_args = app_bar_args.content(RowArgs::default().children(move |scope| {
-        let navigation_icon = navigation_icon.clone();
-        let actions = actions.clone();
-        if let Some(navigation_icon) = navigation_icon {
-            let nav_color = navigation_icon_color;
-            scope.child(move || {
-                provide_context(
-                    || ContentColor { current: nav_color },
-                    || {
-                        navigation_icon.render();
-                    },
-                );
-            });
-        } else if extra_inset.0 > 0.0 {
-            let spacer_width = extra_inset;
-            scope.child(move || {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().width(spacer_width),
-                ));
-            });
-        }
-
-        let title_text = title.clone();
-        let title_mod = title_modifier.clone();
-        scope.child_weighted(
-            move || {
-                if title_text.is_empty() {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().fill_max_width(),
-                    ));
-                } else {
-                    let text_value = title_text.clone();
-                    let title_mod = title_mod.clone();
-                    provide_text_style(title_style, move || {
-                        text(&crate::text::TextArgs::from(
-                            &TextArgs::default()
-                                .text(&text_value)
-                                .modifier(title_mod.clone()),
-                        ));
-                    });
-                }
-            },
-            1.0,
-        );
-
-        if !actions.is_empty() {
-            let actions_len = actions.len();
-            let spacing = actions_spacing;
-            let action_color = action_icon_color;
-            scope.child(move || {
+    app_bar()
+        .modifier(modifier)
+        .container_color(container_color)
+        .content_color(content_color)
+        .elevation(elevation.unwrap_or(AppBarDefaults::TOP_APP_BAR_ELEVATION))
+        .content_padding(content_padding)
+        .content(move || {
+            let navigation_icon = navigation_icon.clone();
+            let actions = actions.clone();
+            let title_text = title.clone();
+            let title_mod = title_area_modifier.clone();
+            row().children(move || {
+                let navigation_icon = navigation_icon.clone();
                 let actions = actions.clone();
-                provide_context(
-                    || ContentColor {
-                        current: action_color,
-                    },
-                    || {
-                        row(&RowArgs::default()
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children(move |row_scope| {
-                                for (index, action) in actions.iter().cloned().enumerate() {
-                                    row_scope.child(move || {
-                                        action.render();
-                                    });
-                                    if spacing.0 > 0.0 && index + 1 < actions_len {
-                                        let spacer_width = spacing;
-                                        row_scope.child(move || {
-                                            spacer(&crate::spacer::SpacerArgs::new(
-                                                Modifier::new().width(spacer_width),
-                                            ));
-                                        });
-                                    }
-                                }
-                            }));
-                    },
-                );
-            });
-        }
-    }));
+                if let Some(navigation_icon) = navigation_icon {
+                    let nav_color = navigation_icon_color;
+                    provide_context(
+                        || ContentColor { current: nav_color },
+                        || {
+                            navigation_icon.render();
+                        },
+                    );
+                } else if extra_inset.0 > 0.0 {
+                    let spacer_width = extra_inset;
+                    spacer().modifier(Modifier::new().width(spacer_width));
+                }
 
-    app_bar(&app_bar_args);
+                let title_text = title_text.clone();
+                let title_mod = title_mod.clone();
+                row()
+                    .modifier(title_mod.fill_max_size().weight(1.0))
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        if title_text.is_empty() {
+                            spacer().modifier(Modifier::new().fill_max_width());
+                        } else {
+                            let text_value = title_text.clone();
+                            provide_text_style(title_style, move || {
+                                text().content(text_value.clone());
+                            });
+                        }
+                    });
+
+                if !actions.is_empty() {
+                    let actions_len = actions.len();
+                    let spacing = actions_spacing;
+                    let action_color = action_icon_color;
+                    let actions = actions.clone();
+                    provide_context(
+                        || ContentColor {
+                            current: action_color,
+                        },
+                        || {
+                            row()
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    for (index, action) in actions.iter().cloned().enumerate() {
+                                        action.render();
+                                        if spacing.0 > 0.0 && index + 1 < actions_len {
+                                            let spacer_width = spacing;
+                                            spacer().modifier(Modifier::new().width(spacer_width));
+                                        }
+                                    }
+                                });
+                        },
+                    );
+                }
+            });
+        });
 }

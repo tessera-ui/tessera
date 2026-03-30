@@ -4,9 +4,9 @@
 //!
 //! Wrap tall lists or cards into multiple columns.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px, PxPosition,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px, PxPosition,
     RenderSlot,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
     tessera,
 };
 
@@ -14,135 +14,6 @@ use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     modifier::ModifierExt as _,
 };
-
-/// Arguments for the `flow_column` component.
-#[derive(Clone, Prop)]
-pub struct FlowColumnArgs {
-    /// Modifier chain applied to the flow column subtree.
-    pub modifier: Modifier,
-    /// Alignment of items along the main axis within each column.
-    pub main_axis_alignment: MainAxisAlignment,
-    /// Alignment of items along the cross axis within each column.
-    pub cross_axis_alignment: CrossAxisAlignment,
-    /// Alignment of columns along the cross axis inside the container.
-    pub line_alignment: MainAxisAlignment,
-    /// Spacing between items within a column.
-    pub item_spacing: Dp,
-    /// Spacing between columns.
-    pub line_spacing: Dp,
-    /// Maximum number of items per column.
-    pub max_items_per_line: usize,
-    /// Maximum number of columns.
-    pub max_lines: usize,
-    /// Child slots rendered by the flow column.
-    #[prop(skip_setter)]
-    pub children: Vec<RenderSlot>,
-    /// Optional weight per child (same index as `children`).
-    pub child_weights: Vec<Option<f32>>,
-}
-
-impl Default for FlowColumnArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new()
-                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
-            main_axis_alignment: MainAxisAlignment::Start,
-            cross_axis_alignment: CrossAxisAlignment::Start,
-            line_alignment: MainAxisAlignment::Start,
-            item_spacing: Dp::ZERO,
-            line_spacing: Dp::ZERO,
-            max_items_per_line: usize::MAX,
-            max_lines: usize::MAX,
-            children: Vec::new(),
-            child_weights: Vec::new(),
-        }
-    }
-}
-
-impl FlowColumnArgs {
-    /// Adds a child without weight.
-    pub fn child<F>(mut self, child_closure: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_weights.push(None);
-        self
-    }
-
-    /// Adds a child without weight using a shared slot.
-    pub fn child_shared(mut self, child_closure: impl Into<RenderSlot>) -> Self {
-        self.children.push(child_closure.into());
-        self.child_weights.push(None);
-        self
-    }
-
-    /// Adds a child with weight.
-    pub fn child_weighted<F>(mut self, child_closure: F, weight: f32) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_weights.push(Some(weight));
-        self
-    }
-
-    /// Adds a child with weight using a shared slot.
-    pub fn child_weighted_shared(
-        mut self,
-        child_closure: impl Into<RenderSlot>,
-        weight: f32,
-    ) -> Self {
-        self.children.push(child_closure.into());
-        self.child_weights.push(Some(weight));
-        self
-    }
-
-    /// Builds children using the scope DSL.
-    pub fn children<F>(mut self, scope_config: F) -> Self
-    where
-        F: FnOnce(&mut FlowColumnScope),
-    {
-        let mut child_closures: Vec<RenderSlot> = Vec::new();
-        let mut child_weights: Vec<Option<f32>> = Vec::new();
-        {
-            let mut scope = FlowColumnScope {
-                child_closures: &mut child_closures,
-                child_weights: &mut child_weights,
-            };
-            scope_config(&mut scope);
-        }
-        self.children = child_closures;
-        self.child_weights = child_weights;
-        self
-    }
-}
-
-/// A scope for declaratively adding children to a `flow_column` component.
-pub struct FlowColumnScope<'a> {
-    child_closures: &'a mut Vec<RenderSlot>,
-    child_weights: &'a mut Vec<Option<f32>>,
-}
-
-impl<'a> FlowColumnScope<'a> {
-    /// Adds a child component to the flow column.
-    pub fn child<F>(&mut self, child_closure: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_weights.push(None);
-    }
-
-    /// Adds a child component with a weight for main-axis distribution.
-    pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_weights.push(Some(weight));
-    }
-}
 
 /// # flow_column
 ///
@@ -154,55 +25,58 @@ impl<'a> FlowColumnScope<'a> {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures alignment, spacing, and wrapping; see
-///   [`FlowColumnArgs`].
+/// - `modifier` — modifier chain applied to the flowing column container.
+/// - `main_axis_alignment` — alignment within each wrapped column.
+/// - `cross_axis_alignment` — cross-axis alignment for items inside a column.
+/// - `line_alignment` — alignment between wrapped columns.
+/// - `item_spacing` — spacing between items in the same column.
+/// - `line_spacing` — spacing between wrapped columns.
+/// - `max_items_per_line` — optional cap for items per column.
+/// - `max_lines` — optional cap for total wrapped columns.
+/// - `children` — child slot rendered inside the layout.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::flow_column::{FlowColumnArgs, flow_column};
-/// use tessera_components::text::text;
+/// use tessera_components::{flow_column::flow_column, text::text};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
-///     flow_column(&FlowColumnArgs::default().children(move |scope| {
-///         scope.child(move || {
-///             rendered.with_mut(|count| *count += 1);
-///             text(&tessera_components::text::TextArgs::default().text("Alpha"));
-///         });
-///         scope.child(move || {
-///             rendered.with_mut(|count| *count += 1);
-///             text(&tessera_components::text::TextArgs::default().text("Beta"));
-///         });
-///     }));
+///     flow_column().children(move || {
+///         rendered.with_mut(|count| *count += 1);
+///         text().content("Alpha");
+///         rendered.with_mut(|count| *count += 1);
+///         text().content("Beta");
+///     });
 ///     assert_eq!(rendered.get(), 2);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn flow_column(args: &FlowColumnArgs) {
-    let args = args.clone();
-    let child_len = args.children.len();
-    let mut child_weights = args.child_weights;
-    if child_weights.len() < child_len {
-        child_weights.resize(child_len, None);
-    } else if child_weights.len() > child_len {
-        child_weights.truncate(child_len);
-    }
-    let children = args.children;
-    let modifier = args.modifier;
-    let main_axis_alignment = args.main_axis_alignment;
-    let cross_axis_alignment = args.cross_axis_alignment;
-    let line_alignment = args.line_alignment;
-    let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
-    let line_spacing = sanitize_spacing(Px::from(args.line_spacing));
-    let max_items_per_line = args.max_items_per_line;
-    let max_lines = args.max_lines;
-    modifier.run(move || {
-        layout(FlowColumnLayout {
+pub fn flow_column(
+    modifier: Option<Modifier>,
+    main_axis_alignment: MainAxisAlignment,
+    cross_axis_alignment: CrossAxisAlignment,
+    line_alignment: MainAxisAlignment,
+    item_spacing: Dp,
+    line_spacing: Dp,
+    max_items_per_line: Option<usize>,
+    max_lines: Option<usize>,
+    children: RenderSlot,
+) {
+    let modifier = modifier.unwrap_or_else(|| {
+        Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
+    });
+    let item_spacing = sanitize_spacing(Px::from(item_spacing));
+    let line_spacing = sanitize_spacing(Px::from(line_spacing));
+    let max_items_per_line = max_items_per_line.unwrap_or(usize::MAX);
+    let max_lines = max_lines.unwrap_or(usize::MAX);
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(FlowColumnLayout {
             main_axis_alignment,
             cross_axis_alignment,
             line_alignment,
@@ -210,13 +84,10 @@ pub fn flow_column(args: &FlowColumnArgs) {
             line_spacing,
             max_items_per_line,
             max_lines,
-            child_weights: child_weights.clone(),
+        })
+        .child(move || {
+            children.render();
         });
-
-        for child_closure in &children {
-            child_closure.render();
-        }
-    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -228,16 +99,16 @@ struct FlowColumnLayout {
     line_spacing: Px,
     max_items_per_line: usize,
     max_lines: usize,
-    child_weights: Vec<Option<f32>>,
 }
 
-impl LayoutSpec for FlowColumnLayout {
+impl LayoutPolicy for FlowColumnLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let n = self.child_weights.len();
+        let child_weights = collect_child_weights(input);
+        let n = child_weights.len();
         let children_ids = input.children_ids();
         assert_eq!(
             children_ids.len(),
@@ -263,12 +134,7 @@ impl LayoutSpec for FlowColumnLayout {
         let mut unweighted_nodes = Vec::new();
         let mut weighted_nodes = Vec::new();
         for (idx, &child_id) in children_ids.iter().enumerate().take(n) {
-            let weight = self
-                .child_weights
-                .get(idx)
-                .copied()
-                .flatten()
-                .unwrap_or(0.0);
+            let weight = child_weights.get(idx).copied().flatten().unwrap_or(0.0);
             if weight > 0.0 && use_weighted_remeasure {
                 weighted_nodes.push((child_id, child_constraint));
             } else {
@@ -317,7 +183,7 @@ impl LayoutSpec for FlowColumnLayout {
                 flow_constraint: &flow_constraint,
                 lines: &lines,
                 children_sizes: &mut children_sizes,
-                child_weights: &self.child_weights,
+                child_weights: &child_weights,
                 item_spacing: self.item_spacing,
                 max_height,
             })?;
@@ -352,6 +218,18 @@ impl LayoutSpec for FlowColumnLayout {
             height: final_height,
         })
     }
+}
+
+fn collect_child_weights(input: &LayoutInput<'_>) -> Vec<Option<f32>> {
+    input
+        .children_ids()
+        .iter()
+        .map(|&child_id| {
+            input
+                .child_parent_data::<crate::modifier::WeightParentData>(child_id)
+                .map(|data| data.weight)
+        })
+        .collect()
 }
 
 #[derive(Clone, PartialEq, Copy)]
@@ -708,5 +586,96 @@ fn px_from_i64(value: i64) -> Px {
         Px(i32::MIN)
     } else {
         Px(value as i32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+    };
+
+    use crate::{
+        alignment::{CrossAxisAlignment, MainAxisAlignment},
+        modifier::{ModifierExt as _, SemanticsArgs},
+    };
+
+    use super::flow_column;
+
+    #[derive(Clone, PartialEq)]
+    struct FixedTestLayout {
+        width: i32,
+        height: i32,
+    }
+
+    impl LayoutPolicy for FixedTestLayout {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    #[tessera]
+    fn fixed_test_box(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn flow_column_layout_case() {
+        flow_column()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Wrap {
+                    min: None,
+                    max: Some(Px::new(100)),
+                }),
+                Some(DimensionValue::Fixed(Px::new(40))),
+            ))
+            .main_axis_alignment(MainAxisAlignment::Start)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .line_alignment(MainAxisAlignment::Start)
+            .item_spacing(Px::new(3).into())
+            .line_spacing(Px::new(4).into())
+            .children(|| {
+                fixed_test_box()
+                    .tag("flow_column_first".to_string())
+                    .width(20)
+                    .height(12);
+                fixed_test_box()
+                    .tag("flow_column_second".to_string())
+                    .width(25)
+                    .height(15);
+                fixed_test_box()
+                    .tag("flow_column_third".to_string())
+                    .width(18)
+                    .height(10);
+            });
+    }
+
+    #[test]
+    fn flow_column_wraps_children_across_columns() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 100),
+            content: {
+                flow_column_layout_case();
+            },
+            expect: {
+                node("flow_column_first").position(0, 0).size(20, 12);
+                node("flow_column_second").position(0, 15).size(25, 15);
+                node("flow_column_third").position(29, 0).size(18, 10);
+            }
+        }
     }
 }

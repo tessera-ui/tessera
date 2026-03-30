@@ -4,14 +4,14 @@
 //!
 //! Use to add gaps between components or to create flexible, expanding regions.
 use tessera_ui::{
-    ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Modifier,
-    Prop, tessera,
+    ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
+    layout::layout_primitive, tessera,
 };
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 struct SpacerLayout;
 
-impl LayoutSpec for SpacerLayout {
+impl LayoutPolicy for SpacerLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -22,19 +22,6 @@ impl LayoutSpec for SpacerLayout {
             input.parent_constraint().height(),
         );
         Ok(ComputedData::min_from_constraint(&constraint))
-    }
-}
-
-#[derive(Clone, Prop)]
-/// Props for [`spacer`].
-pub struct SpacerArgs {
-    modifier: Modifier,
-}
-
-impl SpacerArgs {
-    /// Creates spacer component props.
-    pub fn new(modifier: Modifier) -> Self {
-        Self { modifier }
     }
 }
 
@@ -54,29 +41,23 @@ impl SpacerArgs {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{
-///     row::{RowArgs, row},
-///     spacer::{SpacerArgs, spacer},
-///     text::{TextArgs, text},
-/// };
+/// use tessera_components::{modifier::ModifierExt as _, row::row, spacer::spacer, text::text};
 /// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// row(&RowArgs::default().children(|scope| {
-///     scope.child(|| text(&TextArgs::default().text("Left")));
-///     // Use weight to let the spacer expand and push the trailing content.
-///     scope.child_weighted(|| spacer(&SpacerArgs::new(Modifier::new())), 1.0);
-///     scope.child(|| text(&TextArgs::default().text("Right")));
-/// }));
+/// row().children(|| {
+///     text().content("Left");
+///     spacer().modifier(Modifier::new().weight(1.0));
+///     text().content("Right");
+/// });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn spacer(args: &SpacerArgs) {
-    let modifier = args.modifier.clone();
-    modifier.run(|| {
-        layout(SpacerLayout);
-    });
+pub fn spacer(modifier: Modifier) {
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(SpacerLayout);
 }

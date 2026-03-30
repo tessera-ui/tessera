@@ -7,9 +7,11 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, ComputedData, DimensionValue, Dp, FocusTraversalPolicy, MeasurementError,
-    Modifier, Prop, Px, PxPosition, RenderSlot, State, current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    Callback, Color, ComputedData, DimensionValue, Dp, FocusScopeNode, FocusTraversalPolicy,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos,
+    layout::{
+        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
+    },
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -17,15 +19,15 @@ use tessera_ui::{
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation,
-    boxed::{BoxedArgs, boxed},
-    column::{ColumnArgs, column},
-    fluid_glass::{FluidGlassArgs, GlassBorder, fluid_glass},
-    modifier::ModifierExt,
-    row::{RowArgs, row},
+    boxed::boxed,
+    column::column,
+    fluid_glass::{GlassBorder, fluid_glass},
+    modifier::{ModifierExt, with_keyboard_input},
+    row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    surface::{SurfaceArgs, surface},
-    text::{TextArgs, text},
+    surface::surface,
+    text::text,
     theme::{ContentColor, MaterialTheme},
 };
 
@@ -74,92 +76,31 @@ pub enum DialogStyle {
     Material,
 }
 
-/// Arguments for the [`dialog_provider`] component.
-#[derive(Clone, Prop)]
-pub struct DialogProviderArgs {
-    /// Callback function triggered when a close request is made, for example by
-    /// clicking the scrim or pressing the `ESC` key.
-    #[prop(skip_setter)]
-    pub on_close_request: Callback,
-    /// Padding around the dialog content.
-    pub padding: Dp,
-    /// The visual style of the dialog's scrim.
-    pub style: DialogStyle,
-    /// Whether the dialog is initially open (for declarative usage).
-    pub is_open: bool,
-    /// Optional external controller for dialog visibility and animation state.
-    #[prop(skip_setter)]
-    pub controller: Option<State<DialogController>>,
-    /// Optional main content rendered behind the dialog.
-    #[prop(skip_setter)]
-    pub main_content: Option<RenderSlot>,
-    /// Optional dialog content rendered above the scrim.
-    #[prop(skip_setter)]
-    pub dialog_content: Option<RenderSlot>,
+impl DialogProviderRenderBuilder {
+    fn on_close_request_handle(mut self, on_close_request: Callback) -> Self {
+        self.props.on_close_request = Some(on_close_request);
+        self
+    }
+
+    fn main_content_slot(mut self, main_content: RenderSlot) -> Self {
+        self.props.main_content = Some(main_content);
+        self
+    }
+
+    fn dialog_content_slot(mut self, dialog_content: RenderSlot) -> Self {
+        self.props.dialog_content = Some(dialog_content);
+        self
+    }
 }
 
-impl DialogProviderArgs {
-    /// Create args with a required close-request callback.
-    pub fn new(on_close_request: impl Fn() + Send + Sync + 'static) -> Self {
-        Self {
-            on_close_request: Callback::new(on_close_request),
-            padding: Dp(24.0),
-            style: DialogStyle::default(),
-            is_open: false,
-            controller: None,
-            main_content: None,
-            dialog_content: None,
-        }
-    }
-
-    /// Set the close-request callback.
-    pub fn on_close_request<F>(mut self, on_close_request: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_close_request = Callback::new(on_close_request);
+impl DialogContentWrapperBuilder {
+    fn on_close_request_handle(mut self, on_close_request: Callback) -> Self {
+        self.props.on_close_request = on_close_request;
         self
     }
 
-    /// Set the close-request callback using a shared callback.
-    pub fn on_close_request_shared(mut self, on_close_request: impl Into<Callback>) -> Self {
-        self.on_close_request = on_close_request.into();
-        self
-    }
-
-    /// Sets an external dialog controller.
-    pub fn controller(mut self, controller: State<DialogController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-
-    /// Sets the main content slot.
-    pub fn main_content<F>(mut self, main_content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.main_content = Some(RenderSlot::new(main_content));
-        self
-    }
-
-    /// Sets the main content slot using a shared render slot.
-    pub fn main_content_shared(mut self, main_content: impl Into<RenderSlot>) -> Self {
-        self.main_content = Some(main_content.into());
-        self
-    }
-
-    /// Sets the dialog content slot.
-    pub fn dialog_content<F>(mut self, dialog_content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.dialog_content = Some(RenderSlot::new(dialog_content));
-        self
-    }
-
-    /// Sets the dialog content slot using a shared render slot.
-    pub fn dialog_content_shared(mut self, dialog_content: impl Into<RenderSlot>) -> Self {
-        self.dialog_content = Some(dialog_content.into());
+    fn content_slot(mut self, content: RenderSlot) -> Self {
+        self.props.content = Some(content);
         self
     }
 }
@@ -241,49 +182,27 @@ impl Default for DialogController {
     }
 }
 
-#[derive(Clone, Prop)]
-struct DialogContentWrapperArgs {
-    style: DialogStyle,
-    alpha: f32,
-    padding: Dp,
-    just_opened: bool,
-    on_close_request: Callback,
-    content: RenderSlot,
-}
-
-#[derive(Clone, Prop)]
-struct DialogProviderRenderArgs {
-    on_close_request: Callback,
-    padding: Dp,
-    style: DialogStyle,
-    controller: State<DialogController>,
-    main_content: RenderSlot,
-    dialog_content: RenderSlot,
-}
-
-fn render_scrim(style: DialogStyle, on_close_request: &Callback, is_open: bool, progress: f32) {
+fn render_scrim(style: DialogStyle, on_close_request: Callback, is_open: bool, progress: f32) {
     match style {
         DialogStyle::Glass => {
             let blur_radius = blur_radius_for(progress, is_open, 5.0);
-            fluid_glass(&crate::fluid_glass::FluidGlassArgs::with_child(
-                FluidGlassArgs::default()
-                    .on_click_shared(*on_close_request)
-                    .tint_color(Color::TRANSPARENT)
-                    .modifier(Modifier::new().fill_max_size())
-                    .dispersion_height(Dp(0.0))
-                    .refraction_height(Dp(0.0))
-                    .block_input(true)
-                    .blur_radius(Dp(blur_radius as f64))
-                    .border(GlassBorder::new(Px(0)))
-                    .shape(Shape::RoundedRectangle {
-                        top_left: RoundedCorner::manual(Dp(0.0), 3.0),
-                        top_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-                    })
-                    .noise_amount(0.0),
-                || {},
-            ));
+            fluid_glass()
+                .on_click_shared(on_close_request)
+                .tint_color(Color::TRANSPARENT)
+                .modifier(Modifier::new().fill_max_size())
+                .dispersion_height(Dp(0.0))
+                .refraction_height(Dp(0.0))
+                .block_input(true)
+                .blur_radius(Dp(blur_radius as f64))
+                .border(GlassBorder::new(Px(0)))
+                .shape(Shape::RoundedRectangle {
+                    top_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                    top_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                    bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                    bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
+                })
+                .noise_amount(0.0)
+                .with_child(|| {});
         }
         DialogStyle::Material => {
             let alpha = scrim_alpha_for(progress, is_open);
@@ -292,14 +211,12 @@ fn render_scrim(style: DialogStyle, on_close_request: &Callback, is_open: bool, 
                 .get()
                 .color_scheme
                 .scrim;
-            surface(&crate::surface::SurfaceArgs::with_child(
-                SurfaceArgs::default()
-                    .style(scrim_color.with_alpha(alpha).into())
-                    .on_click_shared(*on_close_request)
-                    .modifier(Modifier::new().fill_max_size())
-                    .block_input(true),
-                || {},
-            ));
+            surface()
+                .style(scrim_color.with_alpha(alpha).into())
+                .on_click_shared(on_close_request)
+                .modifier(Modifier::new().fill_max_size())
+                .block_input(true)
+                .with_child(|| {});
         }
     }
 }
@@ -331,126 +248,97 @@ fn make_keyboard_handler(
 }
 
 #[tessera]
-fn dialog_content_wrapper(args: &DialogContentWrapperArgs) {
-    let args = args.clone();
-    let style = args.style;
-    let alpha = args.alpha;
-    let padding = args.padding;
-    let content = args.content.clone();
-    let just_opened = args.just_opened;
-    let on_close_request = args.on_close_request;
-    let focus_scope = remember_focus_scope();
-    Modifier::new()
-        .focus_scope_with(focus_scope)
-        .focus_traversal_policy(
-            FocusTraversalPolicy::linear()
-                .wrap(true)
-                .tab_navigation(true),
-        )
-        .run(move || {
-            if just_opened {
-                focus_scope.restore_focus();
-            }
-            keyboard_input_handler(make_keyboard_handler(on_close_request));
-            layout(DialogContentLayout { alpha });
-
+fn dialog_content_wrapper(
+    style: DialogStyle,
+    alpha: f32,
+    padding: Dp,
+    just_opened: bool,
+    on_close_request: Callback,
+    content: Option<RenderSlot>,
+) {
+    let content = content.expect("dialog_content_wrapper requires content");
+    let focus_scope = remember(FocusScopeNode::new).get();
+    let modifier = with_keyboard_input(
+        Modifier::new()
+            .focus_scope_with(focus_scope)
+            .focus_traversal_policy(
+                FocusTraversalPolicy::linear()
+                    .wrap(true)
+                    .tab_navigation(true),
+            ),
+        make_keyboard_handler(on_close_request),
+    );
+    if just_opened {
+        focus_scope.restore_focus();
+    }
+    let policy = DialogContentLayout { alpha };
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(policy.clone())
+        .render_policy(policy)
+        .child(move || {
             let content = content.clone();
-            boxed(
-                &BoxedArgs::default()
-                    .modifier(Modifier::new().fill_max_size())
-                    .alignment(Alignment::Center)
-                    .children(|scope| {
-                        scope.child(move || {
-                            let content = content.clone();
-                            surface(&crate::surface::SurfaceArgs::with_child(
-                                SurfaceArgs::default()
-                                    .style(Color::TRANSPARENT.into())
-                                    .modifier(
-                                        Modifier::new()
-                                            .constrain(
-                                                Some(DimensionValue::WRAP),
-                                                Some(DimensionValue::WRAP),
-                                            )
-                                            .padding_all(Dp(24.0)),
-                                    ),
-                                move || match style {
-                                    DialogStyle::Glass => {
+            boxed()
+                .modifier(Modifier::new().fill_max_size())
+                .alignment(Alignment::Center)
+                .children(move || {
+                    let content = content.clone();
+                    surface()
+                        .style(Color::TRANSPARENT.into())
+                        .modifier(
+                            Modifier::new()
+                                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
+                                .padding_all(Dp(24.0)),
+                        )
+                        .with_child(move || match style {
+                            DialogStyle::Glass => {
+                                let content = content.clone();
+                                fluid_glass()
+                                    .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
+                                    .blur_radius(Dp(5.0 * alpha as f64))
+                                    .shape(Shape::RoundedRectangle {
+                                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                    })
+                                    .refraction_amount(32.0 * alpha)
+                                    .block_input(true)
+                                    .padding(padding)
+                                    .with_child(move || {
+                                        content.render();
+                                    });
+                            }
+                            DialogStyle::Material => {
+                                let content = content.clone();
+                                surface()
+                                    .style(
+                                        use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
+                                            .get()
+                                            .color_scheme
+                                            .surface_container_high
+                                            .into(),
+                                    )
+                                    .elevation(Dp(6.0))
+                                    .shape(Shape::RoundedRectangle {
+                                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                        bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                    })
+                                    .block_input(true)
+                                    .with_child(move || {
                                         let content = content.clone();
-                                        fluid_glass(
-                                            &crate::fluid_glass::FluidGlassArgs::with_child(
-                                                FluidGlassArgs::default()
-                                                    .tint_color(
-                                                        Color::WHITE.with_alpha(alpha / 2.5),
-                                                    )
-                                                    .blur_radius(Dp(5.0 * alpha as f64))
-                                                    .shape(Shape::RoundedRectangle {
-                                                        top_left: RoundedCorner::manual(
-                                                            Dp(28.0),
-                                                            3.0,
-                                                        ),
-                                                        top_right: RoundedCorner::manual(
-                                                            Dp(28.0),
-                                                            3.0,
-                                                        ),
-                                                        bottom_right: RoundedCorner::manual(
-                                                            Dp(28.0),
-                                                            3.0,
-                                                        ),
-                                                        bottom_left: RoundedCorner::manual(
-                                                            Dp(28.0),
-                                                            3.0,
-                                                        ),
-                                                    })
-                                                    .refraction_amount(32.0 * alpha)
-                                                    .block_input(true)
-                                                    .padding(padding),
-                                                move || {
-                                                    content.render();
-                                                },
-                                            ),
-                                        );
-                                    }
-                                    DialogStyle::Material => {
-                                        let content = content.clone();
-                                        surface(&crate::surface::SurfaceArgs::with_child(
-                                            SurfaceArgs::default()
-                                                .style(
-                                                    use_context::<MaterialTheme>()
-                                                        .expect("MaterialTheme must be provided")
-                                                        .get()
-                                                        .color_scheme
-                                                        .surface_container_high
-                                                        .into(),
-                                                )
-                                                .elevation(Dp(6.0))
-                                                .shape(Shape::RoundedRectangle {
-                                                    top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                                    top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                                    bottom_right: RoundedCorner::manual(
-                                                        Dp(28.0),
-                                                        3.0,
-                                                    ),
-                                                    bottom_left: RoundedCorner::manual(
-                                                        Dp(28.0),
-                                                        3.0,
-                                                    ),
-                                                })
-                                                .block_input(true),
-                                            move || {
-                                                let content = content.clone();
-                                                Modifier::new().padding_all(padding).run(
-                                                    move || {
-                                                        content.render();
-                                                    },
-                                                );
-                                            },
-                                        ));
-                                    }
-                                },
-                            ));
+                                        layout_primitive()
+                                            .modifier(Modifier::new().padding_all(padding))
+                                            .child(move || {
+                                                content.render();
+                                            });
+                                    });
+                            }
                         });
-                    }),
-            );
+                });
         });
 }
 
@@ -459,7 +347,7 @@ struct DialogContentLayout {
     alpha: f32,
 }
 
-impl LayoutSpec for DialogContentLayout {
+impl LayoutPolicy for DialogContentLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -475,9 +363,11 @@ impl LayoutSpec for DialogContentLayout {
         output.place_child(child_id, PxPosition::ZERO);
         Ok(computed)
     }
+}
 
+impl RenderPolicy for DialogContentLayout {
     fn record(&self, input: &RenderInput<'_>) {
-        input.metadata_mut().opacity *= self.alpha;
+        input.metadata_mut().multiply_opacity(self.alpha);
     }
 }
 
@@ -492,10 +382,13 @@ impl LayoutSpec for DialogContentLayout {
 ///
 /// # Parameters
 ///
-/// - `args` — configuration for dialog appearance and the `on_close_request`
-///   callback; see [`DialogProviderArgs`].
-/// - `main_content` — closure that renders the always-visible base UI.
-/// - `dialog_content` — closure that renders dialog content.
+/// - `on_close_request` — optional close-request callback.
+/// - `padding` — padding applied inside the dialog surface.
+/// - `style` — dialog scrim style.
+/// - `is_open` — declarative open state.
+/// - `controller` — optional external controller.
+/// - `main_content` — optional main content rendered behind the dialog.
+/// - `dialog_content` — optional modal content rendered above the scrim.
 ///
 /// # Examples
 ///
@@ -503,69 +396,76 @@ impl LayoutSpec for DialogContentLayout {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::dialog::{
-///     BasicDialogArgs, DialogProviderArgs, basic_dialog, dialog_provider,
-/// };
+/// use tessera_components::dialog::{basic_dialog, dialog_provider};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// dialog_provider(
-///     &DialogProviderArgs::new(|| {})
-///         .is_open(true)
-///         .main_content(|| { /* main content */ })
-///         .dialog_content(|| {
-///             basic_dialog(
-///                 &BasicDialogArgs::new("This is the dialog body text.").headline("Dialog Title"),
-///             );
-///         }),
-/// );
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// dialog_provider()
+///     .on_close_request(|| {})
+///     .is_open(true)
+///     .main_content(|| { /* main content */ })
+///     .dialog_content(|| {
+///         basic_dialog()
+///             .supporting_text("This is the dialog body text.")
+///             .headline("Dialog Title");
+///     });
+/// #     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn dialog_provider(args: &DialogProviderArgs) {
-    let args = args.clone();
-    let main_content = args.main_content.unwrap_or_else(RenderSlot::empty);
-    let dialog_content = args.dialog_content.unwrap_or_else(RenderSlot::empty);
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(|| DialogController::new(args.is_open)));
+pub fn dialog_provider(
+    on_close_request: Option<Callback>,
+    padding: Dp,
+    style: DialogStyle,
+    is_open: bool,
+    #[prop(skip_setter)] controller: Option<State<DialogController>>,
+    main_content: Option<RenderSlot>,
+    dialog_content: Option<RenderSlot>,
+) {
+    let on_close_request = on_close_request.unwrap_or_default();
+    let main_content = main_content.unwrap_or_else(RenderSlot::empty);
+    let dialog_content = dialog_content.unwrap_or_else(RenderSlot::empty);
+    let external_controller = controller;
+    let controller =
+        external_controller.unwrap_or_else(|| remember(|| DialogController::new(is_open)));
 
     // In controlled mode (external controller provided), do not override
-    // controller state from `args.is_open`.
-    if args.controller.is_none() {
+    // controller state from `is_open`.
+    if external_controller.is_none() {
         let current_open = controller.with(|c| c.is_open());
-        if args.is_open != current_open {
-            if args.is_open {
+        if is_open != current_open {
+            if is_open {
                 controller.with_mut(|c| c.open());
             } else {
                 controller.with_mut(|c| c.close());
             }
         }
     }
-
-    let provider_render_args = DialogProviderRenderArgs {
-        on_close_request: args.on_close_request,
-        padding: args.padding,
-        style: args.style,
-        controller,
-        main_content,
-        dialog_content,
-    };
-    dialog_provider_render(&provider_render_args);
+    dialog_provider_render()
+        .on_close_request_handle(on_close_request)
+        .padding(padding)
+        .style(style)
+        .controller(controller)
+        .main_content_slot(main_content)
+        .dialog_content_slot(dialog_content);
 }
 
 #[tessera]
-fn dialog_provider_render(args: &DialogProviderRenderArgs) {
-    let args = args.clone();
-    let controller = args.controller;
-    let main_content = args.main_content;
-    let dialog_content = args.dialog_content;
+fn dialog_provider_render(
+    on_close_request: Option<Callback>,
+    padding: Dp,
+    style: DialogStyle,
+    controller: Option<State<DialogController>>,
+    main_content: Option<RenderSlot>,
+    dialog_content: Option<RenderSlot>,
+) {
+    let on_close_request = on_close_request.unwrap_or_default();
+    let controller = controller.expect("dialog_provider_render requires controller");
+    let main_content = main_content.unwrap_or_else(RenderSlot::empty);
+    let dialog_content = dialog_content.unwrap_or_else(RenderSlot::empty);
     let dialog_open_state = remember(|| false);
 
     // Render the main application content unconditionally.
@@ -610,97 +510,15 @@ fn dialog_provider_render(args: &DialogProviderRenderArgs) {
             1.0 * (1.0 - progress) // Transition from 1 to 0 alpha
         };
 
-        render_scrim(args.style, &args.on_close_request, is_open, progress);
+        render_scrim(style, on_close_request, is_open, progress);
 
-        let content_wrapper_args = DialogContentWrapperArgs {
-            style: args.style,
-            alpha: content_alpha,
-            padding: args.padding,
-            just_opened,
-            on_close_request: args.on_close_request,
-            content: dialog_content,
-        };
-        dialog_content_wrapper(&content_wrapper_args);
-    }
-}
-
-/// Arguments for the [`basic_dialog`] component.
-#[derive(Clone, Prop)]
-pub struct BasicDialogArgs {
-    /// Optional icon to display at the top of the dialog.
-    #[prop(skip_setter)]
-    pub icon: Option<RenderSlot>,
-    /// Optional headline text.
-    #[prop(into)]
-    pub headline: Option<String>,
-    /// The supporting text of the dialog.
-    #[prop(into)]
-    pub supporting_text: String,
-    /// The button used to confirm a proposed action, thus resolving what
-    /// triggered the dialog.
-    #[prop(skip_setter)]
-    pub confirm_button: Option<RenderSlot>,
-    /// The button used to dismiss a proposed action, thus resolving what
-    /// triggered the dialog.
-    #[prop(skip_setter)]
-    pub dismiss_button: Option<RenderSlot>,
-}
-
-impl BasicDialogArgs {
-    /// Create args with required supporting text.
-    pub fn new(supporting_text: impl Into<String>) -> Self {
-        Self {
-            icon: None,
-            headline: None,
-            supporting_text: supporting_text.into(),
-            confirm_button: None,
-            dismiss_button: None,
-        }
-    }
-
-    /// Sets the optional icon drawing callback.
-    pub fn icon<F>(mut self, icon: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.icon = Some(RenderSlot::new(icon));
-        self
-    }
-
-    /// Sets the optional icon drawing callback using a shared callback.
-    pub fn icon_shared(mut self, icon: impl Into<RenderSlot>) -> Self {
-        self.icon = Some(icon.into());
-        self
-    }
-
-    /// Sets the confirm button content.
-    pub fn confirm_button<F>(mut self, f: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.confirm_button = Some(RenderSlot::new(f));
-        self
-    }
-
-    /// Sets the confirm button content using a shared callback.
-    pub fn confirm_button_shared(mut self, f: impl Into<RenderSlot>) -> Self {
-        self.confirm_button = Some(f.into());
-        self
-    }
-
-    /// Sets the dismiss button content.
-    pub fn dismiss_button<F>(mut self, f: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.dismiss_button = Some(RenderSlot::new(f));
-        self
-    }
-
-    /// Sets the dismiss button content using a shared callback.
-    pub fn dismiss_button_shared(mut self, f: impl Into<RenderSlot>) -> Self {
-        self.dismiss_button = Some(f.into());
-        self
+        dialog_content_wrapper()
+            .style(style)
+            .alpha(content_alpha)
+            .padding(padding)
+            .just_opened(just_opened)
+            .on_close_request_handle(on_close_request)
+            .content_slot(dialog_content);
     }
 }
 
@@ -714,7 +532,11 @@ impl BasicDialogArgs {
 ///
 /// # Parameters
 ///
-/// - `args` — configuration for the dialog content; see [`BasicDialogArgs`].
+/// - `icon` — optional icon slot shown above the headline.
+/// - `headline` — optional headline text.
+/// - `supporting_text` — body text shown in the dialog.
+/// - `confirm_button` — optional confirm button slot.
+/// - `dismiss_button` — optional dismiss button slot.
 ///
 /// # Examples
 ///
@@ -723,152 +545,135 @@ impl BasicDialogArgs {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::{
-///     button::{ButtonArgs, button},
-///     dialog::{BasicDialogArgs, basic_dialog},
+///     button::button,
+///     dialog::basic_dialog,
 ///     text::text,
 /// };
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// basic_dialog(
-///     &BasicDialogArgs::new("This is the dialog body text.")
-///         .headline("Dialog Title")
-///         .confirm_button(|| {
-///             button(&ButtonArgs::filled(|| {}).child(|| {
-///                 text(&tessera_components::text::TextArgs::default().text("Confirm"));
-///             }));
-///         }),
-/// );
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// basic_dialog()
+///     .supporting_text("This is the dialog body text.")
+///     .headline("Dialog Title")
+///     .confirm_button(|| {
+///         button().filled(|| {}).child(|| {
+///             text().content("Confirm");
+///         });
+///     });
+/// #     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn basic_dialog(args: &BasicDialogArgs) {
-    let args = args.clone();
+pub fn basic_dialog(
+    icon: Option<RenderSlot>,
+    #[prop(into)] headline: Option<String>,
+    #[prop(into)] supporting_text: String,
+    confirm_button: Option<RenderSlot>,
+    dismiss_button: Option<RenderSlot>,
+) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let alignment = if args.icon.is_some() {
+    let alignment = if icon.is_some() {
         CrossAxisAlignment::Center
     } else {
         CrossAxisAlignment::Start
     };
-    let icon = args.icon.clone();
-    let headline = args.headline.clone();
-    let supporting_text = args.supporting_text.clone();
-    let confirm_button = args.confirm_button.clone();
-    let dismiss_button = args.dismiss_button.clone();
 
-    column(
-        &ColumnArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Wrap {
-                    min: Some(Dp(280.0).into()),
-                    max: Some(Dp(560.0).into()),
-                }),
-                Some(DimensionValue::WRAP),
-            ))
-            .cross_axis_alignment(alignment)
-            .children(move |scope| {
-                // Icon
-                if let Some(icon) = icon.as_ref() {
-                    let icon = icon.clone();
-                    let icon_color = scheme.secondary;
-                    scope.child(move || {
-                        provide_context(
-                            || ContentColor {
-                                current: icon_color,
-                            },
-                            || {
-                                icon.render();
-                            },
-                        );
-                    });
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(16.0)),
-                        ));
-                    });
-                }
-
-                // Headline
-                if let Some(headline) = headline.as_ref() {
-                    let headline = headline.clone();
-                    scope.child(move || {
-                        text(&crate::text::TextArgs::from(
-                            &TextArgs::default()
-                                .text(headline.clone())
-                                .size(Dp(24.0))
-                                .color(scheme.on_surface),
-                        ));
-                    });
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(16.0)),
-                        ));
-                    });
-                }
-
-                // Supporting Text
-                scope.child(move || {
-                    text(&crate::text::TextArgs::from(
-                        &TextArgs::default()
-                            .text(supporting_text.clone())
-                            .size(Dp(14.0))
-                            .color(scheme.on_surface_variant),
-                    ));
-                });
-
-                if confirm_button.is_some() || dismiss_button.is_some() {
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(24.0)),
-                        ));
-                    });
-                    let action_color = scheme.primary;
-                    scope.child(move || {
-                        provide_context(
-                            || ContentColor {
-                                current: action_color,
-                            },
-                            || {
-                                let dismiss_button = dismiss_button.clone();
-                                let confirm_button = confirm_button.clone();
-                                row(&RowArgs::default()
-                                    .modifier(Modifier::new().fill_max_width())
-                                    .main_axis_alignment(MainAxisAlignment::End)
-                                    .children(|s| {
-                                        let has_dismiss = dismiss_button.is_some();
-                                        let has_confirm = confirm_button.is_some();
-
-                                        if let Some(dismiss) = dismiss_button.as_ref() {
-                                            let dismiss = dismiss.clone();
-                                            s.child(move || dismiss.render());
-                                        }
-
-                                        if has_dismiss && has_confirm {
-                                            s.child(|| {
-                                                spacer(&crate::spacer::SpacerArgs::new(
-                                                    Modifier::new().width(Dp(8.0)),
-                                                ));
-                                            });
-                                        }
-
-                                        if let Some(confirm) = confirm_button.as_ref() {
-                                            let confirm = confirm.clone();
-                                            s.child(move || confirm.render());
-                                        }
-                                    }));
-                            },
-                        );
-                    });
-                }
+    column()
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Wrap {
+                min: Some(Dp(280.0).into()),
+                max: Some(Dp(560.0).into()),
             }),
-    );
+            Some(DimensionValue::WRAP),
+        ))
+        .cross_axis_alignment(alignment)
+        .children(move || {
+            // Icon
+            if let Some(icon) = icon.as_ref() {
+                let icon = icon.clone();
+                let icon_color = scheme.secondary;
+                {
+                    provide_context(
+                        || ContentColor {
+                            current: icon_color,
+                        },
+                        || {
+                            icon.render();
+                        },
+                    );
+                };
+                {
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                };
+            }
+
+            // Headline
+            if let Some(headline) = headline.as_ref() {
+                let headline = headline.clone();
+                {
+                    text()
+                        .content(headline.clone())
+                        .size(Dp(24.0))
+                        .color(scheme.on_surface);
+                };
+                {
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                };
+            }
+
+            // Supporting Text
+            {
+                text()
+                    .content(supporting_text.clone())
+                    .size(Dp(14.0))
+                    .color(scheme.on_surface_variant);
+            };
+
+            if confirm_button.is_some() || dismiss_button.is_some() {
+                {
+                    spacer().modifier(Modifier::new().height(Dp(24.0)));
+                };
+                let action_color = scheme.primary;
+                {
+                    provide_context(
+                        || ContentColor {
+                            current: action_color,
+                        },
+                        || {
+                            let dismiss_button = dismiss_button.clone();
+                            let confirm_button = confirm_button.clone();
+                            row()
+                                .modifier(Modifier::new().fill_max_width())
+                                .main_axis_alignment(MainAxisAlignment::End)
+                                .children(move || {
+                                    let has_dismiss = dismiss_button.is_some();
+                                    let has_confirm = confirm_button.is_some();
+
+                                    if let Some(dismiss) = dismiss_button.as_ref() {
+                                        let dismiss = dismiss.clone();
+                                        dismiss.render();
+                                    }
+
+                                    if has_dismiss && has_confirm {
+                                        {
+                                            spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                        };
+                                    }
+
+                                    if let Some(confirm) = confirm_button.as_ref() {
+                                        let confirm = confirm.clone();
+                                        confirm.render();
+                                    }
+                                });
+                        },
+                    );
+                };
+            }
+        });
 }

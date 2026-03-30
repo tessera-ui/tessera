@@ -4,9 +4,9 @@
 //!
 //! Wrap chips, tags, or button groups across multiple rows.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Prop, Px, PxPosition,
+    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px, PxPosition,
     RenderSlot,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
     tessera,
 };
 
@@ -14,135 +14,6 @@ use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     modifier::ModifierExt as _,
 };
-
-/// Arguments for the `flow_row` component.
-#[derive(Clone, Prop)]
-pub struct FlowRowArgs {
-    /// Modifier chain applied to the flow row subtree.
-    pub modifier: Modifier,
-    /// Alignment of items along the main axis within each row.
-    pub main_axis_alignment: MainAxisAlignment,
-    /// Alignment of items along the cross axis within each row.
-    pub cross_axis_alignment: CrossAxisAlignment,
-    /// Alignment of rows along the cross axis inside the container.
-    pub line_alignment: MainAxisAlignment,
-    /// Spacing between items within a row.
-    pub item_spacing: Dp,
-    /// Spacing between rows.
-    pub line_spacing: Dp,
-    /// Maximum number of items per row.
-    pub max_items_per_line: usize,
-    /// Maximum number of rows.
-    pub max_lines: usize,
-    /// Child slots rendered by the flow row.
-    #[prop(skip_setter)]
-    pub children: Vec<RenderSlot>,
-    /// Optional weight per child (same index as `children`).
-    pub child_weights: Vec<Option<f32>>,
-}
-
-impl Default for FlowRowArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new()
-                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
-            main_axis_alignment: MainAxisAlignment::Start,
-            cross_axis_alignment: CrossAxisAlignment::Start,
-            line_alignment: MainAxisAlignment::Start,
-            item_spacing: Dp::ZERO,
-            line_spacing: Dp::ZERO,
-            max_items_per_line: usize::MAX,
-            max_lines: usize::MAX,
-            children: Vec::new(),
-            child_weights: Vec::new(),
-        }
-    }
-}
-
-impl FlowRowArgs {
-    /// Adds a child without weight.
-    pub fn child<F>(mut self, child_closure: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_weights.push(None);
-        self
-    }
-
-    /// Adds a child without weight using a shared slot.
-    pub fn child_shared(mut self, child_closure: impl Into<RenderSlot>) -> Self {
-        self.children.push(child_closure.into());
-        self.child_weights.push(None);
-        self
-    }
-
-    /// Adds a child with weight.
-    pub fn child_weighted<F>(mut self, child_closure: F, weight: f32) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_weights.push(Some(weight));
-        self
-    }
-
-    /// Adds a child with weight using a shared slot.
-    pub fn child_weighted_shared(
-        mut self,
-        child_closure: impl Into<RenderSlot>,
-        weight: f32,
-    ) -> Self {
-        self.children.push(child_closure.into());
-        self.child_weights.push(Some(weight));
-        self
-    }
-
-    /// Builds children using the scope DSL.
-    pub fn children<F>(mut self, scope_config: F) -> Self
-    where
-        F: FnOnce(&mut FlowRowScope),
-    {
-        let mut child_closures: Vec<RenderSlot> = Vec::new();
-        let mut child_weights: Vec<Option<f32>> = Vec::new();
-        {
-            let mut scope = FlowRowScope {
-                child_closures: &mut child_closures,
-                child_weights: &mut child_weights,
-            };
-            scope_config(&mut scope);
-        }
-        self.children = child_closures;
-        self.child_weights = child_weights;
-        self
-    }
-}
-
-/// A scope for declaratively adding children to a `flow_row` component.
-pub struct FlowRowScope<'a> {
-    child_closures: &'a mut Vec<RenderSlot>,
-    child_weights: &'a mut Vec<Option<f32>>,
-}
-
-impl<'a> FlowRowScope<'a> {
-    /// Adds a child component to the flow row.
-    pub fn child<F>(&mut self, child_closure: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_weights.push(None);
-    }
-
-    /// Adds a child component with a weight for main-axis distribution.
-    pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_weights.push(Some(weight));
-    }
-}
 
 /// # flow_row
 ///
@@ -154,54 +25,58 @@ impl<'a> FlowRowScope<'a> {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures alignment, spacing, and wrapping; see [`FlowRowArgs`].
+/// - `modifier` — modifier chain applied to the flowing row container.
+/// - `main_axis_alignment` — alignment within each wrapped line.
+/// - `cross_axis_alignment` — cross-axis alignment for items inside a line.
+/// - `line_alignment` — alignment between wrapped lines.
+/// - `item_spacing` — spacing between items in the same line.
+/// - `line_spacing` — spacing between wrapped lines.
+/// - `max_items_per_line` — optional cap for items per line.
+/// - `max_lines` — optional cap for total wrapped lines.
+/// - `children` — child slot rendered inside the layout.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::flow_row::{FlowRowArgs, flow_row};
-/// use tessera_components::text::text;
+/// use tessera_components::{flow_row::flow_row, text::text};
 /// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
 ///     let rendered = remember(|| 0usize);
-///     flow_row(&FlowRowArgs::default().children(|scope| {
-///         scope.child(move || {
-///             rendered.with_mut(|count| *count += 1);
-///             text(&tessera_components::text::TextArgs::default().text("First"));
-///         });
-///         scope.child(move || {
-///             rendered.with_mut(|count| *count += 1);
-///             text(&tessera_components::text::TextArgs::default().text("Second"));
-///         });
-///     }));
+///     flow_row().children(move || {
+///         rendered.with_mut(|count| *count += 1);
+///         text().content("First");
+///         rendered.with_mut(|count| *count += 1);
+///         text().content("Second");
+///     });
 ///     assert_eq!(rendered.get(), 2);
 /// }
 ///
 /// demo();
 /// ```
 #[tessera]
-pub fn flow_row(args: &FlowRowArgs) {
-    let args = args.clone();
-    let child_len = args.children.len();
-    let mut child_weights = args.child_weights;
-    if child_weights.len() < child_len {
-        child_weights.resize(child_len, None);
-    } else if child_weights.len() > child_len {
-        child_weights.truncate(child_len);
-    }
-    let children = args.children;
-    let modifier = args.modifier;
-    let main_axis_alignment = args.main_axis_alignment;
-    let cross_axis_alignment = args.cross_axis_alignment;
-    let line_alignment = args.line_alignment;
-    let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
-    let line_spacing = sanitize_spacing(Px::from(args.line_spacing));
-    let max_items_per_line = args.max_items_per_line;
-    let max_lines = args.max_lines;
-    modifier.run(move || {
-        layout(FlowRowLayout {
+pub fn flow_row(
+    modifier: Option<Modifier>,
+    main_axis_alignment: MainAxisAlignment,
+    cross_axis_alignment: CrossAxisAlignment,
+    line_alignment: MainAxisAlignment,
+    item_spacing: Dp,
+    line_spacing: Dp,
+    max_items_per_line: Option<usize>,
+    max_lines: Option<usize>,
+    children: RenderSlot,
+) {
+    let modifier = modifier.unwrap_or_else(|| {
+        Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
+    });
+    let item_spacing = sanitize_spacing(Px::from(item_spacing));
+    let line_spacing = sanitize_spacing(Px::from(line_spacing));
+    let max_items_per_line = max_items_per_line.unwrap_or(usize::MAX);
+    let max_lines = max_lines.unwrap_or(usize::MAX);
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(FlowRowLayout {
             main_axis_alignment,
             cross_axis_alignment,
             line_alignment,
@@ -209,13 +84,10 @@ pub fn flow_row(args: &FlowRowArgs) {
             line_spacing,
             max_items_per_line,
             max_lines,
-            child_weights: child_weights.clone(),
+        })
+        .child(move || {
+            children.render();
         });
-
-        for child_closure in &children {
-            child_closure.render();
-        }
-    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -227,16 +99,16 @@ struct FlowRowLayout {
     line_spacing: Px,
     max_items_per_line: usize,
     max_lines: usize,
-    child_weights: Vec<Option<f32>>,
 }
 
-impl LayoutSpec for FlowRowLayout {
+impl LayoutPolicy for FlowRowLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let n = self.child_weights.len();
+        let child_weights = collect_child_weights(input);
+        let n = child_weights.len();
         let children_ids = input.children_ids();
         assert_eq!(
             children_ids.len(),
@@ -262,12 +134,7 @@ impl LayoutSpec for FlowRowLayout {
         let mut unweighted_nodes = Vec::new();
         let mut weighted_nodes = Vec::new();
         for (idx, &child_id) in children_ids.iter().enumerate().take(n) {
-            let weight = self
-                .child_weights
-                .get(idx)
-                .copied()
-                .flatten()
-                .unwrap_or(0.0);
+            let weight = child_weights.get(idx).copied().flatten().unwrap_or(0.0);
             if weight > 0.0 && use_weighted_remeasure {
                 weighted_nodes.push((child_id, child_constraint));
             } else {
@@ -316,7 +183,7 @@ impl LayoutSpec for FlowRowLayout {
                 flow_constraint: &flow_constraint,
                 lines: &lines,
                 children_sizes: &mut children_sizes,
-                child_weights: &self.child_weights,
+                child_weights: &child_weights,
                 item_spacing: self.item_spacing,
                 max_width,
             })?;
@@ -350,6 +217,18 @@ impl LayoutSpec for FlowRowLayout {
             height: final_height,
         })
     }
+}
+
+fn collect_child_weights(input: &LayoutInput<'_>) -> Vec<Option<f32>> {
+    input
+        .children_ids()
+        .iter()
+        .map(|&child_id| {
+            input
+                .child_parent_data::<crate::modifier::WeightParentData>(child_id)
+                .map(|data| data.weight)
+        })
+        .collect()
 }
 
 #[derive(Clone, PartialEq, Copy)]
@@ -706,5 +585,96 @@ fn px_from_i64(value: i64) -> Px {
         Px(i32::MIN)
     } else {
         Px(value as i32)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+    };
+
+    use crate::{
+        alignment::{CrossAxisAlignment, MainAxisAlignment},
+        modifier::{ModifierExt as _, SemanticsArgs},
+    };
+
+    use super::flow_row;
+
+    #[derive(Clone, PartialEq)]
+    struct FixedTestLayout {
+        width: i32,
+        height: i32,
+    }
+
+    impl LayoutPolicy for FixedTestLayout {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    #[tessera]
+    fn fixed_test_box(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn flow_row_layout_case() {
+        flow_row()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(60))),
+                Some(DimensionValue::Wrap {
+                    min: None,
+                    max: Some(Px::new(100)),
+                }),
+            ))
+            .main_axis_alignment(MainAxisAlignment::Start)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .line_alignment(MainAxisAlignment::Start)
+            .item_spacing(Px::new(5).into())
+            .line_spacing(Px::new(4).into())
+            .children(|| {
+                fixed_test_box()
+                    .tag("flow_row_first".to_string())
+                    .width(30)
+                    .height(10);
+                fixed_test_box()
+                    .tag("flow_row_second".to_string())
+                    .width(25)
+                    .height(10);
+                fixed_test_box()
+                    .tag("flow_row_third".to_string())
+                    .width(20)
+                    .height(12);
+            });
+    }
+
+    #[test]
+    fn flow_row_wraps_children_across_lines() {
+        tessera_ui::assert_layout! {
+            viewport: (100, 100),
+            content: {
+                flow_row_layout_case();
+            },
+            expect: {
+                node("flow_row_first").position(0, 0).size(30, 10);
+                node("flow_row_second").position(35, 0).size(25, 10);
+                node("flow_row_third").position(0, 14).size(20, 12);
+            }
+        }
     }
 }

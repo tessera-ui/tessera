@@ -3,17 +3,19 @@
 //! ## Usage
 //!
 //! Present compact actions, filters, or input tokens in dense UIs.
-use tessera_ui::{Callback, Color, Dp, Modifier, Prop, accesskit::Role, tessera, use_context};
+use tessera_ui::{
+    Callback, Color, Dp, Modifier, accesskit::Role, layout::layout_primitive, tessera, use_context,
+};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
-    icon::{IconArgs, icon},
+    icon::{IconContent, icon},
     modifier::{ModifierExt as _, Padding, ShadowArgs},
-    row::{RowArgs, row},
+    row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
-    text::{TextArgs, text},
+    surface::{SurfaceStyle, surface},
+    text::text,
     theme::{MaterialAlpha, MaterialTheme, provide_text_style},
 };
 
@@ -375,112 +377,78 @@ impl ChipDefaults {
     }
 }
 
-/// Arguments for the [`chip`] component.
-#[derive(Clone, Prop)]
-pub struct ChipArgs {
-    /// Variant of the chip.
-    pub variant: ChipVariant,
-    /// Visual style of the chip.
-    pub style: ChipStyle,
-    /// Text label rendered inside the chip.
-    #[prop(into)]
-    pub label: String,
-    /// Optional leading icon shown before the label.
-    #[prop(into)]
-    pub leading_icon: Option<IconArgs>,
-    /// Optional trailing icon shown after the label.
-    #[prop(into)]
-    pub trailing_icon: Option<IconArgs>,
-    /// Whether the chip is selected (used by selectable variants).
-    pub selected: bool,
-    /// Whether the chip is enabled.
-    pub enabled: bool,
-    /// Optional modifier chain applied to the chip subtree.
-    pub modifier: Modifier,
-    /// Optional colors override.
-    pub colors: Option<ChipColors>,
-    /// Optional border override.
-    pub border: Option<ChipBorder>,
-    /// Shape of the chip container.
-    pub shape: Shape,
-    /// Optional elevation override.
-    pub elevation: Option<Dp>,
-    /// Optional click handler for the chip.
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// Optional accessibility label announced by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional accessibility description announced by assistive technologies.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
+#[derive(Clone)]
+struct ChipResolvedArgs {
+    variant: ChipVariant,
+    style: ChipStyle,
+    label: String,
+    leading_icon: Option<IconContent>,
+    trailing_icon: Option<IconContent>,
+    selected: bool,
+    enabled: bool,
+    modifier: Modifier,
+    colors: Option<ChipColors>,
+    border: Option<ChipBorder>,
+    shape: Option<Shape>,
+    elevation: Option<Dp>,
+    on_click: Option<Callback>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
 }
 
-impl ChipArgs {
-    /// Sets the on_click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Some(Callback::new(on_click));
+impl ChipBuilder {
+    /// Applies the assist chip preset and updates the visible label.
+    pub fn assist(self, label: impl Into<String>) -> Self {
+        self.variant(ChipVariant::Assist).label(label.into())
+    }
+
+    /// Applies the suggestion chip preset and updates the visible label.
+    pub fn suggestion(self, label: impl Into<String>) -> Self {
+        self.variant(ChipVariant::Suggestion).label(label.into())
+    }
+
+    /// Applies the filter chip preset and updates the visible label.
+    pub fn filter(self, label: impl Into<String>) -> Self {
+        self.variant(ChipVariant::Filter).label(label.into())
+    }
+
+    /// Applies the input chip preset and updates the visible label.
+    pub fn input(self, label: impl Into<String>) -> Self {
+        self.variant(ChipVariant::Input).label(label.into())
+    }
+
+    /// Sets the leading icon content using any supported icon source.
+    pub fn leading_icon(mut self, icon: impl Into<IconContent>) -> Self {
+        self.props.leading_icon = Some(icon.into());
         self
     }
 
-    /// Sets the on_click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
+    /// Clears the leading icon content.
+    pub fn clear_leading_icon(mut self) -> Self {
+        self.props.leading_icon = None;
+        self
+    }
+
+    /// Sets the trailing icon content using any supported icon source.
+    pub fn trailing_icon(mut self, icon: impl Into<IconContent>) -> Self {
+        self.props.trailing_icon = Some(icon.into());
+        self
+    }
+
+    /// Clears the trailing icon content.
+    pub fn clear_trailing_icon(mut self) -> Self {
+        self.props.trailing_icon = None;
         self
     }
 }
 
-impl ChipArgs {
-    /// Creates a default assist chip configuration with the provided label.
-    pub fn assist(label: impl Into<String>) -> Self {
-        ChipArgs::default()
-            .variant(ChipVariant::Assist)
-            .label(label)
-    }
+fn render_chip_icon(icon_content: IconContent, tint: Color) {
+    let builder = match icon_content {
+        IconContent::Vector(data) => icon().vector(data),
+        IconContent::Raster(data) => icon().raster(data),
+    };
 
-    /// Creates a default suggestion chip configuration with the provided label.
-    pub fn suggestion(label: impl Into<String>) -> Self {
-        ChipArgs::default()
-            .variant(ChipVariant::Suggestion)
-            .label(label)
-    }
-
-    /// Creates a default filter chip configuration with the provided label.
-    pub fn filter(label: impl Into<String>) -> Self {
-        ChipArgs::default()
-            .variant(ChipVariant::Filter)
-            .label(label)
-    }
-
-    /// Creates a default input chip configuration with the provided label.
-    pub fn input(label: impl Into<String>) -> Self {
-        ChipArgs::default().variant(ChipVariant::Input).label(label)
-    }
-}
-
-impl Default for ChipArgs {
-    fn default() -> Self {
-        Self {
-            variant: ChipVariant::default(),
-            style: ChipStyle::default(),
-            label: String::new(),
-            leading_icon: None,
-            trailing_icon: None,
-            selected: false,
-            enabled: true,
-            modifier: Modifier::new(),
-            colors: None,
-            border: None,
-            shape: ChipDefaults::shape(),
-            elevation: None,
-            on_click: None,
-            accessibility_label: None,
-            accessibility_description: None,
-        }
-    }
+    builder.size(ChipDefaults::ICON_SIZE).tint(tint);
 }
 
 /// # chip
@@ -494,8 +462,21 @@ impl Default for ChipArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the chip label, variant, and appearance; see
-///   [`ChipArgs`].
+/// - `variant` — optional chip variant controlling default tokens and behavior.
+/// - `style` — optional chip container style.
+/// - `label` — visible chip label text.
+/// - `leading_icon` — optional leading icon content.
+/// - `trailing_icon` — optional trailing icon content.
+/// - `selected` — optional selected state used by selectable variants.
+/// - `enabled` — optional enabled flag.
+/// - `modifier` — modifier chain applied to the chip subtree.
+/// - `colors` — optional chip color override set.
+/// - `border` — optional chip border override.
+/// - `shape` — optional chip shape override.
+/// - `elevation` — optional chip elevation override.
+/// - `on_click` — optional click callback.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
 ///
 /// ## Examples
 ///
@@ -503,27 +484,57 @@ impl Default for ChipArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::chip::{ChipArgs, chip};
+/// use tessera_components::chip::chip;
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
 /// let selected = remember(|| false);
 /// selected.with_mut(|value| *value = true);
-/// let args = ChipArgs::filter("Favorites").selected(selected.with(|value| *value));
-/// assert!(args.selected);
-/// chip(&args);
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// chip()
+///     .filter("Favorites")
+///     .selected(selected.with(|value| *value));
+/// #     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn chip(args: &ChipArgs) {
-    let args = args.clone();
+pub fn chip(
+    variant: Option<ChipVariant>,
+    style: Option<ChipStyle>,
+    #[prop(into)] label: String,
+    #[prop(skip_setter)] leading_icon: Option<IconContent>,
+    #[prop(skip_setter)] trailing_icon: Option<IconContent>,
+    selected: Option<bool>,
+    enabled: Option<bool>,
+    modifier: Modifier,
+    colors: Option<ChipColors>,
+    border: Option<ChipBorder>,
+    shape: Option<Shape>,
+    elevation: Option<Dp>,
+    on_click: Option<Callback>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+) {
+    let args = ChipResolvedArgs {
+        variant: variant.unwrap_or_default(),
+        style: style.unwrap_or_default(),
+        label,
+        leading_icon,
+        trailing_icon,
+        selected: selected.unwrap_or(false),
+        enabled: enabled.unwrap_or(true),
+        modifier,
+        colors,
+        border,
+        shape,
+        elevation,
+        on_click,
+        accessibility_label,
+        accessibility_description,
+    };
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -537,6 +548,7 @@ pub fn chip(args: &ChipArgs) {
         .unwrap_or_else(|| ChipDefaults::colors(variant, style));
     let border = args.border.or_else(|| ChipDefaults::border(variant, style));
     let elevation = args.elevation.or_else(|| ChipDefaults::elevation(style));
+    let shape = args.shape.unwrap_or_else(ChipDefaults::shape);
     let padding = chip_padding(
         variant,
         args.leading_icon.is_some(),
@@ -571,18 +583,19 @@ pub fn chip(args: &ChipArgs) {
     if matches!(style, ChipStyle::Elevated)
         && let Some(elevation) = elevation
     {
-        modifier = modifier.shadow(
-            &ShadowArgs::new(elevation)
-                .shape(args.shape)
-                .ambient_color(theme.color_scheme.shadow.with_alpha(0.12))
-                .spot_color(Color::TRANSPARENT),
-        );
+        modifier = modifier.shadow(&ShadowArgs {
+            elevation,
+            shape,
+            ambient_color: Some(theme.color_scheme.shadow.with_alpha(0.12)),
+            spot_color: Some(Color::TRANSPARENT),
+            ..Default::default()
+        });
     }
 
-    let mut surface_args = SurfaceArgs::default()
+    let mut surface_builder = surface()
         .modifier(modifier)
         .style(surface_style)
-        .shape(args.shape)
+        .shape(shape)
         .content_alignment(Alignment::Center)
         .content_color(label_color)
         .enabled(args.enabled)
@@ -591,100 +604,70 @@ pub fn chip(args: &ChipArgs) {
     if !matches!(style, ChipStyle::Elevated)
         && let Some(elevation) = elevation
     {
-        surface_args = surface_args.elevation(elevation);
+        surface_builder = surface_builder.elevation(elevation);
     }
 
     if let Some(on_click) = args.on_click {
-        surface_args = surface_args
+        surface_builder = surface_builder
             .on_click_shared(on_click)
             .accessibility_role(Role::Button)
             .accessibility_focusable(true);
     }
 
     if let Some(label) = accessibility_label {
-        surface_args = surface_args.accessibility_label(label);
+        surface_builder = surface_builder.accessibility_label(label);
     }
     if let Some(description) = args.accessibility_description {
-        surface_args = surface_args.accessibility_description(description);
+        surface_builder = surface_builder.accessibility_description(description);
     }
 
     let leading_icon = args.leading_icon;
     let trailing_icon = args.trailing_icon;
     let has_label = !label.is_empty();
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        surface_args,
-        move || {
-            let leading_icon = leading_icon.clone();
-            let trailing_icon = trailing_icon.clone();
-            let label = label.clone();
-            provide_text_style(typography.label_large, move || {
-                Modifier::new().padding(padding).run(move || {
+    surface_builder.child(move || {
+        let leading_icon = leading_icon.clone();
+        let trailing_icon = trailing_icon.clone();
+        let label = label.clone();
+        provide_text_style(typography.label_large, move || {
+            layout_primitive()
+                .modifier(Modifier::new().padding(padding))
+                .child(move || {
                     let leading_icon = leading_icon.clone();
                     let trailing_icon = trailing_icon.clone();
                     let label = label.clone();
-                    row(&RowArgs::default()
+                    row()
                         .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(move |scope| {
+                        .children(move || {
                             let spacing = ChipDefaults::ELEMENT_SPACING;
                             let mut item_count = 0;
 
-                            if let Some(mut icon_args) = leading_icon.clone() {
+                            if let Some(icon_content) = leading_icon.clone() {
                                 if item_count > 0 {
-                                    scope.child(move || {
-                                        spacer(&crate::spacer::SpacerArgs::new(
-                                            Modifier::new().width(spacing),
-                                        ));
-                                    });
+                                    spacer().modifier(Modifier::new().width(spacing));
                                 }
                                 item_count += 1;
-                                icon_args.size = ChipDefaults::ICON_SIZE;
-                                icon_args.tint = leading_icon_color;
-                                scope.child({
-                                    let icon_args = icon_args.clone();
-                                    move || icon(&icon_args.clone())
-                                });
+                                render_chip_icon(icon_content.clone(), leading_icon_color);
                             }
 
                             if has_label {
                                 if item_count > 0 {
-                                    scope.child(move || {
-                                        spacer(&crate::spacer::SpacerArgs::new(
-                                            Modifier::new().width(spacing),
-                                        ));
-                                    });
+                                    spacer().modifier(Modifier::new().width(spacing));
                                 }
                                 item_count += 1;
-                                scope.child({
-                                    let label = label.clone();
-                                    move || {
-                                        text(&crate::text::TextArgs::from(
-                                            &TextArgs::default().text(label.clone()),
-                                        ));
-                                    }
-                                });
+                                text().content(label.clone());
                             }
 
-                            if let Some(mut icon_args) = trailing_icon.clone() {
+                            if let Some(icon_content) = trailing_icon.clone() {
                                 if item_count > 0 {
-                                    scope.child(move || {
-                                        spacer(&crate::spacer::SpacerArgs::new(
-                                            Modifier::new().width(spacing),
-                                        ));
-                                    });
+                                    spacer().modifier(Modifier::new().width(spacing));
                                 }
-                                icon_args.size = ChipDefaults::ICON_SIZE;
-                                icon_args.tint = trailing_icon_color;
-                                scope.child({
-                                    let icon_args = icon_args.clone();
-                                    move || icon(&icon_args.clone())
-                                });
+                                render_chip_icon(icon_content.clone(), trailing_icon_color);
                             }
-                        }));
+                        });
                 });
-            });
-        },
-    ));
+        });
+    });
 }
 
 fn chip_padding(variant: ChipVariant, has_leading_icon: bool, has_trailing_icon: bool) -> Padding {

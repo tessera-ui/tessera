@@ -6,19 +6,19 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tessera_ui::{
-    Callback, DimensionValue, Dp, Modifier, Prop, RenderSlot, State, provide_context, remember,
-    tessera, use_context,
+    Callback, DimensionValue, Dp, Modifier, RenderSlot, State, provide_context, remember, tessera,
+    use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    column::{ColumnArgs, column},
+    column::column,
     modifier::ModifierExt as _,
-    row::{RowArgs, row},
+    row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
-    text::{TextArgs, text},
+    surface::{SurfaceStyle, surface},
+    text::text,
     theme::{ContentColor, MaterialTheme},
 };
 
@@ -204,120 +204,12 @@ struct TimePickerSnapshot {
     display_mode: TimePickerDisplayMode,
 }
 
-/// Configuration options for [`time_picker`].
-///
-/// Initial-state fields are applied only when `time_picker` owns the state.
-#[derive(Clone, Prop)]
-pub struct TimePickerArgs {
-    /// Optional modifier chain applied to the time picker.
-    pub modifier: Modifier,
-    /// Initial hour for the internal state.
-    pub initial_hour: u8,
-    /// Initial minute for the internal state.
-    pub initial_minute: u8,
-    /// Whether the internal state uses 24-hour mode.
-    pub is_24_hour: bool,
-    /// Initial display mode for the internal state.
-    pub display_mode: TimePickerDisplayMode,
-    /// Step size for hour changes.
-    pub hour_step: u8,
-    /// Step size for minute changes.
-    pub minute_step: u8,
-    /// Optional external state for selected time and display mode.
-    ///
-    /// When this is `None`, `time_picker` creates and owns an internal state.
-    #[prop(skip_setter)]
-    pub state: Option<State<TimePickerState>>,
-}
-
-impl Default for TimePickerArgs {
-    fn default() -> Self {
-        let (hour, minute) = current_time_utc();
-        Self {
-            modifier: Modifier::new()
-                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
-            initial_hour: hour,
-            initial_minute: minute,
-            is_24_hour: false,
-            display_mode: TimePickerDisplayMode::Picker,
-            hour_step: 1,
-            minute_step: 1,
-            state: None,
-        }
-    }
-}
-
-impl TimePickerArgs {
-    /// Sets an external time picker state.
-    pub fn state(mut self, state: State<TimePickerState>) -> Self {
-        self.state = Some(state);
-        self
-    }
-}
-
-/// Configuration for [`time_picker_dialog`].
-#[derive(Clone, Prop)]
-pub struct TimePickerDialogArgs {
-    /// State handle used by the embedded time picker.
-    #[prop(skip_setter)]
-    pub state: State<TimePickerState>,
-    /// Optional override for the dialog title.
-    #[prop(into)]
-    pub title: Option<String>,
-    /// Optional confirm button content.
-    #[prop(skip_setter)]
-    pub confirm_button: Option<RenderSlot>,
-    /// Optional dismiss button content.
-    #[prop(skip_setter)]
-    pub dismiss_button: Option<RenderSlot>,
-    /// Whether the display mode toggle is shown.
-    pub show_mode_toggle: bool,
-    /// Picker configuration forwarded to [`time_picker`].
-    pub picker: TimePickerArgs,
-}
-
-impl TimePickerDialogArgs {
-    /// Creates dialog args with the required time picker state.
-    pub fn new(state: State<TimePickerState>) -> Self {
-        Self {
-            state,
-            title: None,
-            confirm_button: None,
-            dismiss_button: None,
-            show_mode_toggle: false,
-            picker: TimePickerArgs::default(),
-        }
-    }
-
-    /// Sets the confirm button content.
-    pub fn confirm_button<F>(mut self, f: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.confirm_button = Some(RenderSlot::new(f));
-        self
-    }
-
-    /// Sets the confirm button content using a shared callback.
-    pub fn confirm_button_shared(mut self, f: impl Into<RenderSlot>) -> Self {
-        self.confirm_button = Some(f.into());
-        self
-    }
-
-    /// Sets the dismiss button content.
-    pub fn dismiss_button<F>(mut self, f: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.dismiss_button = Some(RenderSlot::new(f));
-        self
-    }
-
-    /// Sets the dismiss button content using a shared callback.
-    pub fn dismiss_button_shared(mut self, f: impl Into<RenderSlot>) -> Self {
-        self.dismiss_button = Some(f.into());
-        self
-    }
+#[derive(Clone)]
+struct TimePickerConfig {
+    modifier: Modifier,
+    hour_step: u8,
+    minute_step: u8,
+    state: Option<State<TimePickerState>>,
 }
 
 /// # time_picker
@@ -330,8 +222,14 @@ impl TimePickerDialogArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configuration for the picker layout and internal state defaults;
-///   see [`TimePickerArgs`].
+/// - `modifier` — modifier chain applied to the time picker.
+/// - `initial_hour` — initial hour for the internal state.
+/// - `initial_minute` — initial minute for the internal state.
+/// - `is_24_hour` — whether the internal state uses 24-hour mode.
+/// - `display_mode` — initial display mode for the internal state.
+/// - `hour_step` — step size for hour changes.
+/// - `minute_step` — step size for minute changes.
+/// - `state` — optional external state for selected time and display mode.
 ///
 /// ## Examples
 ///
@@ -339,43 +237,45 @@ impl TimePickerDialogArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::time_picker::{TimePickerArgs, TimePickerState, time_picker};
+/// use tessera_components::time_picker::{TimePickerState, time_picker};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// time_picker(&TimePickerArgs::default());
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// time_picker();
 ///
 /// let state = TimePickerState::default();
 /// assert!(state.hour() <= 23);
-/// #     },
-/// # );
-/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn time_picker(args: &TimePickerArgs) {
-    let mut args: TimePickerArgs = args.clone();
-    let initial_hour = args.initial_hour;
-    let initial_minute = args.initial_minute;
-    let is_24_hour = args.is_24_hour;
-    let display_mode = args.display_mode;
-
-    let state = args.state.unwrap_or_else(|| {
+pub fn time_picker(
+    modifier: Modifier,
+    initial_hour: u8,
+    initial_minute: u8,
+    is_24_hour: bool,
+    display_mode: TimePickerDisplayMode,
+    hour_step: u8,
+    minute_step: u8,
+    state: Option<State<TimePickerState>>,
+) {
+    let state = state.unwrap_or_else(|| {
         remember(|| TimePickerState::new(initial_hour, initial_minute, is_24_hour, display_mode))
     });
-    args.state = Some(state);
-    time_picker_inner(&args);
+    time_picker_inner(TimePickerConfig {
+        modifier,
+        hour_step,
+        minute_step,
+        state: Some(state),
+    });
 }
 
-#[tessera]
-fn time_picker_inner(args: &TimePickerArgs) {
+fn time_picker_inner(args: TimePickerConfig) {
     let state = args
         .state
         .expect("time_picker_inner requires state to be set");
-    let args = args.clone();
     let snapshot = state.with(|s| s.snapshot());
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -391,81 +291,69 @@ fn time_picker_inner(args: &TimePickerArgs) {
     let minute_display = format_two_digit(snapshot.minute);
     let show_labels = snapshot.display_mode == TimePickerDisplayMode::Input;
 
-    column(
-        &ColumnArgs::default()
-            .modifier(modifier)
-            .children(move |scope| {
-                scope.child(move || {
+    column().modifier(modifier).children(move || {
+        {
+            let hour_display = hour_display.clone();
+            let minute_display = minute_display.clone();
+            row()
+                .main_axis_alignment(MainAxisAlignment::Center)
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
                     let hour_display = hour_display.clone();
-                    let minute_display = minute_display.clone();
-                    row(&RowArgs::default()
-                        .main_axis_alignment(MainAxisAlignment::Center)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(move |row_scope| {
-                            let hour_display = hour_display.clone();
-                            row_scope.child(move || {
-                                time_stepper_column(&TimeStepperColumnArgs {
-                                    label: "Hour",
-                                    value: hour_display.clone(),
-                                    show_label: show_labels,
-                                    on_increment: Callback::new(move || {
-                                        state.with_mut(|s| s.increment_hour(hour_step));
-                                    }),
-                                    on_decrement: Callback::new(move || {
-                                        state.with_mut(|s| s.decrement_hour(hour_step));
-                                    }),
-                                });
-                            });
+                    {
+                        time_stepper_column(
+                            "Hour",
+                            hour_display.clone(),
+                            show_labels,
+                            Callback::new(move || {
+                                state.with_mut(|s| s.increment_hour(hour_step));
+                            }),
+                            Callback::new(move || {
+                                state.with_mut(|s| s.decrement_hour(hour_step));
+                            }),
+                        );
+                    };
 
-                            row_scope.child(|| {
-                                spacer(&crate::spacer::SpacerArgs::new(
-                                    Modifier::new().width(Dp(6.0)),
-                                ))
-                            });
-                            row_scope.child(move || {
-                                text(&crate::text::TextArgs::from(
-                                    &TextArgs::default()
-                                        .text(":")
-                                        .size(typography.headline_small.font_size)
-                                        .color(scheme.on_surface_variant),
-                                ));
-                            });
-                            row_scope.child(|| {
-                                spacer(&crate::spacer::SpacerArgs::new(
-                                    Modifier::new().width(Dp(6.0)),
-                                ))
-                            });
+                    {
+                        spacer().modifier(Modifier::new().width(Dp(6.0)));
+                    };
+                    {
+                        text()
+                            .content(":")
+                            .size(typography.headline_small.font_size)
+                            .color(scheme.on_surface_variant);
+                    };
+                    {
+                        spacer().modifier(Modifier::new().width(Dp(6.0)));
+                    };
 
-                            row_scope.child(move || {
-                                let minute_display = minute_display.clone();
-                                time_stepper_column(&TimeStepperColumnArgs {
-                                    label: "Minute",
-                                    value: minute_display,
-                                    show_label: show_labels,
-                                    on_increment: Callback::new(move || {
-                                        state.with_mut(|s| s.increment_minute(minute_step));
-                                    }),
-                                    on_decrement: Callback::new(move || {
-                                        state.with_mut(|s| s.decrement_minute(minute_step));
-                                    }),
-                                });
-                            });
-                        }));
+                    {
+                        let minute_display = minute_display.clone();
+                        time_stepper_column(
+                            "Minute",
+                            minute_display,
+                            show_labels,
+                            Callback::new(move || {
+                                state.with_mut(|s| s.increment_minute(minute_step));
+                            }),
+                            Callback::new(move || {
+                                state.with_mut(|s| s.decrement_minute(minute_step));
+                            }),
+                        );
+                    };
                 });
+        };
 
-                if !snapshot.is_24_hour {
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(TIME_ROW_GAP),
-                        ))
-                    });
-                    let is_pm = snapshot.hour >= 12;
-                    scope.child(move || {
-                        period_toggle(&PeriodToggleArgs { is_pm, state });
-                    });
-                }
-            }),
-    );
+        if !snapshot.is_24_hour {
+            {
+                spacer().modifier(Modifier::new().height(TIME_ROW_GAP));
+            };
+            let is_pm = snapshot.hour >= 12;
+            {
+                period_toggle(is_pm, state);
+            };
+        }
+    });
 }
 
 /// # time_picker_dialog
@@ -478,8 +366,18 @@ fn time_picker_inner(args: &TimePickerArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — dialog layout and action configuration; see
-///   [`TimePickerDialogArgs`].
+/// - `state` — state handle used by the embedded time picker.
+/// - `title` — optional override for the dialog title.
+/// - `confirm_button` — optional confirm button content.
+/// - `dismiss_button` — optional dismiss button content.
+/// - `show_mode_toggle` — whether the display mode toggle is shown.
+/// - `picker_modifier` — modifier chain applied to the embedded picker.
+/// - `picker_initial_hour` — initial picker hour.
+/// - `picker_initial_minute` — initial picker minute.
+/// - `picker_is_24_hour` — whether the picker uses 24-hour mode.
+/// - `picker_display_mode` — initial picker display mode.
+/// - `picker_hour_step` — hour step size for the picker.
+/// - `picker_minute_step` — minute step size for the picker.
 ///
 /// ## Examples
 ///
@@ -489,341 +387,258 @@ fn time_picker_inner(args: &TimePickerArgs) {
 /// # fn component() {
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_components::time_picker::{
-///     TimePickerDialogArgs, TimePickerState, time_picker_dialog,
-/// };
+/// use tessera_components::time_picker::{TimePickerState, time_picker_dialog};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
 /// let state = remember(TimePickerState::default);
-/// time_picker_dialog(&TimePickerDialogArgs::new(state));
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// time_picker_dialog().state(state);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn time_picker_dialog(args: &TimePickerDialogArgs) {
-    let args: TimePickerDialogArgs = args.clone();
+pub fn time_picker_dialog(
+    state: Option<State<TimePickerState>>,
+    #[prop(into)] title: Option<String>,
+    confirm_button: Option<RenderSlot>,
+    dismiss_button: Option<RenderSlot>,
+    show_mode_toggle: bool,
+    picker_modifier: Modifier,
+    picker_initial_hour: u8,
+    picker_initial_minute: u8,
+    picker_is_24_hour: bool,
+    picker_display_mode: TimePickerDisplayMode,
+    picker_hour_step: u8,
+    picker_minute_step: u8,
+) {
+    let state = state.expect("time_picker_dialog requires state to be set");
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let title = args.title;
-    let picker = args.picker;
-    let state = args.state;
-    let confirm_button = args.confirm_button;
-    let dismiss_button = args.dismiss_button;
-    let show_mode_toggle = args.show_mode_toggle;
     let has_confirm = confirm_button.is_some();
     let has_dismiss = dismiss_button.is_some();
 
-    column(
-        &ColumnArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Wrap {
-                    min: Some(Dp(280.0).into()),
-                    max: Some(Dp(520.0).into()),
-                }),
-                Some(DimensionValue::WRAP),
-            ))
-            .children(move |scope| {
-                scope.child(move || {
-                    let title = title.clone();
-                    row(&RowArgs::default()
-                        .modifier(Modifier::new().fill_max_width())
-                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(move |row_scope| {
-                            row_scope.child(move || {
-                                let title_text = title.as_deref().unwrap_or("Select time");
-                                text(&crate::text::TextArgs::from(
-                                    &TextArgs::default()
-                                        .text(title_text)
-                                        .size(
-                                            use_context::<MaterialTheme>()
-                                                .expect("MaterialTheme must be provided")
-                                                .get()
-                                                .typography
-                                                .title_medium
-                                                .font_size,
-                                        )
-                                        .color(scheme.on_surface),
-                                ));
-                            });
-                            if show_mode_toggle {
-                                row_scope.child(move || {
-                                    time_display_mode_toggle(&TimeDisplayModeToggleArgs { state });
-                                });
-                            }
-                        }));
-                });
-
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(12.0)),
-                    ))
-                });
-
-                scope.child(move || {
-                    time_picker(&picker.clone().state(state));
-                });
-
-                if has_confirm || has_dismiss {
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(16.0)),
-                        ))
-                    });
-                    let action_color = scheme.primary;
-                    scope.child(move || {
-                        let dismiss_button = dismiss_button.clone();
-                        let confirm_button = confirm_button.clone();
-                        provide_context(
-                            || ContentColor {
-                                current: action_color,
-                            },
-                            || {
-                                row(&RowArgs::default()
-                                    .modifier(Modifier::new().fill_max_width())
-                                    .main_axis_alignment(MainAxisAlignment::End)
-                                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .children(move |row_scope| {
-                                        if let Some(dismiss) = dismiss_button.clone() {
-                                            row_scope.child(move || dismiss.render());
-                                        }
-                                        if has_confirm && has_dismiss {
-                                            row_scope.child(|| {
-                                                spacer(&crate::spacer::SpacerArgs::new(
-                                                    Modifier::new().width(Dp(8.0)),
-                                                ))
-                                            });
-                                        }
-                                        if let Some(confirm) = confirm_button.clone() {
-                                            row_scope.child(move || confirm.render());
-                                        }
-                                    }));
-                            },
-                        );
-                    });
-                }
+    column()
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Wrap {
+                min: Some(Dp(280.0).into()),
+                max: Some(Dp(520.0).into()),
             }),
-    );
+            Some(DimensionValue::WRAP),
+        ))
+        .children(move || {
+            {
+                let title = title.clone();
+                row()
+                    .modifier(Modifier::new().fill_max_width())
+                    .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        {
+                            let title_text = title.as_deref().unwrap_or("Select time");
+                            text()
+                                .content(title_text)
+                                .size(
+                                    use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
+                                        .get()
+                                        .typography
+                                        .title_medium
+                                        .font_size,
+                                )
+                                .color(scheme.on_surface);
+                        };
+                        if show_mode_toggle {
+                            {
+                                time_display_mode_toggle(state);
+                            };
+                        }
+                    });
+            };
+
+            {
+                spacer().modifier(Modifier::new().height(Dp(12.0)));
+            };
+
+            {
+                time_picker()
+                    .modifier(picker_modifier.clone())
+                    .initial_hour(picker_initial_hour)
+                    .initial_minute(picker_initial_minute)
+                    .is_24_hour(picker_is_24_hour)
+                    .display_mode(picker_display_mode)
+                    .hour_step(picker_hour_step)
+                    .minute_step(picker_minute_step)
+                    .state(state);
+            };
+
+            if has_confirm || has_dismiss {
+                {
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                };
+                let action_color = scheme.primary;
+                {
+                    let dismiss_button = dismiss_button.clone();
+                    let confirm_button = confirm_button.clone();
+                    provide_context(
+                        || ContentColor {
+                            current: action_color,
+                        },
+                        || {
+                            row()
+                                .modifier(Modifier::new().fill_max_width())
+                                .main_axis_alignment(MainAxisAlignment::End)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    if let Some(dismiss) = dismiss_button.clone() {
+                                        dismiss.render();
+                                    }
+                                    if has_confirm && has_dismiss {
+                                        {
+                                            spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                        };
+                                    }
+                                    if let Some(confirm) = confirm_button.clone() {
+                                        confirm.render();
+                                    }
+                                });
+                        },
+                    );
+                };
+            }
+        });
 }
 
-#[derive(Clone, Prop)]
-struct TimeStepperColumnArgs {
+fn time_stepper_column(
     label: &'static str,
-    #[prop(into)]
     value: String,
     show_label: bool,
     on_increment: Callback,
     on_decrement: Callback,
-}
-
-#[tessera]
-fn time_stepper_column(args: &TimeStepperColumnArgs) {
-    let label = args.label;
-    let value = args.value.clone();
-    let show_label = args.show_label;
-    let on_increment = args.on_increment;
-    let on_decrement = args.on_decrement;
+) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
-    column(
-        &ColumnArgs::default()
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(move |scope| {
-                scope.child(move || {
-                    step_button(&StepButtonArgs {
-                        label: "+",
-                        on_click: on_increment,
-                    });
-                });
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(6.0)),
-                    ))
-                });
-                let value_text = value.clone();
-                scope.child(move || {
-                    time_value_cell(&TimeValueCellArgs {
-                        value: value_text.clone(),
-                    });
-                });
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(Dp(6.0)),
-                    ))
-                });
-                scope.child(move || {
-                    step_button(&StepButtonArgs {
-                        label: "-",
-                        on_click: on_decrement,
-                    });
-                });
-                if show_label {
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(6.0)),
-                        ))
-                    });
-                    scope.child(move || {
-                        text(&crate::text::TextArgs::from(
-                            &TextArgs::default()
-                                .text(label)
-                                .size(typography.label_small.font_size)
-                                .color(scheme.on_surface_variant),
-                        ));
-                    });
-                }
-            }),
-    );
+    column()
+        .cross_axis_alignment(CrossAxisAlignment::Center)
+        .children(move || {
+            {
+                step_button("+", on_increment);
+            };
+            {
+                spacer().modifier(Modifier::new().height(Dp(6.0)));
+            };
+            let value_text = value.clone();
+            {
+                time_value_cell(value_text.clone());
+            };
+            {
+                spacer().modifier(Modifier::new().height(Dp(6.0)));
+            };
+            {
+                step_button("-", on_decrement);
+            };
+            if show_label {
+                {
+                    spacer().modifier(Modifier::new().height(Dp(6.0)));
+                };
+                {
+                    text()
+                        .content(label)
+                        .size(typography.label_small.font_size)
+                        .color(scheme.on_surface_variant);
+                };
+            }
+        });
 }
 
-#[derive(Clone, Prop)]
-struct TimeValueCellArgs {
-    #[prop(into)]
-    value: String,
-}
-
-#[tessera]
-fn time_value_cell(args: &TimeValueCellArgs) {
-    let value = args.value.clone();
+fn time_value_cell(value: String) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(
-                Modifier::new()
-                    .width(TIME_CELL_WIDTH)
-                    .height(TIME_CELL_HEIGHT),
-            )
-            .style(SurfaceStyle::Filled {
-                color: scheme.surface_container_high,
-            })
-            .shape(Shape::rounded_rectangle(TIME_CELL_RADIUS))
-            .content_alignment(Alignment::Center),
-        move || {
-            let value = value.clone();
-            text(&crate::text::TextArgs::from(
-                &TextArgs::default()
-                    .text(value)
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .headline_small
-                            .font_size,
-                    )
-                    .color(scheme.on_surface),
-            ));
-        },
-    ));
+    surface()
+        .modifier(
+            Modifier::new()
+                .width(TIME_CELL_WIDTH)
+                .height(TIME_CELL_HEIGHT),
+        )
+        .style(SurfaceStyle::Filled {
+            color: scheme.surface_container_high,
+        })
+        .shape(Shape::rounded_rectangle(TIME_CELL_RADIUS))
+        .content_alignment(Alignment::Center)
+        .child(move || {
+            text()
+                .content(value.clone())
+                .size(
+                    use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .typography
+                        .headline_small
+                        .font_size,
+                )
+                .color(scheme.on_surface);
+        });
 }
 
-#[derive(Clone, Prop)]
-struct StepButtonArgs {
-    label: &'static str,
-    on_click: Callback,
-}
-
-#[tessera]
-fn step_button(args: &StepButtonArgs) {
-    let label = args.label;
-    let on_click = args.on_click;
+fn step_button(label: &'static str, on_click: Callback) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().size(TIME_STEP_BUTTON_SIZE, TIME_STEP_BUTTON_SIZE))
-            .style(SurfaceStyle::Filled {
-                color: scheme.surface_container_low,
-            })
-            .shape(Shape::capsule())
-            .content_alignment(Alignment::Center)
-            .on_click_shared(on_click),
-        move || {
-            text(&crate::text::TextArgs::from(
-                &TextArgs::default()
-                    .text(label)
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .body_medium
-                            .font_size,
-                    )
-                    .color(scheme.on_surface),
-            ));
-        },
-    ));
+    surface()
+        .modifier(Modifier::new().size(TIME_STEP_BUTTON_SIZE, TIME_STEP_BUTTON_SIZE))
+        .style(SurfaceStyle::Filled {
+            color: scheme.surface_container_low,
+        })
+        .shape(Shape::capsule())
+        .content_alignment(Alignment::Center)
+        .on_click_shared(on_click)
+        .child(move || {
+            text()
+                .content(label)
+                .size(
+                    use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .typography
+                        .body_medium
+                        .font_size,
+                )
+                .color(scheme.on_surface);
+        });
 }
 
-#[derive(Clone, Prop)]
-struct PeriodToggleArgs {
-    is_pm: bool,
-    state: State<TimePickerState>,
-}
-
-#[tessera]
-fn period_toggle(args: &PeriodToggleArgs) {
-    let is_pm = args.is_pm;
-    let state = args.state;
-    row(&RowArgs::default()
+fn period_toggle(is_pm: bool, state: State<TimePickerState>) {
+    row()
         .main_axis_alignment(MainAxisAlignment::Center)
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .children(move |scope| {
-            scope.child(move || {
-                period_button(&PeriodButtonArgs {
-                    label: "AM",
-                    selected: !is_pm,
-                    period: DayPeriod::Am,
-                    state,
-                });
-            });
-            scope.child(|| {
-                spacer(&crate::spacer::SpacerArgs::new(
-                    Modifier::new().width(Dp(8.0)),
-                ))
-            });
-            scope.child(move || {
-                period_button(&PeriodButtonArgs {
-                    label: "PM",
-                    selected: is_pm,
-                    period: DayPeriod::Pm,
-                    state,
-                });
-            });
-        }));
+        .children(move || {
+            {
+                period_button("AM", !is_pm, DayPeriod::Am, state);
+            };
+            {
+                spacer().modifier(Modifier::new().width(Dp(8.0)));
+            };
+            {
+                period_button("PM", is_pm, DayPeriod::Pm, state);
+            };
+        });
 }
 
-#[derive(Clone, Prop)]
-struct PeriodButtonArgs {
+fn period_button(
     label: &'static str,
     selected: bool,
     period: DayPeriod,
     state: State<TimePickerState>,
-}
-
-#[tessera]
-fn period_button(args: &PeriodButtonArgs) {
-    let label = args.label;
-    let selected = args.selected;
-    let period = args.period;
-    let state = args.state;
+) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -842,45 +657,34 @@ fn period_button(args: &PeriodButtonArgs) {
             color: scheme.surface_container_low,
         }
     };
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(
-                Modifier::new()
-                    .width(PERIOD_BUTTON_WIDTH)
-                    .height(PERIOD_BUTTON_HEIGHT),
-            )
-            .style(style)
-            .shape(Shape::capsule())
-            .content_alignment(Alignment::Center)
-            .on_click(move || {
-                state.with_mut(|s| s.set_period(period));
-            }),
-        move || {
-            text(&crate::text::TextArgs::from(
-                &TextArgs::default()
-                    .text(label)
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .label_medium
-                            .font_size,
-                    )
-                    .color(text_color),
-            ));
-        },
-    ));
+    surface()
+        .modifier(
+            Modifier::new()
+                .width(PERIOD_BUTTON_WIDTH)
+                .height(PERIOD_BUTTON_HEIGHT),
+        )
+        .style(style)
+        .shape(Shape::capsule())
+        .content_alignment(Alignment::Center)
+        .on_click(move || {
+            state.with_mut(|s| s.set_period(period));
+        })
+        .child(move || {
+            text()
+                .content(label)
+                .size(
+                    use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .typography
+                        .label_medium
+                        .font_size,
+                )
+                .color(text_color);
+        });
 }
 
-#[derive(Clone, Prop)]
-struct TimeDisplayModeToggleArgs {
-    state: State<TimePickerState>,
-}
-
-#[tessera]
-fn time_display_mode_toggle(args: &TimeDisplayModeToggleArgs) {
-    let state = args.state;
+fn time_display_mode_toggle(state: State<TimePickerState>) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -889,33 +693,29 @@ fn time_display_mode_toggle(args: &TimeDisplayModeToggleArgs) {
         TimePickerDisplayMode::Picker => "Input",
         TimePickerDisplayMode::Input => "Picker",
     });
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().padding_all(Dp(4.0)))
-            .style(SurfaceStyle::Filled {
-                color: scheme.surface_container_high,
-            })
-            .shape(Shape::capsule())
-            .content_alignment(Alignment::Center)
-            .on_click(move || {
-                state.with_mut(|s| s.toggle_display_mode());
-            }),
-        move || {
-            text(&crate::text::TextArgs::from(
-                &TextArgs::default()
-                    .text(label)
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .label_small
-                            .font_size,
-                    )
-                    .color(scheme.primary),
-            ));
-        },
-    ));
+    surface()
+        .modifier(Modifier::new().padding_all(Dp(4.0)))
+        .style(SurfaceStyle::Filled {
+            color: scheme.surface_container_high,
+        })
+        .shape(Shape::capsule())
+        .content_alignment(Alignment::Center)
+        .on_click(move || {
+            state.with_mut(|s| s.toggle_display_mode());
+        })
+        .child(move || {
+            text()
+                .content(label)
+                .size(
+                    use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .typography
+                        .label_small
+                        .font_size,
+                )
+                .color(scheme.primary);
+        });
 }
 
 fn format_two_digit(value: u8) -> String {

@@ -10,20 +10,20 @@ use std::{
 };
 
 use tessera_ui::{
-    Callback, Color, DimensionValue, Dp, Modifier, Prop, RenderSlot, State, provide_context,
-    remember, tessera, use_context,
+    Callback, Color, DimensionValue, Dp, Modifier, RenderSlot, State, provide_context, remember,
+    tessera, use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    column::{ColumnArgs, column},
-    flow_row::{FlowRowArgs, flow_row},
+    column::column,
+    flow_row::flow_row,
     modifier::ModifierExt as _,
-    row::{RowArgs, row},
+    row::row,
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgs, SurfaceStyle, surface},
-    text::{TextArgs, text},
+    surface::{SurfaceStyle, surface},
+    text::text,
     theme::{ContentColor, MaterialAlpha, MaterialTheme},
 };
 
@@ -38,9 +38,10 @@ const NAV_BUTTON_SIZE: Dp = Dp(28.0);
 const INPUT_ROW_GAP: Dp = Dp(12.0);
 
 /// Days of the week in Monday-first order.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Weekday {
     /// Monday.
+    #[default]
     Monday,
     /// Tuesday.
     Tuesday,
@@ -394,130 +395,15 @@ impl PartialEq for DatePickerSnapshot {
     }
 }
 
-/// Configuration options for [`date_picker`].
-///
-/// Initial-state fields are applied only when `date_picker` owns the state.
-#[derive(Clone, Prop)]
-pub struct DatePickerArgs {
-    /// Optional modifier chain applied to the date picker.
-    pub modifier: Modifier,
-    /// Initial selected date for the internal state.
-    pub initial_selected_date: Option<CalendarDate>,
-    /// Initial displayed month for the internal state.
-    pub initial_displayed_month: Option<YearMonth>,
-    /// Year range allowed in the internal state.
-    pub year_range: RangeInclusive<i32>,
-    /// Selectable-dates policy used by the internal state.
-    pub selectable_dates: Arc<dyn SelectableDates>,
-    /// Initial display mode for the internal state.
-    pub display_mode: DatePickerDisplayMode,
-    /// First day of the week for the calendar grid.
-    pub first_day_of_week: Weekday,
-    /// Whether weekday labels are rendered.
-    pub show_weekday_labels: bool,
-    /// Whether the display mode toggle is shown.
-    pub show_mode_toggle: bool,
-    /// Optional override for the title text.
-    #[prop(into)]
-    pub title: Option<String>,
-    /// Optional override for the headline text.
-    #[prop(into)]
-    pub headline: Option<String>,
-    /// Optional external state for selection, month navigation, and mode.
-    ///
-    /// When this is `None`, `date_picker` creates and owns an internal state.
-    #[prop(skip_setter)]
-    pub state: Option<State<DatePickerState>>,
-}
-
-impl Default for DatePickerArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new()
-                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
-            initial_selected_date: None,
-            initial_displayed_month: None,
-            year_range: DatePickerDefaults::YEAR_RANGE,
-            selectable_dates: DatePickerDefaults::all_dates(),
-            display_mode: DatePickerDisplayMode::Picker,
-            first_day_of_week: Weekday::Monday,
-            show_weekday_labels: true,
-            show_mode_toggle: true,
-            title: None,
-            headline: None,
-            state: None,
-        }
-    }
-}
-
-impl DatePickerArgs {
-    /// Sets an external date picker state.
-    pub fn state(mut self, state: State<DatePickerState>) -> Self {
-        self.state = Some(state);
-        self
-    }
-}
-
-/// Configuration for [`date_picker_dialog`].
-#[derive(Clone, Prop)]
-pub struct DatePickerDialogArgs {
-    /// State handle used by the embedded date picker.
-    #[prop(skip_setter)]
-    pub state: State<DatePickerState>,
-    /// Optional override for the dialog title.
-    #[prop(into)]
-    pub title: Option<String>,
-    /// Optional confirm button content.
-    #[prop(skip_setter)]
-    pub confirm_button: Option<RenderSlot>,
-    /// Optional dismiss button content.
-    #[prop(skip_setter)]
-    pub dismiss_button: Option<RenderSlot>,
-    /// Picker configuration forwarded to [`date_picker`].
-    pub picker: DatePickerArgs,
-}
-
-impl DatePickerDialogArgs {
-    /// Creates dialog args with the required date picker state.
-    pub fn new(state: State<DatePickerState>) -> Self {
-        Self {
-            state,
-            title: None,
-            confirm_button: None,
-            dismiss_button: None,
-            picker: DatePickerArgs::default(),
-        }
-    }
-
-    /// Sets the confirm button content.
-    pub fn confirm_button<F>(mut self, f: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.confirm_button = Some(RenderSlot::new(f));
-        self
-    }
-
-    /// Sets the confirm button content using a shared callback.
-    pub fn confirm_button_shared(mut self, f: impl Into<RenderSlot>) -> Self {
-        self.confirm_button = Some(f.into());
-        self
-    }
-
-    /// Sets the dismiss button content.
-    pub fn dismiss_button<F>(mut self, f: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.dismiss_button = Some(RenderSlot::new(f));
-        self
-    }
-
-    /// Sets the dismiss button content using a shared callback.
-    pub fn dismiss_button_shared(mut self, f: impl Into<RenderSlot>) -> Self {
-        self.dismiss_button = Some(f.into());
-        self
-    }
+#[derive(Clone)]
+struct DatePickerConfig {
+    modifier: Modifier,
+    first_day_of_week: Weekday,
+    show_weekday_labels: bool,
+    show_mode_toggle: bool,
+    title: Option<String>,
+    headline: Option<String>,
+    state: Option<State<DatePickerState>>,
 }
 
 /// # date_picker
@@ -530,8 +416,20 @@ impl DatePickerDialogArgs {
 ///
 /// ## Parameters
 ///
-/// - `args` — configuration for the picker layout and internal state defaults;
-///   see [`DatePickerArgs`].
+/// - `modifier` — modifier chain applied to the date picker.
+/// - `initial_selected_date` — initial selected date for the internal state.
+/// - `initial_displayed_month` — initial displayed month for the internal
+///   state.
+/// - `year_range` — year range allowed in the internal state.
+/// - `selectable_dates` — selectable-dates policy used by the internal state.
+/// - `display_mode` — initial display mode for the internal state.
+/// - `first_day_of_week` — first day of the week for the calendar grid.
+/// - `show_weekday_labels` — whether weekday labels are rendered.
+/// - `show_mode_toggle` — whether the display mode toggle is shown.
+/// - `title` — optional override for the title text.
+/// - `headline` — optional override for the headline text.
+/// - `state` — optional external state for selection, month navigation, and
+///   mode.
 ///
 /// ## Examples
 ///
@@ -539,52 +437,63 @@ impl DatePickerDialogArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::date_picker::{DatePickerArgs, DatePickerState, date_picker};
+/// use tessera_components::date_picker::{DatePickerState, date_picker};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
-/// date_picker(&DatePickerArgs::default());
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// date_picker();
 ///
 /// let mut state = DatePickerState::default();
 /// assert!(state.selected_date().is_none());
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// #     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn date_picker(args: &DatePickerArgs) {
-    let mut args: DatePickerArgs = args.clone();
-    let initial_selected_date = args.initial_selected_date;
-    let initial_displayed_month = args.initial_displayed_month;
-    let year_range = args.year_range.clone();
-    let selectable_dates = args.selectable_dates.clone();
-    let display_mode = args.display_mode;
-
-    let state = args.state.unwrap_or_else(|| {
+pub fn date_picker(
+    modifier: Modifier,
+    initial_selected_date: Option<CalendarDate>,
+    initial_displayed_month: Option<YearMonth>,
+    year_range: Option<RangeInclusive<i32>>,
+    selectable_dates: Option<Arc<dyn SelectableDates>>,
+    display_mode: DatePickerDisplayMode,
+    first_day_of_week: Weekday,
+    show_weekday_labels: bool,
+    show_mode_toggle: bool,
+    #[prop(into)] title: Option<String>,
+    #[prop(into)] headline: Option<String>,
+    state: Option<State<DatePickerState>>,
+) {
+    let year_range = year_range.unwrap_or(DatePickerDefaults::YEAR_RANGE);
+    let selectable_dates = selectable_dates.unwrap_or_else(DatePickerDefaults::all_dates);
+    let state = state.unwrap_or_else(|| {
         remember(|| {
             DatePickerState::new(
                 initial_selected_date,
                 initial_displayed_month,
-                year_range,
-                selectable_dates,
+                year_range.clone(),
+                selectable_dates.clone(),
                 display_mode,
             )
         })
     });
-    args.state = Some(state);
-    date_picker_inner(&args);
+    date_picker_inner(DatePickerConfig {
+        modifier,
+        first_day_of_week,
+        show_weekday_labels,
+        show_mode_toggle,
+        title,
+        headline,
+        state: Some(state),
+    });
 }
 
-#[tessera]
-fn date_picker_inner(args: &DatePickerArgs) {
+fn date_picker_inner(args: DatePickerConfig) {
     let state = args
         .state
         .expect("date_picker_inner requires state to be set");
-    let args = args.clone();
     let snapshot = state.with(|s| s.snapshot());
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -603,86 +512,71 @@ fn date_picker_inner(args: &DatePickerArgs) {
         .headline
         .unwrap_or_else(|| default_headline(snapshot.selected_date));
 
-    column(
-        &ColumnArgs::default()
-            .modifier(modifier)
-            .children(move |scope| {
-                scope.child(move || {
+    column().modifier(modifier).children(move || {
+        {
+            let title_text = title_text.clone();
+            let headline_text = headline_text.clone();
+            row()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .padding_all(HEADER_VERTICAL_PADDING),
+                )
+                .main_axis_alignment(MainAxisAlignment::SpaceBetween)
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
                     let title_text = title_text.clone();
                     let headline_text = headline_text.clone();
-                    row(&RowArgs::default()
-                        .modifier(
-                            Modifier::new()
-                                .fill_max_width()
-                                .padding_all(HEADER_VERTICAL_PADDING),
-                        )
-                        .main_axis_alignment(MainAxisAlignment::SpaceBetween)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(move |row_scope| {
-                            let title_text = title_text.clone();
-                            let headline_text = headline_text.clone();
-                            row_scope.child(move || {
+                    {
+                        let title_text = title_text.clone();
+                        let headline_text = headline_text.clone();
+                        column()
+                            .modifier(Modifier::new().padding_all(HEADER_HORIZONTAL_PADDING))
+                            .children(move || {
                                 let title_text = title_text.clone();
+                                {
+                                    text()
+                                        .content(title_text.clone())
+                                        .size(typography.title_small.font_size)
+                                        .color(scheme.on_surface_variant);
+                                };
+
                                 let headline_text = headline_text.clone();
-                                column(
-                                    &ColumnArgs::default()
-                                        .modifier(
-                                            Modifier::new().padding_all(HEADER_HORIZONTAL_PADDING),
-                                        )
-                                        .children(move |column_scope| {
-                                            let title_text = title_text.clone();
-                                            column_scope.child(move || {
-                                                text(&crate::text::TextArgs::from(
-                                                    &TextArgs::default()
-                                                        .text(title_text.clone())
-                                                        .size(typography.title_small.font_size)
-                                                        .color(scheme.on_surface_variant),
-                                                ));
-                                            });
-
-                                            let headline_text = headline_text.clone();
-                                            column_scope.child(move || {
-                                                text(&crate::text::TextArgs::from(
-                                                    &TextArgs::default()
-                                                        .text(headline_text.clone())
-                                                        .size(typography.headline_small.font_size)
-                                                        .color(scheme.on_surface),
-                                                ));
-                                            });
-                                        }),
-                                );
+                                {
+                                    text()
+                                        .content(headline_text.clone())
+                                        .size(typography.headline_small.font_size)
+                                        .color(scheme.on_surface);
+                                };
                             });
+                    };
 
-                            if show_mode_toggle {
-                                row_scope.child(move || {
-                                    display_mode_toggle(&DisplayModeToggleArgs { state });
-                                });
-                            }
-                        }));
+                    if show_mode_toggle {
+                        {
+                            display_mode_toggle(state);
+                        };
+                    }
                 });
+        };
 
-                match snapshot.display_mode {
-                    DatePickerDisplayMode::Picker => {
-                        scope.child(move || {
-                            calendar_view(&CalendarViewArgs {
-                                snapshot: snapshot.clone(),
-                                first_day_of_week,
-                                show_weekday_labels,
-                                state,
-                            });
-                        });
-                    }
-                    DatePickerDisplayMode::Input => {
-                        scope.child(move || {
-                            input_view(&InputViewArgs {
-                                snapshot: snapshot.clone(),
-                                state,
-                            });
-                        });
-                    }
-                }
-            }),
-    );
+        match snapshot.display_mode {
+            DatePickerDisplayMode::Picker => {
+                {
+                    calendar_view(
+                        snapshot.clone(),
+                        first_day_of_week,
+                        show_weekday_labels,
+                        state,
+                    );
+                };
+            }
+            DatePickerDisplayMode::Input => {
+                {
+                    input_view(snapshot.clone(), state);
+                };
+            }
+        }
+    });
 }
 
 /// # date_picker_dialog
@@ -695,8 +589,17 @@ fn date_picker_inner(args: &DatePickerArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` — dialog layout and action configuration; see
-///   [`DatePickerDialogArgs`].
+/// - `state` — state handle used by the embedded date picker.
+/// - `title` — optional override for the dialog title.
+/// - `confirm_button` — optional confirm button content.
+/// - `dismiss_button` — optional dismiss button content.
+/// - `picker_modifier` — modifier chain applied to the embedded picker.
+/// - `picker_first_day_of_week` — first day of the week for the embedded
+///   picker.
+/// - `picker_show_weekday_labels` — whether weekday labels are rendered.
+/// - `picker_show_mode_toggle` — whether the display mode toggle is shown.
+/// - `picker_title` — optional picker title override.
+/// - `picker_headline` — optional picker headline override.
 ///
 /// ## Examples
 ///
@@ -704,174 +607,148 @@ fn date_picker_inner(args: &DatePickerArgs) {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::date_picker::{
-///     DatePickerDialogArgs, DatePickerState, date_picker_dialog,
-/// };
+/// use tessera_components::date_picker::{DatePickerState, date_picker_dialog};
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-/// #     || MaterialTheme::default(),
-/// #     || {
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
 /// let state = remember(DatePickerState::default);
-/// date_picker_dialog(&DatePickerDialogArgs::new(state));
-/// #     },
-/// # );
-/// # material_theme(&args);
+/// date_picker_dialog().state(state);
+/// #     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn date_picker_dialog(args: &DatePickerDialogArgs) {
-    let args: DatePickerDialogArgs = args.clone();
+pub fn date_picker_dialog(
+    state: Option<State<DatePickerState>>,
+    #[prop(into)] title: Option<String>,
+    confirm_button: Option<RenderSlot>,
+    dismiss_button: Option<RenderSlot>,
+    picker_modifier: Modifier,
+    picker_first_day_of_week: Weekday,
+    picker_show_weekday_labels: bool,
+    picker_show_mode_toggle: bool,
+    #[prop(into)] picker_title: Option<String>,
+    #[prop(into)] picker_headline: Option<String>,
+) {
+    let state = state.expect("date_picker_dialog requires state to be set");
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let title = args.title;
-    let picker = args.picker;
-    let state = args.state;
-    let confirm_button = args.confirm_button;
-    let dismiss_button = args.dismiss_button;
     let has_confirm = confirm_button.is_some();
     let has_dismiss = dismiss_button.is_some();
 
-    column(
-        &ColumnArgs::default()
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Wrap {
-                    min: Some(Dp(320.0).into()),
-                    max: Some(Dp(560.0).into()),
-                }),
-                Some(DimensionValue::WRAP),
-            ))
-            .children(move |scope| {
-                if let Some(title) = title.as_ref() {
-                    let title = title.clone();
-                    scope.child(move || {
-                        text(&crate::text::TextArgs::from(
-                            &TextArgs::default()
-                                .text(title.clone())
-                                .size(
-                                    use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .typography
-                                        .title_medium
-                                        .font_size,
-                                )
-                                .color(scheme.on_surface),
-                        ));
-                    });
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(8.0)),
-                        ))
-                    });
-                }
-
-                scope.child(move || {
-                    date_picker(&picker.clone().state(state));
-                });
-
-                if has_confirm || has_dismiss {
-                    scope.child(|| {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().height(Dp(16.0)),
-                        ))
-                    });
-                    let action_color = scheme.primary;
-                    scope.child(move || {
-                        provide_context(
-                            || ContentColor {
-                                current: action_color,
-                            },
-                            || {
-                                let dismiss_button = dismiss_button.clone();
-                                let confirm_button = confirm_button.clone();
-                                row(&RowArgs::default()
-                                    .modifier(Modifier::new().fill_max_width())
-                                    .main_axis_alignment(MainAxisAlignment::End)
-                                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .children(move |row_scope| {
-                                        if let Some(dismiss) = dismiss_button.as_ref() {
-                                            let dismiss = dismiss.clone();
-                                            row_scope.child(move || dismiss.render());
-                                        }
-                                        if has_confirm && has_dismiss {
-                                            row_scope.child(|| {
-                                                spacer(&crate::spacer::SpacerArgs::new(
-                                                    Modifier::new().width(Dp(8.0)),
-                                                ))
-                                            });
-                                        }
-                                        if let Some(confirm) = confirm_button.as_ref() {
-                                            let confirm = confirm.clone();
-                                            row_scope.child(move || confirm.render());
-                                        }
-                                    }));
-                            },
-                        );
-                    });
-                }
+    column()
+        .modifier(Modifier::new().constrain(
+            Some(DimensionValue::Wrap {
+                min: Some(Dp(320.0).into()),
+                max: Some(Dp(560.0).into()),
             }),
-    );
+            Some(DimensionValue::WRAP),
+        ))
+        .children(move || {
+            if let Some(title) = title.as_ref() {
+                let title = title.clone();
+                {
+                    text()
+                        .content(title.clone())
+                        .size(
+                            use_context::<MaterialTheme>()
+                                .expect("MaterialTheme must be provided")
+                                .get()
+                                .typography
+                                .title_medium
+                                .font_size,
+                        )
+                        .color(scheme.on_surface);
+                };
+                {
+                    spacer().modifier(Modifier::new().height(Dp(8.0)));
+                };
+            }
+
+            {
+                date_picker_inner(DatePickerConfig {
+                    modifier: picker_modifier.clone(),
+                    first_day_of_week: picker_first_day_of_week,
+                    show_weekday_labels: picker_show_weekday_labels,
+                    show_mode_toggle: picker_show_mode_toggle,
+                    title: picker_title.clone(),
+                    headline: picker_headline.clone(),
+                    state: Some(state),
+                });
+            };
+
+            if has_confirm || has_dismiss {
+                {
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                };
+                let action_color = scheme.primary;
+                {
+                    provide_context(
+                        || ContentColor {
+                            current: action_color,
+                        },
+                        || {
+                            let dismiss_button = dismiss_button.clone();
+                            let confirm_button = confirm_button.clone();
+                            row()
+                                .modifier(Modifier::new().fill_max_width())
+                                .main_axis_alignment(MainAxisAlignment::End)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    if let Some(dismiss) = dismiss_button.as_ref() {
+                                        let dismiss = dismiss.clone();
+                                        dismiss.render();
+                                    }
+                                    if has_confirm && has_dismiss {
+                                        {
+                                            spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                        };
+                                    }
+                                    if let Some(confirm) = confirm_button.as_ref() {
+                                        let confirm = confirm.clone();
+                                        confirm.render();
+                                    }
+                                });
+                        },
+                    );
+                };
+            }
+        });
 }
 
-#[derive(Clone, Prop)]
-struct CalendarViewArgs {
+fn calendar_view(
     snapshot: DatePickerSnapshot,
     first_day_of_week: Weekday,
     show_weekday_labels: bool,
     state: State<DatePickerState>,
+) {
+    column()
+        .modifier(Modifier::new().fill_max_width())
+        .children(move || {
+            let nav_snapshot = snapshot.clone();
+            {
+                month_navigation(nav_snapshot.clone(), state);
+            };
+
+            if show_weekday_labels {
+                {
+                    weekday_labels_row(first_day_of_week);
+                };
+            }
+
+            let grid_snapshot = snapshot.clone();
+            {
+                date_grid(grid_snapshot.clone(), first_day_of_week, state);
+            };
+        });
 }
 
-#[tessera]
-fn calendar_view(args: &CalendarViewArgs) {
-    let snapshot = args.snapshot.clone();
-    let first_day_of_week = args.first_day_of_week;
-    let show_weekday_labels = args.show_weekday_labels;
-    let state = args.state;
-    column(
-        &ColumnArgs::default()
-            .modifier(Modifier::new().fill_max_width())
-            .children(move |scope| {
-                let nav_snapshot = snapshot.clone();
-                scope.child(move || {
-                    month_navigation(&MonthNavigationArgs {
-                        snapshot: nav_snapshot.clone(),
-                        state,
-                    });
-                });
-
-                if show_weekday_labels {
-                    scope.child(move || {
-                        weekday_labels_row(&WeekdayLabelsRowArgs { first_day_of_week });
-                    });
-                }
-
-                let grid_snapshot = snapshot.clone();
-                scope.child(move || {
-                    date_grid(&DateGridArgs {
-                        snapshot: grid_snapshot.clone(),
-                        first_day_of_week,
-                        state,
-                    });
-                });
-            }),
-    );
-}
-
-#[derive(Clone, Prop)]
-struct MonthNavigationArgs {
-    snapshot: DatePickerSnapshot,
-    state: State<DatePickerState>,
-}
-
-#[tessera]
-fn month_navigation(args: &MonthNavigationArgs) {
-    let snapshot = args.snapshot.clone();
-    let state = args.state;
+fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -886,106 +763,76 @@ fn month_navigation(args: &MonthNavigationArgs) {
         state.with_mut(|s| s.next_month());
     });
 
-    row(&RowArgs::default()
+    row()
         .modifier(Modifier::new().fill_max_width())
         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .children(move |scope| {
-            scope.child(move || {
-                nav_button(&NavButtonArgs {
-                    label: "<",
-                    enabled: can_prev,
-                    on_click: on_prev,
-                });
-            });
+        .children(move || {
+            {
+                nav_button("<", can_prev, on_prev);
+            };
 
-            scope.child(move || {
-                text(&crate::text::TextArgs::from(
-                    &TextArgs::default()
-                        .text(month_label.clone())
-                        .size(
-                            use_context::<MaterialTheme>()
-                                .expect("MaterialTheme must be provided")
-                                .get()
-                                .typography
-                                .title_medium
-                                .font_size,
-                        )
-                        .color(scheme.on_surface),
-                ));
-            });
+            {
+                text()
+                    .content(month_label.clone())
+                    .size(
+                        use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
+                            .get()
+                            .typography
+                            .title_medium
+                            .font_size,
+                    )
+                    .color(scheme.on_surface);
+            };
 
-            scope.child(move || {
-                nav_button(&NavButtonArgs {
-                    label: ">",
-                    enabled: can_next,
-                    on_click: on_next,
-                });
-            });
-        }));
+            {
+                nav_button(">", can_next, on_next);
+            };
+        });
 }
 
-#[derive(Clone, Prop)]
-struct WeekdayLabelsRowArgs {
-    first_day_of_week: Weekday,
-}
-
-#[tessera]
-fn weekday_labels_row(args: &WeekdayLabelsRowArgs) {
-    let first_day_of_week = args.first_day_of_week;
+fn weekday_labels_row(first_day_of_week: Weekday) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
     let labels = weekday_sequence(first_day_of_week);
 
-    flow_row(
-        &FlowRowArgs::default()
-            .max_items_per_line(DATE_COLUMNS)
-            .item_spacing(DATE_GRID_SPACING)
-            .children(move |scope| {
-                for weekday in labels {
-                    let label = weekday_short_label(weekday);
-                    scope.child(move || {
-                        surface(&crate::surface::SurfaceArgs::with_child(
-                            SurfaceArgs::default()
-                                .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                                .style(Color::TRANSPARENT.into())
-                                .content_alignment(Alignment::Center),
-                            move || {
-                                text(&crate::text::TextArgs::from(
-                                    &TextArgs::default()
-                                        .text(label)
-                                        .size(
-                                            use_context::<MaterialTheme>()
-                                                .expect("MaterialTheme must be provided")
-                                                .get()
-                                                .typography
-                                                .label_small
-                                                .font_size,
-                                        )
-                                        .color(scheme.on_surface_variant),
-                                ));
-                            },
-                        ));
-                    });
-                }
-            }),
-    );
+    flow_row()
+        .max_items_per_line(DATE_COLUMNS)
+        .item_spacing(DATE_GRID_SPACING)
+        .children(move || {
+            for weekday in labels {
+                let label = weekday_short_label(weekday);
+                {
+                    surface()
+                        .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                        .style(Color::TRANSPARENT.into())
+                        .content_alignment(Alignment::Center)
+                        .child(move || {
+                            text()
+                                .content(label)
+                                .size(
+                                    use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
+                                        .get()
+                                        .typography
+                                        .label_small
+                                        .font_size,
+                                )
+                                .color(scheme.on_surface_variant);
+                        });
+                };
+            }
+        });
 }
 
-#[derive(Clone, Prop)]
-struct DateGridArgs {
+fn date_grid(
     snapshot: DatePickerSnapshot,
     first_day_of_week: Weekday,
     state: State<DatePickerState>,
-}
-
-#[tessera]
-fn date_grid(args: &DateGridArgs) {
-    let snapshot = args.snapshot.clone();
-    let first_day_of_week = args.first_day_of_week;
-    let state = args.state;
+) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -993,106 +840,103 @@ fn date_grid(args: &DateGridArgs) {
     let today = CalendarDate::today();
     let grid = build_month_grid(snapshot.displayed_month, first_day_of_week);
 
-    flow_row(
-        &FlowRowArgs::default()
-            .max_items_per_line(DATE_COLUMNS)
-            .max_lines(DATE_ROWS)
-            .item_spacing(DATE_GRID_SPACING)
-            .line_spacing(DATE_GRID_SPACING)
-            .children(move |scope| {
-                for cell in grid {
-                    let snapshot = snapshot.clone();
-                    scope.child(move || {
-                        if let Some(date) = cell {
-                            let is_selected = snapshot.selected_date == Some(date);
-                            let is_today = date == today;
-                            let is_enabled = is_date_selectable(
-                                date,
-                                &snapshot.year_range,
-                                &snapshot.selectable_dates,
-                            );
-                            let text_color = if is_selected {
-                                scheme.on_primary
-                            } else if is_enabled {
-                                scheme.on_surface
-                            } else {
-                                scheme
-                                    .on_surface_variant
-                                    .with_alpha(MaterialAlpha::DISABLED_CONTENT)
-                            };
-                            let style = if is_selected {
-                                SurfaceStyle::Filled {
-                                    color: scheme.primary,
-                                }
-                            } else if is_today {
-                                SurfaceStyle::Outlined {
-                                    color: scheme.primary,
-                                    width: Dp(1.0),
-                                }
-                            } else {
-                                SurfaceStyle::Filled {
-                                    color: Color::TRANSPARENT,
-                                }
-                            };
-
-                            let on_click = if is_enabled {
-                                Some(Callback::new(move || {
-                                    state.with_mut(|s| {
-                                        s.set_selected_date(date);
-                                    });
-                                }))
-                            } else {
-                                None
-                            };
-
-                            let mut surface_args = SurfaceArgs::default()
-                                .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-                                .style(style)
-                                .shape(Shape::rounded_rectangle(DATE_CELL_RADIUS))
-                                .content_alignment(Alignment::Center)
-                                .enabled(is_enabled);
-                            if let Some(on_click) = on_click {
-                                surface_args = surface_args.on_click_shared(on_click);
-                            }
-                            surface(&crate::surface::SurfaceArgs::with_child(
-                                surface_args,
-                                move || {
-                                    text(&crate::text::TextArgs::from(
-                                        &TextArgs::default()
-                                            .text(format!("{}", date.day()))
-                                            .size(
-                                                use_context::<MaterialTheme>()
-                                                    .expect("MaterialTheme must be provided")
-                                                    .get()
-                                                    .typography
-                                                    .body_medium
-                                                    .font_size,
-                                            )
-                                            .color(text_color),
-                                    ));
-                                },
-                            ));
-                        } else {
-                            spacer(&crate::spacer::SpacerArgs::new(
-                                Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE),
-                            ));
+    flow_row()
+        .max_items_per_line(DATE_COLUMNS)
+        .max_lines(DATE_ROWS)
+        .item_spacing(DATE_GRID_SPACING)
+        .line_spacing(DATE_GRID_SPACING)
+        .children(move || {
+            for cell in grid.iter().copied() {
+                let snapshot = snapshot.clone();
+                if let Some(date) = cell {
+                    let is_selected = snapshot.selected_date == Some(date);
+                    let is_today = date == today;
+                    let is_enabled =
+                        is_date_selectable(date, &snapshot.year_range, &snapshot.selectable_dates);
+                    let text_color = if is_selected {
+                        scheme.on_primary
+                    } else if is_enabled {
+                        scheme.on_surface
+                    } else {
+                        scheme
+                            .on_surface_variant
+                            .with_alpha(MaterialAlpha::DISABLED_CONTENT)
+                    };
+                    let style = if is_selected {
+                        SurfaceStyle::Filled {
+                            color: scheme.primary,
                         }
-                    });
-                }
-            }),
-    );
+                    } else if is_today {
+                        SurfaceStyle::Outlined {
+                            color: scheme.primary,
+                            width: Dp(1.0),
+                        }
+                    } else {
+                        SurfaceStyle::Filled {
+                            color: Color::TRANSPARENT,
+                        }
+                    };
+
+                    let on_click = if is_enabled {
+                        Some(Callback::new(move || {
+                            state.with_mut(|s| {
+                                s.set_selected_date(date);
+                            });
+                        }))
+                    } else {
+                        None
+                    };
+
+                    if let Some(on_click) = on_click {
+                        surface()
+                            .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                            .style(style)
+                            .shape(Shape::rounded_rectangle(DATE_CELL_RADIUS))
+                            .content_alignment(Alignment::Center)
+                            .enabled(is_enabled)
+                            .on_click_shared(on_click)
+                            .child(move || {
+                                text()
+                                    .content(format!("{}", date.day()))
+                                    .size(
+                                        use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
+                                            .get()
+                                            .typography
+                                            .body_medium
+                                            .font_size,
+                                    )
+                                    .color(text_color);
+                            });
+                    } else {
+                        surface()
+                            .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
+                            .style(style)
+                            .shape(Shape::rounded_rectangle(DATE_CELL_RADIUS))
+                            .content_alignment(Alignment::Center)
+                            .enabled(is_enabled)
+                            .child(move || {
+                                text()
+                                    .content(format!("{}", date.day()))
+                                    .size(
+                                        use_context::<MaterialTheme>()
+                                            .expect("MaterialTheme must be provided")
+                                            .get()
+                                            .typography
+                                            .body_medium
+                                            .font_size,
+                                    )
+                                    .color(text_color);
+                            });
+                    }
+                } else {
+                    spacer().modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE));
+                };
+            }
+        });
 }
 
-#[derive(Clone, Prop)]
-struct InputViewArgs {
-    snapshot: DatePickerSnapshot,
-    state: State<DatePickerState>,
-}
-
-#[tessera]
-fn input_view(args: &InputViewArgs) {
-    let snapshot = args.snapshot.clone();
-    let state = args.state;
+fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1106,218 +950,141 @@ fn input_view(args: &InputViewArgs) {
     let snapshot_day = snapshot.clone();
     let snapshot_desc = snapshot.clone();
 
-    column(
-        &ColumnArgs::default()
-            .modifier(Modifier::new().padding_all(HEADER_HORIZONTAL_PADDING))
-            .children(move |scope| {
-                scope.child(move || {
-                    let decrement_snapshot = snapshot_year.clone();
-                    let increment_snapshot = snapshot_year.clone();
-                    input_row(&InputRowArgs {
-                        label: "Year",
-                        value: format!("{}", current_date.year()),
-                        on_decrement: Callback::new(move || {
-                            adjust_input_date(
-                                state,
-                                decrement_snapshot.clone(),
-                                InputField::Year,
-                                -1,
-                            );
-                        }),
-                        on_increment: Callback::new(move || {
-                            adjust_input_date(
-                                state,
-                                increment_snapshot.clone(),
-                                InputField::Year,
-                                1,
-                            );
-                        }),
-                    });
-                });
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(INPUT_ROW_GAP),
-                    ))
-                });
-                scope.child(move || {
-                    let decrement_snapshot = snapshot_month.clone();
-                    let increment_snapshot = snapshot_month.clone();
-                    input_row(&InputRowArgs {
-                        label: "Month",
-                        value: format_month_name(current_date.month()).to_string(),
-                        on_decrement: Callback::new(move || {
-                            adjust_input_date(
-                                state,
-                                decrement_snapshot.clone(),
-                                InputField::Month,
-                                -1,
-                            );
-                        }),
-                        on_increment: Callback::new(move || {
-                            adjust_input_date(
-                                state,
-                                increment_snapshot.clone(),
-                                InputField::Month,
-                                1,
-                            );
-                        }),
-                    });
-                });
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(INPUT_ROW_GAP),
-                    ))
-                });
-                scope.child(move || {
-                    let decrement_snapshot = snapshot_day.clone();
-                    let increment_snapshot = snapshot_day.clone();
-                    input_row(&InputRowArgs {
-                        label: "Day",
-                        value: format!("{}", current_date.day()),
-                        on_decrement: Callback::new(move || {
-                            adjust_input_date(
-                                state,
-                                decrement_snapshot.clone(),
-                                InputField::Day,
-                                -1,
-                            );
-                        }),
-                        on_increment: Callback::new(move || {
-                            adjust_input_date(
-                                state,
-                                increment_snapshot.clone(),
-                                InputField::Day,
-                                1,
-                            );
-                        }),
-                    });
-                });
-                scope.child(|| {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(INPUT_ROW_GAP),
-                    ))
-                });
-                scope.child(move || {
-                    let description = if snapshot_desc.selected_date.is_some() {
-                        "Use the steppers to adjust the selected date."
-                    } else {
-                        "Use the steppers to pick a date."
-                    };
-                    text(&crate::text::TextArgs::from(
-                        &TextArgs::default()
-                            .text(description)
-                            .size(
-                                use_context::<MaterialTheme>()
-                                    .expect("MaterialTheme must be provided")
-                                    .get()
-                                    .typography
-                                    .body_small
-                                    .font_size,
-                            )
-                            .color(scheme.on_surface_variant),
-                    ));
-                });
-            }),
-    );
+    column()
+        .modifier(Modifier::new().padding_all(HEADER_HORIZONTAL_PADDING))
+        .children(move || {
+            {
+                let decrement_snapshot = snapshot_year.clone();
+                let increment_snapshot = snapshot_year.clone();
+                input_row(
+                    "Year",
+                    format!("{}", current_date.year()),
+                    Callback::new(move || {
+                        adjust_input_date(state, decrement_snapshot.clone(), InputField::Year, -1);
+                    }),
+                    Callback::new(move || {
+                        adjust_input_date(state, increment_snapshot.clone(), InputField::Year, 1);
+                    }),
+                );
+            };
+            {
+                spacer().modifier(Modifier::new().height(INPUT_ROW_GAP));
+            };
+            {
+                let decrement_snapshot = snapshot_month.clone();
+                let increment_snapshot = snapshot_month.clone();
+                input_row(
+                    "Month",
+                    format_month_name(current_date.month()).to_string(),
+                    Callback::new(move || {
+                        adjust_input_date(state, decrement_snapshot.clone(), InputField::Month, -1);
+                    }),
+                    Callback::new(move || {
+                        adjust_input_date(state, increment_snapshot.clone(), InputField::Month, 1);
+                    }),
+                );
+            };
+            {
+                spacer().modifier(Modifier::new().height(INPUT_ROW_GAP));
+            };
+            {
+                let decrement_snapshot = snapshot_day.clone();
+                let increment_snapshot = snapshot_day.clone();
+                input_row(
+                    "Day",
+                    format!("{}", current_date.day()),
+                    Callback::new(move || {
+                        adjust_input_date(state, decrement_snapshot.clone(), InputField::Day, -1);
+                    }),
+                    Callback::new(move || {
+                        adjust_input_date(state, increment_snapshot.clone(), InputField::Day, 1);
+                    }),
+                );
+            };
+            {
+                spacer().modifier(Modifier::new().height(INPUT_ROW_GAP));
+            };
+            {
+                let description = if snapshot_desc.selected_date.is_some() {
+                    "Use the steppers to adjust the selected date."
+                } else {
+                    "Use the steppers to pick a date."
+                };
+                text()
+                    .content(description)
+                    .size(
+                        use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
+                            .get()
+                            .typography
+                            .body_small
+                            .font_size,
+                    )
+                    .color(scheme.on_surface_variant);
+            };
+        });
 }
 
-#[derive(Clone, Prop)]
-struct InputRowArgs {
-    label: &'static str,
-    #[prop(into)]
-    value: String,
-    on_decrement: Callback,
-    on_increment: Callback,
-}
-
-#[tessera]
-fn input_row(args: &InputRowArgs) {
-    let label = args.label;
-    let value = args.value.clone();
-    let on_decrement = args.on_decrement;
-    let on_increment = args.on_increment;
+fn input_row(label: &'static str, value: String, on_decrement: Callback, on_increment: Callback) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    row(&RowArgs::default()
+    row()
         .modifier(Modifier::new().fill_max_width())
         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
         .cross_axis_alignment(CrossAxisAlignment::Center)
-        .children(move |scope| {
-            scope.child(move || {
-                text(&crate::text::TextArgs::from(
-                    &TextArgs::default()
-                        .text(label)
-                        .size(
-                            use_context::<MaterialTheme>()
-                                .expect("MaterialTheme must be provided")
-                                .get()
-                                .typography
-                                .body_medium
-                                .font_size,
-                        )
-                        .color(scheme.on_surface_variant),
-                ));
-            });
-            scope.child(move || {
+        .children(move || {
+            {
+                text()
+                    .content(label)
+                    .size(
+                        use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
+                            .get()
+                            .typography
+                            .body_medium
+                            .font_size,
+                    )
+                    .color(scheme.on_surface_variant);
+            };
+            {
                 let value = value.clone();
-                row(&RowArgs::default()
+                row()
                     .main_axis_alignment(MainAxisAlignment::Center)
                     .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .children(move |row_scope| {
-                        row_scope.child(move || {
-                            nav_button(&NavButtonArgs {
-                                label: "-",
-                                enabled: true,
-                                on_click: on_decrement,
-                            });
-                        });
-                        row_scope.child(|| {
-                            spacer(&crate::spacer::SpacerArgs::new(
-                                Modifier::new().width(Dp(8.0)),
-                            ))
-                        });
-                        row_scope.child(move || {
-                            text(&crate::text::TextArgs::from(
-                                &TextArgs::default()
-                                    .text(value.clone())
-                                    .size(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .typography
-                                            .body_large
-                                            .font_size,
-                                    )
-                                    .color(scheme.on_surface),
-                            ));
-                        });
-                        row_scope.child(|| {
-                            spacer(&crate::spacer::SpacerArgs::new(
-                                Modifier::new().width(Dp(8.0)),
-                            ))
-                        });
-                        row_scope.child(move || {
-                            nav_button(&NavButtonArgs {
-                                label: "+",
-                                enabled: true,
-                                on_click: on_increment,
-                            });
-                        });
-                    }));
-            });
-        }));
+                    .children(move || {
+                        {
+                            nav_button("-", true, on_decrement);
+                        };
+                        {
+                            spacer().modifier(Modifier::new().width(Dp(8.0)));
+                        };
+                        {
+                            text()
+                                .content(value.clone())
+                                .size(
+                                    use_context::<MaterialTheme>()
+                                        .expect("MaterialTheme must be provided")
+                                        .get()
+                                        .typography
+                                        .body_large
+                                        .font_size,
+                                )
+                                .color(scheme.on_surface);
+                        };
+                        {
+                            spacer().modifier(Modifier::new().width(Dp(8.0)));
+                        };
+                        {
+                            nav_button("+", true, on_increment);
+                        };
+                    });
+            };
+        });
 }
 
-#[derive(Clone, Prop)]
-struct DisplayModeToggleArgs {
-    state: State<DatePickerState>,
-}
-
-#[tessera]
-fn display_mode_toggle(args: &DisplayModeToggleArgs) {
-    let state = args.state;
+fn display_mode_toggle(state: State<DatePickerState>) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1326,47 +1093,32 @@ fn display_mode_toggle(args: &DisplayModeToggleArgs) {
         DatePickerDisplayMode::Picker => "Input",
         DatePickerDisplayMode::Input => "Calendar",
     });
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().padding_all(Dp(4.0)))
-            .style(SurfaceStyle::Filled {
-                color: scheme.surface_container_high,
-            })
-            .shape(Shape::capsule())
-            .content_alignment(Alignment::Center)
-            .on_click(move || {
-                state.with_mut(|s| s.toggle_display_mode());
-            }),
-        move || {
-            text(&crate::text::TextArgs::from(
-                &TextArgs::default()
-                    .text(label)
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .label_small
-                            .font_size,
-                    )
-                    .color(scheme.primary),
-            ));
-        },
-    ));
+    surface()
+        .modifier(Modifier::new().padding_all(Dp(4.0)))
+        .style(SurfaceStyle::Filled {
+            color: scheme.surface_container_high,
+        })
+        .shape(Shape::capsule())
+        .content_alignment(Alignment::Center)
+        .on_click(move || {
+            state.with_mut(|s| s.toggle_display_mode());
+        })
+        .child(move || {
+            text()
+                .content(label)
+                .size(
+                    use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .typography
+                        .label_small
+                        .font_size,
+                )
+                .color(scheme.primary);
+        });
 }
 
-#[derive(Clone, Prop)]
-struct NavButtonArgs {
-    label: &'static str,
-    enabled: bool,
-    on_click: Callback,
-}
-
-#[tessera]
-fn nav_button(args: &NavButtonArgs) {
-    let label = args.label;
-    let enabled = args.enabled;
-    let on_click = args.on_click;
+fn nav_button(label: &'static str, enabled: bool, on_click: Callback) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -1378,36 +1130,32 @@ fn nav_button(args: &NavButtonArgs) {
             .on_surface_variant
             .with_alpha(MaterialAlpha::DISABLED_CONTENT)
     };
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .modifier(Modifier::new().size(NAV_BUTTON_SIZE, NAV_BUTTON_SIZE))
-            .style(SurfaceStyle::Filled {
-                color: scheme.surface_container_low,
-            })
-            .shape(Shape::capsule())
-            .content_alignment(Alignment::Center)
-            .enabled(enabled)
-            .on_click(move || {
-                if enabled {
-                    on_click.call();
-                }
-            }),
-        move || {
-            text(&crate::text::TextArgs::from(
-                &TextArgs::default()
-                    .text(label)
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .body_medium
-                            .font_size,
-                    )
-                    .color(text_color),
-            ));
-        },
-    ));
+    surface()
+        .modifier(Modifier::new().size(NAV_BUTTON_SIZE, NAV_BUTTON_SIZE))
+        .style(SurfaceStyle::Filled {
+            color: scheme.surface_container_low,
+        })
+        .shape(Shape::capsule())
+        .content_alignment(Alignment::Center)
+        .enabled(enabled)
+        .on_click(move || {
+            if enabled {
+                on_click.call();
+            }
+        })
+        .child(move || {
+            text()
+                .content(label)
+                .size(
+                    use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .typography
+                        .body_medium
+                        .font_size,
+                )
+                .color(text_color);
+        });
 }
 
 fn adjust_input_date(

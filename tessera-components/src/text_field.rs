@@ -6,29 +6,26 @@
 use glyphon::Action as GlyphonAction;
 use tessera_ui::{
     Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput,
-    LayoutOutput, LayoutSpec, MeasurementError, Modifier, PressKeyEventType, Prop, Px, PxPosition,
-    RenderSlot, State, provide_context, remember, tessera, use_context, winit,
+    LayoutOutput, LayoutPolicy, MeasurementError, Modifier, PressKeyEventType, Px, PxPosition,
+    RenderSlot, State, layout::layout_primitive, modifier::CursorModifierExt as _, provide_context,
+    remember, tessera, use_context, winit,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
-    boxed::{BoxedArgs, boxed},
-    divider::{DividerArgs, horizontal_divider},
+    boxed::boxed,
+    divider::horizontal_divider,
     gesture_recognizer::{TapRecognizer, TapSettings},
-    menus::{
-        MenuAnchor, MenuController, MenuItemArgs, MenuPlacement, MenuProviderArgs, MenuScope,
-        menu_provider,
-    },
-    modifier::{ModifierExt as _, Padding},
+    menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
+    modifier::{ModifierExt as _, Padding, with_pointer_input},
     pos_misc::is_position_inside_bounds,
-    row::{RowArgs, row},
+    row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    surface::surface,
-    text::{TextArgs, text},
+    text::text,
     text_edit_core::DisplayTransform,
     text_input::{
-        DisplayTransformText, TextInputArgs, TextInputController, create_surface_args,
+        DisplayTransformText, TextInputController, TextInputProps, create_surface_args,
         text_input_core,
     },
     theme::{ContentColor, MaterialColorScheme, MaterialTheme, TextSelectionColors},
@@ -69,9 +66,10 @@ impl TextFieldDefaults {
 }
 
 /// Line limit behavior for a text field.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub enum TextFieldLineLimit {
     /// Restrict input to a single line.
+    #[default]
     SingleLine,
     /// Allow multiple lines of input.
     MultiLine,
@@ -129,8 +127,8 @@ impl Default for TextFieldContextMenu {
 }
 
 /// Arguments for configuring a Material text field.
-#[derive(Clone, Prop)]
-pub struct TextFieldArgs {
+#[derive(Clone)]
+struct TextFieldProps {
     /// Whether the text field is enabled for user input.
     pub enabled: bool,
     /// Whether the text field is read-only.
@@ -139,10 +137,8 @@ pub struct TextFieldArgs {
     pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
     /// content and returns the updated content.
-    #[prop(skip_setter)]
     pub on_change: CallbackWith<String, String>,
     /// Called when the user submits a single-line field with the Enter key.
-    #[prop(skip_setter)]
     pub on_submit: Callback,
     /// Minimum width in density-independent pixels.
     pub min_width: Option<Dp>,
@@ -171,13 +167,10 @@ pub struct TextFieldArgs {
     /// Color of the text cursor.
     pub cursor_color: Option<Color>,
     /// Optional label announced by assistive technologies.
-    #[prop(into)]
     pub accessibility_label: Option<String>,
     /// Optional description announced by assistive technologies.
-    #[prop(into)]
     pub accessibility_description: Option<String>,
     /// Initial text content.
-    #[prop(into)]
     pub initial_text: Option<String>,
     /// Font size in Dp.
     pub font_size: Dp,
@@ -185,182 +178,65 @@ pub struct TextFieldArgs {
     pub line_height: Option<Dp>,
     /// Optional label text shown inside the field and floated when focused or
     /// non-empty.
-    #[prop(into)]
     pub label: Option<String>,
     /// Optional placeholder text shown when input is empty (and the label is
     /// floating, if any).
-    #[prop(into)]
     pub placeholder: Option<String>,
     /// Optional leading icon shown before the input text.
-    #[prop(skip_setter)]
     pub leading_icon: Option<RenderSlot>,
     /// Optional trailing icon shown after the input text.
-    #[prop(skip_setter)]
     pub trailing_icon: Option<RenderSlot>,
     /// Optional prefix content shown before the input text.
-    #[prop(skip_setter)]
     pub prefix: Option<RenderSlot>,
     /// Optional suffix content shown after the input text.
-    #[prop(skip_setter)]
     pub suffix: Option<RenderSlot>,
     /// Whether to show the filled-style indicator line.
     pub show_indicator: bool,
     /// Input line limit policy.
-    #[prop(skip_setter)]
     pub line_limit: TextFieldLineLimit,
     /// Context menu configuration.
-    #[prop(skip_setter)]
     pub context_menu: TextFieldContextMenu,
     /// Optional transform applied to text changes before on_change.
-    #[prop(skip_setter)]
     pub input_transform: Option<CallbackWith<String, String>>,
     /// Optional obfuscation character for secure fields.
-    #[prop(skip_setter)]
     pub obfuscation_char: Option<char>,
     /// Optional transform applied only for display.
-    #[prop(skip_setter)]
     pub display_transform: Option<DisplayTransform>,
     /// Optional external controller for text, cursor, and selection state.
     ///
     /// When this is `None`, `text_field` creates and owns an internal
     /// controller.
-    #[prop(skip_setter)]
     pub controller: Option<State<TextInputController>>,
 }
 
-impl TextFieldArgs {
-    /// Set the text change handler.
-    pub fn on_change<F>(mut self, on_change: F) -> Self
-    where
-        F: Fn(String) -> String + Send + Sync + 'static,
-    {
-        self.on_change = CallbackWith::new(on_change);
-        self
-    }
-
-    /// Set the text change handler using a shared callback.
-    pub fn on_change_shared(mut self, on_change: CallbackWith<String, String>) -> Self {
-        self.on_change = on_change;
-        self
-    }
-
-    /// Set the single-line submit handler.
-    pub fn on_submit<F>(mut self, on_submit: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_submit = Callback::new(on_submit);
-        self
-    }
-
-    /// Set the single-line submit handler using a shared callback.
-    pub fn on_submit_shared(mut self, on_submit: Callback) -> Self {
-        self.on_submit = on_submit;
-        self
-    }
-
-    /// Set an input transform applied before the change handler.
-    pub fn input_transform<F>(mut self, transform: F) -> Self
-    where
-        F: Fn(String) -> String + Send + Sync + 'static,
-    {
-        self.input_transform = Some(CallbackWith::new(transform));
-        self
-    }
-
-    /// Set an input transform using a shared callback.
-    pub fn input_transform_shared(mut self, transform: CallbackWith<String, String>) -> Self {
-        self.input_transform = Some(transform);
-        self
-    }
-
+impl TextFieldBuilder {
     /// Set the input line limit policy.
     pub fn line_limit(mut self, line_limit: TextFieldLineLimit) -> Self {
-        self.line_limit = line_limit;
+        self.props.line_limit = line_limit;
         self
     }
 
     /// Set the context menu policy.
     pub fn context_menu(mut self, context_menu: TextFieldContextMenu) -> Self {
-        self.context_menu = context_menu;
+        self.props.context_menu = context_menu;
         self
     }
 
     /// Sets an external text input controller.
     pub fn controller(mut self, controller: State<TextInputController>) -> Self {
-        self.controller = Some(controller);
+        self.props.controller = Some(controller);
         self
     }
 
     /// Set the obfuscation character for secure fields.
     pub fn obfuscation_char(mut self, obfuscation_char: char) -> Self {
-        self.obfuscation_char = Some(obfuscation_char);
-        self
-    }
-
-    /// Set the leading icon slot.
-    pub fn leading_icon<F>(mut self, leading_icon: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.leading_icon = Some(RenderSlot::new(leading_icon));
-        self
-    }
-
-    /// Set the leading icon slot using a shared callback.
-    pub fn leading_icon_shared(mut self, leading_icon: RenderSlot) -> Self {
-        self.leading_icon = Some(leading_icon);
-        self
-    }
-
-    /// Set the trailing icon slot.
-    pub fn trailing_icon<F>(mut self, trailing_icon: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.trailing_icon = Some(RenderSlot::new(trailing_icon));
-        self
-    }
-
-    /// Set the trailing icon slot using a shared callback.
-    pub fn trailing_icon_shared(mut self, trailing_icon: RenderSlot) -> Self {
-        self.trailing_icon = Some(trailing_icon);
-        self
-    }
-
-    /// Set the prefix content slot.
-    pub fn prefix<F>(mut self, prefix: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.prefix = Some(RenderSlot::new(prefix));
-        self
-    }
-
-    /// Set the prefix content slot using a shared callback.
-    pub fn prefix_shared(mut self, prefix: RenderSlot) -> Self {
-        self.prefix = Some(prefix);
-        self
-    }
-
-    /// Set the suffix content slot.
-    pub fn suffix<F>(mut self, suffix: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.suffix = Some(RenderSlot::new(suffix));
-        self
-    }
-
-    /// Set the suffix content slot using a shared callback.
-    pub fn suffix_shared(mut self, suffix: RenderSlot) -> Self {
-        self.suffix = Some(suffix);
+        self.props.obfuscation_char = Some(obfuscation_char);
         self
     }
 
     /// Creates filled text field defaults.
     pub fn filled() -> Self {
-        Self::default()
+        text_field()
     }
 
     /// Creates outlined text field defaults.
@@ -370,26 +246,39 @@ impl TextFieldArgs {
             .get();
         let scheme = theme.color_scheme;
         let selection_colors = TextSelectionColors::from_scheme(&scheme);
-        Self {
-            background_color: Some(Color::TRANSPARENT),
-            border_width: TextFieldDefaults::OUTLINED_BORDER_WIDTH,
-            border_color: Some(scheme.outline),
-            shape: theme.shapes.extra_small,
-            focus_border_color: Some(scheme.primary),
-            focus_border_width: Some(TextFieldDefaults::OUTLINED_FOCUS_BORDER_WIDTH),
-            focus_background_color: Some(Color::TRANSPARENT),
-            selection_color: Some(selection_colors.background),
-            text_color: Some(scheme.on_surface),
-            cursor_color: Some(scheme.primary),
-            font_size: theme.typography.body_large.font_size,
-            line_height: theme.typography.body_large.line_height,
-            ..Self::default()
+        if let Some(line_height) = theme.typography.body_large.line_height {
+            text_field()
+                .background_color(Color::TRANSPARENT)
+                .border_width(TextFieldDefaults::OUTLINED_BORDER_WIDTH)
+                .border_color(scheme.outline)
+                .shape(theme.shapes.extra_small)
+                .focus_border_color(scheme.primary)
+                .focus_border_width(TextFieldDefaults::OUTLINED_FOCUS_BORDER_WIDTH)
+                .focus_background_color(Color::TRANSPARENT)
+                .selection_color(selection_colors.background)
+                .text_color(scheme.on_surface)
+                .cursor_color(scheme.primary)
+                .font_size(theme.typography.body_large.font_size)
+                .line_height(line_height)
+        } else {
+            text_field()
+                .background_color(Color::TRANSPARENT)
+                .border_width(TextFieldDefaults::OUTLINED_BORDER_WIDTH)
+                .border_color(scheme.outline)
+                .shape(theme.shapes.extra_small)
+                .focus_border_color(scheme.primary)
+                .focus_border_width(TextFieldDefaults::OUTLINED_FOCUS_BORDER_WIDTH)
+                .focus_background_color(Color::TRANSPARENT)
+                .selection_color(selection_colors.background)
+                .text_color(scheme.on_surface)
+                .cursor_color(scheme.primary)
+                .font_size(theme.typography.body_large.font_size)
         }
     }
 
     /// Creates secure text field defaults.
     pub fn secure() -> Self {
-        Self::default()
+        text_field()
             .obfuscation_char(TextFieldDefaults::OBFUSCATION_CHAR)
             .line_limit(TextFieldLineLimit::SingleLine)
             .context_menu(TextFieldContextMenu::secure_default())
@@ -404,7 +293,7 @@ impl TextFieldArgs {
     }
 }
 
-impl Default for TextFieldArgs {
+impl Default for TextFieldProps {
     fn default() -> Self {
         let theme = use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
@@ -509,11 +398,11 @@ fn merge_input_transforms(
 }
 
 fn build_editor_args(
-    args: &TextFieldArgs,
+    args: &TextFieldProps,
     input_transform: Option<CallbackWith<String, String>>,
     display_transform: Option<DisplayTransform>,
-) -> TextInputArgs {
-    TextInputArgs {
+) -> TextInputProps {
+    TextInputProps {
         enabled: args.enabled,
         read_only: args.read_only,
         modifier: args.modifier.clone(),
@@ -590,7 +479,7 @@ fn resolve_indicator_style(scheme: &MaterialColorScheme, focused: bool) -> (Colo
 }
 
 fn resolve_container_color(
-    args: &TextFieldArgs,
+    args: &TextFieldProps,
     scheme: &MaterialColorScheme,
     focused: bool,
 ) -> Color {
@@ -603,7 +492,7 @@ fn resolve_container_color(
     }
 }
 
-fn resolve_border_width(args: &TextFieldArgs, focused: bool) -> Dp {
+fn resolve_border_width(args: &TextFieldProps, focused: bool) -> Dp {
     if focused {
         args.focus_border_width.unwrap_or(args.border_width)
     } else {
@@ -629,7 +518,7 @@ fn resolve_text_field_menu_policy(
     menu
 }
 
-fn field_text_content_origin(args: &TextFieldArgs, focused: bool) -> PxPosition {
+fn field_text_content_origin(args: &TextFieldProps, focused: bool) -> PxPosition {
     let padding_px: Px = args.padding.into();
     let border_width_px = Px(resolve_border_width(args, focused).to_pixels_u32() as i32);
     PxPosition::new(padding_px + border_width_px, padding_px + border_width_px)
@@ -638,7 +527,7 @@ fn field_text_content_origin(args: &TextFieldArgs, focused: bool) -> PxPosition 
 fn field_click_pointer_position(
     cursor_pos: PxPosition,
     size: ComputedData,
-    args: &TextFieldArgs,
+    args: &TextFieldProps,
     controller: &State<TextInputController>,
 ) -> PxPosition {
     let text_origin =
@@ -662,7 +551,7 @@ fn field_click_pointer_position(
         text_relative_y + vertical_scroll,
     )
 }
-#[derive(Clone, Prop)]
+#[derive(Clone)]
 struct OutlinedFloatingLabelArgs {
     label_text: String,
     label_color: Color,
@@ -682,7 +571,7 @@ struct OutlinedFloatingLabelLayout {
     notch_vertical_padding: Px,
 }
 
-impl LayoutSpec for OutlinedFloatingLabelLayout {
+impl LayoutPolicy for OutlinedFloatingLabelLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -724,31 +613,37 @@ impl LayoutSpec for OutlinedFloatingLabelLayout {
 }
 
 #[tessera]
-fn outlined_floating_label(args: &OutlinedFloatingLabelArgs) {
-    let args = args.clone();
-
-    layout(OutlinedFloatingLabelLayout {
-        label_offset: PxPosition::new(args.label_offset_x.into(), args.label_offset_y.into()),
-        notch_padding: args.notch_padding.into(),
-        notch_vertical_padding: args.notch_vertical_padding.into(),
-    });
-
-    spacer(&crate::spacer::SpacerArgs::new(
-        Modifier::new().background(args.notch_fill_color),
-    ));
-
-    let mut label_args = TextArgs::default()
-        .text(&args.label_text)
-        .color(args.label_color)
-        .size(args.label_font_size);
-    label_args = label_args.line_height(args.label_line_height);
-    text(&crate::text::TextArgs::from(&label_args));
+fn outlined_floating_label(
+    label_text: String,
+    label_color: Color,
+    label_font_size: Dp,
+    label_line_height: Dp,
+    label_offset_x: Dp,
+    label_offset_y: Dp,
+    notch_fill_color: Color,
+    notch_padding: Dp,
+    notch_vertical_padding: Dp,
+) {
+    layout_primitive()
+        .layout_policy(OutlinedFloatingLabelLayout {
+            label_offset: PxPosition::new(label_offset_x.into(), label_offset_y.into()),
+            notch_padding: notch_padding.into(),
+            notch_vertical_padding: notch_vertical_padding.into(),
+        })
+        .child(move || {
+            spacer().modifier(Modifier::new().background(notch_fill_color));
+            text()
+                .content(label_text.clone())
+                .color(label_color)
+                .size(label_font_size)
+                .line_height(label_line_height);
+        });
 }
 
 fn render_text_field(
-    args: TextFieldArgs,
+    args: TextFieldProps,
     controller: State<TextInputController>,
-    editor: TextInputArgs,
+    editor: TextInputProps,
 ) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -813,231 +708,220 @@ fn render_text_field(
         let surface_args = create_surface_args(&editor, &controller)
             .content_color(content_color)
             .block_input(!args.enabled);
-        surface(&crate::surface::SurfaceArgs::with_child(
-            surface_args,
-            move || {
-                let leading_icon = leading_icon.clone();
-                let prefix = prefix.clone();
-                let core_args = core_args.clone();
-                let placeholder_text = placeholder_text.clone();
-                let label_text = label_text.clone();
-                let suffix = suffix.clone();
-                let trailing_icon = trailing_icon.clone();
-                boxed(&BoxedArgs::default().children(move |scope| {
-                    scope.child(move || {
-                        let leading_icon = leading_icon.clone();
-                        let prefix = prefix.clone();
-                        let core_args = core_args.clone();
-                        let placeholder_text = placeholder_text.clone();
-                        let label_text = label_text.clone();
-                        let suffix = suffix.clone();
-                        let trailing_icon = trailing_icon.clone();
-                        let row_modifier = RowArgs::default()
-                            .modifier
-                            .padding(Padding::all(content_padding));
-                        row(&RowArgs::default()
-                            .modifier(row_modifier)
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children(move |row_scope| {
-                                if let Some(leading_icon) = leading_icon.as_ref() {
-                                    let leading_icon = leading_icon.clone();
-                                    row_scope.child(move || {
-                                        provide_context(
-                                            || ContentColor {
-                                                current: content_color,
-                                            },
-                                            || {
-                                                leading_icon.render();
-                                            },
-                                        );
-                                    });
-                                    let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
-                                    row_scope.child(move || {
-                                        spacer(&crate::spacer::SpacerArgs::new(
-                                            Modifier::new().width(spacing),
-                                        ));
-                                    });
-                                }
+        surface_args.with_child(move || {
+            let leading_icon = leading_icon.clone();
+            let prefix = prefix.clone();
+            let core_args = core_args.clone();
+            let placeholder_text = placeholder_text.clone();
+            let label_text = label_text.clone();
+            let suffix = suffix.clone();
+            let trailing_icon = trailing_icon.clone();
+            boxed().children(move || {
+                {
+                    let leading_icon = leading_icon.clone();
+                    let prefix = prefix.clone();
+                    let core_args = core_args.clone();
+                    let placeholder_text = placeholder_text.clone();
+                    let label_text = label_text.clone();
+                    let suffix = suffix.clone();
+                    let trailing_icon = trailing_icon.clone();
+                    let row_modifier = Modifier::new()
+                        .fill_max_height()
+                        .padding(Padding::all(content_padding));
+                    row()
+                        .modifier(row_modifier)
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move || {
+                            if let Some(leading_icon) = leading_icon.as_ref() {
+                                let leading_icon = leading_icon.clone();
+                                {
+                                    provide_context(
+                                        || ContentColor {
+                                            current: content_color,
+                                        },
+                                        || {
+                                            leading_icon.render();
+                                        },
+                                    );
+                                };
+                                let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
+                                {
+                                    spacer().modifier(Modifier::new().width(spacing));
+                                };
+                            }
 
-                                if let Some(prefix) = prefix.as_ref() {
-                                    let prefix = prefix.clone();
-                                    row_scope.child(move || {
-                                        provide_context(
-                                            || ContentColor {
-                                                current: content_color,
-                                            },
-                                            || {
-                                                prefix.render();
-                                            },
-                                        );
-                                    });
-                                    let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
-                                    row_scope.child(move || {
-                                        spacer(&crate::spacer::SpacerArgs::new(
-                                            Modifier::new().width(spacing),
-                                        ));
-                                    });
-                                }
+                            if let Some(prefix) = prefix.as_ref() {
+                                let prefix = prefix.clone();
+                                {
+                                    provide_context(
+                                        || ContentColor {
+                                            current: content_color,
+                                        },
+                                        || {
+                                            prefix.render();
+                                        },
+                                    );
+                                };
+                                let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
+                                {
+                                    spacer().modifier(Modifier::new().width(spacing));
+                                };
+                            }
 
-                                row_scope.child_weighted(
-                                    move || {
-                                        let core_args = core_args.clone();
+                            let core_args_for_box = core_args.clone();
+                            let placeholder_text_for_box = placeholder_text.clone();
+                            let label_text_for_box = label_text.clone();
+                            boxed()
+                                .modifier(Modifier::new().weight(1.0))
+                                .children(move || {
+                                    let core_args = core_args_for_box.clone();
+                                    let placeholder_text = placeholder_text_for_box.clone();
+                                    let label_text = label_text_for_box.clone();
+                                    text_input_core(&core_args.clone(), controller);
+
+                                    if show_placeholder
+                                        && let Some(placeholder_text) = placeholder_text.as_ref()
+                                    {
                                         let placeholder_text = placeholder_text.clone();
-                                        let label_text = label_text.clone();
-                                        boxed(&BoxedArgs::default().children(move |box_scope| {
-                                            box_scope.child(move || {
-                                                text_input_core(&core_args.clone(), controller);
-                                            });
-
-                                            if show_placeholder
-                                                && let Some(placeholder_text) =
-                                                    placeholder_text.as_ref()
-                                            {
-                                                let placeholder_text = placeholder_text.clone();
-                                                box_scope.child_with_alignment(
-                                                    Alignment::TopStart,
-                                                    move || {
-                                                        let (font_size, line_height) =
-                                                            placeholder_style;
-                                                        let mut args = TextArgs::default()
-                                                            .text(placeholder_text.clone())
-                                                            .color(placeholder_color)
-                                                            .size(font_size);
-                                                        if let Some(line_height) = line_height {
-                                                            args = args.line_height(line_height);
-                                                        }
-                                                        text(&crate::text::TextArgs::from(&args));
-                                                    },
-                                                );
-                                            }
-
-                                            if let Some(label_text) = label_text.as_ref() {
-                                                let label_text = label_text.clone();
-                                                if label_should_float {
-                                                    if is_outlined {
-                                                        let floating_args =
-                                                            OutlinedFloatingLabelArgs {
-                                                                label_text: label_text.clone(),
-                                                                label_color,
-                                                                label_font_size:
-                                                                    label_floating_font_size,
-                                                                label_line_height:
-                                                                    label_floating_line_height,
-                                                                label_offset_x:
-                                                                    floating_label_offset_x,
-                                                                label_offset_y:
-                                                                    floating_label_offset_y,
-                                                                notch_fill_color,
-                                                                notch_padding,
-                                                                notch_vertical_padding,
-                                                            };
-                                                        box_scope.child_with_alignment(
-                                                            Alignment::TopStart,
-                                                            move || {
-                                                                let args = floating_args.clone();
-                                                                outlined_floating_label(&args);
-                                                            },
-                                                        );
-                                                    } else {
-                                                        box_scope.child_with_alignment(
-                                                            Alignment::TopStart,
-                                                            move || {
-                                                                let mut args = TextArgs::default()
-                                                                    .text(label_text.clone())
-                                                                    .color(label_color)
-                                                                    .size(label_floating_font_size)
-                                                                    .modifier(
-                                                                        Modifier::new().offset(
-                                                                            floating_label_offset_x,
-                                                                            floating_label_offset_y,
-                                                                        ),
-                                                                    );
-                                                                args = args.line_height(
-                                                                    label_floating_line_height,
-                                                                );
-                                                                text(&crate::text::TextArgs::from(
-                                                                    &args,
-                                                                ));
-                                                            },
-                                                        );
-                                                    }
+                                        layout_primitive()
+                                            .modifier(Modifier::new().align(Alignment::TopStart))
+                                            .child(move || {
+                                                let (font_size, line_height) = placeholder_style;
+                                                if let Some(line_height) = line_height {
+                                                    text()
+                                                        .content(placeholder_text.clone())
+                                                        .color(placeholder_color)
+                                                        .size(font_size)
+                                                        .line_height(line_height);
                                                 } else {
-                                                    box_scope.child_with_alignment(
-                                                        Alignment::TopStart,
-                                                        move || {
-                                                            let mut args = TextArgs::default()
-                                                                .text(label_text.clone())
-                                                                .color(label_color)
-                                                                .size(label_resting_font_size);
-                                                            args = args.line_height(
-                                                                label_resting_line_height,
-                                                            );
-                                                            text(&crate::text::TextArgs::from(
-                                                                &args,
-                                                            ));
-                                                        },
-                                                    );
+                                                    text()
+                                                        .content(placeholder_text.clone())
+                                                        .color(placeholder_color)
+                                                        .size(font_size);
                                                 }
+                                            });
+                                    }
+
+                                    if let Some(label_text) = label_text.as_ref() {
+                                        let label_text = label_text.clone();
+                                        if label_should_float {
+                                            if is_outlined {
+                                                let floating_args = OutlinedFloatingLabelArgs {
+                                                    label_text: label_text.clone(),
+                                                    label_color,
+                                                    label_font_size: label_floating_font_size,
+                                                    label_line_height: label_floating_line_height,
+                                                    label_offset_x: floating_label_offset_x,
+                                                    label_offset_y: floating_label_offset_y,
+                                                    notch_fill_color,
+                                                    notch_padding,
+                                                    notch_vertical_padding,
+                                                };
+                                                layout_primitive()
+                                                    .modifier(
+                                                        Modifier::new().align(Alignment::TopStart),
+                                                    )
+                                                    .child(move || {
+                                                        let args = floating_args.clone();
+                                                        outlined_floating_label()
+                                                            .label_text(args.label_text)
+                                                            .label_color(args.label_color)
+                                                            .label_font_size(args.label_font_size)
+                                                            .label_line_height(
+                                                                args.label_line_height,
+                                                            )
+                                                            .label_offset_x(args.label_offset_x)
+                                                            .label_offset_y(args.label_offset_y)
+                                                            .notch_fill_color(args.notch_fill_color)
+                                                            .notch_padding(args.notch_padding)
+                                                            .notch_vertical_padding(
+                                                                args.notch_vertical_padding,
+                                                            );
+                                                    });
+                                            } else {
+                                                layout_primitive()
+                                                    .modifier(
+                                                        Modifier::new().align(Alignment::TopStart),
+                                                    )
+                                                    .child(move || {
+                                                        text()
+                                                            .content(label_text.clone())
+                                                            .color(label_color)
+                                                            .size(label_floating_font_size)
+                                                            .modifier(Modifier::new().offset(
+                                                                floating_label_offset_x,
+                                                                floating_label_offset_y,
+                                                            ))
+                                                            .line_height(
+                                                                label_floating_line_height,
+                                                            );
+                                                    });
                                             }
-                                        }));
-                                    },
-                                    1.0,
-                                );
+                                        } else {
+                                            layout_primitive()
+                                                .modifier(
+                                                    Modifier::new().align(Alignment::TopStart),
+                                                )
+                                                .child(move || {
+                                                    text()
+                                                        .content(label_text.clone())
+                                                        .color(label_color)
+                                                        .size(label_resting_font_size)
+                                                        .line_height(label_resting_line_height);
+                                                });
+                                        }
+                                    }
+                                });
 
-                                if let Some(suffix) = suffix.as_ref() {
-                                    let suffix = suffix.clone();
-                                    let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
-                                    row_scope.child(move || {
-                                        spacer(&crate::spacer::SpacerArgs::new(
-                                            Modifier::new().width(spacing),
-                                        ));
-                                    });
-                                    row_scope.child(move || {
-                                        provide_context(
-                                            || ContentColor {
-                                                current: content_color,
-                                            },
-                                            || {
-                                                suffix.render();
-                                            },
-                                        );
-                                    });
-                                }
+                            if let Some(suffix) = suffix.as_ref() {
+                                let suffix = suffix.clone();
+                                let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
+                                {
+                                    spacer().modifier(Modifier::new().width(spacing));
+                                };
+                                {
+                                    provide_context(
+                                        || ContentColor {
+                                            current: content_color,
+                                        },
+                                        || {
+                                            suffix.render();
+                                        },
+                                    );
+                                };
+                            }
 
-                                if let Some(trailing_icon) = trailing_icon.as_ref() {
-                                    let trailing_icon = trailing_icon.clone();
-                                    let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
-                                    row_scope.child(move || {
-                                        spacer(&crate::spacer::SpacerArgs::new(
-                                            Modifier::new().width(spacing),
-                                        ));
-                                    });
-                                    row_scope.child(move || {
-                                        provide_context(
-                                            || ContentColor {
-                                                current: content_color,
-                                            },
-                                            || {
-                                                trailing_icon.render();
-                                            },
-                                        );
-                                    });
-                                }
-                            }));
-                    });
-
-                    if show_indicator {
-                        scope.child_with_alignment(Alignment::BottomStart, move || {
-                            horizontal_divider(
-                                &DividerArgs::default()
-                                    .thickness(indicator_thickness)
-                                    .color(indicator_color),
-                            );
+                            if let Some(trailing_icon) = trailing_icon.as_ref() {
+                                let trailing_icon = trailing_icon.clone();
+                                let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
+                                {
+                                    spacer().modifier(Modifier::new().width(spacing));
+                                };
+                                {
+                                    provide_context(
+                                        || ContentColor {
+                                            current: content_color,
+                                        },
+                                        || {
+                                            trailing_icon.render();
+                                        },
+                                    );
+                                };
+                            }
                         });
-                    }
-                }));
-            },
-        ));
+                };
+
+                if show_indicator {
+                    layout_primitive()
+                        .modifier(Modifier::new().align(Alignment::BottomStart))
+                        .child(move || {
+                            horizontal_divider()
+                                .thickness(indicator_thickness)
+                                .color(indicator_color);
+                        });
+                }
+            });
+        });
     };
 
     render_editor();
@@ -1082,25 +966,19 @@ fn apply_menu_action(
     }
 }
 
-fn menu_item(
-    scope: &mut MenuScope<'_, '_>,
+fn add_menu_item(
     label: &str,
     enabled: bool,
     action_state: State<Option<TextFieldMenuAction>>,
     action: TextFieldMenuAction,
 ) {
-    scope.menu_item(
-        &MenuItemArgs::default()
-            .label(label)
-            .enabled(enabled)
-            .on_click(move || {
-                action_state.set(Some(action));
-            }),
-    );
+    let label = label.to_string();
+    menu_item().label(label).enabled(enabled).on_click(move || {
+        action_state.set(Some(action));
+    });
 }
 
 fn configure_text_field_menu(
-    scope: &mut MenuScope<'_, '_>,
     controller: State<TextInputController>,
     menu: TextFieldContextMenu,
     action_state: State<Option<TextFieldMenuAction>>,
@@ -1112,8 +990,7 @@ fn configure_text_field_menu(
     let selection_available = controller.with(|c| c.has_selection());
 
     if menu.allow_cut {
-        menu_item(
-            scope,
+        add_menu_item(
             "Cut",
             selection_available,
             action_state,
@@ -1121,8 +998,7 @@ fn configure_text_field_menu(
         );
     }
     if menu.allow_copy {
-        menu_item(
-            scope,
+        add_menu_item(
             "Copy",
             selection_available,
             action_state,
@@ -1130,17 +1006,10 @@ fn configure_text_field_menu(
         );
     }
     if menu.allow_paste {
-        menu_item(
-            scope,
-            "Paste",
-            true,
-            action_state,
-            TextFieldMenuAction::Paste,
-        );
+        add_menu_item("Paste", true, action_state, TextFieldMenuAction::Paste);
     }
     if menu.allow_select_all {
-        menu_item(
-            scope,
+        add_menu_item(
             "Select All",
             true,
             action_state,
@@ -1160,8 +1029,42 @@ fn configure_text_field_menu(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the field styling, transforms, and behavior; see
-///   [`TextFieldArgs`].
+/// - `enabled` — whether the field accepts user input.
+/// - `read_only` — whether the field is read-only.
+/// - `modifier` — optional modifier chain applied to the field container.
+/// - `on_change` — optional text change callback.
+/// - `on_submit` — optional submit callback for single-line fields.
+/// - `min_width` — optional minimum width.
+/// - `min_height` — optional minimum height.
+/// - `background_color` — optional container background color.
+/// - `border_width` — base border width.
+/// - `border_color` — optional border color.
+/// - `shape` — field container shape.
+/// - `padding` — content padding.
+/// - `focus_border_color` — optional focused border color.
+/// - `focus_border_width` — optional focused border width.
+/// - `focus_background_color` — optional focused background color.
+/// - `selection_color` — optional text selection highlight color.
+/// - `text_color` — optional text color.
+/// - `cursor_color` — optional cursor color.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `initial_text` — optional initial text content.
+/// - `font_size` — font size in Dp.
+/// - `line_height` — optional line height in Dp.
+/// - `label` — optional label text.
+/// - `placeholder` — optional placeholder text.
+/// - `leading_icon` — optional leading icon slot.
+/// - `trailing_icon` — optional trailing icon slot.
+/// - `prefix` — optional prefix slot.
+/// - `suffix` — optional suffix slot.
+/// - `show_indicator` — whether filled-style indicator is rendered.
+/// - `line_limit` — text line limit policy.
+/// - `context_menu` — context menu policy.
+/// - `input_transform` — optional input transform callback.
+/// - `obfuscation_char` — optional obfuscation character.
+/// - `display_transform` — optional display transform.
+/// - `controller` — optional external text input controller.
 ///
 /// ## Examples
 ///
@@ -1169,25 +1072,98 @@ fn configure_text_field_menu(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::text_field::{TextFieldArgs, text_field};
+/// use tessera_components::text_field::text_field;
+/// use tessera_ui::CallbackWith;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-/// let args = TextFieldArgs::default().input_transform(|value| value.to_uppercase());
-/// assert_eq!(
-///     args.input_transform
-///         .as_ref()
-///         .unwrap()
-///         .call("hello".to_string()),
-///     "HELLO"
-/// );
-/// text_field(&args);
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// let transform = CallbackWith::new(|value: String| value.to_uppercase());
+/// assert_eq!(transform.call("hello".to_string()), "HELLO");
+/// text_field().input_transform_shared(transform);
 /// # });
-/// # material_theme(&args);
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn text_field(args: &TextFieldArgs) {
+pub fn text_field(
+    #[default(true)] enabled: bool,
+    read_only: bool,
+    modifier: Modifier,
+    on_change: Option<CallbackWith<String, String>>,
+    on_submit: Option<Callback>,
+    #[default(TextFieldProps::default().min_width)] min_width: Option<Dp>,
+    #[default(TextFieldProps::default().min_height)] min_height: Option<Dp>,
+    #[default(TextFieldProps::default().background_color)] background_color: Option<Color>,
+    border_width: Dp,
+    border_color: Option<Color>,
+    #[default(TextFieldProps::default().shape)] shape: Shape,
+    #[default(TextFieldProps::default().padding)] padding: Dp,
+    #[default(TextFieldProps::default().focus_border_color)] focus_border_color: Option<Color>,
+    focus_border_width: Option<Dp>,
+    #[default(TextFieldProps::default().focus_background_color)] focus_background_color: Option<
+        Color,
+    >,
+    #[default(TextFieldProps::default().selection_color)] selection_color: Option<Color>,
+    #[default(TextFieldProps::default().text_color)] text_color: Option<Color>,
+    #[default(TextFieldProps::default().cursor_color)] cursor_color: Option<Color>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    #[prop(into)] initial_text: Option<String>,
+    #[default(TextFieldProps::default().font_size)] font_size: Dp,
+    #[default(TextFieldProps::default().line_height)] line_height: Option<Dp>,
+    #[prop(into)] label: Option<String>,
+    #[prop(into)] placeholder: Option<String>,
+    leading_icon: Option<RenderSlot>,
+    trailing_icon: Option<RenderSlot>,
+    prefix: Option<RenderSlot>,
+    suffix: Option<RenderSlot>,
+    #[default(true)] show_indicator: bool,
+    #[prop(skip_setter)] line_limit: TextFieldLineLimit,
+    #[prop(skip_setter)] context_menu: TextFieldContextMenu,
+    input_transform: Option<CallbackWith<String, String>>,
+    #[prop(skip_setter)] obfuscation_char: Option<char>,
+    #[prop(skip_setter)] display_transform: Option<DisplayTransform>,
+    #[prop(skip_setter)] controller: Option<State<TextInputController>>,
+) {
+    let args = TextFieldProps {
+        enabled,
+        read_only,
+        modifier,
+        on_change: on_change.unwrap_or_else(CallbackWith::identity),
+        on_submit: on_submit.unwrap_or_else(Callback::noop),
+        min_width,
+        min_height,
+        background_color,
+        border_width,
+        border_color,
+        shape,
+        padding,
+        focus_border_color,
+        focus_border_width,
+        focus_background_color,
+        selection_color,
+        text_color,
+        cursor_color,
+        accessibility_label,
+        accessibility_description,
+        initial_text,
+        font_size,
+        line_height,
+        label,
+        placeholder,
+        leading_icon,
+        trailing_icon,
+        prefix,
+        suffix,
+        show_indicator,
+        line_limit,
+        context_menu,
+        input_transform,
+        obfuscation_char,
+        display_transform,
+        controller,
+    };
     let controller = args.controller.unwrap_or_else(|| {
         remember(|| {
             let mut controller = TextInputController::new(args.font_size, args.line_height);
@@ -1205,33 +1181,17 @@ pub fn text_field(args: &TextFieldArgs) {
     let menu_controller = remember(MenuController::new);
     let action_state = remember(|| None::<TextFieldMenuAction>);
     let input_transform = merge_input_transforms(args.line_limit, args.input_transform);
-    let display_transform = args.obfuscation_char.map(|mask| {
-        CallbackWith::new(move |value: String| {
+    let display_transform = if let Some(mask) = args.obfuscation_char {
+        Some(CallbackWith::new(move |value: String| {
             DisplayTransformText::from_strings(&value, obfuscate_text(&value, mask))
-        }) as DisplayTransform
-    });
+        }) as DisplayTransform)
+    } else {
+        args.display_transform
+    };
     let editor_args = build_editor_args(&args, input_transform, display_transform);
     let menu_policy = resolve_text_field_menu_policy(args.context_menu, enabled, read_only);
     let on_change = args.on_change;
     let render_args = args.clone();
-
-    if menu_policy.enabled {
-        let render_args = render_args.clone();
-        let editor_args = editor_args.clone();
-        let menu_args = MenuProviderArgs::default()
-            .placement(MenuPlacement::BelowStart)
-            .offset([Dp(0.0), Dp(4.0)])
-            .controller(menu_controller)
-            .main_content(move || {
-                render_text_field(render_args.clone(), controller, editor_args.clone());
-            })
-            .menu_content(move |menu_scope| {
-                configure_text_field_menu(menu_scope, controller, menu_policy, action_state);
-            });
-        menu_provider(&menu_args);
-    } else {
-        render_text_field(render_args, controller, editor_args);
-    }
 
     let focus_tap_recognizer = remember(TapRecognizer::default);
     let context_menu_tap_recognizer = remember(|| {
@@ -1240,7 +1200,12 @@ pub fn text_field(args: &TextFieldArgs) {
             ..Default::default()
         })
     });
-    pointer_input_handler(move |mut input| {
+    let modifier_base = if enabled {
+        Modifier::new().hover_cursor_icon(winit::window::CursorIcon::Text)
+    } else {
+        Modifier::new()
+    };
+    let modifier = with_pointer_input(modifier_base, move |mut input| {
         let cursor_pos = input.cursor_position_rel;
         let is_inside = cursor_pos
             .map(|pos| is_position_inside_bounds(input.computed_data, pos))
@@ -1284,10 +1249,6 @@ pub fn text_field(args: &TextFieldArgs) {
         }
 
         if enabled {
-            if is_inside {
-                input.requests.cursor_icon = winit::window::CursorIcon::Text;
-            }
-
             if focus_tap_result.pressed
                 && let Some(cursor_pos) = cursor_pos
                 && is_inside
@@ -1320,6 +1281,25 @@ pub fn text_field(args: &TextFieldArgs) {
 
         if is_inside {
             input.block_cursor();
+        }
+    });
+
+    layout_primitive().modifier(modifier).child(move || {
+        if menu_policy.enabled {
+            let render_args = render_args.clone();
+            let editor_args = editor_args.clone();
+            menu_provider()
+                .placement(MenuPlacement::BelowStart)
+                .offset([Dp(0.0), Dp(4.0)])
+                .controller(menu_controller)
+                .main_content(move || {
+                    render_text_field(render_args.clone(), controller, editor_args.clone());
+                })
+                .menu_content(move || {
+                    configure_text_field_menu(controller, menu_policy, action_state);
+                });
+        } else {
+            render_text_field(render_args.clone(), controller, editor_args.clone());
         }
     });
 }

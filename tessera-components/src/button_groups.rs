@@ -7,34 +7,24 @@
 use std::collections::HashMap;
 
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError,
-    Modifier, Prop, Px, PxPosition, RenderSlot, current_frame_nanos, receive_frame_nanos, remember,
-    tessera, use_context,
+    CallbackWith, Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, current_frame_nanos,
+    layout::layout_primitive, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::MainAxisAlignment,
     animation,
-    button::{ButtonArgs, button},
+    button::button,
     modifier::ModifierExt,
-    row::{RowArgs, row},
+    row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     theme::MaterialTheme,
 };
 
-/// According to the [`ButtonGroups-Types`](https://m3.material.io/components/button-groups/specs#3b51d175-cc02-4701-b3f8-c9ffa229123a)
-/// spec, the [`button_groups`] component supports two styles: `Standard` and
-/// `Connected`.
-///
-/// ## Standard
-///
-/// Buttons have spacing between them and do not need to be the same width.
-///
-/// ## Connected
-///
-/// Buttons are adjacent with no spacing, and each button must be the same
-/// width.
+/// According to the Material 3 spec, the [`button_groups`] component supports
+/// two styles: `Standard` and `Connected`.
 #[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum ButtonGroupsStyle {
     /// Buttons have spacing between them and do not need to be the same width.
@@ -45,17 +35,8 @@ pub enum ButtonGroupsStyle {
     Connected,
 }
 
-/// According to the [`ButtonGroups-Configurations`](https://m3.material.io/components/button-groups/specs#0d2cf762-275c-4693-9484-fe011501439e)
-/// spec, the [`button_groups`] component supports two selection modes: `Single`
-/// and `Multiple`.
-///
-/// ## Single
-///
-/// Only one button can be selected at a time.
-///
-/// ## Multiple
-///
-/// Multiple buttons can be selected at the same time.
+/// According to the Material 3 spec, the [`button_groups`] component supports
+/// two selection modes: `Single` and `Multiple`.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum ButtonGroupsSelectionMode {
     /// Only one button can be selected at a time.
@@ -65,8 +46,8 @@ pub enum ButtonGroupsSelectionMode {
     Multiple,
 }
 
-/// According to the [`ButtonGroups-Configurations`](https://m3.material.io/components/button-groups/specs#0d2cf762-275c-4693-9484-fe011501439e)
-/// spec, the [`button_groups`] component supports a series of sizes.
+/// According to the Material 3 spec, the [`button_groups`] component supports
+/// a series of sizes.
 #[derive(Debug, Clone, PartialEq, Copy, Default)]
 pub enum ButtonGroupsSize {
     /// Extra small size.
@@ -82,60 +63,17 @@ pub enum ButtonGroupsSize {
     ExtraLarge,
 }
 
-/// A scope for declaratively adding children to a [`button_groups`] component.
-pub struct ButtonGroupsScope<'a> {
-    child_closures: &'a mut Vec<CallbackWith<Color>>,
-    on_click_closures: &'a mut Vec<CallbackWith<bool>>,
-}
-
-impl ButtonGroupsScope<'_> {
-    /// Add a child component to the button group, which will be wrapped by a
-    /// [`button`] component.
-    ///
-    /// # Arguments
-    ///
-    /// - `child_closure` - A closure that takes a [`Color`] and returns a
-    ///   [`button`] component. The `Color` argument should be used for the
-    ///   content of the child component.
-    /// - `on_click_closure` - A closure that will be called when the button is
-    ///   clicked. The closure takes a `bool` argument indicating whether the
-    ///   button is now active (selected) or not.
-    pub fn child<F, C>(&mut self, child: F, on_click: C)
-    where
-        F: Fn(Color) + Send + Sync + 'static,
-        C: Fn(bool) + Send + Sync + 'static,
-    {
-        self.child_closures.push(CallbackWith::new(child));
-        self.on_click_closures.push(CallbackWith::new(on_click));
-    }
-}
-
-/// Arguments for the [`button_groups`] component.
-#[derive(Clone, Default, Prop)]
-pub struct ButtonGroupsArgs {
-    /// Size of the button group.
-    pub size: ButtonGroupsSize,
-    /// Style of the button group.
-    pub style: ButtonGroupsStyle,
-    /// Selection mode of the button group.
-    pub selection_mode: ButtonGroupsSelectionMode,
-    /// Per-item content builders that receive resolved label color.
-    #[prop(skip_setter)]
-    pub child_closures: Vec<CallbackWith<Color>>,
-    /// Per-item click handlers receiving new active state.
-    #[prop(skip_setter)]
-    pub on_click_closures: Vec<CallbackWith<bool>>,
-}
-
-impl ButtonGroupsArgs {
+impl ButtonGroupsBuilder {
     /// Add a child item and click callback.
     pub fn child<F, C>(mut self, child: F, on_click: C) -> Self
     where
         F: Fn(Color) + Send + Sync + 'static,
         C: Fn(bool) + Send + Sync + 'static,
     {
-        self.child_closures.push(CallbackWith::new(child));
-        self.on_click_closures.push(CallbackWith::new(on_click));
+        self.props.child_closures.push(CallbackWith::new(child));
+        self.props
+            .on_click_closures
+            .push(CallbackWith::new(on_click));
         self
     }
 
@@ -145,27 +83,8 @@ impl ButtonGroupsArgs {
         child: impl Into<CallbackWith<Color>>,
         on_click: impl Into<CallbackWith<bool>>,
     ) -> Self {
-        self.child_closures.push(child.into());
-        self.on_click_closures.push(on_click.into());
-        self
-    }
-
-    /// Build children using the scope DSL.
-    pub fn children<F>(mut self, scope_config: F) -> Self
-    where
-        F: FnOnce(&mut ButtonGroupsScope),
-    {
-        let mut child_closures = Vec::new();
-        let mut on_click_closures = Vec::new();
-        {
-            let mut scope = ButtonGroupsScope {
-                child_closures: &mut child_closures,
-                on_click_closures: &mut on_click_closures,
-            };
-            scope_config(&mut scope);
-        }
-        self.child_closures = child_closures;
-        self.on_click_closures = on_click_closures;
+        self.props.child_closures.push(child.into());
+        self.props.on_click_closures.push(on_click.into());
         self
     }
 }
@@ -182,7 +101,6 @@ struct ButtonGroupsLayout {
 
 impl ButtonGroupsLayout {
     fn new(size: ButtonGroupsSize, style: ButtonGroupsStyle) -> Self {
-        // See https://m3.material.io/components/button-groups/specs#f41a7d35-b9c2-4340-b3bb-47b34acaaf45
         let container_height = match size {
             ButtonGroupsSize::ExtraSmall => Dp(32.0),
             ButtonGroupsSize::Small => Dp(40.0),
@@ -241,7 +159,6 @@ struct ButtonItemState {
     elastic_state: ElasticState,
 }
 
-/// Internal state of a button group.
 #[derive(PartialEq, Default)]
 struct ButtonGroupsState {
     item_states: HashMap<usize, ButtonItemState>,
@@ -265,127 +182,95 @@ impl ButtonGroupsState {
 ///
 /// Used for grouping related actions.
 ///
-/// State for selection and animations is managed internally via `remember`; no
-/// external state handle is required.
-///
 /// ## Parameters
 ///
-/// - `args` — configures size, style, and selection mode; see
-///   [`ButtonGroupsArgs`].
+/// - `size` — size of the button group.
+/// - `style` — visual style of the button group.
+/// - `selection_mode` — selection mode of the button group.
+/// - `child_closures` — per-item content builders receiving resolved label
+///   color.
+/// - `on_click_closures` — per-item click handlers receiving the new active
+///   state.
 ///
-/// # Example
+/// ## Examples
 ///
 /// ```
-/// use tessera_components::{
-///     button_groups::{ButtonGroupsArgs, button_groups},
-///     text::{TextArgs, text},
-/// };
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
+/// use tessera_components::{button_groups::button_groups, text::text};
 ///
-/// # #[tessera_ui::tessera]
+/// # use tessera_ui::tessera;
+/// # #[tessera]
 /// # fn demo() {
-///     let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-///         || MaterialTheme::default(),
-///         || {
-///             button_groups(&ButtonGroupsArgs::default().children(|scope| {
-///                 scope.child(
-///                     |color| {
-///                         text(&TextArgs {
-///                             text: "Button 1".to_string(),
-///                             color,
-///                             ..Default::default()
-///                         })
-///                     },
-///                     |_| {
-///                         println!("Button 1 clicked");
-///                     },
-///                 );
-///
-///                 scope.child(
-///                     |color| {
-///                         text(&TextArgs {
-///                             text: "Button 2".to_string(),
-///                             color,
-///                             ..Default::default()
-///                         })
-///                     },
-///                     |_| {
-///                         println!("Button 2 clicked");
-///                     },
-///                 );
-///
-///                 scope.child(
-///                     |color| {
-///                         text(&TextArgs {
-///                             text: "Button 3".to_string(),
-///                             color,
-///                             ..Default::default()
-///                         })
-///                     },
-///                     |_| {
-///                         println!("Button 3 clicked");
-///                     },
-///                 );
-///             }));
-///         },
-///     );
-///     material_theme(&args);
-/// }
-/// # demo();
+/// button_groups().child(
+///     |color| {
+///         text().content("Button 1").color(color);
+///     },
+///     |_| {},
+/// );
+/// # }
 /// ```
 #[tessera]
-pub fn button_groups(args: &ButtonGroupsArgs) {
-    let args = args.clone();
+pub fn button_groups(
+    size: ButtonGroupsSize,
+    style: ButtonGroupsStyle,
+    selection_mode: ButtonGroupsSelectionMode,
+    #[prop(skip_setter)] child_closures: Vec<CallbackWith<Color>>,
+    #[prop(skip_setter)] on_click_closures: Vec<CallbackWith<bool>>,
+) {
     let state = remember(ButtonGroupsState::default);
-    let child_closures = args.child_closures.clone();
-    let on_click_closures = args.on_click_closures.clone();
-    let layout = ButtonGroupsLayout::new(args.size, args.style);
+    let layout = ButtonGroupsLayout::new(size, style);
     let child_len = child_closures.len();
-    let selection_mode = args.selection_mode;
-    let row_modifier = RowArgs::default().modifier.height(layout.container_height);
-    row(&RowArgs::default()
-        .modifier(row_modifier)
+    row()
+        .modifier(Modifier::new().height(layout.container_height))
         .main_axis_alignment(MainAxisAlignment::Start)
-        .children(move |scope| {
+        .children(move || {
             for (index, child_closure) in child_closures.iter().cloned().enumerate() {
                 let on_click_closure = on_click_closures[index];
                 let item_layout = layout.clone();
                 let between_space = layout.between_space;
 
-                scope.child(move || {
-                    let actived =
-                        state.with(|s| s.item_states.get(&index).is_some_and(|item| item.actived));
-                    if actived {
-                        let mut button_args = ButtonArgs::filled(move || {
+                let actived =
+                    state.with(|s| s.item_states.get(&index).is_some_and(|item| item.actived));
+                if actived {
+                    let scheme = use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .color_scheme;
+                    let label_color = scheme.on_primary;
+                    button()
+                        .filled(move || {
                             on_click_closure.call(false);
                             state.with_mut(|s| {
                                 let item = s.item_state_mut(index);
                                 item.actived = false;
                                 item.elastic_state.toggle();
                             });
+                        })
+                        .shape(item_layout.active_button_shape)
+                        .with_child(move || {
+                            elastic_container()
+                                .state(state)
+                                .index(index)
+                                .child(move || child_closure.call(label_color));
                         });
-                        button_args.shape = item_layout.active_button_shape;
-                        let scheme = use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .color_scheme;
-                        let label_color = scheme.on_primary;
-                        button(&crate::button::ButtonArgs::with_child(button_args, {
-                            move || {
-                                let elastic_args = ElasticContainerArgs {
-                                    state,
-                                    index,
-                                    child: RenderSlot::new(move || child_closure.call(label_color)),
-                                };
-                                elastic_container(&elastic_args);
-                            }
-                        }));
+                } else {
+                    let scheme = use_context::<MaterialTheme>()
+                        .expect("MaterialTheme must be provided")
+                        .get()
+                        .color_scheme;
+                    let label_color = scheme.on_secondary_container;
+                    let shape = if index == 0 {
+                        item_layout.inactive_button_shape_start
+                    } else if index == child_len - 1 {
+                        item_layout.inactive_button_shape_end
                     } else {
-                        let mut button_args = ButtonArgs::filled(move || {
+                        item_layout.inactive_button_shape
+                    };
+                    button()
+                        .filled(move || {
                             on_click_closure.call(true);
                             state.with_mut(|s| {
                                 if selection_mode == ButtonGroupsSelectionMode::Single {
-                                    for (other_index, item) in s.item_states.iter_mut() {
+                                    for (other_index, item) in &mut s.item_states {
                                         if *other_index != index && item.actived {
                                             item.actived = false;
                                             item.elastic_state.toggle();
@@ -397,46 +282,21 @@ pub fn button_groups(args: &ButtonGroupsArgs) {
                                 item.actived = true;
                                 item.elastic_state.toggle();
                             });
+                        })
+                        .color(scheme.secondary_container)
+                        .shape(shape)
+                        .with_child(move || {
+                            elastic_container()
+                                .state(state)
+                                .index(index)
+                                .child(move || child_closure.call(label_color));
                         });
-                        let scheme = use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .color_scheme;
-                        button_args.color = scheme.secondary_container;
-                        if index == 0 {
-                            button_args.shape = item_layout.inactive_button_shape_start;
-                        } else if index == child_len - 1 {
-                            button_args.shape = item_layout.inactive_button_shape_end;
-                        } else {
-                            button_args.shape = item_layout.inactive_button_shape;
-                        }
-
-                        let scheme = use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .color_scheme;
-                        let label_color = scheme.on_secondary_container;
-                        button(&crate::button::ButtonArgs::with_child(button_args, {
-                            move || {
-                                let elastic_args = ElasticContainerArgs {
-                                    state,
-                                    index,
-                                    child: RenderSlot::new(move || child_closure.call(label_color)),
-                                };
-                                elastic_container(&elastic_args);
-                            }
-                        }));
-                    }
-                });
+                }
                 if index != child_len - 1 {
-                    scope.child(move || {
-                        spacer(&crate::spacer::SpacerArgs::new(
-                            Modifier::new().width(between_space),
-                        ));
-                    })
+                    spacer().modifier(Modifier::new().width(between_space));
                 }
             }
-        }))
+        });
 }
 
 #[derive(PartialEq)]
@@ -498,26 +358,30 @@ impl ElasticState {
 }
 
 #[tessera]
-fn elastic_container(args: &ElasticContainerArgs) {
+fn elastic_container(
+    state: Option<tessera_ui::State<ButtonGroupsState>>,
+    index: usize,
+    child: Option<RenderSlot>,
+) {
+    let state = state.expect("elastic_container requires state");
+    let child = child.expect("elastic_container requires child content");
     let frame_tick = remember(|| 0_u64);
     let _ = frame_tick.with(|tick| *tick);
     let frame_nanos = current_frame_nanos();
 
-    args.child.render();
-    let progress = args.state.with(|state| {
+    child.render();
+    let progress = state.with(|state| {
         state
-            .item_state(args.index)
+            .item_state(index)
             .map_or(0.0, |item| item.elastic_state.update(frame_nanos))
     });
 
-    let should_schedule_frame = args.state.with(|s| {
+    let should_schedule_frame = state.with(|s| {
         s.item_states
-            .get(&args.index)
+            .get(&index)
             .is_some_and(|item| item.elastic_state.is_animating(frame_nanos))
     });
     if should_schedule_frame {
-        let index = args.index;
-        let state = args.state;
         receive_frame_nanos(move |frame_nanos| {
             frame_tick.with_mut(|tick| *tick = tick.wrapping_add(1));
             let is_animating = state.with(|state| {
@@ -534,14 +398,11 @@ fn elastic_container(args: &ElasticContainerArgs) {
         });
     }
 
-    layout(ElasticContainerLayout { progress })
-}
-
-#[derive(Clone, Prop)]
-struct ElasticContainerArgs {
-    state: tessera_ui::State<ButtonGroupsState>,
-    index: usize,
-    child: RenderSlot,
+    layout_primitive()
+        .layout_policy(ElasticContainerLayout { progress })
+        .child(move || {
+            child.render();
+        });
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -549,7 +410,7 @@ struct ElasticContainerLayout {
     progress: f32,
 }
 
-impl LayoutSpec for ElasticContainerLayout {
+impl LayoutPolicy for ElasticContainerLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,

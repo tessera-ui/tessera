@@ -4,129 +4,15 @@
 //!
 //! Use to stack children horizontally.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutSpec,
-    MeasurementError, Modifier, NodeId, Prop, Px, PxPosition, RenderSlot, tessera,
+    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy,
+    MeasurementError, Modifier, NodeId, Px, PxPosition, RenderSlot, layout::layout_primitive,
+    tessera,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     modifier::ModifierExt as _,
 };
-
-/// Arguments for the `row` component.
-#[derive(Clone, Prop)]
-pub struct RowArgs {
-    /// Modifier chain applied to the row subtree.
-    pub modifier: Modifier,
-    /// Main axis alignment (horizontal alignment).
-    pub main_axis_alignment: MainAxisAlignment,
-    /// Cross axis alignment (vertical alignment).
-    pub cross_axis_alignment: CrossAxisAlignment,
-    /// Child slots rendered by the row.
-    #[prop(skip_setter)]
-    pub children: Vec<RenderSlot>,
-    /// Optional weight per child (same index as `children`).
-    pub child_weights: Vec<Option<f32>>,
-}
-
-impl Default for RowArgs {
-    fn default() -> Self {
-        Self {
-            modifier: Modifier::new()
-                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP)),
-            main_axis_alignment: MainAxisAlignment::Start,
-            cross_axis_alignment: CrossAxisAlignment::Start,
-            children: Vec::new(),
-            child_weights: Vec::new(),
-        }
-    }
-}
-
-impl RowArgs {
-    /// Adds a child without weight.
-    pub fn child<F>(mut self, child_closure: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_weights.push(None);
-        self
-    }
-
-    /// Adds a child without weight using a shared slot.
-    pub fn child_shared(mut self, child_closure: impl Into<RenderSlot>) -> Self {
-        self.children.push(child_closure.into());
-        self.child_weights.push(None);
-        self
-    }
-
-    /// Adds a child with weight.
-    pub fn child_weighted<F>(mut self, child_closure: F, weight: f32) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.children.push(RenderSlot::new(child_closure));
-        self.child_weights.push(Some(weight));
-        self
-    }
-
-    /// Adds a child with weight using a shared slot.
-    pub fn child_weighted_shared(
-        mut self,
-        child_closure: impl Into<RenderSlot>,
-        weight: f32,
-    ) -> Self {
-        self.children.push(child_closure.into());
-        self.child_weights.push(Some(weight));
-        self
-    }
-
-    /// Builds children using the scope DSL.
-    pub fn children<F>(mut self, scope_config: F) -> Self
-    where
-        F: FnOnce(&mut RowScope),
-    {
-        let mut child_closures: Vec<RenderSlot> = Vec::new();
-        let mut child_weights: Vec<Option<f32>> = Vec::new();
-        {
-            let mut scope = RowScope {
-                child_closures: &mut child_closures,
-                child_weights: &mut child_weights,
-            };
-            scope_config(&mut scope);
-        }
-        self.children = child_closures;
-        self.child_weights = child_weights;
-        self
-    }
-}
-
-/// A scope for declaratively adding children to a `row` component.
-pub struct RowScope<'a> {
-    child_closures: &'a mut Vec<RenderSlot>,
-    child_weights: &'a mut Vec<Option<f32>>,
-}
-
-impl<'a> RowScope<'a> {
-    /// Adds a child component to the row.
-    pub fn child<F>(&mut self, child_closure: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_weights.push(None);
-    }
-
-    /// Adds a child component to the row with a specified weight for flexible
-    /// space distribution.
-    pub fn child_weighted<F>(&mut self, child_closure: F, weight: f32)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child_closures.push(RenderSlot::new(child_closure));
-        self.child_weights.push(Some(weight));
-    }
-}
 
 struct PlaceChildrenArgs<'a> {
     children_sizes: &'a [Option<ComputedData>],
@@ -147,23 +33,23 @@ struct MeasureWeightedChildrenArgs<'a> {
     remaining_width: Px,
     total_weight: f32,
     row_effective_constraint: &'a Constraint,
-    child_weights: &'a [Option<f32>],
+    child_weights: &'a [f32],
 }
 
 #[derive(Clone, PartialEq)]
 struct RowLayout {
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,
-    child_weights: Vec<Option<f32>>,
 }
 
-impl LayoutSpec for RowLayout {
+impl LayoutPolicy for RowLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let n = self.child_weights.len();
+        let child_weights = collect_child_weights(input);
+        let n = child_weights.len();
         assert_eq!(
             input.children_ids().len(),
             n,
@@ -175,7 +61,7 @@ impl LayoutSpec for RowLayout {
             input.parent_constraint().height(),
         );
 
-        let has_weighted_children = self.child_weights.iter().any(|w| w.unwrap_or(0.0) > 0.0);
+        let has_weighted_children = child_weights.iter().any(|&weight| weight > 0.0);
         let should_use_weight_for_width = has_weighted_children
             && matches!(
                 row_effective_constraint.width,
@@ -190,7 +76,7 @@ impl LayoutSpec for RowLayout {
                 output,
                 self.main_axis_alignment,
                 self.cross_axis_alignment,
-                &self.child_weights,
+                &child_weights,
                 &row_effective_constraint,
             )
         } else {
@@ -216,57 +102,47 @@ impl LayoutSpec for RowLayout {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures alignment and modifiers; see [`RowArgs`].
+/// - `modifier` — modifier chain applied to the row container.
+/// - `main_axis_alignment` — alignment along the horizontal axis.
+/// - `cross_axis_alignment` — alignment along the vertical axis.
+/// - `children` — child slot rendered inside the row.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{
-///     row::{RowArgs, row},
-///     spacer::spacer,
-///     text::{TextArgs, text},
-/// };
+/// use tessera_components::{modifier::ModifierExt as _, row::row, spacer::spacer, text::text};
 /// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// row(&RowArgs::default().children(|scope| {
-///     scope.child(|| text(&TextArgs::default().text("First")));
-///     scope.child_weighted(
-///         || spacer(&tessera_components::spacer::SpacerArgs::new(Modifier::new())),
-///         1.0,
-///     ); // Flexible space
-///     scope.child(|| text(&TextArgs::default().text("Last")));
-/// }));
+/// row().children(|| {
+///     text().content("First");
+///     spacer().modifier(Modifier::new().weight(1.0));
+///     text().content("Last");
+/// });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn row(args: &RowArgs) {
-    let args = args.clone();
-    let child_len = args.children.len();
-    let mut child_weights = args.child_weights;
-    if child_weights.len() < child_len {
-        child_weights.resize(child_len, None);
-    } else if child_weights.len() > child_len {
-        child_weights.truncate(child_len);
-    }
-    let children = args.children;
-    let modifier = args.modifier;
-    let main_axis_alignment = args.main_axis_alignment;
-    let cross_axis_alignment = args.cross_axis_alignment;
-    modifier.run(move || {
-        layout(RowLayout {
+pub fn row(
+    modifier: Option<Modifier>,
+    main_axis_alignment: MainAxisAlignment,
+    cross_axis_alignment: CrossAxisAlignment,
+    children: RenderSlot,
+) {
+    let modifier = modifier.unwrap_or_else(|| {
+        Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
+    });
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(RowLayout {
             main_axis_alignment,
             cross_axis_alignment,
-            child_weights: child_weights.clone(),
+        })
+        .child(move || {
+            children.render();
         });
-
-        for child_closure in &children {
-            child_closure.render();
-        }
-    });
 }
 
 fn measure_weighted_row(
@@ -274,7 +150,7 @@ fn measure_weighted_row(
     output: &mut LayoutOutput<'_>,
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,
-    child_weights: &[Option<f32>],
+    child_weights: &[f32],
     row_effective_constraint: &Constraint,
 ) -> Result<ComputedData, MeasurementError> {
     // Prepare buffers and metadata for measurement:
@@ -404,7 +280,7 @@ fn measure_unweighted_row(
     })
 }
 
-fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, f32) {
+fn classify_children(child_weights: &[f32]) -> (Vec<usize>, Vec<usize>, f32) {
     // Split children into weighted and unweighted categories and compute the total
     // weight of weighted children. Returns: (weighted_indices,
     // unweighted_indices, total_weight)
@@ -412,16 +288,10 @@ fn classify_children(child_weights: &[Option<f32>]) -> (Vec<usize>, Vec<usize>, 
     let mut unweighted_indices = Vec::new();
     let mut total_weight = 0.0;
 
-    for (i, weight) in child_weights.iter().enumerate() {
-        if let Some(w) = weight {
-            if *w > 0.0 {
-                weighted_indices.push(i);
-                total_weight += w;
-            } else {
-                // weight == 0.0 is treated as an unweighted item (it won't participate in
-                // remaining-space allocation)
-                unweighted_indices.push(i);
-            }
+    for (i, &weight) in child_weights.iter().enumerate() {
+        if weight > 0.0 {
+            weighted_indices.push(i);
+            total_weight += weight;
         } else {
             unweighted_indices.push(i);
         }
@@ -481,7 +351,7 @@ fn measure_weighted_children(
         .weighted_indices
         .iter()
         .map(|&child_idx| {
-            let child_weight = args.child_weights[child_idx].unwrap_or(0.0);
+            let child_weight = args.child_weights[child_idx];
             let allocated_width =
                 Px((args.remaining_width.0 as f32 * (child_weight / args.total_weight)) as i32);
             let child_id = args.input.children_ids()[child_idx];
@@ -504,6 +374,19 @@ fn measure_weighted_children(
     }
 
     Ok(())
+}
+
+fn collect_child_weights(input: &LayoutInput<'_>) -> Vec<f32> {
+    input
+        .children_ids()
+        .iter()
+        .map(|&child_id| {
+            input
+                .child_parent_data::<crate::modifier::WeightParentData>(child_id)
+                .map(|data| data.weight)
+                .unwrap_or(0.0)
+        })
+        .collect()
 }
 
 fn calculate_final_row_width(
@@ -659,5 +542,173 @@ fn calculate_cross_axis_offset(
         CrossAxisAlignment::Center => (final_row_height - child_actual_size.height).max(Px(0)) / 2,
         CrossAxisAlignment::End => (final_row_height - child_actual_size.height).max(Px(0)),
         CrossAxisAlignment::Stretch => Px(0),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+    };
+
+    use crate::{
+        alignment::{CrossAxisAlignment, MainAxisAlignment},
+        modifier::{ModifierExt as _, SemanticsArgs},
+    };
+
+    use super::row;
+
+    #[derive(Clone, PartialEq)]
+    struct FixedTestLayout {
+        width: i32,
+        height: i32,
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct FillWidthTestLayout {
+        height: i32,
+    }
+
+    impl LayoutPolicy for FixedTestLayout {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    impl LayoutPolicy for FillWidthTestLayout {
+        fn measure(
+            &self,
+            input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            let width = match input.parent_constraint().width() {
+                DimensionValue::Fixed(width) => width,
+                DimensionValue::Wrap {
+                    max: Some(width), ..
+                }
+                | DimensionValue::Fill {
+                    max: Some(width), ..
+                } => width,
+                _ => panic!("FillWidthTestLayout requires a bounded width constraint"),
+            };
+
+            Ok(ComputedData {
+                width,
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    #[tessera]
+    fn fixed_test_box(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn fill_width_test_box(tag: String, height: i32) {
+        layout_primitive()
+            .layout_policy(FillWidthTestLayout { height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn row_layout_case() {
+        row()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(100))),
+                Some(DimensionValue::Fixed(Px::new(30))),
+            ))
+            .main_axis_alignment(MainAxisAlignment::Start)
+            .cross_axis_alignment(CrossAxisAlignment::Start)
+            .children(|| {
+                row_fixed_box();
+                layout_primitive()
+                    .modifier(Modifier::new().weight(1.0))
+                    .child(|| {
+                        row_weighted_content_box();
+                    });
+            });
+    }
+
+    #[tessera]
+    fn row_fixed_box() {
+        fixed_test_box()
+            .tag("row_fixed".to_string())
+            .width(20)
+            .height(10);
+    }
+
+    #[tessera]
+    fn row_weighted_content_box() {
+        fill_width_test_box()
+            .tag("row_weighted_content".to_string())
+            .height(10);
+    }
+
+    #[tessera]
+    fn row_alignment_case() {
+        row()
+            .modifier(Modifier::new().constrain(
+                Some(DimensionValue::Fixed(Px::new(100))),
+                Some(DimensionValue::Fixed(Px::new(30))),
+            ))
+            .main_axis_alignment(MainAxisAlignment::Center)
+            .cross_axis_alignment(CrossAxisAlignment::End)
+            .children(|| {
+                fixed_test_box()
+                    .tag("row_center_first".to_string())
+                    .width(20)
+                    .height(10);
+                fixed_test_box()
+                    .tag("row_center_second".to_string())
+                    .width(10)
+                    .height(12);
+            });
+    }
+
+    #[test]
+    fn row_allocates_remaining_width_to_weighted_child() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 60),
+            content: {
+                row_layout_case();
+            },
+            expect: {
+                node("row_fixed").position(0, 0).size(20, 10);
+                node("row_weighted_content").position(20, 0).size(80, 10);
+            }
+        }
+    }
+
+    #[test]
+    fn row_honors_main_and_cross_axis_alignment() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 60),
+            content: {
+                row_alignment_case();
+            },
+            expect: {
+                node("row_center_first").position(35, 20).size(20, 10);
+                node("row_center_second").position(55, 18).size(10, 12);
+            }
+        }
     }
 }

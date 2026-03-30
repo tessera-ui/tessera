@@ -5,10 +5,14 @@
 //! Use as a base for buttons, cards, or any styled and interactive region.
 use tessera_ui::{
     Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusProperties, FocusRequester,
-    MeasurementError, Modifier, Prop, Px, PxPosition, PxSize, RenderSlot, State,
+    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize,
+    RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    layout::{
+        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
+    },
+    modifier::ModifierCapabilityExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -123,162 +127,69 @@ impl From<Color> for SurfaceStyle {
     }
 }
 
-/// Arguments for the `surface` component.
-#[derive(Clone, Prop)]
-pub struct SurfaceArgs {
-    /// Optional modifier chain applied to the surface subtree.
-    pub modifier: Modifier,
-    /// Defines the visual style of the surface (fill, outline, or both).
-    pub style: SurfaceStyle,
-    /// Geometric outline of the surface (rounded rectangle / ellipse / capsule
-    /// variants).
-    pub shape: Shape,
-    /// Elevation of the surface.
-    ///
-    /// This value determines the shadow cast by the surface and its tonal
-    /// elevation (if the color is `surface`).
-    pub elevation: Option<Dp>,
-    /// Tonal elevation for surfaces that use the theme `surface` color.
-    ///
-    /// When the container color equals `MaterialColorScheme.surface`, a tint is
-    /// overlaid to simulate Material 3 tonal elevation.
-    pub tonal_elevation: Dp,
-    /// Optional explicit content color override for descendants.
-    ///
-    /// When `None`, the surface derives its content color from the theme using
-    /// [`content_color_for`].
-    pub content_color: Option<Color>,
-    /// Aligns child content within the surface bounds.
-    pub content_alignment: Alignment,
-    /// Whether this surface is enabled for user interaction.
-    ///
-    /// When disabled, it will not react to input, will not show hover/ripple
-    /// feedback, and will expose a disabled state to accessibility services.
-    pub enabled: bool,
-    /// Optional click handler. Presence of this value makes the surface
-    /// interactive:
-    ///
-    /// * Cursor changes to pointer when hovered
-    /// * Press / release events are captured
-    /// * Ripple animation starts on press
-    #[prop(skip_setter)]
-    pub on_click: Option<Callback>,
-    /// Color of the ripple effect (used when interactive).
-    pub ripple_color: Color,
-    /// Whether ripples are bounded to the surface shape.
-    pub ripple_bounded: bool,
-    /// Optional explicit ripple radius for this surface.
-    pub ripple_radius: Option<Dp>,
-    /// Optional shared interaction state used to render state layers.
-    ///
-    /// This can be used to render visual feedback in one place while driving
-    /// interactions from another.
-    pub interaction_state: Option<State<InteractionState>>,
-    /// Whether to render the state-layer overlay for this surface.
-    pub show_state_layer: bool,
-    /// Whether to render ripple animations for this surface.
-    pub show_ripple: bool,
-    /// Optional ripple animation state used for rendering ripples.
-    pub ripple_state: Option<State<RippleState>>,
-    /// If true, all input events inside the surface bounds are blocked (stop
-    /// propagation), after (optionally) handling its own click logic.
-    pub block_input: bool,
-    /// Optional explicit accessibility role. Defaults to `Role::Button` when
-    /// interactive.
-    pub accessibility_role: Option<Role>,
-    /// Optional label read by assistive technologies.
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional description read by assistive technologies.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-    /// Whether this surface should be focusable even when not interactive.
-    pub accessibility_focusable: bool,
-    /// Optional externally managed focus requester for the interactive surface.
-    pub focus_requester: Option<FocusRequester>,
-    /// Optional focus properties applied to the interactive surface target.
-    pub focus_properties: Option<FocusProperties>,
-    /// Optional child render slot.
-    #[prop(skip_setter)]
-    pub child: Option<RenderSlot>,
-}
-
-impl SurfaceArgs {
+impl SurfaceBuilder {
     /// Creates props from base args and a child render function.
-    pub fn with_child(args: SurfaceArgs, child: impl Fn() + Send + Sync + 'static) -> Self {
-        args.child(child)
-    }
-
-    /// Set the click handler.
-    pub fn on_click<F>(mut self, on_click: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.on_click = Some(Callback::new(on_click));
+    pub fn with_child(mut self, child: impl Fn() + Send + Sync + 'static) -> Self {
+        self.props.child = Some(RenderSlot::new(child));
         self
     }
 
-    /// Set the click handler using a shared callback.
-    pub fn on_click_shared(mut self, on_click: impl Into<Callback>) -> Self {
-        self.on_click = Some(on_click.into());
-        self
-    }
-
-    /// Sets the child render slot.
-    pub fn child<F>(mut self, child: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.child = Some(RenderSlot::new(child));
-        self
-    }
-
-    /// Sets the child render slot using a shared callback.
-    pub fn child_shared(mut self, child: impl Into<RenderSlot>) -> Self {
-        self.child = Some(child.into());
-        self
-    }
-}
-
-impl SurfaceArgs {
     pub(crate) fn set_ripple_state(&mut self, state: Option<State<RippleState>>) {
-        self.ripple_state = state;
+        self.props.ripple_state = state;
+    }
+
+    pub(crate) fn ripple_state_internal(mut self, state: Option<State<RippleState>>) -> Self {
+        self.props.ripple_state = state;
+        self
     }
 }
 
-impl Default for SurfaceArgs {
-    fn default() -> Self {
-        let theme = use_context::<MaterialTheme>();
-        Self {
-            modifier: Modifier::new(),
-            style: SurfaceStyle::default(),
-            shape: Shape::default(),
-            elevation: None,
-            tonal_elevation: Dp(0.0),
-            content_color: None,
-            content_alignment: Alignment::default(),
-            enabled: true,
-            on_click: None,
-            ripple_color: use_context::<ContentColor>()
-                .map(|c| c.get().current)
-                .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
-                .unwrap_or_else(|| ContentColor::default().current),
-            ripple_bounded: true,
-            ripple_radius: None,
-            interaction_state: None,
-            show_state_layer: true,
-            show_ripple: true,
-            ripple_state: None,
-            block_input: false,
-            accessibility_role: None,
-            accessibility_label: None,
-            accessibility_description: None,
-            accessibility_focusable: false,
-            focus_requester: None,
-            focus_properties: None,
-            child: None,
-        }
+impl SurfaceContentBuilder {
+    fn resolved_internal(mut self, resolved: SurfaceResolvedArgs) -> Self {
+        self.props.resolved = Some(resolved);
+        self
     }
+
+    fn interaction_state_internal(
+        mut self,
+        interaction_state: Option<State<InteractionState>>,
+    ) -> Self {
+        self.props.interaction_state = interaction_state;
+        self
+    }
+
+    fn ripple_state_internal(mut self, ripple_state: Option<State<RippleState>>) -> Self {
+        self.props.ripple_state = ripple_state;
+        self
+    }
+}
+
+#[derive(Clone, Default, PartialEq)]
+struct SurfaceResolvedArgs {
+    modifier: Modifier,
+    style: SurfaceStyle,
+    shape: Shape,
+    elevation: Option<Dp>,
+    tonal_elevation: Dp,
+    content_color: Option<Color>,
+    content_alignment: Alignment,
+    enabled: bool,
+    on_click: Option<Callback>,
+    ripple_color: Color,
+    ripple_bounded: bool,
+    ripple_radius: Option<Dp>,
+    interaction_state: Option<State<InteractionState>>,
+    show_state_layer: bool,
+    show_ripple: bool,
+    ripple_state: Option<State<RippleState>>,
+    block_input: bool,
+    accessibility_role: Option<Role>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    accessibility_focusable: bool,
+    focus_requester: Option<FocusRequester>,
+    focus_properties: Option<FocusProperties>,
+    child: Option<RenderSlot>,
 }
 
 fn compute_content_offset(
@@ -341,7 +252,7 @@ fn apply_tonal_elevation_to_style(
 }
 
 fn build_ripple_props(
-    args: &SurfaceArgs,
+    args: &SurfaceResolvedArgs,
     ripple_state: Option<State<RippleState>>,
     frame_nanos: u64,
 ) -> RippleProps {
@@ -465,7 +376,7 @@ fn build_rounded_rectangle_command(
 }
 
 fn build_ellipse_command(
-    _args: &SurfaceArgs,
+    _args: &SurfaceResolvedArgs,
     style: &SurfaceStyle,
     ripple_props: RippleProps,
     use_ripple: bool,
@@ -516,7 +427,7 @@ fn build_ellipse_command(
 }
 
 fn build_shape_command(
-    args: &SurfaceArgs,
+    args: &SurfaceResolvedArgs,
     style: &SurfaceStyle,
     ripple_props: RippleProps,
     size: PxSize,
@@ -539,7 +450,7 @@ fn build_shape_command(
 }
 
 fn make_surface_drawable(
-    args: &SurfaceArgs,
+    args: &SurfaceResolvedArgs,
     style: &SurfaceStyle,
     ripple_state: Option<State<RippleState>>,
     frame_nanos: u64,
@@ -550,7 +461,7 @@ fn make_surface_drawable(
 }
 
 fn try_build_simple_rect_command(
-    args: &SurfaceArgs,
+    args: &SurfaceResolvedArgs,
     style: &SurfaceStyle,
     ripple_state: Option<State<RippleState>>,
     frame_nanos: u64,
@@ -650,7 +561,7 @@ fn compute_surface_size(
 
 #[derive(Clone)]
 struct SurfaceLayout {
-    args: SurfaceArgs,
+    args: SurfaceResolvedArgs,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
     scheme: MaterialColorScheme,
@@ -663,7 +574,7 @@ impl PartialEq for SurfaceLayout {
     }
 }
 
-impl LayoutSpec for SurfaceLayout {
+impl LayoutPolicy for SurfaceLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -721,7 +632,9 @@ impl LayoutSpec for SurfaceLayout {
 
         Ok(ComputedData { width, height })
     }
+}
 
+impl RenderPolicy for SurfaceLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let state_layer_alpha = if self.args.show_state_layer {
             self.interaction_state
@@ -754,7 +667,7 @@ impl LayoutSpec for SurfaceLayout {
 
         let mut metadata = input.metadata_mut();
         let size = metadata
-            .computed_data
+            .computed_data()
             .expect("Surface node must have computed size before record");
 
         if let Some(simple) = try_build_simple_rect_command(
@@ -778,167 +691,36 @@ impl LayoutSpec for SurfaceLayout {
     }
 }
 
-/// # surface
-///
-/// Renders a styled container for content with optional interaction.
-///
-/// ## Usage
-///
-/// Wrap content to provide a visual background, shape, and optional click
-/// handling with a ripple effect.
-///
-/// ## Parameters
-///
-/// - `args` — props for this component; see [`SurfaceArgs`].
-///
-/// ## Examples
-///
-/// ```
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::{
-///     modifier::{ModifierExt, Padding},
-///     surface::{SurfaceArgs, surface},
-///     text::{TextArgs, text},
-/// };
-/// use tessera_ui::{Dp, Modifier};
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
-///
-/// # let args = tessera_components::theme::MaterialThemeProviderArgs::new(|| MaterialTheme::default(), || {
-/// let args = SurfaceArgs::default()
-///     .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
-///     .on_click(|| println!("Surface was clicked!"))
-///     .child(|| {
-///         text(&TextArgs::default().text("Click me"));
-///     });
-/// surface(&args);
-/// # });
-/// # material_theme(&args);
-/// # }
-/// # component();
-/// ```
-/// Renders a styled surface container.
-#[tessera]
-pub fn surface(args: &SurfaceArgs) {
-    let args = args.clone();
-    let child = args.child.clone();
-    let mut modifier = args.modifier.clone();
-    let clickable = args.on_click.is_some();
-    let interactive = args.enabled && clickable;
-    let internal_focus_requester = remember_focus_requester();
-    let focus_requester = args.focus_requester.unwrap_or(internal_focus_requester);
-    let interaction_state = args
-        .interaction_state
-        .or_else(|| interactive.then(|| remember(InteractionState::new)));
-    let ripple_state = if args.show_ripple {
-        args.ripple_state
-            .or_else(|| interactive.then(|| remember(RippleState::new)))
+struct SurfaceBlockInputPointerModifierNode;
+
+impl PointerInputModifierNode for SurfaceBlockInputPointerModifierNode {
+    fn on_pointer_input(&self, mut input: PointerInput<'_>) {
+        let is_cursor_in_surface = input
+            .cursor_position_rel
+            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+            .unwrap_or(false);
+        if is_cursor_in_surface {
+            input.block_all();
+        }
+    }
+}
+
+fn apply_surface_block_input_modifier(base: Modifier, block_input: bool) -> Modifier {
+    if block_input {
+        base.push_pointer_input(SurfaceBlockInputPointerModifierNode)
     } else {
-        None
-    };
-    let has_semantics = args.accessibility_role.is_some()
-        || args.accessibility_label.is_some()
-        || args.accessibility_description.is_some()
-        || args.accessibility_focusable;
-
-    if clickable {
-        modifier = modifier.minimum_interactive_component_size();
+        base
     }
-
-    if interactive {
-        let ripple_spec = RippleSpec {
-            bounded: args.ripple_bounded,
-            radius: args.ripple_radius,
-        };
-        let press_handler = ripple_state.map(|state| {
-            let spec = ripple_spec;
-            move |ctx: PointerEventContext| {
-                state.with_mut(|s| {
-                    s.start_animation_with_spec(ctx.normalized_pos, ctx.size, spec);
-                });
-            }
-        });
-        let release_handler = ripple_state
-            .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
-        let mut clickable_args =
-            ClickableArgs::new(args.on_click.expect("interactive implies on_click is set"))
-                .enabled(args.enabled)
-                .block_input(args.block_input);
-
-        if let Some(role) = args.accessibility_role {
-            clickable_args = clickable_args.role(role);
-        }
-        if let Some(label) = args.accessibility_label.clone() {
-            clickable_args = clickable_args.label(label);
-        }
-        if let Some(description) = args.accessibility_description.clone() {
-            clickable_args = clickable_args.description(description);
-        }
-        if let Some(state) = interaction_state {
-            clickable_args = clickable_args.interaction_state(state);
-        }
-        if let Some(properties) = args.focus_properties {
-            clickable_args = clickable_args.focus_properties(properties);
-        }
-        if let Some(handler) = press_handler {
-            clickable_args = clickable_args.on_press(handler);
-        }
-        if let Some(handler) = release_handler {
-            clickable_args = clickable_args.on_release(handler);
-        }
-        clickable_args = clickable_args.focus_requester(focus_requester);
-
-        modifier = modifier.clickable(clickable_args);
-    } else if args.block_input {
-        modifier = modifier.block_touch_propagation();
-    }
-
-    if !interactive && has_semantics {
-        let mut semantics = SemanticsArgs::new();
-        if let Some(role) = args.accessibility_role {
-            semantics = semantics.role(role);
-        }
-        if let Some(label) = args.accessibility_label.clone() {
-            semantics = semantics.label(label);
-        }
-        if let Some(description) = args.accessibility_description.clone() {
-            semantics = semantics.description(description);
-        }
-        if args.accessibility_focusable {
-            semantics = semantics.focusable(true);
-        }
-        if !args.enabled {
-            semantics = semantics.disabled(true);
-        }
-        modifier = modifier.semantics(semantics);
-    }
-
-    if let Some(elevation) = args.elevation
-        && elevation.0 > 0.0
-    {
-        modifier = modifier.shadow(&ShadowArgs::new(elevation).shape(args.shape).clip(false));
-    }
-
-    let inner_args = SurfaceInnerArgs {
-        surface: args.clone(),
-        interaction_state,
-        ripple_state,
-        child,
-    };
-
-    modifier.run(move || {
-        let inner_args = inner_args.clone();
-        surface_inner(&inner_args);
-    });
 }
 
 #[tessera]
-fn surface_inner(args: &SurfaceInnerArgs) {
-    let surface = &args.surface;
-    let interaction_state = args.interaction_state;
-    let ripple_state = args.ripple_state;
-
+fn surface_content(
+    #[prop(skip_setter)] resolved: Option<SurfaceResolvedArgs>,
+    #[prop(skip_setter)] interaction_state: Option<State<InteractionState>>,
+    #[prop(skip_setter)] ripple_state: Option<State<RippleState>>,
+) {
+    let surface = resolved.expect("surface_content requires resolved args");
+    let child = surface.child.clone();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -988,52 +770,248 @@ fn surface_inner(args: &SurfaceInnerArgs) {
         }
     }
 
-    provide_context(
-        || AbsoluteTonalElevation {
-            current: absolute_tonal_elevation,
-        },
-        || {
-            provide_context(
-                || ContentColor {
-                    current: content_color,
-                },
-                || {
-                    if let Some(child) = args.child.as_ref() {
-                        child.render();
-                    }
-                },
-            );
-        },
-    );
-
     let layout_args = surface.clone();
-    layout(SurfaceLayout {
+    let modifier =
+        apply_surface_block_input_modifier(Modifier::new(), !interactive && surface.block_input);
+    let policy = SurfaceLayout {
         args: layout_args,
         interaction_state,
         ripple_state,
         scheme,
         absolute_tonal_elevation,
-    });
-
-    if !interactive && surface.block_input {
-        // Block after descendants so container surfaces can host interactive children.
-        pointer_input_handler(move |mut input| {
-            let size = input.computed_data;
-            let cursor_pos_option = input.cursor_position_rel;
-            let is_cursor_in_surface = cursor_pos_option
-                .map(|pos| is_position_inside_bounds(size, pos))
-                .unwrap_or(false);
-            if is_cursor_in_surface {
-                input.block_all();
-            }
+    };
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(policy.clone())
+        .render_policy(policy)
+        .child(move || {
+            provide_context(
+                || AbsoluteTonalElevation {
+                    current: absolute_tonal_elevation,
+                },
+                || {
+                    provide_context(
+                        || ContentColor {
+                            current: content_color,
+                        },
+                        || {
+                            if let Some(child) = child.as_ref() {
+                                child.render();
+                            }
+                        },
+                    );
+                },
+            );
         });
-    }
 }
 
-#[derive(Clone, Prop)]
-struct SurfaceInnerArgs {
-    surface: SurfaceArgs,
+/// # surface
+///
+/// Renders a styled container for content with optional interaction.
+///
+/// ## Usage
+///
+/// Wrap content to provide a visual background, shape, and optional click
+/// handling with a ripple effect.
+///
+/// ## Parameters
+///
+/// - `modifier` — optional modifier chain applied to the surface subtree.
+/// - `style` — optional visual style of the surface.
+/// - `shape` — optional geometric outline of the surface.
+/// - `elevation` — optional shadow elevation.
+/// - `tonal_elevation` — optional tonal elevation tint for theme surfaces.
+/// - `content_color` — optional explicit content color override.
+/// - `content_alignment` — optional child alignment within the surface bounds.
+/// - `enabled` — optional interactive enabled flag.
+/// - `on_click` — optional click callback.
+/// - `ripple_color` — optional ripple color.
+/// - `ripple_bounded` — optional bounded-ripple flag.
+/// - `ripple_radius` — optional explicit ripple radius.
+/// - `interaction_state` — optional shared interaction state.
+/// - `show_state_layer` — optional state-layer visibility flag.
+/// - `show_ripple` — optional ripple visibility flag.
+/// - `ripple_state` — optional shared ripple state.
+/// - `block_input` — optional input-blocking flag.
+/// - `accessibility_role` — optional accessibility role.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `accessibility_focusable` — optional accessibility focusable flag.
+/// - `focus_requester` — optional externally managed focus requester.
+/// - `focus_properties` — optional focus properties.
+/// - `child` — optional child render slot.
+///
+/// ## Examples
+///
+/// ```
+/// # use tessera_ui::tessera;
+/// # #[tessera]
+/// # fn component() {
+/// use tessera_components::{modifier::{ModifierExt, Padding}, surface::surface, text::text};
+/// use tessera_ui::{Dp, Modifier};
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
+///
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
+/// surface()
+///     .modifier(Modifier::new().padding(Padding::all(Dp(16.0))))
+///     .on_click(|| println!("Surface was clicked!"))
+///     .child(|| {
+///         text().content("Click me");
+///     });
+/// # });
+/// # }
+/// # component();
+/// ```
+/// Renders a styled surface container.
+#[tessera]
+pub fn surface(
+    modifier: Option<Modifier>,
+    style: Option<SurfaceStyle>,
+    shape: Option<Shape>,
+    elevation: Option<Dp>,
+    tonal_elevation: Option<Dp>,
+    content_color: Option<Color>,
+    content_alignment: Option<Alignment>,
+    enabled: Option<bool>,
+    on_click: Option<Callback>,
+    ripple_color: Option<Color>,
+    ripple_bounded: Option<bool>,
+    ripple_radius: Option<Dp>,
     interaction_state: Option<State<InteractionState>>,
+    show_state_layer: Option<bool>,
+    show_ripple: Option<bool>,
     ripple_state: Option<State<RippleState>>,
+    block_input: Option<bool>,
+    accessibility_role: Option<Role>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    accessibility_focusable: Option<bool>,
+    focus_requester: Option<FocusRequester>,
+    focus_properties: Option<FocusProperties>,
     child: Option<RenderSlot>,
+) {
+    let theme = use_context::<MaterialTheme>();
+    let scheme = theme
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let resolved = SurfaceResolvedArgs {
+        modifier: modifier.unwrap_or_default(),
+        style: style.unwrap_or_default(),
+        shape: shape.unwrap_or_default(),
+        elevation,
+        tonal_elevation: tonal_elevation.unwrap_or(Dp(0.0)),
+        content_color,
+        content_alignment: content_alignment.unwrap_or_default(),
+        enabled: enabled.unwrap_or(true),
+        on_click,
+        ripple_color: ripple_color
+            .or_else(|| use_context::<ContentColor>().map(|c| c.get().current))
+            .unwrap_or(scheme.on_surface),
+        ripple_bounded: ripple_bounded.unwrap_or(true),
+        ripple_radius,
+        interaction_state,
+        show_state_layer: show_state_layer.unwrap_or(true),
+        show_ripple: show_ripple.unwrap_or(true),
+        ripple_state,
+        block_input: block_input.unwrap_or(false),
+        accessibility_role,
+        accessibility_label,
+        accessibility_description,
+        accessibility_focusable: accessibility_focusable.unwrap_or(false),
+        focus_requester,
+        focus_properties,
+        child,
+    };
+    let mut modifier = resolved.modifier.clone();
+    let clickable = resolved.on_click.is_some();
+    let interactive = resolved.enabled && clickable;
+    let internal_focus_requester = remember(FocusRequester::new).get();
+    let bound_focus_requester = resolved.focus_requester.unwrap_or(internal_focus_requester);
+    let interaction_state = resolved
+        .interaction_state
+        .or_else(|| interactive.then(|| remember(InteractionState::new)));
+    let ripple_state = if resolved.show_ripple {
+        resolved
+            .ripple_state
+            .or_else(|| interactive.then(|| remember(RippleState::new)))
+    } else {
+        None
+    };
+    let has_semantics = resolved.accessibility_role.is_some()
+        || resolved.accessibility_label.is_some()
+        || resolved.accessibility_description.is_some()
+        || resolved.accessibility_focusable;
+
+    if clickable {
+        modifier = modifier.minimum_interactive_component_size();
+    }
+
+    if interactive {
+        let ripple_spec = RippleSpec {
+            bounded: resolved.ripple_bounded,
+            radius: resolved.ripple_radius,
+        };
+        let press_handler = ripple_state.map(|state| {
+            let spec = ripple_spec;
+            move |ctx: PointerEventContext| {
+                state.with_mut(|s| {
+                    s.start_animation_with_spec(ctx.normalized_pos, ctx.size, spec);
+                });
+            }
+        });
+        let release_handler = ripple_state
+            .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
+        let clickable_args = ClickableArgs {
+            on_click: resolved
+                .on_click
+                .expect("interactive implies on_click is set"),
+            enabled: resolved.enabled,
+            block_input: resolved.block_input,
+            on_press: press_handler.map(Into::into),
+            on_release: release_handler.map(Into::into),
+            role: resolved.accessibility_role,
+            label: resolved.accessibility_label.clone(),
+            description: resolved.accessibility_description.clone(),
+            interaction_state,
+            focus_requester: Some(bound_focus_requester),
+            focus_properties: resolved.focus_properties,
+        };
+
+        modifier = modifier.clickable_with(clickable_args);
+    } else if resolved.block_input {
+        modifier = modifier.block_touch_propagation();
+    }
+
+    if !interactive && has_semantics {
+        let semantics = SemanticsArgs {
+            role: resolved.accessibility_role,
+            label: resolved.accessibility_label.clone(),
+            description: resolved.accessibility_description.clone(),
+            focusable: resolved.accessibility_focusable,
+            disabled: !resolved.enabled,
+            ..Default::default()
+        };
+        modifier = modifier.semantics(semantics);
+    }
+
+    if let Some(elevation) = resolved.elevation
+        && elevation.0 > 0.0
+    {
+        modifier = modifier.shadow(&ShadowArgs {
+            elevation,
+            shape: resolved.shape,
+            clip: false,
+            ..Default::default()
+        });
+    }
+
+    layout_primitive().modifier(modifier).child(move || {
+        surface_content()
+            .resolved_internal(resolved.clone())
+            .interaction_state_internal(interaction_state)
+            .ripple_state_internal(ripple_state);
+    });
 }

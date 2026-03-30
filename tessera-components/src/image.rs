@@ -10,8 +10,10 @@ use std::{
 
 use image::GenericImageView;
 use tessera_ui::{
-    AssetExt, ComputedData, DimensionValue, MeasurementError, Modifier, Prop, Px,
-    layout::{LayoutInput, LayoutOutput, LayoutSpec, RenderInput},
+    AssetExt, ComputedData, DimensionValue, MeasurementError, Modifier, Px,
+    layout::{
+        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
+    },
     tessera,
 };
 use thiserror::Error;
@@ -39,6 +41,14 @@ pub enum ImageLoadError {
 pub trait TryIntoImageData {
     /// Convert this source into decoded image data.
     fn try_into_image_data(self) -> Result<ImageData, ImageLoadError>;
+}
+
+fn placeholder_image_data() -> Arc<ImageData> {
+    Arc::new(ImageData {
+        data: Arc::new(vec![0, 0, 0, 0]),
+        width: 1,
+        height: 1,
+    })
 }
 
 fn decode_dynamic_image(decoded: image::DynamicImage) -> ImageData {
@@ -102,21 +112,10 @@ impl TryIntoImageData for &Path {
     }
 }
 
-/// Arguments for the `image` component.
-#[derive(Debug, Prop, Clone)]
-pub struct ImageArgs {
-    /// Decoded image data containing RGBA pixels and dimensions.
-    #[prop(into)]
-    pub data: Arc<ImageData>,
-
-    /// Optional modifier chain applied to the image node.
-    pub modifier: Modifier,
-}
-
-impl ImageArgs {
+impl ImageBuilder {
     /// Replaces the image data with already-decoded raster pixels.
     pub fn raster(mut self, data: impl Into<Arc<ImageData>>) -> Self {
-        self.data = data.into();
+        self.props.data = Some(data.into());
         self
     }
 
@@ -125,7 +124,7 @@ impl ImageArgs {
     where
         T: TryIntoImageData,
     {
-        self.data = Arc::new(source.try_into_image_data()?);
+        self.props.data = Some(Arc::new(source.try_into_image_data()?));
         Ok(self)
     }
 
@@ -137,26 +136,8 @@ impl ImageArgs {
         let bytes = asset
             .read()
             .map_err(|source| ImageLoadError::AssetRead { source })?;
-        self.data = Arc::new(decode_image_from_bytes(bytes.as_ref())?);
+        self.props.data = Some(Arc::new(decode_image_from_bytes(bytes.as_ref())?));
         Ok(self)
-    }
-}
-
-impl From<ImageData> for ImageArgs {
-    fn from(data: ImageData) -> Self {
-        Self {
-            data: Arc::new(data),
-            modifier: Modifier::new(),
-        }
-    }
-}
-
-impl From<Arc<ImageData>> for ImageArgs {
-    fn from(data: Arc<ImageData>) -> Self {
-        Self {
-            data,
-            modifier: Modifier::new(),
-        }
     }
 }
 
@@ -165,7 +146,7 @@ struct ImageLayout {
     data: Arc<ImageData>,
 }
 
-impl LayoutSpec for ImageLayout {
+impl LayoutPolicy for ImageLayout {
     fn measure(
         &self,
         input: &LayoutInput<'_>,
@@ -202,7 +183,9 @@ impl LayoutSpec for ImageLayout {
 
         Ok(ComputedData { width, height })
     }
+}
 
+impl RenderPolicy for ImageLayout {
     fn record(&self, input: &RenderInput<'_>) {
         let image_command = ImageCommand {
             data: self.data.clone(),
@@ -226,7 +209,8 @@ impl LayoutSpec for ImageLayout {
 ///
 /// ## Parameters
 ///
-/// - `args` - configures the image data and layout; see [`ImageArgs`].
+/// - `data` - optional decoded raster image pixels.
+/// - `modifier` - node-local layout, drawing, and interaction modifiers.
 ///
 /// ## Examples
 ///
@@ -235,7 +219,7 @@ impl LayoutSpec for ImageLayout {
 /// # #[tessera]
 /// # fn component() {
 /// use std::sync::Arc;
-/// use tessera_components::image::{ImageArgs, ImageData, image};
+/// use tessera_components::image::{ImageData, image};
 ///
 /// let image_data = ImageData {
 ///     data: Arc::new(vec![255, 255, 255, 255]),
@@ -243,18 +227,15 @@ impl LayoutSpec for ImageLayout {
 ///     height: 1,
 /// };
 ///
-/// image(&ImageArgs::from(image_data));
+/// image().raster(image_data);
 /// # }
 /// ```
 #[tessera]
-pub fn image(args: &ImageArgs) {
-    let modifier = args.modifier.clone();
-    let inner_args = args.clone();
-    modifier.run(move || image_inner(&inner_args));
-}
-
-#[tessera]
-fn image_inner(args: &ImageArgs) {
-    let data = args.data.clone();
-    layout(ImageLayout { data });
+pub fn image(#[prop(skip_setter)] data: Option<Arc<ImageData>>, modifier: Modifier) {
+    let data = data.unwrap_or_else(placeholder_image_data);
+    let policy = ImageLayout { data: data.clone() };
+    layout_primitive()
+        .modifier(modifier)
+        .layout_policy(policy.clone())
+        .render_policy(policy);
 }

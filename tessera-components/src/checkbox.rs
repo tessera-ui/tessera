@@ -6,18 +6,18 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CallbackWith, Color, Dp, Modifier, Prop, PxSize, RenderSlot, State, accesskit::Role,
+    CallbackWith, Color, Dp, Modifier, PxSize, RenderSlot, State, accesskit::Role,
     current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    boxed::{BoxedArgs, boxed},
-    checkmark::{CheckmarkArgs, checkmark},
+    boxed::boxed,
+    checkmark::checkmark,
     modifier::{InteractionState, ModifierExt, PointerEventContext, ToggleableArgs},
     ripple_state::{RippleSpec, RippleState},
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceArgs, SurfaceStyle, surface},
+    surface::{SurfaceStyle, surface},
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
@@ -31,15 +31,25 @@ impl CheckboxDefaults {
     pub const STATE_LAYER_SIZE: Dp = Dp(40.0);
     /// Minimum recommended touch target size.
     pub const TOUCH_TARGET_SIZE: Dp = Dp(48.0);
+
+    fn default_shape() -> Shape {
+        Shape::RoundedRectangle {
+            top_left: RoundedCorner::manual(Dp(2.0), 2.0),
+            top_right: RoundedCorner::manual(Dp(2.0), 2.0),
+            bottom_right: RoundedCorner::manual(Dp(2.0), 2.0),
+            bottom_left: RoundedCorner::manual(Dp(2.0), 2.0),
+        }
+    }
+
     /// Computes the default state-layer base color for the current checked
     /// state.
     pub fn state_layer_base_color(
         is_checked: bool,
-        args: &CheckboxArgs,
+        checked_color: Color,
         scheme: &MaterialColorScheme,
     ) -> Color {
         if is_checked {
-            args.checked_color
+            checked_color
         } else {
             scheme.on_surface
         }
@@ -95,130 +105,28 @@ impl CheckboxController {
     }
 }
 
-/// Arguments for the `checkbox` component.
-#[derive(Clone, Prop)]
-pub struct CheckboxArgs {
-    /// Optional modifier chain applied to the checkbox subtree.
-    pub modifier: Modifier,
-    /// Callback invoked when the checkbox is toggled.
-    #[prop(skip_setter)]
-    pub on_toggle: CallbackWith<bool, ()>,
-    /// Initial checked state for the checkbox.
-    pub checked: bool,
-    /// Size of the checkbox (width and height).
-    ///
-    /// Expressed in `Dp` (density-independent pixels). The checkbox will use
-    /// the same value for width and height; default is `Dp(18.0)`.
-    pub size: Dp,
-
-    /// Outline color when the checkbox is not checked.
-    ///
-    /// This sets the border color shown for the unchecked state.
-    pub color: Color,
-
-    /// Background color used when the checkbox is checked.
-    ///
-    /// This color is shown behind the checkmark to indicate an active/selected
-    /// state. Choose a higher-contrast color relative to `color`.
-    pub checked_color: Color,
-
-    /// Color used to draw the checkmark icon inside the checkbox.
-    ///
-    /// This is applied on top of the `checked_color` surface.
-    pub checkmark_color: Color,
-
-    /// Stroke width in physical pixels used to render the checkmark path.
-    ///
-    /// Higher values produce a thicker checkmark. The default value is tuned
-    /// for the default `size`.
-    pub checkmark_stroke_width: f32,
-
-    /// Shape used for the outer checkbox surface (rounded rectangle, etc.).
-    ///
-    /// Use this to customize the corner radii or switch to alternate shapes.
-    pub shape: Shape,
-
-    /// Whether the checkbox is disabled.
-    pub disabled: bool,
-
-    /// Color used for the checkbox border/background when disabled.
-    pub disabled_color: Color,
-
-    /// Color used for the checkmark icon when disabled.
-    pub disabled_checkmark_color: Color,
-
-    /// Optional accessibility label read by assistive technologies.
-    ///
-    /// The label should be a short, human-readable string describing the
-    /// purpose of the checkbox (for example "Enable auto-save").
-    #[prop(into)]
-    pub accessibility_label: Option<String>,
-    /// Optional accessibility description read by assistive technologies.
-    ///
-    /// A longer description or contextual helper text that augments the
-    /// `accessibility_label` for users of assistive technology.
-    #[prop(into)]
-    pub accessibility_description: Option<String>,
-    /// Optional external controller for checked state and animation progress.
-    ///
-    /// When this is `None`, `checkbox` creates and owns an internal controller.
-    #[prop(skip_setter)]
-    pub controller: Option<State<CheckboxController>>,
-}
-
-impl CheckboxArgs {
-    /// Sets the on_toggle handler.
-    pub fn on_toggle<F>(mut self, on_toggle: F) -> Self
-    where
-        F: Fn(bool) + Send + Sync + 'static,
-    {
-        self.on_toggle = CallbackWith::new(on_toggle);
+impl CheckboxInnerBuilder {
+    fn on_toggle_option_shared(mut self, on_toggle: Option<CallbackWith<bool, ()>>) -> Self {
+        self.props.on_toggle = on_toggle;
         self
     }
 
-    /// Sets the on_toggle handler using a shared callback.
-    pub fn on_toggle_shared(mut self, on_toggle: impl Into<CallbackWith<bool, ()>>) -> Self {
-        self.on_toggle = on_toggle.into();
+    fn accessibility_label_option(mut self, accessibility_label: Option<String>) -> Self {
+        self.props.accessibility_label = accessibility_label;
         self
     }
 
-    /// Sets an external controller for controlled checkbox state.
-    pub fn controller(mut self, controller: State<CheckboxController>) -> Self {
-        self.controller = Some(controller);
+    fn accessibility_description_option(
+        mut self,
+        accessibility_description: Option<String>,
+    ) -> Self {
+        self.props.accessibility_description = accessibility_description;
         self
     }
-}
 
-impl Default for CheckboxArgs {
-    fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        Self {
-            modifier: Modifier::new(),
-            on_toggle: CallbackWith::default_value(),
-            checked: false,
-            size: CheckboxDefaults::GLYPH_SIZE,
-            color: scheme.on_surface_variant,
-            checked_color: scheme.primary,
-            checkmark_color: scheme.on_primary,
-            checkmark_stroke_width: 2.5,
-            shape: Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(Dp(2.0), 2.0),
-                top_right: RoundedCorner::manual(Dp(2.0), 2.0),
-                bottom_right: RoundedCorner::manual(Dp(2.0), 2.0),
-                bottom_left: RoundedCorner::manual(Dp(2.0), 2.0),
-            },
-            disabled: false,
-            disabled_color: scheme
-                .on_surface
-                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
-            disabled_checkmark_color: scheme.surface,
-            accessibility_label: None,
-            accessibility_description: None,
-            controller: None,
-        }
+    fn controller_option(mut self, controller: Option<State<CheckboxController>>) -> Self {
+        self.props.controller = controller;
+        self
     }
 }
 
@@ -248,13 +156,11 @@ impl CheckmarkState {
         }
     }
 
-    /// Toggle checked state and start animation
     fn toggle(&mut self) {
         self.checked = !self.checked;
         self.last_toggle_frame_nanos = Some(current_frame_nanos());
     }
 
-    /// Update progress based on elapsed time
     fn update_progress(&mut self, frame_nanos: u64) {
         if let Some(start_frame_nanos) = self.last_toggle_frame_nanos {
             let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
@@ -272,7 +178,7 @@ impl CheckmarkState {
                 1.0 - fraction
             };
             if fraction >= 1.0 {
-                self.last_toggle_frame_nanos = None; // Animation ends
+                self.last_toggle_frame_nanos = None;
             }
         }
     }
@@ -292,45 +198,107 @@ impl CheckmarkState {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the checkbox's appearance, initial state, and
-///   `on_toggle` callback; see [`CheckboxArgs`].
+/// - `modifier` — modifier chain applied to the checkbox subtree.
+/// - `on_toggle` — toggle callback invoked with the new checked state.
+/// - `checked` — initial checked state.
+/// - `size` — optional checkbox glyph size.
+/// - `color` — optional unchecked outline color.
+/// - `checked_color` — optional checked container color.
+/// - `checkmark_color` — optional checkmark icon color.
+/// - `checkmark_stroke_width` — optional checkmark stroke width.
+/// - `shape` — optional outer checkbox shape.
+/// - `disabled` — whether the checkbox is disabled.
+/// - `disabled_color` — optional disabled border/container color.
+/// - `disabled_checkmark_color` — optional disabled checkmark color.
+/// - `accessibility_label` — optional accessibility label.
+/// - `accessibility_description` — optional accessibility description.
+/// - `controller` — optional external checkbox controller.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::checkbox::{CheckboxArgs, checkbox};
-/// use tessera_ui::{Dp, remember, tessera};
+/// use tessera_components::checkbox::checkbox;
+/// use tessera_ui::{remember, tessera};
 ///
-/// // A tiny UI demo that shows a checkbox and a text label that reflects its state.
 /// #[tessera]
 /// fn checkbox_demo() {
 ///     let is_checked = remember(|| false);
-///     checkbox(
-///         &CheckboxArgs::default()
-///             .checked(true)
-///             .on_toggle(move |new_value| {
-///                 is_checked.set(new_value);
-///             }),
-///     );
+///     checkbox().checked(true).on_toggle(move |new_value| {
+///         is_checked.set(new_value);
+///     });
 /// }
 /// ```
 #[tessera]
-pub fn checkbox(args: &CheckboxArgs) {
-    let mut args = args.clone();
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(|| CheckboxController::new(args.checked)));
-    args.controller = Some(controller);
-    checkbox_inner(&args);
+pub fn checkbox(
+    modifier: Modifier,
+    on_toggle: Option<CallbackWith<bool, ()>>,
+    checked: bool,
+    size: Option<Dp>,
+    color: Option<Color>,
+    checked_color: Option<Color>,
+    checkmark_color: Option<Color>,
+    checkmark_stroke_width: Option<f32>,
+    shape: Option<Shape>,
+    disabled: bool,
+    disabled_color: Option<Color>,
+    disabled_checkmark_color: Option<Color>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
+    #[prop(skip_setter)] controller: Option<State<CheckboxController>>,
+) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let size = size.unwrap_or(CheckboxDefaults::GLYPH_SIZE);
+    let color = color.unwrap_or(scheme.on_surface_variant);
+    let checked_color = checked_color.unwrap_or(scheme.primary);
+    let checkmark_color = checkmark_color.unwrap_or(scheme.on_primary);
+    let checkmark_stroke_width = checkmark_stroke_width.unwrap_or(2.5);
+    let shape = shape.unwrap_or_else(CheckboxDefaults::default_shape);
+    let disabled_color = disabled_color.unwrap_or(
+        scheme
+            .on_surface
+            .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+    );
+    let disabled_checkmark_color = disabled_checkmark_color.unwrap_or(scheme.surface);
+    let controller = controller.unwrap_or_else(|| remember(|| CheckboxController::new(checked)));
+
+    checkbox_inner()
+        .modifier(modifier)
+        .on_toggle_option_shared(on_toggle)
+        .size(size)
+        .color(color)
+        .checked_color(checked_color)
+        .checkmark_color(checkmark_color)
+        .checkmark_stroke_width(checkmark_stroke_width)
+        .shape(shape)
+        .disabled(disabled)
+        .disabled_color(disabled_color)
+        .disabled_checkmark_color(disabled_checkmark_color)
+        .accessibility_label_option(accessibility_label)
+        .accessibility_description_option(accessibility_description)
+        .controller_option(Some(controller));
 }
 
 #[tessera]
-fn checkbox_inner(args: &CheckboxArgs) {
-    let args = args.clone();
-    let controller = args
-        .controller
-        .expect("checkbox_inner requires controller to be set");
-    let enabled = !args.disabled;
+fn checkbox_inner(
+    modifier: Modifier,
+    on_toggle: Option<CallbackWith<bool, ()>>,
+    size: Dp,
+    color: Color,
+    checked_color: Color,
+    checkmark_color: Color,
+    checkmark_stroke_width: f32,
+    shape: Shape,
+    disabled: bool,
+    disabled_color: Color,
+    disabled_checkmark_color: Color,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    controller: Option<State<CheckboxController>>,
+) {
+    let controller = controller.expect("checkbox_inner requires controller to be set");
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller.with_mut(|controller| {
@@ -345,38 +313,34 @@ fn checkbox_inner(args: &CheckboxArgs) {
         });
     }
 
-    // Clone fields needed for closures before moving on_toggle
-    let size = args.size;
-    let shape = args.shape;
-
     let is_checked = controller.with(|c| c.is_checked());
+    let enabled = !disabled;
     let interaction_state = enabled.then(|| remember(InteractionState::new));
     let ripple_state = enabled.then(|| remember(RippleState::new));
     let on_value_change = {
-        let on_toggle = args.on_toggle;
-        CallbackWith::new(move |checked| {
-            controller.with_mut(|c| c.set_checked(checked));
-            on_toggle.call(checked);
+        let on_toggle = on_toggle.unwrap_or_else(CallbackWith::default_value);
+        CallbackWith::new(move |next_checked| {
+            controller.with_mut(|c| c.set_checked(next_checked));
+            on_toggle.call(next_checked);
         })
     };
 
-    // Determine colors based on state
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let (checkbox_style, icon_color) = if args.disabled {
+    let (checkbox_style, icon_color) = if disabled {
         if is_checked {
             (
                 SurfaceStyle::Filled {
-                    color: args.disabled_color,
+                    color: disabled_color,
                 },
-                args.disabled_checkmark_color,
+                disabled_checkmark_color,
             )
         } else {
             (
                 SurfaceStyle::Outlined {
-                    color: args.disabled_color,
+                    color: disabled_color,
                     width: Dp(2.0),
                 },
                 Color::TRANSPARENT,
@@ -385,121 +349,114 @@ fn checkbox_inner(args: &CheckboxArgs) {
     } else if is_checked {
         (
             SurfaceStyle::Filled {
-                color: args.checked_color,
+                color: checked_color,
             },
-            args.checkmark_color,
+            checkmark_color,
         )
     } else {
         (
             SurfaceStyle::Outlined {
-                color: args.color,
+                color,
                 width: Dp(2.0),
             },
             Color::TRANSPARENT,
         )
     };
 
-    let state_layer_base = CheckboxDefaults::state_layer_base_color(is_checked, &args, &scheme);
+    let state_layer_base =
+        CheckboxDefaults::state_layer_base_color(is_checked, checked_color, &scheme);
 
-    // Checkmark
-    let checkmark_stroke_width = args.checkmark_stroke_width;
-    let checkbox_size = args.size;
     let render_checkmark = RenderSlot::new(move || {
         let progress = controller.with(|c| c.progress());
         if progress > 0.0 {
-            boxed(
-                &BoxedArgs::default()
-                    .alignment(Alignment::Center)
-                    .modifier(Modifier::new().fill_max_size())
-                    .children(|scope| {
-                        scope.child(move || {
-                            checkmark(
-                                &CheckmarkArgs::default()
-                                    .color(icon_color)
-                                    .stroke_width(checkmark_stroke_width)
-                                    .progress(progress)
-                                    .size(Dp(checkbox_size.0 * 0.8))
-                                    .padding([0.0, 0.0]),
-                            )
-                        });
-                    }),
-            );
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    checkmark()
+                        .color(icon_color)
+                        .stroke_width(checkmark_stroke_width)
+                        .progress(progress)
+                        .size(Dp(size.0 * 0.8))
+                        .padding([0.0, 0.0]);
+                });
         }
     });
 
-    // Checkbox Surface (18x18)
     let render_checkbox_surface = {
         let render_checkmark = render_checkmark.clone();
         RenderSlot::new(move || {
             let checkbox_style = checkbox_style.clone();
             let render_checkmark = render_checkmark.clone();
-            surface(&crate::surface::SurfaceArgs::with_child(
-                SurfaceArgs::default()
-                    .modifier(Modifier::new().size(size, size))
-                    .shape(shape)
-                    .style(checkbox_style),
-                move || {
+            surface()
+                .modifier(Modifier::new().size(size, size))
+                .shape(shape)
+                .style(checkbox_style)
+                .with_child(move || {
                     render_checkmark.render();
-                },
-            ));
+                });
         })
     };
 
-    // Checkbox Container (centering the 18x18 surface)
     let render_checkbox_container = {
         let render_checkbox_surface = render_checkbox_surface.clone();
         RenderSlot::new(move || {
             let render_checkbox_surface = render_checkbox_surface.clone();
-            boxed(
-                &BoxedArgs::default()
-                    .alignment(Alignment::Center)
-                    .modifier(Modifier::new().fill_max_size())
-                    .children(move |scope| {
-                        let render_checkbox_surface = render_checkbox_surface.clone();
-                        scope.child(move || {
-                            render_checkbox_surface.render();
-                        });
-                    }),
-            );
+            boxed()
+                .alignment(Alignment::Center)
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    render_checkbox_surface.render();
+                });
         })
     };
 
-    // State Layer Surface (40x40)
     let render_state_layer = {
         let render_checkbox_container = render_checkbox_container.clone();
         RenderSlot::new(move || {
-            let mut surface_args = SurfaceArgs::default()
-                .modifier(Modifier::new().size(
-                    CheckboxDefaults::STATE_LAYER_SIZE,
-                    CheckboxDefaults::STATE_LAYER_SIZE,
-                ))
-                .shape(Shape::Ellipse)
-                .enabled(enabled)
-                .style(SurfaceStyle::Filled {
-                    color: Color::TRANSPARENT,
-                })
-                .ripple_bounded(false)
-                .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
-                .ripple_color(state_layer_base);
-
-            if let Some(state) = interaction_state {
-                surface_args = surface_args.interaction_state(state);
-            }
-
-            surface_args.set_ripple_state(ripple_state);
-
             let render_checkbox_container = render_checkbox_container.clone();
-            surface(&crate::surface::SurfaceArgs::with_child(
-                surface_args,
-                move || {
-                    render_checkbox_container.render();
-                },
-            ));
+            if let Some(state) = interaction_state {
+                surface()
+                    .modifier(Modifier::new().size(
+                        CheckboxDefaults::STATE_LAYER_SIZE,
+                        CheckboxDefaults::STATE_LAYER_SIZE,
+                    ))
+                    .shape(Shape::Ellipse)
+                    .enabled(enabled)
+                    .style(SurfaceStyle::Filled {
+                        color: Color::TRANSPARENT,
+                    })
+                    .ripple_bounded(false)
+                    .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
+                    .ripple_color(state_layer_base)
+                    .ripple_state_internal(ripple_state)
+                    .interaction_state(state)
+                    .with_child(move || {
+                        render_checkbox_container.render();
+                    });
+            } else {
+                surface()
+                    .modifier(Modifier::new().size(
+                        CheckboxDefaults::STATE_LAYER_SIZE,
+                        CheckboxDefaults::STATE_LAYER_SIZE,
+                    ))
+                    .shape(Shape::Ellipse)
+                    .enabled(enabled)
+                    .style(SurfaceStyle::Filled {
+                        color: Color::TRANSPARENT,
+                    })
+                    .ripple_bounded(false)
+                    .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
+                    .ripple_color(state_layer_base)
+                    .ripple_state_internal(ripple_state)
+                    .with_child(move || {
+                        render_checkbox_container.render();
+                    });
+            }
         })
     };
 
-    // Outer Box (Layout 48x48)
-    let mut modifier = args.modifier.size(
+    let mut modifier = modifier.size(
         CheckboxDefaults::TOUCH_TARGET_SIZE,
         CheckboxDefaults::TOUCH_TARGET_SIZE,
     );
@@ -521,35 +478,24 @@ fn checkbox_inner(args: &CheckboxArgs) {
         });
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
-        let mut toggle_args = ToggleableArgs::new(is_checked, on_value_change)
-            .enabled(true)
-            .role(Role::CheckBox);
-        if let Some(label) = args.accessibility_label.clone() {
-            toggle_args = toggle_args.label(label);
-        }
-        if let Some(desc) = args.accessibility_description.clone() {
-            toggle_args = toggle_args.description(desc);
-        }
-        if let Some(state) = interaction_state {
-            toggle_args = toggle_args.interaction_state(state);
-        }
-        if let Some(handler) = press_handler {
-            toggle_args = toggle_args.on_press(handler);
-        }
-        if let Some(handler) = release_handler {
-            toggle_args = toggle_args.on_release(handler);
-        }
-        modifier = modifier.toggleable(toggle_args);
+        let toggle_args = ToggleableArgs {
+            value: is_checked,
+            on_value_change,
+            enabled: true,
+            role: Some(Role::CheckBox),
+            label: accessibility_label.clone(),
+            description: accessibility_description.clone(),
+            interaction_state,
+            on_press: press_handler.map(Into::into),
+            on_release: release_handler.map(Into::into),
+            ..Default::default()
+        };
+        modifier = modifier.toggleable_with(toggle_args);
     }
-    boxed(
-        &BoxedArgs::default()
-            .modifier(modifier)
-            .alignment(Alignment::Center)
-            .children(move |scope| {
-                let render_state_layer = render_state_layer.clone();
-                scope.child(move || {
-                    render_state_layer.render();
-                });
-            }),
-    );
+    boxed()
+        .modifier(modifier)
+        .alignment(Alignment::Center)
+        .children(move || {
+            render_state_layer.render();
+        });
 }

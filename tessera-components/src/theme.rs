@@ -8,7 +8,7 @@ use material_color_utilities::{
     dynamiccolor::{DynamicSchemeBuilder, MaterialDynamicColors, SpecVersion, Variant},
     hct::Hct,
 };
-use tessera_ui::{CallbackWith, Color, Dp, Prop, RenderSlot, provide_context, tessera};
+use tessera_ui::{CallbackWith, Color, Dp, RenderSlot, provide_context, tessera};
 
 use crate::shape_def::Shape;
 
@@ -98,26 +98,6 @@ impl Default for TextStyle {
 /// Provides a text style to descendants for the duration of `child`.
 pub fn provide_text_style(style: TextStyle, child: impl FnOnce()) {
     provide_context(|| style, child);
-}
-
-#[derive(Clone, Prop)]
-/// Props for [`material_theme`].
-pub struct MaterialThemeProviderArgs {
-    theme: CallbackWith<(), MaterialTheme>,
-    child: RenderSlot,
-}
-
-impl MaterialThemeProviderArgs {
-    /// Creates Material theme component props.
-    pub fn new(
-        theme: impl Fn() -> MaterialTheme + Send + Sync + 'static,
-        child: impl Fn() + Send + Sync + 'static,
-    ) -> Self {
-        Self {
-            theme: CallbackWith::new(move |()| theme()),
-            child: RenderSlot::new(child),
-        }
-    }
 }
 
 /// Material typography scale used by components to resolve default text styles.
@@ -288,14 +268,14 @@ impl MaterialTheme {
 ///
 /// ## Parameters
 ///
-/// - `args` — props for this component; see [`MaterialThemeProviderArgs`].
+/// - `theme` — optional theme producer for descendants.
+/// - `child` — optional content rendered with the provided theme.
 ///
 /// ## Examples
 ///
 /// ```
 /// use tessera_components::theme::{
-///     MaterialColorScheme, MaterialTheme, MaterialThemeProviderArgs, MaterialTypography,
-///     material_theme,
+///     MaterialColorScheme, MaterialTheme, MaterialTypography, material_theme,
 /// };
 /// use tessera_ui::{Color, tessera};
 ///
@@ -304,23 +284,21 @@ impl MaterialTheme {
 ///     let scheme = MaterialColorScheme::light_from_seed(Color::from_rgb(0.4, 0.3, 0.6));
 ///     let typography = MaterialTypography::default();
 ///
-///     let args = MaterialThemeProviderArgs::new(
-///         move || MaterialTheme {
+///     material_theme()
+///         .theme(move || MaterialTheme {
 ///             color_scheme: scheme.clone(),
 ///             typography,
 ///             ..MaterialTheme::default()
-///         },
-///         || {
+///         })
+///         .child(|| {
 ///             // Your UI here.
-///         },
-///     );
-///     material_theme(&args);
+///         });
 /// }
 /// ```
 #[tessera]
-pub fn material_theme(args: &MaterialThemeProviderArgs) {
-    let theme = args.theme;
-    let child = args.child.clone();
+pub fn material_theme(theme: Option<CallbackWith<(), MaterialTheme>>, child: Option<RenderSlot>) {
+    let theme = theme.unwrap_or_else(|| CallbackWith::new(|()| MaterialTheme::default()));
+    let child = child.unwrap_or_else(RenderSlot::empty);
     provide_context(
         move || theme.call(()),
         move || {

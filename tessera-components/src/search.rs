@@ -5,20 +5,20 @@
 //! Use to collect search queries and show suggestions or results as the user
 //! types.
 use tessera_ui::{
-    CallbackWith, Color, Dp, Modifier, Prop, RenderSlot, State, remember, tessera, use_context,
-    winit,
+    CallbackWith, Color, Dp, Modifier, RenderSlot, State, layout::layout_primitive, remember,
+    tessera, use_context, winit,
 };
 
 use crate::{
-    column::{ColumnArgs, column},
-    divider::{DividerArgs, horizontal_divider},
+    column::column,
+    divider::horizontal_divider,
     gesture_recognizer::TapRecognizer,
-    modifier::ModifierExt as _,
+    modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
     pos_misc::is_position_inside_bounds,
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceArgs, surface},
-    text_field::{TextFieldArgs, TextFieldDefaults, TextFieldLineLimit, text_field},
+    surface::surface,
+    text_field::{TextFieldBuilder, TextFieldDefaults, TextFieldLineLimit},
     text_input::TextInputController,
     theme::MaterialTheme,
 };
@@ -32,6 +32,12 @@ pub struct SearchBarColors {
     pub container_color: Color,
     /// Divider color between the input field and results content.
     pub divider_color: Color,
+}
+
+impl Default for SearchBarColors {
+    fn default() -> Self {
+        SearchBarDefaults::colors()
+    }
 }
 
 /// Defaults for search bars.
@@ -81,156 +87,30 @@ impl SearchBarDefaults {
     }
 }
 
-/// Configuration arguments for search bars.
-#[derive(Clone, Prop)]
-pub struct SearchBarArgs {
-    /// Modifier chain applied to the search bar container.
-    pub modifier: Modifier,
-    /// Whether the input is enabled.
-    pub enabled: bool,
-    /// Whether the input is read-only.
-    pub read_only: bool,
-    /// Whether the bar is active (expanded) for declarative usage.
-    pub is_active: bool,
-    /// Optional placeholder text shown when the query is empty.
-    #[prop(into)]
-    pub placeholder: Option<String>,
-    /// Optional leading icon shown before the input text.
-    #[prop(skip_setter)]
-    pub leading_icon: Option<RenderSlot>,
-    /// Optional trailing icon shown after the input text.
-    #[prop(skip_setter)]
-    pub trailing_icon: Option<RenderSlot>,
-    /// Called when the query changes. Return value is the text to keep.
-    #[prop(skip_setter)]
-    pub on_query_change: CallbackWith<String, String>,
-    /// Called when the user submits the query.
-    #[prop(skip_setter)]
-    pub on_search: CallbackWith<String, ()>,
-    /// Called when the active state changes due to user interaction.
-    #[prop(skip_setter)]
-    pub on_active_change: CallbackWith<bool, ()>,
-    /// Shape used for the input field.
-    pub shape: Shape,
-    /// Colors for the search bar.
-    pub colors: SearchBarColors,
-    /// Tonal elevation for the search bar container.
-    pub tonal_elevation: Dp,
-    /// Shadow elevation for the search bar container.
-    pub shadow_elevation: Dp,
-    /// Shape used for docked results.
-    pub dropdown_shape: Shape,
-    /// Gap between input field and docked results.
-    pub dropdown_gap: Dp,
-    /// Padding inside the results container.
-    pub content_padding: Dp,
-    /// Optional external controller for active/query state.
-    #[prop(skip_setter)]
-    pub controller: Option<State<SearchBarController>>,
-    /// Optional results content slot.
-    #[prop(skip_setter)]
-    pub content: Option<RenderSlot>,
+#[derive(Clone)]
+struct SearchBarProps {
+    modifier: Modifier,
+    enabled: bool,
+    read_only: bool,
+    is_active: bool,
+    placeholder: Option<String>,
+    leading_icon: Option<RenderSlot>,
+    trailing_icon: Option<RenderSlot>,
+    on_query_change: Option<CallbackWith<String, String>>,
+    on_search: Option<CallbackWith<String, ()>>,
+    on_active_change: Option<CallbackWith<bool, ()>>,
+    shape: Shape,
+    colors: SearchBarColors,
+    tonal_elevation: Dp,
+    shadow_elevation: Dp,
+    dropdown_shape: Shape,
+    dropdown_gap: Dp,
+    content_padding: Dp,
+    controller: Option<State<SearchBarController>>,
+    content: Option<RenderSlot>,
 }
 
-impl SearchBarArgs {
-    /// Set the query change handler.
-    pub fn on_query_change<F>(mut self, on_query_change: F) -> Self
-    where
-        F: Fn(String) -> String + Send + Sync + 'static,
-    {
-        self.on_query_change = CallbackWith::new(on_query_change);
-        self
-    }
-
-    /// Set the query change handler using a shared callback.
-    pub fn on_query_change_shared(mut self, on_query_change: CallbackWith<String, String>) -> Self {
-        self.on_query_change = on_query_change;
-        self
-    }
-
-    /// Set the search submit handler.
-    pub fn on_search<F>(mut self, on_search: F) -> Self
-    where
-        F: Fn(String) + Send + Sync + 'static,
-    {
-        self.on_search = CallbackWith::new(on_search);
-        self
-    }
-
-    /// Set the search submit handler using a shared callback.
-    pub fn on_search_shared(mut self, on_search: CallbackWith<String, ()>) -> Self {
-        self.on_search = on_search;
-        self
-    }
-
-    /// Set the active-state change handler.
-    pub fn on_active_change<F>(mut self, on_active_change: F) -> Self
-    where
-        F: Fn(bool) + Send + Sync + 'static,
-    {
-        self.on_active_change = CallbackWith::new(on_active_change);
-        self
-    }
-
-    /// Set the active-state change handler using a shared callback.
-    pub fn on_active_change_shared(mut self, on_active_change: CallbackWith<bool, ()>) -> Self {
-        self.on_active_change = on_active_change;
-        self
-    }
-
-    /// Set the leading icon slot.
-    pub fn leading_icon<F>(mut self, leading_icon: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.leading_icon = Some(RenderSlot::new(leading_icon));
-        self
-    }
-
-    /// Set the leading icon slot using a shared callback.
-    pub fn leading_icon_shared(mut self, leading_icon: RenderSlot) -> Self {
-        self.leading_icon = Some(leading_icon);
-        self
-    }
-
-    /// Set the trailing icon slot.
-    pub fn trailing_icon<F>(mut self, trailing_icon: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.trailing_icon = Some(RenderSlot::new(trailing_icon));
-        self
-    }
-
-    /// Set the trailing icon slot using a shared callback.
-    pub fn trailing_icon_shared(mut self, trailing_icon: RenderSlot) -> Self {
-        self.trailing_icon = Some(trailing_icon);
-        self
-    }
-
-    /// Sets an external search bar controller.
-    pub fn controller(mut self, controller: State<SearchBarController>) -> Self {
-        self.controller = Some(controller);
-        self
-    }
-
-    /// Sets the results content slot.
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.content = Some(RenderSlot::new(content));
-        self
-    }
-
-    /// Sets the results content slot using a shared render slot.
-    pub fn content_shared(mut self, content: impl Into<RenderSlot>) -> Self {
-        self.content = Some(content.into());
-        self
-    }
-}
-
-impl Default for SearchBarArgs {
+impl Default for SearchBarProps {
     fn default() -> Self {
         Self {
             modifier: Modifier::new(),
@@ -240,9 +120,9 @@ impl Default for SearchBarArgs {
             placeholder: None,
             leading_icon: None,
             trailing_icon: None,
-            on_query_change: CallbackWith::identity(),
-            on_search: CallbackWith::default_value(),
-            on_active_change: CallbackWith::default_value(),
+            on_query_change: None,
+            on_search: None,
+            on_active_change: None,
             shape: SearchBarDefaults::input_shape(),
             colors: SearchBarDefaults::colors(),
             tonal_elevation: SearchBarDefaults::TONAL_ELEVATION,
@@ -309,8 +189,9 @@ impl Default for SearchBarController {
     }
 }
 
-#[derive(Clone, PartialEq, Copy)]
+#[derive(Clone, PartialEq, Copy, Default)]
 enum SearchBarLayoutKind {
+    #[default]
     FullScreen,
     Docked,
 }
@@ -325,8 +206,25 @@ enum SearchBarLayoutKind {
 ///
 /// ## Parameters
 ///
-/// - `args` - configures search behavior and appearance; see [`SearchBarArgs`].
-/// - `content` - renders search results when the bar is active.
+/// - `modifier` - modifier chain applied to the search bar container.
+/// - `enabled` - whether the input is enabled.
+/// - `read_only` - whether the input is read-only.
+/// - `is_active` - whether the search bar is currently expanded.
+/// - `placeholder` - optional placeholder text.
+/// - `leading_icon` - optional leading icon slot.
+/// - `trailing_icon` - optional trailing icon slot.
+/// - `on_query_change` - optional callback for query changes.
+/// - `on_search` - optional callback invoked when the query is submitted.
+/// - `on_active_change` - optional callback invoked when active state changes.
+/// - `shape` - shape used for the search input.
+/// - `colors` - search bar color configuration.
+/// - `tonal_elevation` - tonal elevation for the search container.
+/// - `shadow_elevation` - shadow elevation for the search container.
+/// - `dropdown_shape` - shape used for docked result surfaces.
+/// - `dropdown_gap` - gap between a docked field and its results.
+/// - `content_padding` - padding inside the result surface.
+/// - `controller` - optional external controller for active/query state.
+/// - `content` - optional results content slot.
 ///
 /// ## Examples
 ///
@@ -335,28 +233,61 @@ enum SearchBarLayoutKind {
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::search::{SearchBarArgs, search_bar};
-/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-///     || MaterialTheme::default(),
-///     || {
-///         let args = SearchBarArgs::default()
-///             .is_active(true)
-///             .content(|| { /* results */ });
-///         assert!(args.is_active);
-///         search_bar(&args);
-///     },
-/// );
-/// material_theme(&args);
+/// use tessera_components::search::search_bar;
+/// material_theme()
+///     .theme(|| MaterialTheme::default())
+///     .child(|| {
+///         search_bar().is_active(true).content(|| {});
+///     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn search_bar(args: &SearchBarArgs) {
-    let render_args = build_search_bar_render_args(args.clone(), SearchBarLayoutKind::FullScreen);
-    let modifier = render_args.modifier.clone();
-    modifier.run(move || {
-        search_bar_inner(&render_args);
-    });
+pub fn search_bar(
+    modifier: Modifier,
+    #[default(true)] enabled: bool,
+    read_only: bool,
+    is_active: bool,
+    #[prop(into)] placeholder: Option<String>,
+    leading_icon: Option<RenderSlot>,
+    trailing_icon: Option<RenderSlot>,
+    on_query_change: Option<CallbackWith<String, String>>,
+    on_search: Option<CallbackWith<String, ()>>,
+    on_active_change: Option<CallbackWith<bool, ()>>,
+    #[default(SearchBarProps::default().shape)] shape: Shape,
+    #[default(SearchBarProps::default().colors)] colors: SearchBarColors,
+    #[default(SearchBarProps::default().tonal_elevation)] tonal_elevation: Dp,
+    #[default(SearchBarProps::default().shadow_elevation)] shadow_elevation: Dp,
+    #[default(SearchBarProps::default().dropdown_shape)] dropdown_shape: Shape,
+    #[default(SearchBarProps::default().dropdown_gap)] dropdown_gap: Dp,
+    #[default(SearchBarProps::default().content_padding)] content_padding: Dp,
+    controller: Option<State<SearchBarController>>,
+    content: Option<RenderSlot>,
+) {
+    render_search_bar(
+        SearchBarProps {
+            modifier,
+            enabled,
+            read_only,
+            is_active,
+            placeholder,
+            leading_icon,
+            trailing_icon,
+            on_query_change,
+            on_search,
+            on_active_change,
+            shape,
+            colors,
+            tonal_elevation,
+            shadow_elevation,
+            dropdown_shape,
+            dropdown_gap,
+            content_padding,
+            controller,
+            content,
+        },
+        SearchBarLayoutKind::FullScreen,
+    );
 }
 
 /// # docked_search_bar
@@ -369,8 +300,8 @@ pub fn search_bar(args: &SearchBarArgs) {
 ///
 /// ## Parameters
 ///
-/// - `args` - configures search behavior and appearance; see [`SearchBarArgs`].
-/// - `content` - renders search results when the bar is active.
+/// - Parameters are the same as [`search_bar`], but docked results render below
+///   the field instead of taking over the screen.
 ///
 /// ## Examples
 ///
@@ -379,34 +310,90 @@ pub fn search_bar(args: &SearchBarArgs) {
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::search::{SearchBarArgs, docked_search_bar};
-/// let args = tessera_components::theme::MaterialThemeProviderArgs::new(
-///     || MaterialTheme::default(),
-///     || {
-///         let args = SearchBarArgs::default()
-///             .is_active(true)
-///             .content(|| { /* results */ });
-///         assert!(args.is_active);
-///         docked_search_bar(&args);
-///     },
-/// );
-/// material_theme(&args);
+/// use tessera_components::search::docked_search_bar;
+/// material_theme()
+///     .theme(|| MaterialTheme::default())
+///     .child(|| {
+///         docked_search_bar().is_active(true).content(|| {});
+///     });
 /// # }
 /// # component();
 /// ```
 #[tessera]
-pub fn docked_search_bar(args: &SearchBarArgs) {
-    let render_args = build_search_bar_render_args(args.clone(), SearchBarLayoutKind::Docked);
+pub fn docked_search_bar(
+    modifier: Modifier,
+    #[default(true)] enabled: bool,
+    read_only: bool,
+    is_active: bool,
+    #[prop(into)] placeholder: Option<String>,
+    leading_icon: Option<RenderSlot>,
+    trailing_icon: Option<RenderSlot>,
+    on_query_change: Option<CallbackWith<String, String>>,
+    on_search: Option<CallbackWith<String, ()>>,
+    on_active_change: Option<CallbackWith<bool, ()>>,
+    #[default(SearchBarProps::default().shape)] shape: Shape,
+    #[default(SearchBarProps::default().colors)] colors: SearchBarColors,
+    #[default(SearchBarProps::default().tonal_elevation)] tonal_elevation: Dp,
+    #[default(SearchBarProps::default().shadow_elevation)] shadow_elevation: Dp,
+    #[default(SearchBarProps::default().dropdown_shape)] dropdown_shape: Shape,
+    #[default(SearchBarProps::default().dropdown_gap)] dropdown_gap: Dp,
+    #[default(SearchBarProps::default().content_padding)] content_padding: Dp,
+    controller: Option<State<SearchBarController>>,
+    content: Option<RenderSlot>,
+) {
+    render_search_bar(
+        SearchBarProps {
+            modifier,
+            enabled,
+            read_only,
+            is_active,
+            placeholder,
+            leading_icon,
+            trailing_icon,
+            on_query_change,
+            on_search,
+            on_active_change,
+            shape,
+            colors,
+            tonal_elevation,
+            shadow_elevation,
+            dropdown_shape,
+            dropdown_gap,
+            content_padding,
+            controller,
+            content,
+        },
+        SearchBarLayoutKind::Docked,
+    );
+}
+
+fn render_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
+    let render_args = build_search_bar_props(args, kind);
     let modifier = render_args.modifier.clone();
-    modifier.run(move || {
-        search_bar_inner(&render_args);
+    layout_primitive().modifier(modifier).child(move || {
+        search_bar_inner()
+            .kind(render_args.kind)
+            .enabled(render_args.enabled)
+            .read_only(render_args.read_only)
+            .shape(render_args.shape)
+            .colors(render_args.colors)
+            .tonal_elevation(render_args.tonal_elevation)
+            .shadow_elevation(render_args.shadow_elevation)
+            .dropdown_shape(render_args.dropdown_shape)
+            .dropdown_gap(render_args.dropdown_gap)
+            .content_padding(render_args.content_padding)
+            .controller(render_args.controller)
+            .content_shared(render_args.content.clone())
+            .placeholder_internal(render_args.placeholder.clone())
+            .leading_icon_internal(render_args.leading_icon.clone())
+            .trailing_icon_internal(render_args.trailing_icon.clone())
+            .on_query_change_shared(render_args.on_query_change)
+            .on_search_shared(render_args.on_search)
+            .on_active_change_shared(render_args.on_active_change);
     });
 }
 
-fn build_search_bar_render_args(
-    args: SearchBarArgs,
-    kind: SearchBarLayoutKind,
-) -> SearchBarRenderArgs {
+fn build_search_bar_props(args: SearchBarProps, kind: SearchBarLayoutKind) -> SearchBarRenderArgs {
     let content = args.content.unwrap_or_else(RenderSlot::empty);
     let controller = args
         .controller
@@ -427,9 +414,11 @@ fn build_search_bar_render_args(
         placeholder: args.placeholder,
         leading_icon: args.leading_icon,
         trailing_icon: args.trailing_icon,
-        on_query_change: args.on_query_change,
-        on_search: args.on_search,
-        on_active_change: args.on_active_change,
+        on_query_change: args.on_query_change.unwrap_or_else(CallbackWith::identity),
+        on_search: args.on_search.unwrap_or_else(CallbackWith::default_value),
+        on_active_change: args
+            .on_active_change
+            .unwrap_or_else(CallbackWith::default_value),
         shape: args.shape,
         colors: args.colors,
         tonal_elevation: args.tonal_elevation,
@@ -442,7 +431,7 @@ fn build_search_bar_render_args(
     }
 }
 
-#[derive(Clone, Prop)]
+#[derive(Clone)]
 struct SearchBarRenderArgs {
     kind: SearchBarLayoutKind,
     modifier: Modifier,
@@ -465,7 +454,7 @@ struct SearchBarRenderArgs {
     content: RenderSlot,
 }
 
-#[derive(Clone, Prop)]
+#[derive(Clone)]
 struct SearchResultsSurfaceArgs {
     kind: SearchBarLayoutKind,
     container_color: Color,
@@ -478,102 +467,78 @@ struct SearchResultsSurfaceArgs {
 }
 
 #[tessera]
-fn search_bar_inner(args: &SearchBarRenderArgs) {
-    let args = args.clone();
-    let kind = args.kind;
-    let controller = args.controller;
-    let content = args.content;
-    let mut field_args = TextFieldArgs::filled();
-    let font_size = field_args.font_size;
-    let line_height = field_args.line_height;
+fn search_bar_inner(
+    kind: SearchBarLayoutKind,
+    enabled: bool,
+    read_only: bool,
+    #[prop(into)] placeholder: Option<String>,
+    leading_icon: Option<RenderSlot>,
+    trailing_icon: Option<RenderSlot>,
+    on_query_change: Option<CallbackWith<String, String>>,
+    on_search: Option<CallbackWith<String, ()>>,
+    on_active_change: Option<CallbackWith<bool, ()>>,
+    shape: Shape,
+    colors: SearchBarColors,
+    tonal_elevation: Dp,
+    shadow_elevation: Dp,
+    dropdown_shape: Shape,
+    dropdown_gap: Dp,
+    content_padding: Dp,
+    controller: Option<State<SearchBarController>>,
+    content: Option<RenderSlot>,
+) {
+    let controller = controller.expect("search_bar_inner requires controller");
+    let content = content.unwrap_or_else(RenderSlot::empty);
+    let on_query_change = on_query_change.unwrap_or_else(CallbackWith::identity);
+    let on_search = on_search.unwrap_or_else(CallbackWith::default_value);
+    let on_active_change = on_active_change.unwrap_or_else(CallbackWith::default_value);
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
 
+    let font_size = theme.typography.body_large.font_size;
+    let line_height = theme.typography.body_large.line_height;
     let input_controller = remember(|| TextInputController::new(font_size, line_height));
     let synced_query = remember(String::new);
 
     sync_query(&controller, &input_controller, &synced_query);
 
-    let on_query_change = args.on_query_change;
-    field_args = field_args.on_change(move |text| {
-        let next = on_query_change.call(text);
-        controller.with_mut(|c| c.set_query(next.clone()));
-        synced_query.set(next.clone());
-        next
-    });
-
-    field_args = field_args
-        .enabled(args.enabled)
-        .read_only(args.read_only)
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .height(SearchBarDefaults::INPUT_HEIGHT),
-        )
-        .min_height(SearchBarDefaults::INPUT_HEIGHT)
-        .shape(args.shape)
-        .background_color(args.colors.container_color)
-        .focus_background_color(args.colors.container_color)
-        .border_width(Dp(0.0))
-        .border_color(Color::TRANSPARENT)
-        .focus_border_width(Dp(0.0))
-        .focus_border_color(Color::TRANSPARENT)
-        .show_indicator(false)
-        .padding(TextFieldDefaults::CONTENT_PADDING)
-        .line_limit(TextFieldLineLimit::SingleLine);
-
-    if let Some(placeholder) = args.placeholder.clone() {
-        field_args = field_args.placeholder(placeholder);
-    }
-
-    if let Some(leading_icon) = args.leading_icon.clone() {
-        field_args = field_args.leading_icon(move || {
-            leading_icon.render();
-        });
-    }
-
-    if let Some(trailing_icon) = args.trailing_icon.clone() {
-        field_args = field_args.trailing_icon(move || {
-            trailing_icon.render();
-        });
-    }
-
-    let on_active_change = args.on_active_change;
-    let on_search = args.on_search;
-    let enabled = args.enabled;
     let tap_recognizer = remember(TapRecognizer::default);
-    pointer_input_handler({
-        move |input| {
+    let modifier = with_keyboard_input(
+        with_pointer_input(Modifier::new(), {
+            move |input| {
+                if !enabled {
+                    return;
+                }
+                let is_active = controller.with(|c| c.is_active());
+                let cursor_pos = input.cursor_position_rel;
+                let within_bounds = cursor_pos
+                    .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+                    .unwrap_or(false);
+                let tap_result = tap_recognizer.with_mut(|recognizer| {
+                    recognizer.update(
+                        input.pass,
+                        input.pointer_changes.as_mut_slice(),
+                        input.cursor_position_rel,
+                        within_bounds,
+                    )
+                });
+
+                if tap_result.pressed && within_bounds && !is_active {
+                    controller.with_mut(|c| c.open());
+                    on_active_change.call(true);
+                }
+            }
+        }),
+        move |mut input| {
             if !enabled {
                 return;
             }
             let is_active = controller.with(|c| c.is_active());
-            let cursor_pos = input.cursor_position_rel;
-            let within_bounds = cursor_pos
-                .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-                .unwrap_or(false);
-            let tap_result = tap_recognizer.with_mut(|recognizer| {
-                recognizer.update(
-                    input.pass,
-                    input.pointer_changes.as_mut_slice(),
-                    input.cursor_position_rel,
-                    within_bounds,
-                )
-            });
-
-            if tap_result.pressed && within_bounds && !is_active {
-                controller.with_mut(|c| c.open());
-                on_active_change.call(true);
-            }
-        }
-    });
-
-    keyboard_input_handler(move |mut input| {
-        if !enabled {
-            return;
-        }
-        let is_active = controller.with(|c| c.is_active());
-        for event in input.keyboard_events.iter() {
-            if event.state == winit::event::ElementState::Pressed {
-                if let winit::keyboard::PhysicalKey::Code(code) = event.physical_key {
+            for event in input.keyboard_events.iter() {
+                if event.state == winit::event::ElementState::Pressed
+                    && let winit::keyboard::PhysicalKey::Code(code) = event.physical_key
+                {
                     match code {
                         winit::keyboard::KeyCode::Escape => {
                             if is_active {
@@ -591,88 +556,184 @@ fn search_bar_inner(args: &SearchBarRenderArgs) {
                     }
                 }
             }
-        }
-        if is_active {
-            input.block_keyboard();
-        }
-    });
+            if is_active {
+                input.block_keyboard();
+            }
+        },
+    );
 
-    let dropdown_gap = args.dropdown_gap;
     let results_surface_args = SearchResultsSurfaceArgs {
         kind,
-        container_color: args.colors.container_color,
-        divider_color: args.colors.divider_color,
-        dropdown_shape: args.dropdown_shape,
-        tonal_elevation: args.tonal_elevation,
-        shadow_elevation: args.shadow_elevation,
-        content_padding: args.content_padding,
+        container_color: colors.container_color,
+        divider_color: colors.divider_color,
+        dropdown_shape,
+        tonal_elevation,
+        shadow_elevation,
+        content_padding,
         content: content.clone(),
     };
-    column(&ColumnArgs::default().children(move |scope| {
-        scope.child(move || {
-            let field_args = field_args.clone().controller(input_controller);
-            text_field(&field_args);
-        });
 
-        if controller.with(|c| c.is_active()) {
-            if matches!(kind, SearchBarLayoutKind::Docked) {
-                scope.child(move || {
-                    spacer(&crate::spacer::SpacerArgs::new(
-                        Modifier::new().height(dropdown_gap),
-                    ))
-                });
-            }
-
-            scope.child(move || {
-                render_results_surface(&results_surface_args);
+    layout_primitive().modifier(modifier).child(move || {
+        let placeholder = placeholder.clone();
+        let leading_icon = leading_icon.clone();
+        let trailing_icon = trailing_icon.clone();
+        let results_surface_args = results_surface_args.clone();
+        column().children(move || {
+            build_search_field(SearchFieldArgs {
+                enabled,
+                read_only,
+                placeholder: placeholder.clone(),
+                leading_icon: leading_icon.clone(),
+                trailing_icon: trailing_icon.clone(),
+                shape,
+                colors,
+                controller,
+                input_controller,
+                synced_query,
+                on_query_change,
             });
-        }
-    }));
+
+            if controller.with(|c| c.is_active()) {
+                if matches!(kind, SearchBarLayoutKind::Docked) {
+                    spacer().modifier(Modifier::new().height(dropdown_gap));
+                }
+
+                render_results_surface(&results_surface_args);
+            }
+        });
+    });
 }
 
 fn render_results_surface(args: &SearchResultsSurfaceArgs) {
-    let kind = args.kind;
-    let container_color = args.container_color;
-    let divider_color = args.divider_color;
-    let dropdown_shape = args.dropdown_shape;
-    let tonal_elevation = args.tonal_elevation;
-    let shadow_elevation = args.shadow_elevation;
-    let content_padding = args.content_padding;
-    let content = args.content.clone();
-
-    let shape = match kind {
+    let shape = match args.kind {
         SearchBarLayoutKind::FullScreen => Shape::RECTANGLE,
-        SearchBarLayoutKind::Docked => dropdown_shape,
+        SearchBarLayoutKind::Docked => args.dropdown_shape,
     };
 
-    let modifier = match kind {
+    let modifier = match args.kind {
         SearchBarLayoutKind::FullScreen => Modifier::new().fill_max_width().fill_max_height(),
         SearchBarLayoutKind::Docked => Modifier::new().fill_max_width(),
     };
 
-    surface(&crate::surface::SurfaceArgs::with_child(
-        SurfaceArgs::default()
-            .style(container_color.into())
-            .shape(shape)
-            .modifier(modifier)
-            .tonal_elevation(tonal_elevation)
-            .block_input(true)
-            .elevation(shadow_elevation),
-        move || {
+    let content = args.content.clone();
+    let divider_color = args.divider_color;
+    let content_padding = args.content_padding;
+
+    surface()
+        .style(args.container_color.into())
+        .shape(shape)
+        .modifier(modifier)
+        .tonal_elevation(args.tonal_elevation)
+        .block_input(true)
+        .elevation(args.shadow_elevation)
+        .with_child(move || {
             let content = content.clone();
-            column(&ColumnArgs::default().children(|scope| {
-                scope.child(move || {
-                    horizontal_divider(&DividerArgs::default().color(divider_color));
-                });
-                scope.child(move || {
-                    let content = content.clone();
-                    Modifier::new().padding_all(content_padding).run(move || {
+            column().children(move || {
+                horizontal_divider().color(divider_color);
+                let content = content.clone();
+                layout_primitive()
+                    .modifier(Modifier::new().padding_all(content_padding))
+                    .child(move || {
                         content.render();
                     });
-                });
-            }));
-        },
-    ));
+            });
+        });
+}
+
+struct SearchFieldArgs {
+    enabled: bool,
+    read_only: bool,
+    placeholder: Option<String>,
+    leading_icon: Option<RenderSlot>,
+    trailing_icon: Option<RenderSlot>,
+    shape: Shape,
+    colors: SearchBarColors,
+    controller: State<SearchBarController>,
+    input_controller: State<TextInputController>,
+    synced_query: State<String>,
+    on_query_change: CallbackWith<String, String>,
+}
+
+fn build_search_field(args: SearchFieldArgs) {
+    TextFieldBuilder::filled()
+        .enabled(args.enabled)
+        .read_only(args.read_only)
+        .modifier(
+            Modifier::new()
+                .fill_max_width()
+                .height(SearchBarDefaults::INPUT_HEIGHT),
+        )
+        .min_height(SearchBarDefaults::INPUT_HEIGHT)
+        .shape(args.shape)
+        .background_color(args.colors.container_color)
+        .focus_background_color(args.colors.container_color)
+        .border_width(Dp(0.0))
+        .border_color(Color::TRANSPARENT)
+        .focus_border_width(Dp(0.0))
+        .focus_border_color(Color::TRANSPARENT)
+        .show_indicator(false)
+        .padding(TextFieldDefaults::CONTENT_PADDING)
+        .line_limit(TextFieldLineLimit::SingleLine)
+        .on_change(move |text| {
+            let next = args.on_query_change.call(text);
+            args.controller.with_mut(|c| c.set_query(next.clone()));
+            args.synced_query.set(next.clone());
+            next
+        })
+        .controller(args.input_controller)
+        .placeholder_internal(args.placeholder)
+        .leading_icon_slot_internal(args.leading_icon)
+        .trailing_icon_slot_internal(args.trailing_icon);
+}
+
+impl SearchBarInnerBuilder {
+    fn placeholder_internal(mut self, placeholder: Option<String>) -> Self {
+        if let Some(placeholder) = placeholder {
+            self = self.placeholder(placeholder);
+        }
+        self
+    }
+
+    fn leading_icon_internal(mut self, leading_icon: Option<RenderSlot>) -> Self {
+        if let Some(leading_icon) = leading_icon {
+            self = self.leading_icon_shared(leading_icon);
+        }
+        self
+    }
+
+    fn trailing_icon_internal(mut self, trailing_icon: Option<RenderSlot>) -> Self {
+        if let Some(trailing_icon) = trailing_icon {
+            self = self.trailing_icon_shared(trailing_icon);
+        }
+        self
+    }
+}
+
+impl TextFieldBuilder {
+    fn placeholder_internal(mut self, placeholder: Option<String>) -> Self {
+        if let Some(placeholder) = placeholder {
+            self = self.placeholder(placeholder);
+        }
+        self
+    }
+
+    fn leading_icon_slot_internal(mut self, leading_icon: Option<RenderSlot>) -> Self {
+        if let Some(leading_icon) = leading_icon {
+            self = self.leading_icon(move || {
+                leading_icon.render();
+            });
+        }
+        self
+    }
+
+    fn trailing_icon_slot_internal(mut self, trailing_icon: Option<RenderSlot>) -> Self {
+        if let Some(trailing_icon) = trailing_icon {
+            self = self.trailing_icon(move || {
+                trailing_icon.render();
+            });
+        }
+        self
+    }
 }
 
 fn sync_query(
