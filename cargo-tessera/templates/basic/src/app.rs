@@ -1,6 +1,6 @@
 use tessera_components::{
-    modifier::ModifierExt,
-    surface::{SurfaceArgs, surface},
+    modifier::ModifierExt as _,
+    surface::surface,
     text::text,
     theme::{MaterialTheme, material_theme},
 };
@@ -8,12 +8,13 @@ use tessera_ui::{Modifier, tessera};
 
 #[tessera]
 pub fn app() {
-    material_theme(MaterialTheme::default, || {
-        surface(
-            SurfaceArgs::default().modifier(Modifier::new().fill_max_size()),
-            || {
-                text("Hello Tessera!");
-            },
-        );
-    });
+    material_theme()
+        .theme(|| MaterialTheme::default())
+        .child(|| {
+            surface()
+                .modifier(Modifier::new().fill_max_size())
+                .child(|| {
+                    text().content("Hello Tessera!");
+                });
+        });
 }

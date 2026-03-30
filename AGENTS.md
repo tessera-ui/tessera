@@ -16,6 +16,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - **Project Type**: Rust UI Framework
 - **Core Crates**:
   - **tessera-ui**: Framework core (component tree, rendering, runtime, basic types Dp/Px, event handling, etc.)
+  - **tessera-foundation**: Shared foundational UI building blocks (alignment, shape definitions, and future common modifier APIs)
   - **tessera-components**: Basic UI components (row, column, text, button, surface, etc.) and their rendering pipelines
   - **tessera-macros**: The `#[tessera]` procedural macro for simplified component definition
   - **example**: Example project demonstrating framework usage
@@ -30,27 +31,28 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 - Components are stateless Rust functions annotated with `#[tessera]`. Persistent UI state is created with `remember` (returned as `State<T>`) and can be passed around as `State<T>`.
 - Inside the component function:
-  - `layout`: Provide a layout spec for measurement (optional)
-  - Typed input handlers such as `pointer_input_handler`, `keyboard_input_handler`, and `ime_input_handler`: Event and interaction handling (optional, choose the handlers you need)
+  - Compose child components to build the complete component tree
+  - Use `Modifier` chains for node-local behavior such as layout modifiers, input, semantics, drawing, and focus
+  - Use the internal layout primitive only inside framework/internal crates when a component must provide a custom layout policy
   - All child component closures must be executed to build the complete component tree
-
-**Automatic Injection**: `layout` and the typed input handler registration functions are injected by the macro and do not require manual import.
 
 ### Component API Pattern
 
-- Truly zero-config components may use `#[tessera] pub fn component()` with no `Args`.
-- Any configurable component must use a single public entrypoint with one argument: `#[tessera] pub fn component(args: &ComponentArgs)`.
+- Truly zero-config components may use `#[tessera] pub fn component()` with no parameters.
+- Configurable components must use a single public entrypoint declared with named owned parameters: `#[tessera] pub fn component(foo: Foo, bar: Bar, ...)`.
+- Public component calls must use the generated builder syntax: `component().foo(value).bar(value);`.
 - Do not introduce public wrapper variants (`*_with_controller`, `*_impl`, or extra public forwarding layers).
-- For optional external controllers, use `Option<State<...>>` in `Args`; when `None`, create internal state with `remember`.
-- Callback fields in `Args` should use `Callback` / `CallbackWith<...>`.
-- Slot fields in `Args` should use `RenderSlot` / slot wrappers as needed by signature.
+- Component parameters must use owned types that satisfy the macro requirements (`Clone`, `Default`, `Send`, `Sync`, and `'static` through the generated props model). Use `Option<T>` when a value has no natural default.
+- For optional external controllers, use `Option<State<...>>`; when `None`, create internal state with `remember`.
+- Callback parameters should use `Callback` / `CallbackWith<...>`.
+- Slot parameters should use `RenderSlot` / slot wrappers as needed by signature.
 - `Callback`/`RenderSlot` are immutable handles in practice; do not rely on closure hot-swap semantics.
 - If callback behavior depends on changing values, capture `State<T>` (or other stable handles) and read latest values at call time.
 - Do not add runtime callback/slot helper wrappers (`callback`, `callback_with`, `render_slot`, `render_slot_with`); construct handles directly via `Callback::new`, `CallbackWith::new`, `RenderSlot::new`, and `RenderSlotWith::new`.
 
 ### Component Tree & Node Metadata
 
-- The component tree is managed via structures like `ComponentNode` and `ComponentNodeMetaData`, supporting parallel measurement and rendering.
+- The component tree is managed internally by `ComponentTree` and node metadata structures, supporting parallel measurement and rendering.
 
 ---
 
@@ -59,7 +61,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Use `Constraint` and `DimensionValue` to describe size constraints.
 - `measure_nodes` supports parallel measurement of multiple child nodes.
 - `place_node` is used to position child nodes.
-- Default layout: If `layout` is not called, `DefaultLayoutSpec` stacks children at (0,0), and the container size is the minimal bounding rectangle.
+- Default layout: If no layout policy is attached to the current node, `DefaultLayoutPolicy` stacks children at (0,0), and the container size is the minimal bounding rectangle.
 
 ---
 
@@ -69,7 +71,7 @@ This document defines how You should assist in the Tessera project to ensure cod
   - **DrawCommand**: Trait describing renderable objects
   - **DrawablePipeline**/**ComputablePipeline**: GPU rendering/compute logic
   - **PipelineRegistry**: Registers all pipelines at startup
-- Components set draw/compute commands via `ComponentNodeMetaData`
+- Components set draw/compute commands through `RenderInput`, `RenderMetadataMut`, and render policies
 - The basic components crate provides common pipelines, which must be registered at entry (e.g., `register_pipelines`)
 
 ### Barrier System & Performance Optimization
@@ -92,11 +94,9 @@ This document defines how You should assist in the Tessera project to ensure cod
 ## 🎯 Event & State Management
 
 - Components are stateless; persistent state is stored via `remember` as `State<T>` and passed via parameters as needed.
-- Event handling is done via typed closures:
-  - `pointer_preview_input_handler` (root → leaf), `pointer_input_handler` (leaf → root), `pointer_final_input_handler` (root → leaf)
-  - `keyboard_preview_input_handler` / `keyboard_input_handler`
-  - `ime_preview_input_handler` / `ime_input_handler`
+- Event handling is attached through modifier-based interaction APIs and other node-local capabilities, using typed closures over the framework input contexts.
 - The typed input contexts are `PointerInput`, `KeyboardInput`, and `ImeInput`.
+- Treat input contexts as event/consumption surfaces, not generic renderer request bags. Cursor changes, semantics, IME publication, and window-side effects must use their dedicated modifier/controller/session APIs.
 - Mouse, keyboard, and IME events are processed via event queues and must be consumed promptly.
 - Event handlers should be lightweight to avoid blocking the main loop.
 
@@ -178,9 +178,8 @@ Example:
   1. `# <component_name>` — function header (title)
   2. Single-line summary: What this component does **and** recommended use cases.
   3. `## Usage` — a short one-line usage scenario (non-placement, app-level).
-  4. `## Parameters` — list each parameter and its role; if a parameter is an `Args` or
-     `State` structure, reference the type (e.g., `see [`DialogProviderArgs`]`) instead of
-     listing its fields.
+  4. `## Parameters` — list each parameter and its role. For large parameter sets, keep each
+     line concise and group related parameters by behavior when helpful.
   5. `## Examples` — a runnable rustdoc example (no `no_run`, no `ignore`) that demonstrates
      the key state logic (e.g., open/close a dialog or state toggle) and uses `assert!` to
      verify expected behavior.
@@ -190,17 +189,17 @@ Example:
 
 ```rust
 /// # dialog_provider
-/// 
+///
 /// Provide a modal dialog for alerts and confirmations.
 ///
 /// ## Usage
-/// 
+///
 /// Show modals (alerts/confirmations/wizards) that block user interaction.
 ///
 /// ## Parameters
-/// 
-/// - `args` — see [`DialogProviderArgs`]
-/// - `state` — a clonable [`DialogProviderState`] used to open/close
+///
+/// - `is_open` — whether the dialog is currently visible
+/// - `on_dismiss` — callback invoked when the dialog should close
 ///
 /// ## Examples
 /// use tessera_components::dialog::DialogProviderState;
@@ -221,8 +220,8 @@ Example:
 ### Notes
 
 - Aim for brevity and clarity. Examples should be minimal but assert meaningful behavior.
-- Keep references to `Args` and `State` types to avoid duplicating configuration
-  documentation across multiple components.
+- Keep parameter descriptions concise. Reference helper/controller types when useful, but do not
+  force public configuration through `Args` types.
 
 ---
 
