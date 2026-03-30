@@ -1,24 +1,11 @@
 mod app;
-mod example_components;
 pub mod res;
 
-use tessera_ui::{
-    EntryPoint,
-    renderer::{TesseraConfig, WindowConfig},
-};
+use tessera_ui::EntryPoint;
 
-use crate::app::app;
+use app::app;
 
 #[tessera_ui::entry]
 pub fn run() -> EntryPoint {
-    let config = TesseraConfig {
-        window: WindowConfig {
-            decorations: false,
-            ..Default::default()
-        },
-        ..Default::default()
-    };
-    EntryPoint::new(app)
-        .package(tessera_components::ComponentsPackage)
-        .config(config)
+    EntryPoint::new(app).package(tessera_components::ComponentsPackage)
 }

@@ -1,7 +1,11 @@
 [package]
 name = "example"
 version = "0.1.0"
-edition = "2024"
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+homepage.workspace = true
+build = "build.rs"
 
 [lib]
 crate-type = ["rlib", "cdylib"]
@@ -15,11 +19,6 @@ path = "src/main.rs"
 [dependencies]
 tessera-ui = { path = "../tessera-ui" }
 tessera-components = { path = "../tessera-components" }
-tokio = { version = "1.49.0", features = ["full"] }
-bytemuck = { version = "1.24.0", features = ["derive"] }
-image = "0.25.9"
-dashmap = "6.1.0"
-closure = "0.3.0"
 
 [build-dependencies]
 tessera-build = { path = "../tessera-build" }

@@ -3,3 +3,6 @@ permissions = []
 
 [assets]
 dir = "assets"
+
+[assets.tree_shaking]
+exclude = []
