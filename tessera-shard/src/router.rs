@@ -12,7 +12,10 @@
 
 use std::{
     collections::HashSet,
-    sync::atomic::{AtomicU64, Ordering},
+    sync::{
+        Arc,
+        atomic::{AtomicU64, Ordering},
+    },
 };
 
 use dashmap::DashMap;
@@ -22,29 +25,11 @@ use crate::{
     recycle_shard_state_slot,
 };
 
-static NEXT_ROUTER_SCOPE_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_ROUTE_ID: AtomicU64 = AtomicU64::new(1);
-
-/// Stable identifier for one router scope.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct RouterScopeId(u64);
-
-impl Default for RouterScopeId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl RouterScopeId {
-    /// Create a new unique router scope identifier.
-    pub fn new() -> Self {
-        Self(NEXT_ROUTER_SCOPE_ID.fetch_add(1, Ordering::Relaxed))
-    }
-}
 
 /// Stable identifier for one pushed route instance.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct RouteId(u64);
+pub(crate) struct RouteId(u64);
 
 impl RouteId {
     fn new() -> Self {
@@ -60,25 +45,21 @@ struct RouteShardKey {
 
 struct RouteEntry {
     route_id: RouteId,
-    destination: Box<dyn RouterDestination>,
+    destination: Arc<dyn RouterDestination>,
 }
 
-/// Scoped router state.
-///
-/// This type has no global singleton. Create one per `router_scope`.
-pub struct Router {
-    scope_id: RouterScopeId,
+/// Reactive navigation controller for one shard tree.
+pub struct RouterController {
     route_stack: Vec<RouteEntry>,
     version: u64,
     scope_shards: ShardStateMap<String>,
     route_shards: ShardStateMap<RouteShardKey>,
 }
 
-impl Router {
-    /// Create an empty scoped router.
-    pub fn new(scope_id: RouterScopeId) -> Self {
+impl RouterController {
+    /// Create an empty controller.
+    pub fn new() -> Self {
         Self {
-            scope_id,
             route_stack: Vec::new(),
             version: 0,
             scope_shards: DashMap::new(),
@@ -86,16 +67,18 @@ impl Router {
         }
     }
 
-    /// Create a scoped router seeded with a root destination.
-    pub fn with_root(scope_id: RouterScopeId, root_dest: impl RouterDestination + 'static) -> Self {
-        let mut router = Self::new(scope_id);
+    /// Create a controller seeded with a root destination.
+    pub fn with_root(root_dest: impl RouterDestination + 'static) -> Self {
+        let mut router = Self::new();
         router.push(root_dest);
         router
     }
 
-    /// Owning scope identifier.
-    pub fn scope_id(&self) -> RouterScopeId {
-        self.scope_id
+    /// Create a controller seeded with a shared root destination.
+    pub fn with_root_shared(root_dest: Arc<dyn RouterDestination>) -> Self {
+        let mut router = Self::new();
+        router.push_shared(root_dest);
+        router
     }
 
     /// Monotonic routing version.
@@ -105,9 +88,14 @@ impl Router {
 
     /// Push a destination onto the stack.
     pub fn push<T: RouterDestination + 'static>(&mut self, destination: T) {
+        self.push_shared(Arc::new(destination));
+    }
+
+    /// Push a shared destination onto the stack.
+    pub fn push_shared(&mut self, destination: Arc<dyn RouterDestination>) {
         self.route_stack.push(RouteEntry {
             route_id: RouteId::new(),
-            destination: Box::new(destination),
+            destination,
         });
         self.bump_version();
     }
@@ -115,7 +103,7 @@ impl Router {
     /// Pop the top destination from the stack.
     ///
     /// Returns `None` if the stack is empty.
-    pub fn pop(&mut self) -> Option<Box<dyn RouterDestination>> {
+    pub fn pop(&mut self) -> Option<Arc<dyn RouterDestination>> {
         let removed = self.route_stack.pop()?;
         self.prune_route_shards(removed.route_id);
         self.bump_version();
@@ -128,9 +116,19 @@ impl Router {
     pub fn replace<T: RouterDestination + 'static>(
         &mut self,
         destination: T,
-    ) -> Option<Box<dyn RouterDestination>> {
+    ) -> Option<Arc<dyn RouterDestination>> {
         let previous = self.pop();
         self.push(destination);
+        previous
+    }
+
+    /// Replace the top destination with a shared destination.
+    pub fn replace_shared(
+        &mut self,
+        destination: Arc<dyn RouterDestination>,
+    ) -> Option<Arc<dyn RouterDestination>> {
+        let previous = self.pop();
+        self.push_shared(destination);
         previous
     }
 
@@ -150,7 +148,7 @@ impl Router {
     }
 
     /// Route id for the top destination.
-    pub fn current_route_id(&self) -> Option<RouteId> {
+    pub(crate) fn current_route_id(&self) -> Option<RouteId> {
         self.route_stack.last().map(|entry| entry.route_id)
     }
 
@@ -232,9 +230,15 @@ impl Router {
     }
 
     /// Clear all destinations and push a new root destination.
-    pub fn reset_with(&mut self, root_dest: impl RouterDestination + 'static) {
+    pub fn reset(&mut self, root_dest: impl RouterDestination + 'static) {
         self.clear();
         self.push(root_dest);
+    }
+
+    /// Clear all destinations and push a shared root destination.
+    pub fn reset_shared(&mut self, root_dest: Arc<dyn RouterDestination>) {
+        self.clear();
+        self.push_shared(root_dest);
     }
 
     fn bump_version(&mut self) {
@@ -256,7 +260,13 @@ impl Router {
     }
 }
 
-impl Drop for Router {
+impl Default for RouterController {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl Drop for RouterController {
     fn drop(&mut self) {
         let scope_slots: Vec<_> = self
             .scope_shards
@@ -295,7 +305,7 @@ mod tests {
 
     use crate::ShardStateLifeCycle;
 
-    use super::{Router, RouterDestination, RouterScopeId};
+    use super::{RouterController, RouterDestination};
 
     static TEST_SHARD_ID_COUNTER: AtomicU64 = AtomicU64::new(1);
 
@@ -319,7 +329,11 @@ mod tests {
         }
     }
 
-    fn increment_state(router: &Router, shard_id: &str, life_cycle: ShardStateLifeCycle) -> usize {
+    fn increment_state(
+        router: &RouterController,
+        shard_id: &str,
+        life_cycle: ShardStateLifeCycle,
+    ) -> usize {
         router.init_or_get_with_lifecycle::<CounterState, _, _>(shard_id, life_cycle, |state| {
             state.with(|value| value.value.fetch_add(1, Ordering::SeqCst) + 1)
         })
@@ -328,7 +342,7 @@ mod tests {
     #[test]
     fn route_scoped_state_is_released_on_pop() {
         let shard_id = unique_shard_id("route_scoped");
-        let mut router = Router::with_root(RouterScopeId::new(), DummyDestination);
+        let mut router = RouterController::with_root(DummyDestination);
 
         assert_eq!(
             increment_state(&router, shard_id, ShardStateLifeCycle::Shard),
@@ -350,7 +364,7 @@ mod tests {
     #[test]
     fn scope_scoped_state_persists_inside_scope_but_resets_across_scopes() {
         let shard_id = unique_shard_id("scope_scoped");
-        let mut router = Router::with_root(RouterScopeId::new(), DummyDestination);
+        let mut router = RouterController::with_root(DummyDestination);
 
         assert_eq!(
             increment_state(&router, shard_id, ShardStateLifeCycle::Scope),
@@ -371,7 +385,7 @@ mod tests {
 
         drop(router);
 
-        let router = Router::with_root(RouterScopeId::new(), DummyDestination);
+        let router = RouterController::with_root(DummyDestination);
         assert_eq!(
             increment_state(&router, shard_id, ShardStateLifeCycle::Scope),
             1
@@ -381,7 +395,7 @@ mod tests {
     #[test]
     fn route_scoped_state_requires_active_route() {
         let shard_id = unique_shard_id("route_context_required");
-        let router = Router::new(RouterScopeId::new());
+        let router = RouterController::new();
         let result = catch_unwind(AssertUnwindSafe(|| {
             let _ = increment_state(&router, shard_id, ShardStateLifeCycle::Shard);
         }));

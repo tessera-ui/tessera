@@ -1,11 +1,14 @@
-//! Modifier chains for layout, focus, and drawing behavior.
+//! Modifier chains for node-local layout, drawing, focus, semantics, and other
+//! node-scoped behavior.
 //!
 //! ## Usage
 //!
-//! Build reusable modifier chains that wrap component subtrees with shared
-//! behavior.
+//! Build reusable modifier chains that attach behavior directly to the current
+//! component node.
 
 use std::{
+    any::{Any, TypeId},
+    collections::HashMap,
     fmt,
     hash::{Hash, Hasher},
     sync::Arc,
@@ -14,21 +17,192 @@ use std::{
 use smallvec::SmallVec;
 
 use crate::{
-    FocusGroupNode, FocusNode, FocusProperties, FocusRequester, FocusScopeNode, FocusState,
-    FocusTraversalPolicy,
+    AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, FocusGroupNode,
+    FocusProperties, FocusRequester, FocusScopeNode, FocusState, FocusTraversalPolicy, ImeInput,
+    KeyboardInput, MeasurementError, PointerInput, PxPosition,
+    focus::{FocusDirection, FocusNode, FocusRevealRequest},
+    layout::{LayoutInput, LayoutOutput, RenderInput},
     prop::CallbackWith,
-    runtime::{
-        TesseraRuntime, ensure_build_phase, persistent_focus_group_for_current_instance,
-        persistent_focus_scope_for_current_instance, persistent_focus_target_for_current_instance,
-    },
+    runtime::{TesseraRuntime, ensure_build_phase},
+    winit::window::CursorIcon,
 };
 
-/// A child subtree builder used by modifier wrappers.
-pub type ModifierChild = Box<dyn Fn() + Send + Sync + 'static>;
+/// Parent-data payloads collected from modifier nodes.
+pub type ParentDataMap = HashMap<TypeId, Arc<dyn Any + Send + Sync>>;
 
-/// A wrapper function that receives a child builder and returns a wrapped child
-/// builder.
-pub type ModifierWrapper = CallbackWith<ModifierChild, ModifierChild>;
+/// Child measurement entry used by layout modifier nodes.
+pub trait LayoutModifierChild {
+    /// Measures the wrapped content under the given constraint.
+    fn measure(&mut self, constraint: &Constraint) -> Result<ComputedData, MeasurementError>;
+
+    /// Places the wrapped content at the provided relative position.
+    fn place(&mut self, position: PxPosition, output: &mut LayoutOutput<'_>);
+}
+
+/// Input passed to layout modifier nodes.
+pub struct LayoutModifierInput<'a> {
+    /// The original layout input for the current node.
+    pub layout_input: &'a LayoutInput<'a>,
+}
+
+/// Output produced by a layout modifier node.
+pub struct LayoutModifierOutput {
+    /// Final computed size for the current node.
+    pub size: ComputedData,
+}
+
+/// Draw continuation used by draw modifier nodes.
+pub trait DrawModifierContent {
+    /// Records the wrapped content.
+    fn draw(&mut self, input: &RenderInput<'_>);
+}
+
+/// Draw input passed to draw modifier nodes.
+pub struct DrawModifierContext<'a> {
+    /// The render input for the current node.
+    pub render_input: &'a RenderInput<'a>,
+}
+
+/// A node-local layout modifier.
+pub trait LayoutModifierNode: Send + Sync + 'static {
+    /// Measures and places the wrapped content.
+    fn measure(
+        &self,
+        input: &LayoutModifierInput<'_>,
+        child: &mut dyn LayoutModifierChild,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<LayoutModifierOutput, MeasurementError>;
+}
+
+/// A node-local draw modifier.
+pub trait DrawModifierNode: Send + Sync + 'static {
+    /// Records drawing behavior around the wrapped content.
+    fn draw(&self, ctx: &mut DrawModifierContext<'_>, content: &mut dyn DrawModifierContent);
+}
+
+/// A node-local parent-data modifier.
+pub trait ParentDataModifierNode: Send + Sync + 'static {
+    /// Applies parent data visible to the parent layout.
+    fn apply_parent_data(&self, data: &mut ParentDataMap);
+}
+
+/// A node-local build modifier.
+pub trait BuildModifierNode: Send + Sync + 'static {
+    /// Applies build-time effects to the current component node.
+    fn apply(&self, runtime: &mut TesseraRuntime);
+}
+
+/// A node-local semantics modifier.
+pub trait SemanticsModifierNode: Send + Sync + 'static {
+    /// Applies accessibility metadata and optional action handling.
+    fn apply(
+        &self,
+        accessibility: &mut AccessibilityNode,
+        action_handler: &mut Option<AccessibilityActionHandler>,
+    );
+}
+
+/// A node-local pointer input modifier.
+pub trait PointerInputModifierNode: Send + Sync + 'static {
+    /// Handles pointer input for the current node.
+    ///
+    /// Pointer modifiers should operate on pointer-specific event flow and
+    /// local interaction state. Cross-cutting concerns such as semantics,
+    /// hover cursors, and IME publication should use their dedicated modifier
+    /// or session APIs.
+    fn on_pointer_input(&self, input: PointerInput<'_>);
+}
+
+/// A node-local hover cursor modifier.
+pub trait CursorModifierNode: Send + Sync + 'static {
+    /// Returns the cursor icon that should be used when the pointer hovers this
+    /// node.
+    fn cursor_icon(&self) -> CursorIcon;
+}
+
+/// A node-local keyboard input modifier.
+pub trait KeyboardInputModifierNode: Send + Sync + 'static {
+    /// Handles keyboard input for the current node.
+    fn on_keyboard_input(&self, input: KeyboardInput<'_>);
+}
+
+/// A node-local IME input modifier.
+pub trait ImeInputModifierNode: Send + Sync + 'static {
+    /// Handles IME input for the current node.
+    fn on_ime_input(&self, input: ImeInput<'_>);
+}
+
+/// Low-level modifier primitive API for framework crates that build semantic
+/// modifier extensions.
+///
+/// This trait is intended for crates such as `tessera-foundation` and
+/// `tessera-components` that implement higher-level `Modifier` extensions. Most
+/// application code should prefer those semantic extensions instead of calling
+/// these methods directly.
+pub trait ModifierCapabilityExt {
+    /// Appends a layout modifier node to the current modifier chain.
+    fn push_layout<N>(self, node: N) -> Self
+    where
+        N: LayoutModifierNode;
+
+    /// Appends a draw modifier node to the current modifier chain.
+    fn push_draw<N>(self, node: N) -> Self
+    where
+        N: DrawModifierNode;
+
+    /// Appends a parent-data modifier node to the current modifier chain.
+    fn push_parent_data<N>(self, node: N) -> Self
+    where
+        N: ParentDataModifierNode;
+
+    /// Appends a build modifier node to the current modifier chain.
+    fn push_build<N>(self, node: N) -> Self
+    where
+        N: BuildModifierNode;
+
+    /// Appends a semantics modifier node to the current modifier chain.
+    fn push_semantics<N>(self, node: N) -> Self
+    where
+        N: SemanticsModifierNode;
+
+    /// Appends a preview pointer-input modifier node to the current modifier
+    /// chain.
+    fn push_pointer_preview_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode;
+
+    /// Appends a pointer-input modifier node to the current modifier chain.
+    fn push_pointer_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode;
+
+    /// Appends a final pointer-input modifier node to the current modifier
+    /// chain.
+    fn push_pointer_final_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode;
+
+    /// Appends a preview keyboard-input modifier node to the current modifier
+    /// chain.
+    fn push_keyboard_preview_input<N>(self, node: N) -> Self
+    where
+        N: KeyboardInputModifierNode;
+
+    /// Appends a keyboard-input modifier node to the current modifier chain.
+    fn push_keyboard_input<N>(self, node: N) -> Self
+    where
+        N: KeyboardInputModifierNode;
+
+    /// Appends a preview IME-input modifier node to the current modifier chain.
+    fn push_ime_preview_input<N>(self, node: N) -> Self
+    where
+        N: ImeInputModifierNode;
+
+    /// Appends an IME-input modifier node to the current modifier chain.
+    fn push_ime_input<N>(self, node: N) -> Self
+    where
+        N: ImeInputModifierNode;
+}
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) enum FocusModifierRegistration {
@@ -41,41 +215,6 @@ pub(crate) enum FocusModifierRegistration {
     },
 }
 
-#[derive(Clone, Default, PartialEq, Eq)]
-pub(crate) struct FocusModifierConfig {
-    pub requester: Option<FocusRequester>,
-    pub registration: Option<FocusModifierRegistration>,
-    pub properties: Option<FocusProperties>,
-    pub traversal_policy: Option<FocusTraversalPolicy>,
-    pub changed_handler: Option<CallbackWith<FocusState>>,
-    pub event_handler: Option<CallbackWith<FocusState>>,
-}
-
-impl FocusModifierConfig {
-    fn merge(&mut self, op: FocusModifierOp) {
-        match op {
-            FocusModifierOp::Requester(requester) => {
-                self.requester = Some(requester);
-            }
-            FocusModifierOp::Registration(registration) => {
-                self.registration = Some(registration);
-            }
-            FocusModifierOp::Properties(properties) => {
-                self.properties = Some(properties);
-            }
-            FocusModifierOp::TraversalPolicy(policy) => {
-                self.traversal_policy = Some(policy);
-            }
-            FocusModifierOp::ChangedHandler(handler) => {
-                self.changed_handler = Some(handler);
-            }
-            FocusModifierOp::EventHandler(handler) => {
-                self.event_handler = Some(handler);
-            }
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Eq)]
 enum FocusModifierOp {
     Requester(FocusRequester),
@@ -84,21 +223,35 @@ enum FocusModifierOp {
     TraversalPolicy(FocusTraversalPolicy),
     ChangedHandler(CallbackWith<FocusState>),
     EventHandler(CallbackWith<FocusState>),
+    BeyondBoundsHandler(CallbackWith<FocusDirection, bool>),
+    RevealHandler(CallbackWith<FocusRevealRequest, bool>),
 }
 
 #[derive(Clone)]
 enum ModifierAction {
-    Wrapper(ModifierWrapper),
+    Layout(Arc<dyn LayoutModifierNode>),
+    Draw(Arc<dyn DrawModifierNode>),
+    ParentData(Arc<dyn ParentDataModifierNode>),
+    Build(Arc<dyn BuildModifierNode>),
+    Semantics(Arc<dyn SemanticsModifierNode>),
+    Cursor(Arc<dyn CursorModifierNode>),
+    PointerPreviewInput(Arc<dyn PointerInputModifierNode>),
+    PointerInput(Arc<dyn PointerInputModifierNode>),
+    PointerFinalInput(Arc<dyn PointerInputModifierNode>),
+    KeyboardPreviewInput(Arc<dyn KeyboardInputModifierNode>),
+    KeyboardInput(Arc<dyn KeyboardInputModifierNode>),
+    ImePreviewInput(Arc<dyn ImeInputModifierNode>),
+    ImeInput(Arc<dyn ImeInputModifierNode>),
     Focus(FocusModifierOp),
 }
 
 #[derive(Clone)]
-struct ModifierNode {
-    prev: Option<Arc<ModifierNode>>,
+struct ModifierLink {
+    prev: Option<Arc<ModifierLink>>,
     action: ModifierAction,
 }
 
-fn collect_actions(mut node: Option<Arc<ModifierNode>>) -> Vec<ModifierAction> {
+fn collect_actions(mut node: Option<Arc<ModifierLink>>) -> Vec<ModifierAction> {
     let mut actions: SmallVec<[ModifierAction; 8]> = SmallVec::new();
     while let Some(current) = node {
         actions.push(current.action.clone());
@@ -108,39 +261,12 @@ fn collect_actions(mut node: Option<Arc<ModifierNode>>) -> Vec<ModifierAction> {
 }
 
 /// A persistent handle to a modifier chain.
-///
-/// The modifier chain is immutable and replay-safe across frames.
 #[derive(Clone, Default)]
 pub struct Modifier {
-    tail: Option<Arc<ModifierNode>>,
+    tail: Option<Arc<ModifierLink>>,
 }
 
 /// Focus-specific modifier extensions for [`Modifier`].
-///
-/// These APIs live in the core crate so focus behavior can be reused without
-/// depending on the component library.
-///
-/// Typical usage is to remember a [`crate::FocusRequester`], bind it to a
-/// modifier, and then declare the current subtree as focusable.
-///
-/// # Examples
-///
-/// ```
-/// use tessera_ui::modifier::FocusModifierExt as _;
-/// use tessera_ui::{FocusProperties, FocusRequester, Modifier, remember, tessera};
-///
-/// #[tessera]
-/// fn focusable_field() {
-///     let requester = remember(FocusRequester::new).get();
-///     let _modifier = Modifier::new()
-///         .focus_requester(requester)
-///         .focusable()
-///         .focus_properties(FocusProperties::new().can_focus(true))
-///         .on_focus_changed(|state: tessera_ui::FocusState| {
-///             let _ = state.is_focused();
-///         });
-/// }
-/// ```
 pub trait FocusModifierExt {
     /// Registers a focus target for this subtree.
     fn focusable(self) -> Modifier;
@@ -182,6 +308,23 @@ pub trait FocusModifierExt {
     fn on_focus_event<F>(self, handler: F) -> Modifier
     where
         F: Into<CallbackWith<FocusState>>;
+
+    /// Registers a callback that moves focus beyond the current viewport.
+    fn focus_beyond_bounds_handler<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<FocusDirection, bool>>;
+
+    /// Registers a callback that reveals the focused target within the
+    /// viewport.
+    fn focus_reveal_handler<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<FocusRevealRequest, bool>>;
+}
+
+/// Cursor-specific modifier extensions for [`Modifier`].
+pub trait CursorModifierExt {
+    /// Sets the cursor icon used while the pointer hovers this node.
+    fn hover_cursor_icon(self, icon: CursorIcon) -> Modifier;
 }
 
 impl Modifier {
@@ -191,76 +334,145 @@ impl Modifier {
         Self::default()
     }
 
-    /// Appends a wrapper action and returns the updated modifier.
-    pub fn push_wrapper<F, Child>(self, wrapper: F) -> Self
-    where
-        F: Fn(ModifierChild) -> Child + Send + Sync + 'static,
-        Child: Fn() + Send + Sync + 'static,
-    {
-        self.push_wrapper_shared(CallbackWith::new(
-            move |child: ModifierChild| -> ModifierChild { Box::new(wrapper(child)) },
-        ))
-    }
-
-    fn push_wrapper_shared(self, wrapper: ModifierWrapper) -> Self {
+    fn push_action(self, action: ModifierAction) -> Self {
         ensure_build_phase();
         Self {
-            tail: Some(Arc::new(ModifierNode {
+            tail: Some(Arc::new(ModifierLink {
                 prev: self.tail,
-                action: ModifierAction::Wrapper(wrapper),
+                action,
             })),
         }
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_requester(self, requester: FocusRequester) -> Self {
+    /// Appends another modifier chain after this one.
+    pub fn then(mut self, other: Modifier) -> Self {
+        let actions = collect_actions(other.tail);
+        for action in actions.into_iter().rev() {
+            self = self.push_action(action);
+        }
+        self
+    }
+
+    pub(crate) fn push_layout<N>(self, node: N) -> Self
+    where
+        N: LayoutModifierNode,
+    {
+        self.push_action(ModifierAction::Layout(Arc::new(node)))
+    }
+
+    pub(crate) fn push_draw<N>(self, node: N) -> Self
+    where
+        N: DrawModifierNode,
+    {
+        self.push_action(ModifierAction::Draw(Arc::new(node)))
+    }
+
+    pub(crate) fn push_parent_data<N>(self, node: N) -> Self
+    where
+        N: ParentDataModifierNode,
+    {
+        self.push_action(ModifierAction::ParentData(Arc::new(node)))
+    }
+
+    pub(crate) fn push_build<N>(self, node: N) -> Self
+    where
+        N: BuildModifierNode,
+    {
+        self.push_action(ModifierAction::Build(Arc::new(node)))
+    }
+
+    pub(crate) fn push_semantics<N>(self, node: N) -> Self
+    where
+        N: SemanticsModifierNode,
+    {
+        self.push_action(ModifierAction::Semantics(Arc::new(node)))
+    }
+
+    fn push_cursor<N>(self, node: N) -> Self
+    where
+        N: CursorModifierNode,
+    {
+        self.push_action(ModifierAction::Cursor(Arc::new(node)))
+    }
+
+    pub(crate) fn push_pointer_preview_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode,
+    {
+        self.push_action(ModifierAction::PointerPreviewInput(Arc::new(node)))
+    }
+
+    pub(crate) fn push_pointer_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode,
+    {
+        self.push_action(ModifierAction::PointerInput(Arc::new(node)))
+    }
+
+    pub(crate) fn push_pointer_final_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode,
+    {
+        self.push_action(ModifierAction::PointerFinalInput(Arc::new(node)))
+    }
+
+    pub(crate) fn push_keyboard_preview_input<N>(self, node: N) -> Self
+    where
+        N: KeyboardInputModifierNode,
+    {
+        self.push_action(ModifierAction::KeyboardPreviewInput(Arc::new(node)))
+    }
+
+    pub(crate) fn push_keyboard_input<N>(self, node: N) -> Self
+    where
+        N: KeyboardInputModifierNode,
+    {
+        self.push_action(ModifierAction::KeyboardInput(Arc::new(node)))
+    }
+
+    pub(crate) fn push_ime_preview_input<N>(self, node: N) -> Self
+    where
+        N: ImeInputModifierNode,
+    {
+        self.push_action(ModifierAction::ImePreviewInput(Arc::new(node)))
+    }
+
+    pub(crate) fn push_ime_input<N>(self, node: N) -> Self
+    where
+        N: ImeInputModifierNode,
+    {
+        self.push_action(ModifierAction::ImeInput(Arc::new(node)))
+    }
+
+    fn push_focus_requester(self, requester: FocusRequester) -> Self {
         self.push_focus_op(FocusModifierOp::Requester(requester))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_target(self) -> Self {
+    fn push_focus_target(self) -> Self {
         self.push_focus_op(FocusModifierOp::Registration(
             FocusModifierRegistration::Target(None),
         ))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_target_with(self, node: FocusNode) -> Self {
-        self.push_focus_op(FocusModifierOp::Registration(
-            FocusModifierRegistration::Target(Some(node)),
-        ))
-    }
-
-    #[doc(hidden)]
-    pub fn push_focus_scope(self) -> Self {
-        self.push_focus_op(FocusModifierOp::Registration(
-            FocusModifierRegistration::Scope(None),
-        ))
-    }
-
-    #[doc(hidden)]
-    pub fn push_focus_scope_with(self, scope: FocusScopeNode) -> Self {
+    fn push_focus_scope_with(self, scope: FocusScopeNode) -> Self {
         self.push_focus_op(FocusModifierOp::Registration(
             FocusModifierRegistration::Scope(Some(scope)),
         ))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_group(self) -> Self {
+    fn push_focus_group(self) -> Self {
         self.push_focus_op(FocusModifierOp::Registration(
             FocusModifierRegistration::Group(None),
         ))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_group_with(self, group: FocusGroupNode) -> Self {
+    fn push_focus_group_with(self, group: FocusGroupNode) -> Self {
         self.push_focus_op(FocusModifierOp::Registration(
             FocusModifierRegistration::Group(Some(group)),
         ))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_restorer(self, fallback: Option<FocusRequester>) -> Self {
+    fn push_focus_restorer(self, fallback: Option<FocusRequester>) -> Self {
         self.push_focus_op(FocusModifierOp::Registration(
             FocusModifierRegistration::Restorer {
                 scope: None,
@@ -269,8 +481,7 @@ impl Modifier {
         ))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_restorer_with(
+    fn push_focus_restorer_with(
         self,
         scope: FocusScopeNode,
         fallback: Option<FocusRequester>,
@@ -283,87 +494,301 @@ impl Modifier {
         ))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_properties(self, properties: FocusProperties) -> Self {
+    fn push_focus_properties(self, properties: FocusProperties) -> Self {
         self.push_focus_op(FocusModifierOp::Properties(properties))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_traversal_policy(self, policy: FocusTraversalPolicy) -> Self {
+    fn push_focus_traversal_policy(self, policy: FocusTraversalPolicy) -> Self {
         self.push_focus_op(FocusModifierOp::TraversalPolicy(policy))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_changed_handler(self, handler: CallbackWith<FocusState>) -> Self {
+    fn push_focus_changed_handler(self, handler: CallbackWith<FocusState>) -> Self {
         self.push_focus_op(FocusModifierOp::ChangedHandler(handler))
     }
 
-    #[doc(hidden)]
-    pub fn push_focus_event_handler(self, handler: CallbackWith<FocusState>) -> Self {
+    fn push_focus_event_handler(self, handler: CallbackWith<FocusState>) -> Self {
         self.push_focus_op(FocusModifierOp::EventHandler(handler))
     }
 
+    fn push_focus_beyond_bounds_handler(self, handler: CallbackWith<FocusDirection, bool>) -> Self {
+        self.push_focus_op(FocusModifierOp::BeyondBoundsHandler(handler))
+    }
+
+    fn push_focus_reveal_handler(self, handler: CallbackWith<FocusRevealRequest, bool>) -> Self {
+        self.push_focus_op(FocusModifierOp::RevealHandler(handler))
+    }
+
     fn push_focus_op(self, op: FocusModifierOp) -> Self {
-        ensure_build_phase();
-        Self {
-            tail: Some(Arc::new(ModifierNode {
-                prev: self.tail,
-                action: ModifierAction::Focus(op),
-            })),
-        }
+        self.push_action(ModifierAction::Focus(op))
     }
 
-    /// Applies all wrappers to `child` and returns the wrapped child builder.
-    pub fn apply<F>(self, child: F) -> ModifierChild
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.apply_child(Box::new(child))
-    }
-
-    fn apply_child(self, child: ModifierChild) -> ModifierChild {
+    /// Attaches this modifier chain to the current component node.
+    pub fn attach(self) {
         ensure_build_phase();
 
-        if self.tail.is_none() {
-            return child;
-        }
-
-        let actions = collect_actions(self.tail);
-        let mut child = child;
-        let mut pending_focus = FocusModifierConfig::default();
-        let mut has_pending_focus = false;
-
-        for action in actions.into_iter().rev() {
-            match action {
-                ModifierAction::Focus(op) => {
-                    pending_focus.merge(op);
-                    has_pending_focus = true;
-                }
-                ModifierAction::Wrapper(wrapper) => {
-                    if has_pending_focus {
-                        child = apply_focus_modifier(pending_focus, child);
-                        pending_focus = FocusModifierConfig::default();
-                        has_pending_focus = false;
+        let actions = collect_actions(self.tail.clone());
+        TesseraRuntime::with_mut(|runtime| {
+            runtime.append_current_modifier(self.clone());
+            let mut accessibility = AccessibilityNode::new();
+            let mut action_handler = None;
+            let mut has_semantics = false;
+            for action in actions.into_iter().rev() {
+                match action {
+                    ModifierAction::Build(node) => node.apply(runtime),
+                    ModifierAction::Semantics(node) => {
+                        has_semantics = true;
+                        node.apply(&mut accessibility, &mut action_handler);
                     }
-                    child = wrapper.call(child);
+                    ModifierAction::Focus(op) => {
+                        apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op);
+                    }
+                    _ => {}
                 }
             }
-        }
-
-        if has_pending_focus {
-            child = apply_focus_modifier(pending_focus, child);
-        }
-
-        child
+            runtime.set_current_accessibility(has_semantics.then_some(accessibility));
+            runtime.set_current_accessibility_action_handler(action_handler);
+        });
     }
 
-    /// Applies all wrappers to `child` and immediately runs the resulting tree.
+    /// Attaches this modifier chain to the current node and then runs `child`.
     pub fn run<F>(self, child: F)
     where
         F: Fn() + Send + Sync + 'static,
     {
-        let child = self.apply(child);
+        self.attach();
         child();
+    }
+
+    /// Returns true when the modifier has no actions.
+    pub fn is_empty(&self) -> bool {
+        self.tail.is_none()
+    }
+
+    pub(crate) fn layout_nodes(&self) -> Vec<Arc<dyn LayoutModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::Layout(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn draw_nodes(&self) -> Vec<Arc<dyn DrawModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::Draw(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn apply_parent_data(&self, data: &mut ParentDataMap) {
+        for action in collect_actions(self.tail.clone()).into_iter().rev() {
+            if let ModifierAction::ParentData(node) = action {
+                node.apply_parent_data(data);
+            }
+        }
+    }
+
+    pub(crate) fn pointer_preview_input_nodes(&self) -> Vec<Arc<dyn PointerInputModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::PointerPreviewInput(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn pointer_input_nodes(&self) -> Vec<Arc<dyn PointerInputModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::PointerInput(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn pointer_final_input_nodes(&self) -> Vec<Arc<dyn PointerInputModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::PointerFinalInput(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn keyboard_preview_input_nodes(&self) -> Vec<Arc<dyn KeyboardInputModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::KeyboardPreviewInput(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn keyboard_input_nodes(&self) -> Vec<Arc<dyn KeyboardInputModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::KeyboardInput(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn ime_preview_input_nodes(&self) -> Vec<Arc<dyn ImeInputModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::ImePreviewInput(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn ime_input_nodes(&self) -> Vec<Arc<dyn ImeInputModifierNode>> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::ImeInput(node) => Some(node),
+                _ => None,
+            })
+            .collect()
+    }
+
+    pub(crate) fn has_pointer_input_nodes(&self) -> bool {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .any(|action| {
+                matches!(
+                    action,
+                    ModifierAction::PointerPreviewInput(_)
+                        | ModifierAction::PointerInput(_)
+                        | ModifierAction::PointerFinalInput(_)
+                )
+            })
+    }
+
+    pub(crate) fn cursor_icon(&self) -> Option<CursorIcon> {
+        collect_actions(self.tail.clone())
+            .into_iter()
+            .find_map(|action| match action {
+                ModifierAction::Cursor(node) => Some(node.cursor_icon()),
+                _ => None,
+            })
+    }
+
+    pub(crate) fn has_cursor_icon(&self) -> bool {
+        self.cursor_icon().is_some()
+    }
+}
+
+impl ModifierCapabilityExt for Modifier {
+    fn push_layout<N>(self, node: N) -> Self
+    where
+        N: LayoutModifierNode,
+    {
+        Modifier::push_layout(self, node)
+    }
+
+    fn push_draw<N>(self, node: N) -> Self
+    where
+        N: DrawModifierNode,
+    {
+        Modifier::push_draw(self, node)
+    }
+
+    fn push_parent_data<N>(self, node: N) -> Self
+    where
+        N: ParentDataModifierNode,
+    {
+        Modifier::push_parent_data(self, node)
+    }
+
+    fn push_build<N>(self, node: N) -> Self
+    where
+        N: BuildModifierNode,
+    {
+        Modifier::push_build(self, node)
+    }
+
+    fn push_semantics<N>(self, node: N) -> Self
+    where
+        N: SemanticsModifierNode,
+    {
+        Modifier::push_semantics(self, node)
+    }
+
+    fn push_pointer_preview_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode,
+    {
+        Modifier::push_pointer_preview_input(self, node)
+    }
+
+    fn push_pointer_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode,
+    {
+        Modifier::push_pointer_input(self, node)
+    }
+
+    fn push_pointer_final_input<N>(self, node: N) -> Self
+    where
+        N: PointerInputModifierNode,
+    {
+        Modifier::push_pointer_final_input(self, node)
+    }
+
+    fn push_keyboard_preview_input<N>(self, node: N) -> Self
+    where
+        N: KeyboardInputModifierNode,
+    {
+        Modifier::push_keyboard_preview_input(self, node)
+    }
+
+    fn push_keyboard_input<N>(self, node: N) -> Self
+    where
+        N: KeyboardInputModifierNode,
+    {
+        Modifier::push_keyboard_input(self, node)
+    }
+
+    fn push_ime_preview_input<N>(self, node: N) -> Self
+    where
+        N: ImeInputModifierNode,
+    {
+        Modifier::push_ime_preview_input(self, node)
+    }
+
+    fn push_ime_input<N>(self, node: N) -> Self
+    where
+        N: ImeInputModifierNode,
+    {
+        Modifier::push_ime_input(self, node)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct StaticCursorModifierNode {
+    icon: CursorIcon,
+}
+
+impl CursorModifierNode for StaticCursorModifierNode {
+    fn cursor_icon(&self) -> CursorIcon {
+        self.icon
+    }
+}
+
+impl CursorModifierExt for Modifier {
+    fn hover_cursor_icon(self, icon: CursorIcon) -> Modifier {
+        self.push_cursor(StaticCursorModifierNode { icon })
     }
 }
 
@@ -421,6 +846,20 @@ impl FocusModifierExt for Modifier {
     {
         self.push_focus_event_handler(handler.into())
     }
+
+    fn focus_beyond_bounds_handler<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<FocusDirection, bool>>,
+    {
+        self.push_focus_beyond_bounds_handler(handler.into())
+    }
+
+    fn focus_reveal_handler<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<FocusRevealRequest, bool>>,
+    {
+        self.push_focus_reveal_handler(handler.into())
+    }
 }
 
 impl fmt::Debug for Modifier {
@@ -446,76 +885,133 @@ impl Eq for Modifier {}
 impl Hash for Modifier {
     fn hash<H: Hasher>(&self, state: &mut H) {
         match &self.tail {
-            Some(node) => {
-                // Pointer identity is the stable key for modifier replay/prop comparison.
-                std::ptr::hash(Arc::as_ptr(node), state);
-            }
-            None => {
-                0u8.hash(state);
-            }
+            Some(node) => std::ptr::hash(Arc::as_ptr(node), state),
+            None => 0u8.hash(state),
         }
     }
 }
 
-fn apply_focus_modifier(config: FocusModifierConfig, child: ModifierChild) -> ModifierChild {
-    Box::new(move || {
-        TesseraRuntime::with_mut(|runtime| {
-            if let Some(requester) = config.requester {
-                runtime.bind_current_focus_requester(requester);
-            }
+mod runtime {
+    use super::FocusModifierRegistration;
+    use crate::{
+        FocusProperties, FocusRequester, FocusScopeNode, FocusState, FocusTraversalPolicy,
+        focus::{FocusDirection, FocusRevealRequest},
+        prop::CallbackWith,
+        runtime::TesseraRuntime,
+    };
 
-            match config.registration {
-                Some(FocusModifierRegistration::Target(node)) => {
+    pub(super) struct FocusModifierRuntime<'a> {
+        runtime: &'a mut TesseraRuntime,
+    }
+
+    impl<'a> FocusModifierRuntime<'a> {
+        pub(super) fn new(runtime: &'a mut TesseraRuntime) -> Self {
+            Self { runtime }
+        }
+
+        pub(super) fn bind_requester(&mut self, requester: FocusRequester) {
+            self.runtime.bind_current_focus_requester(requester);
+        }
+
+        pub(super) fn ensure_registration(&mut self, registration: FocusModifierRegistration) {
+            match registration {
+                FocusModifierRegistration::Target(node) => {
                     let node = node.unwrap_or_else(|| {
-                        runtime.current_focus_target_handle().unwrap_or_else(|| {
-                            persistent_focus_target_for_current_instance("__tessera_focus_target")
-                        })
+                        self.runtime
+                            .current_focus_target_handle()
+                            .unwrap_or_else(|| {
+                                crate::runtime::persistent_focus_target_for_current_instance(
+                                    "__tessera_focus_target",
+                                )
+                            })
                     });
-                    runtime.ensure_current_focus_target(node);
+                    self.runtime.ensure_current_focus_target(node);
                 }
-                Some(FocusModifierRegistration::Scope(scope)) => {
+                FocusModifierRegistration::Scope(scope) => {
                     let scope = scope.unwrap_or_else(|| {
-                        runtime.current_focus_scope_handle().unwrap_or_else(|| {
-                            persistent_focus_scope_for_current_instance("__tessera_focus_scope")
-                        })
+                        self.runtime
+                            .current_focus_scope_handle()
+                            .unwrap_or_else(|| {
+                                crate::runtime::persistent_focus_scope_for_current_instance(
+                                    "__tessera_focus_scope",
+                                )
+                            })
                     });
-                    runtime.ensure_current_focus_scope(scope);
+                    self.runtime.ensure_current_focus_scope(scope);
                 }
-                Some(FocusModifierRegistration::Group(group)) => {
+                FocusModifierRegistration::Group(group) => {
                     let group = group.unwrap_or_else(|| {
-                        runtime.current_focus_group_handle().unwrap_or_else(|| {
-                            persistent_focus_group_for_current_instance("__tessera_focus_group")
-                        })
+                        self.runtime
+                            .current_focus_group_handle()
+                            .unwrap_or_else(|| {
+                                crate::runtime::persistent_focus_group_for_current_instance(
+                                    "__tessera_focus_group",
+                                )
+                            })
                     });
-                    runtime.ensure_current_focus_group(group);
+                    self.runtime.ensure_current_focus_group(group);
                 }
-                Some(FocusModifierRegistration::Restorer { scope, fallback }) => {
-                    let scope = scope.unwrap_or_else(|| {
-                        runtime.current_focus_scope_handle().unwrap_or_else(|| {
-                            persistent_focus_scope_for_current_instance("__tessera_focus_scope")
-                        })
+                FocusModifierRegistration::Restorer { scope, fallback } => {
+                    let scope: FocusScopeNode = scope.unwrap_or_else(|| {
+                        self.runtime
+                            .current_focus_scope_handle()
+                            .unwrap_or_else(|| {
+                                crate::runtime::persistent_focus_scope_for_current_instance(
+                                    "__tessera_focus_scope",
+                                )
+                            })
                     });
-                    runtime.ensure_current_focus_scope(scope);
+                    self.runtime.ensure_current_focus_scope(scope);
                     if let Some(fallback) = fallback {
-                        runtime.set_current_focus_restorer_fallback(fallback);
+                        self.runtime.set_current_focus_restorer_fallback(fallback);
                     }
                 }
-                None => {}
             }
+        }
 
-            if let Some(properties) = config.properties {
-                runtime.set_current_focus_properties(properties);
-            }
-            if let Some(policy) = config.traversal_policy {
-                runtime.set_current_focus_traversal_policy(policy);
-            }
-            if let Some(handler) = config.changed_handler {
-                runtime.set_current_focus_changed_handler(handler);
-            }
-            if let Some(handler) = config.event_handler {
-                runtime.set_current_focus_event_handler(handler);
-            }
-        });
-        child();
-    })
+        pub(super) fn set_properties(&mut self, properties: FocusProperties) {
+            self.runtime.set_current_focus_properties(properties);
+        }
+
+        pub(super) fn set_traversal_policy(&mut self, policy: FocusTraversalPolicy) {
+            self.runtime.set_current_focus_traversal_policy(policy);
+        }
+
+        pub(super) fn set_changed_handler(&mut self, handler: CallbackWith<FocusState>) {
+            self.runtime.set_current_focus_changed_handler(handler);
+        }
+
+        pub(super) fn set_event_handler(&mut self, handler: CallbackWith<FocusState>) {
+            self.runtime.set_current_focus_event_handler(handler);
+        }
+
+        pub(super) fn set_beyond_bounds_handler(
+            &mut self,
+            handler: CallbackWith<FocusDirection, bool>,
+        ) {
+            self.runtime
+                .set_current_focus_beyond_bounds_handler(handler);
+        }
+
+        pub(super) fn set_reveal_handler(
+            &mut self,
+            handler: CallbackWith<FocusRevealRequest, bool>,
+        ) {
+            self.runtime.set_current_focus_reveal_handler(handler);
+        }
+    }
+}
+
+fn apply_focus_op(runtime: runtime::FocusModifierRuntime<'_>, op: FocusModifierOp) {
+    let mut runtime = runtime;
+    match op {
+        FocusModifierOp::Requester(requester) => runtime.bind_requester(requester),
+        FocusModifierOp::Registration(registration) => runtime.ensure_registration(registration),
+        FocusModifierOp::Properties(properties) => runtime.set_properties(properties),
+        FocusModifierOp::TraversalPolicy(policy) => runtime.set_traversal_policy(policy),
+        FocusModifierOp::ChangedHandler(handler) => runtime.set_changed_handler(handler),
+        FocusModifierOp::EventHandler(handler) => runtime.set_event_handler(handler),
+        FocusModifierOp::BeyondBoundsHandler(handler) => runtime.set_beyond_bounds_handler(handler),
+        FocusModifierOp::RevealHandler(handler) => runtime.set_reveal_handler(handler),
+    }
 }

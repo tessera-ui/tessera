@@ -6,37 +6,10 @@
 //!
 //! ## Usage
 //!
-//! Components use the accessibility API through typed input contexts:
-//!
-//! ```
-//! use accesskit::{Action, Role};
-//! use tessera_ui::{Prop, tessera};
-//!
-//! #[derive(Clone, Prop)]
-//! struct MyButtonArgs {
-//!     label: String,
-//! }
-//!
-//! #[tessera]
-//! fn my_button(args: &MyButtonArgs) {
-//!     let label = args.label.clone();
-//!     pointer_input_handler(move |input| {
-//!         // Set accessibility information
-//!         input
-//!             .accessibility()
-//!             .role(Role::Button)
-//!             .label(label.clone())
-//!             .action(Action::Click);
-//!
-//!         // Set action handler
-//!         input.set_accessibility_action_handler(|action| {
-//!             if action == Action::Click {
-//!                 // Handle click from assistive technology
-//!             }
-//!         });
-//!     });
-//! }
-//! ```
+//! Accessibility metadata is typically attached through semantics and
+//! interaction modifiers in higher-level component crates. Framework internals
+//! may also write accessibility state directly while building node-local
+//! modifier chains.
 
 mod tree_builder;
 

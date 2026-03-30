@@ -11,7 +11,7 @@
 //! - **[`DimensionValue`]**: Specifies how a single dimension (width or height)
 //!   should be calculated
 //! - **[`Constraint`]**: Combines width and height dimension values for
-//!   complete layout specification
+//!   complete layout constraint description
 //!
 //! ## Dimension Types
 //!
@@ -460,7 +460,8 @@ impl std::ops::SubAssign<Px> for DimensionValue {
 /// Represents layout constraints for a component node.
 ///
 /// A `Constraint` combines width and height dimension values to provide
-/// complete layout specification for a component. It defines how a component
+/// complete layout constraint description for a component. It defines how a
+/// component
 /// should size itself in both dimensions and provides methods for merging
 /// constraints in a component hierarchy.
 ///

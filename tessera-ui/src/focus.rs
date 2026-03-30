@@ -298,7 +298,6 @@ impl FocusTraversalPolicy {
 
 /// A request for scroll containers to reveal a focused rectangle.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[doc(hidden)]
 pub struct FocusRevealRequest {
     /// The absolute rectangle of the focused target.
     pub target_rect: PxRect,
@@ -308,8 +307,7 @@ pub struct FocusRevealRequest {
 
 impl FocusRevealRequest {
     /// Creates a new focus reveal request.
-    #[doc(hidden)]
-    pub const fn new(target_rect: PxRect, viewport_rect: PxRect) -> Self {
+    pub(crate) const fn new(target_rect: PxRect, viewport_rect: PxRect) -> Self {
         Self {
             target_rect,
             viewport_rect,
@@ -465,9 +463,8 @@ pub(crate) enum FocusRegistrationKind {
     Group,
 }
 
-#[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub struct FocusRegistration {
+pub(crate) struct FocusRegistration {
     pub(crate) id: FocusHandleId,
     pub(crate) kind: FocusRegistrationKind,
     pub(crate) properties: FocusProperties,
@@ -591,15 +588,13 @@ impl Default for FocusRequester {
 ///
 /// This is the low-level target identity used by focus modifiers. Most code
 /// should prefer [`FocusRequester`] and [`crate::modifier::FocusModifierExt`].
-#[doc(hidden)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct FocusNode {
+pub(crate) struct FocusNode {
     id: FocusHandleId,
 }
 
 impl FocusNode {
-    /// Creates a new persistent focus target handle.
-    pub fn new() -> Self {
+    pub(crate) fn new() -> Self {
         Self {
             id: next_focus_handle_id(),
         }

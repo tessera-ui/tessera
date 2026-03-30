@@ -2,8 +2,8 @@
 //!
 //! ## Usage
 //!
-//! Define a `Prop` args type for `#[tessera]` components and pass it by
-//! shared reference.
+//! Internal prop comparison and replay support used by generated component
+//! props.
 
 use std::{any::Any, marker::PhantomData, ptr, sync::Arc};
 
@@ -326,6 +326,12 @@ impl Clone for RenderSlot {
     }
 }
 
+impl Default for RenderSlot {
+    fn default() -> Self {
+        Self::empty()
+    }
+}
+
 impl PartialEq for RenderSlot {
     fn eq(&self, other: &Self) -> bool {
         match (&self.repr, &other.repr) {
@@ -413,10 +419,7 @@ impl<T, R> PartialEq for RenderSlotWith<T, R> {
 
 impl<T, R> Eq for RenderSlotWith<T, R> {}
 
-/// Component props that can be snapshotted and compared for replay.
-///
-/// Prefer `#[derive(Prop)]` on args structs.
-/// The derive also generates fluent setters and callback/slot helper setters.
+/// Internal component props contract used by replay and prop comparison.
 pub trait Prop: Clone + Send + Sync + 'static {
     /// Compare current props with another props value.
     fn prop_eq(&self, other: &Self) -> bool;

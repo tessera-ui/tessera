@@ -5,16 +5,16 @@
 [readme-en-badge]: https://img.shields.io/badge/README-English-blue.svg?style=for-the-badge&logo=readme
 [readme-en-url]: https://github.com/tessera-ui/tessera/blob/main/tessera-macros/README.md
 
-`tessera_macros` crate 为 [Tessera UI 框架](https://github.com/tessera-ui/tessera) 提供了过程宏。目前，它包含 `#[tessera]` 属性宏，这对于在 Tessera 框架中创建组件至关重要。
+`tessera_macros` crate 为 [Tessera UI 框架](https://github.com/tessera-ui/tessera) 提供过程宏。当前主要公开能力是 `#[tessera]` 属性宏，以及 entry/shard 相关宏。
 
 ## 概述
 
-`#[tessera]` 宏通过将常规 Rust 函数自动集成到框架的组件树中并注入必要的运行时功能，从而将其转换为 Tessera UI 组件。
+`#[tessera]` 宏通过将普通 Rust 函数集成到框架的组件树中并建立所需的构建 / replay 上下文，从而将其转换为 Tessera UI 组件。
 
 ## 特性
 
 - **组件集成**: 自动将函数注册为 Tessera 组件树中的组件
-- **运行时注入**: 在组件函数内提供对 `layout` 和 typed input handler 注册函数的访问
+- **运行时上下文**: 建立框架所需的组件/节点运行时上下文
 - **简洁的语法**: 以最少的样板代码实现声明式组件定义
 - **树管理**: 自动处理组件树节点的创建和清理
 
@@ -28,10 +28,6 @@ use tessera_macros::tessera;
 #[tessera]
 fn my_component() {
     // 你的组件逻辑在这里
-    // 宏自动提供对以下内容的访问：
-    // - layout: 用于自定义布局逻辑
-    // - pointer_input_handler / keyboard_input_handler / ime_input_handler:
-    //   用于处理用户交互
 }
 ```
 
@@ -39,60 +35,21 @@ fn my_component() {
 
 ```rust
 use tessera_macros::tessera;
-use tessera_ui::{Callback, Prop};
-
-#[derive(Clone)]
-struct ButtonArgs {
-    label: String,
-    on_click: Callback,
-}
-
-impl Prop for ButtonArgs {
-    fn prop_eq(&self, _other: &Self) -> bool {
-        false
-    }
-}
+use tessera_ui::Callback;
 
 #[tessera]
-fn button_component(args: &ButtonArgs) {
-    let _ = args;
+fn button_component(label: String, on_click: Callback) {
+    let _ = (label, on_click);
     // 组件实现
-    // 宏处理组件树集成
 }
 ```
 
-### 使用 Layout 和 Typed Input Handlers
+公开组件通过宏生成的 builder 语法调用：
 
 ```rust
-use tessera_macros::tessera;
-use tessera_ui::{ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px};
-
-#[derive(Clone, PartialEq)]
-struct FixedLayout;
-
-impl LayoutSpec for FixedLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData {
-            width: Px(100),
-            height: Px(50),
-        })
-    }
-}
-
-#[tessera]
-fn custom_component() {
-    // 定义自定义布局行为
-    layout(FixedLayout);
-
-    // 处理用户交互
-    pointer_input_handler(|_| {
-        // 处理点击、按键等事件
-    });
-}
+button_component()
+    .label("Confirm")
+    .on_click(Callback::new(|| {}));
 ```
 
 ## 工作原理
@@ -100,8 +57,8 @@ fn custom_component() {
 `#[tessera]` 宏执行以下转换：
 
 1. **组件注册**: 将函数以其名称添加到组件树中
-2. **运行时访问**: 注入代码以访问 Tessera 运行时
-3. **函数注入**: 在组件作用域内提供 `layout` 和 typed input handler 注册函数
+2. **运行时访问**: 注入构建与 replay 所需的内部运行时代码
+3. **上下文注入**: 建立 Tessera 在构建与 replay 阶段使用的内部组件上下文
 4. **树管理**: 处理从组件树中推入和弹出节点
 5. **错误安全**: 包装原始函数体，以防止提前返回破坏组件树
 
@@ -118,32 +75,8 @@ fn my_component() {
 
 ```rust
 fn my_component() {
-    // 组件树注册
-    TesseraRuntime::with_mut(|runtime| {
-        runtime.component_tree.add_node(ComponentNode { ... });
-    });
-
-    // 注入 layout 和 typed input handler 函数
-    let layout = |spec: impl LayoutSpec| { /* ... */ };
-    let pointer_input_handler =
-        |fun: impl Fn(PointerInput) + Send + Sync + 'static| { /* ... */ };
-    let keyboard_input_handler =
-        |fun: impl Fn(KeyboardInput) + Send + Sync + 'static| { /* ... */ };
-
-    // 安全地执行原始函数体
-    let result = {
-        let closure = || {
-            // 原始组件逻辑在这里
-        };
-        closure()
-    };
-
-    // 清理组件树
-    TesseraRuntime::with_mut(|runtime| {
-        runtime.component_tree.pop_node();
-    });
-
-    result
+    // 建立构建上下文、注册节点并附着 replay 元数据。
+    // 在受管的组件作用域内执行原始函数体。
 }
 ```
 
@@ -155,53 +88,20 @@ fn my_component() {
 use tessera_macros::tessera;
 use tessera_ui::remember;
 use tessera_components::{
-    button::{ButtonArgs, button},
-    text::{TextArgs, text},
+    button::button,
+    text::text,
 };
 
 #[tessera]
 fn counter_component() {
     let count = remember(|| 0i32);
 
-    button(&ButtonArgs::with_child(
-        ButtonArgs::filled(move || count.with_mut(|c| *c += 1)),
-        move || {
+    button()
+        .on_click(Callback::new(move || count.with_mut(|c| *c += 1)))
+        .child(|| {
             let label = format!("Count: {}", count.get());
-            text(&TextArgs::from(label));
-        },
-    ));
-}
-```
-
-### 自定义布局组件
-
-```rust
-use tessera_macros::tessera;
-use tessera_components::text::{TextArgs, text};
-use tessera_ui::{ComputedData, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px};
-
-#[derive(Clone, PartialEq)]
-struct FixedLayout;
-
-impl LayoutSpec for FixedLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData {
-            width: Px(120),
-            height: Px(80),
-        })
-    }
-}
-
-#[tessera]
-fn custom_layout() {
-    layout(FixedLayout);
-
-    // 子组件
-    text(&TextArgs::from("Hello, World!"));
+            text().content(label);
+        });
 }
 ```
 

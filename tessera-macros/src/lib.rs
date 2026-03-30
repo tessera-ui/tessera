@@ -9,8 +9,8 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    Block, Data, DeriveInput, Expr, Fields, FnArg, GenericArgument, Ident, ItemFn, Pat, Path,
-    PathArguments, Token, Type, parse::Parse, parse_macro_input, parse_quote, visit_mut::VisitMut,
+    Block, Expr, FnArg, GenericArgument, Ident, ItemFn, Pat, Path, PathArguments, Token, Type,
+    parse::Parse, parse_macro_input, parse_quote, visit_mut::VisitMut,
 };
 
 /// Helper: parse crate path from attribute TokenStream
@@ -44,11 +44,6 @@ enum PropHelperKind {
 #[derive(Clone, Copy, Debug, Default)]
 struct PropFieldAttrConfig {
     skip_eq: bool,
-}
-
-#[derive(Default)]
-struct PropContainerAttrConfig {
-    crate_path: Option<Path>,
 }
 
 fn parse_setter_attr(attrs: &[syn::Attribute]) -> syn::Result<SetterAttrConfig> {
@@ -87,13 +82,6 @@ fn parse_setter_attr(attrs: &[syn::Attribute]) -> syn::Result<SetterAttrConfig> 
     Ok(config)
 }
 
-fn merge_setter_attr(container: SetterAttrConfig, field: SetterAttrConfig) -> SetterAttrConfig {
-    SetterAttrConfig {
-        skip: container.skip || field.skip,
-        into: container.into || field.into,
-    }
-}
-
 fn parse_prop_field_attr(attrs: &[syn::Attribute]) -> syn::Result<PropFieldAttrConfig> {
     let mut config = PropFieldAttrConfig::default();
     for attr in attrs {
@@ -122,50 +110,6 @@ fn parse_prop_field_attr(attrs: &[syn::Attribute]) -> syn::Result<PropFieldAttrC
 
             Err(meta.error(
                 "unsupported field #[prop(...)] option; expected setter options (`skip_setter`/`into`) or compare option (`skip_eq`)",
-            ))
-        })?;
-    }
-    Ok(config)
-}
-
-fn parse_prop_container_attr(attrs: &[syn::Attribute]) -> syn::Result<PropContainerAttrConfig> {
-    let mut config = PropContainerAttrConfig::default();
-    for attr in attrs {
-        if !attr.path().is_ident("prop") {
-            continue;
-        }
-        attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("crate_path") {
-                if config.crate_path.is_some() {
-                    return Err(meta.error("duplicate `crate_path` in #[prop(...)]"));
-                }
-                let value = meta.value()?;
-                config.crate_path = Some(value.parse::<Path>()?);
-                return Ok(());
-            }
-            if meta.path.is_ident("skip") {
-                return Err(meta.error("unsupported struct option `skip`"));
-            }
-            if meta.path.is_ident("skip_setter") {
-                return Ok(());
-            }
-            if meta.path.is_ident("into") {
-                return Err(meta.error(
-                    "unsupported struct option `into`; use `#[prop(into)]` on fields",
-                ));
-            }
-            if meta.path.is_ident("no_setters") {
-                return Err(meta.error(
-                    "unsupported struct option `no_setters`; use `#[prop(skip_setter)]` instead",
-                ));
-            }
-            if meta.path.is_ident("skip_eq") {
-                return Err(meta.error(
-                    "field option in struct #[prop(...)]; `skip_eq` is only valid on fields",
-                ));
-            }
-            Err(meta.error(
-                "unsupported struct #[prop(...)] option; expected `crate_path = ...` or `skip_setter`",
             ))
         })?;
     }
@@ -207,6 +151,10 @@ fn parse_functor_signature(ty: &Type, type_name: &str) -> Option<(Type, Type)> {
     let arg = types.next()?;
     let ret = types.next().unwrap_or_else(|| parse_quote!(()));
     Some((arg, ret))
+}
+
+fn is_unit_type(ty: &Type) -> bool {
+    matches!(ty, Type::Tuple(tuple) if tuple.elems.is_empty())
 }
 
 fn type_last_segment_ident(ty: &Type) -> Option<&Ident> {
@@ -284,6 +232,7 @@ struct ShardMacroArgs {
 struct ShardParam {
     ident: Ident,
     ty: Type,
+    is_router: bool,
 }
 
 #[cfg(feature = "shard")]
@@ -304,14 +253,43 @@ fn parse_shard_params(sig: &syn::Signature) -> syn::Result<Vec<ShardParam>> {
                         "#[shard] parameters must be simple named bindings like `foo: T`",
                     ));
                 };
+                let is_router = pat_type
+                    .attrs
+                    .iter()
+                    .any(|attr| attr.path().is_ident("router"));
                 params.push(ShardParam {
                     ident: pat_ident.ident.clone(),
                     ty: (*pat_type.ty).clone(),
+                    is_router,
                 });
             }
         }
     }
     Ok(params)
+}
+
+#[cfg(feature = "shard")]
+fn is_state_router_controller_type(ty: &Type) -> bool {
+    let Type::Path(type_path) = ty else {
+        return false;
+    };
+    let Some(state_segment) = type_path.path.segments.last() else {
+        return false;
+    };
+    if state_segment.ident != "State" {
+        return false;
+    }
+    let syn::PathArguments::AngleBracketed(args) = &state_segment.arguments else {
+        return false;
+    };
+    let Some(syn::GenericArgument::Type(Type::Path(controller_path))) = args.args.first() else {
+        return false;
+    };
+    controller_path
+        .path
+        .segments
+        .last()
+        .is_some_and(|segment| segment.ident == "RouterController")
 }
 
 #[cfg(feature = "shard")]
@@ -365,60 +343,18 @@ impl Parse for ShardMacroArgs {
 /// Helper: tokens to register a component node
 fn register_node_tokens(crate_path: &syn::Path, fn_name: &syn::Ident) -> proc_macro2::TokenStream {
     quote! {
-        {
-            use #crate_path::ComponentNode;
-            use #crate_path::layout::DefaultLayoutSpec;
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.component_tree.add_node(
-                    ComponentNode {
-                        fn_name: stringify!(#fn_name).to_string(),
-                        component_type_id: __tessera_component_type_id,
-                        instance_logic_id: 0,
-                        instance_key: 0,
-                        pointer_preview_handler_fn: None,
-                        pointer_handler_fn: None,
-                        pointer_final_handler_fn: None,
-                        keyboard_preview_handler_fn: None,
-                        keyboard_handler_fn: None,
-                        ime_preview_handler_fn: None,
-                        ime_handler_fn: None,
-                        focus_requester_binding: None,
-                        focus_registration: None,
-                        focus_restorer_fallback: None,
-                        focus_traversal_policy: None,
-                        focus_changed_handler: None,
-                        focus_event_handler: None,
-                        focus_beyond_bounds_handler: None,
-                        focus_reveal_handler: None,
-                        layout_spec: Box::new(DefaultLayoutSpec::default()),
-                        replay: None,
-                        props_unchanged_from_previous: false,
-                    }
-                )
-            })
-        }
+        #crate_path::__private::register_component_node(
+            stringify!(#fn_name),
+            __tessera_component_type_id,
+        )
     }
 }
 
 /// Parse and validate strict component props signature:
-/// `fn component(<prop>: &T)`.
+/// `fn component()` or `fn component(foo: T, bar: U)`.
 enum ComponentPropSignature {
     Unit,
-    RefArg {
-        ident: syn::Ident,
-        ty: Box<syn::Type>,
-    },
-}
-
-impl ComponentPropSignature {
-    fn prop_type(&self) -> syn::Type {
-        match self {
-            Self::Unit => syn::parse_quote!(()),
-            Self::RefArg { ty, .. } => ty.as_ref().clone(),
-        }
-    }
+    Params(Vec<PropFieldSpec>),
 }
 
 fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature, syn::Error> {
@@ -426,86 +362,65 @@ fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature,
         return Ok(ComponentPropSignature::Unit);
     }
 
-    if sig.inputs.len() != 1 {
-        return Err(syn::Error::new_spanned(
-            &sig.inputs,
-            "#[tessera] components must have signature `fn name()` or `fn name(<prop>: &T)`",
-        ));
+    let mut fields = Vec::new();
+    for arg in &sig.inputs {
+        let FnArg::Typed(arg) = arg else {
+            return Err(syn::Error::new_spanned(
+                arg,
+                "#[tessera] methods are not supported; use free functions with named parameters",
+            ));
+        };
+
+        let Pat::Ident(pat_ident) = arg.pat.as_ref() else {
+            return Err(syn::Error::new_spanned(
+                &arg.pat,
+                "component parameters must be named identifiers",
+            ));
+        };
+
+        if pat_ident.by_ref.is_some() || pat_ident.mutability.is_some() {
+            return Err(syn::Error::new_spanned(
+                pat_ident,
+                "component parameters must be plain named bindings like `foo: T`",
+            ));
+        }
+
+        if matches!(arg.ty.as_ref(), Type::Reference(_)) {
+            return Err(syn::Error::new_spanned(
+                &arg.ty,
+                "component parameters must be owned types; borrowed parameter types are not supported",
+            ));
+        }
+
+        let field_setter_attr = parse_setter_attr(&arg.attrs)?;
+        let prop_attr = parse_prop_field_attr(&arg.attrs)?;
+        let default_expr = parse_component_default_attr(&arg.attrs)?;
+        fields.push(PropFieldSpec {
+            ident: pat_ident.ident.clone(),
+            ty: (*arg.ty).clone(),
+            setter: field_setter_attr,
+            helper: infer_prop_helper_kind(arg.ty.as_ref()),
+            skip_eq: prop_attr.skip_eq,
+            default_expr,
+        });
     }
 
-    let Some(arg) = sig.inputs.first() else {
-        return Err(syn::Error::new_spanned(
-            &sig.inputs,
-            "#[tessera] components must have signature `fn name()` or `fn name(<prop>: &T)`",
-        ));
-    };
-    let FnArg::Typed(arg) = arg else {
-        return Err(syn::Error::new_spanned(
-            arg,
-            "#[tessera] methods are not supported; use free functions with `&T` props",
-        ));
-    };
-
-    let Pat::Ident(pat_ident) = arg.pat.as_ref() else {
-        return Err(syn::Error::new_spanned(
-            &arg.pat,
-            "component parameter must be a named identifier",
-        ));
-    };
-
-    let Type::Reference(type_ref) = arg.ty.as_ref() else {
-        return Err(syn::Error::new_spanned(
-            &arg.ty,
-            "component parameter must be a shared reference `&T`",
-        ));
-    };
-
-    if type_ref.mutability.is_some() {
-        return Err(syn::Error::new_spanned(
-            type_ref,
-            "component parameter must be an immutable reference `&T`",
-        ));
-    }
-
-    Ok(ComponentPropSignature::RefArg {
-        ident: pat_ident.ident.clone(),
-        ty: Box::new(type_ref.elem.as_ref().clone()),
-    })
+    Ok(ComponentPropSignature::Params(fields))
 }
 
 /// Helper: tokens to attach replay metadata to the current component node.
 fn replay_register_tokens(
     crate_path: &syn::Path,
-    fn_name: &syn::Ident,
-    signature: &ComponentPropSignature,
+    runner_name: &syn::Ident,
+    prop_type: &syn::Type,
+    props_expr: proc_macro2::TokenStream,
 ) -> proc_macro2::TokenStream {
-    match signature {
-        ComponentPropSignature::RefArg { ident, ty } => {
-            let ty = ty.as_ref();
-            quote! {
-                let __tessera_component_reused = {
-                    use #crate_path::runtime::TesseraRuntime;
-                    let __tessera_runner = #crate_path::prop::make_component_runner::<#ty>(#fn_name);
-                    TesseraRuntime::with_mut(|runtime| {
-                        runtime.set_current_component_replay(__tessera_runner, #ident)
-                    })
-                };
-            }
-        }
-        ComponentPropSignature::Unit => quote! {
-            let __tessera_component_reused = {
-                use #crate_path::runtime::TesseraRuntime;
-                fn __tessera_noarg_runner(_props: &()) {
-                    #fn_name();
-                }
-                let __tessera_runner =
-                    #crate_path::prop::make_component_runner::<()>(__tessera_noarg_runner);
-                let __tessera_unit_props = ();
-                TesseraRuntime::with_mut(|runtime| {
-                    runtime.set_current_component_replay(__tessera_runner, &__tessera_unit_props)
-                })
-            };
-        },
+    quote! {
+        let __tessera_component_reused = {
+            let __tessera_runner =
+                #crate_path::__private::make_component_runner::<#prop_type>(#runner_name);
+            #crate_path::__private::set_current_component_replay(__tessera_runner, #props_expr)
+        };
     }
 }
 
@@ -513,388 +428,8 @@ fn replay_register_tokens(
 fn prop_assert_tokens(crate_path: &syn::Path, prop_type: &syn::Type) -> proc_macro2::TokenStream {
     quote! {
         {
-            fn __tessera_assert_prop<T: #crate_path::Prop>() {}
+            fn __tessera_assert_prop<T: #crate_path::__private::Prop>() {}
             __tessera_assert_prop::<#prop_type>();
-        }
-    }
-}
-
-/// Helper: tokens to inject `layout`
-fn layout_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
-    quote! {
-        #[allow(clippy::needless_pass_by_value)]
-        fn layout<S>(spec: S)
-        where
-            S: #crate_path::layout::LayoutSpec,
-        {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| runtime.set_current_layout_spec(spec));
-        }
-    }
-}
-
-/// Helper: tokens to inject typed input handlers.
-fn input_handler_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
-    quote! {
-        #[allow(clippy::needless_pass_by_value)]
-        fn pointer_preview_input_handler<F>(fun: F)
-        where
-            F: Fn(#crate_path::PointerInput) + Send + Sync + 'static,
-        {
-            use #crate_path::PointerInputHandlerFn;
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .current_node_mut()
-                    .unwrap()
-                    .pointer_preview_handler_fn = Some(Box::new(fun) as Box<PointerInputHandlerFn>)
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn pointer_input_handler<F>(fun: F)
-        where
-            F: Fn(#crate_path::PointerInput) + Send + Sync + 'static,
-        {
-            use #crate_path::PointerInputHandlerFn;
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .current_node_mut()
-                    .unwrap()
-                    .pointer_handler_fn = Some(Box::new(fun) as Box<PointerInputHandlerFn>)
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn pointer_final_input_handler<F>(fun: F)
-        where
-            F: Fn(#crate_path::PointerInput) + Send + Sync + 'static,
-        {
-            use #crate_path::PointerInputHandlerFn;
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .current_node_mut()
-                    .unwrap()
-                    .pointer_final_handler_fn = Some(Box::new(fun) as Box<PointerInputHandlerFn>)
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn keyboard_preview_input_handler<F>(fun: F)
-        where
-            F: Fn(#crate_path::KeyboardInput) + Send + Sync + 'static,
-        {
-            use #crate_path::KeyboardInputHandlerFn;
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .current_node_mut()
-                    .unwrap()
-                    .keyboard_preview_handler_fn = Some(Box::new(fun) as Box<KeyboardInputHandlerFn>)
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn keyboard_input_handler<F>(fun: F)
-        where
-            F: Fn(#crate_path::KeyboardInput) + Send + Sync + 'static,
-        {
-            use #crate_path::KeyboardInputHandlerFn;
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .current_node_mut()
-                    .unwrap()
-                    .keyboard_handler_fn = Some(Box::new(fun) as Box<KeyboardInputHandlerFn>)
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn ime_preview_input_handler<F>(fun: F)
-        where
-            F: Fn(#crate_path::ImeInput) + Send + Sync + 'static,
-        {
-            use #crate_path::ImeInputHandlerFn;
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .current_node_mut()
-                    .unwrap()
-                    .ime_preview_handler_fn = Some(Box::new(fun) as Box<ImeInputHandlerFn>)
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn ime_input_handler<F>(fun: F)
-        where
-            F: Fn(#crate_path::ImeInput) + Send + Sync + 'static,
-        {
-            use #crate_path::ImeInputHandlerFn;
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime
-                    .component_tree
-                    .current_node_mut()
-                    .unwrap()
-                    .ime_handler_fn = Some(Box::new(fun) as Box<ImeInputHandlerFn>)
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn focus_requester_with(requester: #crate_path::FocusRequester) {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.bind_current_focus_requester(requester);
-            });
-        }
-
-        fn focus_requester() -> #crate_path::FocusRequester {
-            #crate_path::runtime::persistent_focus_requester_for_current_instance(
-                "__tessera_focus_requester",
-            )
-        }
-
-        fn remember_focus_requester() -> #crate_path::FocusRequester {
-            focus_requester()
-        }
-
-        fn focus_target_handle() -> #crate_path::FocusNode {
-            #crate_path::runtime::persistent_focus_target_for_current_instance(
-                "__tessera_focus_target",
-            )
-        }
-
-        fn focus_scope_handle() -> #crate_path::FocusScopeNode {
-            #crate_path::runtime::persistent_focus_scope_for_current_instance(
-                "__tessera_focus_scope",
-            )
-        }
-
-        fn remember_focus_scope() -> #crate_path::FocusScopeNode {
-            focus_scope_handle()
-        }
-
-        fn focus_group_handle() -> #crate_path::FocusGroupNode {
-            #crate_path::runtime::persistent_focus_group_for_current_instance(
-                "__tessera_focus_group",
-            )
-        }
-
-        fn remember_focus_group() -> #crate_path::FocusGroupNode {
-            focus_group_handle()
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn focus_target_with(node: #crate_path::FocusNode) -> #crate_path::FocusNode {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.register_current_focus_target(node);
-            });
-            node
-        }
-
-        fn focus_target() -> #crate_path::FocusNode {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                if let Some(node) = runtime.current_focus_target_handle() {
-                    node
-                } else {
-                    let node = focus_target_handle();
-                    runtime.ensure_current_focus_target(node);
-                    node
-                }
-            })
-        }
-
-        fn focusable() -> #crate_path::FocusNode {
-            focus_target()
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn focusable_with_requester(
-            requester: #crate_path::FocusRequester,
-        ) -> #crate_path::FocusNode {
-            focus_requester_with(requester);
-            focus_target()
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn focus_scope_with(scope: #crate_path::FocusScopeNode) -> #crate_path::FocusScopeNode {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.register_current_focus_scope(scope);
-            });
-            scope
-        }
-
-        fn focus_scope() -> #crate_path::FocusScopeNode {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                if let Some(scope) = runtime.current_focus_scope_handle() {
-                    scope
-                } else {
-                    let scope = focus_scope_handle();
-                    runtime.ensure_current_focus_scope(scope);
-                    scope
-                }
-            })
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn focus_group_with(group: #crate_path::FocusGroupNode) -> #crate_path::FocusGroupNode {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.register_current_focus_group(group);
-            });
-            group
-        }
-
-        fn focus_group() -> #crate_path::FocusGroupNode {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                if let Some(group) = runtime.current_focus_group_handle() {
-                    group
-                } else {
-                    let group = focus_group_handle();
-                    runtime.ensure_current_focus_group(group);
-                    group
-                }
-            })
-        }
-
-        fn focus_restorer() -> #crate_path::FocusScopeNode {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                if let Some(scope) = runtime.current_focus_scope_handle() {
-                    scope
-                } else {
-                    let scope = focus_scope_handle();
-                    runtime.ensure_current_focus_scope(scope);
-                    scope
-                }
-            })
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn focus_restorer_with_fallback(
-            fallback: #crate_path::FocusRequester,
-        ) -> #crate_path::FocusScopeNode {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                let scope = if let Some(scope) = runtime.current_focus_scope_handle() {
-                    scope
-                } else {
-                    let scope = focus_scope_handle();
-                    runtime.ensure_current_focus_scope(scope);
-                    scope
-                };
-                runtime.set_current_focus_restorer_fallback(fallback);
-                scope
-            })
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn focus_properties(properties: #crate_path::FocusProperties) {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.set_current_focus_properties(properties);
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn focus_traversal_policy(policy: #crate_path::FocusTraversalPolicy) {
-            use #crate_path::runtime::TesseraRuntime;
-
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.set_current_focus_traversal_policy(policy);
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn on_focus_changed<F>(fun: F)
-        where
-            F: Into<#crate_path::CallbackWith<#crate_path::FocusState>>,
-        {
-            use #crate_path::runtime::TesseraRuntime;
-
-            let handler: #crate_path::CallbackWith<#crate_path::FocusState> = fun.into();
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.set_current_focus_changed_handler(handler);
-            });
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn on_focus_event<F>(fun: F)
-        where
-            F: Into<#crate_path::CallbackWith<#crate_path::FocusState>>,
-        {
-            use #crate_path::runtime::TesseraRuntime;
-
-            let handler: #crate_path::CallbackWith<#crate_path::FocusState> = fun.into();
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.set_current_focus_event_handler(handler);
-            });
-        }
-
-        fn focus_manager() -> #crate_path::FocusManager {
-            #crate_path::FocusManager::current()
-        }
-    }
-}
-
-/// Helper: tokens to inject `callback`, `callback_with`, and `render_slot`.
-fn callback_helpers_inject_tokens(crate_path: &syn::Path) -> proc_macro2::TokenStream {
-    quote! {
-        #[allow(clippy::needless_pass_by_value)]
-        fn remember_callback<F>(fun: F) -> #crate_path::Callback
-        where
-            F: Fn() + Send + Sync + 'static,
-        {
-            #crate_path::Callback::new(fun)
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn remember_callback_with<T, R, F>(fun: F) -> #crate_path::CallbackWith<T, R>
-        where
-            T: Send + Sync + 'static,
-            R: Send + Sync + 'static,
-            F: Fn(T) -> R + Send + Sync + 'static,
-        {
-            #crate_path::CallbackWith::new(fun)
-        }
-
-        #[allow(clippy::needless_pass_by_value)]
-        fn remember_render_slot<F>(fun: F) -> #crate_path::RenderSlot
-        where
-            F: Fn() + Send + Sync + 'static,
-        {
-            #crate_path::RenderSlot::new(fun)
         }
     }
 }
@@ -905,10 +440,33 @@ struct PropFieldSpec {
     setter: SetterAttrConfig,
     helper: Option<PropHelperKind>,
     skip_eq: bool,
+    default_expr: Option<Expr>,
 }
 
-fn generate_default_setter_method(
+fn parse_component_default_attr(attrs: &[syn::Attribute]) -> syn::Result<Option<Expr>> {
+    let mut default_expr = None;
+    for attr in attrs {
+        if !attr.path().is_ident("default") {
+            continue;
+        }
+
+        if default_expr.is_some() {
+            return Err(syn::Error::new_spanned(
+                attr,
+                "duplicate #[default(...)] on component parameter",
+            ));
+        }
+
+        default_expr = Some(attr.parse_args::<Expr>()?);
+    }
+
+    Ok(default_expr)
+}
+
+fn generate_default_setter_method_for_path(
     field: &PropFieldSpec,
+    field_path: &proc_macro2::TokenStream,
+    set_flag_path: Option<&proc_macro2::TokenStream>,
 ) -> syn::Result<Option<proc_macro2::TokenStream>> {
     if field.setter.skip {
         return Ok(None);
@@ -917,12 +475,14 @@ fn generate_default_setter_method(
     let ident = &field.ident;
     let method_doc = format!("Set `{ident}`.");
     let field_ty = &field.ty;
+    let set_flag_stmt = set_flag_path.map(|path| quote!(self.#path = true;));
     if let Some(inner_ty) = option_inner_type(field_ty) {
         let method = if field.setter.into {
             quote! {
                 #[doc = #method_doc]
                 pub fn #ident(mut self, #ident: impl Into<#inner_ty>) -> Self {
-                    self.#ident = Some(#ident.into());
+                    self.#field_path = Some(#ident.into());
+                    #set_flag_stmt
                     self
                 }
             }
@@ -930,7 +490,8 @@ fn generate_default_setter_method(
             quote! {
                 #[doc = #method_doc]
                 pub fn #ident(mut self, #ident: #inner_ty) -> Self {
-                    self.#ident = Some(#ident);
+                    self.#field_path = Some(#ident);
+                    #set_flag_stmt
                     self
                 }
             }
@@ -942,7 +503,8 @@ fn generate_default_setter_method(
         quote! {
             #[doc = #method_doc]
             pub fn #ident(mut self, #ident: impl Into<#field_ty>) -> Self {
-                self.#ident = #ident.into();
+                self.#field_path = #ident.into();
+                #set_flag_stmt
                 self
             }
         }
@@ -950,7 +512,8 @@ fn generate_default_setter_method(
         quote! {
             #[doc = #method_doc]
             pub fn #ident(mut self, #ident: #field_ty) -> Self {
-                self.#ident = #ident;
+                self.#field_path = #ident;
+                #set_flag_stmt
                 self
             }
         }
@@ -962,6 +525,8 @@ fn generate_helper_setter_methods(
     field: &PropFieldSpec,
     helper: PropHelperKind,
     crate_path: &Path,
+    field_path: &proc_macro2::TokenStream,
+    set_flag_path: Option<&proc_macro2::TokenStream>,
 ) -> syn::Result<proc_macro2::TokenStream> {
     let ident = &field.ident;
     let shared_ident = format_ident!("{}_shared", ident);
@@ -971,6 +536,7 @@ fn generate_helper_setter_methods(
         Some(inner) => (inner, true),
         None => (field.ty.clone(), false),
     };
+    let set_flag_stmt = set_flag_path.map(|path| quote!(self.#path = true;));
 
     match helper {
         PropHelperKind::Callback => {
@@ -1002,13 +568,15 @@ fn generate_helper_setter_methods(
                 where
                     F: Fn() + Send + Sync + 'static,
                 {
-                    self.#ident = #closure_assign;
+                    self.#field_path = #closure_assign;
+                    #set_flag_stmt
                     self
                 }
 
                 #[doc = #shared_doc]
                 pub fn #shared_ident(mut self, #ident: impl Into<#crate_path::Callback>) -> Self {
-                    self.#ident = #shared_assign;
+                    self.#field_path = #shared_assign;
+                    #set_flag_stmt
                     self
                 }
             })
@@ -1021,7 +589,13 @@ fn generate_helper_setter_methods(
                 ));
             };
 
-            let closure_assign = if wrap_some {
+            let closure_assign = if is_unit_type(&arg_ty) {
+                if wrap_some {
+                    quote! { Some(#crate_path::CallbackWith::new(move |()| #ident())) }
+                } else {
+                    quote! { #crate_path::CallbackWith::new(move |()| #ident()) }
+                }
+            } else if wrap_some {
                 quote! { Some(#crate_path::CallbackWith::new(#ident)) }
             } else {
                 quote! { #crate_path::CallbackWith::new(#ident) }
@@ -1032,13 +606,20 @@ fn generate_helper_setter_methods(
                 quote! { #ident.into() }
             };
 
+            let callback_bound = if is_unit_type(&arg_ty) {
+                quote! { F: Fn() -> #ret_ty + Send + Sync + 'static }
+            } else {
+                quote! { F: Fn(#arg_ty) -> #ret_ty + Send + Sync + 'static }
+            };
+
             Ok(quote! {
                 #[doc = #helper_doc]
                 pub fn #ident<F>(mut self, #ident: F) -> Self
                 where
-                    F: Fn(#arg_ty) -> #ret_ty + Send + Sync + 'static,
+                    #callback_bound,
                 {
-                    self.#ident = #closure_assign;
+                    self.#field_path = #closure_assign;
+                    #set_flag_stmt
                     self
                 }
 
@@ -1047,7 +628,8 @@ fn generate_helper_setter_methods(
                     mut self,
                     #ident: impl Into<#crate_path::CallbackWith<#arg_ty, #ret_ty>>,
                 ) -> Self {
-                    self.#ident = #shared_assign;
+                    self.#field_path = #shared_assign;
+                    #set_flag_stmt
                     self
                 }
             })
@@ -1081,13 +663,15 @@ fn generate_helper_setter_methods(
                 where
                     F: Fn() + Send + Sync + 'static,
                 {
-                    self.#ident = #closure_assign;
+                    self.#field_path = #closure_assign;
+                    #set_flag_stmt
                     self
                 }
 
                 #[doc = #shared_doc]
                 pub fn #shared_ident(mut self, #ident: impl Into<#crate_path::RenderSlot>) -> Self {
-                    self.#ident = #shared_assign;
+                    self.#field_path = #shared_assign;
+                    #set_flag_stmt
                     self
                 }
             })
@@ -1101,7 +685,13 @@ fn generate_helper_setter_methods(
                 ));
             };
 
-            let closure_assign = if wrap_some {
+            let closure_assign = if is_unit_type(&arg_ty) {
+                if wrap_some {
+                    quote! { Some(#crate_path::RenderSlotWith::new(move |()| #ident())) }
+                } else {
+                    quote! { #crate_path::RenderSlotWith::new(move |()| #ident()) }
+                }
+            } else if wrap_some {
                 quote! { Some(#crate_path::RenderSlotWith::new(#ident)) }
             } else {
                 quote! { #crate_path::RenderSlotWith::new(#ident) }
@@ -1112,13 +702,20 @@ fn generate_helper_setter_methods(
                 quote! { #ident.into() }
             };
 
+            let callback_bound = if is_unit_type(&arg_ty) {
+                quote! { F: Fn() -> #ret_ty + Send + Sync + 'static }
+            } else {
+                quote! { F: Fn(#arg_ty) -> #ret_ty + Send + Sync + 'static }
+            };
+
             Ok(quote! {
                 #[doc = #helper_doc]
                 pub fn #ident<F>(mut self, #ident: F) -> Self
                 where
-                    F: Fn(#arg_ty) -> #ret_ty + Send + Sync + 'static,
+                    #callback_bound,
                 {
-                    self.#ident = #closure_assign;
+                    self.#field_path = #closure_assign;
+                    #set_flag_stmt
                     self
                 }
 
@@ -1127,7 +724,8 @@ fn generate_helper_setter_methods(
                     mut self,
                     #ident: impl Into<#crate_path::RenderSlotWith<#arg_ty, #ret_ty>>,
                 ) -> Self {
-                    self.#ident = #shared_assign;
+                    self.#field_path = #shared_assign;
+                    #set_flag_stmt
                     self
                 }
             })
@@ -1136,152 +734,91 @@ fn generate_helper_setter_methods(
 }
 
 /// Automatically converts a struct into component props and
-/// generates convenient setter methods.
-///
-/// For common fields, it generates a single setter with the same field name.
-/// For special field types such as `Callback`, `CallbackWith`, `RenderSlot`,
-/// and `RenderSlotWith`, it additionally generates convenient setters that
-/// accept closures and automatically wrap them into the corresponding helper
-/// types.
-///
-/// For `Option<T>`, by default it tries to generate a setter that accepts `T`,
-/// and wraps it into `Some(T)` internally, unless you use
-/// `#[prop(skip_setter)]` to skip generation and write a manual setter.
-///
-/// For fields where you do not want a generated setter, you can mark the field
-/// with `#[prop(skip_setter)]` to prevent generating that setter method.
-///
-/// For fields that should not participate in prop comparison, you can mark them
-/// with `#[prop(skip_eq)]` to avoid triggering component updates when they
-/// change.
-#[proc_macro_derive(Prop, attributes(prop))]
-pub fn derive_prop(input: TokenStream) -> TokenStream {
-    let input = parse_macro_input!(input as DeriveInput);
-    let name = input.ident;
-    let generics = input.generics;
-    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
-
-    let container_attr = match parse_prop_container_attr(&input.attrs) {
-        Ok(config) => config,
-        Err(err) => return err.to_compile_error().into(),
-    };
-    let container_setter_attr = match parse_setter_attr(&input.attrs) {
-        Ok(config) => config,
-        Err(err) => return err.to_compile_error().into(),
-    };
-    let crate_path = container_attr
-        .crate_path
-        .unwrap_or_else(|| syn::parse_quote!(::tessera_ui));
-
-    let Data::Struct(data_struct) = &input.data else {
-        return syn::Error::new_spanned(
-            &name,
-            "#[derive(Prop)] only supports structs with named fields",
-        )
-        .to_compile_error()
-        .into();
-    };
-    let Fields::Named(fields) = &data_struct.fields else {
-        return syn::Error::new_spanned(
-            &name,
-            "#[derive(Prop)] only supports structs with named fields",
-        )
-        .to_compile_error()
-        .into();
-    };
-
-    let mut methods = Vec::new();
-    let mut compare_fields = Vec::new();
-
-    for field in &fields.named {
-        let Some(ident) = &field.ident else {
-            return syn::Error::new_spanned(
-                field,
-                "#[derive(Prop)] only supports named struct fields",
-            )
-            .to_compile_error()
-            .into();
-        };
-
-        let field_setter_attr = match parse_setter_attr(&field.attrs) {
-            Ok(config) => config,
-            Err(err) => return err.to_compile_error().into(),
-        };
-        let prop_attr = match parse_prop_field_attr(&field.attrs) {
-            Ok(config) => config,
-            Err(err) => return err.to_compile_error().into(),
-        };
-        let setter = merge_setter_attr(container_setter_attr, field_setter_attr);
-        let helper = infer_prop_helper_kind(&field.ty);
-
-        let spec = PropFieldSpec {
-            ident: ident.clone(),
-            ty: field.ty.clone(),
-            setter,
-            helper,
-            skip_eq: prop_attr.skip_eq,
-        };
-
-        let wants_setter = !setter.skip;
-        if wants_setter {
-            if let Some(helper) = spec.helper {
-                match generate_helper_setter_methods(&spec, helper, &crate_path) {
-                    Ok(method_block) => methods.push(method_block),
-                    Err(err) => return err.to_compile_error().into(),
-                }
-            } else {
-                match generate_default_setter_method(&spec) {
-                    Ok(Some(method)) => methods.push(method),
-                    Ok(None) => {}
-                    Err(err) => return err.to_compile_error().into(),
-                }
-            }
-        }
-
-        if !spec.skip_eq {
-            let field_ident = &spec.ident;
-            compare_fields.push(field_compare_expr(field_ident, &spec.ty));
+fn pascal_case_ident(base: &Ident, suffix: &str) -> Ident {
+    let mut output = String::new();
+    for segment in base
+        .to_string()
+        .split('_')
+        .filter(|segment| !segment.is_empty())
+    {
+        let mut chars = segment.chars();
+        if let Some(first) = chars.next() {
+            output.extend(first.to_uppercase());
+            output.push_str(chars.as_str());
         }
     }
+    output.push_str(suffix);
+    format_ident!("{output}")
+}
 
+fn hidden_props_ident(fn_name: &Ident) -> Ident {
+    format_ident!("__Tessera{}Props", pascal_case_ident(fn_name, ""))
+}
+
+fn builder_ident(fn_name: &Ident) -> Ident {
+    pascal_case_ident(fn_name, "Builder")
+}
+
+fn hidden_component_impl_ident(fn_name: &Ident) -> Ident {
+    format_ident!("__tessera_{}_impl", fn_name)
+}
+
+fn generate_prop_like_impls(
+    type_name: &Ident,
+    fields: &[PropFieldSpec],
+    crate_path: &Path,
+) -> proc_macro2::TokenStream {
+    let compare_fields: Vec<_> = fields
+        .iter()
+        .filter(|field| !field.skip_eq)
+        .map(|field| field_compare_expr(&field.ident, &field.ty))
+        .collect();
     let prop_eq_expr = if compare_fields.is_empty() {
         quote! { true }
     } else {
         quote! { true #(&& #compare_fields)* }
     };
 
-    let partial_eq_impl = quote! {
-        impl #impl_generics ::core::cmp::PartialEq for #name #ty_generics #where_clause {
+    quote! {
+        impl ::core::cmp::PartialEq for #type_name {
             fn eq(&self, other: &Self) -> bool {
                 #prop_eq_expr
             }
         }
-    };
 
-    let prop_impl = quote! {
-        impl #impl_generics #crate_path::Prop for #name #ty_generics #where_clause {
+        impl #crate_path::__private::Prop for #type_name {
             fn prop_eq(&self, other: &Self) -> bool {
                 <Self as ::core::cmp::PartialEq>::eq(self, other)
             }
         }
-    };
-
-    let setters_impl = if methods.is_empty() {
-        quote! {}
-    } else {
-        quote! {
-            impl #impl_generics #name #ty_generics #where_clause {
-                #(#methods)*
-            }
-        }
-    };
-
-    quote! {
-        #partial_eq_impl
-        #prop_impl
-        #setters_impl
     }
-    .into()
+}
+
+fn generate_builder_methods(
+    fields: &[PropFieldSpec],
+    crate_path: &Path,
+) -> syn::Result<Vec<proc_macro2::TokenStream>> {
+    let mut methods = Vec::new();
+    for field in fields {
+        let ident = &field.ident;
+        let field_path = quote!(props.#ident);
+        let set_flag_ident = format_ident!("__tessera_set_{}", ident);
+        let set_flag_path = quote!(props.#set_flag_ident);
+        if let Some(helper) = field.helper {
+            methods.push(generate_helper_setter_methods(
+                field,
+                helper,
+                crate_path,
+                &field_path,
+                Some(&set_flag_path),
+            )?);
+        } else if let Some(method) =
+            generate_default_setter_method_for_path(field, &field_path, Some(&set_flag_path))?
+        {
+            methods.push(method);
+        }
+    }
+    Ok(methods)
 }
 
 /// Helper: tokens to compute a stable component type id based on module path +
@@ -1323,7 +860,7 @@ impl ControlFlowInstrumenter {
     ///
     /// Before transform: expr
     /// After transform: { let _group_guard =
-    /// ::tessera_ui::runtime::GroupGuard::new(#id); expr }
+    /// ::tessera_ui::__private::GroupGuard::new(#id); expr }
     fn wrap_expr_in_group(&mut self, expr: &mut Expr) {
         // Recursively visit sub-expressions (depth-first) to ensure nested structures
         // are wrapped
@@ -1333,7 +870,7 @@ impl ControlFlowInstrumenter {
         let original_expr = &expr;
         let new_expr: Expr = parse_quote! {
             {
-                let _group_guard = ::tessera_ui::runtime::GroupGuard::new(#group_id);
+                let _group_guard = ::tessera_ui::__private::GroupGuard::new(#group_id);
                 #original_expr
             }
         };
@@ -1350,7 +887,7 @@ impl ControlFlowInstrumenter {
 
         let new_block: Block = parse_quote! {
             {
-                let _group_guard = ::tessera_ui::runtime::GroupGuard::new(#group_id);
+                let _group_guard = ::tessera_ui::__private::GroupGuard::new(#group_id);
                 #(#original_stmts)*
             }
         };
@@ -1367,7 +904,7 @@ impl ControlFlowInstrumenter {
 
         let new_block: Block = parse_quote! {
             {
-                let _group_guard = ::tessera_ui::runtime::PathGroupGuard::new(#group_id);
+                let _group_guard = ::tessera_ui::__private::PathGroupGuard::new(#group_id);
                 #(#original_stmts)*
             }
         };
@@ -1421,17 +958,20 @@ impl VisitMut for ControlFlowInstrumenter {
 ///
 /// # Usage
 ///
-/// Annotate a free function (no captured self) with `#[tessera]`. You may then
-/// (optionally) call any of the injected helpers exactly once (last call wins
-/// if repeated).
+/// Annotate a plain free function with `#[tessera]`.
+///
+/// The macro turns the function into a Tessera component entrypoint. Public
+/// components use the generated builder syntax, while the original function
+/// body runs inside Tessera's build/replay context.
 ///
 /// # Parameters
 ///
-/// * Attribute arguments are currently unused; pass nothing or `#[tessera]`.
+/// * Attribute arguments select the Tessera crate path. Use `#[tessera]` for
+///   normal external authoring, or `#[tessera(crate)]` inside Tessera crates.
 ///
 /// # When NOT to Use
 ///
-/// * For function that should not be a ui component.
+/// * For functions that should not participate in the component tree.
 ///
 /// # See Also
 ///
@@ -1458,15 +998,38 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
         .to_compile_error()
         .into();
     }
+
+    if input_fn.sig.constness.is_some()
+        || input_fn.sig.asyncness.is_some()
+        || input_fn.sig.unsafety.is_some()
+        || input_fn.sig.abi.is_some()
+        || input_fn.sig.variadic.is_some()
+        || !input_fn.sig.generics.params.is_empty()
+        || input_fn.sig.generics.where_clause.is_some()
+    {
+        return syn::Error::new_spanned(
+            &input_fn.sig,
+            "#[tessera] components must be plain, non-generic free functions",
+        )
+        .to_compile_error()
+        .into();
+    }
+    if !matches!(input_fn.sig.output, syn::ReturnType::Default) {
+        return syn::Error::new_spanned(
+            &input_fn.sig.output,
+            "#[tessera] components must not return a value",
+        )
+        .to_compile_error()
+        .into();
+    }
+
     let fn_name = &input_fn.sig.ident;
     let fn_vis = &input_fn.vis;
     let fn_attrs = &input_fn.attrs;
-    let fn_sig = &input_fn.sig;
-    let prop_signature = match strict_prop_signature(fn_sig) {
+    let prop_signature = match strict_prop_signature(&input_fn.sig) {
         Ok(v) => v,
         Err(err) => return err.to_compile_error().into(),
     };
-    let prop_type = prop_signature.prop_type();
 
     // Generate a stable hash seed based on function name in order to avoid ID
     // collisions
@@ -1481,78 +1044,207 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 
     // Prepare token fragments using helpers to keep function small and readable
     let register_tokens = register_node_tokens(&crate_path, fn_name);
-    let layout_tokens = layout_inject_tokens(&crate_path);
-    let state_tokens = input_handler_inject_tokens(&crate_path);
-    let callback_helper_tokens = callback_helpers_inject_tokens(&crate_path);
-    let replay_tokens = replay_register_tokens(&crate_path, fn_name, &prop_signature);
-    let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
     let component_type_id_tokens = component_type_id_tokens(fn_name);
+    let expanded = match &prop_signature {
+        ComponentPropSignature::Unit => {
+            let fn_sig = &input_fn.sig;
+            let prop_assert_tokens = prop_assert_tokens(&crate_path, &syn::parse_quote!(()));
+            let unit_runner_ident = format_ident!("__tessera_{}_unit_runner", fn_name);
+            let replay_tokens = replay_register_tokens(
+                &crate_path,
+                &unit_runner_ident,
+                &syn::parse_quote!(()),
+                quote!(&__tessera_unit_props),
+            );
 
-    // Generate the transformed function with Tessera runtime integration
-    let expanded = quote! {
-        #(#fn_attrs)*
-        #fn_vis #fn_sig {
-            let __tessera_component_type_id: u64 = #component_type_id_tokens;
-            let __tessera_phase_guard = {
-                use #crate_path::runtime::{RuntimePhase, push_phase};
-                push_phase(RuntimePhase::Build)
-            };
-            let __tessera_fn_name: &str = stringify!(#fn_name);
-            let __tessera_node_id = #register_tokens;
-
-            // Inject guard to pop component node on function exit
-            let _component_scope_guard = {
-                struct ComponentScopeGuard;
-                impl Drop for ComponentScopeGuard {
-                    fn drop(&mut self) {
-                        use #crate_path::runtime::TesseraRuntime;
-                        TesseraRuntime::with_mut(|runtime| {
-                            runtime.finalize_current_layout_spec_dirty();
-                            runtime.component_tree.pop_node();
-                        });
-                    }
+            quote! {
+                fn #unit_runner_ident(_props: &()) {
+                    #fn_name();
                 }
-                ComponentScopeGuard
-            };
 
-            // Track current node for control-flow instrumentation
-            let _node_ctx_guard = {
-                use #crate_path::runtime::push_current_node;
-                push_current_node(
-                    __tessera_node_id,
-                    __tessera_component_type_id,
-                    __tessera_fn_name,
-                )
-            };
+                #(#fn_attrs)*
+                #fn_vis #fn_sig {
+                    let __tessera_component_type_id: u64 = #component_type_id_tokens;
+                    let __tessera_phase_guard = {
+                        use #crate_path::__private::{RuntimePhase, push_phase};
+                        push_phase(RuntimePhase::Build)
+                    };
+                    let __tessera_fn_name: &str = stringify!(#fn_name);
+                    let __tessera_node_id = #register_tokens;
 
-            let __tessera_instance_key: u64 = #crate_path::runtime::current_instance_key();
-            let __tessera_instance_logic_id: u64 =
-                #crate_path::runtime::current_instance_logic_id();
-            let _instance_ctx_guard = {
-                use #crate_path::runtime::push_current_component_instance_key;
-                push_current_component_instance_key(__tessera_instance_key)
-            };
-            {
-                use #crate_path::runtime::TesseraRuntime;
-                TesseraRuntime::with_mut(|runtime| {
-                    runtime.set_current_node_identity(
+                    let _component_scope_guard = {
+                        struct ComponentScopeGuard;
+                        impl Drop for ComponentScopeGuard {
+                            fn drop(&mut self) {
+                                #crate_path::__private::finish_component_node();
+                            }
+                        }
+                        ComponentScopeGuard
+                    };
+
+                    let _node_ctx_guard = {
+                        use #crate_path::__private::push_current_node;
+                        push_current_node(
+                            __tessera_node_id,
+                            __tessera_component_type_id,
+                            __tessera_fn_name,
+                        )
+                    };
+
+                    let __tessera_instance_key: u64 = #crate_path::__private::current_instance_key();
+                    let __tessera_instance_logic_id: u64 =
+                        #crate_path::__private::current_instance_logic_id();
+                    let _instance_ctx_guard = {
+                        use #crate_path::__private::push_current_component_instance_key;
+                        push_current_component_instance_key(__tessera_instance_key)
+                    };
+                    #crate_path::__private::set_current_node_identity(
                         __tessera_instance_key,
                         __tessera_instance_logic_id,
                     );
-                });
+                    #prop_assert_tokens
+                    #crate_path::__private::record_current_context_snapshot_for(__tessera_instance_key);
+                    let __tessera_unit_props = ();
+                    #replay_tokens
+                    if __tessera_component_reused {
+                        return;
+                    }
+                    #fn_block
+                }
             }
-            #prop_assert_tokens
-            #crate_path::context::record_current_context_snapshot_for(__tessera_instance_key);
-            #replay_tokens
-            if __tessera_component_reused {
-                return;
+        }
+        ComponentPropSignature::Params(fields) => {
+            let props_ident = hidden_props_ident(fn_name);
+            let builder_ident = builder_ident(fn_name);
+            let impl_ident = hidden_component_impl_ident(fn_name);
+            let set_flag_idents: Vec<_> = fields
+                .iter()
+                .map(|field| format_ident!("__tessera_set_{}", field.ident))
+                .collect();
+            let field_defs: Vec<_> = fields
+                .iter()
+                .map(|field| {
+                    let ident = &field.ident;
+                    let ty = &field.ty;
+                    quote!(#ident: #ty)
+                })
+                .collect();
+            let set_flag_defs: Vec<_> = set_flag_idents
+                .iter()
+                .map(|ident| quote!(#ident: bool))
+                .collect();
+            let field_resolutions: Vec<_> = fields
+                .iter()
+                .zip(set_flag_idents.iter())
+                .map(|(field, set_flag_ident)| {
+                    let ident = &field.ident;
+                    let ty = &field.ty;
+                    if let Some(default_expr) = &field.default_expr {
+                        quote! {
+                            let #ident: #ty = if __tessera_props.#set_flag_ident {
+                                __tessera_props.#ident.clone()
+                            } else {
+                                #default_expr
+                            };
+                        }
+                    } else {
+                        quote!(let #ident: #ty = __tessera_props.#ident.clone();)
+                    }
+                })
+                .collect();
+            let prop_impl_tokens = generate_prop_like_impls(&props_ident, fields, &crate_path);
+            let builder_methods = match generate_builder_methods(fields, &crate_path) {
+                Ok(methods) => methods,
+                Err(err) => return err.to_compile_error().into(),
+            };
+            let prop_assert_tokens =
+                prop_assert_tokens(&crate_path, &syn::parse_quote!(#props_ident));
+            let replay_tokens = replay_register_tokens(
+                &crate_path,
+                &impl_ident,
+                &syn::parse_quote!(#props_ident),
+                quote!(__tessera_props),
+            );
+
+            quote! {
+                #[derive(Clone, Default)]
+                struct #props_ident {
+                    #(#field_defs,)*
+                    #(#set_flag_defs,)*
+                }
+
+                #prop_impl_tokens
+
+                #[derive(Default)]
+                #[doc = concat!("Builder returned by [`", stringify!(#fn_name), "`].")]
+                #fn_vis struct #builder_ident {
+                    props: #props_ident,
+                }
+
+                impl #builder_ident {
+                    #(#builder_methods)*
+                }
+
+                impl Drop for #builder_ident {
+                    fn drop(&mut self) {
+                        #impl_ident(&self.props);
+                    }
+                }
+
+                #(#fn_attrs)*
+                #fn_vis fn #fn_name() -> #builder_ident {
+                    #builder_ident::default()
+                }
+
+                fn #impl_ident(__tessera_props: &#props_ident) {
+                    let __tessera_component_type_id: u64 = #component_type_id_tokens;
+                    let __tessera_phase_guard = {
+                        use #crate_path::__private::{RuntimePhase, push_phase};
+                        push_phase(RuntimePhase::Build)
+                    };
+                    let __tessera_fn_name: &str = stringify!(#fn_name);
+                    let __tessera_node_id = #register_tokens;
+
+                    let _component_scope_guard = {
+                        struct ComponentScopeGuard;
+                        impl Drop for ComponentScopeGuard {
+                            fn drop(&mut self) {
+                                #crate_path::__private::finish_component_node();
+                            }
+                        }
+                        ComponentScopeGuard
+                    };
+
+                    let _node_ctx_guard = {
+                        use #crate_path::__private::push_current_node;
+                        push_current_node(
+                            __tessera_node_id,
+                            __tessera_component_type_id,
+                            __tessera_fn_name,
+                        )
+                    };
+
+                    let __tessera_instance_key: u64 = #crate_path::__private::current_instance_key();
+                    let __tessera_instance_logic_id: u64 =
+                        #crate_path::__private::current_instance_logic_id();
+                    let _instance_ctx_guard = {
+                        use #crate_path::__private::push_current_component_instance_key;
+                        push_current_component_instance_key(__tessera_instance_key)
+                    };
+                    #crate_path::__private::set_current_node_identity(
+                        __tessera_instance_key,
+                        __tessera_instance_logic_id,
+                    );
+                    #prop_assert_tokens
+                    #crate_path::__private::record_current_context_snapshot_for(__tessera_instance_key);
+                    #replay_tokens
+                    if __tessera_component_reused {
+                        return;
+                    }
+                    #(#field_resolutions)*
+                    #fn_block
+                }
             }
-            // Inject helper tokens
-            #layout_tokens
-            #state_tokens
-            #callback_helper_tokens
-            // Execute user's function body
-            #fn_block
         }
     };
 
@@ -1606,7 +1298,7 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Features
 ///
 /// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`)
-///   implementing `tessera_shard::router::RouterDestination`
+///   implementing `tessera_ui::router::RouterDestination`
 /// * Optional state injection via `#[shard(state = T)]`, where `T`:
 ///   - Must implement `Default + Send + Sync + 'static`
 ///   - Is constructed (or reused) and exposed as local variable `state` with
@@ -1617,11 +1309,11 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// Controlled by the `lifecycle` shard attribute argument.
 /// * Default: `Shard` – state is removed when the destination is `pop()`‑ed
-/// * Override: `#[shard(lifecycle = scope)]` to persist for the lifetime of
-///   current `router_scope`
+/// * Override: `#[shard(lifecycle = scope)]` to persist for the lifetime of the
+///   current router controller hosted by `shard_home`
 ///
 /// Route-scoped state is removed on route pop/clear. Scope-scoped state is
-/// removed when the router scope is dropped.
+/// removed when the hosting `shard_home` is dropped.
 ///
 /// # Parameter Transformation
 ///
@@ -1646,8 +1338,8 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # See Also
 ///
-/// * Routing helpers: `tessera_ui::router::{Router, router_root}`
-/// * Scoped router internals: `tessera_shard::router::Router`
+/// * Routing helpers: `tessera_ui::router::{shard_home, router_outlet}`
+/// * Router controller internals: `tessera_ui::router::RouterController`
 ///
 /// # Errors
 ///
@@ -1688,6 +1380,28 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         Ok(params) => params,
         Err(err) => return err.to_compile_error().into(),
     };
+    let router_params: Vec<_> = shard_params
+        .iter()
+        .filter(|param| param.is_router)
+        .collect();
+    if router_params.len() > 1 {
+        return syn::Error::new_spanned(
+            &func.sig.inputs,
+            "#[shard] supports at most one `#[router]` parameter",
+        )
+        .to_compile_error()
+        .into();
+    }
+    if let Some(router_param) = router_params.first()
+        && !is_state_router_controller_type(&router_param.ty)
+    {
+        return syn::Error::new_spanned(
+            &router_param.ty,
+            "`#[router]` parameters must have type `State<RouterController>`",
+        )
+        .to_compile_error()
+        .into();
+    }
 
     let state_type = shard_args.state_type;
     let state_lifecycle_tokens = match shard_args.lifecycle {
@@ -1702,9 +1416,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 .into();
             }
             if lifecycle_name == "scope" {
-                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Scope }
+                quote! { #crate_path::router::ShardStateLifeCycle::Scope }
             } else if lifecycle_name == "shard" {
-                quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard }
+                quote! { #crate_path::router::ShardStateLifeCycle::Shard }
             } else {
                 return syn::Error::new_spanned(
                     lifecycle,
@@ -1714,7 +1428,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 .into();
             }
         }
-        None => quote! { #crate_path::tessera_shard::ShardStateLifeCycle::Shard },
+        None => quote! { #crate_path::router::ShardStateLifeCycle::Shard },
     };
 
     let func_body = func.block;
@@ -1722,7 +1436,38 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let func_attrs = &func.attrs;
     let func_vis = &func.vis;
-    let func_sig_modified = &func.sig;
+    let router_binding =
+        router_params
+            .first()
+            .map_or_else(proc_macro2::TokenStream::new, |param| {
+                let router_ident = &param.ident;
+                quote! {
+                    let #router_ident = #router_ident
+                        .expect("`#[router]` injection is only available inside shard_home");
+                }
+            });
+    let mut func_sig_modified = func.sig.clone();
+    for input in &mut func_sig_modified.inputs {
+        let FnArg::Typed(pat_type) = input else {
+            continue;
+        };
+        let is_router = pat_type
+            .attrs
+            .iter()
+            .any(|attr| attr.path().is_ident("router"));
+        if !is_router {
+            continue;
+        }
+        let original_ty = (*pat_type.ty).clone();
+        *pat_type.ty = parse_quote!(::core::option::Option<#original_ty>);
+        pat_type
+            .attrs
+            .retain(|attr| !attr.path().is_ident("router"));
+        pat_type.attrs.push(syn::parse_quote!(#[prop(skip_setter)]));
+        pat_type.attrs.push(
+            syn::parse_quote!(#[default(Some(#crate_path::__private::current_router_controller()))]),
+        );
+    }
 
     // Generate struct name for the new RouterDestination
     let func_name = func.sig.ident.clone();
@@ -1730,42 +1475,36 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         &format!("{}Destination", func_name_str.to_upper_camel_case()),
         func_name.span(),
     );
-    let inner_component_name = format_ident!("__{}_shard_component", func_name);
-    let shard_props_name = syn::Ident::new(
-        &format!("{}ShardProps", func_name_str.to_upper_camel_case()),
-        func_name.span(),
-    );
-
     // Generate fields for the new struct that will implement `RouterDestination`
-    let dest_fields = shard_params.iter().map(|param| {
-        let ident = &param.ident;
-        let ty = &param.ty;
-        quote! { pub #ident: #ty }
-    });
+    let dest_fields = shard_params
+        .iter()
+        .filter(|param| !param.is_router)
+        .map(|param| {
+            let ident = &param.ident;
+            let ty = &param.ty;
+            quote! { pub #ident: #ty }
+        });
 
     // Keep all explicit function parameters as destination props.
-    let param_idents: Vec<_> = shard_params
-        .iter()
-        .map(|param| param.ident.clone())
-        .collect();
-
-    let shard_prop_fields = shard_params.iter().map(|param| {
-        let ident = &param.ident;
-        let ty = &param.ty;
-        quote! { #ident: #ty }
-    });
-
     let expanded = {
-        // `exec_component` only passes destination prop fields.
-        let exec_args = param_idents
+        let destination_builder_setters: Vec<_> = shard_params
             .iter()
-            .map(|ident| quote! { self.#ident.clone() });
-        let shard_prop_init = param_idents.iter().map(|ident| quote! { #ident });
-        let shard_prop_bindings = param_idents.iter().map(|ident| {
-            quote! {
-                let #ident = __tessera_shard_props.#ident.clone();
-            }
-        });
+            .filter(|param| !param.is_router)
+            .map(|param| {
+                let ident = &param.ident;
+                if option_inner_type(&param.ty).is_some() {
+                    quote! {
+                        if let Some(value) = self.#ident.clone() {
+                            __tessera_builder = __tessera_builder.#ident(value);
+                        }
+                    }
+                } else {
+                    quote! {
+                        __tessera_builder = __tessera_builder.#ident(self.#ident.clone());
+                    }
+                }
+            })
+            .collect();
 
         if let Some(state_type) = state_type {
             quote! {
@@ -1773,13 +1512,11 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     #(#dest_fields),*
                 }
 
-                impl #crate_path::tessera_shard::router::RouterDestination for #struct_name {
+                impl #crate_path::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
-                        #func_name(
-                            #(
-                                #exec_args
-                            ),*
-                        );
+                        let mut __tessera_builder = #func_name();
+                        #(#destination_builder_setters)*
+                        drop(__tessera_builder);
                     }
 
                     fn shard_id(&self) -> &'static str {
@@ -1788,36 +1525,17 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
 
                 #(#func_attrs)*
+                #[#crate_path::tessera(#crate_path)]
                 #func_vis #func_sig_modified {
-                    #[derive(Clone)]
-                    struct #shard_props_name {
-                        #(#shard_prop_fields),*
-                    }
-
-                    impl #crate_path::Prop for #shard_props_name {
-                        fn prop_eq(&self, _other: &Self) -> bool {
-                            false
-                        }
-                    }
-
-                    #[#crate_path::tessera(#crate_path)]
-                    fn #inner_component_name(__tessera_shard_props: &#shard_props_name) {
-                        #(#shard_prop_bindings)*
-
-                        const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
-                        #crate_path::router::with_current_router_shard_state::<#state_type, _, _>(
-                            SHARD_ID,
-                            #state_lifecycle_tokens,
-                            |state| {
-                                #func_body
-                            },
-                        )
-                    }
-
-                    let __tessera_shard_props = #shard_props_name {
-                        #(#shard_prop_init),*
-                    };
-                    #inner_component_name(&__tessera_shard_props);
+                    const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
+                    #router_binding
+                    #crate_path::__private::with_current_router_shard_state::<#state_type, _, _>(
+                        SHARD_ID,
+                        #state_lifecycle_tokens,
+                        |state| {
+                            #func_body
+                        },
+                    )
                 }
             }
         } else {
@@ -1826,13 +1544,11 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     #(#dest_fields),*
                 }
 
-                impl #crate_path::tessera_shard::router::RouterDestination for #struct_name {
+                impl #crate_path::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
-                        #func_name(
-                            #(
-                                #exec_args
-                            ),*
-                        );
+                        let mut __tessera_builder = #func_name();
+                        #(#destination_builder_setters)*
+                        drop(__tessera_builder);
                     }
 
                     fn shard_id(&self) -> &'static str {
@@ -1841,28 +1557,10 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 }
 
                 #(#func_attrs)*
+                #[#crate_path::tessera(#crate_path)]
                 #func_vis #func_sig_modified {
-                    #[derive(Clone)]
-                    struct #shard_props_name {
-                        #(#shard_prop_fields),*
-                    }
-
-                    impl #crate_path::Prop for #shard_props_name {
-                        fn prop_eq(&self, _other: &Self) -> bool {
-                            false
-                        }
-                    }
-
-                    #[#crate_path::tessera(#crate_path)]
-                    fn #inner_component_name(__tessera_shard_props: &#shard_props_name) {
-                        #(#shard_prop_bindings)*
-                        #func_body
-                    }
-
-                    let __tessera_shard_props = #shard_props_name {
-                        #(#shard_prop_init),*
-                    };
-                    #inner_component_name(&__tessera_shard_props);
+                    #router_binding
+                    #func_body
                 }
             }
         }

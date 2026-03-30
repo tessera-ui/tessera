@@ -15,6 +15,7 @@ use smallvec::SmallVec;
 
 use crate::{
     NodeId,
+    accessibility::{AccessibilityActionHandler, AccessibilityNode},
     component_tree::ComponentTree,
     execution_context::{OrderFrame, with_execution_context, with_execution_context_mut},
     focus::{
@@ -22,7 +23,8 @@ use crate::{
         FocusRegistration, FocusRegistrationKind, FocusRequester, FocusRequesterId,
         FocusRevealRequest, FocusScopeNode, FocusState, FocusTraversalPolicy,
     },
-    layout::{LayoutSpec, LayoutSpecDyn},
+    layout::{LayoutPolicyDyn, RenderPolicyDyn},
+    modifier::Modifier,
     prop::{CallbackWith, ComponentReplayData, ErasedComponentRunner, Prop},
 };
 
@@ -460,11 +462,19 @@ impl<T, R> RenderSlotWithCell<T, R> {
 
 #[derive(Default)]
 struct LayoutDirtyTracker {
-    previous_layout_specs_by_node: HashMap<u64, Box<dyn LayoutSpecDyn>>,
-    frame_layout_specs_by_node: HashMap<u64, Box<dyn LayoutSpecDyn>>,
-    pending_self_dirty_nodes: HashSet<u64>,
-    ready_self_dirty_nodes: HashSet<u64>,
+    previous_layout_policies_by_node: HashMap<u64, Box<dyn LayoutPolicyDyn>>,
+    frame_layout_policies_by_node: HashMap<u64, Box<dyn LayoutPolicyDyn>>,
+    pending_measure_self_dirty_nodes: HashSet<u64>,
+    ready_measure_self_dirty_nodes: HashSet<u64>,
+    pending_placement_self_dirty_nodes: HashSet<u64>,
+    ready_placement_self_dirty_nodes: HashSet<u64>,
     previous_children_by_node: HashMap<u64, Vec<u64>>,
+}
+
+#[derive(Default)]
+pub(crate) struct LayoutDirtyNodes {
+    pub measure_self_nodes: HashSet<u64>,
+    pub placement_self_nodes: HashSet<u64>,
 }
 
 #[derive(Default)]
@@ -649,8 +659,7 @@ fn current_persistent_focus_handle_key<K: Hash>(slot_key: K) -> PersistentFocusH
     }
 }
 
-#[doc(hidden)]
-pub fn persistent_focus_target_for_current_instance<K: Hash>(slot_key: K) -> FocusNode {
+pub(crate) fn persistent_focus_target_for_current_instance<K: Hash>(slot_key: K) -> FocusNode {
     let key = current_persistent_focus_handle_key(slot_key);
     let mut store = persistent_focus_handle_store().write();
     match store.targets.entry(key) {
@@ -663,8 +672,7 @@ pub fn persistent_focus_target_for_current_instance<K: Hash>(slot_key: K) -> Foc
     }
 }
 
-#[doc(hidden)]
-pub fn persistent_focus_scope_for_current_instance<K: Hash>(slot_key: K) -> FocusScopeNode {
+pub(crate) fn persistent_focus_scope_for_current_instance<K: Hash>(slot_key: K) -> FocusScopeNode {
     let key = current_persistent_focus_handle_key(slot_key);
     let mut store = persistent_focus_handle_store().write();
     match store.scopes.entry(key) {
@@ -677,28 +685,13 @@ pub fn persistent_focus_scope_for_current_instance<K: Hash>(slot_key: K) -> Focu
     }
 }
 
-#[doc(hidden)]
-pub fn persistent_focus_group_for_current_instance<K: Hash>(slot_key: K) -> FocusGroupNode {
+pub(crate) fn persistent_focus_group_for_current_instance<K: Hash>(slot_key: K) -> FocusGroupNode {
     let key = current_persistent_focus_handle_key(slot_key);
     let mut store = persistent_focus_handle_store().write();
     match store.groups.entry(key) {
         std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
         std::collections::hash_map::Entry::Vacant(entry) => {
             let value = FocusGroupNode::new();
-            entry.insert(PersistentFocusHandleEntry::new(value));
-            value
-        }
-    }
-}
-
-#[doc(hidden)]
-pub fn persistent_focus_requester_for_current_instance<K: Hash>(slot_key: K) -> FocusRequester {
-    let key = current_persistent_focus_handle_key(slot_key);
-    let mut store = persistent_focus_handle_store().write();
-    match store.requesters.entry(key) {
-        std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            let value = FocusRequester::new();
             entry.insert(PersistentFocusHandleEntry::new(value));
             value
         }
@@ -1286,44 +1279,67 @@ fn layout_dirty_tracker() -> &'static RwLock<LayoutDirtyTracker> {
     LAYOUT_DIRTY_TRACKER.get_or_init(|| RwLock::new(LayoutDirtyTracker::default()))
 }
 
-fn record_layout_spec_dirty(instance_key: u64, layout_spec: &dyn LayoutSpecDyn) {
+fn record_layout_policy_dirty(instance_key: u64, layout_policy: &dyn LayoutPolicyDyn) {
     if current_phase() != Some(RuntimePhase::Build) {
         return;
     }
     let mut tracker = layout_dirty_tracker().write();
-    let (changed, next_layout_spec) =
-        match tracker.previous_layout_specs_by_node.remove(&instance_key) {
-            Some(previous) => {
-                if previous.dyn_eq(layout_spec) {
-                    (false, previous)
-                } else {
-                    (true, layout_spec.clone_box())
-                }
+    let (measure_changed, placement_changed, next_layout_policy) = match tracker
+        .previous_layout_policies_by_node
+        .remove(&instance_key)
+    {
+        Some(previous) => {
+            let measure_changed = !previous.dyn_measure_eq(layout_policy);
+            let placement_changed = !previous.dyn_placement_eq(layout_policy);
+            if !measure_changed && !placement_changed {
+                (false, false, previous)
+            } else {
+                (
+                    measure_changed,
+                    placement_changed,
+                    layout_policy.clone_box(),
+                )
             }
-            None => (true, layout_spec.clone_box()),
-        };
-    if changed {
-        tracker.pending_self_dirty_nodes.insert(instance_key);
+        }
+        None => (true, true, layout_policy.clone_box()),
+    };
+    if measure_changed {
+        tracker
+            .pending_measure_self_dirty_nodes
+            .insert(instance_key);
+    } else if placement_changed {
+        tracker
+            .pending_placement_self_dirty_nodes
+            .insert(instance_key);
     }
     tracker
-        .frame_layout_specs_by_node
-        .insert(instance_key, next_layout_spec);
+        .frame_layout_policies_by_node
+        .insert(instance_key, next_layout_policy);
 }
 
 pub(crate) fn begin_frame_layout_dirty_tracking() {
     let mut tracker = layout_dirty_tracker().write();
-    tracker.frame_layout_specs_by_node.clear();
-    tracker.pending_self_dirty_nodes.clear();
+    tracker.frame_layout_policies_by_node.clear();
+    tracker.pending_measure_self_dirty_nodes.clear();
+    tracker.pending_placement_self_dirty_nodes.clear();
 }
 
 pub(crate) fn finalize_frame_layout_dirty_tracking() {
     let mut tracker = layout_dirty_tracker().write();
-    tracker.ready_self_dirty_nodes = std::mem::take(&mut tracker.pending_self_dirty_nodes);
-    tracker.previous_layout_specs_by_node = std::mem::take(&mut tracker.frame_layout_specs_by_node);
+    tracker.ready_measure_self_dirty_nodes =
+        std::mem::take(&mut tracker.pending_measure_self_dirty_nodes);
+    tracker.ready_placement_self_dirty_nodes =
+        std::mem::take(&mut tracker.pending_placement_self_dirty_nodes);
+    tracker.previous_layout_policies_by_node =
+        std::mem::take(&mut tracker.frame_layout_policies_by_node);
 }
 
-pub(crate) fn take_layout_self_dirty_nodes() -> HashSet<u64> {
-    std::mem::take(&mut layout_dirty_tracker().write().ready_self_dirty_nodes)
+pub(crate) fn take_layout_dirty_nodes() -> LayoutDirtyNodes {
+    let mut tracker = layout_dirty_tracker().write();
+    LayoutDirtyNodes {
+        measure_self_nodes: std::mem::take(&mut tracker.ready_measure_self_dirty_nodes),
+        placement_self_nodes: std::mem::take(&mut tracker.ready_placement_self_dirty_nodes),
+    }
 }
 
 pub(crate) fn reset_layout_dirty_tracking() {
@@ -1586,8 +1602,7 @@ impl TesseraRuntime {
     }
 
     /// Sets identity fields for the current component node.
-    #[doc(hidden)]
-    pub fn set_current_node_identity(&mut self, instance_key: u64, instance_logic_id: u64) {
+    pub(crate) fn set_current_node_identity(&mut self, instance_key: u64, instance_logic_id: u64) {
         if let Some(node) = self.component_tree.current_node_mut() {
             node.instance_key = instance_key;
             node.instance_logic_id = instance_logic_id;
@@ -1600,8 +1615,7 @@ impl TesseraRuntime {
     }
 
     /// Stores replay metadata for the current component node.
-    #[doc(hidden)]
-    pub fn set_current_component_replay<P>(
+    pub(crate) fn set_current_component_replay<P>(
         &mut self,
         runner: Arc<dyn ErasedComponentRunner>,
         props: &P,
@@ -1666,25 +1680,72 @@ impl TesseraRuntime {
         false
     }
 
-    /// Sets the layout spec for the current component node.
-    #[doc(hidden)]
-    pub fn set_current_layout_spec<S>(&mut self, spec: S)
-    where
-        S: LayoutSpec,
-    {
+    /// Sets the layout policy for the current component node.
+    pub(crate) fn set_current_layout_policy_boxed(&mut self, policy: Box<dyn LayoutPolicyDyn>) {
         if let Some(node) = self.component_tree.current_node_mut() {
-            node.layout_spec = Box::new(spec) as Box<dyn LayoutSpecDyn>;
+            node.layout_policy = policy;
         } else {
             debug_assert!(
                 false,
-                "set_current_layout_spec must be called inside a component build"
+                "set_current_layout_policy_boxed must be called inside a component build"
             );
         }
     }
 
-    /// Binds a focus requester to the current component node.
-    #[doc(hidden)]
-    pub fn bind_current_focus_requester(&mut self, requester: FocusRequester) {
+    /// Sets the render policy for the current component node.
+    pub(crate) fn set_current_render_policy_boxed(&mut self, policy: Box<dyn RenderPolicyDyn>) {
+        if let Some(node) = self.component_tree.current_node_mut() {
+            node.render_policy = policy;
+        } else {
+            debug_assert!(
+                false,
+                "set_current_render_policy_boxed must be called inside a component build"
+            );
+        }
+    }
+
+    /// Appends a modifier chain to the current component node.
+    pub(crate) fn append_current_modifier(&mut self, modifier: Modifier) {
+        if let Some(node) = self.component_tree.current_node_mut() {
+            node.modifier = node.modifier.clone().then(modifier);
+        } else {
+            debug_assert!(
+                false,
+                "append_current_modifier must be called inside a component build"
+            );
+        }
+    }
+
+    pub(crate) fn set_current_accessibility(&mut self, accessibility: Option<AccessibilityNode>) {
+        if let Some(node_id) = current_node_id()
+            && let Some(mut metadata) = self.component_tree.metadatas().get_mut(&node_id)
+        {
+            metadata.accessibility = accessibility;
+        } else {
+            debug_assert!(
+                false,
+                "set_current_accessibility must be called inside a component build"
+            );
+        }
+    }
+
+    pub(crate) fn set_current_accessibility_action_handler(
+        &mut self,
+        handler: Option<AccessibilityActionHandler>,
+    ) {
+        if let Some(node_id) = current_node_id()
+            && let Some(mut metadata) = self.component_tree.metadatas().get_mut(&node_id)
+        {
+            metadata.accessibility_action_handler = handler;
+        } else {
+            debug_assert!(
+                false,
+                "set_current_accessibility_action_handler must be called inside a component build"
+            );
+        }
+    }
+
+    pub(crate) fn bind_current_focus_requester(&mut self, requester: FocusRequester) {
         if let Some(current) = self.component_tree.current_node_mut() {
             current.focus_requester_binding = Some(requester);
         } else {
@@ -1695,22 +1756,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Registers the current component node as a focus target.
-    #[doc(hidden)]
-    pub fn register_current_focus_target(&mut self, node: FocusNode) {
-        if let Some(current) = self.component_tree.current_node_mut() {
-            current.focus_registration = Some(FocusRegistration::target(node));
-        } else {
-            debug_assert!(
-                false,
-                "register_current_focus_target must be called inside a component build"
-            );
-        }
-    }
-
-    /// Ensures the current component node has a focus target registration.
-    #[doc(hidden)]
-    pub fn ensure_current_focus_target(&mut self, node: FocusNode) {
+    pub(crate) fn ensure_current_focus_target(&mut self, node: FocusNode) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if current.focus_registration.is_none() {
                 current.focus_registration = Some(FocusRegistration::target(node));
@@ -1723,22 +1769,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Registers the current component node as a focus scope.
-    #[doc(hidden)]
-    pub fn register_current_focus_scope(&mut self, scope: FocusScopeNode) {
-        if let Some(current) = self.component_tree.current_node_mut() {
-            current.focus_registration = Some(FocusRegistration::scope(scope));
-        } else {
-            debug_assert!(
-                false,
-                "register_current_focus_scope must be called inside a component build"
-            );
-        }
-    }
-
-    /// Ensures the current component node has a focus scope registration.
-    #[doc(hidden)]
-    pub fn ensure_current_focus_scope(&mut self, scope: FocusScopeNode) {
+    pub(crate) fn ensure_current_focus_scope(&mut self, scope: FocusScopeNode) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if current.focus_registration.is_none() {
                 current.focus_registration = Some(FocusRegistration::scope(scope));
@@ -1751,23 +1782,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Registers the current component node as a focus traversal group.
-    #[doc(hidden)]
-    pub fn register_current_focus_group(&mut self, group: FocusGroupNode) {
-        if let Some(current) = self.component_tree.current_node_mut() {
-            current.focus_registration = Some(FocusRegistration::group(group));
-        } else {
-            debug_assert!(
-                false,
-                "register_current_focus_group must be called inside a component build"
-            );
-        }
-    }
-
-    /// Ensures the current component node has a focus traversal group
-    /// registration.
-    #[doc(hidden)]
-    pub fn ensure_current_focus_group(&mut self, group: FocusGroupNode) {
+    pub(crate) fn ensure_current_focus_group(&mut self, group: FocusGroupNode) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if current.focus_registration.is_none() {
                 current.focus_registration = Some(FocusRegistration::group(group));
@@ -1780,33 +1795,25 @@ impl TesseraRuntime {
         }
     }
 
-    /// Returns the current component node's registered focus target, if any.
-    #[doc(hidden)]
-    pub fn current_focus_target_handle(&self) -> Option<FocusNode> {
+    pub(crate) fn current_focus_target_handle(&self) -> Option<FocusNode> {
         let registration = self.component_tree.current_node()?.focus_registration?;
         (registration.kind == FocusRegistrationKind::Target)
             .then(|| FocusNode::from_handle_id(registration.id))
     }
 
-    /// Returns the current component node's registered focus scope, if any.
-    #[doc(hidden)]
-    pub fn current_focus_scope_handle(&self) -> Option<FocusScopeNode> {
+    pub(crate) fn current_focus_scope_handle(&self) -> Option<FocusScopeNode> {
         let registration = self.component_tree.current_node()?.focus_registration?;
         (registration.kind == FocusRegistrationKind::Scope)
             .then(|| FocusScopeNode::from_handle_id(registration.id))
     }
 
-    /// Returns the current component node's registered focus group, if any.
-    #[doc(hidden)]
-    pub fn current_focus_group_handle(&self) -> Option<FocusGroupNode> {
+    pub(crate) fn current_focus_group_handle(&self) -> Option<FocusGroupNode> {
         let registration = self.component_tree.current_node()?.focus_registration?;
         (registration.kind == FocusRegistrationKind::Group)
             .then(|| FocusGroupNode::from_handle_id(registration.id))
     }
 
-    /// Updates focus properties for the current component node registration.
-    #[doc(hidden)]
-    pub fn set_current_focus_properties(&mut self, properties: FocusProperties) {
+    pub(crate) fn set_current_focus_properties(&mut self, properties: FocusProperties) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if let Some(registration) = current.focus_registration.as_mut() {
                 registration.properties = properties;
@@ -1824,9 +1831,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Updates the traversal policy for the current focus scope or group.
-    #[doc(hidden)]
-    pub fn set_current_focus_traversal_policy(&mut self, policy: FocusTraversalPolicy) {
+    pub(crate) fn set_current_focus_traversal_policy(&mut self, policy: FocusTraversalPolicy) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if current.focus_registration.is_some_and(|registration| {
                 matches!(
@@ -1849,9 +1854,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Registers a focus-changed callback on the current component node.
-    #[doc(hidden)]
-    pub fn set_current_focus_changed_handler(&mut self, handler: CallbackWith<FocusState>) {
+    pub(crate) fn set_current_focus_changed_handler(&mut self, handler: CallbackWith<FocusState>) {
         if let Some(current) = self.component_tree.current_node_mut() {
             current.focus_changed_handler = Some(handler);
         } else {
@@ -1862,9 +1865,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Registers a focus-event callback on the current component node.
-    #[doc(hidden)]
-    pub fn set_current_focus_event_handler(&mut self, handler: CallbackWith<FocusState>) {
+    pub(crate) fn set_current_focus_event_handler(&mut self, handler: CallbackWith<FocusState>) {
         if let Some(current) = self.component_tree.current_node_mut() {
             current.focus_event_handler = Some(handler);
         } else {
@@ -1875,9 +1876,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Registers a beyond-bounds focus callback on the current component node.
-    #[doc(hidden)]
-    pub fn set_current_focus_beyond_bounds_handler(
+    pub(crate) fn set_current_focus_beyond_bounds_handler(
         &mut self,
         handler: CallbackWith<FocusDirection, bool>,
     ) {
@@ -1891,9 +1890,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Registers a focus reveal callback on the current component node.
-    #[doc(hidden)]
-    pub fn set_current_focus_reveal_handler(
+    pub(crate) fn set_current_focus_reveal_handler(
         &mut self,
         handler: CallbackWith<FocusRevealRequest, bool>,
     ) {
@@ -1907,9 +1904,7 @@ impl TesseraRuntime {
         }
     }
 
-    /// Registers a restorer fallback on the current focus scope node.
-    #[doc(hidden)]
-    pub fn set_current_focus_restorer_fallback(&mut self, fallback: FocusRequester) {
+    pub(crate) fn set_current_focus_restorer_fallback(&mut self, fallback: FocusRequester) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if current
                 .focus_registration
@@ -1930,15 +1925,13 @@ impl TesseraRuntime {
         }
     }
 
-    /// Records the final layout spec snapshot for the current node.
-    #[doc(hidden)]
-    pub fn finalize_current_layout_spec_dirty(&mut self) {
+    pub(crate) fn finalize_current_layout_policy_dirty(&mut self) {
         if let Some(node) = self.component_tree.current_node() {
-            record_layout_spec_dirty(node.instance_key, node.layout_spec.as_ref());
+            record_layout_policy_dirty(node.instance_key, node.layout_policy.as_ref());
         } else {
             debug_assert!(
                 false,
-                "finalize_current_layout_spec_dirty must be called inside a component build"
+                "finalize_current_layout_policy_dirty must be called inside a component build"
             );
         }
     }
@@ -1953,6 +1946,7 @@ pub struct NodeContextGuard {
     profiling_guard: Option<crate::profiler::ScopeGuard>,
 }
 
+/// Guard that keeps the current component instance key on the execution stack.
 pub struct CurrentComponentInstanceGuard {
     popped: bool,
 }
@@ -2205,15 +2199,13 @@ fn current_instance_logic_id_opt() -> Option<u64> {
 }
 
 /// Returns the current component instance logic id.
-#[doc(hidden)]
-pub fn current_instance_logic_id() -> u64 {
+pub(crate) fn current_instance_logic_id() -> u64 {
     current_instance_logic_id_opt()
         .expect("current_instance_logic_id must be called inside a component")
 }
 
 /// Returns the instance key for the current component call site.
-#[doc(hidden)]
-pub fn current_instance_key() -> u64 {
+pub(crate) fn current_instance_key() -> u64 {
     let instance_logic_id = current_instance_logic_id_opt()
         .expect("current_instance_key must be called inside a component");
     let group_path_hash = current_group_path_hash();
@@ -3067,16 +3059,11 @@ where
 /// # Examples
 ///
 /// ```
-/// use tessera_ui::{Prop, key, remember, tessera};
-///
-/// #[derive(Clone, Prop)]
-/// struct MyListArgs {
-///     items: Vec<String>,
-/// }
+/// use tessera_ui::{key, remember, tessera};
 ///
 /// #[tessera]
-/// fn my_list(args: &MyListArgs) {
-///     for item in args.items.iter() {
+/// fn my_list(items: Vec<String>) {
+///     for item in items.iter() {
 ///         key(item.clone(), || {
 ///             let state = remember(|| 0);
 ///         });
@@ -3105,6 +3092,7 @@ mod tests {
     use crate::execution_context::{
         reset_execution_context, with_execution_context, with_execution_context_mut,
     };
+    use crate::layout::{LayoutInput, LayoutOutput, LayoutPolicy};
     use crate::prop::{Callback, RenderSlot};
 
     fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
@@ -3199,6 +3187,83 @@ mod tests {
         }));
         assert!(result.is_err());
         assert!(!is_instance_key_build_dirty(11));
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct DirtySplitPolicy {
+        measure_key: u32,
+        placement_key: u32,
+    }
+
+    impl LayoutPolicy for DirtySplitPolicy {
+        fn measure(
+            &self,
+            _input: &LayoutInput<'_>,
+            _output: &mut LayoutOutput<'_>,
+        ) -> Result<crate::ComputedData, crate::MeasurementError> {
+            Ok(crate::ComputedData::ZERO)
+        }
+
+        fn measure_eq(&self, other: &Self) -> bool {
+            self.measure_key == other.measure_key
+        }
+
+        fn placement_eq(&self, other: &Self) -> bool {
+            self.placement_key == other.placement_key
+        }
+    }
+
+    #[test]
+    fn layout_dirty_tracking_separates_measure_and_placement_changes() {
+        reset_layout_dirty_tracking();
+
+        begin_frame_layout_dirty_tracking();
+        {
+            let _phase_guard = push_phase(RuntimePhase::Build);
+            record_layout_policy_dirty(
+                1,
+                &DirtySplitPolicy {
+                    measure_key: 0,
+                    placement_key: 0,
+                },
+            );
+        }
+        finalize_frame_layout_dirty_tracking();
+        let dirty = take_layout_dirty_nodes();
+        assert!(dirty.measure_self_nodes.contains(&1));
+        assert!(dirty.placement_self_nodes.is_empty());
+
+        begin_frame_layout_dirty_tracking();
+        {
+            let _phase_guard = push_phase(RuntimePhase::Build);
+            record_layout_policy_dirty(
+                1,
+                &DirtySplitPolicy {
+                    measure_key: 0,
+                    placement_key: 1,
+                },
+            );
+        }
+        finalize_frame_layout_dirty_tracking();
+        let dirty = take_layout_dirty_nodes();
+        assert!(!dirty.measure_self_nodes.contains(&1));
+        assert!(dirty.placement_self_nodes.contains(&1));
+
+        begin_frame_layout_dirty_tracking();
+        {
+            let _phase_guard = push_phase(RuntimePhase::Build);
+            record_layout_policy_dirty(
+                1,
+                &DirtySplitPolicy {
+                    measure_key: 1,
+                    placement_key: 1,
+                },
+            );
+        }
+        finalize_frame_layout_dirty_tracking();
+        let dirty = take_layout_dirty_nodes();
+        assert!(dirty.measure_self_nodes.contains(&1));
+        assert!(!dirty.placement_self_nodes.contains(&1));
     }
 
     #[test]

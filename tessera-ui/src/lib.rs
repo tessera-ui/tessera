@@ -70,7 +70,7 @@
 //!
 //! Memoized state is implemented via macro-based control-flow analysis and
 //! cannot be used outside of functions marked with `#[tessera]`. It also must
-//! not be used inside layout specs or event handler implementations.
+//! not be used inside layout policies or event handler implementations.
 //!
 //! `remember` handles most control flow situations, but it cannot guarantee
 //! stable identity inside loops. If you need to use memoized state within a
@@ -104,16 +104,11 @@
 //! Or use the `key` function to influence the `remember` calls inside it.
 //!
 //! ```
-//! use tessera_ui::{Prop, key, remember, tessera};
-//!
-//! #[derive(Clone, Prop)]
-//! struct MyListArgs {
-//!     items: Vec<String>,
-//! }
+//! use tessera_ui::{key, remember, tessera};
 //!
 //! #[tessera]
-//! fn my_list(args: &MyListArgs) {
-//!     for item in args.items.iter() {
+//! fn my_list(items: Vec<String>) {
+//!     for item in items.iter() {
 //!         key(item.clone(), || {
 //!             let state = remember(|| 0);
 //!         });
@@ -138,17 +133,13 @@
 //! is retained across the entire lifetime of the process.
 //!
 //! ```
-//! use tessera_ui::{Prop, retain, tessera};
-//!
-//! #[derive(Clone, Prop)]
-//! struct ScrollablePageArgs {
-//!     page_id: String,
-//! }
+//! use tessera_ui::{retain, tessera};
 //!
 //! #[tessera]
-//! fn scrollable_page(_args: &ScrollablePageArgs) {
+//! fn scrollable_page(page_id: String) {
 //!     // Scroll position persists even when navigating away and returning
 //!     let scroll_offset = retain(|| 0.0f32);
+//!     let _ = page_id;
 //!
 //!     /* component implementation */
 //! }
@@ -185,16 +176,11 @@
 //! Or use the `key` function to influence the `retain` calls inside it.
 //!
 //! ```
-//! use tessera_ui::{Prop, key, retain, tessera};
-//!
-//! #[derive(Clone, Prop)]
-//! struct MyListArgs {
-//!     items: Vec<String>,
-//! }
+//! use tessera_ui::{key, retain, tessera};
 //!
 //! #[tessera]
-//! fn my_list(args: &MyListArgs) {
-//!     for item in args.items.iter() {
+//! fn my_list(items: Vec<String>) {
+//!     for item in items.iter() {
 //!         key(item.clone(), || {
 //!             let state = retain(|| 0);
 //!         });
@@ -275,64 +261,23 @@
 //!
 //! # Layout
 //!
-//! Implement a layout spec to define a component's layout behavior.
-//! ```
-//! use tessera_ui::{
-//!     Constraint, LayoutInput, LayoutOutput, LayoutSpec, MeasurementError, Px, PxPosition,
-//!     tessera,
-//! };
-//!
-//! #[derive(Clone, PartialEq)]
-//! struct DefaultLayout;
-//!
-//! impl LayoutSpec for DefaultLayout {
-//!     fn measure(
-//!         &self,
-//!         input: &LayoutInput<'_>,
-//!         output: &mut LayoutOutput<'_>,
-//!     ) -> Result<tessera_ui::ComputedData, MeasurementError> {
-//!         let parent_constraint = Constraint::new(
-//!             input.parent_constraint().width(),
-//!             input.parent_constraint().height(),
-//!         );
-//!         if input.children_ids().is_empty() {
-//!             return Ok(tessera_ui::ComputedData::min_from_constraint(
-//!                 &parent_constraint,
-//!             ));
-//!         }
-//!         let nodes_to_measure = input
-//!             .children_ids()
-//!             .iter()
-//!             .map(|&child_id| (child_id, parent_constraint))
-//!             .collect();
-//!         let sizes = input.measure_children(nodes_to_measure)?;
-//!         let mut final_width = Px(0);
-//!         let mut final_height = Px(0);
-//!         for (child_id, size) in sizes {
-//!             output.place_child(child_id, PxPosition::ZERO);
-//!             final_width = final_width.max(size.width);
-//!             final_height = final_height.max(size.height);
-//!         }
-//!         Ok(tessera_ui::ComputedData {
-//!             width: final_width,
-//!             height: final_height,
-//!         })
-//!     }
-//! }
-//!
-//! #[tessera]
-//! fn component() {
-//!     layout(DefaultLayout);
-//! }
-//! ```
+//! Tessera layout behavior is expressed through layout policies attached to the
+//! current node. Framework and component crates do this through internal
+//! layout primitives, while application code typically composes existing
+//! components and modifiers.
 //!
 //! For more details, see the [Layout Guide](https://tessera-ui.github.io/guide/component.html#layout).
 #![deny(missing_docs, clippy::unwrap_used)]
 
+extern crate self as tessera_ui;
+
+#[doc(hidden)]
+pub mod __private;
 pub mod accessibility;
 #[cfg(target_os = "android")]
 pub mod android;
 pub mod asset;
+mod build_tree;
 pub mod color;
 mod component_tree;
 pub mod context;
@@ -351,16 +296,16 @@ pub mod pipeline_context;
 pub mod plugin;
 #[cfg(feature = "profiling")]
 pub mod profiler;
-#[doc(hidden)]
-pub mod prop;
+mod prop;
 pub mod px;
 mod render_graph;
 pub mod render_module;
 mod render_pass;
 pub mod render_scene;
 pub mod renderer;
-#[doc(hidden)]
-pub mod runtime;
+mod runtime;
+#[cfg(feature = "testing")]
+pub mod testing;
 mod thread_utils;
 
 #[cfg(feature = "shard")]
@@ -368,7 +313,7 @@ pub mod router;
 
 pub use accesskit;
 pub use indextree::{Arena, NodeId};
-pub use tessera_macros::{Prop, entry, tessera};
+pub use tessera_macros::{entry, tessera};
 pub use wgpu;
 pub use winit;
 
@@ -377,10 +322,9 @@ pub use crate::{
     asset::AssetExt,
     color::Color,
     component_tree::{
-        ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
         ComponentTree, ComputedData, Constraint, DimensionValue, ImeInput, ImeInputHandlerFn,
-        ImeRequest, KeyboardInput, KeyboardInputHandlerFn, MeasurementError, ParentConstraint,
-        PointerEventPass, PointerInput, PointerInputHandlerFn, WindowAction, WindowRequests,
+        ImeRequest, ImeSession, KeyboardInput, KeyboardInputHandlerFn, MeasurementError,
+        ParentConstraint, PointerEventPass, PointerInput, PointerInputHandlerFn, WindowAction,
     },
     context::{Context, provide_context, use_context},
     cursor::{
@@ -391,17 +335,26 @@ pub use crate::{
     entry_point::EntryPoint,
     entry_registry::{EntryRegistry, TesseraPackage},
     focus::{
-        FocusDirection, FocusGroupNode, FocusManager, FocusNode, FocusProperties, FocusRequester,
+        FocusDirection, FocusGroupNode, FocusManager, FocusProperties, FocusRequester,
         FocusScopeNode, FocusState, FocusTraversalPolicy, FocusTraversalStrategy,
     },
-    layout::{DefaultLayoutSpec, LayoutInput, LayoutOutput, LayoutResult, LayoutSpec, RenderInput},
-    modifier::{FocusModifierExt, Modifier, ModifierChild, ModifierWrapper},
+    layout::{
+        DefaultLayoutPolicy, LayoutInput, LayoutOutput, LayoutPolicy, LayoutResult,
+        NoopRenderPolicy, RenderInput, RenderMetadataMut, RenderPolicy,
+    },
+    modifier::{
+        BuildModifierNode, CursorModifierExt, CursorModifierNode, DrawModifierContent,
+        DrawModifierContext, DrawModifierNode, FocusModifierExt, ImeInputModifierNode,
+        KeyboardInputModifierNode, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
+        LayoutModifierOutput, Modifier, ParentDataMap, ParentDataModifierNode,
+        PointerInputModifierNode, SemanticsModifierNode,
+    },
     pipeline_context::PipelineContext,
     plugin::{
         Plugin, PluginContext, PluginResult, register_plugin, register_plugin_boxed, with_plugin,
         with_plugin_mut,
     },
-    prop::{Callback, CallbackWith, Prop, RenderSlot, RenderSlotWith, Slot},
+    prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith, Slot},
     px::{Px, PxPosition, PxRect, PxSize},
     render_graph::{
         ExternalTextureDesc, RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp,

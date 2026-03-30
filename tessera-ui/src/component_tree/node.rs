@@ -7,22 +7,23 @@ use std::{
 
 use dashmap::DashMap;
 use indextree::NodeId;
-use parking_lot::RwLock;
 use rayon::prelude::*;
 use rustc_hash::FxBuildHasher;
 use tracing::debug;
 use winit::window::CursorIcon;
 
 use crate::{
-    ComputeResourceManager, Px,
-    accessibility::{AccessibilityActionHandler, AccessibilityNode, AccessibilityPadding},
+    Px,
+    accessibility::{AccessibilityActionHandler, AccessibilityNode},
     cursor::{CursorEventContent, PointerChange},
-    dp::Dp,
     focus::{
         FocusDirection, FocusRegistration, FocusRequester, FocusRevealRequest, FocusState,
         FocusTraversalPolicy,
     },
-    layout::{LayoutInput, LayoutOutput, LayoutResult, LayoutSpecDyn},
+    layout::{
+        LayoutInput, LayoutOutput, LayoutPolicyDyn, LayoutResult, PlacementInput, RenderPolicyDyn,
+    },
+    modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier},
     prop::CallbackWith,
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
@@ -40,284 +41,61 @@ use super::{
 #[cfg(feature = "profiling")]
 use crate::profiler::{Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
 
-/// A guard that manages accessibility node building and automatically
-/// commits the result to the metadata when dropped.
-pub struct AccessibilityBuilderGuard<'a> {
-    node_id: NodeId,
-    metadatas: &'a ComponentNodeMetaDatas,
-    node: AccessibilityNode,
-}
-
-impl<'a> AccessibilityBuilderGuard<'a> {
-    /// Sets the role of this node.
-    pub fn role(mut self, role: accesskit::Role) -> Self {
-        self.node.role = Some(role);
-        self
-    }
-
-    /// Sets the label of this node.
-    pub fn label(mut self, label: impl Into<String>) -> Self {
-        self.node.label = Some(label.into());
-        self
-    }
-
-    /// Sets the description of this node.
-    pub fn description(mut self, description: impl Into<String>) -> Self {
-        self.node.description = Some(description.into());
-        self
-    }
-
-    /// Sets the value of this node.
-    pub fn value(mut self, value: impl Into<String>) -> Self {
-        self.node.value = Some(value.into());
-        self
-    }
-
-    /// Sets the numeric value of this node.
-    pub fn numeric_value(mut self, value: f64) -> Self {
-        self.node.numeric_value = Some(value);
-        self
-    }
-
-    /// Sets the numeric range of this node.
-    pub fn numeric_range(mut self, min: f64, max: f64) -> Self {
-        self.node.min_numeric_value = Some(min);
-        self.node.max_numeric_value = Some(max);
-        self
-    }
-
-    /// Marks this node as focusable.
-    pub fn focusable(mut self) -> Self {
-        self.node.focusable = true;
-        self
-    }
-
-    /// Marks this node as focused.
-    pub fn focused(mut self) -> Self {
-        self.node.focused = true;
-        self
-    }
-
-    /// Sets the toggled state of this node.
-    pub fn toggled(mut self, toggled: accesskit::Toggled) -> Self {
-        self.node.toggled = Some(toggled);
-        self
-    }
-
-    /// Marks this node as disabled.
-    pub fn disabled(mut self) -> Self {
-        self.node.disabled = true;
-        self
-    }
-
-    /// Marks this node as hidden from accessibility.
-    pub fn hidden(mut self) -> Self {
-        self.node.hidden = true;
-        self
-    }
-
-    /// Adds an action that this node supports.
-    pub fn action(mut self, action: accesskit::Action) -> Self {
-        self.node.actions.push(action);
-        self
-    }
-
-    /// Adds multiple actions that this node supports.
-    pub fn actions(mut self, actions: impl IntoIterator<Item = accesskit::Action>) -> Self {
-        self.node.actions.extend(actions);
-        self
-    }
-
-    /// Sets a custom accessibility key for stable ID generation.
-    pub fn key(mut self, key: impl Into<String>) -> Self {
-        self.node.key = Some(key.into());
-        self
-    }
-
-    /// Sets a state description announced with the control.
-    pub fn state_description(mut self, description: impl Into<String>) -> Self {
-        self.node.state_description = Some(description.into());
-        self
-    }
-
-    /// Sets a custom role description for custom controls.
-    pub fn role_description(mut self, description: impl Into<String>) -> Self {
-        self.node.role_description = Some(description.into());
-        self
-    }
-
-    /// Sets tooltip text.
-    pub fn tooltip(mut self, tooltip: impl Into<String>) -> Self {
-        self.node.tooltip = Some(tooltip.into());
-        self
-    }
-
-    /// Sets the live region politeness.
-    pub fn live(mut self, live: accesskit::Live) -> Self {
-        self.node.live = Some(live);
-        self
-    }
-
-    /// Marks this node as a heading with an optional level (1-based).
-    pub fn heading_level(mut self, level: u32) -> Self {
-        self.node.heading_level = Some(level);
-        self
-    }
-
-    /// Sets scroll X value and range.
-    pub fn scroll_x(mut self, value: f64, min: f64, max: f64) -> Self {
-        self.node.scroll_x = Some((value, min, max));
-        self
-    }
-
-    /// Sets scroll Y value and range.
-    pub fn scroll_y(mut self, value: f64, min: f64, max: f64) -> Self {
-        self.node.scroll_y = Some((value, min, max));
-        self
-    }
-
-    /// Sets the numeric step value for range-based controls.
-    pub fn numeric_value_step(mut self, step: f64) -> Self {
-        self.node.numeric_value_step = Some(step);
-        self
-    }
-
-    /// Sets the numeric jump value for range-based controls.
-    pub fn numeric_value_jump(mut self, jump: f64) -> Self {
-        self.node.numeric_value_jump = Some(jump);
-        self
-    }
-
-    /// Sets collection info: (row_count, column_count, hierarchical).
-    pub fn collection_info(mut self, rows: usize, cols: usize, hierarchical: bool) -> Self {
-        self.node.collection_info = Some((rows, cols, hierarchical));
-        self
-    }
-
-    /// Sets collection item info: (row_index, row_span, col_index, col_span,
-    /// heading).
-    pub fn collection_item_info(
-        mut self,
-        row_index: usize,
-        row_span: usize,
-        col_index: usize,
-        col_span: usize,
-        heading: bool,
-    ) -> Self {
-        self.node.collection_item_info = Some((row_index, row_span, col_index, col_span, heading));
-        self
-    }
-
-    /// Marks this node as editable text.
-    pub fn editable_text(mut self, editable: bool) -> Self {
-        self.node.is_editable_text = editable;
-        self
-    }
-
-    /// Prevents child semantics from being merged, similar to Compose's
-    /// `clearAndSetSemantics`.
-    pub fn clear_and_set(mut self) -> Self {
-        self.node.merge_descendants = false;
-        self
-    }
-
-    /// Expands the semantic bounds by a fixed pixel padding.
-    pub fn bounds_padding_px(mut self, left: Px, top: Px, right: Px, bottom: Px) -> Self {
-        self.node.bounds_padding = Some(AccessibilityPadding {
-            left,
-            top,
-            right,
-            bottom,
-        });
-        self
-    }
-
-    /// Expands the semantic bounds by a density-independent padding.
-    pub fn bounds_padding_dp(mut self, left: Dp, top: Dp, right: Dp, bottom: Dp) -> Self {
-        self.node.bounds_padding = Some(AccessibilityPadding {
-            left: left.into(),
-            top: top.into(),
-            right: right.into(),
-            bottom: bottom.into(),
-        });
-        self
-    }
-
-    /// Sets a testing tag by assigning a stable accessibility key.
-    pub fn test_tag(mut self, tag: impl Into<String>) -> Self {
-        self.node.key = Some(tag.into());
-        self
-    }
-
-    /// Explicitly commits the accessibility information.
-    pub fn commit(self) {
-        // The Drop impl will handle the actual commit
-        drop(self);
-    }
-}
-
-impl Drop for AccessibilityBuilderGuard<'_> {
-    fn drop(&mut self) {
-        // Copy the accessibility data to metadata
-        if let Some(mut metadata) = self.metadatas.get_mut(&self.node_id) {
-            metadata.accessibility = Some(self.node.clone());
-        }
-    }
-}
-
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
-pub struct ComponentNode {
+pub(crate) struct ComponentNode {
     /// Component function's name, for debugging purposes.
-    pub fn_name: String,
-    /// Stable identifier of the component function/type.
-    pub component_type_id: u64,
+    pub(crate) fn_name: String,
     /// Stable logic identifier of this concrete component instance.
-    pub instance_logic_id: u64,
+    pub(crate) instance_logic_id: u64,
     /// Stable instance identifier for this node in the current frame.
-    pub instance_key: u64,
-    /// Pointer input handler for capture stage (root to leaf).
-    pub pointer_preview_handler_fn: Option<Box<PointerInputHandlerFn>>,
-    /// Pointer input handler for bubble stage (leaf to root).
-    pub pointer_handler_fn: Option<Box<PointerInputHandlerFn>>,
-    /// Pointer input handler for final stage (root to leaf).
-    pub pointer_final_handler_fn: Option<Box<PointerInputHandlerFn>>,
-    /// Keyboard input handler for preview stage (root to leaf).
-    pub keyboard_preview_handler_fn: Option<Box<KeyboardInputHandlerFn>>,
-    /// Keyboard input handler for bubble stage (leaf to root).
-    pub keyboard_handler_fn: Option<Box<KeyboardInputHandlerFn>>,
-    /// IME input handler for preview stage (root to leaf).
-    pub ime_preview_handler_fn: Option<Box<ImeInputHandlerFn>>,
-    /// IME input handler for bubble stage (leaf to root).
-    pub ime_handler_fn: Option<Box<ImeInputHandlerFn>>,
+    pub(crate) instance_key: u64,
+    /// Pointer input handlers for capture stage (root to leaf).
+    pub(crate) pointer_preview_handlers: Vec<Box<PointerInputHandlerFn>>,
+    /// Pointer input handlers for bubble stage (leaf to root).
+    pub(crate) pointer_handlers: Vec<Box<PointerInputHandlerFn>>,
+    /// Pointer input handlers for final stage (root to leaf).
+    pub(crate) pointer_final_handlers: Vec<Box<PointerInputHandlerFn>>,
+    /// Keyboard input handlers for preview stage (root to leaf).
+    pub(crate) keyboard_preview_handlers: Vec<Box<KeyboardInputHandlerFn>>,
+    /// Keyboard input handlers for bubble stage (leaf to root).
+    pub(crate) keyboard_handlers: Vec<Box<KeyboardInputHandlerFn>>,
+    /// IME input handlers for preview stage (root to leaf).
+    pub(crate) ime_preview_handlers: Vec<Box<ImeInputHandlerFn>>,
+    /// IME input handlers for bubble stage (leaf to root).
+    pub(crate) ime_handlers: Vec<Box<ImeInputHandlerFn>>,
     /// Optional focus requester bound to this component node.
-    pub focus_requester_binding: Option<FocusRequester>,
+    pub(crate) focus_requester_binding: Option<FocusRequester>,
     /// Optional focus registration attached to this component node.
-    pub focus_registration: Option<FocusRegistration>,
+    pub(crate) focus_registration: Option<FocusRegistration>,
     /// Optional fallback target used when a focus scope restores focus.
-    pub focus_restorer_fallback: Option<FocusRequester>,
+    pub(crate) focus_restorer_fallback: Option<FocusRequester>,
     /// Optional traversal policy used when directional navigation starts inside
     /// this focus group or scope.
-    pub focus_traversal_policy: Option<FocusTraversalPolicy>,
+    pub(crate) focus_traversal_policy: Option<FocusTraversalPolicy>,
     /// Optional callback invoked when the node's focus state changes.
-    pub focus_changed_handler: Option<FocusChangedHandler>,
+    pub(crate) focus_changed_handler: Option<FocusChangedHandler>,
     /// Optional callback invoked when the node participates in a focus event.
-    pub focus_event_handler: Option<FocusEventHandler>,
+    pub(crate) focus_event_handler: Option<FocusEventHandler>,
     /// Optional callback used to expand virtualized content for focus search.
-    pub focus_beyond_bounds_handler: Option<FocusBeyondBoundsHandler>,
+    pub(crate) focus_beyond_bounds_handler: Option<FocusBeyondBoundsHandler>,
     /// Optional callback used to reveal the focused rectangle inside a
     /// container.
-    pub focus_reveal_handler: Option<FocusRevealHandler>,
-    /// Pure layout spec for skipping and record passes.
-    pub layout_spec: Box<dyn LayoutSpecDyn>,
+    pub(crate) focus_reveal_handler: Option<FocusRevealHandler>,
+    /// Node-local modifier chain attached during build.
+    pub(crate) modifier: Modifier,
+    /// Pure layout policy for measure and placement passes.
+    pub(crate) layout_policy: Box<dyn LayoutPolicyDyn>,
+    /// Render policy for recording draw and compute commands.
+    pub(crate) render_policy: Box<dyn RenderPolicyDyn>,
     /// Optional replay metadata for subtree-level rerun.
-    pub replay: Option<crate::prop::ComponentReplayData>,
+    pub(crate) replay: Option<crate::prop::ComponentReplayData>,
     /// Whether props are equal to the previous frame snapshot.
-    pub props_unchanged_from_previous: bool,
+    pub(crate) props_unchanged_from_previous: bool,
 }
 
 /// Contains metadata of the component node.
-pub struct ComponentNodeMetaData {
+pub(crate) struct ComponentNodeMetaData {
     /// The computed data (size) of the node.
     /// None if the node is not computed yet.
     pub computed_data: Option<ComputedData>,
@@ -385,10 +163,23 @@ impl Default for ComponentNodeMetaData {
     }
 }
 
+fn reset_frame_metadata(node_id: NodeId, component_node_metadatas: &ComponentNodeMetaDatas) {
+    let mut metadata = component_node_metadatas.entry(node_id).or_default();
+    metadata.computed_data = None;
+    metadata.layout_cache_hit = false;
+    metadata.placement_order = None;
+    metadata.rel_position = None;
+    metadata.abs_position = None;
+    metadata.event_clip_rect = None;
+    metadata.fragment = RenderFragment::default();
+    metadata.clips_children = false;
+    metadata.opacity = 1.0;
+}
+
 /// A tree of component nodes, using `indextree::Arena` for storage.
-pub type ComponentNodeTree = indextree::Arena<ComponentNode>;
+pub(crate) type ComponentNodeTree = indextree::Arena<ComponentNode>;
 /// Contains all component nodes' metadatas, using a thread-safe `DashMap`.
-pub type ComponentNodeMetaDatas = DashMap<NodeId, ComponentNodeMetaData, FxBuildHasher>;
+pub(crate) type ComponentNodeMetaDatas = DashMap<NodeId, ComponentNodeMetaData, FxBuildHasher>;
 
 /// Represents errors that can occur during node measurement.
 #[derive(Debug, Clone, PartialEq)]
@@ -398,7 +189,7 @@ pub enum MeasurementError {
     /// Indicates that metadata for the specified node was not found (currently
     /// not a primary error source in measure_node).
     NodeNotFoundInMeta,
-    /// Indicates that the layout spec for a node failed. Contains a string
+    /// Indicates that the layout policy for a node failed. Contains a string
     /// detailing the failure.
     MeasureFnFailed(String),
     /// Indicates that the measurement of a child node failed during a
@@ -434,6 +225,11 @@ pub type FocusBeyondBoundsHandler = CallbackWith<FocusDirection, bool>;
 pub type FocusRevealHandler = CallbackWith<FocusRevealRequest, bool>;
 
 /// Input for pointer handlers.
+///
+/// This type carries pointer event payload, local geometry, and event
+/// consumption helpers. Side effects that are not pointer-specific should use
+/// dedicated APIs such as semantics modifiers, hover cursor modifiers, window
+/// action helpers, or the IME session bridge instead of a generic request bag.
 pub struct PointerInput<'a> {
     /// Current pointer dispatch pass.
     pub pass: PointerEventPass,
@@ -448,12 +244,8 @@ pub struct PointerInput<'a> {
     pub pointer_changes: &'a mut Vec<PointerChange>,
     /// The current state of the keyboard modifiers at the time of the event.
     pub key_modifiers: winit::keyboard::ModifiersState,
-    /// A context for making requests to the window for the current frame.
-    pub requests: &'a mut WindowRequests,
-    /// The current node ID (for accessibility setup).
-    pub(crate) current_node_id: indextree::NodeId,
-    /// Reference to component metadatas (for accessibility setup).
-    pub(crate) metadatas: &'a ComponentNodeMetaDatas,
+    pub(crate) ime_request: &'a mut Option<ImeRequest>,
+    pub(crate) window_action: &'a mut Option<WindowAction>,
 }
 
 impl PointerInput<'_> {
@@ -482,32 +274,48 @@ impl PointerInput<'_> {
         self.block_cursor();
     }
 
-    /// Requests a window action for the current frame.
-    pub fn request_window_action(&mut self, action: WindowAction) {
-        self.requests.window_action = Some(action);
+    fn set_window_action(&mut self, action: WindowAction) {
+        *self.window_action = Some(action);
     }
 
-    /// Returns an accessibility builder for the current component.
-    pub fn accessibility(&self) -> AccessibilityBuilderGuard<'_> {
-        AccessibilityBuilderGuard {
-            node_id: self.current_node_id,
-            metadatas: self.metadatas,
-            node: AccessibilityNode::new(),
-        }
+    /// Begins a system drag move for the current window.
+    pub fn drag_window(&mut self) {
+        self.set_window_action(WindowAction::DragWindow);
     }
 
-    /// Sets an action handler for accessibility actions.
-    pub fn set_accessibility_action_handler(
-        &self,
-        handler: impl Fn(accesskit::Action) + Send + Sync + 'static,
-    ) {
-        if let Some(mut metadata) = self.metadatas.get_mut(&self.current_node_id) {
-            metadata.accessibility_action_handler = Some(Box::new(handler));
+    /// Requests that the current window be minimized.
+    pub fn minimize_window(&mut self) {
+        self.set_window_action(WindowAction::Minimize);
+    }
+
+    /// Requests that the current window be maximized.
+    pub fn maximize_window(&mut self) {
+        self.set_window_action(WindowAction::Maximize);
+    }
+
+    /// Requests that the current window toggle maximized state.
+    pub fn toggle_maximize_window(&mut self) {
+        self.set_window_action(WindowAction::ToggleMaximize);
+    }
+
+    /// Requests that the current window close.
+    pub fn close_window(&mut self) {
+        self.set_window_action(WindowAction::Close);
+    }
+
+    /// Returns the IME session bridge for the current frame.
+    pub fn ime_session(&mut self) -> ImeSession<'_> {
+        ImeSession {
+            request: self.ime_request,
         }
     }
 }
 
 /// Input for keyboard handlers.
+///
+/// This type carries keyboard event payload and event consumption helpers.
+/// IME updates, semantics, and other side effects are exposed through narrower
+/// dedicated APIs rather than a general-purpose request sink.
 pub struct KeyboardInput<'a> {
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
@@ -515,12 +323,7 @@ pub struct KeyboardInput<'a> {
     pub keyboard_events: &'a mut Vec<winit::event::KeyEvent>,
     /// The current state of the keyboard modifiers at the time of the event.
     pub key_modifiers: winit::keyboard::ModifiersState,
-    /// A context for making requests to the window for the current frame.
-    pub requests: &'a mut WindowRequests,
-    /// The current node ID (for accessibility setup).
-    pub(crate) current_node_id: indextree::NodeId,
-    /// Reference to component metadatas (for accessibility setup).
-    pub(crate) metadatas: &'a ComponentNodeMetaDatas,
+    pub(crate) ime_request: &'a mut Option<ImeRequest>,
 }
 
 impl KeyboardInput<'_> {
@@ -529,43 +332,24 @@ impl KeyboardInput<'_> {
         self.keyboard_events.clear();
     }
 
-    /// Requests a window action for the current frame.
-    pub fn request_window_action(&mut self, action: WindowAction) {
-        self.requests.window_action = Some(action);
-    }
-
-    /// Returns an accessibility builder for the current component.
-    pub fn accessibility(&self) -> AccessibilityBuilderGuard<'_> {
-        AccessibilityBuilderGuard {
-            node_id: self.current_node_id,
-            metadatas: self.metadatas,
-            node: AccessibilityNode::new(),
-        }
-    }
-
-    /// Sets an action handler for accessibility actions.
-    pub fn set_accessibility_action_handler(
-        &self,
-        handler: impl Fn(accesskit::Action) + Send + Sync + 'static,
-    ) {
-        if let Some(mut metadata) = self.metadatas.get_mut(&self.current_node_id) {
-            metadata.accessibility_action_handler = Some(Box::new(handler));
+    /// Returns the IME session bridge for the current frame.
+    pub fn ime_session(&mut self) -> ImeSession<'_> {
+        ImeSession {
+            request: self.ime_request,
         }
     }
 }
 
 /// Input for IME handlers.
+///
+/// This type carries IME event payload and event consumption helpers. IME
+/// snapshot publication is performed through [`ImeSession`].
 pub struct ImeInput<'a> {
     /// The size of the component node, computed during the measure stage.
     pub computed_data: ComputedData,
     /// IME events from the event loop, if any.
     pub ime_events: &'a mut Vec<winit::event::Ime>,
-    /// A context for making requests to the window for the current frame.
-    pub requests: &'a mut WindowRequests,
-    /// The current node ID (for accessibility setup).
-    pub(crate) current_node_id: indextree::NodeId,
-    /// Reference to component metadatas (for accessibility setup).
-    pub(crate) metadatas: &'a ComponentNodeMetaDatas,
+    pub(crate) ime_request: &'a mut Option<ImeRequest>,
 }
 
 impl ImeInput<'_> {
@@ -574,27 +358,10 @@ impl ImeInput<'_> {
         self.ime_events.clear();
     }
 
-    /// Requests a window action for the current frame.
-    pub fn request_window_action(&mut self, action: WindowAction) {
-        self.requests.window_action = Some(action);
-    }
-
-    /// Returns an accessibility builder for the current component.
-    pub fn accessibility(&self) -> AccessibilityBuilderGuard<'_> {
-        AccessibilityBuilderGuard {
-            node_id: self.current_node_id,
-            metadatas: self.metadatas,
-            node: AccessibilityNode::new(),
-        }
-    }
-
-    /// Sets an action handler for accessibility actions.
-    pub fn set_accessibility_action_handler(
-        &self,
-        handler: impl Fn(accesskit::Action) + Send + Sync + 'static,
-    ) {
-        if let Some(mut metadata) = self.metadatas.get_mut(&self.current_node_id) {
-            metadata.accessibility_action_handler = Some(Box::new(handler));
+    /// Returns the IME session bridge for the current frame.
+    pub fn ime_session(&mut self) -> ImeSession<'_> {
+        ImeSession {
+            request: self.ime_request,
         }
     }
 }
@@ -603,7 +370,7 @@ impl ImeInput<'_> {
 /// for the current frame. This struct's lifecycle is confined to a single
 /// `compute` pass.
 #[derive(Default, Debug)]
-pub struct WindowRequests {
+pub(crate) struct WindowRequests {
     /// The cursor icon requested by a component. If multiple components request
     /// a cursor, the last one to make a request in a frame "wins", since
     /// it's executed later.
@@ -630,6 +397,27 @@ pub enum WindowAction {
     ToggleMaximize,
     /// Request application close.
     Close,
+}
+
+/// Frame-local IME bridge used by input handlers to publish text input state.
+///
+/// Use this bridge when an input handler needs to expose the current text-input
+/// snapshot to the renderer-facing IME integration without mutating renderer
+/// aggregation state directly.
+pub struct ImeSession<'a> {
+    request: &'a mut Option<ImeRequest>,
+}
+
+impl ImeSession<'_> {
+    /// Publishes the IME snapshot for the current frame.
+    pub fn update(&mut self, request: ImeRequest) {
+        *self.request = Some(request);
+    }
+
+    /// Clears the IME snapshot for the current frame.
+    pub fn clear(&mut self) {
+        *self.request = None;
+    }
 }
 
 /// A request to the windowing system to open an Input Method Editor (IME).
@@ -776,6 +564,141 @@ fn restore_cached_subtree_metadata(
     true
 }
 
+#[derive(Clone)]
+struct MeasuredNodeLayout {
+    size: ComputedData,
+    placements: Vec<(u64, PxPosition)>,
+    measured_children: HashMap<NodeId, crate::layout::ChildMeasure>,
+}
+
+struct MeasureLayoutContext<'a, 'ctx> {
+    tree: &'a ComponentNodeTree,
+    children: &'a [NodeId],
+    component_node_metadatas: &'a ComponentNodeMetaDatas,
+    layout_ctx: Option<&'a LayoutContext<'ctx>>,
+    resolve_instance_key: &'a dyn Fn(NodeId) -> u64,
+}
+
+fn measure_base_layout(
+    layout_policy: &dyn LayoutPolicyDyn,
+    layout_ctx: &MeasureLayoutContext<'_, '_>,
+    constraint: &Constraint,
+) -> Result<MeasuredNodeLayout, MeasurementError> {
+    let input = LayoutInput::new(
+        layout_ctx.tree,
+        ParentConstraint::new(constraint),
+        layout_ctx.children,
+        layout_ctx.component_node_metadatas,
+        layout_ctx.layout_ctx,
+    );
+    let mut output = LayoutOutput::new(layout_ctx.resolve_instance_key);
+    let size = layout_policy.measure_dyn(&input, &mut output)?;
+    Ok(MeasuredNodeLayout {
+        size,
+        placements: output.finish(),
+        measured_children: input.take_measured_children(),
+    })
+}
+
+fn measure_with_layout_modifiers(
+    modifiers: &[Arc<dyn LayoutModifierNode>],
+    layout_policy: &dyn LayoutPolicyDyn,
+    layout_ctx: &MeasureLayoutContext<'_, '_>,
+    constraint: &Constraint,
+) -> Result<MeasuredNodeLayout, MeasurementError> {
+    if modifiers.is_empty() {
+        return measure_base_layout(layout_policy, layout_ctx, constraint);
+    }
+
+    struct ModifierChildRunner<'a, 'b> {
+        next: &'b mut dyn FnMut(&Constraint) -> Result<MeasuredNodeLayout, MeasurementError>,
+        last: Option<MeasuredNodeLayout>,
+        _marker: std::marker::PhantomData<&'a ()>,
+    }
+
+    impl LayoutModifierChild for ModifierChildRunner<'_, '_> {
+        fn measure(&mut self, constraint: &Constraint) -> Result<ComputedData, MeasurementError> {
+            let measured = (self.next)(constraint)?;
+            let size = measured.size;
+            self.last = Some(measured);
+            Ok(size)
+        }
+
+        fn place(&mut self, position: PxPosition, output: &mut LayoutOutput<'_>) {
+            let measured = self
+                .last
+                .as_ref()
+                .expect("layout modifier child must be measured before placement");
+            for (instance_key, child_position) in &measured.placements {
+                output.place_instance_key(*instance_key, position + *child_position);
+            }
+        }
+    }
+
+    let head = &modifiers[0];
+    let tail = &modifiers[1..];
+    let mut next = |next_constraint: &Constraint| {
+        measure_with_layout_modifiers(tail, layout_policy, layout_ctx, next_constraint)
+    };
+    let input = LayoutInput::new(
+        layout_ctx.tree,
+        ParentConstraint::new(constraint),
+        layout_ctx.children,
+        layout_ctx.component_node_metadatas,
+        layout_ctx.layout_ctx,
+    );
+    let modifier_input = LayoutModifierInput {
+        layout_input: &input,
+    };
+    let mut output = LayoutOutput::new(layout_ctx.resolve_instance_key);
+    let mut child = ModifierChildRunner {
+        next: &mut next,
+        last: None,
+        _marker: std::marker::PhantomData,
+    };
+    let size = head.measure(&modifier_input, &mut child, &mut output)?.size;
+    if let Some(measured) = child.last.as_ref() {
+        input.extend_measured_children(measured.measured_children.clone());
+    }
+    Ok(MeasuredNodeLayout {
+        size,
+        placements: output.finish(),
+        measured_children: input.take_measured_children(),
+    })
+}
+
+fn relayout_base_layout(
+    layout_policy: &dyn LayoutPolicyDyn,
+    tree: &ComponentNodeTree,
+    children: &[NodeId],
+    cached_child_sizes: &[ComputedData],
+    constraint: &Constraint,
+    cached_size: ComputedData,
+    resolve_instance_key: &dyn Fn(NodeId) -> u64,
+) -> Option<Vec<(u64, PxPosition)>> {
+    if cached_child_sizes.len() != children.len() {
+        return None;
+    }
+
+    let child_sizes: HashMap<NodeId, ComputedData> = children
+        .iter()
+        .copied()
+        .zip(cached_child_sizes.iter().copied())
+        .collect();
+    let input = PlacementInput::new(
+        tree,
+        ParentConstraint::new(constraint),
+        children,
+        &child_sizes,
+        cached_size,
+    );
+    let mut output = LayoutOutput::new(resolve_instance_key);
+    if !layout_policy.place_children_dyn(&input, &mut output) {
+        return None;
+    }
+    Some(output.finish())
+}
+
 /// Measures a single node recursively, returning its size or an error.
 ///
 /// See [`measure_nodes`] for concurrent measurement of multiple nodes.
@@ -786,8 +709,6 @@ pub(crate) fn measure_node(
     parent_constraint: &Constraint,
     tree: &ComponentNodeTree,
     component_node_metadatas: &ComponentNodeMetaDatas,
-    compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
-    gpu: &wgpu::Device,
     layout_ctx: Option<&LayoutContext<'_>>,
 ) -> Result<ComputedData, MeasurementError> {
     let node_data_ref = tree
@@ -833,13 +754,17 @@ pub(crate) fn measure_node(
             0
         }
     };
-    let layout_spec = &node_data.layout_spec;
+    let layout_policy = &node_data.layout_policy;
+    let layout_modifiers = node_data.modifier.layout_nodes();
     if let Some(layout_ctx) = layout_ctx {
         layout_ctx.diagnostics.inc_measure_node_calls();
         if let Some(entry) = layout_ctx.snapshots.get(&node_data.instance_key) {
             let same_constraint = entry.constraint_key == *parent_constraint;
-            let node_self_dirty = layout_ctx
-                .dirty_self_nodes
+            let node_self_measure_dirty = layout_ctx
+                .measure_self_nodes
+                .contains(&node_data.instance_key);
+            let node_self_placement_dirty = layout_ctx
+                .placement_self_nodes
                 .contains(&node_data.instance_key);
             let node_effective_dirty = layout_ctx
                 .dirty_effective_nodes
@@ -847,7 +772,7 @@ pub(crate) fn measure_node(
             let has_all_child_constraints = entry.child_constraints.len() == children.len();
             let has_all_child_sizes = entry.child_sizes.len() == children.len();
             let can_try_reuse = same_constraint
-                && !node_self_dirty
+                && !node_self_measure_dirty
                 && has_all_child_constraints
                 && (!node_effective_dirty || has_all_child_sizes);
             if can_try_reuse {
@@ -900,8 +825,6 @@ pub(crate) fn measure_node(
                     nodes_to_measure,
                     tree,
                     component_node_metadatas,
-                    compute_resource_manager.clone(),
-                    gpu,
                     Some(layout_ctx),
                 );
                 let mut child_size_changed = false;
@@ -947,25 +870,64 @@ pub(crate) fn measure_node(
                         }
                     }
                     if restored {
-                        component_node_metadatas.insert(node_id, Default::default());
-                        apply_layout_placements(
-                            &cached_result.placements,
-                            tree,
-                            &children,
-                            component_node_metadatas,
-                        );
-                        if let Some(mut metadata) = component_node_metadatas.get_mut(&node_id) {
-                            metadata.computed_data = Some(cached_result.size);
-                            metadata.layout_cache_hit = true;
+                        reset_frame_metadata(node_id, component_node_metadatas);
+                        let placements = if node_self_placement_dirty {
+                            match relayout_base_layout(
+                                layout_policy.as_ref(),
+                                tree,
+                                &children,
+                                &cached_child_sizes,
+                                parent_constraint,
+                                cached_result.size,
+                                &resolve_instance_key,
+                            ) {
+                                Some(placements) => placements,
+                                None => {
+                                    layout_ctx.diagnostics.inc_cache_miss_dirty_self();
+                                    // This node can reuse measurement but not placements; fall back
+                                    // to a full measure+place pass below.
+                                    Vec::new()
+                                }
+                            }
+                        } else {
+                            cached_result.placements.clone()
+                        };
+                        if node_self_placement_dirty && placements.is_empty() {
+                            // Fall through to the full measure path below.
+                        } else {
+                            apply_layout_placements(
+                                &placements,
+                                tree,
+                                &children,
+                                component_node_metadatas,
+                            );
+                            if let Some(mut metadata) = component_node_metadatas.get_mut(&node_id) {
+                                metadata.computed_data = Some(cached_result.size);
+                                metadata.layout_cache_hit = true;
+                            }
+                            if node_self_placement_dirty {
+                                layout_ctx.snapshots.insert(
+                                    node_data.instance_key,
+                                    LayoutSnapshotEntry {
+                                        constraint_key: *parent_constraint,
+                                        layout_result: LayoutResult {
+                                            size: cached_result.size,
+                                            placements,
+                                        },
+                                        child_constraints: cached_child_constraints,
+                                        child_sizes: cached_child_sizes,
+                                    },
+                                );
+                            }
+                            layout_ctx.diagnostics.inc_cache_hit_boundary();
+                            return Ok(cached_result.size);
                         }
-                        layout_ctx.diagnostics.inc_cache_hit_boundary();
-                        return Ok(cached_result.size);
                     }
                 }
             }
             if !same_constraint {
                 layout_ctx.diagnostics.inc_cache_miss_constraint();
-            } else if node_self_dirty {
+            } else if node_self_measure_dirty || node_self_placement_dirty {
                 layout_ctx.diagnostics.inc_cache_miss_dirty_self();
             } else if node_effective_dirty {
                 layout_ctx.diagnostics.inc_cache_miss_child_size();
@@ -977,20 +939,23 @@ pub(crate) fn measure_node(
         }
     }
 
-    component_node_metadatas.insert(node_id, Default::default());
-    let input = LayoutInput::new(
+    reset_frame_metadata(node_id, component_node_metadatas);
+    let measure_layout_ctx = MeasureLayoutContext {
         tree,
-        ParentConstraint::new(parent_constraint),
-        &children,
+        children: &children,
         component_node_metadatas,
-        compute_resource_manager,
-        gpu,
         layout_ctx,
-    );
-    let mut output = LayoutOutput::new(&resolve_instance_key);
-    let size = layout_spec.measure_dyn(&input, &mut output)?;
-    let measured_children = input.take_measured_children();
-    let placements = output.finish();
+        resolve_instance_key: &resolve_instance_key,
+    };
+    let measured = measure_with_layout_modifiers(
+        &layout_modifiers,
+        layout_policy.as_ref(),
+        &measure_layout_ctx,
+        parent_constraint,
+    )?;
+    let size = measured.size;
+    let measured_children = measured.measured_children;
+    let placements = measured.placements;
     apply_layout_placements(&placements, tree, &children, component_node_metadatas);
 
     component_node_metadatas
@@ -1069,8 +1034,6 @@ pub(crate) fn measure_nodes(
     nodes_to_measure: Vec<(NodeId, Constraint)>,
     tree: &ComponentNodeTree,
     component_node_metadatas: &ComponentNodeMetaDatas,
-    compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
-    gpu: &wgpu::Device,
     layout_ctx: Option<&LayoutContext<'_>>,
 ) -> HashMap<NodeId, Result<ComputedData, MeasurementError>> {
     if nodes_to_measure.is_empty() {
@@ -1078,7 +1041,7 @@ pub(crate) fn measure_nodes(
     }
     // metadata must be reseted and initialized for each node to measure.
     for (node_id, _) in &nodes_to_measure {
-        component_node_metadatas.insert(*node_id, Default::default());
+        reset_frame_metadata(*node_id, component_node_metadatas);
     }
     nodes_to_measure
         .into_par_iter()
@@ -1088,8 +1051,6 @@ pub(crate) fn measure_nodes(
                 &parent_constraint,
                 tree,
                 component_node_metadatas,
-                compute_resource_manager.clone(),
-                gpu,
                 layout_ctx,
             );
             (node_id, result)

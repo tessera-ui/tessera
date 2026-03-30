@@ -224,8 +224,7 @@ pub(crate) fn reset_context_read_dependencies() {
     *context_read_dependency_tracker().write() = ContextReadDependencyTracker::default();
 }
 
-#[doc(hidden)]
-pub fn record_current_context_snapshot_for(instance_key: u64) {
+pub(crate) fn record_current_context_snapshot_for(instance_key: u64) {
     context_snapshot_tracker()
         .write()
         .current_by_instance_key
