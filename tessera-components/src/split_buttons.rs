@@ -308,28 +308,24 @@ impl SplitLeadingButtonBuilder {
         self
     }
 
-    pub fn filled(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn filled(self) -> Self {
         self.variant(SplitButtonVariant::Filled)
             .enabled(true)
-            .on_click(on_click)
     }
 
-    pub fn tonal(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn tonal(self) -> Self {
         self.variant(SplitButtonVariant::Tonal)
             .enabled(true)
-            .on_click(on_click)
     }
 
-    pub fn elevated(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn elevated(self) -> Self {
         self.variant(SplitButtonVariant::Elevated)
             .enabled(true)
-            .on_click(on_click)
     }
 
-    pub fn outlined(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn outlined(self) -> Self {
         self.variant(SplitButtonVariant::Outlined)
             .enabled(true)
-            .on_click(on_click)
     }
 }
 
@@ -358,28 +354,24 @@ impl SplitTrailingButtonBuilder {
         self
     }
 
-    pub fn filled(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn filled(self) -> Self {
         self.variant(SplitButtonVariant::Filled)
             .enabled(true)
-            .on_click(on_click)
     }
 
-    pub fn tonal(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn tonal(self) -> Self {
         self.variant(SplitButtonVariant::Tonal)
             .enabled(true)
-            .on_click(on_click)
     }
 
-    pub fn elevated(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn elevated(self) -> Self {
         self.variant(SplitButtonVariant::Elevated)
             .enabled(true)
-            .on_click(on_click)
     }
 
-    pub fn outlined(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn outlined(self) -> Self {
         self.variant(SplitButtonVariant::Outlined)
             .enabled(true)
-            .on_click(on_click)
     }
 }
 
@@ -413,12 +405,12 @@ impl SplitTrailingButtonBuilder {
 /// material_theme().content(|| {
 ///     split_button_layout()
 ///         .leading_button(|| {
-///             split_leading_button().filled(|| {}).content(|| {
+///             split_leading_button().filled().on_click(|| {}).content(|| {
 ///                 text().content("Create");
 ///             });
 ///         })
 ///         .trailing_button(|| {
-///             split_trailing_button().filled(|| {}).content(|| {
+///             split_trailing_button().filled().on_click(|| {}).content(|| {
 ///                 text().content("More");
 ///             });
 ///         });
@@ -478,7 +470,7 @@ pub fn split_button_layout(
 /// };
 ///
 /// material_theme().content(|| {
-///     split_leading_button().filled(|| {}).content(|| {
+///     split_leading_button().filled().on_click(|| {}).content(|| {
 ///         text().content("Create");
 ///     });
 /// });
@@ -543,7 +535,7 @@ pub fn split_leading_button(
 /// };
 ///
 /// material_theme().content(|| {
-///     split_trailing_button().filled(|| {}).content(|| {
+///     split_trailing_button().filled().on_click(|| {}).content(|| {
 ///         text().content("More");
 ///     });
 /// });

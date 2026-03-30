@@ -130,7 +130,7 @@ struct ButtonResolvedArgs {
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
-/// button().filled(|| {}).child(|| {
+/// button().filled().on_click(|| {}).child(|| {
 ///     text().content("Click Me");
 /// });
 /// #     });
@@ -291,7 +291,7 @@ impl ButtonBuilder {
     /// Applies the standard "Filled" button preset.
     /// Create a standard "Filled" button (High emphasis).
     /// Uses Primary color for container and OnPrimary for content.
-    pub fn filled(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn filled(self) -> Self {
         let scheme = use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
             .get()
@@ -309,13 +309,12 @@ impl ButtonBuilder {
                     .on_surface_variant
                     .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
             )
-            .on_click(on_click)
     }
 
     /// Applies the "Elevated" button preset.
     /// Create an "Elevated" button (Medium emphasis).
     /// Uses Surface color (or SurfaceContainerLow if available) with a shadow.
-    pub fn elevated(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn elevated(self) -> Self {
         let scheme = use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
             .get()
@@ -334,14 +333,13 @@ impl ButtonBuilder {
                     .on_surface_variant
                     .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
             )
-            .on_click(on_click)
     }
 
     /// Applies the "Tonal" button preset.
     /// Create a "Tonal" button (Medium emphasis).
     /// Uses SecondaryContainer color for container and OnSecondaryContainer for
     /// content.
-    pub fn tonal(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn tonal(self) -> Self {
         let scheme = use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
             .get()
@@ -359,13 +357,12 @@ impl ButtonBuilder {
                     .on_surface
                     .with_alpha(ButtonDefaults::DISABLED_CONTENT_ALPHA),
             )
-            .on_click(on_click)
     }
 
     /// Applies the "Outlined" button preset.
     /// Create an "Outlined" button (Medium emphasis).
     /// Transparent container with an Outline border.
-    pub fn outlined(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn outlined(self) -> Self {
         let scheme = use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
             .get()
@@ -386,13 +383,12 @@ impl ButtonBuilder {
                     .on_surface_variant
                     .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
             )
-            .on_click(on_click)
     }
 
     /// Applies the "Text" button preset.
     /// Create a "Text" button (Low emphasis).
     /// Transparent container and no border.
-    pub fn text(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn text(self) -> Self {
         let scheme = use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
             .get()
@@ -406,6 +402,5 @@ impl ButtonBuilder {
                     .on_surface_variant
                     .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
             )
-            .on_click(on_click)
     }
 }

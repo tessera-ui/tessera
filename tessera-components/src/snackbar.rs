@@ -749,7 +749,8 @@ fn render_message(message: String, style: crate::theme::TextStyle, color: Color)
 fn render_action_button(label: String, action_color: Color, on_action: Option<Callback>) {
     let on_action = on_action.unwrap_or_default();
     button()
-        .text(move || {
+        .text()
+        .on_click(move || {
             on_action.call();
         })
         .content_color(action_color)

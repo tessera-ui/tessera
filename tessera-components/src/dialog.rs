@@ -558,7 +558,7 @@ fn dialog_provider_render(
 ///     .supporting_text("This is the dialog body text.")
 ///     .headline("Dialog Title")
 ///     .confirm_button(|| {
-///         button().filled(|| {}).child(|| {
+///         button().filled().on_click(|| {}).child(|| {
 ///             text().content("Confirm");
 ///         });
 ///     });

@@ -42,31 +42,27 @@ impl GlassButtonBuilder {
     }
 
     /// Applies the primary glass button preset.
-    pub fn primary(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn primary(self) -> Self {
         self.tint_color(Color::new(0.2, 0.5, 0.8, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
-            .on_click(on_click)
     }
 
     /// Applies the secondary glass button preset.
-    pub fn secondary(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn secondary(self) -> Self {
         self.tint_color(Color::new(0.6, 0.6, 0.6, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
-            .on_click(on_click)
     }
 
     /// Applies the success glass button preset.
-    pub fn success(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn success(self) -> Self {
         self.tint_color(Color::new(0.1, 0.7, 0.3, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
-            .on_click(on_click)
     }
 
     /// Applies the danger glass button preset.
-    pub fn danger(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+    pub fn danger(self) -> Self {
         self.tint_color(Color::new(0.8, 0.2, 0.2, 0.2))
             .border(GlassBorder::new(Dp(1.0).into()))
-            .on_click(on_click)
     }
 }
 
@@ -110,7 +106,8 @@ impl GlassButtonBuilder {
 /// #[tessera]
 /// fn component() {
 ///     glass_button()
-///         .primary(|| println!("Button clicked!"))
+///         .primary()
+///         .on_click(|| println!("Button clicked!"))
 ///         .with_child(|| {
 ///             text().content("Click Me");
 ///         });

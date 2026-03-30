@@ -67,11 +67,11 @@ fn app() {
         .modifier(Modifier::new().fill_max_size())
         .child(|| {
             column().children(|| {
-                button().filled(|| {}).child(|| {
+                button().filled().on_click(|| {}).child(|| {
                     text().content("+");
                 });
                 text().content("Count: 0");
-                button().filled(|| {}).child(|| {
+                button().filled().on_click(|| {}).child(|| {
                     text().content("-");
                 });
             });

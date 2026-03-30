@@ -4,8 +4,8 @@
 //!
 //! Use to organize content into separate pages that can be switched between.
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, FocusProperties,
-    FocusRequester, FocusState, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    Color, ComputedData, Constraint, DimensionValue, Dp, FocusProperties, FocusRequester,
+    FocusState, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
@@ -349,7 +349,6 @@ pub struct TabItem {
 #[derive(Clone, PartialEq)]
 enum TabTitle {
     Custom(RenderSlot),
-    Themed(CallbackWith<Color>),
     Label {
         text: String,
         icon: Option<IconContent>,
@@ -388,19 +387,6 @@ impl TabsBuilder {
     {
         self.props.items.push(TabItem {
             title: TabTitle::Custom(RenderSlot::new(title)),
-            content: RenderSlot::new(content),
-        });
-        self
-    }
-
-    /// Adds a tab whose title closure receives the resolved content color.
-    pub fn child_with_color<F1, F2>(mut self, title: F1, content: F2) -> Self
-    where
-        F1: Fn(Color) + Send + Sync + 'static,
-        F2: Fn() + Send + Sync + 'static,
-    {
-        self.props.items.push(TabItem {
-            title: TabTitle::Themed(CallbackWith::new(title)),
             content: RenderSlot::new(content),
         });
         self
@@ -1129,27 +1115,32 @@ impl RenderPolicy for TabsLayout {
 /// ```
 /// use tessera_components::{tabs::tabs, text::text};
 /// use tessera_ui::{Dp, tessera};
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
+/// #     material_theme()
+/// #         .theme(|| MaterialTheme::default())
+/// #         .child(|| {
 ///     tabs()
 ///         .initial_active_tab(1)
-///         .child_with_color(
-///             |color| {
-///                 text().content("Flights").color(color).size(Dp(14.0));
+///         .child(
+///             || {
+///                 text().content("Flights").size(Dp(14.0));
 ///             },
 ///             || {
 ///                 text().content("Content for Flights");
 ///             },
 ///         )
-///         .child_with_color(
-///             |color| {
-///                 text().content("Hotel").color(color).size(Dp(14.0));
+///         .child(
+///             || {
+///                 text().content("Hotel").size(Dp(14.0));
 ///             },
 ///             || {
 ///                 text().content("Content for Hotel");
 ///             },
 ///         );
+/// #         });
 /// }
 /// ```
 #[tessera]
@@ -1427,7 +1418,7 @@ fn tab_trigger(args: TabTriggerArgs) {
                         .with_mut(|state| state.set_active_tab(args.index));
                 })
                 .with_child(move || {
-                    render_tab_title(args.title.clone(), args.label_color, args.tab_padding);
+                    render_tab_title(args.title.clone(), args.tab_padding);
                 });
         }
         (true, None) => {
@@ -1452,7 +1443,7 @@ fn tab_trigger(args: TabTriggerArgs) {
                         .with_mut(|state| state.set_active_tab(args.index));
                 })
                 .with_child(move || {
-                    render_tab_title(args.title.clone(), args.label_color, args.tab_padding);
+                    render_tab_title(args.title.clone(), args.tab_padding);
                 });
         }
         (false, Some(label)) => {
@@ -1469,7 +1460,7 @@ fn tab_trigger(args: TabTriggerArgs) {
                 .accessibility_focusable(true)
                 .accessibility_label(label)
                 .with_child(move || {
-                    render_tab_title(args.title.clone(), args.label_color, args.tab_padding);
+                    render_tab_title(args.title.clone(), args.tab_padding);
                 });
         }
         (false, None) => {
@@ -1485,16 +1476,15 @@ fn tab_trigger(args: TabTriggerArgs) {
                 .accessibility_role(tessera_ui::accesskit::Role::Tab)
                 .accessibility_focusable(true)
                 .with_child(move || {
-                    render_tab_title(args.title.clone(), args.label_color, args.tab_padding);
+                    render_tab_title(args.title.clone(), args.tab_padding);
                 });
         }
     }
 }
 
-fn render_tab_title(title: TabTitle, label_color: Color, tab_padding: Dp) {
+fn render_tab_title(title: TabTitle, tab_padding: Dp) {
     match title {
         TabTitle::Custom(render) => render.render(),
-        TabTitle::Themed(render) => render.call(label_color),
         TabTitle::Label {
             text,
             icon: Some(icon),
