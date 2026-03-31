@@ -1,2 +1,3 @@
 /target
 .gradle/
+example/gen/web/pkg-web/

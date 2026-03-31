@@ -16,5 +16,8 @@ path = "src/main.rs"
 tessera-ui = "2"
 tessera-components = "2"
 
+[target.'cfg(target_family = "wasm")'.dependencies]
+wasm-bindgen = "0.2.105"
+
 [build-dependencies]
 tessera-build = "0.1"

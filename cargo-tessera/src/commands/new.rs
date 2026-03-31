@@ -126,6 +126,7 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
         .unwrap_or("tessera-app")
         .to_string();
     let project_name_snake = project_name.replace('-', "_");
+    let lib_name = format!("{project_name_snake}_lib");
 
     let mut handlebars = Handlebars::new();
     handlebars.register_escape_fn(handlebars::no_escape);
@@ -133,6 +134,7 @@ fn generate_from_template(project_dir: &Path, template: &str) -> Result<()> {
     let data = json!({
         "project_name": project_name,
         "project_name_snake": project_name_snake,
+        "lib_name": lib_name,
     });
 
     write_template_dir_at(

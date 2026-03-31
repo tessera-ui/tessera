@@ -40,3 +40,4 @@ serde_json = { version = "1", features = ["unbounded_depth"] }
 tessera-build = { path = "../tessera-build" }
 toml = "1.0.0"
 unicode-width = "0.2"
+wasm-bindgen-cli-support = "0.2.114"
