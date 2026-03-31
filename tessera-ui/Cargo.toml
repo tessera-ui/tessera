@@ -28,7 +28,6 @@ rayon = "1.11.0"
 slotmap = "1.1.1"
 rustc-hash = "2.1.1"
 dashmap = "6.1.0"
-uuid = { version = "1.20.0", features = ["v4"] }
 tessera-macros = { path = "../tessera-macros" }
 tessera-shard = { path = "../tessera-shard", optional = true }
 accesskit = "0.24.0"
