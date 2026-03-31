@@ -4,7 +4,7 @@ mod node;
 use std::{
     num::NonZero,
     sync::{
-        Arc, OnceLock,
+        Arc,
         atomic::{AtomicU64, Ordering},
     },
     time::Instant,
@@ -63,26 +63,27 @@ struct LayoutSnapshotStore {
     entries: LayoutSnapshotMap,
 }
 
-static LAYOUT_SNAPSHOT_STORE: OnceLock<LayoutSnapshotStore> = OnceLock::new();
+thread_local! {
+    static LAYOUT_SNAPSHOT_STORE: LayoutSnapshotStore = LayoutSnapshotStore::default();
+}
 
-fn layout_snapshot_entries() -> &'static LayoutSnapshotMap {
-    &LAYOUT_SNAPSHOT_STORE
-        .get_or_init(LayoutSnapshotStore::default)
-        .entries
+fn with_layout_snapshot_entries<R>(f: impl FnOnce(&LayoutSnapshotMap) -> R) -> R {
+    LAYOUT_SNAPSHOT_STORE.with(|store| f(&store.entries))
 }
 
 pub(crate) fn clear_layout_snapshots() {
-    layout_snapshot_entries().clear();
+    with_layout_snapshot_entries(LayoutSnapshotMap::clear);
 }
 
 fn remove_layout_snapshots(keys: &HashSet<u64>) {
     if keys.is_empty() {
         return;
     }
-    let snapshots = layout_snapshot_entries();
-    for key in keys {
-        snapshots.remove(key);
-    }
+    with_layout_snapshot_entries(|snapshots| {
+        for key in keys {
+            snapshots.remove(key);
+        }
+    });
 }
 
 #[derive(Clone, Copy)]
@@ -763,46 +764,46 @@ impl ComponentTree {
         let dirty_expand_ns = dirty_prepare_start.elapsed().as_nanos() as u64;
         let diagnostics = LayoutDiagnosticsCollector::default();
 
-        let layout_ctx = LayoutContext {
-            snapshots: layout_snapshot_entries(),
-            measure_self_nodes: &layout_dirty_nodes.measure_self_nodes,
-            placement_self_nodes: &layout_dirty_nodes.placement_self_nodes,
-            dirty_effective_nodes: &dirty_nodes_effective,
-            diagnostics: &diagnostics,
-        };
-
         self.focus_owner
             .sync_from_component_tree(root_node, &self.tree);
         self.focus_owner.commit_pending();
 
-        let measure_timer = Instant::now();
-        debug!("Start measuring the component tree...");
+        let diagnostics_snapshot = with_layout_snapshot_entries(|snapshots| {
+            let layout_ctx = LayoutContext {
+                snapshots,
+                measure_self_nodes: &layout_dirty_nodes.measure_self_nodes,
+                placement_self_nodes: &layout_dirty_nodes.placement_self_nodes,
+                dirty_effective_nodes: &dirty_nodes_effective,
+                diagnostics: &diagnostics,
+            };
 
-        // Call measure_node with &self.tree and &self.metadatas
-        // Handle the Result from measure_node
-        match measure_node(
-            root_node,
-            &screen_constraint,
-            &self.tree,
-            &self.metadatas,
-            Some(&layout_ctx),
-        ) {
-            Ok(_root_computed_data) => {
-                debug!("Component tree measured in {:?}", measure_timer.elapsed());
-            }
-            Err(e) => {
-                panic!(
-                    "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
-                );
-            }
-        }
+            let measure_timer = Instant::now();
+            debug!("Start measuring the component tree...");
 
-        let diagnostics_snapshot = diagnostics.snapshot(
-            dirty_nodes_param,
-            dirty_nodes_structural,
-            dirty_nodes_effective.len() as u64,
-            dirty_expand_ns,
-        );
+            match measure_node(
+                root_node,
+                &screen_constraint,
+                &self.tree,
+                &self.metadatas,
+                Some(&layout_ctx),
+            ) {
+                Ok(_root_computed_data) => {
+                    debug!("Component tree measured in {:?}", measure_timer.elapsed());
+                }
+                Err(e) => {
+                    panic!(
+                        "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
+                    );
+                }
+            }
+
+            diagnostics.snapshot(
+                dirty_nodes_param,
+                dirty_nodes_structural,
+                dirty_nodes_effective.len() as u64,
+                dirty_expand_ns,
+            )
+        });
 
         let (compute_resource_manager, gpu) = match mode {
             ComputeMode::Full {
