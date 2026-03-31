@@ -529,22 +529,30 @@ impl Modifier {
         let actions = collect_actions(self.tail.clone());
         TesseraRuntime::with_mut(|runtime| {
             runtime.append_current_modifier(self.clone());
-            let mut accessibility = AccessibilityNode::new();
-            let mut action_handler = None;
-            let mut has_semantics = false;
-            for action in actions.into_iter().rev() {
-                match action {
-                    ModifierAction::Build(node) => node.apply(runtime),
-                    ModifierAction::Semantics(node) => {
-                        has_semantics = true;
-                        node.apply(&mut accessibility, &mut action_handler);
-                    }
-                    ModifierAction::Focus(op) => {
-                        apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op);
-                    }
-                    _ => {}
+        });
+
+        let mut accessibility = AccessibilityNode::new();
+        let mut action_handler = None;
+        let mut has_semantics = false;
+        for action in actions.into_iter().rev() {
+            match action {
+                ModifierAction::Build(node) => {
+                    TesseraRuntime::with_mut(|runtime| node.apply(runtime));
                 }
+                ModifierAction::Semantics(node) => {
+                    has_semantics = true;
+                    node.apply(&mut accessibility, &mut action_handler);
+                }
+                ModifierAction::Focus(op) => {
+                    TesseraRuntime::with_mut(|runtime| {
+                        apply_focus_op(runtime::FocusModifierRuntime::new(runtime), op);
+                    });
+                }
+                _ => {}
             }
+        }
+
+        TesseraRuntime::with_mut(|runtime| {
             runtime.set_current_accessibility(has_semantics.then_some(accessibility));
             runtime.set_current_accessibility_action_handler(action_handler);
         });

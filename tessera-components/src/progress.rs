@@ -594,6 +594,7 @@ impl LinearProgressIndicatorBuilder {
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// linear_progress_indicator().progress(0.75);
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -855,6 +856,7 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// circular_progress_indicator().progress(0.6);
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -977,6 +979,7 @@ impl ProgressBuilder {
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// progress().value(0.75);
+/// # });
 /// # }
 /// # component();
 /// ```

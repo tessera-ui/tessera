@@ -428,7 +428,7 @@ fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Cal
 ///         text().content("Main content");
 ///     })
 ///     .menu_content(|| {
-///         menu_item().label("Edit").on_click(Callback::noop());
+///         menu_item().label("Edit").on_click(|| {});
 ///     });
 /// # });
 /// # }
@@ -763,7 +763,11 @@ impl Default for MenuItemConfig {
 ///     menus::{menu_item, menu_provider},
 ///     text::text,
 /// };
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
 /// menu_provider()
 ///     .is_open(true)
 ///     .menu_content(|| {
@@ -772,6 +776,7 @@ impl Default for MenuItemConfig {
 ///     .main_content(|| {
 ///         text().content("Main content");
 ///     });
+/// # });
 /// # }
 /// # component();
 /// ```

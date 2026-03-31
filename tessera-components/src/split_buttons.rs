@@ -394,22 +394,24 @@ impl SplitTrailingButtonBuilder {
 ///     theme::{MaterialTheme, material_theme},
 /// };
 ///
-/// material_theme().content(|| {
-///     split_button_layout()
-///         .leading_button(|| {
-///             split_leading_button().filled().on_click(|| {}).content(|| {
-///                 text().content("Create");
-///             });
-///         })
-///         .trailing_button(|| {
-///             split_trailing_button()
-///                 .filled()
-///                 .on_click(|| {})
-///                 .content(|| {
-///                     text().content("More");
+/// material_theme()
+///     .theme(|| MaterialTheme::default())
+///     .child(|| {
+///         split_button_layout()
+///             .leading_button(|| {
+///                 split_leading_button().filled().on_click(|| {}).content(|| {
+///                     text().content("Create");
 ///                 });
-///         });
-/// });
+///             })
+///             .trailing_button(|| {
+///                 split_trailing_button()
+///                     .filled()
+///                     .on_click(|| {})
+///                     .content(|| {
+///                         text().content("More");
+///                     });
+///             });
+///     });
 /// # }
 /// # component();
 /// ```
@@ -464,11 +466,13 @@ pub fn split_button_layout(
 ///     theme::{MaterialTheme, material_theme},
 /// };
 ///
-/// material_theme().content(|| {
-///     split_leading_button().filled().on_click(|| {}).content(|| {
-///         text().content("Create");
+/// material_theme()
+///     .theme(|| MaterialTheme::default())
+///     .child(|| {
+///         split_leading_button().filled().on_click(|| {}).content(|| {
+///             text().content("Create");
+///         });
 ///     });
-/// });
 /// # }
 /// # component();
 /// ```
@@ -529,14 +533,16 @@ pub fn split_leading_button(
 ///     theme::{MaterialTheme, material_theme},
 /// };
 ///
-/// material_theme().content(|| {
-///     split_trailing_button()
-///         .filled()
-///         .on_click(|| {})
-///         .content(|| {
-///             text().content("More");
-///         });
-/// });
+/// material_theme()
+///     .theme(|| MaterialTheme::default())
+///     .child(|| {
+///         split_trailing_button()
+///             .filled()
+///             .on_click(|| {})
+///             .content(|| {
+///                 text().content("More");
+///             });
+///     });
 /// # }
 /// # component();
 /// ```

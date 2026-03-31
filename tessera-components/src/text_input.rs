@@ -322,8 +322,13 @@ impl TextInputBuilder {
 /// # fn component() {
 /// use tessera_components::text_input::text_input;
 /// use tessera_ui::Dp;
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
+/// # material_theme()
+/// #     .theme(|| MaterialTheme::default())
+/// #     .child(|| {
 /// text_input().padding(Dp(8.0)).initial_text("Hello World");
+/// # });
 /// # }
 /// # component();
 /// ```

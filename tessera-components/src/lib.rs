@@ -12,8 +12,7 @@
 //!     material_theme()
 //!         .theme(|| MaterialTheme::default())
 //!         .child(|| {
-//!         // Your app code here
-//!     });
+//!             // Your app code here
 //!         });
 //! }
 //!
@@ -44,7 +43,7 @@
 //! #     .child(|| {
 //!
 //! // Button example
-//! button().on_click(|| {}).child(|| {
+//! button().filled().on_click(|| {}).child(|| {
 //!     text().content("Click me");
 //! });
 //!

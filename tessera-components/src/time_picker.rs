@@ -247,6 +247,7 @@ struct TimePickerConfig {
 ///
 /// let state = TimePickerState::default();
 /// assert!(state.hour() <= 23);
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -394,6 +395,7 @@ fn time_picker_inner(args: TimePickerConfig) {
 /// #     .child(|| {
 /// let state = remember(TimePickerState::default);
 /// time_picker_dialog().state(state);
+/// # });
 /// # }
 /// # component();
 /// ```

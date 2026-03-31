@@ -656,16 +656,15 @@ where
 /// use tessera_ui::{
 ///     Modifier, NoopRenderPolicy, RenderSlot,
 ///     layout::{DefaultLayoutPolicy, layout_primitive},
-///     tessera,
 /// };
 ///
-/// #[tessera(crate)]
-/// fn primitive_example(modifier: Modifier, child: Option<RenderSlot>) {
+/// #[tessera_ui::tessera]
+/// fn primitive_example(modifier: Modifier, child: RenderSlot) {
 ///     layout_primitive()
 ///         .layout_policy(DefaultLayoutPolicy)
 ///         .render_policy(NoopRenderPolicy)
 ///         .modifier(modifier)
-///         .child(child);
+///         .child(move || child.render());
 /// }
 /// ```
 #[tessera(crate)]

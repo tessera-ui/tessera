@@ -431,11 +431,13 @@ impl Default for SwitchController {
 /// # fn component() {
 /// use tessera_components::switch::switch;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
-/// material_theme().content(|| {
-///     switch().on_toggle(|checked| {
-///         assert!(checked || !checked);
+/// material_theme()
+///     .theme(|| MaterialTheme::default())
+///     .child(|| {
+///         switch().on_toggle(|checked| {
+///             assert!(checked || !checked);
+///         });
 ///     });
-/// });
 /// # }
 /// # component();
 /// ```

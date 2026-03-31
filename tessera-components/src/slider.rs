@@ -1101,21 +1101,20 @@ fn range_slider_colors(args: &RangeSliderConfig) -> SliderColors {
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::modifier::ModifierExt as _;
-/// use tessera_components::slider::{SliderConfig, slider};
+/// use tessera_components::slider::slider;
 /// use tessera_ui::{Dp, Modifier};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
-/// slider(
-///     &SliderConfig::default()
-///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(0.5)
-///         .on_change(|new_value| {
-///             // In a real app, you would update your state here.
-///             println!("Slider value changed to: {}", new_value);
-///         }),
+/// slider()
+///     .modifier(Modifier::new().width(Dp(200.0)))
+///     .value(0.5)
+///     .on_change(|new_value| {
+///         assert!((0.0..=1.0).contains(&new_value));
+///     });
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -1433,7 +1432,7 @@ fn measure_centered_slider(
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::modifier::ModifierExt as _;
-/// use tessera_components::slider::{SliderConfig, centered_slider};
+/// use tessera_components::slider::centered_slider;
 /// use tessera_ui::{Dp, Modifier, remember};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
@@ -1445,18 +1444,17 @@ fn measure_centered_slider(
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// centered_slider(
-///     &SliderConfig::default()
-///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(current_value.get())
-///         .on_change(move |new_value| {
-///             current_value.set(new_value);
-///         }),
+/// #     .child(move || {
+/// centered_slider()
+///     .modifier(Modifier::new().width(Dp(200.0)))
+///     .value(current_value.get())
+///     .on_change(move |new_value| {
+///         current_value.set(new_value);
+///     });
 ///
-/// // Simulate another value change and check the state
 /// current_value.set(0.25);
 /// assert_eq!(current_value.get(), 0.25);
+/// # });
 /// # }
 /// # component();
 /// ```
@@ -1762,22 +1760,22 @@ fn measure_range_slider(
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::modifier::ModifierExt as _;
-/// use tessera_components::slider::{RangeSliderConfig, range_slider};
+/// use tessera_components::slider::range_slider;
 /// use tessera_ui::{Dp, Modifier, remember};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// let range_value = remember(|| (0.2f32, 0.8f32));
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// range_slider(
-///     &RangeSliderConfig::default()
-///         .modifier(Modifier::new().width(Dp(200.0)))
-///         .value(range_value.get())
-///         .on_change(move |(start, end)| {
-///             range_value.set((start, end));
-///         }),
+/// #     .child(move || {
+/// range_slider()
+///     .modifier(Modifier::new().width(Dp(200.0)))
+///     .value(range_value.get())
+///     .on_change(move |(start, end)| {
+///         range_value.set((start, end));
+///     });
 /// assert_eq!(range_value.get(), (0.2, 0.8));
+/// # });
 /// # }
 /// # component();
 /// ```

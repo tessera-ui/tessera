@@ -894,9 +894,10 @@ fn apply_pager_input_modifiers(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::pager::{PagerConfig, horizontal_pager};
-/// use tessera_components::text::{TextArgs, text};
+/// use tessera_components::pager::horizontal_pager;
+/// use tessera_components::text::text;
 /// use tessera_ui::{remember, tessera};
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -904,14 +905,16 @@ fn apply_pager_input_modifiers(
 ///     start_page.with_mut(|value| *value = 2);
 ///     assert_eq!(start_page.get(), 2);
 ///
-///     horizontal_pager(
-///         &PagerConfig::default()
-///             .page_count(4)
-///             .initial_page(start_page.get())
-///             .page_content(|page| {
-///                 text(&TextArgs::default().text(format!("Page {page}")));
-///             }),
-///     );
+///     material_theme()
+///         .theme(|| MaterialTheme::default())
+///         .child(move || {
+///             horizontal_pager()
+///                 .page_count(4)
+///                 .initial_page(start_page.get())
+///                 .page_content(|page| {
+///                     text().content(format!("Page {page}"));
+///                 });
+///         });
 /// }
 ///
 /// demo();
@@ -970,9 +973,10 @@ pub fn horizontal_pager(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::pager::{PagerConfig, vertical_pager};
-/// use tessera_components::text::{TextArgs, text};
+/// use tessera_components::pager::vertical_pager;
+/// use tessera_components::text::text;
 /// use tessera_ui::{remember, tessera};
+/// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -980,9 +984,13 @@ pub fn horizontal_pager(
 ///     start_page.with_mut(|value| *value = 0);
 ///     assert_eq!(start_page.get(), 0);
 ///
-///     vertical_pager(&PagerConfig::default().page_count(2).page_content(|page| {
-///         text(&TextArgs::default().text(format!("Page {page}")));
-///     }));
+///     material_theme()
+///         .theme(|| MaterialTheme::default())
+///         .child(move || {
+///             vertical_pager().page_count(2).page_content(|page| {
+///                 text().content(format!("Page {page}"));
+///             });
+///         });
 /// }
 ///
 /// demo();

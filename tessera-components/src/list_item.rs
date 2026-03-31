@@ -235,11 +235,13 @@ impl ListItemDefaults {
 ///
 /// #[tessera]
 /// fn demo() {
-///     material_theme().content(|| {
-///         list_item()
-///             .headline("Inbox")
-///             .supporting_text("3 new messages");
-///     });
+///     material_theme()
+///         .theme(|| MaterialTheme::default())
+///         .child(|| {
+///             list_item()
+///                 .headline("Inbox")
+///                 .supporting_text("3 new messages");
+///         });
 /// }
 ///
 /// demo();

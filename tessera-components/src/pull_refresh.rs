@@ -443,7 +443,7 @@ pub fn pull_refresh_indicator(
 /// ```
 /// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_components::{
-///     column::{ColumnArgs, column},
+///     column::column,
 ///     pull_refresh::{PullRefreshController, pull_refresh},
 ///     scrollable::scrollable,
 ///     text::text,
@@ -470,6 +470,8 @@ pub fn pull_refresh_indicator(
 ///             assert!(!refresh_controller.with(|s| s.refreshing()));
 ///         });
 /// }
+///
+/// demo();
 /// ```
 #[tessera]
 pub fn pull_refresh(
