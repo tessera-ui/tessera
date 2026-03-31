@@ -98,12 +98,14 @@ fn app() {
         .child(move || {
             column().children(move || {
                 button()
-                    .filled(move || count.with_mut(|c| *c += 1))
+                    .filled()
+                    .on_click(move || count.with_mut(|c| *c += 1))
                     .child(|| text().content("+"));
                 let label = format!("Count: {}", count.get());
                 text().content(label);
                 button()
-                    .filled(move || count.with_mut(|c| *c -= 1))
+                    .filled()
+                    .on_click(move || count.with_mut(|c| *c -= 1))
                     .child(|| text().content("-"));
             });
         });
