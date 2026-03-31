@@ -1,13 +1,99 @@
 use std::{
+    collections::HashMap,
     env,
     ffi::{OsStr, OsString},
-    io,
+    fs,
+    io::{self, ErrorKind},
     os::unix::ffi::{OsStrExt, OsStringExt},
     path::{Path, PathBuf},
 };
 
-use freedesktop_entry_parser::{Entry as FreeDesktopEntry, parse_entry};
 use once_cell_regex::{byte_regex, exports::regex::bytes::Regex};
+
+#[derive(Debug, Clone)]
+pub struct FreeDesktopEntry {
+    sections: HashMap<String, FreeDesktopSection>,
+}
+
+impl FreeDesktopEntry {
+    pub fn section(&self, name: &str) -> Option<&FreeDesktopSection> {
+        self.sections.get(name)
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct FreeDesktopSection {
+    attributes: HashMap<String, Vec<String>>,
+}
+
+impl FreeDesktopSection {
+    pub fn attr(&self, name: &str) -> &[String] {
+        self.attributes
+            .get(name)
+            .map(Vec::as_slice)
+            .unwrap_or_default()
+    }
+}
+
+fn parse_entry(path: &Path) -> io::Result<FreeDesktopEntry> {
+    let content = fs::read_to_string(path)?;
+    let mut sections: HashMap<String, FreeDesktopSection> = HashMap::new();
+    let mut current_section: Option<String> = None;
+
+    for raw_line in content.lines() {
+        let line = raw_line.trim();
+        if line.is_empty() || line.starts_with('#') || line.starts_with(';') {
+            continue;
+        }
+
+        if line.starts_with('[') && line.ends_with(']') {
+            let section_name = line
+                .strip_prefix('[')
+                .and_then(|line| line.strip_suffix(']'))
+                .ok_or_else(|| io::Error::new(ErrorKind::InvalidData, "Malformed section header"))?
+                .trim()
+                .to_string();
+            sections
+                .entry(section_name.clone())
+                .or_insert_with(|| FreeDesktopSection {
+                    attributes: HashMap::new(),
+                });
+            current_section = Some(section_name);
+            continue;
+        }
+
+        let (raw_key, raw_value) = line.split_once('=').ok_or_else(|| {
+            io::Error::new(
+                ErrorKind::InvalidData,
+                format!("Malformed desktop entry line: {line}"),
+            )
+        })?;
+        let section_name = current_section.as_ref().ok_or_else(|| {
+            io::Error::new(
+                ErrorKind::InvalidData,
+                "Desktop entry attribute found before any section header",
+            )
+        })?;
+        let key = raw_key.trim();
+        let base_key = key
+            .split_once('[')
+            .map_or(key, |(base, _)| base)
+            .to_string();
+        let value = raw_value.trim().to_string();
+
+        sections
+            .entry(section_name.clone())
+            .or_insert_with(|| FreeDesktopSection {
+                attributes: HashMap::new(),
+            })
+            .attributes
+            .entry(base_key)
+            .or_default()
+            .push(value);
+    }
+
+    Ok(FreeDesktopEntry { sections })
+}
 
 // Detects which .desktop file contains the data on how to handle a given
 // mime type (like: "with which program do I open a text/rust file?")
