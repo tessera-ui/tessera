@@ -4,10 +4,7 @@
 //!
 //! Rebuild or partially replay the component tree before layout and rendering.
 
-use std::{
-    cell::RefCell,
-    time::{Duration, Instant},
-};
+use std::{cell::RefCell, time::Duration};
 
 use rustc_hash::FxHashSet as HashSet;
 use tessera_macros::tessera;
@@ -33,6 +30,7 @@ use crate::{
         reset_render_slot_read_dependencies, reset_state_read_dependencies,
         take_build_invalidations, with_build_dirty_instance_keys, with_replay_scope,
     },
+    time::Instant,
 };
 
 #[cfg(feature = "profiling")]

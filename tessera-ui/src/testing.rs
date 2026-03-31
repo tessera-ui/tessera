@@ -4,7 +4,7 @@
 //!
 //! Assert positions and sizes of tagged nodes without creating a real renderer.
 
-use std::{collections::BTreeSet, time::Instant};
+use std::collections::BTreeSet;
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -20,6 +20,7 @@ use crate::{
         reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
         reset_slots, reset_state_read_dependencies, take_layout_dirty_nodes,
     },
+    time::Instant,
 };
 
 /// Create a headless layout test harness for the provided component content.

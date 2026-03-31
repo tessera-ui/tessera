@@ -253,7 +253,7 @@ fn sample_with_offset(
     max_uv: vec2<f32>
 ) -> vec4<f32> {
     let uv = clamp(base_uv + offset_uv, min_uv, max_uv);
-    return textureSample(t_diffuse, s_diffuse, uv);
+    return textureSampleLevel(t_diffuse, s_diffuse, uv, 0.0);
 }
 
 fn refraction_sample_with_eval(
@@ -297,7 +297,7 @@ fn refraction_sample_with_eval(
 
     var sample_uv = rect_uv_start + refracted_coord * px_to_uv_ratio;
     sample_uv = clamp(sample_uv, min_uv, max_uv);
-    let color = textureSample(t_diffuse, s_diffuse, sample_uv);
+    let color = textureSampleLevel(t_diffuse, s_diffuse, sample_uv, 0.0);
 
     return RefractionResult(
         color,
@@ -491,7 +491,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         // 1. Define the border region.
         // sd is the distance to the shape edge, negative inside, positive outside.
         // This expression creates a "band" region where sd is between 0 and -border_width.
-        let border_width_aa = fwidth(sd); // Add anti-aliasing for the border
+        let border_width_aa = width;
         if instance.border_width <= border_width_aa {
             final_color.a = shape_alpha;
             return final_color;

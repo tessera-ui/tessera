@@ -1,5 +1,6 @@
 pub mod router;
 pub mod task_handles;
+#[cfg(not(target_family = "wasm"))]
 mod tokio_runtime;
 
 use std::{

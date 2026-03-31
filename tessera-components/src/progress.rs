@@ -3,8 +3,6 @@
 //! ## Usage
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
-use std::time::Instant;
-
 use tessera_ui::{
     Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
     ParentConstraint, Px, PxPosition,
@@ -12,7 +10,9 @@ use tessera_ui::{
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
     },
-    receive_frame_nanos, remember, tessera, use_context,
+    receive_frame_nanos, remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{

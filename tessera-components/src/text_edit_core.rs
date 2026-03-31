@@ -21,7 +21,7 @@
 
 mod cursor;
 
-use std::{ops::Range, time::Instant};
+use std::ops::Range;
 
 use glyphon::{
     Cursor, Edit,
@@ -34,7 +34,9 @@ use tessera_ui::{
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
     },
-    receive_frame_nanos, tessera, winit,
+    receive_frame_nanos, tessera,
+    time::Instant,
+    winit,
 };
 use winit::keyboard::NamedKey;
 

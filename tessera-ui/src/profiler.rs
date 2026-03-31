@@ -109,7 +109,7 @@ use std::{
         mpsc,
     },
     thread,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 
 use indextree::NodeId;
@@ -117,7 +117,7 @@ use serde::Serialize;
 use serde_json;
 use tracing::error;
 
-use crate::component_tree::LayoutFrameDiagnostics;
+use crate::{component_tree::LayoutFrameDiagnostics, time::Instant};
 
 /// Profiling phases that can be emitted.
 #[derive(Clone, Copy)]

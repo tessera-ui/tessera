@@ -5,9 +5,9 @@
 //! Provide ripple and state-layer feedback for interactive controls such as
 //! buttons and surfaces.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
-use tessera_ui::{Dp, PxSize, current_frame_nanos};
+use tessera_ui::{Dp, PxSize, current_frame_nanos, time::Instant};
 
 use crate::theme::MaterialAlpha;
 

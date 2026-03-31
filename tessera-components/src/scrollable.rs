@@ -4,10 +4,7 @@
 //!
 //! Use to display content that might overflow the available space.
 pub(crate) mod scrollbar;
-use std::{
-    collections::VecDeque,
-    time::{Duration, Instant},
-};
+use std::{collections::VecDeque, time::Duration};
 
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
@@ -19,7 +16,9 @@ use tessera_ui::{
         layout_primitive,
     },
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    receive_frame_nanos, remember, tessera, use_context,
+    receive_frame_nanos, remember, tessera,
+    time::Instant,
+    use_context,
 };
 
 use crate::{

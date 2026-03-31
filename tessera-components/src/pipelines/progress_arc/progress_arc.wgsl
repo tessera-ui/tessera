@@ -24,7 +24,7 @@ struct VertexInput {
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
     @location(0) uv: vec2<f32>,
-    @location(1) instance_index: u32,
+    @location(1) @interpolate(flat) instance_index: u32,
 }
 
 fn normalize_angle_degrees(angle: f32) -> f32 {
@@ -128,4 +128,3 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     return vec4<f32>(uniform.color.rgb, uniform.color.a * mask);
 }
-

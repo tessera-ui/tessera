@@ -134,13 +134,11 @@ fn sdf_ellipse(p: vec2f, r: vec2f) -> f32 {
     return (length(p / r) - 1.0) * min(r.x, r.y);
 }
 
-fn aa_mask(dist: f32) -> f32 {
-    let aa = fwidth(dist);
+fn aa_mask(dist: f32, aa: f32) -> f32 {
     return 1.0 - smoothstep(-aa, aa, dist);
 }
 
-fn outline_mask(dist: f32, border_width: f32) -> f32 {
-    let aa = fwidth(dist);
+fn outline_mask(dist: f32, border_width: f32, aa: f32) -> f32 {
     let outer = 1.0 - smoothstep(-aa, aa, dist);
     let inner = 1.0 - smoothstep(-aa, aa, dist + border_width);
     return max(0.0, outer - inner);
@@ -170,7 +168,18 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     var final_color: vec4f;
 
     let dist = sdf_shape(p_object, half_size, instance.corner_radii, instance.corner_g2);
-    let shape_mask = aa_mask(dist);
+    let dist_aa = max(fwidth(dist), EPS_DISCARD);
+    let shape_mask = aa_mask(dist, dist_aa);
+    let ripple_center = instance.ripple_params.xy;
+    let ripple_radius = instance.ripple_params.z;
+    let ripple_alpha = instance.ripple_params.w;
+    let ripple_bounded = instance.ripple_color.a > 0.5;
+    let p_pixel = p_normalized * size;
+    let center_pixel = ripple_center * size;
+    let dist_to_center_pixel = distance(p_pixel, center_pixel);
+    let min_dimension = min(size.x, size.y);
+    let dist_norm = dist_to_center_pixel / max(min_dimension, 1.0);
+    let aa_ripple = max(fwidth(dist_norm), EPS_DISCARD);
 
     if mode == MODE_FILL {
         if shape_mask <= EPS_DISCARD {
@@ -181,7 +190,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
         if instance.border_width <= 0.0 {
             discard;
         }
-        let mask = outline_mask(dist, instance.border_width);
+        let mask = outline_mask(dist, instance.border_width, dist_aa);
         if mask <= EPS_DISCARD {
             discard;
         }
@@ -197,7 +206,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             if instance.border_width <= 0.0 {
                 discard;
             }
-            let mask = outline_mask(dist, instance.border_width);
+            let mask = outline_mask(dist, instance.border_width, dist_aa);
             base_rgb = instance.primary_color.rgb;
             base_a = instance.primary_color.a * mask;
         } else {
@@ -209,24 +218,12 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
                 base_a = instance.primary_color.a * shape_mask;
             } else {
                 let dist_inner_edge = dist + instance.border_width;
-                let aa = fwidth(dist);
-                let t = smoothstep(-aa, aa, dist_inner_edge);
+                let t = smoothstep(-dist_aa, dist_aa, dist_inner_edge);
                 base_rgb = mix(instance.primary_color.rgb, instance.border_color.rgb, t);
                 base_a = mix(instance.primary_color.a, instance.border_color.a, t) * shape_mask;
             }
         }
 
-        let ripple_center = instance.ripple_params.xy;
-        let ripple_radius = instance.ripple_params.z;
-        let ripple_alpha = instance.ripple_params.w;
-        let ripple_bounded = instance.ripple_color.a > 0.5;
-
-        let p_pixel = p_normalized * size;
-        let center_pixel = ripple_center * size;
-        let dist_to_center_pixel = distance(p_pixel, center_pixel);
-        let min_dimension = min(size.x, size.y);
-        let dist_norm = dist_to_center_pixel / max(min_dimension, 1.0);
-        let aa_ripple = max(fwidth(dist_norm), EPS_DISCARD);
         let ripple_mask = calculate_ripple_mask(dist_norm, ripple_radius, aa_ripple);
         let bounded_mask = select(1.0, shape_mask, ripple_bounded);
         let overlay_a = clamp(ripple_mask * ripple_alpha * bounded_mask, 0.0, 1.0);

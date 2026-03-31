@@ -6,7 +6,7 @@ use std::{
     hash::{Hash, Hasher},
     marker::PhantomData,
     sync::Arc,
-    time::{Duration, Instant},
+    time::Duration,
 };
 
 use parking_lot::RwLock;
@@ -27,6 +27,7 @@ use crate::{
     layout::{LayoutPolicyDyn, RenderPolicyDyn},
     modifier::Modifier,
     prop::{CallbackWith, ComponentReplayData, ErasedComponentRunner, Prop},
+    time::Instant,
 };
 
 #[derive(Clone, Copy)]

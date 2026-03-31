@@ -5,12 +5,9 @@
 //! touch gesture recognition, and scroll event generation for smooth user
 //! interactions.
 
-use std::{
-    collections::{HashMap, VecDeque},
-    time::Instant,
-};
+use std::collections::{HashMap, VecDeque};
 
-use crate::PxPosition;
+use crate::{PxPosition, time::Instant};
 
 /// Pointer identifier used by input changes.
 pub type PointerId = u64;

@@ -68,11 +68,18 @@ impl EntryPoint {
     }
 
     /// Runs the entry point on desktop platforms.
-    #[cfg(not(target_os = "android"))]
+    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     pub fn run_desktop(self) -> Result<(), winit::error::EventLoopError> {
         init_tracing();
         init_deadlock_detection();
         Renderer::run_with_config(self.entry, self.registry.finish(), self.config)
+    }
+
+    /// Runs the entry point on web platforms.
+    #[cfg(target_family = "wasm")]
+    pub fn run_web(self) -> Result<(), winit::error::EventLoopError> {
+        init_tracing();
+        Renderer::run_web_with_config(self.entry, self.registry.finish(), self.config)
     }
 
     /// Runs the entry point on Android.
@@ -84,36 +91,42 @@ impl EntryPoint {
     }
 }
 
+#[cfg(all(debug_assertions, not(target_family = "wasm")))]
 fn init_deadlock_detection() {
-    #[cfg(debug_assertions)]
-    {
-        use std::{sync::Once, thread, time::Duration};
+    use std::{sync::Once, thread, time::Duration};
 
-        static INIT: Once = Once::new();
-        INIT.call_once(|| {
-            thread::spawn(|| {
-                loop {
-                    thread::sleep(Duration::from_secs(10));
-                    let deadlocks = parking_lot::deadlock::check_deadlock();
-                    if deadlocks.is_empty() {
-                        continue;
-                    }
+    static INIT: Once = Once::new();
+    INIT.call_once(|| {
+        thread::spawn(|| {
+            loop {
+                thread::sleep(Duration::from_secs(10));
+                let deadlocks = parking_lot::deadlock::check_deadlock();
+                if deadlocks.is_empty() {
+                    continue;
+                }
 
-                    eprintln!("{} deadlocks detected", deadlocks.len());
-                    for (idx, threads) in deadlocks.iter().enumerate() {
-                        eprintln!("Deadlock #{}", idx);
-                        for thread in threads {
-                            eprintln!("Thread Id {:#?}", thread.thread_id());
-                            eprintln!("{:?}", thread.backtrace());
-                        }
+                eprintln!("{} deadlocks detected", deadlocks.len());
+                for (idx, threads) in deadlocks.iter().enumerate() {
+                    eprintln!("Deadlock #{}", idx);
+                    for thread in threads {
+                        eprintln!("Thread Id {:#?}", thread.thread_id());
+                        eprintln!("{:?}", thread.backtrace());
                     }
                 }
-            });
+            }
         });
-    }
+    });
 }
 
 fn init_tracing() {
+    #[cfg(target_family = "wasm")]
+    {
+        let _ = tracing_subscriber::fmt()
+            .with_max_level(tracing::Level::INFO)
+            .without_time()
+            .try_init();
+    }
+
     #[cfg(target_os = "android")]
     {
         let _ = tracing_subscriber::fmt()
@@ -122,7 +135,7 @@ fn init_tracing() {
             .try_init();
     }
 
-    #[cfg(not(target_os = "android"))]
+    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     {
         let filter = match tracing_subscriber::EnvFilter::try_from_default_env() {
             Ok(filter) => filter,

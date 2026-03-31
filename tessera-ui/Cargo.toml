@@ -61,6 +61,11 @@ objc2-quartz-core = { version = "0.3.2", default-features = false, features = [
 [target.'cfg(not(target_os = "android"))'.dependencies]
 winit = "0.30.12"
 
+[target.'cfg(target_family = "wasm")'.dependencies]
+web-sys = { version = "0.3.93", features = ["Document", "Element", "HtmlCanvasElement", "Window"] }
+wasm-bindgen-futures = "0.4.55"
+web-time = "1.1.0"
+
 [target.'cfg(target_os = "android")'.dependencies]
 winit = { version = "0.30.12", features = ["android-game-activity"] }
 ndk-sys = "0.6.0"
