@@ -6,7 +6,7 @@ use tessera_build::AssetBackend;
 
 use commands::{
     android::{self, AndroidFormat},
-    plugin,
+    plugin, web,
 };
 
 mod commands;
@@ -99,6 +99,11 @@ enum TesseraCommands {
         #[command(subcommand)]
         command: AndroidCommands,
     },
+    /// Web-specific initialization and development commands
+    Web {
+        #[command(subcommand)]
+        command: WebCommands,
+    },
     /// Create a new Tessera plugin
     Plugin {
         #[command(subcommand)]
@@ -120,6 +125,37 @@ enum AndroidCommands {
     Dev(AndroidDevArgs),
     /// Build Rust library for a single Android target (used by Gradle)
     RustBuild(AndroidRustBuildArgs),
+}
+
+#[derive(Subcommand)]
+enum WebCommands {
+    /// Initialize minimal browser host and wasm entry support for a Tessera app
+    Init {
+        /// Override package/binary name (-p)
+        #[arg(long, short)]
+        package: Option<String>,
+    },
+    /// Build a Tessera app for the browser
+    Build {
+        /// Build in release mode
+        #[arg(long, short)]
+        release: bool,
+        /// Override package/binary name (-p)
+        #[arg(long, short)]
+        package: Option<String>,
+    },
+    /// Rebuild and serve a Tessera app for browser development
+    Dev {
+        /// Build in release mode
+        #[arg(long, short)]
+        release: bool,
+        /// Override package/binary name (-p)
+        #[arg(long, short)]
+        package: Option<String>,
+        /// Port for the local static file server
+        #[arg(long, default_value_t = 8000)]
+        port: u16,
+    },
 }
 
 #[derive(Subcommand)]
@@ -436,6 +472,21 @@ fn run() -> Result<()> {
                         debug_dirty_overlay: build_args.debug_dirty_overlay,
                         asset_backend: build_args.asset_backend.map(AssetBackendArg::to_backend),
                     })?;
+                }
+            },
+            TesseraCommands::Web { command } => match command {
+                WebCommands::Init { package } => {
+                    web::init(package.as_deref())?;
+                }
+                WebCommands::Build { release, package } => {
+                    web::build(release, package.as_deref())?;
+                }
+                WebCommands::Dev {
+                    release,
+                    package,
+                    port,
+                } => {
+                    web::dev(release, package.as_deref(), port)?;
                 }
             },
         },
