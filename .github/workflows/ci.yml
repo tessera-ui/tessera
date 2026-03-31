@@ -49,6 +49,26 @@ jobs:
           cargo +stable check -p example --verbose
           cargo tessera build -p example
 
+  check_web:
+    name: Check Web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1
+        with:
+          target: wasm32-unknown-unknown
+      - name: Install stable
+        run: |
+          rustup toolchain install stable --profile minimal
+          rustup target add wasm32-unknown-unknown --toolchain stable
+      - uses: Swatinem/rust-cache@v2
+      - name: Check wasm target
+        run: cargo +stable check -p example --target wasm32-unknown-unknown --verbose
+      - name: Build web example
+        env:
+          RUSTUP_TOOLCHAIN: stable
+        run: cargo +stable tessera web build --release -p example
+
   check_android:
     name: Check Android
     runs-on: ubuntu-latest
