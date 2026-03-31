@@ -477,7 +477,6 @@ pub fn switch(
     let thumb_icon_color = thumb_icon_color.unwrap_or(scheme.surface_container_highest);
 
     let controller = controller.unwrap_or_else(|| remember(|| SwitchController::new(checked)));
-    let child = child.clone();
     let mut modifier = modifier.unwrap_or_default();
 
     if controller.with(|c| c.is_animating()) {
@@ -639,8 +638,6 @@ pub fn switch(
             } else {
                 state_layer.with_child(|| {});
             }
-
-            let child = child.clone();
             surface()
                 .modifier(Modifier::new().constrain(
                     Some(DimensionValue::Fixed(thumb_size_px)),
@@ -652,7 +649,6 @@ pub fn switch(
                 .shape(Shape::Ellipse)
                 .content_color(colors.icon_color)
                 .with_child(move || {
-                    let child = child.clone();
                     if let Some(child) = child {
                         boxed()
                             .modifier(Modifier::new().constrain(

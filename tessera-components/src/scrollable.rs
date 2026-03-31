@@ -693,7 +693,6 @@ pub fn scrollable(
 
     match scrollbar_layout {
         ScrollBarLayout::Alongside => {
-            let child = child.clone();
             layout_primitive().modifier(modifier).child(move || {
                 scrollable_with_alongside_scrollbar()
                     .controller_internal(controller)
@@ -704,11 +703,10 @@ pub fn scrollable(
                     .scrollbar_track_color(scrollbar_track_color)
                     .scrollbar_thumb_color(scrollbar_thumb_color)
                     .scrollbar_thumb_hover_color(scrollbar_thumb_hover_color)
-                    .child_slot(child.clone());
+                    .child_slot(child);
             });
         }
         ScrollBarLayout::Overlay => {
-            let child = child.clone();
             layout_primitive().modifier(modifier).child(move || {
                 scrollable_with_overlay_scrollbar()
                     .controller_internal(controller)
@@ -719,7 +717,7 @@ pub fn scrollable(
                     .scrollbar_track_color(scrollbar_track_color)
                     .scrollbar_thumb_color(scrollbar_thumb_color)
                     .scrollbar_thumb_hover_color(scrollbar_thumb_hover_color)
-                    .child_slot(child.clone());
+                    .child_slot(child);
             });
         }
     }
@@ -909,7 +907,7 @@ fn scrollable_with_alongside_scrollbar(
                 .controller_internal(controller)
                 .scrollbar_state_v_internal(scrollbar_v_state.clone())
                 .scrollbar_state_h_internal(scrollbar_h_state.clone())
-                .child_slot(child.clone());
+                .child_slot(child);
 
             if vertical {
                 scrollbar_v_bound()
@@ -955,7 +953,7 @@ fn scrollable_with_overlay_scrollbar(
         .alignment(Alignment::BottomEnd)
         .children(move || {
             {
-                let child = child.clone();
+                let child = child;
                 let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
                 let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
                 let scrollbar_behavior = scrollbar_behavior.clone();
@@ -967,7 +965,7 @@ fn scrollable_with_overlay_scrollbar(
                     .controller_internal(controller)
                     .scrollbar_state_v_internal(scrollbar_v_state.clone())
                     .scrollbar_state_h_internal(scrollbar_h_state.clone())
-                    .child_slot(child.clone());
+                    .child_slot(child);
             };
             {
                 let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());

@@ -167,7 +167,7 @@ pub fn shard_home(
     provide_context(
         || RouterContext { controller },
         move || {
-            if let Some(child) = child.clone() {
+            if let Some(child) = child {
                 child.render();
             } else {
                 router_outlet();

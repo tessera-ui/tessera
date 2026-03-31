@@ -383,10 +383,10 @@ fn render_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
             .dropdown_gap(render_args.dropdown_gap)
             .content_padding(render_args.content_padding)
             .controller(render_args.controller)
-            .content_shared(render_args.content.clone())
+            .content_shared(render_args.content)
             .placeholder_internal(render_args.placeholder.clone())
-            .leading_icon_internal(render_args.leading_icon.clone())
-            .trailing_icon_internal(render_args.trailing_icon.clone())
+            .leading_icon_internal(render_args.leading_icon)
+            .trailing_icon_internal(render_args.trailing_icon)
             .on_query_change_shared(render_args.on_query_change)
             .on_search_shared(render_args.on_search)
             .on_active_change_shared(render_args.on_active_change);
@@ -570,21 +570,21 @@ fn search_bar_inner(
         tonal_elevation,
         shadow_elevation,
         content_padding,
-        content: content.clone(),
+        content,
     };
 
     layout_primitive().modifier(modifier).child(move || {
         let placeholder = placeholder.clone();
-        let leading_icon = leading_icon.clone();
-        let trailing_icon = trailing_icon.clone();
+        let leading_icon = leading_icon;
+        let trailing_icon = trailing_icon;
         let results_surface_args = results_surface_args.clone();
         column().children(move || {
             build_search_field(SearchFieldArgs {
                 enabled,
                 read_only,
                 placeholder: placeholder.clone(),
-                leading_icon: leading_icon.clone(),
-                trailing_icon: trailing_icon.clone(),
+                leading_icon,
+                trailing_icon,
                 shape,
                 colors,
                 controller,
@@ -615,7 +615,7 @@ fn render_results_surface(args: &SearchResultsSurfaceArgs) {
         SearchBarLayoutKind::Docked => Modifier::new().fill_max_width(),
     };
 
-    let content = args.content.clone();
+    let content = args.content;
     let divider_color = args.divider_color;
     let content_padding = args.content_padding;
 
@@ -627,10 +627,10 @@ fn render_results_surface(args: &SearchResultsSurfaceArgs) {
         .block_input(true)
         .elevation(args.shadow_elevation)
         .with_child(move || {
-            let content = content.clone();
+            let content = content;
             column().children(move || {
                 horizontal_divider().color(divider_color);
-                let content = content.clone();
+                let content = content;
                 layout_primitive()
                     .modifier(Modifier::new().padding_all(content_padding))
                     .child(move || {

@@ -253,10 +253,7 @@ impl RenderPolicy for IconLayout {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::{
-///     icon::icon,
-///     material_icons::filled,
-/// };
+/// use tessera_components::{icon::icon, material_icons::filled};
 /// use tessera_ui::Color;
 ///
 /// icon()

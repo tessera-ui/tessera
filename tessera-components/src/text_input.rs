@@ -1303,7 +1303,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple();
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn simple() -> Self {
@@ -1348,7 +1348,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::outlined();
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn outlined() -> Self {
@@ -1373,7 +1373,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::minimal();
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn minimal() -> Self {
@@ -1407,7 +1407,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_min_width(Dp(80.0));
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_min_width(self, min_width: Dp) -> Self {
@@ -1430,7 +1430,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_min_height(Dp(40.0));
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_min_height(self, min_height: Dp) -> Self {
@@ -1452,7 +1452,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_background_color(Color::WHITE);
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_background_color(self, color: Color) -> Self {
@@ -1476,7 +1476,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_border_width(Dp(1.0));
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_border_width(self, width: Dp) -> Self {
@@ -1499,7 +1499,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_border_color(Color::BLACK);
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_border_color(self, color: Color) -> Self {
@@ -1528,7 +1528,7 @@ impl TextInputBuilder {
     ///     bottom_left: RoundedCorner::manual(Dp(8.0), 3.0),
     /// });
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_shape(self, shape: Shape) -> Self {
@@ -1551,7 +1551,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_padding(Dp(12.0));
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_padding(self, padding: Dp) -> Self {
@@ -1574,7 +1574,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0));
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_focus_border_color(self, color: Color) -> Self {
@@ -1597,7 +1597,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_focus_background_color(Color::WHITE);
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_focus_background_color(self, color: Color) -> Self {
@@ -1620,7 +1620,7 @@ impl TextInputBuilder {
     /// #     .child(|| {
     /// let args = TextInputBuilder::simple().with_selection_color(Color::new(0.5, 0.7, 1.0, 0.4));
     /// # });
-        /// # }
+    /// # }
     /// # component();
     /// ```
     pub fn with_selection_color(self, color: Color) -> Self {

@@ -33,7 +33,9 @@ use crate::{
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{column::column, modifier::ModifierExt as _, spacer::spacer, text::text};
+/// use tessera_components::{
+///     column::column, modifier::ModifierExt as _, spacer::spacer, text::text,
+/// };
 /// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;

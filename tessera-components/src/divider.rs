@@ -130,9 +130,7 @@ impl RenderPolicy for DividerLayout {
 /// use tessera_components::divider::horizontal_divider;
 /// use tessera_ui::{Color, Dp};
 ///
-/// horizontal_divider()
-///     .thickness(Dp::ZERO)
-///     .color(Color::BLACK);
+/// horizontal_divider().thickness(Dp::ZERO).color(Color::BLACK);
 /// ```
 #[tessera]
 pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
@@ -168,9 +166,7 @@ pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
 /// use tessera_components::divider::vertical_divider;
 /// use tessera_ui::{Color, Dp};
 ///
-/// vertical_divider()
-///     .thickness(Dp(2.0))
-///     .color(Color::BLACK);
+/// vertical_divider().thickness(Dp(2.0)).color(Color::BLACK);
 /// ```
 #[tessera]
 pub fn vertical_divider(thickness: Option<Dp>, color: Option<Color>) {

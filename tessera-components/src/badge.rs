@@ -336,8 +336,8 @@ pub fn badged_box(badge: Option<RenderSlot>, content: Option<RenderSlot>) {
     layout_primitive()
         .layout_policy(BadgedBoxLayout)
         .child(move || {
-            content.clone().unwrap_or_else(RenderSlot::empty).render();
-            badge.clone().unwrap_or_else(RenderSlot::empty).render();
+            content.unwrap_or_else(RenderSlot::empty).render();
+            badge.unwrap_or_else(RenderSlot::empty).render();
         });
 }
 
@@ -446,7 +446,6 @@ pub fn badge_with_content(
         .layout_policy(policy)
         .render_policy(policy)
         .child(move || {
-            let content = content.clone();
             provide_context(
                 || ContentColor {
                     current: content_color,
@@ -456,7 +455,7 @@ pub fn badge_with_content(
                         row()
                             .main_axis_alignment(MainAxisAlignment::Center)
                             .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children_shared(content.clone());
+                            .children_shared(content);
                     });
                 },
             );

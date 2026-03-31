@@ -191,7 +191,7 @@ pub fn radio_group(
         .wrap(wrap),
     );
     layout_primitive().modifier(modifier).child(move || {
-        let content = content.clone();
+        let content = content;
         provide_context(
             || RadioGroupContext,
             move || {

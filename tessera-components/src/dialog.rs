@@ -277,12 +277,12 @@ fn dialog_content_wrapper(
         .layout_policy(policy.clone())
         .render_policy(policy)
         .child(move || {
-            let content = content.clone();
+            let content = content;
             boxed()
                 .modifier(Modifier::new().fill_max_size())
                 .alignment(Alignment::Center)
                 .children(move || {
-                    let content = content.clone();
+                    let content = content;
                     surface()
                         .style(Color::TRANSPARENT.into())
                         .modifier(
@@ -292,7 +292,7 @@ fn dialog_content_wrapper(
                         )
                         .with_child(move || match style {
                             DialogStyle::Glass => {
-                                let content = content.clone();
+                                let content = content;
                                 fluid_glass()
                                     .tint_color(Color::WHITE.with_alpha(alpha / 2.5))
                                     .blur_radius(Dp(5.0 * alpha as f64))
@@ -310,7 +310,7 @@ fn dialog_content_wrapper(
                                     });
                             }
                             DialogStyle::Material => {
-                                let content = content.clone();
+                                let content = content;
                                 surface()
                                     .style(
                                         use_context::<MaterialTheme>()
@@ -329,7 +329,7 @@ fn dialog_content_wrapper(
                                     })
                                     .block_input(true)
                                     .with_child(move || {
-                                        let content = content.clone();
+                                        let content = content;
                                         layout_primitive()
                                             .modifier(Modifier::new().padding_all(padding))
                                             .child(move || {
@@ -544,11 +544,7 @@ fn dialog_provider_render(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::{
-///     button::button,
-///     dialog::basic_dialog,
-///     text::text,
-/// };
+/// use tessera_components::{button::button, dialog::basic_dialog, text::text};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
@@ -596,7 +592,7 @@ pub fn basic_dialog(
         .children(move || {
             // Icon
             if let Some(icon) = icon.as_ref() {
-                let icon = icon.clone();
+                let icon = *icon;
                 let icon_color = scheme.secondary;
                 {
                     provide_context(
@@ -646,8 +642,6 @@ pub fn basic_dialog(
                             current: action_color,
                         },
                         || {
-                            let dismiss_button = dismiss_button.clone();
-                            let confirm_button = confirm_button.clone();
                             row()
                                 .modifier(Modifier::new().fill_max_width())
                                 .main_axis_alignment(MainAxisAlignment::End)
@@ -656,7 +650,7 @@ pub fn basic_dialog(
                                     let has_confirm = confirm_button.is_some();
 
                                     if let Some(dismiss) = dismiss_button.as_ref() {
-                                        let dismiss = dismiss.clone();
+                                        let dismiss = *dismiss;
                                         dismiss.render();
                                     }
 
@@ -667,7 +661,7 @@ pub fn basic_dialog(
                                     }
 
                                     if let Some(confirm) = confirm_button.as_ref() {
-                                        let confirm = confirm.clone();
+                                        let confirm = *confirm;
                                         confirm.render();
                                     }
                                 });

@@ -428,9 +428,7 @@ fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Cal
 ///         text().content("Main content");
 ///     })
 ///     .menu_content(|| {
-///         menu_item()
-///             .label("Edit")
-///             .on_click(Callback::noop());
+///         menu_item().label("Edit").on_click(Callback::noop());
 ///     });
 /// # });
 /// # }
@@ -485,14 +483,8 @@ pub fn menu_provider(
         }
     }
 
-    let main_content = provider_args
-        .main_content
-        .clone()
-        .unwrap_or_else(RenderSlot::empty);
-    let menu_content = provider_args
-        .menu_content
-        .clone()
-        .unwrap_or_else(RenderSlot::empty);
+    let main_content = provider_args.main_content.unwrap_or_else(RenderSlot::empty);
+    let menu_content = provider_args.menu_content.unwrap_or_else(RenderSlot::empty);
     let menu_open_state = remember(|| false);
 
     let (is_open, anchor) = controller.with(|c| c.snapshot());
@@ -558,7 +550,7 @@ pub fn menu_provider(
             bounds,
         })
         .child(move || {
-            let menu_content = menu_content.clone();
+            let menu_content = menu_content;
             main_content.render();
 
             surface()
@@ -643,7 +635,7 @@ fn menu_panel(
     }
 
     layout_primitive().modifier(modifier).child(move || {
-        let menu_content = menu_content.clone();
+        let menu_content = menu_content;
         surface()
             .style(SurfaceStyle::Filled {
                 color: provider.container_color,
@@ -666,7 +658,7 @@ fn menu_panel(
             .block_input(true)
             .elevation(provider.elevation)
             .with_child(move || {
-                let menu_content = menu_content.clone();
+                let menu_content = menu_content;
                 provide_context(
                     || controller,
                     move || {
@@ -1106,7 +1098,7 @@ fn menu_item_surface(
 
 #[tessera]
 fn menu_item_inner(args: MenuItemConfig) {
-    let submenu_content = args.submenu_content.clone();
+    let submenu_content = args.submenu_content;
 
     if let Some(submenu_content) = submenu_content {
         let submenu_controller = remember(MenuController::new);

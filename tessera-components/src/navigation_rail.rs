@@ -199,7 +199,7 @@ fn navigation_rail_item_content(
                         .with_child(|| {});
                 });
 
-            if let Some(draw_icon) = item.icon.clone() {
+            if let Some(draw_icon) = item.icon {
                 provide_context(
                     || ContentColor {
                         current: icon_color,
@@ -602,17 +602,14 @@ pub fn navigation_rail(
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true));
     layout_primitive().modifier(modifier).child({
-        let header = header.clone();
         let items = items.clone();
         move || {
-            let header = header.clone();
             let items = items.clone();
             surface()
                 .modifier(Modifier::new().fill_max_height().width(container_width))
                 .style(scheme.surface.into())
                 .block_input(true)
                 .with_child(move || {
-                    let header = header.clone();
                     let items = items.clone();
                     column()
                         .modifier(Modifier::new().fill_max_size().padding(Padding::new(
@@ -624,26 +621,18 @@ pub fn navigation_rail(
                         .main_axis_alignment(MainAxisAlignment::Start)
                         .cross_axis_alignment(CrossAxisAlignment::Start)
                         .children(move || {
-                            if let Some(header) = header.clone() {
-                                {
-                                    let header = header.clone();
-                                    row()
-                                        .modifier(Modifier::new().padding(Padding::new(
-                                            ITEM_HORIZONTAL_PADDING,
-                                            Dp::ZERO,
-                                            Dp::ZERO,
-                                            Dp::ZERO,
-                                        )))
-                                        .children(move || {
-                                            {
-                                                header.render();
-                                            };
-                                        });
-                                };
-                                {
-                                    spacer()
-                                        .modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
-                                };
+                            if let Some(header) = header {
+                                row()
+                                    .modifier(Modifier::new().padding(Padding::new(
+                                        ITEM_HORIZONTAL_PADDING,
+                                        Dp::ZERO,
+                                        Dp::ZERO,
+                                        Dp::ZERO,
+                                    )))
+                                    .children(move || {
+                                        header.render();
+                                    });
+                                spacer().modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
                             }
 
                             let last_index = items.len().saturating_sub(1);

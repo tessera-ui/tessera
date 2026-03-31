@@ -8,8 +8,8 @@ use std::collections::HashMap;
 
 use tessera_ui::{
     CallbackWith, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, current_frame_nanos,
-    layout::layout_primitive, receive_frame_nanos, remember, tessera, use_context,
+    Modifier, Px, PxPosition, RenderSlot, current_frame_nanos, layout::layout_primitive,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -230,7 +230,6 @@ pub fn button_groups(
                 let actived =
                     state.with(|s| s.item_states.get(&index).is_some_and(|item| item.actived));
                 if actived {
-                    let child_closure = child_closure.clone();
                     button()
                         .filled()
                         .on_click(move || {
@@ -243,7 +242,6 @@ pub fn button_groups(
                         })
                         .shape(item_layout.active_button_shape)
                         .with_child(move || {
-                            let child_closure = child_closure.clone();
                             elastic_container()
                                 .state(state)
                                 .index(index)
@@ -254,7 +252,6 @@ pub fn button_groups(
                         .expect("MaterialTheme must be provided")
                         .get()
                         .color_scheme;
-                    let child_closure = child_closure.clone();
                     let shape = if index == 0 {
                         item_layout.inactive_button_shape_start
                     } else if index == child_len - 1 {
@@ -284,7 +281,6 @@ pub fn button_groups(
                         .color(scheme.secondary_container)
                         .shape(shape)
                         .with_child(move || {
-                            let child_closure = child_closure.clone();
                             elastic_container()
                                 .state(state)
                                 .index(index)

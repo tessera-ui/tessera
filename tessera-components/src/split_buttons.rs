@@ -309,23 +309,19 @@ impl SplitLeadingButtonBuilder {
     }
 
     pub fn filled(self) -> Self {
-        self.variant(SplitButtonVariant::Filled)
-            .enabled(true)
+        self.variant(SplitButtonVariant::Filled).enabled(true)
     }
 
     pub fn tonal(self) -> Self {
-        self.variant(SplitButtonVariant::Tonal)
-            .enabled(true)
+        self.variant(SplitButtonVariant::Tonal).enabled(true)
     }
 
     pub fn elevated(self) -> Self {
-        self.variant(SplitButtonVariant::Elevated)
-            .enabled(true)
+        self.variant(SplitButtonVariant::Elevated).enabled(true)
     }
 
     pub fn outlined(self) -> Self {
-        self.variant(SplitButtonVariant::Outlined)
-            .enabled(true)
+        self.variant(SplitButtonVariant::Outlined).enabled(true)
     }
 }
 
@@ -355,23 +351,19 @@ impl SplitTrailingButtonBuilder {
     }
 
     pub fn filled(self) -> Self {
-        self.variant(SplitButtonVariant::Filled)
-            .enabled(true)
+        self.variant(SplitButtonVariant::Filled).enabled(true)
     }
 
     pub fn tonal(self) -> Self {
-        self.variant(SplitButtonVariant::Tonal)
-            .enabled(true)
+        self.variant(SplitButtonVariant::Tonal).enabled(true)
     }
 
     pub fn elevated(self) -> Self {
-        self.variant(SplitButtonVariant::Elevated)
-            .enabled(true)
+        self.variant(SplitButtonVariant::Elevated).enabled(true)
     }
 
     pub fn outlined(self) -> Self {
-        self.variant(SplitButtonVariant::Outlined)
-            .enabled(true)
+        self.variant(SplitButtonVariant::Outlined).enabled(true)
     }
 }
 
@@ -410,9 +402,12 @@ impl SplitTrailingButtonBuilder {
 ///             });
 ///         })
 ///         .trailing_button(|| {
-///             split_trailing_button().filled().on_click(|| {}).content(|| {
-///                 text().content("More");
-///             });
+///             split_trailing_button()
+///                 .filled()
+///                 .on_click(|| {})
+///                 .content(|| {
+///                     text().content("More");
+///                 });
 ///         });
 /// });
 /// # }
@@ -535,9 +530,12 @@ pub fn split_leading_button(
 /// };
 ///
 /// material_theme().content(|| {
-///     split_trailing_button().filled().on_click(|| {}).content(|| {
-///         text().content("More");
-///     });
+///     split_trailing_button()
+///         .filled()
+///         .on_click(|| {})
+///         .content(|| {
+///             text().content("More");
+///         });
 /// });
 /// # }
 /// # component();
@@ -865,7 +863,7 @@ fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
         accessibility_description,
     })
     .with_child(move || {
-        let content = content.clone();
+        let content = content;
         provide_text_style(typography.label_large, move || {
             layout_primitive()
                 .modifier(Modifier::new().padding(content_padding))

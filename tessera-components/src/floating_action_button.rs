@@ -299,7 +299,7 @@ pub fn floating_action_button(
         accessibility_description,
         content,
     };
-    let content = args.content.clone();
+    let content = args.content;
     let shape = args
         .shape
         .unwrap_or_else(|| shape_from_size(args.size, &theme));
@@ -371,9 +371,7 @@ pub fn floating_action_button(
     }
 
     surface_args.child({
-        let content = content.clone();
         move || {
-            let content = content.clone();
             provide_text_style(typography.label_large, move || {
                 if let Some(content) = content.as_ref() {
                     content.render();

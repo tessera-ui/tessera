@@ -454,11 +454,11 @@ pub fn single_choice_segmented_button_row(
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout_primitive().modifier(modifier).child(move || {
-        let content = content.clone();
+        let content = content;
         layout_primitive()
             .layout_policy(layout_policy.clone())
             .child(move || {
-                let content = content.clone();
+                let content = content;
                 provide_context(
                     || SegmentedButtonRowContext {
                         select_on_focus: true,
@@ -548,11 +548,11 @@ pub fn multi_choice_segmented_button_row(
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout_primitive().modifier(modifier).child(move || {
-        let content = content.clone();
+        let content = content;
         layout_primitive()
             .layout_policy(layout_policy.clone())
             .child(move || {
-                let content = content.clone();
+                let content = content;
                 provide_context(
                     || SegmentedButtonRowContext {
                         select_on_focus: false,

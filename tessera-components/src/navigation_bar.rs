@@ -177,7 +177,7 @@ fn navigation_bar_item_content(
                         .with_child(|| {});
                 });
 
-            if let Some(draw_icon) = item.icon.clone() {
+            if let Some(draw_icon) = item.icon {
                 provide_context(
                     || ContentColor {
                         current: icon_color,

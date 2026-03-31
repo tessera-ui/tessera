@@ -711,7 +711,7 @@ fn side_sheet_provider_render(
             drag_offset,
         })
         .child(move || {
-            let side_sheet_content = side_sheet_content.clone();
+            let side_sheet_content = side_sheet_content;
             main_content.render();
 
             render_scrim(sheet_type, on_close_request, progress, is_open);
@@ -764,7 +764,7 @@ fn side_sheet_content_wrapper(
         focus_scope.restore_focus();
     }
     layout_primitive().modifier(modifier).child(move || {
-        let content = content.clone();
+        let content = content;
         if is_modal {
             surface()
                 .elevation(MODAL_ELEVATION)
@@ -773,7 +773,7 @@ fn side_sheet_content_wrapper(
                 .modifier(Modifier::new().fill_max_height())
                 .block_input(true)
                 .with_child(move || {
-                    let content = content.clone();
+                    let content = content;
                     let parent_nested_scroll =
                         use_context::<NestedScrollConnection>().map(|context| context.get());
                     let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
@@ -785,7 +785,7 @@ fn side_sheet_content_wrapper(
                     layout_primitive()
                         .modifier(Modifier::new().padding_all(Dp(16.0)))
                         .child(move || {
-                            let content = content.clone();
+                            let content = content;
                             provide_context(
                                 || nested_scroll_connection.clone(),
                                 move || {
@@ -801,7 +801,7 @@ fn side_sheet_content_wrapper(
                 .modifier(Modifier::new().fill_max_height())
                 .block_input(true)
                 .with_child(move || {
-                    let content = content.clone();
+                    let content = content;
                     let parent_nested_scroll =
                         use_context::<NestedScrollConnection>().map(|context| context.get());
                     let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
@@ -813,7 +813,7 @@ fn side_sheet_content_wrapper(
                     layout_primitive()
                         .modifier(Modifier::new().padding_all(Dp(16.0)))
                         .child(move || {
-                            let content = content.clone();
+                            let content = content;
                             provide_context(
                                 || nested_scroll_connection.clone(),
                                 move || {

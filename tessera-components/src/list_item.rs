@@ -314,8 +314,8 @@ pub fn list_item(
     })
     .with_child(move || {
         let headline = headline.clone();
-        let leading = leading.clone();
-        let trailing = trailing.clone();
+        let leading = leading;
+        let trailing = trailing;
         let overline_text = overline_text.clone();
         let supporting_text = supporting_text.clone();
         let row_modifier = Modifier::new()
@@ -334,11 +334,11 @@ pub fn list_item(
             .main_axis_alignment(MainAxisAlignment::Start)
             .cross_axis_alignment(CrossAxisAlignment::Center)
             .children(move || {
-                if let Some(leading) = leading.clone() {
+                if let Some(leading) = leading {
                     let color = leading_color;
                     {
                         render_slot()
-                            .content_shared(leading.clone())
+                            .content_shared(leading)
                             .color(color)
                             .min_size(ListItemDefaults::LEADING_MIN_SIZE);
                     };
@@ -382,14 +382,14 @@ pub fn list_item(
                         }
                     });
 
-                if let Some(trailing) = trailing.clone() {
+                if let Some(trailing) = trailing {
                     {
                         spacer().modifier(Modifier::new().width(internal_spacing));
                     };
                     let color = trailing_color;
                     {
                         render_slot()
-                            .content_shared(trailing.clone())
+                            .content_shared(trailing)
                             .color(color)
                             .min_size(ListItemDefaults::TRAILING_MIN_SIZE);
                     };

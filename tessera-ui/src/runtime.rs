@@ -440,22 +440,22 @@ impl RenderSlotCell {
     }
 }
 
-struct RenderSlotWithCell<T, R> {
-    current: RwLock<Arc<dyn Fn(T) -> R + Send + Sync>>,
+struct RenderSlotWithCell<T> {
+    current: RwLock<Arc<dyn Fn(T) + Send + Sync>>,
 }
 
-impl<T, R> RenderSlotWithCell<T, R> {
-    fn new(current: Arc<dyn Fn(T) -> R + Send + Sync>) -> Self {
+impl<T> RenderSlotWithCell<T> {
+    fn new(current: Arc<dyn Fn(T) + Send + Sync>) -> Self {
         Self {
             current: RwLock::new(current),
         }
     }
 
-    fn update(&self, next: Arc<dyn Fn(T) -> R + Send + Sync>) {
+    fn update(&self, next: Arc<dyn Fn(T) + Send + Sync>) {
         *self.current.write() = next;
     }
 
-    fn shared(&self) -> Arc<dyn Fn(T) -> R + Send + Sync> {
+    fn shared(&self) -> Arc<dyn Fn(T) + Send + Sync> {
         Arc::clone(&self.current.read())
     }
 }
@@ -2618,13 +2618,12 @@ pub(crate) fn invoke_render_slot_handle(handle: FunctorHandle) {
     render();
 }
 
-pub(crate) fn remember_render_slot_with_handle<T, R, F>(render: F) -> FunctorHandle
+pub(crate) fn remember_render_slot_with_handle<T, F>(render: F) -> FunctorHandle
 where
     T: 'static,
-    R: 'static,
-    F: Fn(T) -> R + Send + Sync + 'static,
+    F: Fn(T) + Send + Sync + 'static,
 {
-    let render = Arc::new(render) as Arc<dyn Fn(T) -> R + Send + Sync>;
+    let render = Arc::new(render) as Arc<dyn Fn(T) + Send + Sync>;
     let creator_instance_key = current_component_instance_key_from_scope().unwrap_or_else(|| {
         panic!("RenderSlotWith handles must be created during a component build")
     });
@@ -2641,12 +2640,11 @@ where
     handle
 }
 
-pub(crate) fn invoke_render_slot_with_handle<T, R>(handle: FunctorHandle, value: T) -> R
+pub(crate) fn invoke_render_slot_with_handle<T>(handle: FunctorHandle, value: T)
 where
     T: 'static,
-    R: 'static,
 {
-    let render = load_functor_cell::<RenderSlotWithCell<T, R>>(handle).shared();
+    let render = load_functor_cell::<RenderSlotWithCell<T>>(handle).shared();
     render(value)
 }
 

@@ -84,7 +84,9 @@ fn compute_child_offset(
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{alignment::Alignment, boxed::boxed, modifier::ModifierExt as _, text::text};
+/// use tessera_components::{
+///     alignment::Alignment, boxed::boxed, modifier::ModifierExt as _, text::text,
+/// };
 /// use tessera_ui::Modifier;
 ///
 /// # use tessera_ui::tessera;

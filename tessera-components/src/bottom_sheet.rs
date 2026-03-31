@@ -518,10 +518,10 @@ fn bottom_sheet_content_wrapper(
         focus_scope.restore_focus();
     }
     layout_primitive().modifier(modifier).child(move || {
-        let bottom_sheet_content = bottom_sheet_content.clone();
+        let bottom_sheet_content = bottom_sheet_content;
         let nested_scroll_connection = nested_scroll_connection.clone();
         let content_wrapper = move || {
-            let bottom_sheet_content = bottom_sheet_content.clone();
+            let bottom_sheet_content = bottom_sheet_content;
             let nested_scroll_connection = nested_scroll_connection.clone();
             column()
                 .modifier(Modifier::new().fill_max_width())
@@ -531,7 +531,7 @@ fn bottom_sheet_content_wrapper(
                         .controller(controller)
                         .on_close_shared(on_close);
 
-                    let bottom_sheet_content = bottom_sheet_content.clone();
+                    let bottom_sheet_content = bottom_sheet_content;
                     let nested_scroll_connection = nested_scroll_connection.clone();
                     provide_context(
                         || nested_scroll_connection.clone(),
@@ -692,7 +692,7 @@ pub fn bottom_sheet_provider(
             drag_offset,
         })
         .child(move || {
-            let bottom_sheet_content = bottom_sheet_content.clone();
+            let bottom_sheet_content = bottom_sheet_content;
             main_content.render();
 
             render_scrim(style, on_close_request, progress, is_open);

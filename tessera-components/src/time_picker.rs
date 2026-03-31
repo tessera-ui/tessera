@@ -480,8 +480,8 @@ pub fn time_picker_dialog(
                 };
                 let action_color = scheme.primary;
                 {
-                    let dismiss_button = dismiss_button.clone();
-                    let confirm_button = confirm_button.clone();
+                    let dismiss_button = dismiss_button;
+                    let confirm_button = confirm_button;
                     provide_context(
                         || ContentColor {
                             current: action_color,
@@ -492,7 +492,7 @@ pub fn time_picker_dialog(
                                 .main_axis_alignment(MainAxisAlignment::End)
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .children(move || {
-                                    if let Some(dismiss) = dismiss_button.clone() {
+                                    if let Some(dismiss) = dismiss_button {
                                         dismiss.render();
                                     }
                                     if has_confirm && has_dismiss {
@@ -500,7 +500,7 @@ pub fn time_picker_dialog(
                                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                                         };
                                     }
-                                    if let Some(confirm) = confirm_button.clone() {
+                                    if let Some(confirm) = confirm_button {
                                         confirm.render();
                                     }
                                 });

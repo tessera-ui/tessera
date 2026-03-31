@@ -134,36 +134,29 @@ pub fn scaffold(
     let snackbar_offset = overlay_offset(snackbar_alignment, snackbar_offset, bottom_bar_height);
 
     layout_primitive().modifier(modifier).child(move || {
-        let content = content.clone();
-        let bottom_bar = bottom_bar.clone();
-        let top_bar = top_bar.clone();
-        let snackbar_host = snackbar_host.clone();
-        let floating_action_button = floating_action_button.clone();
         boxed().children(move || {
-            if let Some(content) = content.clone() {
-                let content = content.clone();
+            if let Some(content) = content {
                 layout_primitive()
                     .modifier(Modifier::new().padding(content_padding).fill_max_size())
                     .child(move || {
                         content.render();
                     });
             }
-            if let Some(bottom_bar) = bottom_bar.clone() {
+            if let Some(bottom_bar) = bottom_bar {
                 layout_primitive()
                     .modifier(Modifier::new().align(Alignment::BottomCenter))
                     .child(move || {
                         bottom_bar.render();
                     });
             }
-            if let Some(top_bar) = top_bar.clone() {
+            if let Some(top_bar) = top_bar {
                 layout_primitive()
                     .modifier(Modifier::new().align(Alignment::TopCenter))
                     .child(move || {
                         top_bar.render();
                     });
             }
-            if let Some(snackbar_host) = snackbar_host.clone() {
-                let snackbar_host = snackbar_host.clone();
+            if let Some(snackbar_host) = snackbar_host {
                 layout_primitive()
                     .modifier(
                         Modifier::new()
@@ -174,8 +167,7 @@ pub fn scaffold(
                         snackbar_host.render();
                     });
             }
-            if let Some(floating_action_button) = floating_action_button.clone() {
-                let floating_action_button = floating_action_button.clone();
+            if let Some(floating_action_button) = floating_action_button {
                 layout_primitive()
                     .modifier(
                         Modifier::new()

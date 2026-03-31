@@ -37,11 +37,7 @@
 //! # use tessera_ui::tessera;
 //! # #[tessera]
 //! # fn component() {
-//! use tessera_components::{
-//!     button::button,
-//!     text::text,
-//!     text_input::text_input,
-//! };
+//! use tessera_components::{button::button, text::text, text_input::text_input};
 //! # use tessera_components::theme::{MaterialTheme, material_theme};
 //! # material_theme()
 //! #     .theme(|| MaterialTheme::default())

@@ -693,15 +693,13 @@ pub fn date_picker_dialog(
                             current: action_color,
                         },
                         || {
-                            let dismiss_button = dismiss_button.clone();
-                            let confirm_button = confirm_button.clone();
                             row()
                                 .modifier(Modifier::new().fill_max_width())
                                 .main_axis_alignment(MainAxisAlignment::End)
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .children(move || {
                                     if let Some(dismiss) = dismiss_button.as_ref() {
-                                        let dismiss = dismiss.clone();
+                                        let dismiss = *dismiss;
                                         dismiss.render();
                                     }
                                     if has_confirm && has_dismiss {
@@ -710,7 +708,7 @@ pub fn date_picker_dialog(
                                         };
                                     }
                                     if let Some(confirm) = confirm_button.as_ref() {
-                                        let confirm = confirm.clone();
+                                        let confirm = *confirm;
                                         confirm.render();
                                     }
                                 });

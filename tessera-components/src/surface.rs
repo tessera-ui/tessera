@@ -720,7 +720,7 @@ fn surface_content(
     #[prop(skip_setter)] ripple_state: Option<State<RippleState>>,
 ) {
     let surface = resolved.expect("surface_content requires resolved args");
-    let child = surface.child.clone();
+    let child = surface.child;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -847,7 +847,11 @@ fn surface_content(
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::{modifier::{ModifierExt, Padding}, surface::surface, text::text};
+/// use tessera_components::{
+///     modifier::{ModifierExt, Padding},
+///     surface::surface,
+///     text::text,
+/// };
 /// use tessera_ui::{Dp, Modifier};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///

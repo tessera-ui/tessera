@@ -254,10 +254,12 @@ where
 /// components to rebuild with the latest UI.
 ///
 /// Create render slots only during a Tessera component build.
+#[derive(Clone, Copy)]
 pub struct RenderSlot {
     repr: RenderSlotRepr,
 }
 
+#[derive(Clone, Copy, Eq, PartialEq)]
 enum RenderSlotRepr {
     Empty,
     Handle(FunctorHandle),
@@ -315,17 +317,6 @@ impl From<Callback> for RenderSlot {
     }
 }
 
-impl Clone for RenderSlot {
-    fn clone(&self) -> Self {
-        match &self.repr {
-            RenderSlotRepr::Empty => Self::empty(),
-            RenderSlotRepr::Handle(handle) => Self {
-                repr: RenderSlotRepr::Handle(*handle),
-            },
-        }
-    }
-}
-
 impl Default for RenderSlot {
     fn default() -> Self {
         Self::empty()
@@ -344,16 +335,16 @@ impl PartialEq for RenderSlot {
 
 impl Eq for RenderSlot {}
 
-/// Stable, comparable render slot handle for `Fn(T) -> R`.
+/// Stable, comparable render slot handle for `Fn(T)`.
 ///
 /// This follows the same invalidation rules as [`RenderSlot`], while supporting
 /// deferred rendering that depends on an input value.
-pub struct RenderSlotWith<T, R = ()> {
+pub struct RenderSlotWith<T> {
     handle: FunctorHandle,
-    marker: PhantomData<fn(T) -> R>,
+    marker: PhantomData<fn(T)>,
 }
 
-impl<T, R> RenderSlotWith<T, R> {
+impl<T> RenderSlotWith<T> {
     /// Create a render slot from a closure.
     ///
     /// This must be called during a component build.
@@ -361,8 +352,7 @@ impl<T, R> RenderSlotWith<T, R> {
     pub fn new<F>(render: F) -> Self
     where
         T: 'static,
-        R: 'static,
-        F: Fn(T) -> R + Send + Sync + 'static,
+        F: Fn(T) + Send + Sync + 'static,
     {
         Self {
             handle: remember_render_slot_with_handle(render),
@@ -371,53 +361,51 @@ impl<T, R> RenderSlotWith<T, R> {
     }
 
     /// Execute the render closure with an input value.
-    pub fn render(&self, value: T) -> R
+    pub fn render(&self, value: T)
     where
         T: 'static,
-        R: 'static,
     {
         track_render_slot_read_dependency(self.handle);
         invoke_render_slot_with_handle(self.handle, value)
     }
 }
 
-impl<T, R, F> From<F> for RenderSlotWith<T, R>
+impl<T, F> From<F> for RenderSlotWith<T>
 where
     T: 'static,
-    R: 'static,
-    F: Fn(T) -> R + Send + Sync + 'static,
+    F: Fn(T) + Send + Sync + 'static,
 {
     fn from(render: F) -> Self {
         Self::new(render)
     }
 }
 
-impl<T, R> From<CallbackWith<T, R>> for RenderSlotWith<T, R>
+impl<T> From<CallbackWith<T>> for RenderSlotWith<T>
 where
     T: 'static,
-    R: 'static,
 {
-    fn from(callback: CallbackWith<T, R>) -> Self {
-        Self::new(move |value| callback.call(value))
+    fn from(callback: CallbackWith<T>) -> Self {
+        Self::new(move |value| {
+            callback.call(value);
+        })
     }
 }
 
-impl<T, R> Clone for RenderSlotWith<T, R> {
+impl<T> Clone for RenderSlotWith<T> {
     fn clone(&self) -> Self {
-        Self {
-            handle: self.handle,
-            marker: PhantomData,
-        }
+        *self
     }
 }
 
-impl<T, R> PartialEq for RenderSlotWith<T, R> {
+impl<T> Copy for RenderSlotWith<T> {}
+
+impl<T> PartialEq for RenderSlotWith<T> {
     fn eq(&self, other: &Self) -> bool {
         self.handle == other.handle
     }
 }
 
-impl<T, R> Eq for RenderSlotWith<T, R> {}
+impl<T> Eq for RenderSlotWith<T> {}
 
 /// Internal component props contract used by replay and prop comparison.
 pub trait Prop: Clone + Send + Sync + 'static {

@@ -218,7 +218,7 @@ pub fn app_bar(
                 .height(AppBarDefaults::TOP_APP_BAR_HEIGHT),
         )
         .with_child(move || {
-            let content = content.clone();
+            let content = content;
             row()
                 .modifier(Modifier::new().fill_max_size().padding(content_padding))
                 .main_axis_alignment(main_axis_alignment)
@@ -364,12 +364,12 @@ pub fn top_app_bar(
         .elevation(elevation.unwrap_or(AppBarDefaults::TOP_APP_BAR_ELEVATION))
         .content_padding(content_padding)
         .content(move || {
-            let navigation_icon = navigation_icon.clone();
+            let navigation_icon = navigation_icon;
             let actions = actions.clone();
             let title_text = title.clone();
             let title_mod = title_area_modifier.clone();
             row().children(move || {
-                let navigation_icon = navigation_icon.clone();
+                let navigation_icon = navigation_icon;
                 let actions = actions.clone();
                 if let Some(navigation_icon) = navigation_icon {
                     let nav_color = navigation_icon_color;

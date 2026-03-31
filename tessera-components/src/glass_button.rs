@@ -186,7 +186,7 @@ pub fn glass_button(
             .noise_scale(button_args.noise_scale)
             .time(button_args.time)
             .padding(button_args.padding)
-            .child_shared(child.clone());
+            .child_shared(child);
 
         if let Some(contrast) = button_args.contrast {
             builder = builder.contrast(contrast);

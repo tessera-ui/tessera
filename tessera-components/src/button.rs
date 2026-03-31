@@ -121,10 +121,7 @@ struct ButtonResolvedArgs {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::{
-///     button::button,
-///     text::text,
-/// };
+/// use tessera_components::{button::button, text::text};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
@@ -186,18 +183,18 @@ pub fn button(
         accessibility_description,
         child,
     };
-    let child = button_args.child.clone();
+    let child = button_args.child;
     let typography = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .typography;
 
     create_surface_builder(&button_args).child(move || {
-        let child = child.clone();
+        let child = child;
         let modifier = Modifier::new().padding_all(button_args.padding);
         layout_primitive().modifier(modifier).child(move || {
             if let Some(child) = child.as_ref() {
-                let child = child.clone();
+                let child = *child;
                 provide_text_style(typography.label_large, move || child.render());
             }
         });

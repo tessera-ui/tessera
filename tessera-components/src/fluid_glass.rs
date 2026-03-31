@@ -404,7 +404,7 @@ pub fn fluid_glass(
         if let Some(ripple_state) = ripple_state {
             builder = builder.ripple_state(ripple_state);
         }
-        if let Some(child) = child.clone() {
+        if let Some(child) = child {
             builder = builder.child_shared(child);
         }
         drop(builder);

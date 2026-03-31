@@ -659,10 +659,10 @@ fn render_text_field(
     let label_should_float = has_label && (focused || !is_empty);
     let show_placeholder =
         is_empty && placeholder_text.is_some() && (!has_label || label_should_float);
-    let leading_icon = args.leading_icon.clone();
-    let trailing_icon = args.trailing_icon.clone();
-    let prefix = args.prefix.clone();
-    let suffix = args.suffix.clone();
+    let leading_icon = args.leading_icon;
+    let trailing_icon = args.trailing_icon;
+    let prefix = args.prefix;
+    let suffix = args.suffix;
     let content_padding = args.padding;
     let (label_floating_font_size, label_floating_line_height) = {
         let (font_size, line_height) = label_floating_text_style(&theme);
@@ -709,22 +709,22 @@ fn render_text_field(
             .content_color(content_color)
             .block_input(!args.enabled);
         surface_args.with_child(move || {
-            let leading_icon = leading_icon.clone();
-            let prefix = prefix.clone();
+            let leading_icon = leading_icon;
+            let prefix = prefix;
             let core_args = core_args.clone();
             let placeholder_text = placeholder_text.clone();
             let label_text = label_text.clone();
-            let suffix = suffix.clone();
-            let trailing_icon = trailing_icon.clone();
+            let suffix = suffix;
+            let trailing_icon = trailing_icon;
             boxed().children(move || {
                 {
-                    let leading_icon = leading_icon.clone();
-                    let prefix = prefix.clone();
+                    let leading_icon = leading_icon;
+                    let prefix = prefix;
                     let core_args = core_args.clone();
                     let placeholder_text = placeholder_text.clone();
                     let label_text = label_text.clone();
-                    let suffix = suffix.clone();
-                    let trailing_icon = trailing_icon.clone();
+                    let suffix = suffix;
+                    let trailing_icon = trailing_icon;
                     let row_modifier = Modifier::new()
                         .fill_max_height()
                         .padding(Padding::all(content_padding));
@@ -733,7 +733,7 @@ fn render_text_field(
                         .cross_axis_alignment(CrossAxisAlignment::Center)
                         .children(move || {
                             if let Some(leading_icon) = leading_icon.as_ref() {
-                                let leading_icon = leading_icon.clone();
+                                let leading_icon = *leading_icon;
                                 {
                                     provide_context(
                                         || ContentColor {
@@ -751,7 +751,7 @@ fn render_text_field(
                             }
 
                             if let Some(prefix) = prefix.as_ref() {
-                                let prefix = prefix.clone();
+                                let prefix = *prefix;
                                 {
                                     provide_context(
                                         || ContentColor {
@@ -874,7 +874,7 @@ fn render_text_field(
                                 });
 
                             if let Some(suffix) = suffix.as_ref() {
-                                let suffix = suffix.clone();
+                                let suffix = *suffix;
                                 let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
                                 {
                                     spacer().modifier(Modifier::new().width(spacing));
@@ -892,7 +892,7 @@ fn render_text_field(
                             }
 
                             if let Some(trailing_icon) = trailing_icon.as_ref() {
-                                let trailing_icon = trailing_icon.clone();
+                                let trailing_icon = *trailing_icon;
                                 let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
                                 {
                                     spacer().modifier(Modifier::new().width(spacing));

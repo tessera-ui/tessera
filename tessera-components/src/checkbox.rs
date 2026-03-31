@@ -384,10 +384,8 @@ fn checkbox_inner(
     });
 
     let render_checkbox_surface = {
-        let render_checkmark = render_checkmark.clone();
         RenderSlot::new(move || {
             let checkbox_style = checkbox_style.clone();
-            let render_checkmark = render_checkmark.clone();
             surface()
                 .modifier(Modifier::new().size(size, size))
                 .shape(shape)
@@ -399,9 +397,7 @@ fn checkbox_inner(
     };
 
     let render_checkbox_container = {
-        let render_checkbox_surface = render_checkbox_surface.clone();
         RenderSlot::new(move || {
-            let render_checkbox_surface = render_checkbox_surface.clone();
             boxed()
                 .alignment(Alignment::Center)
                 .modifier(Modifier::new().fill_max_size())
@@ -412,9 +408,7 @@ fn checkbox_inner(
     };
 
     let render_state_layer = {
-        let render_checkbox_container = render_checkbox_container.clone();
         RenderSlot::new(move || {
-            let render_checkbox_container = render_checkbox_container.clone();
             if let Some(state) = interaction_state {
                 surface()
                     .modifier(Modifier::new().size(

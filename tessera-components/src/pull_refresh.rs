@@ -582,23 +582,19 @@ pub fn pull_refresh(
         .with_parent(parent_nested_scroll);
 
     layout_primitive().modifier(modifier).child(move || {
-        let child = child.clone();
+        let child = child;
         let nested_scroll_connection = nested_scroll_connection.clone();
         boxed()
             .modifier(Modifier::new().fill_max_size())
             .alignment(Alignment::TopCenter)
             .children(move || {
-                let child = child.clone();
                 let nested_scroll_connection = nested_scroll_connection.clone();
-                {
-                    let child = child.clone();
-                    provide_context(
-                        || nested_scroll_connection.clone(),
-                        move || {
-                            child.render();
-                        },
-                    );
-                };
+                provide_context(
+                    || nested_scroll_connection.clone(),
+                    move || {
+                        child.render();
+                    },
+                );
                 layout_primitive()
                     .modifier(Modifier::new().align(Alignment::TopCenter))
                     .child(move || {
