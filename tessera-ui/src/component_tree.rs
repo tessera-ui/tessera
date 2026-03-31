@@ -7,7 +7,6 @@ use std::{
         Arc,
         atomic::{AtomicU64, Ordering},
     },
-    time::Instant,
 };
 
 use dashmap::DashMap;
@@ -32,6 +31,7 @@ use crate::{
         LayoutDirtyNodes, RuntimePhase, StructureReconcileResult,
         push_current_component_instance_key, push_current_node_with_instance_logic_id, push_phase,
     },
+    time::Instant,
 };
 
 pub use constraint::{Constraint, DimensionValue, ParentConstraint};

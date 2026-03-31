@@ -4,11 +4,11 @@
 //!
 //! Use these recognizers to derive tap, drag, long-press, and scroll behavior.
 
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use tessera_ui::{
     CursorEventContent, GestureState, PointerChange, PointerEventPass, PointerId,
-    PressKeyEventType, Px, PxPosition, ScrollEventContent, ScrollEventSource,
+    PressKeyEventType, Px, PxPosition, ScrollEventContent, ScrollEventSource, time::Instant,
 };
 
 const DEFAULT_SLOP_PX: f32 = 8.0;

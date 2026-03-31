@@ -1,4 +1,4 @@
-use std::{any::TypeId, mem, time::Instant};
+use std::{any::TypeId, mem};
 
 use downcast_rs::Downcast;
 use smallvec::SmallVec;
@@ -17,6 +17,7 @@ use crate::{
         drawer::ErasedDrawContext,
         external::{ExternalTextureRegistry, ExternalTextureSlotGuard},
     },
+    time::Instant,
 };
 
 use super::*;

@@ -1,11 +1,22 @@
 use std::future::Future;
 
+use futures_util::future::{AbortHandle, Abortable};
 use parking_lot::Mutex;
-use tokio::{sync::oneshot, task::JoinHandle};
+
+#[cfg(not(target_family = "wasm"))]
+use tokio::task::JoinHandle;
+
+#[cfg(target_family = "wasm")]
+use wasm_bindgen_futures::spawn_local;
+
+#[cfg(not(target_family = "wasm"))]
+pub type TaskRuntimeHandle = JoinHandle<()>;
+#[cfg(target_family = "wasm")]
+pub type TaskRuntimeHandle = ();
 
 pub struct TaskHandle {
-    pub handle: JoinHandle<()>,
-    cancel: oneshot::Sender<()>,
+    pub handle: TaskRuntimeHandle,
+    cancel: AbortHandle,
 }
 
 pub struct TaskHandles {
@@ -35,21 +46,40 @@ impl TaskHandles {
     where
         F: Future<Output = ()> + Send + 'static,
     {
-        let (tx, rx) = oneshot::channel();
-        let wrapped = async move {
-            tokio::select! {
-                _ = fut => {},
-                _ = rx => {},
-            }
-        };
-        let handle = crate::tokio_runtime::get().spawn(wrapped);
-        self.tasks.lock().push(TaskHandle { handle, cancel: tx });
+        let (handle, cancel) = spawn_task(fut);
+        self.tasks.lock().push(TaskHandle { handle, cancel });
     }
 
     pub fn cancel_all(&self) {
         let mut tasks = self.tasks.lock();
         for task in tasks.drain(..) {
-            let _ = task.cancel.send(());
+            task.cancel.abort();
         }
     }
+}
+
+#[cfg(not(target_family = "wasm"))]
+fn spawn_task<F>(fut: F) -> (TaskRuntimeHandle, AbortHandle)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    let (cancel, registration) = AbortHandle::new_pair();
+    let wrapped = Abortable::new(fut, registration);
+    let handle = crate::tokio_runtime::get().spawn(async move {
+        let _ = wrapped.await;
+    });
+    (handle, cancel)
+}
+
+#[cfg(target_family = "wasm")]
+fn spawn_task<F>(fut: F) -> (TaskRuntimeHandle, AbortHandle)
+where
+    F: Future<Output = ()> + Send + 'static,
+{
+    let (cancel, registration) = AbortHandle::new_pair();
+    let wrapped = Abortable::new(fut, registration);
+    spawn_local(async move {
+        let _ = wrapped.await;
+    });
+    ((), cancel)
 }

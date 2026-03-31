@@ -307,6 +307,7 @@ mod runtime;
 #[cfg(feature = "testing")]
 pub mod testing;
 mod thread_utils;
+pub mod time;
 
 #[cfg(feature = "shard")]
 pub mod router;

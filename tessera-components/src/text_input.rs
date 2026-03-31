@@ -1697,10 +1697,10 @@ fn should_expose_submit_accessibility_action(
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use glyphon::{Action as GlyphonAction, Edit as _};
-    use tessera_ui::{ComputedData, Px, PxPosition, PxSize, accesskit::Role, winit};
+    use tessera_ui::{ComputedData, Px, PxPosition, PxSize, accesskit::Role, time::Instant, winit};
 
     use crate::text_edit_core::{
         ClickType, ImeComposition, PlannedImeEdit, PlannedImeEvent, RectDef, TextEditorController,

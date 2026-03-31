@@ -26,6 +26,13 @@ use tessera_ui::{
 
 use super::command::{TextCommand, TextConstraint};
 
+#[cfg(target_family = "wasm")]
+use crate::res;
+#[cfg(target_family = "wasm")]
+use std::io;
+#[cfg(target_family = "wasm")]
+use tessera_ui::AssetExt;
+
 const LRU_CAPACITY: usize = 1024;
 
 /// It costs a lot to create a glyphon font system, so we use a static one
@@ -161,7 +168,38 @@ fn init_font_system() -> RwLock<glyphon::FontSystem> {
     RwLock::new(font_system)
 }
 
+#[cfg(target_family = "wasm")]
+fn load_asset_font_data(db: &mut fontdb::Database, asset: res::Asset) -> io::Result<usize> {
+    let before = db.len();
+    let bytes = asset.read()?;
+    db.load_font_data(bytes.as_ref().to_vec());
+    Ok(db.len().saturating_sub(before))
+}
+
+#[cfg(target_family = "wasm")]
+fn init_font_system() -> RwLock<glyphon::FontSystem> {
+    let mut font_system = glyphon::FontSystem::new();
+
+    {
+        let db = font_system.db_mut();
+        if let Err(err) = load_asset_font_data(db, res::NOTOSANSSC_REGULAR_OTF) {
+            eprintln!("wasm fontdb: failed to load Noto Sans SC asset: {err}");
+        }
+        if let Err(err) = load_asset_font_data(db, res::NOTOCOLOREMOJI_COLRV0_TTF) {
+            eprintln!("wasm fontdb: failed to load emoji font asset: {err}");
+        }
+        db.set_sans_serif_family("Noto Sans SC");
+        db.set_serif_family("Noto Sans SC");
+        db.set_monospace_family("Noto Sans SC");
+        db.set_cursive_family("Noto Sans SC");
+        db.set_fantasy_family("Noto Sans SC");
+    }
+
+    RwLock::new(font_system)
+}
+
 #[cfg(not(target_os = "android"))]
+#[cfg(not(target_family = "wasm"))]
 fn init_font_system() -> RwLock<glyphon::FontSystem> {
     RwLock::new(glyphon::FontSystem::new())
 }

@@ -8,12 +8,9 @@ pub mod core;
 pub mod drawer;
 pub mod external;
 
-use std::{
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Instant,
+use std::sync::{
+    Arc,
+    atomic::{AtomicBool, Ordering},
 };
 
 pub use core::{RenderCore, RenderResources};
@@ -58,6 +55,7 @@ use crate::{
         tick_frame_nanos_receivers,
     },
     thread_utils,
+    time::Instant,
 };
 
 pub use crate::render_scene::{Command, DrawRegion, PaddingRect, SampleRegion};
@@ -88,6 +86,17 @@ use std::collections::BTreeSet;
 #[cfg(feature = "profiling")]
 use std::path::PathBuf;
 
+#[cfg(target_family = "wasm")]
+use std::{cell::RefCell, rc::Rc};
+#[cfg(target_family = "wasm")]
+use wasm_bindgen_futures::spawn_local;
+#[cfg(target_family = "wasm")]
+use web_sys::HtmlCanvasElement;
+#[cfg(target_family = "wasm")]
+use web_sys::wasm_bindgen::JsCast;
+#[cfg(target_family = "wasm")]
+use winit::platform::web::EventLoopExtWebSys;
+
 #[cfg(target_os = "android")]
 use winit::platform::android::{
     ActiveEventLoopExtAndroid, EventLoopBuilderExtAndroid, activity::AndroidApp,
@@ -97,6 +106,8 @@ use winit::platform::android::{
 enum RendererUserEvent {
     AccessKit(AccessKitEvent),
     RuntimeRedrawWake,
+    #[cfg(target_family = "wasm")]
+    WebInitReady(u64),
 }
 
 impl From<AccessKitEvent> for RendererUserEvent {
@@ -175,6 +186,22 @@ impl Default for WindowConfig {
     }
 }
 
+/// Web host configuration for browser platforms.
+#[derive(Debug, Clone, Default)]
+pub struct WebConfig {
+    /// An optional canvas element id to mount into before falling back to the
+    /// default body append behavior.
+    pub canvas_id: Option<String>,
+}
+
+impl WebConfig {
+    /// Returns a config that looks up the canvas with the provided id.
+    pub fn with_canvas_id(mut self, canvas_id: impl Into<String>) -> Self {
+        self.canvas_id = Some(canvas_id.into());
+        self
+    }
+}
+
 /// Configuration for the Tessera runtime and renderer.
 ///
 /// This struct allows you to customize various aspects of the renderer's
@@ -225,6 +252,8 @@ pub struct TesseraConfig {
     pub window_title: String,
     /// Window configuration (desktop only).
     pub window: WindowConfig,
+    /// Web host configuration for browser platforms.
+    pub web: WebConfig,
     /// Path to write profiler output when `profiling` is enabled.
     #[cfg(feature = "profiling")]
     pub profiler_output_path: PathBuf,
@@ -238,6 +267,7 @@ impl Default for TesseraConfig {
             sample_count: 1,
             window_title: "Tessera".to_string(),
             window: WindowConfig::default(),
+            web: WebConfig::default(),
             #[cfg(feature = "profiling")]
             profiler_output_path: PathBuf::from("tessera-profiler.jsonl"),
         }
@@ -376,6 +406,18 @@ pub struct Renderer<F: Fn()> {
     /// While active, cursor input is withheld from the component tree to avoid
     /// accidental UI interaction during system resize.
     resize_in_progress: bool,
+    #[cfg(target_family = "wasm")]
+    /// Render cores that completed asynchronous initialization on the web
+    /// event loop thread and are waiting to be installed into the renderer.
+    pending_web_inits: Rc<RefCell<Vec<(u64, RenderCore)>>>,
+    #[cfg(target_family = "wasm")]
+    /// Monotonic token used to discard stale async initialization completions
+    /// after suspend/resume cycles.
+    web_init_epoch: u64,
+    #[cfg(target_family = "wasm")]
+    /// Whether a web-side render core initialization task is currently
+    /// running.
+    web_init_in_progress: bool,
     #[cfg(feature = "profiling")]
     /// Aggregated redraw reasons that will be attached to the next rendered
     /// frame.
@@ -387,6 +429,15 @@ pub struct Renderer<F: Fn()> {
 }
 
 impl<F: Fn()> Renderer<F> {
+    #[cfg(target_family = "wasm")]
+    fn resolve_web_canvas(config: &TesseraConfig) -> Option<HtmlCanvasElement> {
+        let canvas_id = config.web.canvas_id.as_deref()?;
+        let window = web_sys::window()?;
+        let document = window.document()?;
+        let element = document.get_element_by_id(canvas_id)?;
+        element.dyn_into::<HtmlCanvasElement>().ok()
+    }
+
     /// Runs the Tessera application with default configuration on desktop
     /// platforms.
     ///
@@ -428,7 +479,7 @@ impl<F: Fn()> Renderer<F> {
     ///     Ok(())
     /// }
     /// ```
-    #[cfg(not(target_os = "android"))]
+    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     #[tracing::instrument(level = "info", skip(entry_point, modules))]
     pub fn run(entry_point: F, modules: Vec<Box<dyn RenderModule>>) -> Result<(), EventLoopError> {
         Self::run_with_config(entry_point, modules, Default::default())
@@ -475,7 +526,7 @@ impl<F: Fn()> Renderer<F> {
     /// # }
     /// ```
     #[tracing::instrument(level = "info", skip(entry_point, modules))]
-    #[cfg(not(any(target_os = "android")))]
+    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     pub fn run_with_config(
         entry_point: F,
         modules: Vec<Box<dyn RenderModule>>,
@@ -506,11 +557,76 @@ impl<F: Fn()> Renderer<F> {
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
             resize_in_progress: false,
+            #[cfg(target_family = "wasm")]
+            pending_web_inits: Rc::new(RefCell::new(Vec::new())),
+            #[cfg(target_family = "wasm")]
+            web_init_epoch: 0,
+            #[cfg(target_family = "wasm")]
+            web_init_in_progress: false,
             #[cfg(feature = "profiling")]
             pending_redraw_reasons: BTreeSet::new(),
         };
         thread_utils::set_thread_name("TesseraMain");
         event_loop.run_app(&mut renderer)
+    }
+
+    /// Runs the Tessera application with default configuration on web
+    /// platforms.
+    #[cfg(target_family = "wasm")]
+    #[tracing::instrument(level = "info", skip(entry_point, modules))]
+    pub fn run(entry_point: F, modules: Vec<Box<dyn RenderModule>>) -> Result<(), EventLoopError>
+    where
+        F: 'static,
+    {
+        Self::run_web_with_config(entry_point, modules, Default::default())
+    }
+
+    /// Runs the Tessera application with custom configuration on web
+    /// platforms.
+    #[cfg(target_family = "wasm")]
+    #[tracing::instrument(level = "info", skip(entry_point, modules))]
+    pub fn run_web_with_config(
+        entry_point: F,
+        modules: Vec<Box<dyn RenderModule>>,
+        config: TesseraConfig,
+    ) -> Result<(), EventLoopError>
+    where
+        F: 'static,
+    {
+        let event_loop = EventLoop::<RendererUserEvent>::with_user_event().build()?;
+        let event_loop_proxy = event_loop.create_proxy();
+        let app = None;
+        let cursor_state = CursorState::default();
+        let keyboard_state = KeyboardState::default();
+        let ime_state = ImeState::default();
+        let ime_bridge_state = RendererImeBridgeState::default();
+        #[cfg(feature = "profiling")]
+        crate::profiler::set_output_path(resolve_profiler_output_path(&config));
+        let renderer = Self {
+            app,
+            entry_point,
+            cursor_state,
+            keyboard_state,
+            modules,
+            plugins: PluginHost::new(),
+            ime_state,
+            ime_bridge_state,
+            config,
+            accessibility_adapter: None,
+            event_loop_proxy: Some(event_loop_proxy),
+            frame_index: 0,
+            redraw_request_pending: Arc::new(AtomicBool::new(false)),
+            pending_close_requested: false,
+            resize_in_progress: false,
+            pending_web_inits: Rc::new(RefCell::new(Vec::new())),
+            web_init_epoch: 0,
+            web_init_in_progress: false,
+            #[cfg(feature = "profiling")]
+            pending_redraw_reasons: BTreeSet::new(),
+        };
+        thread_utils::set_thread_name("TesseraMain");
+        event_loop.spawn_app(renderer);
+        Ok(())
     }
 
     /// Runs the Tessera application with default configuration on Android.
@@ -1165,7 +1281,7 @@ Fps: {:.2}
             redraw_reasons,
         } = context;
         #[cfg(feature = "profiling")]
-        let frame_timer = std::time::Instant::now();
+        let frame_timer = Instant::now();
         #[cfg(feature = "profiling")]
         profiler_begin_frame(frame_idx);
         begin_frame_clock(Instant::now());
@@ -1442,6 +1558,61 @@ impl<F: Fn()> Renderer<F> {
         install_redraw_waker(Arc::new(move || {
             let _ = proxy.send_event(RendererUserEvent::RuntimeRedrawWake);
         }));
+    }
+
+    #[cfg(target_family = "wasm")]
+    fn begin_web_initialization(&mut self, window: Arc<Window>) {
+        let Some(proxy) = self.event_loop_proxy.clone() else {
+            error!("Missing event loop proxy for web renderer initialization");
+            return;
+        };
+
+        self.web_init_in_progress = true;
+        let epoch = self.web_init_epoch;
+        let pending_web_inits = self.pending_web_inits.clone();
+        let sample_count = self.config.sample_count;
+        let transparent = self.config.window.transparent;
+        spawn_local(async move {
+            let render_core = RenderCore::new(window, sample_count, transparent).await;
+            pending_web_inits.borrow_mut().push((epoch, render_core));
+            let _ = proxy.send_event(RendererUserEvent::WebInitReady(epoch));
+        });
+    }
+
+    #[cfg(target_family = "wasm")]
+    fn finish_web_initialization(&mut self, event_loop: &ActiveEventLoop, epoch: u64) -> bool {
+        let pending_render_core = {
+            let mut pending_web_inits = self.pending_web_inits.borrow_mut();
+            pending_web_inits
+                .iter()
+                .position(|(ready_epoch, _)| *ready_epoch == epoch)
+                .map(|position| pending_web_inits.remove(position).1)
+        };
+        let Some(mut render_core) = pending_render_core else {
+            return false;
+        };
+
+        if epoch != self.web_init_epoch {
+            return false;
+        }
+
+        let mut context = PipelineContext::new(&mut render_core);
+        for module in &self.modules {
+            module.register_pipelines(&mut context);
+        }
+
+        self.app = Some(render_core);
+        self.web_init_in_progress = false;
+        self.install_runtime_redraw_waker();
+        #[cfg(feature = "profiling")]
+        self.request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
+        #[cfg(not(feature = "profiling"))]
+        self.request_redraw_now();
+
+        if let Some(context) = self.plugin_context(event_loop) {
+            self.plugins.resumed(&context);
+        }
+        true
     }
 
     #[cfg(feature = "profiling")]
@@ -1801,6 +1972,8 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
         submit_runtime_meta(RuntimeMeta {
             kind: RuntimeEventKind::Resumed,
         });
+        #[cfg(target_family = "wasm")]
+        self.finish_web_initialization(event_loop, self.web_init_epoch);
         // Just return if the app is already created
         if self.app.is_some() {
             self.install_runtime_redraw_waker();
@@ -1808,6 +1981,10 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
             self.request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
             #[cfg(not(feature = "profiling"))]
             self.request_redraw_now();
+            return;
+        }
+        #[cfg(target_family = "wasm")]
+        if self.web_init_in_progress {
             return;
         }
 
@@ -1818,6 +1995,18 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
             .with_resizable(self.config.window.resizable)
             .with_transparent(self.config.window.transparent)
             .with_visible(false); // Hide initially for AccessKit
+        #[cfg(target_family = "wasm")]
+        let window_attributes = {
+            use winit::platform::web::WindowAttributesExtWebSys;
+
+            if let Some(canvas) = Self::resolve_web_canvas(&self.config) {
+                window_attributes
+                    .with_canvas(Some(canvas))
+                    .with_append(false)
+            } else {
+                window_attributes.with_append(true)
+            }
+        };
         let window = match event_loop.create_window(window_attributes) {
             Ok(window) => Arc::new(window),
             Err(err) => {
@@ -1837,27 +2026,36 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
         window.set_visible(true);
         self.update_native_window_shape(&window);
 
-        let mut render_core = pollster::block_on(RenderCore::new(
-            window.clone(),
-            self.config.sample_count,
-            self.config.window.transparent,
-        ));
-
-        // Register pipelines
-        let mut context = PipelineContext::new(&mut render_core);
-        for module in &self.modules {
-            module.register_pipelines(&mut context);
+        #[cfg(target_family = "wasm")]
+        {
+            self.begin_web_initialization(window);
+            return;
         }
 
-        self.app = Some(render_core);
-        self.install_runtime_redraw_waker();
-        #[cfg(feature = "profiling")]
-        self.request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
-        #[cfg(not(feature = "profiling"))]
-        self.request_redraw_now();
+        #[cfg(not(target_family = "wasm"))]
+        {
+            let mut render_core = pollster::block_on(RenderCore::new(
+                window.clone(),
+                self.config.sample_count,
+                self.config.window.transparent,
+            ));
 
-        if let Some(context) = self.plugin_context(event_loop) {
-            self.plugins.resumed(&context);
+            // Register pipelines
+            let mut context = PipelineContext::new(&mut render_core);
+            for module in &self.modules {
+                module.register_pipelines(&mut context);
+            }
+
+            self.app = Some(render_core);
+            self.install_runtime_redraw_waker();
+            #[cfg(feature = "profiling")]
+            self.request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
+            #[cfg(not(feature = "profiling"))]
+            self.request_redraw_now();
+
+            if let Some(context) = self.plugin_context(event_loop) {
+                self.plugins.resumed(&context);
+            }
         }
     }
 
@@ -1896,6 +2094,12 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
         self.ime_bridge_state.reset();
         self.resize_in_progress = false;
         self.redraw_request_pending.store(false, Ordering::Release);
+        #[cfg(target_family = "wasm")]
+        {
+            self.web_init_epoch = self.web_init_epoch.wrapping_add(1);
+            self.web_init_in_progress = false;
+            self.pending_web_inits.borrow_mut().clear();
+        }
         #[cfg(target_os = "android")]
         {
             self.android_ime_opened = false;
@@ -2063,8 +2267,10 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: RendererUserEvent) {
+    fn user_event(&mut self, event_loop: &ActiveEventLoop, event: RendererUserEvent) {
         use accesskit_winit::WindowEvent as AccessKitWindowEvent;
+        #[cfg(not(target_family = "wasm"))]
+        let _ = event_loop;
 
         match event {
             RendererUserEvent::RuntimeRedrawWake => {
@@ -2075,6 +2281,10 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
                 );
                 #[cfg(not(feature = "profiling"))]
                 self.request_redraw_now();
+            }
+            #[cfg(target_family = "wasm")]
+            RendererUserEvent::WebInitReady(epoch) => {
+                self.finish_web_initialization(event_loop, epoch);
             }
             RendererUserEvent::AccessKit(event) => {
                 if self.accessibility_adapter.is_none() {

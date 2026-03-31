@@ -2,7 +2,6 @@ use std::{
     collections::HashMap,
     ops::{Add, AddAssign},
     sync::Arc,
-    time::Instant,
 };
 
 use dashmap::DashMap;
@@ -31,6 +30,7 @@ use crate::{
         RuntimePhase, push_current_component_instance_key,
         push_current_node_with_instance_logic_id, push_phase,
     },
+    time::Instant,
 };
 
 use super::{

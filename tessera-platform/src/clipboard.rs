@@ -7,6 +7,8 @@ use std::sync::{Arc, OnceLock};
 
 use parking_lot::RwLock;
 use tessera_ui::{Plugin, PluginContext, PluginResult};
+
+#[cfg(not(target_family = "wasm"))]
 use tracing::warn;
 
 #[cfg(target_os = "android")]
@@ -65,14 +67,14 @@ impl Plugin for ClipboardPlugin {
 
 /// Clipboard handle backed by platform-specific implementations.
 pub struct Clipboard {
-    #[cfg(not(target_os = "android"))]
+    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     manager: arboard::Clipboard,
     #[cfg(target_os = "android")]
     android_app: AndroidApp,
 }
 
 impl Clipboard {
-    #[cfg(not(target_os = "android"))]
+    #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     fn new(_context: &PluginContext) -> Option<Self> {
         match arboard::Clipboard::new() {
             Ok(manager) => Some(Self { manager }),
@@ -90,9 +92,14 @@ impl Clipboard {
         })
     }
 
+    #[cfg(target_family = "wasm")]
+    fn new(_context: &PluginContext) -> Option<Self> {
+        None
+    }
+
     /// Sets clipboard text, replacing previous content.
     pub fn set_text(&mut self, text: &str) {
-        #[cfg(not(target_os = "android"))]
+        #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
         {
             let _ = self.manager.set_text(text.to_string());
         }
@@ -103,11 +110,15 @@ impl Clipboard {
                 warn!("Android clipboard set_text failed: {err}");
             }
         }
+        #[cfg(target_family = "wasm")]
+        {
+            let _ = text;
+        }
     }
 
     /// Returns clipboard text when available.
     pub fn get_text(&mut self) -> Option<String> {
-        #[cfg(not(target_os = "android"))]
+        #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
         {
             self.manager.get_text().ok()
         }
@@ -132,11 +143,15 @@ impl Clipboard {
                 }
             }
         }
+        #[cfg(target_family = "wasm")]
+        {
+            None
+        }
     }
 
     /// Clears clipboard contents.
     pub fn clear(&mut self) {
-        #[cfg(not(target_os = "android"))]
+        #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
         {
             let _ = self.manager.clear();
         }
@@ -147,6 +162,8 @@ impl Clipboard {
                 warn!("Android clipboard clear failed: {err}");
             }
         }
+        #[cfg(target_family = "wasm")]
+        {}
     }
 }
 
