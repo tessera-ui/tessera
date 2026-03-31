@@ -1072,16 +1072,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let __tessera_fn_name: &str = stringify!(#fn_name);
                     let __tessera_node_id = #register_tokens;
 
-                    let _component_scope_guard = {
-                        struct ComponentScopeGuard;
-                        impl Drop for ComponentScopeGuard {
-                            fn drop(&mut self) {
-                                #crate_path::__private::finish_component_node();
-                            }
-                        }
-                        ComponentScopeGuard
-                    };
-
                     let _node_ctx_guard = {
                         use #crate_path::__private::push_current_node;
                         push_current_node(
@@ -1097,6 +1087,15 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let _instance_ctx_guard = {
                         use #crate_path::__private::push_current_component_instance_key;
                         push_current_component_instance_key(__tessera_instance_key)
+                    };
+                    let _component_scope_guard = {
+                        struct ComponentScopeGuard;
+                        impl Drop for ComponentScopeGuard {
+                            fn drop(&mut self) {
+                                #crate_path::__private::finish_component_node();
+                            }
+                        }
+                        ComponentScopeGuard
                     };
                     #crate_path::__private::set_current_node_identity(
                         __tessera_instance_key,
@@ -1205,16 +1204,6 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let __tessera_fn_name: &str = stringify!(#fn_name);
                     let __tessera_node_id = #register_tokens;
 
-                    let _component_scope_guard = {
-                        struct ComponentScopeGuard;
-                        impl Drop for ComponentScopeGuard {
-                            fn drop(&mut self) {
-                                #crate_path::__private::finish_component_node();
-                            }
-                        }
-                        ComponentScopeGuard
-                    };
-
                     let _node_ctx_guard = {
                         use #crate_path::__private::push_current_node;
                         push_current_node(
@@ -1230,6 +1219,15 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let _instance_ctx_guard = {
                         use #crate_path::__private::push_current_component_instance_key;
                         push_current_component_instance_key(__tessera_instance_key)
+                    };
+                    let _component_scope_guard = {
+                        struct ComponentScopeGuard;
+                        impl Drop for ComponentScopeGuard {
+                            fn drop(&mut self) {
+                                #crate_path::__private::finish_component_node();
+                            }
+                        }
+                        ComponentScopeGuard
                     };
                     #crate_path::__private::set_current_node_identity(
                         __tessera_instance_key,
