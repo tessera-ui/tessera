@@ -4,7 +4,7 @@
 //!
 //! Assert positions and sizes of tagged nodes without creating a real renderer.
 
-use std::collections::BTreeSet;
+use std::{collections::BTreeSet, time::Duration};
 
 use rustc_hash::FxHashMap as HashMap;
 
@@ -19,6 +19,7 @@ use crate::{
         reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
         reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
         reset_slots, reset_state_read_dependencies, take_layout_dirty_nodes,
+        tick_frame_nanos_receivers,
     },
     time::Instant,
 };
@@ -55,13 +56,56 @@ where
 
     /// Execute build and layout, then capture a snapshot for assertions.
     pub fn run(self) -> LayoutSnapshot {
-        reset_runtime_for_layout_test(self.viewport);
-        begin_frame_clock(Instant::now());
-        let _ = build_component_tree(&self.content);
+        let mut session = __private::start_layout_test_session(self);
+        __private::pump_layout_test_session(&mut session, 0)
+    }
+}
+
+#[doc(hidden)]
+pub mod __private {
+    use super::*;
+
+    /// Runs a headless Tessera test across multiple animation frames.
+    pub struct LayoutTestSession<F>
+    where
+        F: Fn(),
+    {
+        content: F,
+        viewport: (u32, u32),
+        frame_origin: Instant,
+        current_frame_nanos: u64,
+    }
+
+    pub fn start_layout_test_session<F>(harness: LayoutTestHarness<F>) -> LayoutTestSession<F>
+    where
+        F: Fn(),
+    {
+        reset_runtime_for_layout_test(harness.viewport);
+        LayoutTestSession {
+            content: harness.content,
+            viewport: harness.viewport,
+            frame_origin: Instant::now(),
+            current_frame_nanos: 0,
+        }
+    }
+
+    pub fn pump_layout_test_session<F>(
+        session: &mut LayoutTestSession<F>,
+        frame_nanos: u64,
+    ) -> LayoutSnapshot
+    where
+        F: Fn(),
+    {
+        session.current_frame_nanos = frame_nanos;
+        let frame_time = session.frame_origin + Duration::from_nanos(frame_nanos);
+        begin_frame_clock(frame_time);
+        // Match renderer frame order so frame callbacks update state before build.
+        tick_frame_nanos_receivers();
+        let _ = build_component_tree(&session.content);
         let layout_dirty_nodes = take_layout_dirty_nodes();
         let screen_size = PxSize::new(
-            Px::new(self.viewport.0 as i32),
-            Px::new(self.viewport.1 as i32),
+            Px::new(session.viewport.0 as i32),
+            Px::new(session.viewport.1 as i32),
         );
 
         TesseraRuntime::with_mut(|runtime| {
@@ -83,6 +127,26 @@ where
         flush_pending_focus_callbacks();
 
         LayoutSnapshot::capture()
+    }
+
+    pub fn advance_layout_test_session_by_nanos<F>(
+        session: &mut LayoutTestSession<F>,
+        delta_nanos: u64,
+    ) -> LayoutSnapshot
+    where
+        F: Fn(),
+    {
+        pump_layout_test_session(
+            session,
+            session.current_frame_nanos.saturating_add(delta_nanos),
+        )
+    }
+
+    pub fn current_layout_test_frame_nanos<F>(session: &LayoutTestSession<F>) -> u64
+    where
+        F: Fn(),
+    {
+        session.current_frame_nanos
     }
 }
 
@@ -500,9 +564,44 @@ macro_rules! __assert_layout_expect {
     };
 }
 
+/// Assert layout relationships across multiple animation frames.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __assert_layout_frames {
+    ($session:ident) => {};
+    ($session:ident,) => {};
+    (
+        $session:ident,
+        $frame_nanos:expr => { $($expect:tt)* }
+        $(, $($rest:tt)*)?
+    ) => {{
+        let __tessera_layout_snapshot =
+            $crate::testing::__private::pump_layout_test_session(&mut $session, $frame_nanos);
+        $crate::__assert_layout_expect!(__tessera_layout_snapshot, $($expect)*);
+        $crate::__assert_layout_frames!($session $(, $($rest)*)?);
+    }};
+}
+
 /// Assert layout relationships in a headless Tessera layout test.
 #[macro_export]
 macro_rules! assert_layout {
+    (
+        viewport: ($width:expr, $height:expr),
+        content: $content:block,
+        expect: {
+            $first_frame_nanos:expr => { $($first_expect:tt)* }
+            $(, $frame_nanos:expr => { $($frame_expect:tt)* })* $(,)?
+        }
+    ) => {{
+        let mut __tessera_layout_session = $crate::testing::__private::start_layout_test_session(
+            $crate::testing::layout_test(|| $content).viewport_px($width, $height)
+        );
+        $crate::__assert_layout_frames!(
+            __tessera_layout_session,
+            $first_frame_nanos => { $($first_expect)* }
+            $(, $frame_nanos => { $($frame_expect)* })*
+        );
+    }};
     (
         viewport: ($width:expr, $height:expr),
         content: $content:block,
@@ -518,8 +617,9 @@ macro_rules! assert_layout {
 #[cfg(test)]
 mod tests {
     use crate::{
-        AccessibilityActionHandler, AccessibilityNode, ComputedData, LayoutInput, LayoutOutput,
-        LayoutPolicy, Modifier, NoopRenderPolicy, Px, PxPosition, SemanticsModifierNode, tessera,
+        AccessibilityActionHandler, AccessibilityNode, ComputedData, FrameNanosControl,
+        LayoutInput, LayoutOutput, LayoutPolicy, Modifier, NoopRenderPolicy, Px, PxPosition,
+        SemanticsModifierNode, receive_frame_nanos, remember, tessera,
     };
 
     #[derive(Clone, PartialEq)]
@@ -568,6 +668,32 @@ mod tests {
             Ok(ComputedData {
                 width: max_width,
                 height: current_y,
+            })
+        }
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct OffsetChildPolicy {
+        x: i32,
+    }
+
+    impl LayoutPolicy for OffsetChildPolicy {
+        fn measure(
+            &self,
+            input: &LayoutInput<'_>,
+            output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, crate::MeasurementError> {
+            let child_id = input
+                .children_ids()
+                .first()
+                .copied()
+                .expect("offset child policy requires a child");
+            let child = input.measure_child_in_parent_constraint(child_id)?;
+            output.place_child(child_id, PxPosition::new(Px::new(self.x), Px::ZERO));
+
+            Ok(ComputedData {
+                width: Px::new(self.x + child.width.raw()),
+                height: child.height,
             })
         }
     }
@@ -630,6 +756,35 @@ mod tests {
         tagged_box().tag("button".to_string()).width(120).height(32);
     }
 
+    #[tessera(crate)]
+    fn animated_layout_sample() {
+        let offset = remember(|| 0_i32);
+
+        receive_frame_nanos(move |frame_nanos| {
+            let next_offset = if frame_nanos >= 200_000_000 {
+                100
+            } else if frame_nanos >= 100_000_000 {
+                50
+            } else {
+                0
+            };
+            offset.set(next_offset);
+            if frame_nanos >= 200_000_000 {
+                FrameNanosControl::Stop
+            } else {
+                FrameNanosControl::Continue
+            }
+        });
+
+        crate::layout::layout_primitive()
+            .layout_policy(OffsetChildPolicy { x: offset.get() })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new())
+            .child(|| {
+                tagged_box().tag("moving".to_string()).width(20).height(20);
+            });
+    }
+
     #[test]
     fn assert_layout_macro_smoke() {
         crate::assert_layout! {
@@ -643,5 +798,55 @@ mod tests {
                 node("button_box").below("title_box").align_start_with("title_box").size(120, 32);
             }
         }
+    }
+
+    #[test]
+    fn assert_layout_macro_pumps_animation_frames() {
+        crate::assert_layout! {
+            viewport: (200, 100),
+            content: {
+                animated_layout_sample();
+            },
+            expect: {
+                0 => {
+                    node("moving").position(0, 0).size(20, 20);
+                },
+                100_000_000 => {
+                    node("moving").position(50, 0).size(20, 20);
+                },
+                200_000_000 => {
+                    node("moving").position(100, 0).size(20, 20);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn layout_test_session_pumps_animation_frames() {
+        let mut session = crate::testing::__private::start_layout_test_session(
+            crate::testing::layout_test(|| {
+                animated_layout_sample();
+            })
+            .viewport_px(200, 100),
+        );
+
+        let first = crate::testing::__private::pump_layout_test_session(&mut session, 0);
+        first.node("moving").position(0, 0).size(20, 20);
+
+        let mid = crate::testing::__private::advance_layout_test_session_by_nanos(
+            &mut session,
+            100_000_000,
+        );
+        mid.node("moving").position(50, 0).size(20, 20);
+
+        let end = crate::testing::__private::advance_layout_test_session_by_nanos(
+            &mut session,
+            100_000_000,
+        );
+        end.node("moving").position(100, 0).size(20, 20);
+        assert_eq!(
+            crate::testing::__private::current_layout_test_frame_nanos(&session),
+            200_000_000
+        );
     }
 }
