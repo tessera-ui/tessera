@@ -5,7 +5,7 @@
 //! Switch between views or filters with a connected control.
 
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusState,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusState,
     FocusTraversalPolicy, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier, Px,
     PxPosition, RenderSlot, accesskit::Role, layout::layout_primitive,
     modifier::FocusModifierExt as _, provide_context, tessera, use_context,
@@ -175,10 +175,6 @@ impl SegmentedButtonDefaults {
             disabled_inactive_border_color: disabled_border,
         }
     }
-}
-
-fn default_segmented_button_row_modifier() -> Modifier {
-    Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
 }
 
 /// # segmented_button
@@ -572,7 +568,7 @@ fn segmented_button_row_parts(
     equal_width: Option<bool>,
     content: Option<RenderSlot>,
 ) -> (Modifier, SegmentedButtonRowLayout, RenderSlot) {
-    let modifier = modifier.unwrap_or_else(default_segmented_button_row_modifier);
+    let modifier = modifier.unwrap_or_default();
     let content = content.unwrap_or_else(RenderSlot::empty);
     let overlap = Px::from(overlap.unwrap_or(SegmentedButtonDefaults::BORDER_WIDTH)).max(Px::ZERO);
     let cross_axis_alignment = cross_axis_alignment.unwrap_or(CrossAxisAlignment::Center);
@@ -604,15 +600,9 @@ impl LayoutPolicy for SegmentedButtonRowLayout {
             return Ok(ComputedData::ZERO);
         }
 
-        let row_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let row_constraint = *input.parent_constraint().as_ref();
         let child_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: row_constraint.width.get_max(),
-            },
+            AxisConstraint::new(Px::ZERO, row_constraint.width.resolve_max()),
             row_constraint.height,
         );
 
@@ -636,8 +626,7 @@ impl LayoutPolicy for SegmentedButtonRowLayout {
         }
 
         if self.equal_width && max_width > Px::ZERO {
-            let equal_constraint =
-                Constraint::new(DimensionValue::Fixed(max_width), row_constraint.height);
+            let equal_constraint = Constraint::new(max_width, row_constraint.height);
             let children_to_measure: Vec<_> = child_ids
                 .iter()
                 .map(|&child_id| (child_id, equal_constraint))
@@ -702,59 +691,13 @@ fn calculate_final_row_width(
     row_effective_constraint: &Constraint,
     total_children_measured_width: Px,
 ) -> Px {
-    match row_effective_constraint.width {
-        DimensionValue::Fixed(w) => w,
-        DimensionValue::Fill { min, max } => {
-            if let Some(max) = max {
-                let w = max;
-                if let Some(min) = min { w.max(min) } else { w }
-            } else {
-                panic!(
-                    "Fill width without max constraint is not supported in segmented button rows."
-                );
-            }
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut w = total_children_measured_width;
-            if let Some(min_w) = min {
-                w = w.max(min_w);
-            }
-            if let Some(max_w) = max {
-                w = w.min(max_w);
-            }
-            w
-        }
-    }
+    row_effective_constraint
+        .width
+        .clamp(total_children_measured_width)
 }
 
 fn calculate_final_row_height(row_effective_constraint: &Constraint, max_child_height: Px) -> Px {
-    match row_effective_constraint.height {
-        DimensionValue::Fixed(h) => h,
-        DimensionValue::Fill { min, max } => {
-            if let Some(max_h) = max {
-                let h = max_h;
-                if let Some(min_h) = min {
-                    h.max(min_h)
-                } else {
-                    h
-                }
-            } else {
-                panic!(
-                    "Fill height without max constraint is not supported in segmented button rows."
-                );
-            }
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut h = max_child_height;
-            if let Some(min_h) = min {
-                h = h.max(min_h);
-            }
-            if let Some(max_h) = max {
-                h = h.min(max_h);
-            }
-            h
-        }
-    }
+    row_effective_constraint.height.clamp(max_child_height)
 }
 
 fn calculate_cross_axis_offset(

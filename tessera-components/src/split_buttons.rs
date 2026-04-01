@@ -5,7 +5,7 @@
 //! Pair a primary action with a related secondary action or menu.
 
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput,
     LayoutPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, accesskit::Role,
     layout::layout_primitive, tessera, use_context,
 };
@@ -266,10 +266,6 @@ impl SplitButtonDefaults {
     }
 }
 
-fn default_split_button_layout_modifier() -> Modifier {
-    Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
-}
-
 #[allow(missing_docs)]
 impl SplitButtonLayoutBuilder {
     pub fn modifier(mut self, modifier: Modifier) -> Self {
@@ -422,7 +418,7 @@ pub fn split_button_layout(
     leading_button: Option<RenderSlot>,
     trailing_button: Option<RenderSlot>,
 ) {
-    let modifier = modifier.unwrap_or_else(default_split_button_layout_modifier);
+    let modifier = modifier.unwrap_or_default();
     let leading_button = leading_button.unwrap_or_else(RenderSlot::empty);
     let trailing_button = trailing_button.unwrap_or_else(RenderSlot::empty);
     let spacing = Px::from(spacing.unwrap_or(SplitButtonDefaults::SPACING)).max(Px::ZERO);
@@ -660,19 +656,10 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
             ));
         }
 
-        let layout_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let layout_constraint = *input.parent_constraint().as_ref();
         let child_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: layout_constraint.width.get_max(),
-            },
-            DimensionValue::Wrap {
-                min: None,
-                max: layout_constraint.height.get_max(),
-            },
+            AxisConstraint::new(Px::ZERO, layout_constraint.width.resolve_max()),
+            AxisConstraint::new(Px::ZERO, layout_constraint.height.resolve_max()),
         );
 
         let leading_id = child_ids[0];
@@ -685,14 +672,11 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
         let trailing_id = child_ids[1];
         let trailing_max_width = layout_constraint
             .width
-            .get_max()
+            .resolve_max()
             .map(|max| (max - leading_size.width - self.spacing).max(Px::ZERO));
         let trailing_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: trailing_max_width,
-            },
-            DimensionValue::Fixed(leading_size.height),
+            AxisConstraint::new(Px::ZERO, trailing_max_width),
+            leading_size.height,
         );
         let trailing_size = input
             .measure_children(vec![(trailing_id, trailing_constraint)])?
@@ -724,33 +708,8 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
     }
 }
 
-fn resolve_dimension(constraint: DimensionValue, content: Px) -> Px {
-    match constraint {
-        DimensionValue::Fixed(value) => value,
-        DimensionValue::Fill { min, max } => {
-            if let Some(max) = max {
-                let mut value = max;
-                if let Some(min) = min {
-                    value = value.max(min);
-                }
-                value
-            } else {
-                panic!(
-                    "Fill size without max constraint is not supported in split button layouts."
-                );
-            }
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut value = content;
-            if let Some(min) = min {
-                value = value.max(min);
-            }
-            if let Some(max) = max {
-                value = value.min(max);
-            }
-            value
-        }
-    }
+fn resolve_dimension(constraint: AxisConstraint, content: Px) -> Px {
+    constraint.clamp(content)
 }
 
 fn center_offset(child: Px, container: Px) -> Px {
