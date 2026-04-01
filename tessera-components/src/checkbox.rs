@@ -493,3 +493,50 @@ fn checkbox_inner(
             render_state_layer.render();
         });
 }
+
+#[cfg(test)]
+mod tests {
+    use super::{CHECKMARK_ANIMATION_DURATION, CheckboxController};
+
+    #[test]
+    fn checkbox_controller_animates_to_checked_state() {
+        let mut controller = CheckboxController::new(false);
+
+        controller.toggle();
+
+        assert!(controller.is_checked());
+        assert!(controller.is_animating());
+        assert_eq!(controller.progress(), 0.0);
+
+        let half_nanos = (CHECKMARK_ANIMATION_DURATION.as_nanos() / 2) as u64;
+        controller.update_progress(half_nanos);
+        let mid = controller.progress();
+        assert!(mid > 0.0 && mid < 1.0, "mid animation progress was {mid}");
+        assert!(controller.is_animating());
+
+        controller.update_progress(CHECKMARK_ANIMATION_DURATION.as_nanos() as u64);
+        assert_eq!(controller.progress(), 1.0);
+        assert!(!controller.is_animating());
+    }
+
+    #[test]
+    fn checkbox_controller_animates_to_unchecked_state() {
+        let mut controller = CheckboxController::new(true);
+
+        controller.toggle();
+
+        assert!(!controller.is_checked());
+        assert!(controller.is_animating());
+        assert_eq!(controller.progress(), 1.0);
+
+        let half_nanos = (CHECKMARK_ANIMATION_DURATION.as_nanos() / 2) as u64;
+        controller.update_progress(half_nanos);
+        let mid = controller.progress();
+        assert!(mid > 0.0 && mid < 1.0, "mid animation progress was {mid}");
+        assert!(controller.is_animating());
+
+        controller.update_progress(CHECKMARK_ANIMATION_DURATION.as_nanos() as u64);
+        assert_eq!(controller.progress(), 0.0);
+        assert!(!controller.is_animating());
+    }
+}

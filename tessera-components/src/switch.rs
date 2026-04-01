@@ -27,6 +27,9 @@ use crate::{
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(150);
 
+#[cfg(test)]
+const THUMB_TEST_TAG: &str = "__switch_thumb";
+
 /// Material Design 3 defaults for [`switch`].
 pub struct SwitchDefaults;
 
@@ -314,6 +317,34 @@ impl LayoutPolicy for SwitchLayout {
     }
 }
 
+#[derive(Clone, PartialEq)]
+struct SwitchThumbLayout {
+    size: Px,
+}
+
+impl LayoutPolicy for SwitchThumbLayout {
+    fn measure(
+        &self,
+        input: &LayoutInput<'_>,
+        output: &mut LayoutOutput<'_>,
+    ) -> Result<ComputedData, MeasurementError> {
+        let constraint = Constraint::new(
+            DimensionValue::Fixed(self.size),
+            DimensionValue::Fixed(self.size),
+        );
+
+        for child_id in input.children_ids() {
+            let _ = input.measure_child(*child_id, &constraint)?;
+            output.place_child(*child_id, PxPosition::ZERO);
+        }
+
+        Ok(ComputedData {
+            width: self.size,
+            height: self.size,
+        })
+    }
+}
+
 /// Controller for the `switch` component.
 pub struct SwitchController {
     checked: bool,
@@ -462,6 +493,48 @@ pub fn switch(
     #[prop(skip_setter)] controller: Option<State<SwitchController>>,
     child: Option<RenderSlot>,
 ) {
+    let controller = controller.unwrap_or_else(|| remember(|| SwitchController::new(checked)));
+    render_switch(
+        modifier,
+        on_toggle,
+        enabled,
+        width,
+        height,
+        track_color,
+        track_checked_color,
+        track_outline_color,
+        track_outline_width,
+        thumb_color,
+        thumb_checked_color,
+        thumb_checked_icon_color,
+        thumb_icon_color,
+        accessibility_label,
+        accessibility_description,
+        controller,
+        child,
+    );
+}
+
+#[allow(clippy::too_many_arguments)]
+fn render_switch(
+    modifier: Option<Modifier>,
+    on_toggle: Option<CallbackWith<bool, ()>>,
+    enabled: Option<bool>,
+    width: Option<Dp>,
+    height: Option<Dp>,
+    track_color: Option<Color>,
+    track_checked_color: Option<Color>,
+    track_outline_color: Option<Color>,
+    track_outline_width: Option<Dp>,
+    thumb_color: Option<Color>,
+    thumb_checked_color: Option<Color>,
+    thumb_checked_icon_color: Option<Color>,
+    thumb_icon_color: Option<Color>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    controller: State<SwitchController>,
+    child: Option<RenderSlot>,
+) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -478,7 +551,6 @@ pub fn switch(
     let thumb_checked_icon_color = thumb_checked_icon_color.unwrap_or(scheme.on_primary_container);
     let thumb_icon_color = thumb_icon_color.unwrap_or(scheme.surface_container_highest);
 
-    let controller = controller.unwrap_or_else(|| remember(|| SwitchController::new(checked)));
     let mut modifier = modifier.unwrap_or_default();
 
     if controller.with(|c| c.is_animating()) {
@@ -573,7 +645,6 @@ pub fn switch(
             + (SwitchDefaults::THUMB_DIAMETER.0 - off_diameter.0) * eased_progress_f64)
     };
     let thumb_size_px = thumb_diameter_dp.to_px();
-
     layout_primitive()
         .modifier(modifier)
         .layout_policy(SwitchLayout {
@@ -640,28 +711,268 @@ pub fn switch(
             } else {
                 state_layer.with_child(|| {});
             }
-            surface()
-                .modifier(Modifier::new().constrain(
-                    Some(DimensionValue::Fixed(thumb_size_px)),
-                    Some(DimensionValue::Fixed(thumb_size_px)),
-                ))
-                .style(SurfaceStyle::Filled {
-                    color: colors.thumb_color,
+            layout_primitive()
+                .layout_policy(SwitchThumbLayout {
+                    size: thumb_size_px,
                 })
-                .shape(Shape::Ellipse)
-                .content_color(colors.icon_color)
-                .with_child(move || {
-                    if let Some(child) = child {
-                        boxed()
-                            .modifier(Modifier::new().constrain(
-                                Some(DimensionValue::Fixed(thumb_size_px)),
-                                Some(DimensionValue::Fixed(thumb_size_px)),
-                            ))
-                            .alignment(Alignment::Center)
-                            .children(move || {
-                                child.render();
-                            });
-                    }
+                .modifier({
+                    let modifier = Modifier::new();
+                    #[cfg(test)]
+                    let modifier = modifier.semantics(crate::modifier::SemanticsArgs {
+                        test_tag: Some(THUMB_TEST_TAG.to_string()),
+                        ..Default::default()
+                    });
+                    modifier
+                })
+                .child(move || {
+                    surface()
+                        .modifier(Modifier::new().fill_max_size())
+                        .style(SurfaceStyle::Filled {
+                            color: colors.thumb_color,
+                        })
+                        .shape(Shape::Ellipse)
+                        .content_color(colors.icon_color)
+                        .with_child(move || {
+                            if let Some(child) = child {
+                                boxed()
+                                    .modifier(Modifier::new().fill_max_size())
+                                    .alignment(Alignment::Center)
+                                    .children(move || {
+                                        child.render();
+                                    });
+                            }
+                        });
                 });
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
+        NoopRenderPolicy, Px, PxPosition, layout::layout_primitive, receive_frame_nanos, remember,
+        tessera,
+    };
+
+    use crate::modifier::{ModifierExt as _, SemanticsArgs};
+    use crate::theme::{MaterialTheme, material_theme};
+
+    use super::{ANIMATION_DURATION, SwitchController, THUMB_TEST_TAG, render_switch};
+
+    #[derive(Clone, PartialEq)]
+    struct OffsetChildPolicy {
+        x: i32,
+    }
+
+    impl LayoutPolicy for OffsetChildPolicy {
+        fn measure(
+            &self,
+            input: &LayoutInput<'_>,
+            output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            let child_id = input
+                .children_ids()
+                .first()
+                .copied()
+                .expect("offset child policy requires a child");
+            let child = input.measure_child_in_parent_constraint(child_id)?;
+            output.place_child(child_id, PxPosition::new(Px::new(self.x), Px::ZERO));
+
+            Ok(ComputedData {
+                width: Px::new(self.x + child.width.raw()),
+                height: child.height,
+            })
+        }
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct FixedSizePolicy {
+        width: i32,
+        height: i32,
+    }
+
+    impl LayoutPolicy for FixedSizePolicy {
+        fn measure(
+            &self,
+            input: &LayoutInput<'_>,
+            output: &mut LayoutOutput<'_>,
+        ) -> Result<ComputedData, MeasurementError> {
+            for child_id in input.children_ids() {
+                let _ = input.measure_child_in_parent_constraint(*child_id)?;
+                output.place_child(*child_id, PxPosition::ZERO);
+            }
+
+            Ok(ComputedData {
+                width: Px::new(self.width),
+                height: Px::new(self.height),
+            })
+        }
+    }
+
+    #[tessera]
+    fn tagged_probe(tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedSizePolicy { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            }));
+    }
+
+    #[tessera]
+    fn animated_switch_progress_probe() {
+        let controller = remember(|| SwitchController::new(false));
+        let started = remember(|| false);
+
+        if !started.get() {
+            controller.with_mut(|c| c.toggle());
+            started.set(true);
+        }
+
+        if controller.with(|c| c.is_animating()) {
+            receive_frame_nanos(move |frame_nanos| {
+                let is_animating = controller.with_mut(|controller| {
+                    controller.update_progress(frame_nanos);
+                    controller.is_animating()
+                });
+                if is_animating {
+                    tessera_ui::FrameNanosControl::Continue
+                } else {
+                    tessera_ui::FrameNanosControl::Stop
+                }
+            });
+        }
+
+        let offset = controller.with(|c| (c.animation_progress() * 100.0).round() as i32);
+        layout_primitive()
+            .layout_policy(OffsetChildPolicy { x: offset })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new())
+            .child(|| {
+                tagged_probe()
+                    .tag("progress_probe".to_string())
+                    .width(20)
+                    .height(20);
+            });
+    }
+
+    #[tessera]
+    fn animated_switch_thumb_probe() {
+        let controller = remember(|| SwitchController::new(false));
+        let started = remember(|| false);
+
+        if !started.get() {
+            controller.with_mut(|c| c.toggle());
+            started.set(true);
+        }
+
+        material_theme()
+            .theme(MaterialTheme::default)
+            .child(move || {
+                render_switch(
+                    None,
+                    None,
+                    Some(true),
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    None,
+                    controller,
+                    None,
+                );
+            });
+    }
+
+    #[test]
+    fn switch_controller_animates_to_checked_state() {
+        let mut controller = SwitchController::new(false);
+
+        controller.toggle();
+
+        assert!(controller.is_checked());
+        assert!(controller.is_animating());
+        assert_eq!(controller.animation_progress(), 0.0);
+
+        let half_nanos = (ANIMATION_DURATION.as_nanos() / 2) as u64;
+        controller.update_progress(half_nanos);
+        let mid = controller.animation_progress();
+        assert!(mid > 0.0 && mid < 1.0, "mid animation progress was {mid}");
+        assert!(controller.is_animating());
+
+        controller.update_progress(ANIMATION_DURATION.as_nanos() as u64);
+        assert_eq!(controller.animation_progress(), 1.0);
+        assert!(!controller.is_animating());
+    }
+
+    #[test]
+    fn switch_controller_animates_to_unchecked_state() {
+        let mut controller = SwitchController::new(true);
+
+        controller.toggle();
+
+        assert!(!controller.is_checked());
+        assert!(controller.is_animating());
+        assert_eq!(controller.animation_progress(), 1.0);
+
+        let half_nanos = (ANIMATION_DURATION.as_nanos() / 2) as u64;
+        controller.update_progress(half_nanos);
+        let mid = controller.animation_progress();
+        assert!(mid > 0.0 && mid < 1.0, "mid animation progress was {mid}");
+        assert!(controller.is_animating());
+
+        controller.update_progress(ANIMATION_DURATION.as_nanos() as u64);
+        assert_eq!(controller.animation_progress(), 0.0);
+        assert!(!controller.is_animating());
+    }
+
+    #[test]
+    fn switch_animation_driver_advances_across_frames() {
+        tessera_ui::assert_layout! {
+            viewport: (200, 100),
+            content: {
+                animated_switch_progress_probe();
+            },
+            expect: {
+                0 => {
+                    node("progress_probe").position(0, 0).size(20, 20);
+                },
+                75_000_000 => {
+                    node("progress_probe").position(50, 0).size(20, 20);
+                },
+                150_000_000 => {
+                    node("progress_probe").position(100, 0).size(20, 20);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn switch_thumb_layout_grows_across_frames() {
+        tessera_ui::assert_layout! {
+            viewport: (200, 100),
+            content: {
+                animated_switch_thumb_probe();
+            },
+            expect: {
+                0 => {
+                    node(THUMB_TEST_TAG).size(16, 16);
+                },
+                75_000_000 => {
+                    node(THUMB_TEST_TAG).size(20, 20);
+                },
+                150_000_000 => {
+                    node(THUMB_TEST_TAG).size(24, 24);
+                }
+            }
+        }
+    }
 }
