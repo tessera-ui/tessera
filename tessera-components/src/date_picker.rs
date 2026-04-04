@@ -1096,7 +1096,7 @@ fn display_mode_toggle(state: State<DatePickerState>) {
         .style(SurfaceStyle::Filled {
             color: scheme.surface_container_high,
         })
-        .shape(Shape::capsule())
+        .shape(Shape::CAPSULE)
         .content_alignment(Alignment::Center)
         .on_click(move || {
             state.with_mut(|s| s.toggle_display_mode());
@@ -1133,7 +1133,7 @@ fn nav_button(label: &'static str, enabled: bool, on_click: Callback) {
         .style(SurfaceStyle::Filled {
             color: scheme.surface_container_low,
         })
-        .shape(Shape::capsule())
+        .shape(Shape::CAPSULE)
         .content_alignment(Alignment::Center)
         .enabled(enabled)
         .on_click(move || {

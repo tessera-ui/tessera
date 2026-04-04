@@ -57,7 +57,7 @@ impl SearchBarDefaults {
 
     /// Default shape for a collapsed search input field.
     pub fn input_shape() -> Shape {
-        Shape::capsule()
+        Shape::CAPSULE
     }
 
     /// Default shape for a docked search bar container.

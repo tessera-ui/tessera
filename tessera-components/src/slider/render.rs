@@ -57,7 +57,7 @@ pub(super) fn render_handle(layout: SliderLayout, width: tessera_ui::Px, colors:
             Some(AxisConstraint::exact(layout.handle_height)),
         ),
         colors.thumb,
-        Shape::capsule(),
+        Shape::CAPSULE,
     );
 }
 

@@ -118,10 +118,10 @@ impl ButtonGroupsLayout {
         };
         let active_button_shape = match style {
             ButtonGroupsStyle::Standard => Shape::rounded_rectangle(Dp(16.0)),
-            ButtonGroupsStyle::Connected => Shape::capsule(),
+            ButtonGroupsStyle::Connected => Shape::CAPSULE,
         };
         let inactive_button_shape = match style {
-            ButtonGroupsStyle::Standard => Shape::capsule(),
+            ButtonGroupsStyle::Standard => Shape::CAPSULE,
             ButtonGroupsStyle::Connected => Shape::rounded_rectangle(Dp(16.0)),
         };
         let inactive_button_shape_start = match style {

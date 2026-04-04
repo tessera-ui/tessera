@@ -165,7 +165,7 @@ pub fn button(
         modifier,
         color: color.unwrap_or(scheme.primary),
         content_color,
-        shape: shape.unwrap_or_else(Shape::capsule),
+        shape: shape.unwrap_or(Shape::CAPSULE),
         padding: padding.unwrap_or(ButtonDefaults::CONTENT_VERTICAL_PADDING),
         on_click,
         ripple_color: ripple_color.unwrap_or(scheme.on_primary),

@@ -667,7 +667,7 @@ fn render_switch(
             surface()
                 .modifier(Modifier::new().size(width, height))
                 .style(track_style)
-                .shape(Shape::capsule())
+                .shape(Shape::CAPSULE)
                 .show_state_layer(false)
                 .show_ripple(false)
                 .with_child(|| {});

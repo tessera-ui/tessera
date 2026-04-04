@@ -576,7 +576,7 @@ pub fn linear_progress_indicator(
         let segment_shape = if stroke_cap == ProgressStrokeCap::Butt {
             Shape::RECTANGLE
         } else {
-            Shape::capsule()
+            Shape::CAPSULE
         };
 
         let mut semantics = SemanticsArgs {

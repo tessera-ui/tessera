@@ -244,7 +244,7 @@ impl BadgeDefaults {
     pub const LARGE_SIZE: Dp = Dp(16.0);
 
     /// Default badge shape.
-    pub const SHAPE: Shape = Shape::capsule();
+    pub const SHAPE: Shape = Shape::CAPSULE;
 
     /// Horizontal padding for badges with content.
     pub const WITH_CONTENT_HORIZONTAL_PADDING: Dp = Dp(4.0);

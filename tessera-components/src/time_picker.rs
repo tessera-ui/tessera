@@ -600,7 +600,7 @@ fn step_button(label: &'static str, on_click: Callback) {
         .style(SurfaceStyle::Filled {
             color: scheme.surface_container_low,
         })
-        .shape(Shape::capsule())
+        .shape(Shape::CAPSULE)
         .content_alignment(Alignment::Center)
         .on_click_shared(on_click)
         .child(move || {
@@ -666,7 +666,7 @@ fn period_button(
                 .height(PERIOD_BUTTON_HEIGHT),
         )
         .style(style)
-        .shape(Shape::capsule())
+        .shape(Shape::CAPSULE)
         .content_alignment(Alignment::Center)
         .on_click(move || {
             state.with_mut(|s| s.set_period(period));
@@ -700,7 +700,7 @@ fn time_display_mode_toggle(state: State<TimePickerState>) {
         .style(SurfaceStyle::Filled {
             color: scheme.surface_container_high,
         })
-        .shape(Shape::capsule())
+        .shape(Shape::CAPSULE)
         .content_alignment(Alignment::Center)
         .on_click(move || {
             state.with_mut(|s| s.toggle_display_mode());

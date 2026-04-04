@@ -151,7 +151,7 @@ fn navigation_rail_item_view_content(
                 .style(SurfaceStyle::Filled {
                     color: indicator_color,
                 })
-                .shape(Shape::capsule())
+                .shape(Shape::CAPSULE)
                 .modifier(Modifier::new().constrain(
                     Some(AxisConstraint::exact(animated_indicator_width_px)),
                     Some(AxisConstraint::exact(indicator_height.to_px())),
@@ -164,7 +164,7 @@ fn navigation_rail_item_view_content(
                 .style(SurfaceStyle::Filled {
                     color: Color::TRANSPARENT,
                 })
-                .shape(Shape::capsule())
+                .shape(Shape::CAPSULE)
                 .modifier(Modifier::new().size(indicator_base_width, indicator_height))
                 .enabled(true)
                 .interaction_state(interaction_state)
@@ -174,7 +174,7 @@ fn navigation_rail_item_view_content(
                         .style(SurfaceStyle::Filled {
                             color: Color::TRANSPARENT,
                         })
-                        .shape(Shape::capsule())
+                        .shape(Shape::CAPSULE)
                         .modifier(Modifier::new().size(indicator_base_width, indicator_height))
                         .enabled(true)
                         .ripple_color(ripple_color)

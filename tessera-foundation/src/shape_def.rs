@@ -131,15 +131,13 @@ impl Shape {
         }
     }
 
-    /// A helper to create a uniform capsule on all corners.
-    pub const fn capsule() -> Self {
-        Shape::RoundedRectangle {
-            top_left: RoundedCorner::Capsule,
-            top_right: RoundedCorner::Capsule,
-            bottom_right: RoundedCorner::Capsule,
-            bottom_left: RoundedCorner::Capsule,
-        }
-    }
+    /// A uniform capsule on all corners.
+    pub const CAPSULE: Self = Shape::RoundedRectangle {
+        top_left: RoundedCorner::Capsule,
+        top_right: RoundedCorner::Capsule,
+        bottom_right: RoundedCorner::Capsule,
+        bottom_left: RoundedCorner::Capsule,
+    };
 
     /// Resolves a shape into pixel radii and per-corner G2 parameters for a
     /// given size.

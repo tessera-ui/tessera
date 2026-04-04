@@ -103,7 +103,7 @@ impl SegmentedButtonDefaults {
 
     /// Default shape for segmented buttons.
     pub fn shape() -> Shape {
-        Shape::capsule()
+        Shape::CAPSULE
     }
 
     /// Build the item shape for the button at `index` with `count` items.
