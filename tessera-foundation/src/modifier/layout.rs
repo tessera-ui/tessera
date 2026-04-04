@@ -157,7 +157,7 @@ fn resolve_axis_constraint(
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) struct PaddingModifierNode {
     pub padding: Padding,
 }
@@ -193,7 +193,7 @@ impl LayoutModifierNode for PaddingModifierNode {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) struct OffsetModifierNode {
     pub x: Dp,
     pub y: Dp,
@@ -216,7 +216,7 @@ impl LayoutModifierNode for OffsetModifierNode {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) struct ConstraintModifierNode {
     pub width_override: Option<AxisConstraint>,
     pub height_override: Option<AxisConstraint>,
@@ -243,7 +243,7 @@ impl LayoutModifierNode for ConstraintModifierNode {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Copy, Default, PartialEq)]
 pub(crate) struct MinimumInteractiveModifierNode;
 
 impl LayoutModifierNode for MinimumInteractiveModifierNode {

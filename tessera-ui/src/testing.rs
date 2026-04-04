@@ -617,9 +617,10 @@ macro_rules! assert_layout {
 #[cfg(test)]
 mod tests {
     use crate::{
-        AccessibilityActionHandler, AccessibilityNode, ComputedData, FrameNanosControl,
-        LayoutInput, LayoutOutput, LayoutPolicy, Modifier, NoopRenderPolicy, Px, PxPosition,
-        SemanticsModifierNode, receive_frame_nanos, remember, tessera,
+        AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, FrameNanosControl,
+        LayoutInput, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, LayoutOutput,
+        LayoutPolicy, Modifier, NoopRenderPolicy, Px, PxPosition, SemanticsModifierNode,
+        modifier::ModifierCapabilityExt as _, receive_frame_nanos, remember, tessera,
     };
 
     #[derive(Clone, PartialEq)]
@@ -712,6 +713,28 @@ mod tests {
         }
     }
 
+    #[derive(Clone, Copy, PartialEq)]
+    struct AnimatedWidthModifierNode {
+        width: i32,
+        height: i32,
+    }
+
+    impl LayoutModifierNode for AnimatedWidthModifierNode {
+        fn measure(
+            &self,
+            _input: &LayoutModifierInput<'_>,
+            child: &mut dyn LayoutModifierChild,
+            output: &mut LayoutOutput<'_>,
+        ) -> Result<crate::LayoutModifierOutput, crate::MeasurementError> {
+            let child_size = child.measure(&Constraint::exact(
+                Px::new(self.width),
+                Px::new(self.height),
+            ))?;
+            child.place(PxPosition::ZERO, output);
+            Ok(crate::LayoutModifierOutput { size: child_size })
+        }
+    }
+
     #[tessera(crate)]
     fn tagged_box(tag: String, width: i32, height: i32) {
         crate::layout::layout_primitive()
@@ -785,6 +808,36 @@ mod tests {
             });
     }
 
+    #[tessera(crate)]
+    fn animated_modifier_layout_sample() {
+        let width = remember(|| 20_i32);
+
+        receive_frame_nanos(move |frame_nanos| {
+            let next_width = if frame_nanos >= 200_000_000 {
+                100
+            } else if frame_nanos >= 100_000_000 {
+                50
+            } else {
+                20
+            };
+            width.set(next_width);
+            if frame_nanos >= 200_000_000 {
+                FrameNanosControl::Stop
+            } else {
+                FrameNanosControl::Continue
+            }
+        });
+
+        tagged_box()
+            .tag("modifier_box".to_string())
+            .width(1)
+            .height(20)
+            .modifier(Modifier::new().push_layout(AnimatedWidthModifierNode {
+                width: width.get(),
+                height: 20,
+            }));
+    }
+
     #[test]
     fn assert_layout_macro_smoke() {
         crate::assert_layout! {
@@ -848,5 +901,26 @@ mod tests {
             crate::testing::__private::current_layout_test_frame_nanos(&session),
             200_000_000
         );
+    }
+
+    #[test]
+    fn assert_layout_macro_pumps_modifier_driven_animation_frames() {
+        crate::assert_layout! {
+            viewport: (200, 100),
+            content: {
+                animated_modifier_layout_sample();
+            },
+            expect: {
+                0 => {
+                    node("modifier_box").size(20, 20);
+                },
+                100_000_000 => {
+                    node("modifier_box").size(50, 20);
+                },
+                200_000_000 => {
+                    node("modifier_box").size(100, 20);
+                }
+            }
+        }
     }
 }

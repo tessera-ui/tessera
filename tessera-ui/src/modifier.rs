@@ -143,7 +143,7 @@ pub trait ModifierCapabilityExt {
     /// Appends a layout modifier node to the current modifier chain.
     fn push_layout<N>(self, node: N) -> Self
     where
-        N: LayoutModifierNode;
+        N: LayoutModifierNode + PartialEq;
 
     /// Appends a draw modifier node to the current modifier chain.
     fn push_draw<N>(self, node: N) -> Self
@@ -227,9 +227,50 @@ enum FocusModifierOp {
     RevealHandler(CallbackWith<FocusRevealRequest, bool>),
 }
 
+trait ErasedLayoutModifierNode: Send + Sync + 'static {
+    fn node(&self) -> Arc<dyn LayoutModifierNode>;
+
+    fn measure_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
+
+    fn placement_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
+
+    fn as_any(&self) -> &dyn Any;
+}
+
+struct ComparableLayoutModifierNode<N>
+where
+    N: LayoutModifierNode + PartialEq,
+{
+    node: Arc<N>,
+}
+
+impl<N> ErasedLayoutModifierNode for ComparableLayoutModifierNode<N>
+where
+    N: LayoutModifierNode + PartialEq,
+{
+    fn node(&self) -> Arc<dyn LayoutModifierNode> {
+        self.node.clone()
+    }
+
+    fn measure_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|other| self.node.as_ref() == other.node.as_ref())
+    }
+
+    fn placement_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
+        self.measure_eq(other)
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[derive(Clone)]
 enum ModifierAction {
-    Layout(Arc<dyn LayoutModifierNode>),
+    Layout(Arc<dyn ErasedLayoutModifierNode>),
     Draw(Arc<dyn DrawModifierNode>),
     ParentData(Arc<dyn ParentDataModifierNode>),
     Build(Arc<dyn BuildModifierNode>),
@@ -355,9 +396,13 @@ impl Modifier {
 
     pub(crate) fn push_layout<N>(self, node: N) -> Self
     where
-        N: LayoutModifierNode,
+        N: LayoutModifierNode + PartialEq,
     {
-        self.push_action(ModifierAction::Layout(Arc::new(node)))
+        self.push_action(ModifierAction::Layout(Arc::new(
+            ComparableLayoutModifierNode {
+                node: Arc::new(node),
+            },
+        )))
     }
 
     pub(crate) fn push_draw<N>(self, node: N) -> Self
@@ -576,10 +621,54 @@ impl Modifier {
         collect_actions(self.tail.clone())
             .into_iter()
             .filter_map(|action| match action {
-                ModifierAction::Layout(node) => Some(node),
+                ModifierAction::Layout(node) => Some(node.node()),
                 _ => None,
             })
             .collect()
+    }
+
+    pub(crate) fn layout_measure_eq(&self, other: &Self) -> bool {
+        let lhs: Vec<_> = collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::Layout(node) => Some(node),
+                _ => None,
+            })
+            .collect();
+        let rhs: Vec<_> = collect_actions(other.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::Layout(node) => Some(node),
+                _ => None,
+            })
+            .collect();
+        lhs.len() == rhs.len()
+            && lhs
+                .iter()
+                .zip(rhs.iter())
+                .all(|(lhs, rhs)| lhs.measure_eq(rhs.as_ref()))
+    }
+
+    pub(crate) fn layout_placement_eq(&self, other: &Self) -> bool {
+        let lhs: Vec<_> = collect_actions(self.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::Layout(node) => Some(node),
+                _ => None,
+            })
+            .collect();
+        let rhs: Vec<_> = collect_actions(other.tail.clone())
+            .into_iter()
+            .filter_map(|action| match action {
+                ModifierAction::Layout(node) => Some(node),
+                _ => None,
+            })
+            .collect();
+        lhs.len() == rhs.len()
+            && lhs
+                .iter()
+                .zip(rhs.iter())
+                .all(|(lhs, rhs)| lhs.placement_eq(rhs.as_ref()))
     }
 
     pub(crate) fn draw_nodes(&self) -> Vec<Arc<dyn DrawModifierNode>> {
@@ -700,7 +789,7 @@ impl Modifier {
 impl ModifierCapabilityExt for Modifier {
     fn push_layout<N>(self, node: N) -> Self
     where
-        N: LayoutModifierNode,
+        N: LayoutModifierNode + PartialEq,
     {
         Modifier::push_layout(self, node)
     }
