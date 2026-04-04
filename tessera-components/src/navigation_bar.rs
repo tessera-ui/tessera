@@ -3,10 +3,11 @@
 //! ## Usage
 //!
 //! Use for bottom navigation between a small set of top-level destinations.
-use std::time::Duration;
+use std::{sync::Arc, time::Duration};
 
+use parking_lot::Mutex;
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusTraversalPolicy,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
     MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
@@ -23,7 +24,6 @@ use crate::{
     ripple_state::{RippleSpec, RippleState},
     row::row,
     shape_def::Shape,
-    spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
     theme::{ContentColor, MaterialTheme, provide_text_style},
@@ -34,38 +34,8 @@ const CONTAINER_HEIGHT: Dp = Dp(80.0);
 const INDICATOR_WIDTH: Dp = Dp(56.0);
 const INDICATOR_HEIGHT: Dp = Dp(32.0);
 const DIVIDER_HEIGHT: Dp = Dp(1.0);
-const ITEM_HORIZONTAL_SPACING: Dp = Dp(8.0);
 const INDICATOR_TO_LABEL_PADDING: Dp = Dp(4.0);
 const INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
-
-#[allow(missing_docs)]
-impl NavigationBarBuilder {
-    pub fn item(mut self, item: impl Into<NavigationBarItem>) -> Self {
-        self.props.items.push(item.into());
-        self
-    }
-}
-
-#[allow(missing_docs)]
-impl NavigationBarItemContentBuilder {
-    fn interaction_state_internal(mut self, interaction_state: State<InteractionState>) -> Self {
-        self.props.interaction_state = Some(interaction_state);
-        self
-    }
-
-    fn ripple_state_internal(mut self, ripple_state: State<RippleState>) -> Self {
-        self.props.ripple_state = Some(ripple_state);
-        self
-    }
-}
-
-#[allow(missing_docs)]
-impl NavigationBarItemBuilder {
-    fn controller_internal(mut self, controller: State<NavigationBarController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-}
 
 fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
     Color {
@@ -76,14 +46,33 @@ fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
     }
 }
 
+/// Controls label visibility for a navigation bar item.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NavigationBarLabelBehavior {
+    /// Always render the label.
+    #[default]
+    AlwaysShow,
+    /// Fade the label in only when the item is selected.
+    SelectedOnly,
+}
+
+#[derive(Clone)]
+struct NavigationBarCompositionContext {
+    controller: State<NavigationBarController>,
+    selected_index: usize,
+    previous_index: usize,
+    animation_progress: f32,
+    next_index: Arc<Mutex<usize>>,
+}
+
 #[tessera]
-fn navigation_bar_item_content(
-    item: NavigationBarItem,
+fn navigation_bar_item_view_content(
+    item: NavigationBarItemDefinition,
     is_selected: bool,
     was_selected: bool,
     animation_progress: f32,
-    #[prop(skip_setter)] interaction_state: Option<State<InteractionState>>,
-    #[prop(skip_setter)] ripple_state: Option<State<RippleState>>,
+    interaction_state: Option<State<InteractionState>>,
+    ripple_state: Option<State<RippleState>>,
 ) {
     let interaction_state = interaction_state.expect("interaction_state must be set");
     let ripple_state = ripple_state.expect("ripple_state must be set");
@@ -147,8 +136,8 @@ fn navigation_bar_item_content(
                 })
                 .shape(Shape::capsule())
                 .modifier(Modifier::new().constrain(
-                    Some(DimensionValue::Fixed(animated_indicator_width_px)),
-                    Some(DimensionValue::Fixed(INDICATOR_HEIGHT.to_px())),
+                    Some(AxisConstraint::exact(animated_indicator_width_px)),
+                    Some(AxisConstraint::exact(INDICATOR_HEIGHT.to_px())),
                 ))
                 .show_state_layer(false)
                 .show_ripple(false)
@@ -211,18 +200,14 @@ impl LayoutPolicy for NavigationBarItemLayout {
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let parent_width = match input.parent_constraint().width() {
-            DimensionValue::Fixed(v) => v,
-            DimensionValue::Wrap { max, .. } => max.unwrap_or(Px::ZERO),
-            DimensionValue::Fill { max, .. } => max.unwrap_or(Px::ZERO),
-        };
+        let parent_width = input
+            .parent_constraint()
+            .width()
+            .resolve_max()
+            .unwrap_or(Px::ZERO);
 
         let min_height = CONTAINER_HEIGHT.to_px();
-        let parent_height = match input.parent_constraint().height() {
-            DimensionValue::Fixed(v) => v.max(min_height),
-            DimensionValue::Wrap { min, .. } => min.unwrap_or(min_height).max(min_height),
-            DimensionValue::Fill { min, .. } => min.unwrap_or(min_height).max(min_height),
-        };
+        let parent_height = input.parent_constraint().height().clamp(min_height);
 
         let indicator_background_id = input.children_ids()[0];
         let indicator_ripple_id = input.children_ids()[1];
@@ -243,16 +228,7 @@ impl LayoutPolicy for NavigationBarItemLayout {
             None
         };
 
-        let child_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-        );
+        let child_constraint = Constraint::NONE;
 
         let indicator_size = input.measure_child(indicator_background_id, &child_constraint)?;
         let indicator_ripple_size = input.measure_child(indicator_ripple_id, &child_constraint)?;
@@ -357,10 +333,10 @@ impl LayoutPolicy for NavigationBarItemLayout {
 }
 
 #[tessera]
-fn navigation_bar_item(
-    #[prop(skip_setter)] controller: Option<State<NavigationBarController>>,
+fn navigation_bar_item_view(
+    controller: Option<State<NavigationBarController>>,
     index: usize,
-    item: NavigationBarItem,
+    item: NavigationBarItemDefinition,
     selected_index: usize,
     previous_index: usize,
     animation_progress: f32,
@@ -412,55 +388,88 @@ fn navigation_bar_item(
     layout_primitive().modifier(modifier).child({
         let item = item.clone();
         move || {
-            navigation_bar_item_content()
+            navigation_bar_item_view_content()
                 .item(item.clone())
                 .is_selected(is_selected)
                 .was_selected(was_selected)
                 .animation_progress(animation_progress)
-                .interaction_state_internal(interaction_state)
-                .ripple_state_internal(ripple_state);
+                .interaction_state(interaction_state)
+                .ripple_state(ripple_state);
         }
     });
 }
 
-/// Controls label visibility for a navigation bar item.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NavigationBarLabelBehavior {
-    /// Always render the label.
-    AlwaysShow,
-    /// Fade the label in only when the item is selected.
-    SelectedOnly,
+#[derive(Clone, PartialEq, Default)]
+struct NavigationBarItemDefinition {
+    label: String,
+    icon: Option<RenderSlot>,
+    on_click: Callback,
+    label_behavior: NavigationBarLabelBehavior,
 }
 
-/// Item configuration for [`navigation_bar`].
-#[derive(Clone, PartialEq)]
-pub struct NavigationBarItem {
-    /// Text label shown under the icon.
-    pub label: String,
-    /// Optional icon rendered above the label.
-    pub icon: Option<RenderSlot>,
-    /// Callback invoked after selection changes to this item.
-    pub on_click: Callback,
-    /// Whether the label is always visible or only appears when selected.
-    pub label_behavior: NavigationBarLabelBehavior,
-}
+/// # navigation_bar_item
+///
+/// Renders a single destination inside [`navigation_bar`].
+///
+/// ## Usage
+///
+/// Declare one primary destination in a navigation bar content slot.
+///
+/// ## Parameters
+///
+/// - `label` — text label shown under the icon.
+/// - `icon` — optional icon rendered above the label.
+/// - `on_click` — callback invoked after the item becomes selected.
+/// - `label_behavior` — whether the label is always shown or only when
+///   selected.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_components::navigation_bar::{navigation_bar, navigation_bar_item};
+/// use tessera_ui::tessera;
+///
+/// #[tessera]
+/// fn demo() {
+///     navigation_bar().content(|| {
+///         navigation_bar_item().label("Home");
+///     });
+/// }
+/// ```
+#[tessera]
+pub fn navigation_bar_item(
+    #[prop(into)] label: String,
+    icon: Option<RenderSlot>,
+    on_click: Callback,
+    label_behavior: NavigationBarLabelBehavior,
+) {
+    let composition = use_context::<NavigationBarCompositionContext>()
+        .expect("navigation_bar_item must be used inside navigation_bar")
+        .get();
+    let index = {
+        let mut next_index = composition.next_index.lock();
+        let index = *next_index;
+        *next_index += 1;
+        index
+    };
 
-impl NavigationBarItem {
-    /// Creates a navigation item with the required label.
-    pub fn new(label: impl Into<String>) -> Self {
-        Self {
-            label: label.into(),
-            icon: None,
-            on_click: Callback::noop(),
-            label_behavior: NavigationBarLabelBehavior::AlwaysShow,
-        }
-    }
-}
-
-impl Default for NavigationBarItem {
-    fn default() -> Self {
-        Self::new("")
-    }
+    layout_primitive()
+        .modifier(Modifier::new().weight(1.0))
+        .child(move || {
+            let item = NavigationBarItemDefinition {
+                label: label.clone(),
+                icon,
+                on_click,
+                label_behavior,
+            };
+            navigation_bar_item_view()
+                .controller(composition.controller)
+                .index(index)
+                .item(item)
+                .selected_index(composition.selected_index)
+                .previous_index(composition.previous_index)
+                .animation_progress(composition.animation_progress);
+        });
 }
 
 /// # navigation_bar
@@ -474,26 +483,24 @@ impl Default for NavigationBarItem {
 /// ## Parameters
 ///
 /// - `controller` — optional external controller.
-/// - `items` — navigation items rendered in order.
+/// - `content` — item declarations rendered inside the bar.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::navigation_bar::{NavigationBarItem, navigation_bar};
+/// use tessera_components::navigation_bar::{navigation_bar, navigation_bar_item};
 /// use tessera_ui::tessera;
 ///
 /// #[tessera]
 /// fn demo() {
-///     navigation_bar()
-///         .item(NavigationBarItem::new("Home"))
-///         .item(NavigationBarItem::new("Search"));
+///     navigation_bar().content(|| {
+///         navigation_bar_item().label("Home");
+///         navigation_bar_item().label("Search");
+///     });
 /// }
 /// ```
 #[tessera]
-pub fn navigation_bar(
-    controller: Option<State<NavigationBarController>>,
-    items: Vec<NavigationBarItem>,
-) {
+pub fn navigation_bar(controller: Option<State<NavigationBarController>>, content: RenderSlot) {
     let controller = controller.unwrap_or_else(|| remember(|| NavigationBarController::new(0)));
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -516,21 +523,28 @@ pub fn navigation_bar(
     }
     let selected_index = controller.with(|c| c.selected());
     let previous_index = controller.with(|c| c.previous_selected());
+    let composition = NavigationBarCompositionContext {
+        controller,
+        selected_index,
+        previous_index,
+        animation_progress,
+        next_index: Arc::new(Mutex::new(0)),
+    };
 
     let modifier = Modifier::new()
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout_primitive().modifier(modifier).child({
-        let items = items.clone();
+        let composition = composition.clone();
         move || {
-            let items = items.clone();
+            let composition = composition.clone();
             surface()
                 .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
                 .style(scheme.surface_container.into())
                 .elevation(Dp(3.0))
                 .block_input(true)
                 .with_child(move || {
-                    let items = items.clone();
+                    let composition = composition.clone();
                     let separator_color = scheme.outline_variant.with_alpha(0.12);
                     column()
                         .modifier(Modifier::new().fill_max_size())
@@ -545,32 +559,19 @@ pub fn navigation_bar(
                                     .with_child(|| {});
                             };
 
-                            let items = items.clone();
+                            let content_context = composition.clone();
                             row()
                                 .modifier(Modifier::new().fill_max_size().weight(1.0))
                                 .main_axis_alignment(MainAxisAlignment::Start)
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .children(move || {
-                                    let last_index = items.len().saturating_sub(1);
-                                    for (index, item) in items.iter().cloned().enumerate() {
-                                        layout_primitive()
-                                            .modifier(Modifier::new().weight(1.0))
-                                            .child(move || {
-                                                navigation_bar_item()
-                                                    .controller_internal(controller)
-                                                    .index(index)
-                                                    .item(item.clone())
-                                                    .selected_index(selected_index)
-                                                    .previous_index(previous_index)
-                                                    .animation_progress(animation_progress);
-                                            });
-
-                                        if index != last_index {
-                                            spacer().modifier(
-                                                Modifier::new().width(ITEM_HORIZONTAL_SPACING),
-                                            );
-                                        }
-                                    }
+                                    let provided_context = content_context.clone();
+                                    provide_context(
+                                        move || provided_context.clone(),
+                                        move || {
+                                            content.render();
+                                        },
+                                    );
                                 });
                         });
                 });
