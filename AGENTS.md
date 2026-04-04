@@ -46,6 +46,11 @@ This document defines how You should assist in the Tessera project to ensure cod
 - For optional external controllers, use `Option<State<...>>`; when `None`, create internal state with `remember`.
 - Callback parameters should use `Callback` / `CallbackWith<...>`.
 - Slot parameters should use `RenderSlot` / slot wrappers as needed by signature.
+- Do not add `#[prop(skip_setter)]` to `Option<T>` just to keep builder setters "clean". The macro already generates setters that accept `T` and store `Some(T)`.
+- Prefer `#[prop(into)]` for public `Option<T>` fields whose inner type has a useful conversion surface.
+- Prefer `#[prop(render_slot)]` for public `RenderSlot` / `Option<RenderSlot>` parameters so the generated builder supports closure-style slot setters directly.
+- Reserve `#[prop(skip_setter)]` for true internal plumbing fields that must not appear in the public builder surface. Do not use it on public authoring parameters that should already be expressible through the macro-generated setters.
+- Exception: when a public builder needs a deliberately custom semantic surface (for example, mutually exclusive modes such as `title(...)` vs `label(...)`), use hidden backing fields with `#[prop(skip_setter)]` and expose explicit hand-written semantic setters instead of leaking mechanical field setters.
 - `Callback`/`RenderSlot` are immutable handles in practice; do not rely on closure hot-swap semantics.
 - If callback behavior depends on changing values, capture `State<T>` (or other stable handles) and read latest values at call time.
 - Do not add runtime callback/slot helper wrappers (`callback`, `callback_with`, `render_slot`, `render_slot_with`); construct handles directly via `Callback::new`, `CallbackWith::new`, `RenderSlot::new`, and `RenderSlotWith::new`.
@@ -58,7 +63,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 ## 📏 Layout & Measurement System
 
-- Use `Constraint` and `DimensionValue` to describe size constraints.
+- Use `Constraint` and interval-based `AxisConstraint` to describe size constraints.
 - `measure_nodes` supports parallel measurement of multiple child nodes.
 - `place_node` is used to position child nodes.
 - Default layout: If no layout policy is attached to the current node, `DefaultLayoutPolicy` stacks children at (0,0), and the container size is the minimal bounding rectangle.
