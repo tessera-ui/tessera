@@ -1,23 +1,12 @@
 struct GlassUniforms {
-    // Grouped by alignment to match Rust struct and std140 layout.
-    // vec4s
     tint_color: vec4<f32>,
     rect_uv_bounds: vec4<f32>,
-    corner_radii: vec4<f32>, // top-left, top-right, bottom-right, bottom-left
-    corner_g2: vec4<f32>,    // per-corner G2 parameters
+    corner_radii: vec4<f32>,
+    corner_g2: vec4<f32>,
     clip_rect_uv: vec4<f32>,
-
-    // vec2s
     rect_size_px: vec2<f32>,
     ripple_center: vec2<f32>,
-
-    // f32s
     shape_type: f32,
-    dispersion_height: f32,
-    chroma_multiplier: f32,
-    refraction_height: f32,
-    refraction_amount: f32,
-    eccentric_factor: f32,
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
@@ -26,20 +15,20 @@ struct GlassUniforms {
     ripple_strength: f32,
     border_width: f32,
     sdf_cache_enabled: f32,
-    screen_size: vec2<f32>, // Screen dimensions
-    light_source: vec2<f32>, // Light source position in world coordinates
-    light_scale: f32, // Light intensity scale factor
 };
+
+const LENS_SOURCE_OVERSCAN_SCALE: f32 = 1.06;
+const LENS_CENTER_SHRINK_SCALE: f32 = 1.10;
+const LENS_EDGE_WIDTH_FACTOR: f32 = 0.24;
+const LENS_EDGE_WIDTH_MIN_PX: f32 = 14.0;
+const LENS_EDGE_WIDTH_MAX_PX: f32 = 28.0;
+const LENS_EDGE_ENLARGE_STRENGTH_FACTOR: f32 = 0.52;
+const LENS_EDGE_ENLARGE_STRENGTH_MIN_PX: f32 = 12.0;
+const LENS_EDGE_ENLARGE_STRENGTH_MAX_PX: f32 = 28.0;
+const LENS_EDGE_BLEND_EXPONENT: f32 = 1.9;
 
 struct GlassInstances {
     instances: array<GlassUniforms>,
-};
-
-struct RefractionResult {
-    color: vec4<f32>,
-    sample_uv: vec2<f32>,
-    refracted_vector: vec2<f32>,
-    px_to_uv_ratio: vec2<f32>,
 }
 
 @group(0) @binding(0) var<storage, read> uniforms: GlassInstances;
@@ -50,7 +39,7 @@ struct RefractionResult {
 
 struct VertexOutput {
     @builtin(position) clip_position: vec4<f32>,
-    @location(0) uv: vec2<f32>, // Local UV [0, 1]
+    @location(0) uv: vec2<f32>,
     @location(1) @interpolate(flat) instance_index: u32,
 };
 
@@ -63,22 +52,16 @@ fn vs_main(
     let rect_uv_min = instance.rect_uv_bounds.xy;
     let rect_uv_max = instance.rect_uv_bounds.zw;
 
-    // Define a unit quad (from 0,0 to 1,1). These are the local UVs.
     let local_uvs = array<vec2<f32>, 4>(
-        vec2(0.0, 0.0), // Top-left
-        vec2(0.0, 1.0), // Bottom-left
-        vec2(1.0, 1.0), // Bottom-right
-        vec2(1.0, 0.0)  // Top-right
+        vec2(0.0, 0.0),
+        vec2(0.0, 1.0),
+        vec2(1.0, 1.0),
+        vec2(1.0, 0.0)
     );
 
     let indices = array<u32, 6>(0, 1, 2, 0, 2, 3);
     let local_uv = local_uvs[indices[vertex_index]];
-
-    // Map local UV to the instance's global UV space
     let global_uv = rect_uv_min + local_uv * (rect_uv_max - rect_uv_min);
-
-    // Convert global UV coordinates [0, 1] to clip space coordinates [-1, 1].
-    // Y is flipped in clip space (positive is up).
     let clip_pos = vec2<f32>(
         global_uv.x * 2.0 - 1.0,
         -(global_uv.y * 2.0 - 1.0)
@@ -86,17 +69,9 @@ fn vs_main(
 
     var out: VertexOutput;
     out.clip_position = vec4<f32>(clip_pos, 0.0, 1.0);
-    out.uv = local_uv; // Pass the LOCAL UV to the fragment shader
+    out.uv = local_uv;
     out.instance_index = instance_index;
     return out;
-}
-
-fn circle_map(x: f32) -> f32 {
-    return 1.0 - sqrt(1.0 - x * x);
-}
-
-fn normal_to_tangent(normal: vec2<f32>) -> vec2<f32> {
-    return vec2<f32>(normal.y, -normal.x);
 }
 
 fn sdf_g2_rounded_box(p: vec2<f32>, b: vec2<f32>, r: vec4<f32>, k: vec4<f32>) -> f32 {
@@ -218,212 +193,55 @@ fn evaluate_shape(
     return vec3<f32>(sd, normal);
 }
 
-fn to_linear_srgb(srgb: vec3<f32>) -> vec3<f32> {
-    let cutoff = vec3<f32>(0.04045);
-    let lower = srgb / vec3<f32>(12.92);
-    let higher = pow((srgb + vec3<f32>(0.055)) / vec3<f32>(1.055), vec3<f32>(2.4));
-    return select(higher, lower, srgb <= cutoff);
-}
-
-fn from_linear_srgb(linear: vec3<f32>) -> vec3<f32> {
-    let cutoff = vec3<f32>(0.0031308);
-    let lower = linear * vec3<f32>(12.92);
-    let higher = vec3<f32>(1.055) * pow(linear, vec3<f32>(1.0 / 2.4)) - vec3<f32>(0.055);
-    return select(higher, lower, linear <= cutoff);
-}
-
-fn saturate_color(color: vec4<f32>, amount: f32) -> vec4<f32> {
-    let linear_srgb = to_linear_srgb(color.rgb);
-    let rgb_to_y = vec3<f32>(0.2126, 0.7152, 0.0722);
-    let y = dot(linear_srgb, rgb_to_y);
-    let gray = vec3<f32>(y);
-    let adjusted_linear_srgb = mix(gray, linear_srgb, amount);
-    let adjusted_srgb = from_linear_srgb(adjusted_linear_srgb);
-    return vec4<f32>(adjusted_srgb, color.a);
-}
-
 fn rand(co: vec2<f32>) -> f32 {
     return fract(sin(dot(co.xy, vec2<f32>(12.9898, 78.233))) * 43758.5453);
 }
 
-fn sample_with_offset(
-    base_uv: vec2<f32>,
-    offset_uv: vec2<f32>,
-    min_uv: vec2<f32>,
-    max_uv: vec2<f32>
-) -> vec4<f32> {
-    let uv = clamp(base_uv + offset_uv, min_uv, max_uv);
-    return textureSampleLevel(t_diffuse, s_diffuse, uv, 0.0);
+fn blend_overlay(base: vec3<f32>, blend: vec3<f32>) -> vec3<f32> {
+    let multiply = 2.0 * base * blend;
+    let screen = 1.0 - 2.0 * (1.0 - base) * (1.0 - blend);
+    return select(screen, multiply, base < vec3<f32>(0.5));
 }
 
-fn refraction_sample_with_eval(
+fn lens_sample_uv(
     instance: GlassUniforms,
-    local_coord: vec2<f32>,
     centered_coord: vec2<f32>,
     half_size: vec2<f32>,
-    k: vec4<f32>,
     shape_eval: vec3<f32>
-) -> RefractionResult {
+) -> vec2<f32> {
     let rect_uv_start = instance.rect_uv_bounds.xy;
     let px_to_uv_ratio = (instance.rect_uv_bounds.zw - rect_uv_start) / instance.rect_size_px;
     let min_uv = instance.clip_rect_uv.xy;
     let max_uv = instance.clip_rect_uv.zw;
-    let base_uv = rect_uv_start + local_coord * px_to_uv_ratio;
 
     let sd = shape_eval.x;
+    let normal = shape_eval.yz;
 
-    var refracted_coord = local_coord;
-    if sd < 0.0 && -sd < instance.refraction_height {
-        let normal = shape_eval.yz;
-
-        let refracted_distance = circle_map(1.0 - (-sd / instance.refraction_height)) * -instance.refraction_amount;
-        let refracted_direction = normalize(normal + instance.eccentric_factor * normalize(centered_coord));
-
-        let uv_offset_dir = refracted_direction * px_to_uv_ratio;
-        let uv_offset = uv_offset_dir * refracted_distance;
-
-        let to_max = max_uv - base_uv;
-        let to_min = base_uv - min_uv;
-        let avail = select(to_min, to_max, uv_offset >= vec2<f32>(0.0, 0.0));
-
-        let overflow_vec = max(abs(uv_offset) - avail, vec2<f32>(0.0, 0.0));
-        let overflow = max(overflow_vec.x, overflow_vec.y);
-
-        let softness_uv = max(1e-6, 2.0 * max(px_to_uv_ratio.x, px_to_uv_ratio.y));
-        let fade = clamp(1.0 - overflow / softness_uv, 0.0, 1.0);
-
-        refracted_coord = local_coord + (refracted_distance * fade) * refracted_direction;
-    }
-
-    var sample_uv = rect_uv_start + refracted_coord * px_to_uv_ratio;
-    sample_uv = clamp(sample_uv, min_uv, max_uv);
-    let color = textureSampleLevel(t_diffuse, s_diffuse, sample_uv, 0.0);
-
-    return RefractionResult(
-        color,
-        sample_uv,
-        refracted_coord - local_coord,
-        px_to_uv_ratio
+    let min_dimension = min(instance.rect_size_px.x, instance.rect_size_px.y);
+    let edge_width_px = clamp(
+        min_dimension * LENS_EDGE_WIDTH_FACTOR,
+        LENS_EDGE_WIDTH_MIN_PX,
+        LENS_EDGE_WIDTH_MAX_PX
     );
-}
-
-fn refraction_color_with_eval(
-    instance: GlassUniforms,
-    local_coord: vec2<f32>,
-    centered_coord: vec2<f32>,
-    half_size: vec2<f32>,
-    k: vec4<f32>,
-    shape_eval: vec3<f32>
-) -> vec4<f32> {
-    let result = refraction_sample_with_eval(
-        instance,
-        local_coord,
-        centered_coord,
-        half_size,
-        k,
-        shape_eval
+    let edge_enlarge_strength_px = clamp(
+        min_dimension * LENS_EDGE_ENLARGE_STRENGTH_FACTOR,
+        LENS_EDGE_ENLARGE_STRENGTH_MIN_PX,
+        LENS_EDGE_ENLARGE_STRENGTH_MAX_PX
     );
-    return result.color;
-}
+    let edge_exponent = LENS_EDGE_BLEND_EXPONENT;
 
-fn refraction_color(instance: GlassUniforms, local_coord: vec2<f32>, size: vec2<f32>, k: vec4<f32>) -> vec4<f32> {
-    let half_size = size * 0.5;
-    let centered_coord = local_coord - half_size;
-    let shape_eval = evaluate_shape(instance, centered_coord, half_size, k);
-    let result = refraction_sample_with_eval(
-        instance,
-        local_coord,
-        centered_coord,
-        half_size,
-        k,
-        shape_eval
-    );
-    return result.color;
-}
+    let overscanned_coord = centered_coord / LENS_SOURCE_OVERSCAN_SCALE;
+    let center_shrunk_coord = overscanned_coord * LENS_CENTER_SHRINK_SCALE;
+    let interior_distance = max(-sd, 0.0);
+    let edge_t = clamp(1.0 - interior_distance / edge_width_px, 0.0, 1.0);
+    let edge_factor = pow(edge_t, edge_exponent);
+    let edge_enlarged_coord =
+        overscanned_coord - normal * edge_enlarge_strength_px * edge_factor;
+    let distorted_coord = mix(center_shrunk_coord, edge_enlarged_coord, edge_factor);
 
-fn dispersion_color_on_refracted(
-    instance: GlassUniforms,
-    local_coord: vec2<f32>,
-    size: vec2<f32>,
-    k: vec4<f32>,
-    base_shape_eval: vec3<f32>
-) -> vec4<f32> {
-    let half_size = size * 0.5;
-    let centered_coord = local_coord - half_size;
-    let sd = base_shape_eval.x;
-
-    let base_result = refraction_sample_with_eval(
-        instance,
-        local_coord,
-        centered_coord,
-        half_size,
-        k,
-        base_shape_eval
-    );
-    let base_refracted = base_result.color;
-
-    if sd < 0.0 && -sd < instance.dispersion_height && instance.dispersion_height > 0.0 {
-        let chromatic_aberration = max(instance.chroma_multiplier - 1.0, 0.0);
-        if chromatic_aberration <= 0.0 {
-            return base_refracted;
-        }
-
-        let normalized_area = (centered_coord.x * centered_coord.y)
-            / max(half_size.x * half_size.y, 1e-6);
-        let dispersion_intensity = chromatic_aberration * normalized_area;
-        if abs(dispersion_intensity) <= 1e-4 {
-            return base_refracted;
-        }
-
-        let min_uv = instance.clip_rect_uv.xy;
-        let max_uv = instance.clip_rect_uv.zw;
-        let dispersion_uv = base_result.refracted_vector * base_result.px_to_uv_ratio * dispersion_intensity;
-
-        var color = vec4<f32>(0.0);
-
-        let red = sample_with_offset(base_result.sample_uv, dispersion_uv, min_uv, max_uv);
-        color.r += red.r / 3.5;
-        color.a += red.a / 7.0;
-
-        let orange = sample_with_offset(base_result.sample_uv, dispersion_uv * (2.0 / 3.0), min_uv, max_uv);
-        color.r += orange.r / 3.5;
-        color.g += orange.g / 7.0;
-        color.a += orange.a / 7.0;
-
-        let yellow = sample_with_offset(base_result.sample_uv, dispersion_uv * (1.0 / 3.0), min_uv, max_uv);
-        color.r += yellow.r / 3.5;
-        color.g += yellow.g / 3.5;
-        color.a += yellow.a / 7.0;
-
-        let green = sample_with_offset(base_result.sample_uv, vec2<f32>(0.0), min_uv, max_uv);
-        color.g += green.g / 3.5;
-        color.a += green.a / 7.0;
-
-        let cyan = sample_with_offset(base_result.sample_uv, -dispersion_uv * (1.0 / 3.0), min_uv, max_uv);
-        color.g += cyan.g / 3.5;
-        color.b += cyan.b / 3.0;
-        color.a += cyan.a / 7.0;
-
-        let blue = sample_with_offset(base_result.sample_uv, -dispersion_uv * (2.0 / 3.0), min_uv, max_uv);
-        color.b += blue.b / 3.0;
-        color.a += blue.a / 7.0;
-
-        let purple = sample_with_offset(base_result.sample_uv, -dispersion_uv, min_uv, max_uv);
-        color.r += purple.r / 7.0;
-        color.b += purple.b / 3.0;
-        color.a += purple.a / 7.0;
-
-        return color;
-    }
-
-    return base_refracted;
-}
-
-fn blend_overlay(base: vec3<f32>, blend: vec3<f32>) -> vec3<f32> {
-    // Multiply mode darkens when base is dark, screen mode lightens when base is bright.
-    let multiply = 2.0 * base * blend;
-    let screen = 1.0 - 2.0 * (1.0 - base) * (1.0 - blend);
-    return select(screen, multiply, base < vec3<f32>(0.5));
+    let sample_coord = distorted_coord + half_size;
+    let sample_uv = rect_uv_start + sample_coord * px_to_uv_ratio;
+    return clamp(sample_uv, min_uv, max_uv);
 }
 
 @fragment
@@ -436,33 +254,13 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
 
     let shape_eval = evaluate_shape(instance, centered_coord, half_size, instance.corner_g2);
     let sd = shape_eval.x;
+    let sample_uv = lens_sample_uv(instance, centered_coord, half_size, shape_eval);
 
-    var base_color: vec4<f32>;
-    if instance.dispersion_height > 0.0 {
-        base_color = dispersion_color_on_refracted(
-            instance,
-            local_coord,
-            instance.rect_size_px,
-            instance.corner_g2,
-            shape_eval
-        );
-    } else {
-        base_color = refraction_color_with_eval(
-            instance,
-            local_coord,
-            centered_coord,
-            half_size,
-            instance.corner_g2,
-            shape_eval
-        );
-    }
-
+    let base_color = textureSampleLevel(t_diffuse, s_diffuse, sample_uv, 0.0);
     var color = base_color.rgb;
 
-    let p_pixel = in.uv * instance.rect_size_px;
     let center_pixel = instance.ripple_center * instance.rect_size_px;
-    let dist_pixels = distance(p_pixel, center_pixel);
-
+    let dist_pixels = distance(local_coord, center_pixel);
     let min_dimension = min(instance.rect_size_px.x, instance.rect_size_px.y);
     let radius_pixels = instance.ripple_radius * min_dimension;
 
@@ -476,8 +274,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         color = mix(color, instance.tint_color.rgb, tint_weight);
     }
 
-    color = saturate_color(vec4(color, base_color.a), instance.chroma_multiplier).rgb;
-
     if instance.noise_amount > 0.0 {
         let grain = (rand(local_coord * instance.noise_scale + instance.time) - 0.5) * instance.noise_amount;
         color += grain;
@@ -488,9 +284,6 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     let shape_alpha = smoothstep(width, -width, sd);
 
     if instance.border_width > 0.0 {
-        // 1. Define the border region.
-        // sd is the distance to the shape edge, negative inside, positive outside.
-        // This expression creates a "band" region where sd is between 0 and -border_width.
         let border_width_aa = width;
         if instance.border_width <= border_width_aa {
             final_color.a = shape_alpha;
@@ -498,31 +291,24 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         }
 
         let outer = 1.0 - smoothstep(-border_width_aa, border_width_aa, sd);
-        let inner = 1.0 - smoothstep(-instance.border_width - border_width_aa, -instance.border_width + border_width_aa, sd);
+        let inner = 1.0 - smoothstep(
+            -instance.border_width - border_width_aa,
+            -instance.border_width + border_width_aa,
+            sd
+        );
         let border_mask = clamp(outer - inner, 0.0, 1.0);
-        // Only compute highlight within the border region.
         if border_mask > 0.0 {
-            // 2. Compute highlight normal (same logic as AGSL, using new function).
             let normal = shape_eval.yz;
-
-            // 3. Compute highlight distribution.
-            let highlight_dir = normalize(vec2<f32>(cos(radians(136.0)), sin(radians(136.0)))); // Light direction at 136 degrees.
+            let highlight_dir = normalize(vec2<f32>(cos(radians(136.0)), sin(radians(136.0))));
             let top_light_fraction = dot(highlight_dir, normal);
             let bottom_light_fraction = -top_light_fraction;
             let highlight_decay = 1.5;
             let highlight_fraction = pow(max(top_light_fraction, bottom_light_fraction), highlight_decay);
 
-            // 4. Blend highlight color with border mask and add to final color.
-            let border_color = vec3<f32>(1.0); // Base border color (white).
+            let border_color = vec3<f32>(1.0);
             let highlight_intensity = highlight_fraction * border_mask;
-
-            // Create highlight layer color (white highlight times its intensity).
             let highlight_layer_color = border_color * highlight_intensity;
-
-            // Use overlay blend mode to mix highlight layer into final color.
             let final_rgb_with_highlight = blend_overlay(final_color.rgb, highlight_layer_color);
-
-            // Only apply blended result in border region.
             let highlight_rgb = mix(final_color.rgb, final_rgb_with_highlight, border_mask);
 
             final_color.r = highlight_rgb.r;
@@ -532,6 +318,5 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     }
 
     final_color.a = shape_alpha;
-
     return final_color;
 }

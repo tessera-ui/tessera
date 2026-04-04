@@ -1,4 +1,4 @@
-//! A component for creating a frosted/distorted glass visual effect.
+//! A component for creating a frosted liquid lens glass visual effect.
 //!
 //! ## Usage
 //!
@@ -65,18 +65,6 @@ pub(crate) struct FluidGlassResolvedArgs {
     /// The radius for the background blur effect. A value of `0.0` disables the
     /// blur.
     pub(crate) blur_radius: Dp,
-    /// The height of the chromatic dispersion effect.
-    pub(crate) dispersion_height: Dp,
-    /// Multiplier for the chromatic aberration, enhancing the color separation
-    /// effect.
-    pub(crate) chroma_multiplier: f32,
-    /// The height of the refraction effect, simulating light bending through
-    /// the glass.
-    pub(crate) refraction_height: Dp,
-    /// The amount of refraction to apply.
-    pub(crate) refraction_amount: f32,
-    /// Controls the shape and eccentricity of the highlight.
-    pub(crate) eccentric_factor: f32,
     /// The amount of noise to apply over the surface, adding texture.
     pub(crate) noise_amount: f32,
     /// The scale of the noise pattern.
@@ -131,11 +119,6 @@ impl Default for FluidGlassResolvedArgs {
                 bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
             },
             blur_radius: Dp(0.0),
-            dispersion_height: Dp(25.0),
-            chroma_multiplier: 1.1,
-            refraction_height: Dp(24.0),
-            refraction_amount: 32.0,
-            eccentric_factor: 0.2,
             noise_amount: 0.0,
             noise_scale: 1.0,
             time: 0.0,
@@ -227,8 +210,8 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
 
 /// # fluid_glass
 ///
-/// Renders a highly customizable surface with blur, tint, and other glass-like
-/// effects.
+/// Renders a highly customizable surface with blur, tint, and a liquid lens
+/// deformation effect.
 ///
 /// ## Usage
 ///
@@ -239,11 +222,6 @@ fn apply_fluid_glass_block_input_modifier(base: Modifier, block_input: bool) -> 
 /// - `tint_color` — optional glass tint color.
 /// - `shape` — optional glass shape.
 /// - `blur_radius` — optional background blur radius.
-/// - `dispersion_height` — optional chromatic dispersion height.
-/// - `chroma_multiplier` — optional chromatic aberration multiplier.
-/// - `refraction_height` — optional refraction height.
-/// - `refraction_amount` — optional refraction strength.
-/// - `eccentric_factor` — optional highlight eccentricity.
 /// - `noise_amount` — optional noise amount.
 /// - `noise_scale` — optional noise scale.
 /// - `time` — optional animated time input.
@@ -282,11 +260,6 @@ pub fn fluid_glass(
     tint_color: Option<Color>,
     shape: Option<Shape>,
     blur_radius: Option<Dp>,
-    dispersion_height: Option<Dp>,
-    chroma_multiplier: Option<f32>,
-    refraction_height: Option<Dp>,
-    refraction_amount: Option<f32>,
-    eccentric_factor: Option<f32>,
     noise_amount: Option<f32>,
     noise_scale: Option<f32>,
     time: Option<f32>,
@@ -315,11 +288,6 @@ pub fn fluid_glass(
             bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
         }),
         blur_radius: blur_radius.unwrap_or(Dp(0.0)),
-        dispersion_height: dispersion_height.unwrap_or(Dp(25.0)),
-        chroma_multiplier: chroma_multiplier.unwrap_or(1.1),
-        refraction_height: refraction_height.unwrap_or(Dp(24.0)),
-        refraction_amount: refraction_amount.unwrap_or(32.0),
-        eccentric_factor: eccentric_factor.unwrap_or(0.2),
         noise_amount: noise_amount.unwrap_or(0.0),
         noise_scale: noise_scale.unwrap_or(1.0),
         time: time.unwrap_or(0.0),

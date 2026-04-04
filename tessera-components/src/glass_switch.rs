@@ -249,7 +249,7 @@ pub fn glass_switch(
                     Some(AxisConstraint::exact(height_px)),
                 ))
                 .tint_color(track_color)
-                .shape(Shape::capsule())
+                .shape(Shape::CAPSULE)
                 .blur_radius(Dp(8.0));
             if let Some(border) = track_border {
                 track.border(border).with_child(|| {});
@@ -265,7 +265,6 @@ pub fn glass_switch(
                     Some(AxisConstraint::exact(thumb_px)),
                 ))
                 .tint_color(thumb_color)
-                .refraction_height(Dp(1.0))
                 .shape(Shape::Ellipse);
             if let Some(border) = thumb_border {
                 thumb.border(border).with_child(|| {});

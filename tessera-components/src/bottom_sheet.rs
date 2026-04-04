@@ -234,8 +234,6 @@ fn render_glass_scrim(on_close_request: Callback, progress: f32, is_open: bool) 
         .on_click_shared(on_close_request)
         .tint_color(Color::TRANSPARENT)
         .modifier(Modifier::new().fill_max_size())
-        .dispersion_height(Dp(0.0))
-        .refraction_height(Dp(0.0))
         .block_input(true)
         .blur_radius(Dp(blur_radius as f64))
         .border(GlassBorder::new(Px(0)))
@@ -432,7 +430,7 @@ fn bottom_sheet_drag_handle(controller: Option<State<BottomSheetController>>, on
                             .with_alpha(0.4)
                             .into(),
                     )
-                    .shape(Shape::capsule())
+                    .shape(Shape::CAPSULE)
                     .modifier(Modifier::new().size(Dp(32.0), Dp(4.0)))
                     .with_child(|| {});
                 spacer().modifier(Modifier::new().height(Dp(22.0)));
@@ -550,7 +548,6 @@ fn bottom_sheet_content_wrapper(
                     })
                     .tint_color(Color::WHITE.with_alpha(0.4))
                     .modifier(Modifier::new().fill_max_width())
-                    .refraction_amount(32.0)
                     .blur_radius(Dp(5.0))
                     .block_input(true)
                     .with_child(content_wrapper);

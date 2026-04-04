@@ -40,7 +40,6 @@ fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Sh
                 .tint_color(tint_color)
                 .blur_radius(blur_radius)
                 .shape(shape)
-                .refraction_amount(0.0)
                 .with_child(|| {});
         });
 }

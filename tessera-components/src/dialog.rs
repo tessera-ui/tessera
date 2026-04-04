@@ -190,8 +190,6 @@ fn render_scrim(style: DialogStyle, on_close_request: Callback, is_open: bool, p
                 .on_click_shared(on_close_request)
                 .tint_color(Color::TRANSPARENT)
                 .modifier(Modifier::new().fill_max_size())
-                .dispersion_height(Dp(0.0))
-                .refraction_height(Dp(0.0))
                 .block_input(true)
                 .blur_radius(Dp(blur_radius as f64))
                 .border(GlassBorder::new(Px(0)))
@@ -302,7 +300,6 @@ fn dialog_content_wrapper(
                                         bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
                                         bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
                                     })
-                                    .refraction_amount(32.0 * alpha)
                                     .block_input(true)
                                     .padding(padding)
                                     .with_child(move || {

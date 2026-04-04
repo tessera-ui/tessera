@@ -239,11 +239,6 @@ struct GlassUniforms {
     rect_size_px: Vec2,
     ripple_center: Vec2,
     shape_type: f32,
-    dispersion_height: f32,
-    chroma_multiplier: f32,
-    refraction_height: f32,
-    refraction_amount: f32,
-    eccentric_factor: f32,
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
@@ -252,9 +247,6 @@ struct GlassUniforms {
     ripple_strength: f32,
     border_width: f32,
     sdf_cache_enabled: f32,
-    screen_size: Vec2,  // Screen dimensions
-    light_source: Vec2, // Light source position in world coordinates
-    light_scale: f32,   // Light intensity scale factor
 }
 
 #[derive(PartialEq, ShaderType)]
@@ -585,11 +577,6 @@ impl FluidGlassPipeline {
             corner_radii,
             corner_g2,
             shape_type,
-            dispersion_height: args.dispersion_height.to_pixels_f32(),
-            chroma_multiplier: args.chroma_multiplier,
-            refraction_height: args.refraction_height.to_pixels_f32(),
-            refraction_amount: args.refraction_amount,
-            eccentric_factor: args.eccentric_factor,
             noise_amount: args.noise_amount,
             noise_scale: args.noise_scale,
             time: args.time,
@@ -598,9 +585,6 @@ impl FluidGlassPipeline {
             ripple_strength: args.ripple_strength.unwrap_or(0.0),
             border_width,
             sdf_cache_enabled: if sdf_entry.is_some() { 1.0 } else { 0.0 },
-            screen_size: [screen_w, screen_h].into(),
-            light_source: [screen_w * 0.1, screen_h * 0.1].into(),
-            light_scale: 1.0,
         };
 
         PreparedGlassInstance {

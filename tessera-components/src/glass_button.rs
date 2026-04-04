@@ -20,10 +20,6 @@ struct GlassButtonResolvedArgs {
     tint_color: Color,
     shape: Shape,
     blur_radius: Dp,
-    dispersion_height: Dp,
-    chroma_multiplier: f32,
-    refraction_height: Dp,
-    refraction_amount: f32,
     noise_amount: f32,
     noise_scale: f32,
     time: f32,
@@ -83,10 +79,6 @@ impl GlassButtonBuilder {
 /// - `tint_color` — optional glass tint color.
 /// - `shape` — optional shape override.
 /// - `blur_radius` — optional blur radius.
-/// - `dispersion_height` — optional chromatic dispersion height.
-/// - `chroma_multiplier` — optional chromatic multiplier.
-/// - `refraction_height` — optional refraction height.
-/// - `refraction_amount` — optional refraction amount.
 /// - `noise_amount` — optional noise amount.
 /// - `noise_scale` — optional noise scale.
 /// - `time` — optional animated time input.
@@ -123,10 +115,6 @@ pub fn glass_button(
     tint_color: Option<Color>,
     shape: Option<Shape>,
     blur_radius: Option<Dp>,
-    dispersion_height: Option<Dp>,
-    chroma_multiplier: Option<f32>,
-    refraction_height: Option<Dp>,
-    refraction_amount: Option<f32>,
     noise_amount: Option<f32>,
     noise_scale: Option<f32>,
     time: Option<f32>,
@@ -149,10 +137,6 @@ pub fn glass_button(
             bottom_left: RoundedCorner::manual(Dp(25.0), 3.0),
         }),
         blur_radius: blur_radius.unwrap_or(Dp(0.0)),
-        dispersion_height: dispersion_height.unwrap_or(Dp(25.0)),
-        chroma_multiplier: chroma_multiplier.unwrap_or(1.1),
-        refraction_height: refraction_height.unwrap_or(Dp(24.0)),
-        refraction_amount: refraction_amount.unwrap_or(32.0),
         noise_amount: noise_amount.unwrap_or(0.0),
         noise_scale: noise_scale.unwrap_or(1.0),
         time: time.unwrap_or(0.0),
@@ -178,10 +162,6 @@ pub fn glass_button(
             .tint_color(button_args.tint_color)
             .shape(button_args.shape)
             .blur_radius(button_args.blur_radius)
-            .dispersion_height(button_args.dispersion_height)
-            .chroma_multiplier(button_args.chroma_multiplier)
-            .refraction_height(button_args.refraction_height)
-            .refraction_amount(button_args.refraction_amount)
             .noise_amount(button_args.noise_amount)
             .noise_scale(button_args.noise_scale)
             .time(button_args.time)

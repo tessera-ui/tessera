@@ -374,8 +374,7 @@ fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
     fluid_glass()
         .tint_color(tint_color)
         .blur_radius(blur_radius)
-        .shape(Shape::capsule())
-        .refraction_amount(0.0)
+        .shape(Shape::CAPSULE)
         .with_child(|| {});
 
     let clamped = value.clamp(0.0, 1.0);
@@ -469,7 +468,7 @@ fn render_glass_slider(args: GlassSliderConfig) {
                 .modifier(Modifier::new().fill_max_size())
                 .tint_color(args.track_tint_color)
                 .blur_radius(args.blur_radius)
-                .shape(Shape::capsule())
+                .shape(Shape::CAPSULE)
                 .border(GlassBorder::new(args.track_border_width.into()))
                 .padding(args.track_border_width)
                 .with_child(move || {
