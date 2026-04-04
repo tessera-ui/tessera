@@ -10,12 +10,13 @@ use std::{
     sync::Arc,
 };
 
+use parking_lot::Mutex;
 use tessera_ui::{
-    Callback, CallbackWith, ComputedData, Constraint, DimensionValue, Dp, FocusDirection,
-    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, Slot, State, key,
+    AxisConstraint, Callback, CallbackWith, ComputedData, Constraint, Dp, FocusDirection,
+    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot, State, key,
     layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout_primitive},
     modifier::FocusModifierExt as _,
-    remember, tessera,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -45,8 +46,10 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 /// fn scrollable_page(page_id: String) {
 ///     // Both scroll position and measurement cache persist across navigation
 ///     let controller = retain_with_key(page_id.clone(), LazyListController::new);
-///     lazy_column().controller(controller).content(|scope| {
-///         scope.items(100, |i| { /* ... */ });
+///     lazy_column().controller(controller).content(|| {
+///         tessera_components::lazy_list::lazy_items(100, |i| {
+///             let _ = i;
+///         });
 ///     });
 /// }
 /// ```
@@ -82,249 +85,187 @@ impl LazyListController {
     }
 }
 
-/// Scope used to add lazily generated children to a lazy list.
-pub struct LazyListScope<'a> {
-    slots: &'a mut Vec<LazySlot>,
-}
+#[derive(Clone)]
+struct LazyListCollectedSlots(Arc<Mutex<Vec<LazySlot>>>);
 
-type LazyListRenderFn = dyn for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync;
-
-/// Shared slot builder for lazy list content.
-#[derive(Clone, PartialEq)]
-pub struct LazyListContentSlot(Slot<LazyListRenderFn>);
-
-impl LazyListContentSlot {
-    /// Creates a new shared lazy list content slot.
-    pub fn new<F>(content: F) -> Self
-    where
-        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
-    {
-        Self(Slot::from_shared(Arc::new(content)))
-    }
-
-    fn render(&self, scope: &mut LazyListScope<'_>) {
-        let render = self.0.shared();
-        render(scope);
-    }
-}
-
-impl<F> From<F> for LazyListContentSlot
+fn hash_key<K>(key: K) -> u64
 where
-    F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
+    K: Hash,
 {
-    fn from(value: F) -> Self {
-        Self::new(value)
-    }
+    let mut hasher = DefaultHasher::new();
+    key.hash(&mut hasher);
+    hasher.finish()
 }
 
-#[allow(missing_docs)]
-impl LazyColumnBuilder {
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn controller(mut self, controller: State<LazyListController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
-    {
-        self.props.content = Some(LazyListContentSlot::new(content));
-        self
-    }
-
-    pub fn content_shared(mut self, content: impl Into<LazyListContentSlot>) -> Self {
-        self.props.content = Some(content.into());
-        self
-    }
+fn collect_lazy_list_slots(content: RenderSlot) -> Vec<LazySlot> {
+    let collected = LazyListCollectedSlots(Arc::new(Mutex::new(Vec::new())));
+    provide_context(
+        || collected.clone(),
+        move || {
+            content.render();
+        },
+    );
+    collected.0.lock().clone()
 }
 
-#[allow(missing_docs)]
-impl LazyRowBuilder {
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn controller(mut self, controller: State<LazyListController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
-    pub fn content<F>(mut self, content: F) -> Self
-    where
-        F: for<'a> Fn(&mut LazyListScope<'a>) + Send + Sync + 'static,
-    {
-        self.props.content = Some(LazyListContentSlot::new(content));
-        self
-    }
-
-    pub fn content_shared(mut self, content: impl Into<LazyListContentSlot>) -> Self {
-        self.props.content = Some(content.into());
-        self
-    }
+fn push_lazy_list_slot(slot: LazySlot) {
+    let collector = use_context::<LazyListCollectedSlots>()
+        .expect("lazy list item declarations must be used inside lazy list content")
+        .get();
+    collector.0.lock().push(slot);
 }
 
-impl<'a> LazyListScope<'a> {
-    /// Adds a batch of lazily generated items.
-    pub fn items<F>(&mut self, count: usize, builder: F)
-    where
-        F: Fn(usize) + Send + Sync + 'static,
-    {
-        self.slots.push(LazySlot::items(count, builder, None));
-    }
-
-    /// Adds a batch of lazily generated items with a key provider.
-    pub fn items_with_key<K, KF, F>(&mut self, count: usize, key_provider: KF, builder: F)
-    where
-        K: Hash,
-        KF: Fn(usize) -> K + Send + Sync + 'static,
-        F: Fn(usize) + Send + Sync + 'static,
-    {
-        let key_provider = CallbackWith::new(move |idx| {
-            let key = key_provider(idx);
-            let mut hasher = DefaultHasher::new();
-            key.hash(&mut hasher);
-            hasher.finish()
-        });
-        self.slots
-            .push(LazySlot::items(count, builder, Some(key_provider)));
-    }
-
-    /// Add a single lazily generated item.
-    pub fn item<F>(&mut self, builder: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.items(1, move |_| {
+/// Adds a single lazily generated item declaration to the current lazy list
+/// content slot.
+pub fn lazy_item<F>(builder: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    push_lazy_list_slot(LazySlot::items(
+        1,
+        move |_| {
             builder();
-        });
+        },
+        None,
+    ));
+}
+
+/// Adds a single lazily generated item declaration with a stable key.
+pub fn lazy_item_with_key<K, F>(key: K, builder: F)
+where
+    K: Hash,
+    F: Fn() + Send + Sync + 'static,
+{
+    let key_hash = hash_key(key);
+    push_lazy_list_slot(LazySlot::items(
+        1,
+        move |_| {
+            builder();
+        },
+        Some(CallbackWith::new(move |_| key_hash)),
+    ));
+}
+
+/// Adds a batch of lazily generated items to the current lazy list content
+/// slot.
+pub fn lazy_items<F>(count: usize, builder: F)
+where
+    F: Fn(usize) + Send + Sync + 'static,
+{
+    push_lazy_list_slot(LazySlot::items(count, builder, None));
+}
+
+/// Adds a batch of lazily generated items with a stable key provider.
+pub fn lazy_items_with_key<K, KF, F>(count: usize, key_provider: KF, builder: F)
+where
+    K: Hash,
+    KF: Fn(usize) -> K + Send + Sync + 'static,
+    F: Fn(usize) + Send + Sync + 'static,
+{
+    let key_provider = CallbackWith::new(move |idx| hash_key(key_provider(idx)));
+    push_lazy_list_slot(LazySlot::items(count, builder, Some(key_provider)));
+}
+
+/// Adds a sticky header item that remains pinned while scrolling.
+pub fn lazy_sticky_header<F>(builder: F)
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    push_lazy_list_slot(LazySlot::sticky(builder, None));
+}
+
+/// Adds a sticky header item with a stable key.
+pub fn lazy_sticky_header_with_key<K, F>(key: K, builder: F)
+where
+    K: Hash,
+    F: Fn() + Send + Sync + 'static,
+{
+    push_lazy_list_slot(LazySlot::sticky(builder, Some(hash_key(key))));
+}
+
+/// Adds lazily generated items from an iterator, providing both index and
+/// element reference.
+pub fn lazy_items_from_iter<I, T, F>(iter: I, builder: F)
+where
+    I: IntoIterator<Item = T>,
+    T: Send + Sync + 'static,
+    F: Fn(usize, &T) + Send + Sync + 'static,
+{
+    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
+    if items.is_empty() {
+        return;
     }
-
-    /// Adds a sticky header item that remains pinned while scrolling.
-    pub fn sticky_header<F>(&mut self, builder: F)
-    where
-        F: Fn() + Send + Sync + 'static,
-    {
-        self.slots.push(LazySlot::sticky(builder, None));
-    }
-
-    /// Adds a sticky header item with a stable key.
-    pub fn sticky_header_with_key<K, F>(&mut self, key: K, builder: F)
-    where
-        K: Hash,
-        F: Fn() + Send + Sync + 'static,
-    {
-        let mut hasher = DefaultHasher::new();
-        key.hash(&mut hasher);
-        let key_hash = hasher.finish();
-        self.slots.push(LazySlot::sticky(builder, Some(key_hash)));
-    }
-
-    /// Adds lazily generated items from an iterator, providing both index and
-    /// element reference.
-    ///
-    /// The iterator is eagerly collected so it can be accessed on demand while
-    /// virtualizing.
-    pub fn items_from_iter<I, T, F>(&mut self, iter: I, builder: F)
-    where
-        I: IntoIterator<Item = T>,
-        T: Send + Sync + 'static,
-        F: Fn(usize, &T) + Send + Sync + 'static,
-    {
-        let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
-        if items.is_empty() {
-            return;
-        }
-        let builder = Arc::new(builder);
-        let count = items.len();
-        self.slots.push(LazySlot::items(
-            count,
-            {
-                let items = items.clone();
-                let builder = builder.clone();
-                move |idx| {
-                    if let Some(item) = items.get(idx) {
-                        builder(idx, item);
-                    }
-                }
-            },
-            None,
-        ));
-    }
-
-    /// Adds lazily generated items from an iterator with a key provider.
-    pub fn items_from_iter_with_key<I, T, K, KF, F>(
-        &mut self,
-        iter: I,
-        key_provider: KF,
-        builder: F,
-    ) where
-        I: IntoIterator<Item = T>,
-        T: Send + Sync + 'static,
-        K: Hash,
-        KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-        F: Fn(usize, &T) + Send + Sync + 'static,
-    {
-        let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
-        if items.is_empty() {
-            return;
-        }
-        let builder = Arc::new(builder);
-        let key_provider = Arc::new(key_provider);
-        let count = items.len();
-
-        let slot_builder = {
+    let builder = Arc::new(builder);
+    let count = items.len();
+    push_lazy_list_slot(LazySlot::items(
+        count,
+        {
             let items = items.clone();
             let builder = builder.clone();
-            move |idx: usize| {
+            move |idx| {
                 if let Some(item) = items.get(idx) {
                     builder(idx, item);
                 }
             }
-        };
-
-        let slot_key_provider = {
-            let items = items.clone();
-            let key_provider = key_provider.clone();
-            move |idx: usize| -> u64 {
-                if let Some(item) = items.get(idx) {
-                    let key = key_provider(idx, item);
-                    let mut hasher = DefaultHasher::new();
-                    key.hash(&mut hasher);
-                    hasher.finish()
-                } else {
-                    0
-                }
-            }
-        };
-
-        self.slots.push(LazySlot::items(
-            count,
-            slot_builder,
-            Some(CallbackWith::new(slot_key_provider)),
-        ));
-    }
-
-    /// Convenience helper for iterators when only the element is needed.
-    pub fn items_from_iter_values<I, T, F>(&mut self, iter: I, builder: F)
-    where
-        I: IntoIterator<Item = T>,
-        T: Send + Sync + 'static,
-        F: Fn(&T) + Send + Sync + 'static,
-    {
-        self.items_from_iter(iter, move |_, item| builder(item));
-    }
+        },
+        None,
+    ));
 }
 
-/// Scope alias for vertical lazy lists.
-pub type LazyColumnScope<'a> = LazyListScope<'a>;
-/// Scope alias for horizontal lazy lists.
-pub type LazyRowScope<'a> = LazyListScope<'a>;
+/// Adds lazily generated items from an iterator with a stable key provider.
+pub fn lazy_items_from_iter_with_key<I, T, K, KF, F>(iter: I, key_provider: KF, builder: F)
+where
+    I: IntoIterator<Item = T>,
+    T: Send + Sync + 'static,
+    K: Hash,
+    KF: Fn(usize, &T) -> K + Send + Sync + 'static,
+    F: Fn(usize, &T) + Send + Sync + 'static,
+{
+    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
+    if items.is_empty() {
+        return;
+    }
+    let builder = Arc::new(builder);
+    let key_provider = Arc::new(key_provider);
+    let count = items.len();
+
+    let slot_builder = {
+        let items = items.clone();
+        let builder = builder.clone();
+        move |idx: usize| {
+            if let Some(item) = items.get(idx) {
+                builder(idx, item);
+            }
+        }
+    };
+
+    let slot_key_provider = {
+        let items = items.clone();
+        let key_provider = key_provider.clone();
+        move |idx: usize| -> u64 {
+            items
+                .get(idx)
+                .map(|item| hash_key(key_provider(idx, item)))
+                .unwrap_or(0)
+        }
+    };
+
+    push_lazy_list_slot(LazySlot::items(
+        count,
+        slot_builder,
+        Some(CallbackWith::new(slot_key_provider)),
+    ));
+}
+
+/// Convenience helper for iterators when only the element is needed.
+pub fn lazy_items_from_iter_values<I, T, F>(iter: I, builder: F)
+where
+    I: IntoIterator<Item = T>,
+    T: Send + Sync + 'static,
+    F: Fn(&T) + Send + Sync + 'static,
+{
+    lazy_items_from_iter(iter, move |_, item| builder(item));
+}
 
 /// # lazy_column
 ///
@@ -358,8 +299,8 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 ///
 /// #[tessera]
 /// fn demo() {
-///     lazy_column().content(|scope| {
-///         scope.items(1000, |i| {
+///     lazy_column().content(|| {
+///         tessera_components::lazy_list::lazy_items(1000, |i| {
 ///             let text_content = format!("Item #{i}");
 ///             text().content(text_content);
 ///         });
@@ -368,17 +309,17 @@ pub type LazyRowScope<'a> = LazyListScope<'a>;
 /// ```
 #[tessera]
 pub fn lazy_column(
-    #[prop(skip_setter)] modifier: Option<Modifier>,
+    modifier: Option<Modifier>,
     cross_axis_alignment: CrossAxisAlignment,
     item_spacing: Dp,
     overscan: usize,
     estimated_item_size: Dp,
     content_padding: Dp,
     max_viewport_main: Option<Px>,
-    #[prop(skip_setter)] controller: Option<State<LazyListController>>,
-    #[prop(skip_setter)] content: Option<LazyListContentSlot>,
+    controller: Option<State<LazyListController>>,
+    #[prop(skip_setter)] content: Option<RenderSlot>,
 ) {
-    let content = content.unwrap_or_else(|| LazyListContentSlot::new(|_| {}));
+    let content = content.unwrap_or_else(RenderSlot::empty);
     let slots = collect_column_slots(content);
     let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
     lazy_column_slots(LazyListSlotsArgs {
@@ -394,13 +335,8 @@ pub fn lazy_column(
     });
 }
 
-fn collect_column_slots(content: LazyListContentSlot) -> Vec<LazySlot> {
-    let mut slots = Vec::new();
-    {
-        let mut scope = LazyColumnScope { slots: &mut slots };
-        content.render(&mut scope);
-    }
-    slots
+fn collect_column_slots(content: RenderSlot) -> Vec<LazySlot> {
+    collect_lazy_list_slots(content)
 }
 
 #[derive(Clone)]
@@ -450,7 +386,7 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
                 args.controller
                     .with_mut(|c| c.scroll.set_scroll_position(current_pos));
             }
-            lazy_list_view()
+            let mut builder = lazy_list_view()
                 .axis(LazyListAxis::Vertical)
                 .cross_axis_alignment(args.cross_axis_alignment)
                 .item_spacing(item_spacing)
@@ -459,9 +395,12 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
                 .padding_main(padding_main)
                 .padding_cross(padding_cross)
                 .slots(args.slots.clone())
-                .controller_internal(args.controller)
-                .scroll_controller_internal(scroll_controller)
-                .max_viewport_main_internal(args.max_viewport_main);
+                .controller(args.controller)
+                .scroll_controller(scroll_controller);
+            if let Some(max_viewport_main) = args.max_viewport_main {
+                builder = builder.max_viewport_main(max_viewport_main);
+            }
+            drop(builder);
         });
 }
 
@@ -498,8 +437,8 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
 ///
 /// #[tessera]
 /// fn demo() {
-///     lazy_row().content(|scope| {
-///         scope.items(100, |i| {
+///     lazy_row().content(|| {
+///         tessera_components::lazy_list::lazy_items(100, |i| {
 ///             let text_content = format!("Item {i}");
 ///             text().content(text_content);
 ///         });
@@ -508,17 +447,17 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
 /// ```
 #[tessera]
 pub fn lazy_row(
-    #[prop(skip_setter)] modifier: Option<Modifier>,
+    modifier: Option<Modifier>,
     cross_axis_alignment: CrossAxisAlignment,
     item_spacing: Dp,
     overscan: usize,
     estimated_item_size: Dp,
     content_padding: Dp,
     max_viewport_main: Option<Px>,
-    #[prop(skip_setter)] controller: Option<State<LazyListController>>,
-    #[prop(skip_setter)] content: Option<LazyListContentSlot>,
+    controller: Option<State<LazyListController>>,
+    #[prop(skip_setter)] content: Option<RenderSlot>,
 ) {
-    let content = content.unwrap_or_else(|| LazyListContentSlot::new(|_| {}));
+    let content = content.unwrap_or_else(RenderSlot::empty);
     let slots = collect_row_slots(content);
     let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
     lazy_row_slots(LazyListSlotsArgs {
@@ -534,13 +473,8 @@ pub fn lazy_row(
     });
 }
 
-fn collect_row_slots(content: LazyListContentSlot) -> Vec<LazySlot> {
-    let mut slots = Vec::new();
-    {
-        let mut scope = LazyRowScope { slots: &mut slots };
-        content.render(&mut scope);
-    }
-    slots
+fn collect_row_slots(content: RenderSlot) -> Vec<LazySlot> {
+    collect_lazy_list_slots(content)
 }
 
 fn lazy_row_slots(args: LazyListSlotsArgs) {
@@ -577,7 +511,7 @@ fn lazy_row_slots(args: LazyListSlotsArgs) {
                 args.controller
                     .with_mut(|c| c.scroll.set_scroll_position(current_pos));
             }
-            lazy_list_view()
+            let mut builder = lazy_list_view()
                 .axis(LazyListAxis::Horizontal)
                 .cross_axis_alignment(args.cross_axis_alignment)
                 .item_spacing(item_spacing)
@@ -586,30 +520,13 @@ fn lazy_row_slots(args: LazyListSlotsArgs) {
                 .padding_main(padding_main)
                 .padding_cross(padding_cross)
                 .slots(args.slots.clone())
-                .controller_internal(args.controller)
-                .scroll_controller_internal(scroll_controller)
-                .max_viewport_main_internal(args.max_viewport_main);
+                .controller(args.controller)
+                .scroll_controller(scroll_controller);
+            if let Some(max_viewport_main) = args.max_viewport_main {
+                builder = builder.max_viewport_main(max_viewport_main);
+            }
+            drop(builder);
         });
-}
-
-impl LazyListViewBuilder {
-    fn controller_internal(mut self, controller: State<LazyListController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
-    fn scroll_controller_internal(
-        mut self,
-        scroll_controller: State<ScrollableController>,
-    ) -> Self {
-        self.props.scroll_controller = Some(scroll_controller);
-        self
-    }
-
-    fn max_viewport_main_internal(mut self, max_viewport_main: Option<Px>) -> Self {
-        self.props.max_viewport_main = max_viewport_main;
-        self
-    }
 }
 
 #[tessera]
@@ -622,9 +539,9 @@ fn lazy_list_view(
     max_viewport_main: Option<Px>,
     padding_main: Px,
     padding_cross: Px,
-    #[prop(skip_setter)] controller: Option<State<LazyListController>>,
+    controller: Option<State<LazyListController>>,
     slots: Vec<LazySlot>,
-    #[prop(skip_setter)] scroll_controller: Option<State<ScrollableController>>,
+    scroll_controller: Option<State<ScrollableController>>,
 ) {
     let controller = controller.expect("lazy_list_view requires controller");
     let scroll_controller = scroll_controller.expect("lazy_list_view requires scroll_controller");
@@ -1163,27 +1080,15 @@ impl LazyListAxis {
 
     fn child_constraint(&self, parent: ParentConstraint<'_>) -> Constraint {
         match self {
-            Self::Vertical => Constraint::new(
-                parent.width(),
-                DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                },
-            ),
-            Self::Horizontal => Constraint::new(
-                DimensionValue::Wrap {
-                    min: None,
-                    max: None,
-                },
-                parent.height(),
-            ),
+            Self::Vertical => Constraint::new(parent.width(), AxisConstraint::NONE),
+            Self::Horizontal => Constraint::new(AxisConstraint::NONE, parent.height()),
         }
     }
 
     fn constraint_max(&self, constraint: ParentConstraint<'_>) -> Option<Px> {
         match self {
-            Self::Vertical => constraint.height().get_max(),
-            Self::Horizontal => constraint.width().get_max(),
+            Self::Vertical => constraint.height().resolve_max(),
+            Self::Horizontal => constraint.width().resolve_max(),
         }
     }
 }
@@ -1605,25 +1510,21 @@ fn apply_cross_padding(constraint: &mut Constraint, axis: LazyListAxis, padding:
     let total_padding = padding + padding;
     match axis {
         LazyListAxis::Vertical => {
-            constraint.width = shrink_dimension_max(constraint.width, total_padding);
+            constraint.width = shrink_axis_max(constraint.width, total_padding);
         }
         LazyListAxis::Horizontal => {
-            constraint.height = shrink_dimension_max(constraint.height, total_padding);
+            constraint.height = shrink_axis_max(constraint.height, total_padding);
         }
     }
 }
 
-fn shrink_dimension_max(dim: DimensionValue, amount: Px) -> DimensionValue {
-    match dim {
-        DimensionValue::Fixed(px) => DimensionValue::Fixed(saturating_sub_px(px, amount)),
-        DimensionValue::Wrap { min, max } => DimensionValue::Wrap {
-            min,
-            max: max.map(|m| saturating_sub_px(m, amount)),
-        },
-        DimensionValue::Fill { min, max } => DimensionValue::Fill {
-            min,
-            max: max.map(|m| saturating_sub_px(m, amount)),
-        },
+fn shrink_axis_max(axis: AxisConstraint, amount: Px) -> AxisConstraint {
+    let min = axis.min;
+    let max = axis.max.map(|m| saturating_sub_px(m, amount));
+    if max == Some(min) {
+        AxisConstraint::exact(saturating_sub_px(min, amount))
+    } else {
+        AxisConstraint::new(min, max)
     }
 }
 
@@ -1634,7 +1535,7 @@ fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
         Modifier, NoopRenderPolicy, Px, PxPosition, layout::layout_primitive, remember, tessera,
     };
 
@@ -1643,7 +1544,7 @@ mod tests {
         modifier::{ModifierExt as _, SemanticsArgs},
     };
 
-    use super::{LazyListController, lazy_column, lazy_row};
+    use super::{LazyListController, lazy_column, lazy_item, lazy_row, lazy_sticky_header};
 
     #[derive(Clone, PartialEq)]
     struct FixedTestLayout {
@@ -1679,27 +1580,27 @@ mod tests {
     fn lazy_column_layout_case() {
         lazy_column()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(60))),
-                Some(DimensionValue::Fixed(Px::new(50))),
+                Some(AxisConstraint::exact(Px::new(60))),
+                Some(AxisConstraint::exact(Px::new(50))),
             ))
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .item_spacing(Px::new(3).into())
             .estimated_item_size(Px::new(10).into())
             .content_padding(Px::new(4).into())
-            .content(|scope| {
-                scope.item(|| {
+            .content(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_column_first".to_string())
                         .width(20)
                         .height(10);
                 });
-                scope.item(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_column_second".to_string())
                         .width(18)
                         .height(12);
                 });
-                scope.item(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_column_third".to_string())
                         .width(16)
@@ -1712,27 +1613,27 @@ mod tests {
     fn lazy_row_layout_case() {
         lazy_row()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(70))),
-                Some(DimensionValue::Fixed(Px::new(30))),
+                Some(AxisConstraint::exact(Px::new(70))),
+                Some(AxisConstraint::exact(Px::new(30))),
             ))
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .item_spacing(Px::new(3).into())
             .estimated_item_size(Px::new(10).into())
             .content_padding(Px::new(4).into())
-            .content(|scope| {
-                scope.item(|| {
+            .content(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_row_first".to_string())
                         .width(20)
                         .height(10);
                 });
-                scope.item(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_row_second".to_string())
                         .width(15)
                         .height(12);
                 });
-                scope.item(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_row_third".to_string())
                         .width(18)
@@ -1754,28 +1655,28 @@ mod tests {
 
         lazy_column()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(60))),
-                Some(DimensionValue::Fixed(Px::new(50))),
+                Some(AxisConstraint::exact(Px::new(60))),
+                Some(AxisConstraint::exact(Px::new(50))),
             ))
             .controller(controller)
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .item_spacing(Px::new(3).into())
             .estimated_item_size(Px::new(10).into())
             .content_padding(Px::new(4).into())
-            .content(|scope| {
-                scope.item(|| {
+            .content(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_column_scrolled_first".to_string())
                         .width(20)
                         .height(10);
                 });
-                scope.item(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_column_scrolled_second".to_string())
                         .width(18)
                         .height(12);
                 });
-                scope.item(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_column_scrolled_third".to_string())
                         .width(16)
@@ -1797,28 +1698,28 @@ mod tests {
 
         lazy_column()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(60))),
-                Some(DimensionValue::Fixed(Px::new(40))),
+                Some(AxisConstraint::exact(Px::new(60))),
+                Some(AxisConstraint::exact(Px::new(40))),
             ))
             .controller(controller)
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .item_spacing(Px::new(3).into())
             .estimated_item_size(Px::new(10).into())
             .content_padding(Px::new(4).into())
-            .content(|scope| {
-                scope.sticky_header(|| {
+            .content(|| {
+                lazy_sticky_header(|| {
                     fixed_test_box()
                         .tag("lazy_column_sticky_header".to_string())
                         .width(20)
                         .height(10);
                 });
-                scope.item(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_column_sticky_body".to_string())
                         .width(18)
                         .height(12);
                 });
-                scope.item(|| {
+                lazy_item(|| {
                     fixed_test_box()
                         .tag("lazy_column_sticky_tail".to_string())
                         .width(16)
