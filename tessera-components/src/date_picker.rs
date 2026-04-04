@@ -10,7 +10,7 @@ use std::{
 };
 
 use tessera_ui::{
-    Callback, Color, DimensionValue, Dp, Modifier, RenderSlot, State, provide_context, remember,
+    AxisConstraint, Callback, Color, Dp, Modifier, RenderSlot, State, provide_context, remember,
     tessera, use_context,
 };
 
@@ -643,11 +643,11 @@ pub fn date_picker_dialog(
 
     column()
         .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Wrap {
-                min: Some(Dp(320.0).into()),
-                max: Some(Dp(560.0).into()),
-            }),
-            Some(DimensionValue::WRAP),
+            Some(AxisConstraint::new(
+                Dp(320.0).into(),
+                Some(Dp(560.0).into()),
+            )),
+            Some(AxisConstraint::NONE),
         ))
         .children(move || {
             if let Some(title) = title.as_ref() {

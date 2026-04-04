@@ -1,4 +1,4 @@
-use tessera_ui::{Constraint, DimensionValue, Dp, ParentConstraint, Px, PxPosition};
+use tessera_ui::{Dp, ParentConstraint, Px, PxPosition};
 
 use super::{HANDLE_GAP, MIN_TOUCH_TARGET, STOP_INDICATOR_DIAMETER, SliderArgs, SliderSize};
 
@@ -187,20 +187,9 @@ pub(super) fn resolve_component_width(
     args: &SliderArgs,
     parent_constraint: ParentConstraint<'_>,
 ) -> Px {
-    let specs = get_slider_specs(args.size);
     let fallback = Dp(260.0).to_px();
-    let merged = Constraint::new(
-        parent_constraint.width(),
-        DimensionValue::Fixed(specs.track_height.to_px()),
-    )
-    .merge(parent_constraint);
-
-    match merged.width {
-        DimensionValue::Fixed(px) => px,
-        DimensionValue::Fill { max, .. } | DimensionValue::Wrap { max, .. } => {
-            max.unwrap_or(fallback)
-        }
-    }
+    let _ = args;
+    parent_constraint.width().clamp(fallback)
 }
 
 pub(super) fn fallback_component_width(args: &SliderArgs) -> Px {

@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, FocusScopeNode,
+    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusScopeNode,
     FocusTraversalPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
@@ -356,11 +356,15 @@ fn place_bottom_sheet_if_present(
 
     let bottom_sheet_id = input.children_ids()[2];
 
-    let parent_width = input.parent_constraint().width().get_max().unwrap_or(Px(0));
+    let parent_width = input
+        .parent_constraint()
+        .width()
+        .resolve_max()
+        .unwrap_or(Px(0));
     let parent_height = input
         .parent_constraint()
         .height()
-        .get_max()
+        .resolve_max()
         .unwrap_or(Px(0));
 
     // M3 Spec: Max width 640dp.
@@ -381,13 +385,7 @@ fn place_bottom_sheet_if_present(
     };
     let max_height = (parent_height - top_margin).max(Px(0));
 
-    let constraint = Constraint {
-        width: DimensionValue::Fixed(sheet_width),
-        height: DimensionValue::Wrap {
-            min: None,
-            max: Some(max_height),
-        },
-    };
+    let constraint = Constraint::new(sheet_width, AxisConstraint::new(Px::ZERO, Some(max_height)));
 
     let child_size = match input.measure_child(bottom_sheet_id, &constraint) {
         Ok(s) => s,

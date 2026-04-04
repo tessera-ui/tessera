@@ -4,9 +4,9 @@
 //!
 //! Display labels, headings, and other text content.
 use tessera_ui::{
-    Color, ComputedData, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
-    MeasurementError, Modifier, Px, PxPosition, RenderInput, RenderPolicy, accesskit::Role,
-    layout::layout_primitive, tessera, use_context,
+    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
+    Px, PxPosition, RenderInput, RenderPolicy, accesskit::Role, layout::layout_primitive, tessera,
+    use_context,
 };
 
 use crate::{
@@ -123,17 +123,8 @@ impl LayoutPolicy for TextLayout {
         input: &LayoutInput<'_>,
         _output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let max_width: Option<Px> = match input.parent_constraint().width() {
-            DimensionValue::Fixed(w) => Some(w),
-            DimensionValue::Wrap { max, .. } => max,
-            DimensionValue::Fill { max, .. } => max,
-        };
-
-        let max_height: Option<Px> = match input.parent_constraint().height() {
-            DimensionValue::Fixed(h) => Some(h),
-            DimensionValue::Wrap { max, .. } => max,
-            DimensionValue::Fill { max, .. } => max,
-        };
+        let max_width = input.parent_constraint().width().resolve_max();
+        let max_height = input.parent_constraint().height().resolve_max();
 
         let info = TextData::measure(
             self.text.clone(),
@@ -141,8 +132,8 @@ impl LayoutPolicy for TextLayout {
             self.size.to_pixels_f32(),
             self.line_height.to_pixels_f32(),
             TextConstraint {
-                max_width: max_width.map(|px| px.to_f32()),
-                max_height: max_height.map(|px| px.to_f32()),
+                max_width: max_width.map(|px: Px| px.to_f32()),
+                max_height: max_height.map(|px: Px| px.to_f32()),
             },
         );
 

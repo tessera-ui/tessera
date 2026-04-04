@@ -25,7 +25,6 @@ use crate::{
 /// Material defaults for pull-to-refresh.
 pub struct PullRefreshDefaults;
 
-#[allow(missing_docs)]
 impl PullRefreshDefaults {
     /// Pull distance required to trigger a refresh.
     pub const REFRESH_THRESHOLD: Dp = Dp(80.0);
@@ -204,102 +203,6 @@ impl PullRefreshController {
     }
 }
 
-#[allow(missing_docs)]
-impl PullRefreshBuilder {
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn refresh_threshold(mut self, refresh_threshold: Dp) -> Self {
-        self.props.refresh_threshold = Some(refresh_threshold);
-        self
-    }
-
-    pub fn refreshing_offset(mut self, refreshing_offset: Dp) -> Self {
-        self.props.refreshing_offset = Some(refreshing_offset);
-        self
-    }
-
-    pub fn indicator_size(mut self, indicator_size: Dp) -> Self {
-        self.props.indicator_size = Some(indicator_size);
-        self
-    }
-
-    pub fn indicator_background_color(mut self, indicator_background_color: Color) -> Self {
-        self.props.indicator_background_color = Some(indicator_background_color);
-        self
-    }
-
-    pub fn indicator_content_color(mut self, indicator_content_color: Color) -> Self {
-        self.props.indicator_content_color = Some(indicator_content_color);
-        self
-    }
-
-    pub fn indicator_track_color(mut self, indicator_track_color: Color) -> Self {
-        self.props.indicator_track_color = Some(indicator_track_color);
-        self
-    }
-
-    pub fn indicator_stroke_width(mut self, indicator_stroke_width: Dp) -> Self {
-        self.props.indicator_stroke_width = Some(indicator_stroke_width);
-        self
-    }
-
-    pub fn indicator_elevation(mut self, indicator_elevation: Dp) -> Self {
-        self.props.indicator_elevation = Some(indicator_elevation);
-        self
-    }
-
-    pub fn controller(mut self, controller: State<PullRefreshController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-}
-
-#[allow(missing_docs)]
-impl PullRefreshIndicatorBuilder {
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn size(mut self, size: Dp) -> Self {
-        self.props.size = Some(size);
-        self
-    }
-
-    pub fn background_color(mut self, background_color: Color) -> Self {
-        self.props.background_color = Some(background_color);
-        self
-    }
-
-    pub fn content_color(mut self, content_color: Color) -> Self {
-        self.props.content_color = Some(content_color);
-        self
-    }
-
-    pub fn track_color(mut self, track_color: Color) -> Self {
-        self.props.track_color = Some(track_color);
-        self
-    }
-
-    pub fn stroke_width(mut self, stroke_width: Dp) -> Self {
-        self.props.stroke_width = Some(stroke_width);
-        self
-    }
-
-    pub fn elevation(mut self, elevation: Dp) -> Self {
-        self.props.elevation = Some(elevation);
-        self
-    }
-
-    pub fn controller(mut self, controller: State<PullRefreshController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-}
-
 /// # pull_refresh_indicator
 ///
 /// Draws the default pull-to-refresh indicator for refreshable lists and feeds.
@@ -340,14 +243,14 @@ impl PullRefreshIndicatorBuilder {
 /// ```
 #[tessera]
 pub fn pull_refresh_indicator(
-    #[prop(skip_setter)] modifier: Option<Modifier>,
-    #[prop(skip_setter)] size: Option<Dp>,
-    #[prop(skip_setter)] background_color: Option<Color>,
-    #[prop(skip_setter)] content_color: Option<Color>,
-    #[prop(skip_setter)] track_color: Option<Color>,
-    #[prop(skip_setter)] stroke_width: Option<Dp>,
-    #[prop(skip_setter)] elevation: Option<Dp>,
-    #[prop(skip_setter)] controller: Option<State<PullRefreshController>>,
+    modifier: Option<Modifier>,
+    size: Option<Dp>,
+    background_color: Option<Color>,
+    content_color: Option<Color>,
+    track_color: Option<Color>,
+    stroke_width: Option<Dp>,
+    elevation: Option<Dp>,
+    controller: Option<State<PullRefreshController>>,
 ) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -475,19 +378,19 @@ pub fn pull_refresh_indicator(
 /// ```
 #[tessera]
 pub fn pull_refresh(
-    #[prop(skip_setter)] modifier: Option<Modifier>,
+    modifier: Option<Modifier>,
     on_refresh: Option<Callback>,
     refreshing: bool,
     enabled: bool,
-    #[prop(skip_setter)] refresh_threshold: Option<Dp>,
-    #[prop(skip_setter)] refreshing_offset: Option<Dp>,
-    #[prop(skip_setter)] indicator_size: Option<Dp>,
-    #[prop(skip_setter)] indicator_background_color: Option<Color>,
-    #[prop(skip_setter)] indicator_content_color: Option<Color>,
-    #[prop(skip_setter)] indicator_track_color: Option<Color>,
-    #[prop(skip_setter)] indicator_stroke_width: Option<Dp>,
-    #[prop(skip_setter)] indicator_elevation: Option<Dp>,
-    #[prop(skip_setter)] controller: Option<State<PullRefreshController>>,
+    refresh_threshold: Option<Dp>,
+    refreshing_offset: Option<Dp>,
+    indicator_size: Option<Dp>,
+    indicator_background_color: Option<Color>,
+    indicator_content_color: Option<Color>,
+    indicator_track_color: Option<Color>,
+    indicator_stroke_width: Option<Dp>,
+    indicator_elevation: Option<Dp>,
+    controller: Option<State<PullRefreshController>>,
     child: Option<RenderSlot>,
 ) {
     let scheme = use_context::<MaterialTheme>()

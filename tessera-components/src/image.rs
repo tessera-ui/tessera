@@ -10,7 +10,7 @@ use std::{
 
 use image::GenericImageView;
 use tessera_ui::{
-    AssetExt, ComputedData, DimensionValue, MeasurementError, Modifier, Px,
+    AssetExt, ComputedData, MeasurementError, Modifier, Px,
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
     },
@@ -155,31 +155,8 @@ impl LayoutPolicy for ImageLayout {
         let intrinsic_width = Px(self.data.width as i32);
         let intrinsic_height = Px(self.data.height as i32);
 
-        let width = match input.parent_constraint().width() {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_width)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => max
-                .expect("Seems that you are trying to fill an infinite width, which is not allowed")
-                .max(min.unwrap_or(Px(0)))
-                .max(intrinsic_width),
-        };
-
-        let height = match input.parent_constraint().height() {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_height)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => max
-                .expect(
-                    "Seems that you are trying to fill an infinite height, which is not allowed",
-                )
-                .max(min.unwrap_or(Px(0)))
-                .max(intrinsic_height),
-        };
+        let width = input.parent_constraint().width().clamp(intrinsic_width);
+        let height = input.parent_constraint().height().clamp(intrinsic_height);
 
         Ok(ComputedData { width, height })
     }

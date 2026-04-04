@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, Color, ComputedData, DimensionValue, Dp, FocusScopeNode, FocusTraversalPolicy,
+    AxisConstraint, Callback, Color, ComputedData, Dp, FocusScopeNode, FocusTraversalPolicy,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos,
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
@@ -287,7 +287,7 @@ fn dialog_content_wrapper(
                         .style(Color::TRANSPARENT.into())
                         .modifier(
                             Modifier::new()
-                                .constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
+                                .constrain(Some(AxisConstraint::NONE), Some(AxisConstraint::NONE))
                                 .padding_all(Dp(24.0)),
                         )
                         .with_child(move || match style {
@@ -582,11 +582,11 @@ pub fn basic_dialog(
 
     column()
         .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Wrap {
-                min: Some(Dp(280.0).into()),
-                max: Some(Dp(560.0).into()),
-            }),
-            Some(DimensionValue::WRAP),
+            Some(AxisConstraint::new(
+                Dp(280.0).into(),
+                Some(Dp(560.0).into()),
+            )),
+            Some(AxisConstraint::NONE),
         ))
         .cross_axis_alignment(alignment)
         .children(move || {

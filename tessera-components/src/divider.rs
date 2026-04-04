@@ -4,7 +4,7 @@
 //!
 //! Separate sections in lists, menus, and settings screens.
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
+    AxisConstraint, Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
     MeasurementError, Px, RenderInput, RenderPolicy, layout::layout_primitive, tessera,
     use_context,
 };
@@ -19,24 +19,8 @@ fn resolve_thickness_px(thickness: Dp) -> Px {
     }
 }
 
-fn clamp_wrap(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
-    min.unwrap_or(Px(0))
-        .max(measure)
-        .min(max.unwrap_or(Px::MAX))
-}
-
-fn fill_value(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
-    max.expect("Seems that you are trying to fill an infinite dimension, which is not allowed")
-        .max(measure)
-        .max(min.unwrap_or(Px(0)))
-}
-
-fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
-    match dim {
-        DimensionValue::Fixed(v) => v,
-        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, measure),
-        DimensionValue::Fill { min, max } => fill_value(min, max, measure),
-    }
+fn resolve_dimension(axis: AxisConstraint, measure: Px) -> Px {
+    axis.clamp(measure)
 }
 
 /// Default values for divider components.
@@ -75,26 +59,30 @@ impl LayoutPolicy for DividerLayout {
         input: &LayoutInput<'_>,
         _output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let intrinsic = match self.orientation {
-            DividerOrientation::Horizontal => Constraint::new(
-                DimensionValue::FILLED,
-                DimensionValue::Fixed(self.thickness),
-            ),
-            DividerOrientation::Vertical => Constraint::new(
-                DimensionValue::Fixed(self.thickness),
-                DimensionValue::FILLED,
-            ),
-        };
-        let effective = intrinsic.merge(input.parent_constraint());
-
         let (width, height) = match self.orientation {
             DividerOrientation::Horizontal => (
-                resolve_dimension(effective.width, Px(0)),
-                resolve_dimension(effective.height, self.thickness),
+                input
+                    .parent_constraint()
+                    .width()
+                    .resolve_max()
+                    .expect("horizontal_divider requires a bounded width"),
+                resolve_dimension(
+                    AxisConstraint::exact(self.thickness)
+                        .intersect(input.parent_constraint().height()),
+                    self.thickness,
+                ),
             ),
             DividerOrientation::Vertical => (
-                resolve_dimension(effective.width, self.thickness),
-                resolve_dimension(effective.height, Px(0)),
+                resolve_dimension(
+                    AxisConstraint::exact(self.thickness)
+                        .intersect(input.parent_constraint().width()),
+                    self.thickness,
+                ),
+                input
+                    .parent_constraint()
+                    .height()
+                    .resolve_max()
+                    .expect("vertical_divider requires a bounded height"),
             ),
         };
 

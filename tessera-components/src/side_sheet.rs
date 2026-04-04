@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, FocusScopeNode,
+    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusScopeNode,
     FocusTraversalPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
     layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
@@ -51,22 +51,6 @@ pub enum SideSheetPosition {
     Start,
     /// Attach to the end (right) edge.
     End,
-}
-
-impl ModalSideSheetProviderBuilder {
-    /// Sets an external side sheet controller.
-    pub fn controller(mut self, controller: State<SideSheetController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-}
-
-impl StandardSideSheetProviderBuilder {
-    /// Sets an external side sheet controller.
-    pub fn controller(mut self, controller: State<SideSheetController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
 }
 
 impl SideSheetProviderInnerBuilder {
@@ -471,11 +455,15 @@ fn place_side_sheet_if_present(
     }
 
     let side_sheet_id = input.children_ids()[2];
-    let parent_width = input.parent_constraint().width().get_max().unwrap_or(Px(0));
+    let parent_width = input
+        .parent_constraint()
+        .width()
+        .resolve_max()
+        .unwrap_or(Px(0));
     let parent_height = input
         .parent_constraint()
         .height()
-        .get_max()
+        .resolve_max()
         .unwrap_or(Px(0));
 
     let max_width_px = MAX_SHEET_WIDTH.to_px();
@@ -485,10 +473,7 @@ fn place_side_sheet_if_present(
         parent_width
     };
 
-    let constraint = Constraint {
-        width: DimensionValue::Fixed(sheet_width),
-        height: DimensionValue::Fixed(parent_height),
-    };
+    let constraint = Constraint::exact(sheet_width, parent_height);
 
     let child_size = match input.measure_child(side_sheet_id, &constraint) {
         Ok(s) => s,
@@ -548,7 +533,7 @@ pub fn modal_side_sheet_provider(
     on_close_request: Option<Callback>,
     position: SideSheetPosition,
     is_open: bool,
-    #[prop(skip_setter)] controller: Option<State<SideSheetController>>,
+    controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
@@ -605,7 +590,7 @@ pub fn standard_side_sheet_provider(
     on_close_request: Option<Callback>,
     position: SideSheetPosition,
     is_open: bool,
-    #[prop(skip_setter)] controller: Option<State<SideSheetController>>,
+    controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {

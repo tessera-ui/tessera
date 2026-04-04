@@ -1,4 +1,4 @@
-use tessera_ui::{Color, DimensionValue, Modifier, Px};
+use tessera_ui::{AxisConstraint, Color, Modifier, Px};
 
 use crate::{
     modifier::ModifierExt,
@@ -22,10 +22,9 @@ fn render_surface(
 
 pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors) {
     render_surface(
-        Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Fixed(layout.track_height)),
-        ),
+        Modifier::new()
+            .fill_max_width()
+            .constrain(None, Some(AxisConstraint::exact(layout.track_height))),
         colors.active_track,
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
@@ -38,10 +37,9 @@ pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors)
 
 pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColors) {
     render_surface(
-        Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Fixed(layout.track_height)),
-        ),
+        Modifier::new()
+            .fill_max_width()
+            .constrain(None, Some(AxisConstraint::exact(layout.track_height))),
         colors.inactive_track,
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
@@ -55,8 +53,8 @@ pub(super) fn render_inactive_segment(layout: SliderLayout, colors: &SliderColor
 pub(super) fn render_handle(layout: SliderLayout, width: tessera_ui::Px, colors: &SliderColors) {
     render_surface(
         Modifier::new().constrain(
-            Some(DimensionValue::Fixed(width)),
-            Some(DimensionValue::Fixed(layout.handle_height)),
+            Some(AxisConstraint::exact(width)),
+            Some(AxisConstraint::exact(layout.handle_height)),
         ),
         colors.thumb,
         Shape::capsule(),
@@ -66,8 +64,8 @@ pub(super) fn render_handle(layout: SliderLayout, width: tessera_ui::Px, colors:
 pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors) {
     render_surface(
         Modifier::new().constrain(
-            Some(DimensionValue::Fixed(layout.stop_indicator_diameter)),
-            Some(DimensionValue::Fixed(layout.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.stop_indicator_diameter)),
         ),
         colors.active_track,
         Shape::Ellipse,
@@ -77,8 +75,8 @@ pub(super) fn render_stop_indicator(layout: SliderLayout, colors: &SliderColors)
 pub(super) fn render_tick(diameter: Px, color: Color) {
     render_surface(
         Modifier::new().constrain(
-            Some(DimensionValue::Fixed(diameter)),
-            Some(DimensionValue::Fixed(diameter)),
+            Some(AxisConstraint::exact(diameter)),
+            Some(AxisConstraint::exact(diameter)),
         ),
         color,
         Shape::Ellipse,
@@ -91,10 +89,9 @@ pub(super) fn render_centered_tracks(
 ) {
     // Left Inactive
     render_surface(
-        Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Fixed(layout.base.track_height)),
-        ),
+        Modifier::new()
+            .fill_max_width()
+            .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
         colors.inactive_track,
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
@@ -106,10 +103,9 @@ pub(super) fn render_centered_tracks(
 
     // Active (Middle)
     render_surface(
-        Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Fixed(layout.base.track_height)),
-        ),
+        Modifier::new()
+            .fill_max_width()
+            .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
         colors.active_track,
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
@@ -121,10 +117,9 @@ pub(super) fn render_centered_tracks(
 
     // Right Inactive
     render_surface(
-        Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Fixed(layout.base.track_height)),
-        ),
+        Modifier::new()
+            .fill_max_width()
+            .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
         colors.inactive_track,
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
@@ -142,8 +137,8 @@ pub(super) fn render_centered_stops(
     // Left Stop
     render_surface(
         Modifier::new().constrain(
-            Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
-            Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
         ),
         colors.active_track,
         Shape::Ellipse,
@@ -152,8 +147,8 @@ pub(super) fn render_centered_stops(
     // Right Stop
     render_surface(
         Modifier::new().constrain(
-            Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
-            Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
         ),
         colors.active_track,
         Shape::Ellipse,
@@ -167,8 +162,8 @@ pub(super) fn render_range_stops(
     // Left Stop
     render_surface(
         Modifier::new().constrain(
-            Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
-            Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
         ),
         colors.active_track,
         Shape::Ellipse,
@@ -177,8 +172,8 @@ pub(super) fn render_range_stops(
     // Right Stop
     render_surface(
         Modifier::new().constrain(
-            Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
-            Some(DimensionValue::Fixed(layout.base.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
+            Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
         ),
         colors.active_track,
         Shape::Ellipse,
@@ -191,10 +186,9 @@ pub(super) fn render_range_tracks(
 ) {
     // Left Inactive
     render_surface(
-        Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Fixed(layout.base.track_height)),
-        ),
+        Modifier::new()
+            .fill_max_width()
+            .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
         colors.inactive_track,
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
@@ -206,10 +200,9 @@ pub(super) fn render_range_tracks(
 
     // Active (Middle)
     render_surface(
-        Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Fixed(layout.base.track_height)),
-        ),
+        Modifier::new()
+            .fill_max_width()
+            .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
         colors.active_track,
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
@@ -221,10 +214,9 @@ pub(super) fn render_range_tracks(
 
     // Right Inactive
     render_surface(
-        Modifier::new().constrain(
-            Some(DimensionValue::FILLED),
-            Some(DimensionValue::Fixed(layout.base.track_height)),
-        ),
+        Modifier::new()
+            .fill_max_width()
+            .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
         colors.inactive_track,
         Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),

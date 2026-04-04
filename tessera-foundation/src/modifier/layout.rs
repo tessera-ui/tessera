@@ -8,7 +8,7 @@
 use std::{any::TypeId, sync::Arc};
 
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, LayoutModifierChild, LayoutModifierInput,
+    AxisConstraint, ComputedData, Constraint, Dp, LayoutModifierChild, LayoutModifierInput,
     LayoutModifierNode, LayoutModifierOutput, LayoutOutput, MeasurementError, ParentDataMap,
     ParentDataModifierNode, Px, PxPosition,
 };
@@ -124,22 +124,36 @@ impl Padding {
     }
 }
 
-fn subtract_opt_px(value: Option<Px>, subtract: Px) -> Option<Px> {
-    value.map(|v| (v - subtract).max(Px(0)))
+pub(crate) fn shrink_dimension(dimension: AxisConstraint, before: Px, after: Px) -> AxisConstraint {
+    let subtract = before + after;
+    let min = (dimension.min - subtract).max(Px::ZERO);
+    let max = dimension.max.map(|value| (value - subtract).max(Px::ZERO));
+    AxisConstraint::new(min, max)
 }
 
-pub(crate) fn shrink_dimension(dimension: DimensionValue, before: Px, after: Px) -> DimensionValue {
-    let subtract = before + after;
-    match dimension {
-        DimensionValue::Fixed(value) => DimensionValue::Fixed((value - subtract).max(Px(0))),
-        DimensionValue::Wrap { min, max } => DimensionValue::Wrap {
-            min: subtract_opt_px(min, subtract),
-            max: subtract_opt_px(max, subtract),
-        },
-        DimensionValue::Fill { min, max } => DimensionValue::Fill {
-            min: subtract_opt_px(min, subtract),
-            max: subtract_opt_px(max, subtract),
-        },
+fn resolve_axis_constraint(
+    parent: AxisConstraint,
+    override_axis: Option<AxisConstraint>,
+    fill_parent_max: bool,
+) -> AxisConstraint {
+    if fill_parent_max {
+        return match parent.max {
+            Some(max) => AxisConstraint::exact(max),
+            None => parent,
+        };
+    }
+
+    match override_axis {
+        None => parent,
+        Some(axis) => AxisConstraint::new(
+            axis.min,
+            match (axis.max, parent.max) {
+                (Some(lhs), Some(rhs)) => Some(lhs.min(rhs)),
+                (Some(lhs), None) => Some(lhs),
+                (None, Some(rhs)) => Some(rhs),
+                (None, None) => None,
+            },
+        ),
     }
 }
 
@@ -204,8 +218,10 @@ impl LayoutModifierNode for OffsetModifierNode {
 
 #[derive(Clone, Copy)]
 pub(crate) struct ConstraintModifierNode {
-    pub width_override: Option<DimensionValue>,
-    pub height_override: Option<DimensionValue>,
+    pub width_override: Option<AxisConstraint>,
+    pub height_override: Option<AxisConstraint>,
+    pub fill_width: bool,
+    pub fill_height: bool,
 }
 
 impl LayoutModifierNode for ConstraintModifierNode {
@@ -218,10 +234,9 @@ impl LayoutModifierNode for ConstraintModifierNode {
         let parent_width = input.layout_input.parent_constraint().width();
         let parent_height = input.layout_input.parent_constraint().height();
         let constraint = Constraint::new(
-            self.width_override.unwrap_or(parent_width),
-            self.height_override.unwrap_or(parent_height),
-        )
-        .merge(input.layout_input.parent_constraint());
+            resolve_axis_constraint(parent_width, self.width_override, self.fill_width),
+            resolve_axis_constraint(parent_height, self.height_override, self.fill_height),
+        );
         let child_size = child.measure(&constraint)?;
         child.place(PxPosition::ZERO, output);
         Ok(LayoutModifierOutput { size: child_size })

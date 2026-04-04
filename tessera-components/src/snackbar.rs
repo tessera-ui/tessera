@@ -210,14 +210,6 @@ pub struct SnackbarHostState {
     last_result: Option<SnackbarResult>,
 }
 
-#[allow(missing_docs)]
-impl SnackbarHostBuilder {
-    pub fn state(mut self, state: State<SnackbarHostState>) -> Self {
-        self.props.state = Some(state);
-        self
-    }
-}
-
 impl SnackbarHostState {
     /// Creates a new empty snackbar host state.
     pub fn new() -> Self {
@@ -622,7 +614,7 @@ pub fn snackbar(
 #[tessera]
 pub fn snackbar_host(
     modifier: Modifier,
-    #[prop(skip_setter)] state: Option<State<SnackbarHostState>>,
+    state: Option<State<SnackbarHostState>>,
     snackbar: Option<CallbackWith<SnackbarData>>,
 ) {
     let state = state.expect("snackbar_host requires state to be set");

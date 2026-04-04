@@ -11,27 +11,6 @@ use crate::{
     modifier::{ModifierExt as _, Padding},
 };
 
-#[allow(missing_docs)]
-impl ScaffoldBuilder {
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn floating_action_button_alignment(
-        mut self,
-        floating_action_button_alignment: Alignment,
-    ) -> Self {
-        self.props.floating_action_button_alignment = Some(floating_action_button_alignment);
-        self
-    }
-
-    pub fn snackbar_alignment(mut self, snackbar_alignment: Alignment) -> Self {
-        self.props.snackbar_alignment = Some(snackbar_alignment);
-        self
-    }
-}
-
 fn scaffold_content_padding(base: Padding, top_bar_height: Dp, bottom_bar_height: Dp) -> Padding {
     Padding::new(
         base.left,
@@ -107,7 +86,7 @@ fn overlay_offset(alignment: Alignment, offset: [Dp; 2], bottom_bar_height: Dp) 
 /// ```
 #[tessera]
 pub fn scaffold(
-    #[prop(skip_setter)] modifier: Option<Modifier>,
+    modifier: Option<Modifier>,
     content_padding: Padding,
     content: Option<RenderSlot>,
     top_bar_height: Dp,
@@ -115,10 +94,10 @@ pub fn scaffold(
     top_bar: Option<RenderSlot>,
     bottom_bar: Option<RenderSlot>,
     floating_action_button: Option<RenderSlot>,
-    #[prop(skip_setter)] floating_action_button_alignment: Option<Alignment>,
+    floating_action_button_alignment: Option<Alignment>,
     floating_action_button_offset: [Dp; 2],
     snackbar_host: Option<RenderSlot>,
-    #[prop(skip_setter)] snackbar_alignment: Option<Alignment>,
+    snackbar_alignment: Option<Alignment>,
     snackbar_offset: [Dp; 2],
 ) {
     let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_size());
@@ -227,8 +206,8 @@ mod tests {
     fn scaffold_layout_case() {
         scaffold()
             .modifier(Modifier::new().constrain(
-                Some(tessera_ui::DimensionValue::Fixed(Px::new(100))),
-                Some(tessera_ui::DimensionValue::Fixed(Px::new(80))),
+                Some(tessera_ui::AxisConstraint::exact(Px::new(100))),
+                Some(tessera_ui::AxisConstraint::exact(Px::new(80))),
             ))
             .top_bar_height(Px::new(10).into())
             .bottom_bar_height(Px::new(12).into())

@@ -4,9 +4,8 @@
 //!
 //! Use to select a value from a continuous range.
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, FocusProperties,
-    FocusRequester, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px,
-    PxPosition, State,
+    CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
+    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, State,
     accesskit::Role,
     layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
@@ -394,20 +393,16 @@ impl LayoutPolicy for GlassSliderFillLayout {
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let available_width = match input.parent_constraint().width() {
-            DimensionValue::Fixed(px) => px,
-            DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
-            DimensionValue::Fill { max, .. } => max.expect(
-                "Seems that you are trying to fill an infinite width, which is not allowed",
-            ),
-        };
-        let available_height = match input.parent_constraint().height() {
-            DimensionValue::Fixed(px) => px,
-            DimensionValue::Wrap { max, .. } => max.unwrap_or(Px(0)),
-            DimensionValue::Fill { max, .. } => max.expect(
-                "Seems that you are trying to fill an infinite height, which is not allowed",
-            ),
-        };
+        let available_width = input
+            .parent_constraint()
+            .width()
+            .resolve_max()
+            .unwrap_or(Px(0));
+        let available_height = input
+            .parent_constraint()
+            .height()
+            .resolve_max()
+            .unwrap_or(Px(0));
 
         let width_px = Px((available_width.to_f32() * self.value).round() as i32);
         let child_id = input
@@ -416,10 +411,7 @@ impl LayoutPolicy for GlassSliderFillLayout {
             .copied()
             .expect("progress fill child should exist");
 
-        let child_constraint = Constraint::new(
-            DimensionValue::Fixed(width_px),
-            DimensionValue::Fixed(available_height),
-        );
+        let child_constraint = Constraint::exact(width_px, available_height);
         input.measure_child(child_id, &child_constraint)?;
         output.place_child(child_id, PxPosition::new(Px(0), Px(0)));
 
@@ -501,21 +493,11 @@ impl LayoutPolicy for GlassSliderLayout {
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let width_dim = input.parent_constraint().width();
-        let self_width = match width_dim {
-            DimensionValue::Fixed(px) => px,
-            DimensionValue::Wrap { max, .. } => max.unwrap_or(self.fallback_width),
-            DimensionValue::Fill { max, .. } => max.expect(
-                "Seems that you are trying to fill an infinite width, which is not allowed",
-            ),
-        };
+        let self_width = input.parent_constraint().width().clamp(self.fallback_width);
         let self_height = self.track_height;
 
         let track_id = input.children_ids()[0];
-        let track_constraint = Constraint::new(
-            DimensionValue::Fixed(self_width),
-            DimensionValue::Fixed(self_height),
-        );
+        let track_constraint = Constraint::exact(self_width, self_height);
         input.measure_child(track_id, &track_constraint)?;
         output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
 

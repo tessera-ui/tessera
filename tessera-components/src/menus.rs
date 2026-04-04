@@ -7,7 +7,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    Callback, Color, ComputedData, DimensionValue, Dp, FocusRequester, FocusScopeNode,
+    AxisConstraint, Callback, Color, ComputedData, Dp, FocusRequester, FocusScopeNode,
     FocusTraversalPolicy, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, PxSize,
     RenderSlot, State,
     accesskit::Role,
@@ -40,11 +40,8 @@ const MENU_LEADING_SIZE: Dp = Dp(20.0);
 const MENU_ITEM_HEIGHT: Dp = Dp(48.0);
 const MENU_TRAILING_SPACING: Dp = Dp(16.0);
 
-fn default_menu_width() -> DimensionValue {
-    DimensionValue::Wrap {
-        min: Some(Px::from(MENU_MIN_WIDTH)),
-        max: Some(Px::from(MENU_MAX_WIDTH)),
-    }
+fn default_menu_width() -> AxisConstraint {
+    AxisConstraint::new(Px::from(MENU_MIN_WIDTH), Some(Px::from(MENU_MAX_WIDTH)))
 }
 
 fn default_menu_modifier() -> Modifier {
@@ -344,18 +341,8 @@ fn resolve_menu_position(
 }
 
 fn extract_available_size(constraint: ParentConstraint<'_>) -> ComputedData {
-    let width = match constraint.width() {
-        DimensionValue::Fixed(px) => px,
-        DimensionValue::Wrap { max, .. } | DimensionValue::Fill { max, .. } => {
-            max.unwrap_or(Px::MAX)
-        }
-    };
-    let height = match constraint.height() {
-        DimensionValue::Fixed(px) => px,
-        DimensionValue::Wrap { max, .. } | DimensionValue::Fill { max, .. } => {
-            max.unwrap_or(Px::MAX)
-        }
-    };
+    let width = constraint.width().resolve_max().unwrap_or(Px::MAX);
+    let height = constraint.height().resolve_max().unwrap_or(Px::MAX);
 
     ComputedData { width, height }
 }
@@ -647,10 +634,7 @@ fn menu_panel(
                     .clone()
                     .constrain(
                         None,
-                        Some(DimensionValue::Wrap {
-                            min: None,
-                            max: provider.max_height,
-                        }),
+                        Some(AxisConstraint::new(Px::ZERO, provider.max_height)),
                     )
                     .clip_to_bounds(),
             )
@@ -881,7 +865,7 @@ fn render_labels(args: &MenuItemConfig, enabled: bool) {
     let supporting_text = args.supporting_text.clone();
 
     column()
-        .modifier(Modifier::new().constrain(Some(DimensionValue::WRAP), None))
+        .modifier(Modifier::new())
         .cross_axis_alignment(CrossAxisAlignment::Start)
         .children(move || {
             {
@@ -996,13 +980,11 @@ fn menu_item_surface(
                 color: Color::TRANSPARENT,
             })
             .enabled(enabled)
-            .modifier(Modifier::new().constrain(
-                Some(DimensionValue::FILLED),
-                Some(DimensionValue::Wrap {
-                    min: Some(Px::from(item.height)),
-                    max: None,
-                }),
-            ))
+            .modifier(
+                Modifier::new()
+                    .fill_max_width()
+                    .constrain(None, Some(AxisConstraint::at_least(Px::from(item.height)))),
+            )
             .accessibility_role(Role::MenuItem)
             .accessibility_label(item.label.clone())
             .block_input(true)
@@ -1037,19 +1019,16 @@ fn menu_item_surface(
         surface_args.with_child(move || {
             let item_for_row = item_for_child.clone();
             row()
-                .modifier(Modifier::new().constrain(
-                    Some(DimensionValue::FILLED),
-                    Some(DimensionValue::Wrap {
-                        min: Some(Px::from(item_for_child.height)),
-                        max: None,
-                    }),
+                .modifier(Modifier::new().fill_max_width().constrain(
+                    None,
+                    Some(AxisConstraint::at_least(Px::from(item_for_child.height))),
                 ))
                 .cross_axis_alignment(CrossAxisAlignment::Center)
                 .children(move || {
                     let item_for_child = item_for_row.clone();
                     {
                         spacer().modifier(Modifier::new().constrain(
-                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                            Some(AxisConstraint::exact(Px::from(MENU_HORIZONTAL_PADDING))),
                             None,
                         ));
                     };
@@ -1061,7 +1040,7 @@ fn menu_item_surface(
 
                     {
                         spacer().modifier(Modifier::new().constrain(
-                            Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                            Some(AxisConstraint::exact(Px::from(MENU_HORIZONTAL_PADDING))),
                             None,
                         ));
                     };
@@ -1084,14 +1063,14 @@ fn menu_item_surface(
 
                         {
                             spacer().modifier(Modifier::new().constrain(
-                                Some(DimensionValue::Fixed(Px::from(MENU_TRAILING_SPACING))),
+                                Some(AxisConstraint::exact(Px::from(MENU_TRAILING_SPACING))),
                                 None,
                             ));
                         };
                     } else {
                         {
                             spacer().modifier(Modifier::new().constrain(
-                                Some(DimensionValue::Fixed(Px::from(MENU_HORIZONTAL_PADDING))),
+                                Some(AxisConstraint::exact(Px::from(MENU_HORIZONTAL_PADDING))),
                                 None,
                             ));
                         };

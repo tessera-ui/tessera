@@ -10,7 +10,7 @@ mod visual;
 
 use tessera_foundation::modifier::ModifierExt as FoundationModifierExt;
 use tessera_ui::{
-    Callback, CallbackWith, Color, DimensionValue, Dp, Modifier, WindowAction,
+    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier, WindowAction,
     modifier::ModifierCapabilityExt as _, use_context,
 };
 
@@ -87,8 +87,8 @@ pub trait ModifierExt {
         max_height: Option<Dp>,
     ) -> Modifier;
 
-    /// Applies explicit width/height `DimensionValue` constraints.
-    fn constrain(self, width: Option<DimensionValue>, height: Option<DimensionValue>) -> Modifier;
+    /// Applies explicit width/height interval constraints.
+    fn constrain(self, width: Option<AxisConstraint>, height: Option<AxisConstraint>) -> Modifier;
 
     /// Fills the available width within parent bounds.
     fn fill_max_width(self) -> Modifier;
@@ -234,7 +234,7 @@ impl ModifierExt for Modifier {
         FoundationModifierExt::size_in(self, min_width, max_width, min_height, max_height)
     }
 
-    fn constrain(self, width: Option<DimensionValue>, height: Option<DimensionValue>) -> Modifier {
+    fn constrain(self, width: Option<AxisConstraint>, height: Option<AxisConstraint>) -> Modifier {
         FoundationModifierExt::constrain(self, width, height)
     }
 

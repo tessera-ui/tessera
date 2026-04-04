@@ -4,7 +4,7 @@
 //!
 //! Show onboarding steps or media carousels that snap between pages.
 use tessera_ui::{
-    CallbackWith, ComputedData, Constraint, DimensionValue, Dp, FocusProperties, KeyboardInput,
+    AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusProperties, KeyboardInput,
     KeyboardInputModifierNode, MeasurementError, Modifier, PointerInput, PointerInputModifierNode,
     Px, PxPosition, State, key,
     layout::{
@@ -516,20 +516,16 @@ impl LayoutPolicy for PagerLayout {
             resolve_page_main_size(self.page_size, main_dimension, self.content_padding);
         let page_spacing = self.page_spacing;
         let padding = self.content_padding;
-        let container_main = resolve_dimension(
-            main_dimension,
-            page_main + padding + padding,
-            "pager main axis",
-        );
+        let container_main = main_dimension.clamp(page_main + padding + padding);
 
         let cross_constraint =
             cross_dimension_for_alignment(cross_dimension, self.cross_axis_alignment);
         let child_constraint = match self.axis {
             PagerAxis::Horizontal => {
-                Constraint::new(DimensionValue::Fixed(page_main), cross_constraint)
+                Constraint::new(AxisConstraint::exact(page_main), cross_constraint)
             }
             PagerAxis::Vertical => {
-                Constraint::new(cross_constraint, DimensionValue::Fixed(page_main))
+                Constraint::new(cross_constraint, AxisConstraint::exact(page_main))
             }
         };
 
@@ -544,7 +540,7 @@ impl LayoutPolicy for PagerLayout {
         for size in measurements.values() {
             max_cross = max_cross.max(self.axis.cross(*size));
         }
-        let container_cross = resolve_dimension(cross_dimension, max_cross, "pager cross axis");
+        let container_cross = cross_dimension.clamp(max_cross);
 
         let should_update_layout = self.controller.with(|controller| {
             let mut next = controller.clone();
@@ -664,40 +660,15 @@ fn compute_visible_pages(current_page: usize, page_count: usize, beyond: usize) 
     (start..end).collect()
 }
 
-fn clamp_wrap(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
-    min.unwrap_or(Px(0))
-        .max(measure)
-        .min(max.unwrap_or(Px::MAX))
-}
-
-fn fill_value(min: Option<Px>, max: Option<Px>, measure: Px, context: &str) -> Px {
-    let Some(max) = max else {
-        panic!("Pager cannot fill an unbounded {context}");
-    };
-    let mut value = max.max(measure);
-    if let Some(min) = min {
-        value = value.max(min);
-    }
-    value
-}
-
-fn resolve_dimension(dim: DimensionValue, measure: Px, context: &str) -> Px {
-    match dim {
-        DimensionValue::Fixed(v) => v,
-        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, measure),
-        DimensionValue::Fill { min, max } => fill_value(min, max, measure, context),
-    }
-}
-
 fn resolve_page_main_size(
     page_size: PagerPageSize,
-    main_dimension: DimensionValue,
+    main_dimension: AxisConstraint,
     padding: Px,
 ) -> Px {
     match page_size {
         PagerPageSize::Fill => {
             let max = main_dimension
-                .get_max()
+                .resolve_max()
                 .expect("Pager page size Fill requires a bounded main-axis constraint");
             (max - padding - padding).max(Px::ZERO)
         }
@@ -706,19 +677,15 @@ fn resolve_page_main_size(
 }
 
 fn cross_dimension_for_alignment(
-    cross_dimension: DimensionValue,
+    cross_dimension: AxisConstraint,
     alignment: CrossAxisAlignment,
-) -> DimensionValue {
-    let max = cross_dimension.get_max();
+) -> AxisConstraint {
     match alignment {
-        CrossAxisAlignment::Stretch => match cross_dimension {
-            DimensionValue::Fixed(value) => DimensionValue::Fixed(value),
-            _ => DimensionValue::Fill {
-                min: cross_dimension.get_min(),
-                max,
-            },
+        CrossAxisAlignment::Stretch => match cross_dimension.resolve_max() {
+            Some(max) => AxisConstraint::exact(max),
+            None => cross_dimension,
         },
-        _ => DimensionValue::Wrap { min: None, max },
+        _ => AxisConstraint::new(Px::ZERO, cross_dimension.resolve_max()),
     }
 }
 

@@ -4,16 +4,13 @@
 //!
 //! Wrap chips, tags, or button groups across multiple rows.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier, Px, PxPosition,
+    AxisConstraint, ComputedData, Constraint, Dp, MeasurementError, Modifier, Px, PxPosition,
     RenderSlot,
     layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
     tessera,
 };
 
-use crate::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment},
-    modifier::ModifierExt as _,
-};
+use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
 /// # flow_row
 ///
@@ -67,9 +64,7 @@ pub fn flow_row(
     max_lines: Option<usize>,
     children: RenderSlot,
 ) {
-    let modifier = modifier.unwrap_or_else(|| {
-        Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
-    });
+    let modifier = modifier.unwrap_or_default();
     let item_spacing = sanitize_spacing(Px::from(item_spacing));
     let line_spacing = sanitize_spacing(Px::from(line_spacing));
     let max_items_per_line = max_items_per_line.unwrap_or(usize::MAX);
@@ -116,19 +111,11 @@ impl LayoutPolicy for FlowRowLayout {
             "Mismatch between children defined in scope and runtime children count"
         );
 
-        let flow_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
-        let max_width = flow_constraint.width.get_max();
+        let flow_constraint = *input.parent_constraint().as_ref();
+        let max_width = flow_constraint.width.resolve_max();
 
-        let child_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: max_width,
-            },
-            flow_constraint.height,
-        );
+        let child_constraint =
+            Constraint::new(flow_constraint.width.without_min(), flow_constraint.height);
 
         let use_weighted_remeasure = max_width.is_some();
         let mut unweighted_nodes = Vec::new();
@@ -367,7 +354,7 @@ fn apply_weighted_children_row(
         .map(|(idx, allocated)| {
             (
                 children_ids[*idx],
-                Constraint::new(DimensionValue::Fixed(*allocated), flow_constraint.height),
+                Constraint::new(AxisConstraint::exact(*allocated), flow_constraint.height),
             )
         })
         .collect();
@@ -539,32 +526,8 @@ fn calculate_cross_axis_offset(
     }
 }
 
-fn resolve_dimension(dim: DimensionValue, content: Px, context: &str) -> Px {
-    match dim {
-        DimensionValue::Fixed(value) => value,
-        DimensionValue::Fill { min, max } => {
-            let Some(max) = max else {
-                panic!(
-                    "Seems that you are using Fill without max constraint, which is not supported in {context}."
-                );
-            };
-            let mut value = max;
-            if let Some(min) = min {
-                value = value.max(min);
-            }
-            value
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut value = content;
-            if let Some(min) = min {
-                value = value.max(min);
-            }
-            if let Some(max) = max {
-                value = value.min(max);
-            }
-            value
-        }
-    }
+fn resolve_dimension(axis: AxisConstraint, content: Px, _context: &str) -> Px {
+    axis.clamp(content)
 }
 
 fn sanitize_spacing(px: Px) -> Px {
@@ -591,7 +554,7 @@ fn px_from_i64(value: i64) -> Px {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
         Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
     };
 
@@ -636,11 +599,8 @@ mod tests {
     fn flow_row_layout_case() {
         flow_row()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(60))),
-                Some(DimensionValue::Wrap {
-                    min: None,
-                    max: Some(Px::new(100)),
-                }),
+                Some(AxisConstraint::exact(Px::new(60))),
+                Some(AxisConstraint::new(Px::ZERO, Some(Px::new(100)))),
             ))
             .main_axis_alignment(MainAxisAlignment::Start)
             .cross_axis_alignment(CrossAxisAlignment::Start)

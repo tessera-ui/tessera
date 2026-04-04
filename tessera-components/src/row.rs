@@ -4,15 +4,12 @@
 //!
 //! Use to stack children horizontally.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy,
+    AxisConstraint, ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutPolicy,
     MeasurementError, Modifier, NodeId, Px, PxPosition, RenderSlot, layout::layout_primitive,
     tessera,
 };
 
-use crate::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment},
-    modifier::ModifierExt as _,
-};
+use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
 struct PlaceChildrenArgs<'a> {
     children_sizes: &'a [Option<ComputedData>],
@@ -56,19 +53,11 @@ impl LayoutPolicy for RowLayout {
             "Mismatch between children defined in scope and runtime children count"
         );
 
-        let row_effective_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let row_effective_constraint = *input.parent_constraint().as_ref();
 
         let has_weighted_children = child_weights.iter().any(|&weight| weight > 0.0);
-        let should_use_weight_for_width = has_weighted_children
-            && matches!(
-                row_effective_constraint.width,
-                DimensionValue::Fixed(_)
-                    | DimensionValue::Fill { max: Some(_), .. }
-                    | DimensionValue::Wrap { max: Some(_), .. }
-            );
+        let should_use_weight_for_width =
+            has_weighted_children && row_effective_constraint.width.resolve_max().is_some();
 
         if should_use_weight_for_width {
             measure_weighted_row(
@@ -131,9 +120,7 @@ pub fn row(
     cross_axis_alignment: CrossAxisAlignment,
     children: RenderSlot,
 ) {
-    let modifier = modifier.unwrap_or_else(|| {
-        Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
-    });
+    let modifier = modifier.unwrap_or_default();
     layout_primitive()
         .modifier(modifier)
         .layout_policy(RowLayout {
@@ -164,7 +151,7 @@ fn measure_weighted_row(
     let mut max_child_height = Px(0);
     let available_width_for_children = row_effective_constraint
         .width
-        .get_max()
+        .resolve_max()
         .expect("Row width Fill expected with finite max constraint");
 
     // Classify children into weighted and unweighted and compute the total weight.
@@ -229,14 +216,7 @@ fn measure_unweighted_row(
     let mut max_child_height = Px(0);
 
     let parent_offered_constraint_for_child = Constraint::new(
-        match row_effective_constraint.width {
-            DimensionValue::Fixed(v) => DimensionValue::Wrap {
-                min: None,
-                max: Some(v),
-            },
-            DimensionValue::Fill { max, .. } => DimensionValue::Wrap { min: None, max },
-            DimensionValue::Wrap { max, .. } => DimensionValue::Wrap { min: None, max },
-        },
+        row_effective_constraint.width.without_min(),
         row_effective_constraint.height,
     );
 
@@ -309,10 +289,7 @@ fn measure_unweighted_children(
     let mut total_width = Px(0);
 
     let parent_offered_constraint_for_child = Constraint::new(
-        DimensionValue::Wrap {
-            min: None,
-            max: row_effective_constraint.width.get_max(),
-        },
+        row_effective_constraint.width.without_min(),
         row_effective_constraint.height,
     );
 
@@ -356,7 +333,7 @@ fn measure_weighted_children(
                 Px((args.remaining_width.0 as f32 * (child_weight / args.total_weight)) as i32);
             let child_id = args.input.children_ids()[child_idx];
             let parent_offered_constraint_for_child = Constraint::new(
-                DimensionValue::Fixed(allocated_width),
+                AxisConstraint::exact(allocated_width),
                 args.row_effective_constraint.height,
             );
             (child_id, parent_offered_constraint_for_child)
@@ -393,67 +370,13 @@ fn calculate_final_row_width(
     row_effective_constraint: &Constraint,
     total_children_measured_width: Px,
 ) -> Px {
-    // Decide the final width based on the row's width constraint type:
-    // - Fixed: use the fixed width
-    // - Fill: try to occupy the parent's available maximum width (limited by min)
-    // - Wrap: use the total width of children, limited by min/max constraints
-    match row_effective_constraint.width {
-        DimensionValue::Fixed(w) => w,
-        DimensionValue::Fill { min, max } => {
-            if let Some(max) = max {
-                let w = max;
-                if let Some(min) = min { w.max(min) } else { w }
-            } else {
-                panic!(
-                    "Seem that you are using Fill without max constraint, which is not supported in Row width."
-                );
-            }
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut w = total_children_measured_width;
-            if let Some(min_w) = min {
-                w = w.max(min_w);
-            }
-            if let Some(max_w) = max {
-                w = w.min(max_w);
-            }
-            w
-        }
-    }
+    row_effective_constraint
+        .width
+        .clamp(total_children_measured_width)
 }
 
 fn calculate_final_row_height(row_effective_constraint: &Constraint, max_child_height: Px) -> Px {
-    // Calculate the final height based on the height constraint type:
-    // - Fixed: use the fixed height
-    // - Fill: use the maximum height available from the parent (limited by min)
-    // - Wrap: use the maximum child height, limited by min/max
-    match row_effective_constraint.height {
-        DimensionValue::Fixed(h) => h,
-        DimensionValue::Fill { min, max } => {
-            if let Some(max_h) = max {
-                let h = max_h;
-                if let Some(min_h) = min {
-                    h.max(min_h)
-                } else {
-                    h
-                }
-            } else {
-                panic!(
-                    "Seem that you are using Fill without max constraint, which is not supported in Row height."
-                );
-            }
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut h = max_child_height;
-            if let Some(min_h) = min {
-                h = h.max(min_h);
-            }
-            if let Some(max_h) = max {
-                h = h.min(max_h);
-            }
-            h
-        }
-    }
+    row_effective_constraint.height.clamp(max_child_height)
 }
 
 fn place_children_with_alignment(args: &PlaceChildrenArgs, output: &mut LayoutOutput<'_>) {
@@ -548,7 +471,7 @@ fn calculate_cross_axis_offset(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
         Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
     };
 
@@ -589,16 +512,11 @@ mod tests {
             input: &LayoutInput<'_>,
             _output: &mut LayoutOutput<'_>,
         ) -> Result<ComputedData, MeasurementError> {
-            let width = match input.parent_constraint().width() {
-                DimensionValue::Fixed(width) => width,
-                DimensionValue::Wrap {
-                    max: Some(width), ..
-                }
-                | DimensionValue::Fill {
-                    max: Some(width), ..
-                } => width,
-                _ => panic!("FillWidthTestLayout requires a bounded width constraint"),
-            };
+            let width = input
+                .parent_constraint()
+                .width()
+                .resolve_max()
+                .expect("FillWidthTestLayout requires a bounded width constraint");
 
             Ok(ComputedData {
                 width,
@@ -633,8 +551,8 @@ mod tests {
     fn row_layout_case() {
         row()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(100))),
-                Some(DimensionValue::Fixed(Px::new(30))),
+                Some(AxisConstraint::exact(Px::new(100))),
+                Some(AxisConstraint::exact(Px::new(30))),
             ))
             .main_axis_alignment(MainAxisAlignment::Start)
             .cross_axis_alignment(CrossAxisAlignment::Start)
@@ -667,8 +585,8 @@ mod tests {
     fn row_alignment_case() {
         row()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(100))),
-                Some(DimensionValue::Fixed(Px::new(30))),
+                Some(AxisConstraint::exact(Px::new(100))),
+                Some(AxisConstraint::exact(Px::new(30))),
             ))
             .main_axis_alignment(MainAxisAlignment::Center)
             .cross_axis_alignment(CrossAxisAlignment::End)

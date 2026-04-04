@@ -6,7 +6,7 @@
 use std::sync::{Arc, OnceLock};
 
 use tessera_ui::{
-    AssetExt, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Px,
+    AssetExt, AxisConstraint, Color, ComputedData, Dp, MeasurementError, Px,
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
     },
@@ -143,8 +143,8 @@ impl From<crate::material_icons::Asset> for Arc<ImageVectorData> {
 struct IconLayout {
     content: IconContent,
     size: Dp,
-    width: Option<DimensionValue>,
-    height: Option<DimensionValue>,
+    width: Option<AxisConstraint>,
+    height: Option<AxisConstraint>,
     tint: Color,
     tint_mode: TintMode,
     rotation: f32,
@@ -159,47 +159,14 @@ impl LayoutPolicy for IconLayout {
         let (intrinsic_width, intrinsic_height) = intrinsic_dimensions(&self.content);
         let size_px = self.size.to_px();
 
-        let preferred_width = self.width.unwrap_or(DimensionValue::Fixed(size_px));
-        let preferred_height = self.height.unwrap_or(DimensionValue::Fixed(size_px));
-
-        let constraint = Constraint::new(preferred_width, preferred_height);
-        let effective_constraint = constraint.merge(input.parent_constraint());
-
-        let width = match effective_constraint.width {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_width)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => {
-                let parent_max = input
-                    .parent_constraint()
-                    .width()
-                    .get_max()
-                    .unwrap_or(Px::MAX);
-                max.unwrap_or(parent_max)
-                    .max(min.unwrap_or(Px(0)))
-                    .max(intrinsic_width)
-            }
-        };
-
-        let height = match effective_constraint.height {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(intrinsic_height)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => {
-                let parent_max = input
-                    .parent_constraint()
-                    .height()
-                    .get_max()
-                    .unwrap_or(Px::MAX);
-                max.unwrap_or(parent_max)
-                    .max(min.unwrap_or(Px(0)))
-                    .max(intrinsic_height)
-            }
-        };
+        let preferred_width = self.width.unwrap_or(AxisConstraint::exact(size_px));
+        let preferred_height = self.height.unwrap_or(AxisConstraint::exact(size_px));
+        let width = preferred_width
+            .intersect(input.parent_constraint().width())
+            .clamp(intrinsic_width);
+        let height = preferred_height
+            .intersect(input.parent_constraint().height())
+            .clamp(intrinsic_height);
 
         Ok(ComputedData { width, height })
     }
@@ -266,8 +233,8 @@ impl RenderPolicy for IconLayout {
 pub fn icon(
     #[prop(skip_setter)] content: Option<IconContent>,
     size: Option<Dp>,
-    width: Option<DimensionValue>,
-    height: Option<DimensionValue>,
+    width: Option<AxisConstraint>,
+    height: Option<AxisConstraint>,
     tint: Option<Color>,
     tint_mode: TintMode,
     rotation: f32,

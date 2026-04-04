@@ -6,7 +6,7 @@
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use tessera_ui::{
-    Callback, DimensionValue, Dp, Modifier, RenderSlot, State, provide_context, remember, tessera,
+    AxisConstraint, Callback, Dp, Modifier, RenderSlot, State, provide_context, remember, tessera,
     use_context,
 };
 
@@ -424,11 +424,11 @@ pub fn time_picker_dialog(
 
     column()
         .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Wrap {
-                min: Some(Dp(280.0).into()),
-                max: Some(Dp(520.0).into()),
-            }),
-            Some(DimensionValue::WRAP),
+            Some(AxisConstraint::new(
+                Dp(280.0).into(),
+                Some(Dp(520.0).into()),
+            )),
+            Some(AxisConstraint::NONE),
         ))
         .children(move || {
             {

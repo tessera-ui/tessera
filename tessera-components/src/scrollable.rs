@@ -7,7 +7,7 @@ pub(crate) mod scrollbar;
 use std::{collections::VecDeque, time::Duration};
 
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, MeasurementError, Modifier,
     PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, ScrollEventSource, State,
     current_frame_nanos,
     focus::FocusRevealRequest,
@@ -551,23 +551,13 @@ impl LayoutPolicy for ScrollableInnerLayout {
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let merged_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
-        let mut child_constraint = merged_constraint;
+        let mut child_constraint = *input.parent_constraint().as_ref();
 
         if self.vertical {
-            child_constraint.height = DimensionValue::Wrap {
-                min: None,
-                max: None,
-            };
+            child_constraint.height = AxisConstraint::NONE;
         }
         if self.horizontal {
-            child_constraint.width = DimensionValue::Wrap {
-                min: None,
-                max: None,
-            };
+            child_constraint.width = AxisConstraint::NONE;
         }
 
         let child_node_id = input.children_ids()[0];
@@ -583,15 +573,14 @@ impl LayoutPolicy for ScrollableInnerLayout {
         let current_child_position = self.controller.with(|c| c.child_position());
         output.place_child(child_node_id, current_child_position);
 
-        let mut width = resolve_dimension(merged_constraint.width, child_measurement.width);
-        let mut height = resolve_dimension(merged_constraint.height, child_measurement.height);
-
-        if let Some(parent_max_width) = input.parent_constraint().width().get_max() {
-            width = width.min(parent_max_width);
-        }
-        if let Some(parent_max_height) = input.parent_constraint().height().get_max() {
-            height = height.min(parent_max_height);
-        }
+        let width = input
+            .parent_constraint()
+            .width()
+            .clamp(child_measurement.width);
+        let height = input
+            .parent_constraint()
+            .height()
+            .clamp(child_measurement.height);
 
         let computed_data = ComputedData { width, height };
         let needs_visible_size_update = self.controller.with(|c| c.visible_size != computed_data);
@@ -670,16 +659,16 @@ impl RenderPolicy for ScrollableInnerLayout {
 /// ```
 #[tessera]
 pub fn scrollable(
-    #[prop(skip_setter)] modifier: Option<Modifier>,
+    modifier: Option<Modifier>,
     vertical: bool,
     horizontal: bool,
     scroll_smoothing: f32,
     scrollbar_behavior: ScrollBarBehavior,
-    #[prop(skip_setter)] scrollbar_track_color: Option<Color>,
-    #[prop(skip_setter)] scrollbar_thumb_color: Option<Color>,
-    #[prop(skip_setter)] scrollbar_thumb_hover_color: Option<Color>,
+    scrollbar_track_color: Option<Color>,
+    scrollbar_thumb_color: Option<Color>,
+    scrollbar_thumb_hover_color: Option<Color>,
     scrollbar_layout: ScrollBarLayout,
-    #[prop(skip_setter)] controller: Option<State<ScrollableController>>,
+    controller: Option<State<ScrollableController>>,
     child: Option<RenderSlot>,
 ) {
     let controller = controller.unwrap_or_else(|| remember(ScrollableController::new));
@@ -694,7 +683,7 @@ pub fn scrollable(
         ScrollBarLayout::Alongside => {
             layout_primitive().modifier(modifier).child(move || {
                 scrollable_with_alongside_scrollbar()
-                    .controller_internal(controller)
+                    .controller(controller)
                     .vertical(vertical)
                     .horizontal(horizontal)
                     .scroll_smoothing(scroll_smoothing)
@@ -708,7 +697,7 @@ pub fn scrollable(
         ScrollBarLayout::Overlay => {
             layout_primitive().modifier(modifier).child(move || {
                 scrollable_with_overlay_scrollbar()
-                    .controller_internal(controller)
+                    .controller(controller)
                     .vertical(vertical)
                     .horizontal(horizontal)
                     .scroll_smoothing(scroll_smoothing)
@@ -722,116 +711,36 @@ pub fn scrollable(
     }
 }
 
-#[allow(missing_docs)]
-impl ScrollableBuilder {
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn scrollbar_track_color(mut self, color: Color) -> Self {
-        self.props.scrollbar_track_color = Some(color);
-        self
-    }
-
-    pub fn scrollbar_thumb_color(mut self, color: Color) -> Self {
-        self.props.scrollbar_thumb_color = Some(color);
-        self
-    }
-
-    pub fn scrollbar_thumb_hover_color(mut self, color: Color) -> Self {
-        self.props.scrollbar_thumb_hover_color = Some(color);
-        self
-    }
-
-    pub fn controller(mut self, controller: State<ScrollableController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-}
-
-#[allow(missing_docs)]
 impl ScrollableWithAlongsideScrollbarBuilder {
-    fn controller_internal(mut self, controller: State<ScrollableController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
     fn child_slot(mut self, child: RenderSlot) -> Self {
         self.props.child = Some(child);
         self
     }
 }
 
-#[allow(missing_docs)]
 impl ScrollableWithOverlayScrollbarBuilder {
-    fn controller_internal(mut self, controller: State<ScrollableController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
     fn child_slot(mut self, child: RenderSlot) -> Self {
         self.props.child = Some(child);
         self
     }
 }
 
-#[allow(missing_docs)]
 impl ScrollableViewportBuilder {
-    fn controller_internal(mut self, controller: State<ScrollableController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
     fn child_slot(mut self, child: RenderSlot) -> Self {
         self.props.child = Some(child);
-        self
-    }
-
-    fn scrollbar_state_v_internal(mut self, scrollbar_state_v: ScrollBarState) -> Self {
-        self.props.scrollbar_state_v = Some(scrollbar_state_v);
-        self
-    }
-
-    fn scrollbar_state_h_internal(mut self, scrollbar_state_h: ScrollBarState) -> Self {
-        self.props.scrollbar_state_h = Some(scrollbar_state_h);
-        self
-    }
-}
-
-impl ScrollbarVBoundBuilder {
-    fn controller_internal(mut self, controller: State<ScrollableController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
-    fn scrollbar_state_internal(mut self, scrollbar_state: ScrollBarState) -> Self {
-        self.props.scrollbar_state = Some(scrollbar_state);
-        self
-    }
-}
-
-impl ScrollbarHBoundBuilder {
-    fn controller_internal(mut self, controller: State<ScrollableController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
-    fn scrollbar_state_internal(mut self, scrollbar_state: ScrollBarState) -> Self {
-        self.props.scrollbar_state = Some(scrollbar_state);
         self
     }
 }
 
 #[tessera]
 fn scrollbar_v_bound(
-    #[prop(skip_setter)] controller: Option<State<ScrollableController>>,
+    controller: Option<State<ScrollableController>>,
     thickness: Dp,
     scrollbar_behavior: ScrollBarBehavior,
     track_color: Color,
     thumb_color: Color,
     thumb_hover_color: Color,
-    #[prop(skip_setter)] scrollbar_state: Option<ScrollBarState>,
+    scrollbar_state: Option<ScrollBarState>,
 ) {
     let controller = controller.expect("scrollbar_v_bound requires controller");
     scrollbar_v()
@@ -839,25 +748,25 @@ fn scrollbar_v_bound(
         .visible(controller.with(|c| c.visible_size().height))
         .offset(controller.with(|c| c.child_position().y))
         .thickness(thickness)
-        .state_internal(controller)
+        .state(controller)
         .scrollbar_behavior(scrollbar_behavior)
         .track_color(track_color)
         .thumb_color(thumb_color)
         .thumb_hover_color(thumb_hover_color)
-        .scrollbar_state_internal(
+        .scrollbar_state(
             scrollbar_state.unwrap_or_else(|| controller.with(|c| c.scrollbar_state_v())),
         );
 }
 
 #[tessera]
 fn scrollbar_h_bound(
-    #[prop(skip_setter)] controller: Option<State<ScrollableController>>,
+    controller: Option<State<ScrollableController>>,
     thickness: Dp,
     scrollbar_behavior: ScrollBarBehavior,
     track_color: Color,
     thumb_color: Color,
     thumb_hover_color: Color,
-    #[prop(skip_setter)] scrollbar_state: Option<ScrollBarState>,
+    scrollbar_state: Option<ScrollBarState>,
 ) {
     let controller = controller.expect("scrollbar_h_bound requires controller");
     scrollbar_h()
@@ -865,19 +774,19 @@ fn scrollbar_h_bound(
         .visible(controller.with(|c| c.visible_size().width))
         .offset(controller.with(|c| c.child_position().x))
         .thickness(thickness)
-        .state_internal(controller)
+        .state(controller)
         .scrollbar_behavior(scrollbar_behavior)
         .track_color(track_color)
         .thumb_color(thumb_color)
         .thumb_hover_color(thumb_hover_color)
-        .scrollbar_state_internal(
+        .scrollbar_state(
             scrollbar_state.unwrap_or_else(|| controller.with(|c| c.scrollbar_state_h())),
         );
 }
 
 #[tessera]
 fn scrollable_with_alongside_scrollbar(
-    #[prop(skip_setter)] controller: Option<State<ScrollableController>>,
+    controller: Option<State<ScrollableController>>,
     vertical: bool,
     horizontal: bool,
     scroll_smoothing: f32,
@@ -903,38 +812,38 @@ fn scrollable_with_alongside_scrollbar(
                 .horizontal(horizontal)
                 .scroll_smoothing(scroll_smoothing)
                 .scrollbar_behavior(scrollbar_behavior.clone())
-                .controller_internal(controller)
-                .scrollbar_state_v_internal(scrollbar_v_state.clone())
-                .scrollbar_state_h_internal(scrollbar_h_state.clone())
+                .controller(controller)
+                .scrollbar_state_v(scrollbar_v_state.clone())
+                .scrollbar_state_h(scrollbar_h_state.clone())
                 .child_slot(child);
 
             if vertical {
                 scrollbar_v_bound()
-                    .controller_internal(controller)
+                    .controller(controller)
                     .scrollbar_behavior(scrollbar_behavior.clone())
                     .thickness(Dp(8.0))
                     .track_color(scrollbar_track_color)
                     .thumb_color(scrollbar_thumb_color)
                     .thumb_hover_color(scrollbar_thumb_hover_color)
-                    .scrollbar_state_internal(scrollbar_v_state.clone());
+                    .scrollbar_state(scrollbar_v_state.clone());
             }
 
             if horizontal {
                 scrollbar_h_bound()
-                    .controller_internal(controller)
+                    .controller(controller)
                     .scrollbar_behavior(scrollbar_behavior.clone())
                     .thickness(Dp(8.0))
                     .track_color(scrollbar_track_color)
                     .thumb_color(scrollbar_thumb_color)
                     .thumb_hover_color(scrollbar_thumb_hover_color)
-                    .scrollbar_state_internal(scrollbar_h_state.clone());
+                    .scrollbar_state(scrollbar_h_state.clone());
             }
         });
 }
 
 #[tessera]
 fn scrollable_with_overlay_scrollbar(
-    #[prop(skip_setter)] controller: Option<State<ScrollableController>>,
+    controller: Option<State<ScrollableController>>,
     vertical: bool,
     horizontal: bool,
     scroll_smoothing: f32,
@@ -961,9 +870,9 @@ fn scrollable_with_overlay_scrollbar(
                     .horizontal(horizontal)
                     .scroll_smoothing(scroll_smoothing)
                     .scrollbar_behavior(scrollbar_behavior.clone())
-                    .controller_internal(controller)
-                    .scrollbar_state_v_internal(scrollbar_v_state.clone())
-                    .scrollbar_state_h_internal(scrollbar_h_state.clone())
+                    .controller(controller)
+                    .scrollbar_state_v(scrollbar_v_state.clone())
+                    .scrollbar_state_h(scrollbar_h_state.clone())
                     .child_slot(child);
             };
             {
@@ -971,13 +880,13 @@ fn scrollable_with_overlay_scrollbar(
                 let scrollbar_behavior = scrollbar_behavior.clone();
                 if vertical {
                     scrollbar_v_bound()
-                        .controller_internal(controller)
+                        .controller(controller)
                         .scrollbar_behavior(scrollbar_behavior.clone())
                         .thickness(Dp(8.0))
                         .track_color(scrollbar_track_color)
                         .thumb_color(scrollbar_thumb_color)
                         .thumb_hover_color(scrollbar_thumb_hover_color)
-                        .scrollbar_state_internal(scrollbar_v_state.clone());
+                        .scrollbar_state(scrollbar_v_state.clone());
                 }
             };
             {
@@ -985,39 +894,16 @@ fn scrollable_with_overlay_scrollbar(
                 let scrollbar_behavior = scrollbar_behavior.clone();
                 if horizontal {
                     scrollbar_h_bound()
-                        .controller_internal(controller)
+                        .controller(controller)
                         .scrollbar_behavior(scrollbar_behavior.clone())
                         .thickness(Dp(8.0))
                         .track_color(scrollbar_track_color)
                         .thumb_color(scrollbar_thumb_color)
                         .thumb_hover_color(scrollbar_thumb_hover_color)
-                        .scrollbar_state_internal(scrollbar_h_state.clone());
+                        .scrollbar_state(scrollbar_h_state.clone());
                 }
             };
         });
-}
-
-// Helpers to resolve DimensionValue into concrete Px sizes.
-// This reduces duplication in the measurement code and lowers cyclomatic
-// complexity.
-fn clamp_wrap(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
-    min.unwrap_or(Px(0))
-        .max(measure)
-        .min(max.unwrap_or(Px::MAX))
-}
-
-fn fill_value(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
-    max.expect("Seems that you are trying to fill an infinite dimension, which is not allowed")
-        .max(measure)
-        .max(min.unwrap_or(Px(0)))
-}
-
-fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
-    match dim {
-        DimensionValue::Fixed(v) => v,
-        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, measure),
-        DimensionValue::Fill { min, max } => fill_value(min, max, measure),
-    }
 }
 
 struct ScrollableViewportPointerModifierNode {
@@ -1231,9 +1117,9 @@ fn scrollable_viewport(
     horizontal: bool,
     scroll_smoothing: f32,
     scrollbar_behavior: ScrollBarBehavior,
-    #[prop(skip_setter)] controller: Option<State<ScrollableController>>,
-    #[prop(skip_setter)] scrollbar_state_v: Option<ScrollBarState>,
-    #[prop(skip_setter)] scrollbar_state_h: Option<ScrollBarState>,
+    controller: Option<State<ScrollableController>>,
+    scrollbar_state_v: Option<ScrollBarState>,
+    scrollbar_state_h: Option<ScrollBarState>,
     child: Option<RenderSlot>,
 ) {
     let controller = controller.expect("scrollable_viewport requires controller");

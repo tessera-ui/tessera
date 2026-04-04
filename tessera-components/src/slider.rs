@@ -4,9 +4,9 @@
 //!
 //! Use to allow users to select a value from a continuous range.
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, CallbackWith, Color, ComputedData, Constraint,
-    DimensionValue, Dp, FocusProperties, FocusRequester, MeasurementError, Modifier, PointerInput,
-    PointerInputModifierNode, Px, PxPosition, SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, CallbackWith, Color,
+    ComputedData, Constraint, Dp, FocusProperties, FocusRequester, MeasurementError, Modifier,
+    PointerInput, PointerInputModifierNode, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
@@ -76,18 +76,6 @@ struct RangeSliderThumbProps {
     accessibility: RangeThumbAccessibility,
 }
 
-impl RangeSliderThumbBuilder {
-    fn focus_internal(mut self, focus: FocusRequester) -> Self {
-        self.props.focus = Some(focus);
-        self
-    }
-
-    fn accessibility_internal(mut self, accessibility: RangeThumbAccessibility) -> Self {
-        self.props.accessibility = Some(accessibility);
-        self
-    }
-}
-
 fn apply_range_thumb_semantics(
     accessibility: &mut AccessibilityNode,
     action_handler: &mut Option<AccessibilityActionHandler>,
@@ -143,8 +131,8 @@ fn range_slider_thumb(
     thumb_layout: Option<SliderLayout>,
     handle_width: Px,
     colors: Option<SliderColors>,
-    #[prop(skip_setter)] focus: Option<FocusRequester>,
-    #[prop(skip_setter)] accessibility: Option<RangeThumbAccessibility>,
+    focus: Option<FocusRequester>,
+    accessibility: Option<RangeThumbAccessibility>,
 ) {
     let thumb_layout = thumb_layout.expect("range_slider_thumb requires thumb layout to be set");
     let colors = colors.expect("range_slider_thumb requires colors to be set");
@@ -918,15 +906,15 @@ fn measure_slider(
     let inactive_width = layout.inactive_width(clamped_value);
 
     let active_constraint = Constraint::new(
-        DimensionValue::Fixed(active_width),
-        DimensionValue::Fixed(layout.track_height),
+        AxisConstraint::exact(active_width),
+        AxisConstraint::exact(layout.track_height),
     );
     input.measure_child(active_id, &active_constraint)?;
     output.place_child(active_id, PxPosition::new(Px(0), layout.track_y));
 
     let inactive_constraint = Constraint::new(
-        DimensionValue::Fixed(inactive_width),
-        DimensionValue::Fixed(layout.track_height),
+        AxisConstraint::exact(inactive_width),
+        AxisConstraint::exact(layout.track_height),
     );
     input.measure_child(inactive_id, &inactive_constraint)?;
     output.place_child(
@@ -938,8 +926,8 @@ fn measure_slider(
     );
 
     let handle_constraint = Constraint::new(
-        DimensionValue::Fixed(handle_width),
-        DimensionValue::Fixed(layout.handle_height),
+        AxisConstraint::exact(handle_width),
+        AxisConstraint::exact(layout.handle_height),
     );
     input.measure_child(handle_id, &handle_constraint)?;
 
@@ -953,8 +941,8 @@ fn measure_slider(
     if let Some(stop_id) = stop_id {
         let stop_size = layout.stop_indicator_diameter;
         let stop_constraint = Constraint::new(
-            DimensionValue::Fixed(stop_size),
-            DimensionValue::Fixed(stop_size),
+            AxisConstraint::exact(stop_size),
+            AxisConstraint::exact(stop_size),
         );
         input.measure_child(stop_id, &stop_constraint)?;
         let stop_offset = layout.center_child_offset(layout.stop_indicator_diameter);
@@ -971,14 +959,8 @@ fn measure_slider(
         && let Some(icon_size) = layout.icon_size
     {
         let icon_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: Some(icon_size.into()),
-            },
-            DimensionValue::Wrap {
-                min: None,
-                max: Some(icon_size.into()),
-            },
+            AxisConstraint::at_most(icon_size.into()),
+            AxisConstraint::at_most(icon_size.into()),
         );
         let icon_measured = input.measure_child(icon_id, &icon_constraint)?;
 
@@ -992,8 +974,8 @@ fn measure_slider(
     if steps > 0 {
         let tick_size = layout.stop_indicator_diameter;
         let tick_constraint = Constraint::new(
-            DimensionValue::Fixed(tick_size),
-            DimensionValue::Fixed(tick_size),
+            AxisConstraint::exact(tick_size),
+            AxisConstraint::exact(tick_size),
         );
         let tick_offset = layout.center_child_offset(tick_size);
         let start_x = layout.handle_gap.to_f32() + handle_width.to_f32() / 2.0;
@@ -1290,8 +1272,8 @@ fn measure_centered_slider(
     input.measure_child(
         left_inactive_id,
         &Constraint::new(
-            DimensionValue::Fixed(segments.left_inactive.1),
-            DimensionValue::Fixed(layout.base.track_height),
+            AxisConstraint::exact(segments.left_inactive.1),
+            AxisConstraint::exact(layout.base.track_height),
         ),
     )?;
     output.place_child(
@@ -1303,8 +1285,8 @@ fn measure_centered_slider(
     input.measure_child(
         active_id,
         &Constraint::new(
-            DimensionValue::Fixed(segments.active.1),
-            DimensionValue::Fixed(layout.base.track_height),
+            AxisConstraint::exact(segments.active.1),
+            AxisConstraint::exact(layout.base.track_height),
         ),
     )?;
     output.place_child(active_id, PxPosition::new(segments.active.0, track_y));
@@ -1313,8 +1295,8 @@ fn measure_centered_slider(
     input.measure_child(
         right_inactive_id,
         &Constraint::new(
-            DimensionValue::Fixed(segments.right_inactive.1),
-            DimensionValue::Fixed(layout.base.track_height),
+            AxisConstraint::exact(segments.right_inactive.1),
+            AxisConstraint::exact(layout.base.track_height),
         ),
     )?;
     output.place_child(
@@ -1327,8 +1309,8 @@ fn measure_centered_slider(
     input.measure_child(
         handle_id,
         &Constraint::new(
-            DimensionValue::Fixed(handle_width),
-            DimensionValue::Fixed(layout.base.handle_height),
+            AxisConstraint::exact(handle_width),
+            AxisConstraint::exact(layout.base.handle_height),
         ),
     )?;
     output.place_child(
@@ -1348,8 +1330,8 @@ fn measure_centered_slider(
         // 5. Left Stop
         let stop_size = layout.base.stop_indicator_diameter;
         let stop_constraint = Constraint::new(
-            DimensionValue::Fixed(stop_size),
-            DimensionValue::Fixed(stop_size),
+            AxisConstraint::exact(stop_size),
+            AxisConstraint::exact(stop_size),
         );
         input.measure_child(left_stop_id, &stop_constraint)?;
 
@@ -1382,8 +1364,8 @@ fn measure_centered_slider(
     if steps > 0 {
         let tick_size = layout.base.stop_indicator_diameter;
         let tick_constraint = Constraint::new(
-            DimensionValue::Fixed(tick_size),
-            DimensionValue::Fixed(tick_size),
+            AxisConstraint::exact(tick_size),
+            AxisConstraint::exact(tick_size),
         );
         let tick_offset = layout.base.center_child_offset(tick_size);
         let start_x = layout.base.handle_gap.to_f32() + handle_width.to_f32() / 2.0;
@@ -1606,8 +1588,8 @@ fn measure_range_slider(
     input.measure_child(
         left_inactive_id,
         &Constraint::new(
-            DimensionValue::Fixed(segments.left_inactive.1),
-            DimensionValue::Fixed(layout.base.track_height),
+            AxisConstraint::exact(segments.left_inactive.1),
+            AxisConstraint::exact(layout.base.track_height),
         ),
     )?;
     output.place_child(
@@ -1618,8 +1600,8 @@ fn measure_range_slider(
     input.measure_child(
         active_id,
         &Constraint::new(
-            DimensionValue::Fixed(segments.active.1),
-            DimensionValue::Fixed(layout.base.track_height),
+            AxisConstraint::exact(segments.active.1),
+            AxisConstraint::exact(layout.base.track_height),
         ),
     )?;
     output.place_child(active_id, PxPosition::new(segments.active.0, track_y));
@@ -1627,8 +1609,8 @@ fn measure_range_slider(
     input.measure_child(
         right_inactive_id,
         &Constraint::new(
-            DimensionValue::Fixed(segments.right_inactive.1),
-            DimensionValue::Fixed(layout.base.track_height),
+            AxisConstraint::exact(segments.right_inactive.1),
+            AxisConstraint::exact(layout.base.track_height),
         ),
     )?;
     output.place_child(
@@ -1637,12 +1619,12 @@ fn measure_range_slider(
     );
 
     let start_handle_constraint = Constraint::new(
-        DimensionValue::Fixed(args.start_handle_width),
-        DimensionValue::Fixed(layout.base.handle_height),
+        AxisConstraint::exact(args.start_handle_width),
+        AxisConstraint::exact(layout.base.handle_height),
     );
     let end_handle_constraint = Constraint::new(
-        DimensionValue::Fixed(args.end_handle_width),
-        DimensionValue::Fixed(layout.base.handle_height),
+        AxisConstraint::exact(args.end_handle_width),
+        AxisConstraint::exact(layout.base.handle_height),
     );
     let start_handle_offset = layout.base.center_child_offset(args.start_handle_width);
     let end_handle_offset = layout.base.center_child_offset(args.end_handle_width);
@@ -1668,8 +1650,8 @@ fn measure_range_slider(
     if args.steps > 0 {
         let tick_size = layout.base.stop_indicator_diameter;
         let tick_constraint = Constraint::new(
-            DimensionValue::Fixed(tick_size),
-            DimensionValue::Fixed(tick_size),
+            AxisConstraint::exact(tick_size),
+            AxisConstraint::exact(tick_size),
         );
         let tick_offset = layout.base.center_child_offset(tick_size);
 
@@ -1702,8 +1684,8 @@ fn measure_range_slider(
 
         let stop_size = layout.base.stop_indicator_diameter;
         let stop_constraint = Constraint::new(
-            DimensionValue::Fixed(stop_size),
-            DimensionValue::Fixed(stop_size),
+            AxisConstraint::exact(stop_size),
+            AxisConstraint::exact(stop_size),
         );
         input.measure_child(stop_start_id, &stop_constraint)?;
 
@@ -1921,8 +1903,8 @@ fn render_range_slider(args: RangeSliderConfig) {
                 .thumb_layout(start_thumb_args.thumb_layout)
                 .handle_width(start_thumb_args.handle_width)
                 .colors(start_thumb_args.colors)
-                .focus_internal(start_thumb_args.focus)
-                .accessibility_internal(start_thumb_args.accessibility);
+                .focus(start_thumb_args.focus)
+                .accessibility(start_thumb_args.accessibility);
 
             let end_thumb_args = RangeSliderThumbProps {
                 thumb_layout: range_layout.base,
@@ -1949,7 +1931,7 @@ fn render_range_slider(args: RangeSliderConfig) {
                 .thumb_layout(end_thumb_args.thumb_layout)
                 .handle_width(end_thumb_args.handle_width)
                 .colors(end_thumb_args.colors)
-                .focus_internal(end_thumb_args.focus)
-                .accessibility_internal(end_thumb_args.accessibility);
+                .focus(end_thumb_args.focus)
+                .accessibility(end_thumb_args.accessibility);
         });
 }

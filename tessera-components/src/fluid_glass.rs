@@ -4,9 +4,8 @@
 //!
 //! Use as a background for buttons, panels, or other UI elements.
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, DimensionValue, Dp, FocusRequester,
-    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot,
-    SampleRegion, State,
+    Callback, Color, ComputedData, Constraint, Dp, FocusRequester, MeasurementError, Modifier,
+    PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, SampleRegion, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{
@@ -20,7 +19,7 @@ use tessera_ui::{
 
 use crate::{
     modifier::{ClickableArgs, InteractionState, ModifierExt, PointerEventContext, SemanticsArgs},
-    padding_utils::remove_padding_from_dimension,
+    padding_utils::remove_padding_from_constraint,
     pipelines::{
         blur::command::DualBlurCommand, contrast::ContrastCommand, mean::command::MeanCommand,
     },
@@ -472,17 +471,14 @@ impl LayoutPolicy for FluidGlassLayout {
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let effective_glass_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let effective_glass_constraint = *input.parent_constraint().as_ref();
 
         let child_constraint = Constraint::new(
-            remove_padding_from_dimension(
+            remove_padding_from_constraint(
                 effective_glass_constraint.width,
                 self.args.padding.into(),
             ),
-            remove_padding_from_dimension(
+            remove_padding_from_constraint(
                 effective_glass_constraint.height,
                 self.args.padding.into(),
             ),
@@ -509,30 +505,8 @@ impl LayoutPolicy for FluidGlassLayout {
         let padding_px: Px = self.args.padding.into();
         let min_width = child_measurement.width + padding_px * 2;
         let min_height = child_measurement.height + padding_px * 2;
-        let width = match effective_glass_constraint.width {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(min_width)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => max
-                .expect("Seems that you are trying to fill an infinite width, which is not allowed")
-                .max(min_width)
-                .max(min.unwrap_or(Px(0))),
-        };
-        let height = match effective_glass_constraint.height {
-            DimensionValue::Fixed(value) => value,
-            DimensionValue::Wrap { min, max } => min
-                .unwrap_or(Px(0))
-                .max(min_height)
-                .min(max.unwrap_or(Px::MAX)),
-            DimensionValue::Fill { min, max } => max
-                .expect(
-                    "Seems that you are trying to fill an infinite height, which is not allowed",
-                )
-                .max(min_height)
-                .max(min.unwrap_or(Px(0))),
-        };
+        let width = effective_glass_constraint.width.clamp(min_width);
+        let height = effective_glass_constraint.height.clamp(min_height);
 
         Ok(ComputedData { width, height })
     }

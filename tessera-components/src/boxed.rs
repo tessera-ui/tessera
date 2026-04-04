@@ -4,38 +4,14 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, layout::layout_primitive, tessera,
+    AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+    Modifier, Px, PxPosition, RenderSlot, layout::layout_primitive, tessera,
 };
 
 use crate::alignment::Alignment;
 
-fn resolve_final_dimension(dv: DimensionValue, largest_child: Px) -> Px {
-    match dv {
-        DimensionValue::Fixed(v) => v,
-        DimensionValue::Fill { min, max } => {
-            let Some(max) = max else {
-                panic!(
-                    "Seems that you are trying to fill an infinite dimension, which is not allowed\nboxed constraint = {dv:?}"
-                );
-            };
-            let mut v = max.max(largest_child);
-            if let Some(min_v) = min {
-                v = v.max(min_v);
-            }
-            v
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut v = largest_child;
-            if let Some(min_v) = min {
-                v = v.max(min_v);
-            }
-            if let Some(max_v) = max {
-                v = v.min(max_v);
-            }
-            v
-        }
-    }
+fn resolve_final_dimension(axis: AxisConstraint, largest_child: Px) -> Px {
+    axis.clamp(largest_child)
 }
 
 fn center_axis(container: Px, child: Px) -> Px {
@@ -130,10 +106,7 @@ impl LayoutPolicy for BoxedLayout {
             "Mismatch between children defined in scope and runtime children count"
         );
 
-        let effective_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let effective_constraint = *input.parent_constraint().as_ref();
 
         let mut max_child_width = Px(0);
         let mut max_child_height = Px(0);
@@ -195,7 +168,7 @@ fn collect_child_alignments(input: &LayoutInput<'_>) -> Vec<Option<Alignment>> {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
         Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
     };
 
@@ -241,8 +214,8 @@ mod tests {
         boxed()
             .alignment(Alignment::TopStart)
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(100))),
-                Some(DimensionValue::Fixed(Px::new(80))),
+                Some(AxisConstraint::exact(Px::new(100))),
+                Some(AxisConstraint::exact(Px::new(80))),
             ))
             .children(|| {
                 boxed_start_box();
@@ -275,8 +248,8 @@ mod tests {
         boxed()
             .alignment(Alignment::Center)
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(100))),
-                Some(DimensionValue::Fixed(Px::new(80))),
+                Some(AxisConstraint::exact(Px::new(100))),
+                Some(AxisConstraint::exact(Px::new(80))),
             ))
             .children(|| {
                 fixed_test_box()

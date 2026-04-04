@@ -34,7 +34,7 @@ use crate::{
     time::Instant,
 };
 
-pub use constraint::{Constraint, DimensionValue, ParentConstraint};
+pub use constraint::{AxisConstraint, Constraint, ParentConstraint};
 pub use node::{
     ComputedData, ImeInput, ImeInputHandlerFn, ImeRequest, ImeSession, KeyboardInput,
     KeyboardInputHandlerFn, MeasurementError, PointerEventPass, PointerInput,
@@ -742,10 +742,7 @@ impl ComponentTree {
                 false,
             );
         };
-        let screen_constraint = Constraint::new(
-            DimensionValue::Fixed(screen_size.width),
-            DimensionValue::Fixed(screen_size.height),
-        );
+        let screen_constraint = Constraint::exact(screen_size.width, screen_size.height);
         let current_children_by_node = collect_children_by_instance_key(root_node, &self.tree);
         let StructureReconcileResult {
             changed_nodes: structural_dirty_nodes,

@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, MeasurementError, Modifier,
     Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
@@ -169,16 +169,7 @@ impl LayoutPolicy for SwitchLayout {
         let track_id = input.children_ids()[0];
         let state_layer_id = input.children_ids()[1];
         let thumb_id = input.children_ids()[2];
-        let thumb_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-        );
+        let thumb_constraint = Constraint::NONE;
         let track_size = input.measure_child(track_id, &thumb_constraint)?;
         let state_layer_size = input.measure_child(state_layer_id, &thumb_constraint)?;
         let thumb_size = input.measure_child(thumb_id, &thumb_constraint)?;
@@ -329,8 +320,8 @@ impl LayoutPolicy for SwitchThumbLayout {
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
         let constraint = Constraint::new(
-            DimensionValue::Fixed(self.size),
-            DimensionValue::Fixed(self.size),
+            AxisConstraint::exact(self.size),
+            AxisConstraint::exact(self.size),
         );
 
         for child_id in input.children_ids() {

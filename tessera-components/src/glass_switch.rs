@@ -6,7 +6,7 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, MeasurementError, Modifier,
     Px, PxPosition, State,
     accesskit::Role,
     current_frame_nanos,
@@ -245,8 +245,8 @@ pub fn glass_switch(
         .child(move || {
             let track = fluid_glass()
                 .modifier(Modifier::new().constrain(
-                    Some(DimensionValue::Fixed(width_px)),
-                    Some(DimensionValue::Fixed(height_px)),
+                    Some(AxisConstraint::exact(width_px)),
+                    Some(AxisConstraint::exact(height_px)),
                 ))
                 .tint_color(track_color)
                 .shape(Shape::capsule())
@@ -261,8 +261,8 @@ pub fn glass_switch(
             let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
             let thumb = fluid_glass()
                 .modifier(Modifier::new().constrain(
-                    Some(DimensionValue::Fixed(thumb_px)),
-                    Some(DimensionValue::Fixed(thumb_px)),
+                    Some(AxisConstraint::exact(thumb_px)),
+                    Some(AxisConstraint::exact(thumb_px)),
                 ))
                 .tint_color(thumb_color)
                 .refraction_height(Dp(1.0))
@@ -292,20 +292,8 @@ impl LayoutPolicy for GlassSwitchLayout {
         let track_id = input.children_ids()[0];
         let thumb_id = input.children_ids()[1];
 
-        let track_constraint = Constraint::new(
-            DimensionValue::Fixed(self.width),
-            DimensionValue::Fixed(self.height),
-        );
-        let thumb_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-            DimensionValue::Wrap {
-                min: None,
-                max: None,
-            },
-        );
+        let track_constraint = Constraint::exact(self.width, self.height);
+        let thumb_constraint = Constraint::NONE;
 
         let nodes_constraints = vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
         let sizes_map = input.measure_children(nodes_constraints)?;

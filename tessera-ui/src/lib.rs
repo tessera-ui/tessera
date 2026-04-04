@@ -323,7 +323,7 @@ pub use crate::{
     asset::AssetExt,
     color::Color,
     component_tree::{
-        ComponentTree, ComputedData, Constraint, DimensionValue, ImeInput, ImeInputHandlerFn,
+        AxisConstraint, ComponentTree, ComputedData, Constraint, ImeInput, ImeInputHandlerFn,
         ImeRequest, ImeSession, KeyboardInput, KeyboardInputHandlerFn, MeasurementError,
         ParentConstraint, PointerEventPass, PointerInput, PointerInputHandlerFn, WindowAction,
     },

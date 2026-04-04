@@ -4,8 +4,8 @@
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, MeasurementError, Modifier,
-    ParentConstraint, Px, PxPosition,
+    Color, ComputedData, Constraint, Dp, MeasurementError, Modifier, ParentConstraint, Px,
+    PxPosition,
     accesskit::Role,
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
@@ -81,17 +81,11 @@ impl LayoutPolicy for LinearProgressLayout {
             if let Some((x, w)) =
                 linear_segment_bounds(0.0, progress, self_width, self_height, is_butt)
             {
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(w),
-                    DimensionValue::Fixed(child_height),
-                );
+                let constraint = Constraint::new(w, child_height);
                 input.measure_child(indicator_id, &constraint)?;
                 output.place_child(indicator_id, PxPosition::new(x, Px(0)));
             } else {
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(Px(0)),
-                    DimensionValue::Fixed(child_height),
-                );
+                let constraint = Constraint::new(Px(0), child_height);
                 input.measure_child(indicator_id, &constraint)?;
                 output.place_child(indicator_id, PxPosition::new(Px(0), Px(0)));
             }
@@ -100,27 +94,18 @@ impl LayoutPolicy for LinearProgressLayout {
                 && let Some((x, w)) =
                     linear_segment_bounds(track_start, 1.0, self_width, self_height, is_butt)
             {
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(w),
-                    DimensionValue::Fixed(child_height),
-                );
+                let constraint = Constraint::new(w, child_height);
                 input.measure_child(track_id, &constraint)?;
                 output.place_child(track_id, PxPosition::new(x, Px(0)));
             } else {
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(Px(0)),
-                    DimensionValue::Fixed(child_height),
-                );
+                let constraint = Constraint::new(Px(0), child_height);
                 input.measure_child(track_id, &constraint)?;
                 output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
             }
 
             if let Some(stop_id) = stop_id {
                 let (pos, stop_size) = stop_indicator_bounds(self_width, self_height);
-                let constraint = Constraint::new(
-                    DimensionValue::Fixed(stop_size),
-                    DimensionValue::Fixed(stop_size),
-                );
+                let constraint = Constraint::new(stop_size, stop_size);
                 input.measure_child(stop_id, &constraint)?;
                 output.place_child(stop_id, pos);
             }
@@ -141,17 +126,11 @@ impl LayoutPolicy for LinearProgressLayout {
                 if let Some((x, w)) =
                     linear_segment_bounds(start, end, self_width, self_height, is_butt)
                 {
-                    let constraint = Constraint::new(
-                        DimensionValue::Fixed(w),
-                        DimensionValue::Fixed(child_height),
-                    );
+                    let constraint = Constraint::new(w, child_height);
                     input.measure_child(node_id, &constraint)?;
                     output.place_child(node_id, PxPosition::new(x, Px(0)));
                 } else {
-                    let constraint = Constraint::new(
-                        DimensionValue::Fixed(Px(0)),
-                        DimensionValue::Fixed(child_height),
-                    );
+                    let constraint = Constraint::new(Px(0), child_height);
                     input.measure_child(node_id, &constraint)?;
                     output.place_child(node_id, PxPosition::new(Px(0), Px(0)));
                 }
@@ -425,21 +404,11 @@ fn standard_easing(progress: f32) -> f32 {
     cubic_bezier_easing(progress, 0.2, 0.0, 0.0, 1.0)
 }
 
-fn resolve_dimension(dimension: DimensionValue, fallback: Px) -> Px {
-    match dimension {
-        DimensionValue::Fixed(px) => px,
-        DimensionValue::Fill { max, .. } | DimensionValue::Wrap { max, .. } => {
-            max.unwrap_or(fallback)
-        }
-    }
-}
-
 fn resolve_linear_size(parent: ParentConstraint<'_>) -> (Px, Px) {
     let fallback_width = ProgressIndicatorDefaults::LINEAR_INDICATOR_WIDTH.to_px();
     let fallback_height = ProgressIndicatorDefaults::LINEAR_INDICATOR_HEIGHT.to_px();
-    let merged = Constraint::new(parent.width(), parent.height()).merge(parent);
-    let width = resolve_dimension(merged.width, fallback_width);
-    let height = resolve_dimension(merged.height, fallback_height);
+    let width = parent.width().clamp(fallback_width);
+    let height = parent.height().clamp(fallback_height);
     (width, height)
 }
 
@@ -521,44 +490,6 @@ fn stop_indicator_bounds(width: Px, height: Px) -> (PxPosition, Px) {
     )
 }
 
-impl LinearProgressIndicatorBuilder {
-    /// Sets the modifier chain applied to the indicator subtree.
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    /// Sets the active indicator color.
-    pub fn color(mut self, color: Color) -> Self {
-        self.props.color = Some(color);
-        self
-    }
-
-    /// Sets the inactive track color.
-    pub fn track_color(mut self, track_color: Color) -> Self {
-        self.props.track_color = Some(track_color);
-        self
-    }
-
-    /// Sets the stroke cap used for the indicator ends.
-    pub fn stroke_cap(mut self, stroke_cap: ProgressStrokeCap) -> Self {
-        self.props.stroke_cap = Some(stroke_cap);
-        self
-    }
-
-    /// Sets the gap size between the active indicator and the track.
-    pub fn gap_size(mut self, gap_size: Dp) -> Self {
-        self.props.gap_size = Some(gap_size);
-        self
-    }
-
-    /// Sets whether to draw a stop indicator at the end of the track.
-    pub fn draw_stop_indicator(mut self, draw_stop_indicator: bool) -> Self {
-        self.props.draw_stop_indicator = Some(draw_stop_indicator);
-        self
-    }
-}
-
 /// # linear_progress_indicator
 ///
 /// Renders a Material Design progress indicator in a horizontal, linear form.
@@ -601,12 +532,12 @@ impl LinearProgressIndicatorBuilder {
 #[tessera]
 pub fn linear_progress_indicator(
     progress: Option<f32>,
-    #[prop(skip_setter)] modifier: Option<Modifier>,
-    #[prop(skip_setter)] color: Option<Color>,
-    #[prop(skip_setter)] track_color: Option<Color>,
-    #[prop(skip_setter)] stroke_cap: Option<ProgressStrokeCap>,
-    #[prop(skip_setter)] gap_size: Option<Dp>,
-    #[prop(skip_setter)] draw_stop_indicator: Option<bool>,
+    modifier: Option<Modifier>,
+    color: Option<Color>,
+    track_color: Option<Color>,
+    stroke_cap: Option<ProgressStrokeCap>,
+    gap_size: Option<Dp>,
+    draw_stop_indicator: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
@@ -722,44 +653,6 @@ pub fn linear_progress_indicator(
     });
 }
 
-impl CircularProgressIndicatorBuilder {
-    /// Sets the indicator diameter.
-    pub fn diameter(mut self, diameter: Dp) -> Self {
-        self.props.diameter = Some(diameter);
-        self
-    }
-
-    /// Sets the indicator stroke width.
-    pub fn stroke_width(mut self, stroke_width: Dp) -> Self {
-        self.props.stroke_width = Some(stroke_width);
-        self
-    }
-
-    /// Sets the active indicator color.
-    pub fn color(mut self, color: Color) -> Self {
-        self.props.color = Some(color);
-        self
-    }
-
-    /// Sets the track color.
-    pub fn track_color(mut self, track_color: Color) -> Self {
-        self.props.track_color = Some(track_color);
-        self
-    }
-
-    /// Sets the stroke cap.
-    pub fn stroke_cap(mut self, stroke_cap: ProgressStrokeCap) -> Self {
-        self.props.stroke_cap = Some(stroke_cap);
-        self
-    }
-
-    /// Sets the gap size between the active indicator and the track.
-    pub fn gap_size(mut self, gap_size: Dp) -> Self {
-        self.props.gap_size = Some(gap_size);
-        self
-    }
-}
-
 fn circular_gap_sweep_degrees(diameter: Dp, stroke_width: Dp, gap_size: Dp, is_butt: bool) -> f32 {
     let adjusted_gap = if is_butt {
         gap_size
@@ -863,12 +756,12 @@ fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
 #[tessera]
 pub fn circular_progress_indicator(
     progress: Option<f32>,
-    #[prop(skip_setter)] diameter: Option<Dp>,
-    #[prop(skip_setter)] stroke_width: Option<Dp>,
-    #[prop(skip_setter)] color: Option<Color>,
-    #[prop(skip_setter)] track_color: Option<Color>,
-    #[prop(skip_setter)] stroke_cap: Option<ProgressStrokeCap>,
-    #[prop(skip_setter)] gap_size: Option<Dp>,
+    diameter: Option<Dp>,
+    stroke_width: Option<Dp>,
+    color: Option<Color>,
+    track_color: Option<Color>,
+    stroke_cap: Option<ProgressStrokeCap>,
+    gap_size: Option<Dp>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
@@ -929,26 +822,6 @@ pub fn circular_progress_indicator(
         .render_policy(policy);
 }
 
-impl ProgressBuilder {
-    /// Sets the modifier chain applied to the progress bar subtree.
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    /// Sets the active part color.
-    pub fn progress_color(mut self, progress_color: Color) -> Self {
-        self.props.progress_color = Some(progress_color);
-        self
-    }
-
-    /// Sets the inactive track color.
-    pub fn track_color(mut self, track_color: Color) -> Self {
-        self.props.track_color = Some(track_color);
-        self
-    }
-}
-
 /// # progress
 ///
 /// Renders a linear progress indicator that visualizes a value from 0.0 to 1.0.
@@ -986,9 +859,9 @@ impl ProgressBuilder {
 #[tessera]
 pub fn progress(
     value: f32,
-    #[prop(skip_setter)] modifier: Option<Modifier>,
-    #[prop(skip_setter)] progress_color: Option<Color>,
-    #[prop(skip_setter)] track_color: Option<Color>,
+    modifier: Option<Modifier>,
+    progress_color: Option<Color>,
+    track_color: Option<Color>,
 ) {
     linear_progress_indicator()
         .progress(value)

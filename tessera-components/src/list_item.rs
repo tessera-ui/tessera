@@ -5,7 +5,7 @@
 //! Present rows of content in settings, inboxes, or selection lists.
 
 use tessera_ui::{
-    Callback, Color, DimensionValue, Dp, Modifier, Px, RenderSlot, State, accesskit::Role,
+    AxisConstraint, Callback, Color, Dp, Modifier, Px, RenderSlot, State, accesskit::Role,
     provide_context, tessera, use_context,
 };
 
@@ -323,10 +323,7 @@ pub fn list_item(
         let row_modifier = Modifier::new()
             .constrain(
                 None,
-                Some(DimensionValue::Wrap {
-                    min: Some(Px::from(content_min_height)),
-                    max: None,
-                }),
+                Some(AxisConstraint::at_least(Px::from(content_min_height))),
             )
             .padding(content_padding)
             .fill_max_width();

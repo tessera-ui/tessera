@@ -5,10 +5,10 @@
 //! Collect short-form inputs like names, passwords, or search queries.
 use glyphon::Action as GlyphonAction;
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput,
-    LayoutOutput, LayoutPolicy, MeasurementError, Modifier, PressKeyEventType, Px, PxPosition,
-    RenderSlot, State, layout::layout_primitive, modifier::CursorModifierExt as _, provide_context,
-    remember, tessera, use_context, winit,
+    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput,
+    LayoutPolicy, MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
+    layout::layout_primitive, modifier::CursorModifierExt as _, provide_context, remember, tessera,
+    use_context, winit,
 };
 
 use crate::{
@@ -210,30 +210,6 @@ struct TextFieldProps {
 }
 
 impl TextFieldBuilder {
-    /// Set the input line limit policy.
-    pub fn line_limit(mut self, line_limit: TextFieldLineLimit) -> Self {
-        self.props.line_limit = line_limit;
-        self
-    }
-
-    /// Set the context menu policy.
-    pub fn context_menu(mut self, context_menu: TextFieldContextMenu) -> Self {
-        self.props.context_menu = context_menu;
-        self
-    }
-
-    /// Sets an external text input controller.
-    pub fn controller(mut self, controller: State<TextInputController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
-    /// Set the obfuscation character for secure fields.
-    pub fn obfuscation_char(mut self, obfuscation_char: char) -> Self {
-        self.props.obfuscation_char = Some(obfuscation_char);
-        self
-    }
-
     /// Creates filled text field defaults.
     pub fn filled() -> Self {
         text_field()
@@ -585,17 +561,11 @@ impl LayoutPolicy for OutlinedFloatingLabelLayout {
         let notch_id = input.children_ids()[0];
         let label_id = input.children_ids()[1];
 
-        let parent_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let parent_constraint = *input.parent_constraint().as_ref();
         let label_measurement = input.measure_child(label_id, &parent_constraint)?;
         let notch_width = label_measurement.width + self.notch_padding * 2;
         let notch_height = label_measurement.height + self.notch_vertical_padding * 2;
-        let notch_constraint = Constraint::new(
-            DimensionValue::Fixed(notch_width),
-            DimensionValue::Fixed(notch_height),
-        );
+        let notch_constraint = Constraint::exact(notch_width, notch_height);
         let _ = input.measure_child(notch_id, &notch_constraint)?;
 
         let notch_position = PxPosition::new(
@@ -1119,12 +1089,12 @@ pub fn text_field(
     prefix: Option<RenderSlot>,
     suffix: Option<RenderSlot>,
     #[default(true)] show_indicator: bool,
-    #[prop(skip_setter)] line_limit: TextFieldLineLimit,
-    #[prop(skip_setter)] context_menu: TextFieldContextMenu,
+    line_limit: TextFieldLineLimit,
+    context_menu: TextFieldContextMenu,
     input_transform: Option<CallbackWith<String, String>>,
-    #[prop(skip_setter)] obfuscation_char: Option<char>,
+    obfuscation_char: Option<char>,
     #[prop(skip_setter)] display_transform: Option<DisplayTransform>,
-    #[prop(skip_setter)] controller: Option<State<TextInputController>>,
+    controller: Option<State<TextInputController>>,
 ) {
     let args = TextFieldProps {
         enabled,

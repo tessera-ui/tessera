@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Color, ComputedData, Constraint, DimensionValue,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
     Dp, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     current_frame_nanos,
@@ -282,8 +282,8 @@ fn compute_thumb_color(
 fn render_track_surface_v(width: Px, height: Px, color: Color) {
     surface()
         .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Fixed(width)),
-            Some(DimensionValue::Fixed(height)),
+            Some(AxisConstraint::exact(width)),
+            Some(AxisConstraint::exact(height)),
         ))
         .style(color.into())
         .shape(Shape::RoundedRectangle {
@@ -299,8 +299,8 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
 fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
     surface()
         .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Fixed(width)),
-            Some(DimensionValue::Fixed(height)),
+            Some(AxisConstraint::exact(width)),
+            Some(AxisConstraint::exact(height)),
         ))
         .shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::Capsule,
@@ -316,8 +316,8 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
 fn render_track_surface_h(width: Px, height: Px, color: Color) {
     surface()
         .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Fixed(width)),
-            Some(DimensionValue::Fixed(height)),
+            Some(AxisConstraint::exact(width)),
+            Some(AxisConstraint::exact(height)),
         ))
         .style(color.into())
         .shape(Shape::RoundedRectangle {
@@ -333,8 +333,8 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
 fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
     surface()
         .modifier(Modifier::new().constrain(
-            Some(DimensionValue::Fixed(width)),
-            Some(DimensionValue::Fixed(height)),
+            Some(AxisConstraint::exact(width)),
+            Some(AxisConstraint::exact(height)),
         ))
         .shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::Capsule,
@@ -565,30 +565,6 @@ fn scroll_accessibility_step(
     mark_scroll_activity(state, &args.scrollbar_behavior, current_frame_nanos());
 }
 
-impl ScrollbarVBuilder {
-    pub(crate) fn state_internal(mut self, state: State<ScrollableController>) -> Self {
-        self.props.state = Some(state);
-        self
-    }
-
-    pub(crate) fn scrollbar_state_internal(mut self, scrollbar_state: ScrollBarState) -> Self {
-        self.props.scrollbar_state = Some(scrollbar_state);
-        self
-    }
-}
-
-impl ScrollbarHBuilder {
-    pub(crate) fn state_internal(mut self, state: State<ScrollableController>) -> Self {
-        self.props.state = Some(state);
-        self
-    }
-
-    pub(crate) fn scrollbar_state_internal(mut self, scrollbar_state: ScrollBarState) -> Self {
-        self.props.scrollbar_state = Some(scrollbar_state);
-        self
-    }
-}
-
 /// Update dragging behavior for vertical axis.
 fn update_drag_vertical(
     input: &tessera_ui::PointerInput,
@@ -817,12 +793,12 @@ pub fn scrollbar_v(
     visible: Px,
     offset: Px,
     thickness: Dp,
-    #[prop(skip_setter)] state: Option<State<ScrollableController>>,
+    state: Option<State<ScrollableController>>,
     scrollbar_behavior: ScrollBarBehavior,
     track_color: Color,
     thumb_color: Color,
     thumb_hover_color: Color,
-    #[prop(skip_setter)] scrollbar_state: Option<ScrollBarState>,
+    scrollbar_state: Option<ScrollBarState>,
 ) {
     let state = state.expect("scrollbar_v requires state");
     let args = ScrollBarConfig {
@@ -932,12 +908,12 @@ pub fn scrollbar_h(
     visible: Px,
     offset: Px,
     thickness: Dp,
-    #[prop(skip_setter)] state: Option<State<ScrollableController>>,
+    state: Option<State<ScrollableController>>,
     scrollbar_behavior: ScrollBarBehavior,
     track_color: Color,
     thumb_color: Color,
     thumb_hover_color: Color,
-    #[prop(skip_setter)] scrollbar_state: Option<ScrollBarState>,
+    scrollbar_state: Option<ScrollBarState>,
 ) {
     let state = state.expect("scrollbar_h requires state");
     let args = ScrollBarConfig {

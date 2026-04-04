@@ -35,7 +35,7 @@ use crate::{
 
 use super::{
     LayoutContext, LayoutSnapshotEntry, LayoutSnapshotMap,
-    constraint::{Constraint, DimensionValue, ParentConstraint},
+    constraint::{Constraint, ParentConstraint},
 };
 
 #[cfg(feature = "profiling")]
@@ -1091,20 +1091,10 @@ impl ComputedData {
         height: Px(0),
     };
 
-    /// Calculates a "minimum" size based on a constraint.
-    /// For Fixed, it's the fixed value. For Wrap/Fill, it's their 'min' if
-    /// Some, else 0.
+    /// Calculates the minimum size guaranteed by a constraint interval.
     pub fn min_from_constraint(constraint: &Constraint) -> Self {
-        let width = match constraint.width {
-            DimensionValue::Fixed(w) => w,
-            DimensionValue::Wrap { min, .. } => min.unwrap_or(Px(0)),
-            DimensionValue::Fill { min, .. } => min.unwrap_or(Px(0)),
-        };
-        let height = match constraint.height {
-            DimensionValue::Fixed(h) => h,
-            DimensionValue::Wrap { min, .. } => min.unwrap_or(Px(0)),
-            DimensionValue::Fill { min, .. } => min.unwrap_or(Px(0)),
-        };
+        let width = constraint.width.min;
+        let height = constraint.height.min;
         Self { width, height }
     }
 

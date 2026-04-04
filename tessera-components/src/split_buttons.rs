@@ -97,7 +97,6 @@ impl SplitButtonColors {
 /// Defaults for split buttons.
 pub struct SplitButtonDefaults;
 
-#[allow(missing_docs)]
 impl SplitButtonDefaults {
     /// Minimum width of split button items.
     pub const MIN_WIDTH: Dp = Dp(48.0);
@@ -267,43 +266,7 @@ impl SplitButtonDefaults {
 }
 
 #[allow(missing_docs)]
-impl SplitButtonLayoutBuilder {
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn spacing(mut self, spacing: Dp) -> Self {
-        self.props.spacing = Some(spacing);
-        self
-    }
-}
-
-#[allow(missing_docs)]
 impl SplitLeadingButtonBuilder {
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.props.enabled = Some(enabled);
-        self
-    }
-
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn accessibility_label(mut self, accessibility_label: impl Into<String>) -> Self {
-        self.props.accessibility_label = Some(accessibility_label.into());
-        self
-    }
-
-    pub fn accessibility_description(
-        mut self,
-        accessibility_description: impl Into<String>,
-    ) -> Self {
-        self.props.accessibility_description = Some(accessibility_description.into());
-        self
-    }
-
     pub fn filled(self) -> Self {
         self.variant(SplitButtonVariant::Filled).enabled(true)
     }
@@ -323,29 +286,6 @@ impl SplitLeadingButtonBuilder {
 
 #[allow(missing_docs)]
 impl SplitTrailingButtonBuilder {
-    pub fn enabled(mut self, enabled: bool) -> Self {
-        self.props.enabled = Some(enabled);
-        self
-    }
-
-    pub fn modifier(mut self, modifier: Modifier) -> Self {
-        self.props.modifier = Some(modifier);
-        self
-    }
-
-    pub fn accessibility_label(mut self, accessibility_label: impl Into<String>) -> Self {
-        self.props.accessibility_label = Some(accessibility_label.into());
-        self
-    }
-
-    pub fn accessibility_description(
-        mut self,
-        accessibility_description: impl Into<String>,
-    ) -> Self {
-        self.props.accessibility_description = Some(accessibility_description.into());
-        self
-    }
-
     pub fn filled(self) -> Self {
         self.variant(SplitButtonVariant::Filled).enabled(true)
     }
@@ -413,8 +353,8 @@ impl SplitTrailingButtonBuilder {
 /// ```
 #[tessera]
 pub fn split_button_layout(
-    #[prop(skip_setter)] modifier: Option<Modifier>,
-    #[prop(skip_setter)] spacing: Option<Dp>,
+    modifier: Option<Modifier>,
+    spacing: Option<Dp>,
     leading_button: Option<RenderSlot>,
     trailing_button: Option<RenderSlot>,
 ) {
@@ -476,11 +416,11 @@ pub fn split_button_layout(
 pub fn split_leading_button(
     variant: SplitButtonVariant,
     size: SplitButtonSize,
-    #[prop(skip_setter)] enabled: Option<bool>,
-    #[prop(skip_setter)] modifier: Option<Modifier>,
+    enabled: Option<bool>,
+    modifier: Option<Modifier>,
     on_click: Option<Callback>,
-    #[prop(skip_setter)] accessibility_label: Option<String>,
-    #[prop(skip_setter)] accessibility_description: Option<String>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
     content: Option<RenderSlot>,
 ) {
     let content = content.unwrap_or_else(RenderSlot::empty);
@@ -546,11 +486,11 @@ pub fn split_leading_button(
 pub fn split_trailing_button(
     variant: SplitButtonVariant,
     size: SplitButtonSize,
-    #[prop(skip_setter)] enabled: Option<bool>,
-    #[prop(skip_setter)] modifier: Option<Modifier>,
+    enabled: Option<bool>,
+    modifier: Option<Modifier>,
     on_click: Option<Callback>,
-    #[prop(skip_setter)] accessibility_label: Option<String>,
-    #[prop(skip_setter)] accessibility_description: Option<String>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
     content: Option<RenderSlot>,
 ) {
     let content = content.unwrap_or_else(RenderSlot::empty);

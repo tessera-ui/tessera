@@ -29,8 +29,8 @@ use glyphon::{
 };
 use tessera_platform::clipboard;
 use tessera_ui::{
-    CallbackWith, Color, ComputedData, DimensionValue, Dp, FocusRequester, MeasurementError, Px,
-    PxPosition, State, current_frame_nanos,
+    CallbackWith, Color, ComputedData, Dp, FocusRequester, MeasurementError, Px, PxPosition, State,
+    current_frame_nanos,
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
     },
@@ -3264,21 +3264,12 @@ impl LayoutPolicy for TextEditLayout {
         input: &LayoutInput<'_>,
         output: &mut LayoutOutput<'_>,
     ) -> Result<ComputedData, MeasurementError> {
-        let max_width_pixels: Option<Px> = match input.parent_constraint().width() {
-            DimensionValue::Fixed(w) => Some(w),
-            DimensionValue::Wrap { max, .. } => max,
-            DimensionValue::Fill { max, .. } => max,
-        };
-
-        let max_height_pixels: Option<Px> = match input.parent_constraint().height() {
-            DimensionValue::Fixed(h) => Some(h),
-            DimensionValue::Wrap { max, .. } => max,
-            DimensionValue::Fill { max, .. } => max,
-        };
+        let max_width_pixels: Option<Px> = input.parent_constraint().width().resolve_max();
+        let max_height_pixels: Option<Px> = input.parent_constraint().height().resolve_max();
 
         let text_constraint = TextConstraint {
-            max_width: max_width_pixels.map(|px| px.to_f32()),
-            max_height: max_height_pixels.map(|px| px.to_f32()),
+            max_width: max_width_pixels.map(|px: Px| px.to_f32()),
+            max_height: max_height_pixels.map(|px: Px| px.to_f32()),
         };
         let text_data = self
             .controller

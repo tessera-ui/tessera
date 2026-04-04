@@ -4,15 +4,12 @@
 //!
 //! Use to stack children vertically.
 use tessera_ui::{
-    ComputedData, Constraint, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy,
+    AxisConstraint, ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutPolicy,
     MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot,
     layout::layout_primitive, tessera,
 };
 
-use crate::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment},
-    modifier::ModifierExt as _,
-};
+use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 
 /// # column
 ///
@@ -56,9 +53,7 @@ pub fn column(
     cross_axis_alignment: CrossAxisAlignment,
     children: RenderSlot,
 ) {
-    let modifier = modifier.unwrap_or_else(|| {
-        Modifier::new().constrain(Some(DimensionValue::WRAP), Some(DimensionValue::WRAP))
-    });
+    let modifier = modifier.unwrap_or_default();
     layout_primitive()
         .modifier(modifier)
         .layout_policy(ColumnLayout {
@@ -90,22 +85,14 @@ impl LayoutPolicy for ColumnLayout {
             "Mismatch between children defined in scope and runtime children count"
         );
 
-        let column_effective_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let column_effective_constraint = *input.parent_constraint().as_ref();
 
         let mut children_sizes = vec![None; n];
         let mut max_child_width = Px(0);
 
         let has_weighted_children = child_weights.iter().any(|&weight| weight > 0.0);
-        let should_use_weight_for_height = has_weighted_children
-            && matches!(
-                column_effective_constraint.height,
-                DimensionValue::Fixed(_)
-                    | DimensionValue::Fill { max: Some(_), .. }
-                    | DimensionValue::Wrap { max: Some(_), .. }
-            );
+        let should_use_weight_for_height =
+            has_weighted_children && column_effective_constraint.height.resolve_max().is_some();
 
         let (final_column_width, final_column_height, total_measured_children_height) =
             if should_use_weight_for_height {
@@ -188,10 +175,7 @@ fn measure_unweighted_children_for_column(
 
     let parent_offered_constraint_for_child = Constraint::new(
         column_effective_constraint.width,
-        DimensionValue::Wrap {
-            min: None,
-            max: column_effective_constraint.height.get_max(),
-        },
+        column_effective_constraint.height.without_min(),
     );
 
     let children_to_measure: Vec<_> = indices
@@ -247,7 +231,7 @@ fn measure_weighted_children_for_column(
             let child_id = ctx.input.children_ids()[child_idx];
             let parent_offered_constraint_for_child = Constraint::new(
                 ctx.column_effective_constraint.width,
-                DimensionValue::Fixed(allocated_height),
+                AxisConstraint::exact(allocated_height),
             );
             (child_id, parent_offered_constraint_for_child)
         })
@@ -270,32 +254,9 @@ fn calculate_final_column_height(
     column_effective_constraint: &Constraint,
     measured_children_height: Px,
 ) -> Px {
-    match column_effective_constraint.height {
-        DimensionValue::Fixed(h) => h,
-        DimensionValue::Fill { min, max } => {
-            if let Some(max) = max {
-                if let Some(min) = min {
-                    max.max(min)
-                } else {
-                    max
-                }
-            } else {
-                panic!(
-                    "Seems that you are trying to use Fill without max in a non-infinite parent constraint. This is not supported. Parent constraint: {column_effective_constraint:?}"
-                );
-            }
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut h = measured_children_height;
-            if let Some(min_h) = min {
-                h = h.max(min_h);
-            }
-            if let Some(max_h) = max {
-                h = h.min(max_h);
-            }
-            h
-        }
-    }
+    column_effective_constraint
+        .height
+        .clamp(measured_children_height)
 }
 
 fn calculate_final_column_width(
@@ -303,32 +264,8 @@ fn calculate_final_column_width(
     max_child_width: Px,
     parent_constraint: ParentConstraint<'_>,
 ) -> Px {
-    match column_effective_constraint.width {
-        DimensionValue::Fixed(w) => w,
-        DimensionValue::Fill { min, max } => {
-            if let Some(max) = max {
-                if let Some(min) = min {
-                    max.max(min)
-                } else {
-                    max
-                }
-            } else {
-                panic!(
-                    "Seems that you are trying to use Fill without max in a non-infinite parent constraint. This is not supported. Parent constraint: {parent_constraint:?}"
-                );
-            }
-        }
-        DimensionValue::Wrap { min, max } => {
-            let mut w = max_child_width;
-            if let Some(min_w) = min {
-                w = w.max(min_w);
-            }
-            if let Some(max_w) = max {
-                w = w.min(max_w);
-            }
-            w
-        }
-    }
+    let _ = parent_constraint;
+    column_effective_constraint.width.clamp(max_child_width)
 }
 
 /// Measure column when height uses weighted allocation.
@@ -342,7 +279,7 @@ fn measure_weighted_column(
 ) -> Result<(Px, Px, Px), MeasurementError> {
     let available_height_for_children = column_effective_constraint
         .height
-        .get_max()
+        .resolve_max()
         .expect("Column height Fill expected with finite max constraint");
 
     let (weighted_children_indices, unweighted_children_indices, total_weight_sum) =
@@ -416,10 +353,7 @@ fn measure_unweighted_column(
 
     let parent_offered_constraint_for_child = Constraint::new(
         column_effective_constraint.width,
-        DimensionValue::Wrap {
-            min: None,
-            max: column_effective_constraint.height.get_max(),
-        },
+        column_effective_constraint.height.without_min(),
     );
 
     let children_to_measure: Vec<_> = input
@@ -543,7 +477,7 @@ fn calculate_cross_axis_offset_for_column(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, DimensionValue, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
+        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
         Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
     };
 
@@ -584,16 +518,11 @@ mod tests {
             input: &LayoutInput<'_>,
             _output: &mut LayoutOutput<'_>,
         ) -> Result<ComputedData, MeasurementError> {
-            let height = match input.parent_constraint().height() {
-                DimensionValue::Fixed(height) => height,
-                DimensionValue::Wrap {
-                    max: Some(height), ..
-                }
-                | DimensionValue::Fill {
-                    max: Some(height), ..
-                } => height,
-                _ => panic!("FillHeightTestLayout requires a bounded height constraint"),
-            };
+            let height = input
+                .parent_constraint()
+                .height()
+                .resolve_max()
+                .expect("FillHeightTestLayout requires a bounded height constraint");
 
             Ok(ComputedData {
                 width: Px::new(self.width),
@@ -628,8 +557,8 @@ mod tests {
     fn column_layout_case() {
         column()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(100))),
-                Some(DimensionValue::Fixed(Px::new(60))),
+                Some(AxisConstraint::exact(Px::new(100))),
+                Some(AxisConstraint::exact(Px::new(60))),
             ))
             .main_axis_alignment(MainAxisAlignment::Start)
             .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -659,8 +588,8 @@ mod tests {
     fn column_weighted_case() {
         column()
             .modifier(Modifier::new().constrain(
-                Some(DimensionValue::Fixed(Px::new(60))),
-                Some(DimensionValue::Fixed(Px::new(90))),
+                Some(AxisConstraint::exact(Px::new(60))),
+                Some(AxisConstraint::exact(Px::new(90))),
             ))
             .main_axis_alignment(MainAxisAlignment::Start)
             .cross_axis_alignment(CrossAxisAlignment::Start)

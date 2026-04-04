@@ -410,7 +410,7 @@ fn checkbox_inner(
     let render_state_layer = {
         RenderSlot::new(move || {
             if let Some(state) = interaction_state {
-                surface()
+                let mut builder = surface()
                     .modifier(Modifier::new().size(
                         CheckboxDefaults::STATE_LAYER_SIZE,
                         CheckboxDefaults::STATE_LAYER_SIZE,
@@ -423,13 +423,13 @@ fn checkbox_inner(
                     .ripple_bounded(false)
                     .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
                     .ripple_color(state_layer_base)
-                    .ripple_state_internal(ripple_state)
-                    .interaction_state(state)
-                    .with_child(move || {
-                        render_checkbox_container.render();
-                    });
+                    .interaction_state(state);
+                builder.set_ripple_state(ripple_state);
+                builder.with_child(move || {
+                    render_checkbox_container.render();
+                });
             } else {
-                surface()
+                let mut builder = surface()
                     .modifier(Modifier::new().size(
                         CheckboxDefaults::STATE_LAYER_SIZE,
                         CheckboxDefaults::STATE_LAYER_SIZE,
@@ -441,11 +441,11 @@ fn checkbox_inner(
                     })
                     .ripple_bounded(false)
                     .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
-                    .ripple_color(state_layer_base)
-                    .ripple_state_internal(ripple_state)
-                    .with_child(move || {
-                        render_checkbox_container.render();
-                    });
+                    .ripple_color(state_layer_base);
+                builder.set_ripple_state(ripple_state);
+                builder.with_child(move || {
+                    render_checkbox_container.render();
+                });
             }
         })
     };

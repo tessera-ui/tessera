@@ -7,7 +7,7 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, DimensionValue, Dp, FocusState, FocusTraversalPolicy, Modifier,
+    AxisConstraint, Callback, CallbackWith, Color, Dp, FocusState, FocusTraversalPolicy, Modifier,
     Px, PxSize, RenderSlot, State, accesskit::Role, current_frame_nanos, layout::layout_primitive,
     modifier::FocusModifierExt as _, provide_context, receive_frame_nanos, remember, tessera,
     use_context,
@@ -474,10 +474,10 @@ fn radio_button_inner(
                                                 .children(move || {
                                                     surface()
                                                         .modifier(Modifier::new().constrain(
-                                                            Some(DimensionValue::Fixed(Px(
+                                                            Some(AxisConstraint::exact(Px(
                                                                 animated_size,
                                                             ))),
-                                                            Some(DimensionValue::Fixed(Px(
+                                                            Some(AxisConstraint::exact(Px(
                                                                 animated_size,
                                                             ))),
                                                         ))

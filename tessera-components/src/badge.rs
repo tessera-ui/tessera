@@ -5,7 +5,7 @@
 //! Highlight counts or status markers on top of icons and other UI elements.
 
 use tessera_ui::{
-    Color, ComputedData, Constraint, DimensionValue, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
+    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
     MeasurementError, Px, PxPosition, PxSize, RenderInput, RenderPolicy, RenderSlot,
     layout::layout_primitive, provide_context, tessera, use_context,
 };
@@ -18,48 +18,16 @@ use crate::{
     theme::{ContentColor, MaterialTheme, content_color_for, provide_text_style},
 };
 
-fn clamp_wrap(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
-    min.unwrap_or(Px(0))
-        .max(measure)
-        .min(max.unwrap_or(Px::MAX))
+fn resolve_dimension(axis: AxisConstraint, measure: Px) -> Px {
+    axis.clamp(measure)
 }
 
-fn fill_value(min: Option<Px>, max: Option<Px>, measure: Px) -> Px {
-    max.expect("Seems that you are trying to fill an infinite dimension, which is not allowed")
-        .max(measure)
-        .max(min.unwrap_or(Px(0)))
+fn dimension_max(axis: AxisConstraint) -> Option<Px> {
+    axis.resolve_max()
 }
 
-fn resolve_dimension(dim: DimensionValue, measure: Px) -> Px {
-    match dim {
-        DimensionValue::Fixed(v) => v,
-        DimensionValue::Wrap { min, max } => clamp_wrap(min, max, measure),
-        DimensionValue::Fill { min, max } => fill_value(min, max, measure),
-    }
-}
-
-fn dimension_max(dim: DimensionValue) -> Option<Px> {
-    match dim {
-        DimensionValue::Fixed(v) => Some(v),
-        DimensionValue::Wrap { max, .. } | DimensionValue::Fill { max, .. } => max,
-    }
-}
-
-fn relax_min_constraint(dim: DimensionValue) -> DimensionValue {
-    match dim {
-        DimensionValue::Fixed(v) => DimensionValue::Wrap {
-            min: Some(Px(0)),
-            max: Some(v),
-        },
-        DimensionValue::Wrap { max, .. } => DimensionValue::Wrap {
-            min: Some(Px(0)),
-            max,
-        },
-        DimensionValue::Fill { max, .. } => DimensionValue::Fill {
-            min: Some(Px(0)),
-            max,
-        },
-    }
+fn relax_min_constraint(axis: AxisConstraint) -> AxisConstraint {
+    axis.without_min()
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -77,10 +45,7 @@ impl LayoutPolicy for BadgedBoxLayout {
             "badged_box expects exactly two children: anchor and badge",
         );
 
-        let parent_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let parent_constraint = *input.parent_constraint().as_ref();
 
         let badge_constraint = Constraint::new(
             input.parent_constraint().width(),
@@ -146,16 +111,15 @@ impl LayoutPolicy for BadgeLayout {
     ) -> Result<ComputedData, MeasurementError> {
         let size_px = BadgeDefaults::SIZE.to_px();
         let intrinsic = Constraint::new(
-            DimensionValue::Wrap {
-                min: Some(size_px),
-                max: None,
-            },
-            DimensionValue::Wrap {
-                min: Some(size_px),
-                max: None,
-            },
+            AxisConstraint::new(size_px, None),
+            AxisConstraint::new(size_px, None),
         );
-        let effective = intrinsic.merge(input.parent_constraint());
+        let effective = Constraint::new(
+            intrinsic.width.intersect(input.parent_constraint().width()),
+            intrinsic
+                .height
+                .intersect(input.parent_constraint().height()),
+        );
 
         let width = resolve_dimension(effective.width, size_px);
         let height = resolve_dimension(effective.height, size_px);
@@ -209,30 +173,23 @@ impl LayoutPolicy for BadgeWithContentLayout {
 
         let min_size_px = BadgeDefaults::LARGE_SIZE.to_px();
         let intrinsic = Constraint::new(
-            DimensionValue::Wrap {
-                min: Some(min_size_px),
-                max: None,
-            },
-            DimensionValue::Wrap {
-                min: Some(min_size_px),
-                max: None,
-            },
+            AxisConstraint::new(min_size_px, None),
+            AxisConstraint::new(min_size_px, None),
         );
-        let effective = intrinsic.merge(input.parent_constraint());
+        let effective = Constraint::new(
+            intrinsic.width.intersect(input.parent_constraint().width()),
+            intrinsic
+                .height
+                .intersect(input.parent_constraint().height()),
+        );
 
         let max_width =
             dimension_max(effective.width).map(|v| (v - self.padding_px * 2).max(Px(0)));
         let max_height = dimension_max(effective.height);
 
         let child_constraint = Constraint::new(
-            DimensionValue::Wrap {
-                min: None,
-                max: max_width,
-            },
-            DimensionValue::Wrap {
-                min: None,
-                max: max_height,
-            },
+            AxisConstraint::new(Px::ZERO, max_width),
+            AxisConstraint::new(Px::ZERO, max_height),
         );
 
         let row_id = input.children_ids()[0];
