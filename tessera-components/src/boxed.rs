@@ -210,6 +210,17 @@ mod tests {
     }
 
     #[tessera]
+    fn forwarded_modifier_test_box(modifier: Modifier, tag: String, width: i32, height: i32) {
+        layout_primitive()
+            .layout_policy(FixedTestLayout { width, height })
+            .render_policy(NoopRenderPolicy)
+            .modifier(modifier.then(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some(tag),
+                ..Default::default()
+            })));
+    }
+
+    #[tessera]
     fn boxed_layout_case() {
         boxed()
             .alignment(Alignment::TopStart)
@@ -259,6 +270,23 @@ mod tests {
             });
     }
 
+    #[tessera]
+    fn boxed_forwarded_parent_data_case() {
+        boxed()
+            .alignment(Alignment::TopStart)
+            .modifier(Modifier::new().constrain(
+                Some(AxisConstraint::exact(Px::new(100))),
+                Some(AxisConstraint::exact(Px::new(80))),
+            ))
+            .children(|| {
+                forwarded_modifier_test_box()
+                    .modifier(Modifier::new().align(Alignment::Center))
+                    .tag("boxed_forwarded".to_string())
+                    .width(20)
+                    .height(10);
+            });
+    }
+
     #[test]
     fn boxed_honors_child_alignment_override() {
         tessera_ui::assert_layout! {
@@ -282,6 +310,19 @@ mod tests {
             },
             expect: {
                 node("boxed_center").position(40, 35).size(20, 10);
+            }
+        }
+    }
+
+    #[test]
+    fn boxed_honors_alignment_on_wrapped_children() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 100),
+            content: {
+                boxed_forwarded_parent_data_case();
+            },
+            expect: {
+                node("boxed_forwarded").position(40, 35).size(20, 10);
             }
         }
     }

@@ -208,6 +208,7 @@ impl<'a> LayoutInput<'a> {
     where
         T: Clone + Send + Sync + 'static,
     {
+        let child_id = resolve_parent_data_child_id(self.tree, child_id)?;
         let node = self.tree.get(child_id)?;
         let mut data: ParentDataMap = HashMap::default();
         for action in node.get().modifier.ordered_actions() {
@@ -272,6 +273,7 @@ impl<'a> PlacementInput<'a> {
     where
         T: Clone + Send + Sync + 'static,
     {
+        let child_id = resolve_parent_data_child_id(self.tree, child_id)?;
         let node = self.tree.get(child_id)?;
         let mut data: ParentDataMap = HashMap::default();
         for action in node.get().modifier.ordered_actions() {
@@ -282,6 +284,48 @@ impl<'a> PlacementInput<'a> {
         let value = data.get(&TypeId::of::<T>())?;
         value.downcast_ref::<T>().cloned()
     }
+}
+
+fn resolve_parent_data_child_id(
+    tree: &ComponentNodeTree,
+    child_id: crate::NodeId,
+) -> Option<crate::NodeId> {
+    let node = tree.get(child_id)?;
+    let node = node.get();
+    let has_parent_data = node
+        .modifier
+        .ordered_actions()
+        .into_iter()
+        .any(|action| matches!(action, OrderedModifierAction::ParentData(_)));
+    if has_parent_data || !is_parent_data_transparent_wrapper(tree, child_id) {
+        return Some(child_id);
+    }
+
+    let mut children = child_id.children(tree);
+    let only_child = children.next()?;
+    if children.next().is_some() {
+        return Some(child_id);
+    }
+    resolve_parent_data_child_id(tree, only_child)
+}
+
+fn is_parent_data_transparent_wrapper(tree: &ComponentNodeTree, node_id: crate::NodeId) -> bool {
+    let Some(node_ref) = tree.get(node_id) else {
+        return false;
+    };
+    let node = node_ref.get();
+    if !node.modifier.is_empty() {
+        return false;
+    }
+    if !node.layout_policy.dyn_eq(&DefaultLayoutPolicy) {
+        return false;
+    }
+    if !node.render_policy.dyn_eq(&NoopRenderPolicy) {
+        return false;
+    }
+
+    let mut children = node_id.children(tree);
+    children.next().is_some() && children.next().is_none()
 }
 
 /// Output collected during pure layout.
