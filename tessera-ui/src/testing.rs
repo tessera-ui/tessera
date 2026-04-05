@@ -619,10 +619,9 @@ mod tests {
     use crate::{
         AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, FrameNanosControl,
         LayoutInput, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, LayoutOutput,
-        LayoutPolicy, Modifier, NoopRenderPolicy, Px, PxPosition, SemanticsModifierNode,
-        modifier::ModifierCapabilityExt as _, receive_frame_nanos, remember, tessera,
+        LayoutPolicy, Modifier, NoopRenderPolicy, Px, PxPosition, RenderSlot,
+        SemanticsModifierNode, receive_frame_nanos, remember, tessera,
     };
-
     #[derive(Clone, PartialEq)]
     struct FixedSizePolicy {
         width: i32,
@@ -744,6 +743,14 @@ mod tests {
     }
 
     #[tessera(crate)]
+    fn responsive_box(tag: String) {
+        crate::layout::layout_primitive()
+            .layout_policy(crate::layout::DefaultLayoutPolicy)
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
+    }
+
+    #[tessera(crate)]
     fn stack_content() {
         crate::layout::layout_primitive()
             .layout_policy(VerticalStackPolicy)
@@ -828,14 +835,72 @@ mod tests {
             }
         });
 
-        tagged_box()
-            .tag("modifier_box".to_string())
-            .width(1)
-            .height(20)
-            .modifier(Modifier::new().push_layout(AnimatedWidthModifierNode {
-                width: width.get(),
-                height: 20,
-            }));
+        crate::layout::layout_primitive()
+            .layout_policy(crate::layout::DefaultLayoutPolicy)
+            .render_policy(NoopRenderPolicy)
+            .modifier(
+                Modifier::new()
+                    .push_semantics(TestTagSemanticsModifier {
+                        tag: "modifier_box".to_string(),
+                    })
+                    .push_layout(AnimatedWidthModifierNode {
+                        width: width.get(),
+                        height: 20,
+                    }),
+            )
+            .child(|| {
+                responsive_box().tag("modifier_box_child".to_string());
+            });
+    }
+
+    #[tessera(crate)]
+    fn slot_host(slot: RenderSlot) {
+        crate::layout::layout_primitive()
+            .layout_policy(VerticalStackPolicy)
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new())
+            .child(move || {
+                slot.render();
+            });
+    }
+
+    #[tessera(crate)]
+    fn animated_nested_slot_sample() {
+        let width = remember(|| 20_i32);
+
+        receive_frame_nanos(move |frame_nanos| {
+            let next_width = if frame_nanos >= 200_000_000 {
+                100
+            } else if frame_nanos >= 100_000_000 {
+                50
+            } else {
+                20
+            };
+            width.set(next_width);
+            if frame_nanos >= 200_000_000 {
+                FrameNanosControl::Stop
+            } else {
+                FrameNanosControl::Continue
+            }
+        });
+
+        crate::layout::layout_primitive()
+            .layout_policy(FixedSizePolicy {
+                width: 200,
+                height: 100,
+            })
+            .render_policy(NoopRenderPolicy)
+            .modifier(Modifier::new())
+            .child(move || {
+                slot_host().slot(move || {
+                    slot_host().slot(move || {
+                        tagged_box()
+                            .tag("nested_moving".to_string())
+                            .width(width.get())
+                            .height(20);
+                    });
+                });
+            });
     }
 
     #[test]
@@ -919,6 +984,27 @@ mod tests {
                 },
                 200_000_000 => {
                     node("modifier_box").size(100, 20);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn assert_layout_macro_pumps_nested_slot_animation_frames() {
+        crate::assert_layout! {
+            viewport: (200, 100),
+            content: {
+                animated_nested_slot_sample();
+            },
+            expect: {
+                0 => {
+                    node("nested_moving").size(20, 20);
+                },
+                100_000_000 => {
+                    node("nested_moving").size(50, 20);
+                },
+                200_000_000 => {
+                    node("nested_moving").size(100, 20);
                 }
             }
         }

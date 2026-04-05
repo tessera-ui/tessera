@@ -228,6 +228,48 @@ fn collect_dirty_replay_roots(dirty_instance_keys: &HashSet<u64>) -> Vec<u64> {
     })
 }
 
+fn retain_live_dirty_instance_keys(dirty_instance_keys: &HashSet<u64>) -> HashSet<u64> {
+    TesseraRuntime::with(|runtime| {
+        dirty_instance_keys
+            .iter()
+            .copied()
+            .filter(|instance_key| {
+                runtime
+                    .component_tree
+                    .find_node_id_by_instance_key(*instance_key)
+                    .is_some()
+            })
+            .collect()
+    })
+}
+
+fn expand_dirty_instance_keys_for_reuse(dirty_instance_keys: &HashSet<u64>) -> HashSet<u64> {
+    TesseraRuntime::with(|runtime| {
+        let mut expanded = dirty_instance_keys.clone();
+        let tree = runtime.component_tree.tree();
+
+        for instance_key in dirty_instance_keys {
+            let Some(node_id) = runtime
+                .component_tree
+                .find_node_id_by_instance_key(*instance_key)
+            else {
+                continue;
+            };
+
+            let mut parent_id = tree.get(node_id).and_then(|node| node.parent());
+            while let Some(pid) = parent_id {
+                let Some(parent_node) = tree.get(pid) else {
+                    break;
+                };
+                expanded.insert(parent_node.get().instance_key);
+                parent_id = parent_node.parent();
+            }
+        }
+
+        expanded
+    })
+}
+
 fn dirty_roots_include_tree_root(dirty_roots: &[u64]) -> bool {
     TesseraRuntime::with(|runtime| {
         let tree = runtime.component_tree.tree();
@@ -324,14 +366,16 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                 return result;
             }
 
-            let dirty_roots = collect_dirty_replay_roots(&invalidations.dirty_instance_keys);
-            if dirty_roots_include_tree_root(&dirty_roots) {
+            let initial_live_dirty_instance_keys =
+                retain_live_dirty_instance_keys(&invalidations.dirty_instance_keys);
+            let initial_dirty_roots = collect_dirty_replay_roots(&initial_live_dirty_instance_keys);
+            if dirty_roots_include_tree_root(&initial_dirty_roots) {
                 let result = run_root_recompose();
                 #[cfg(feature = "debug-dirty-overlay")]
                 let result = result.with_dirty_replay_info(had_invalidations, Vec::new());
                 return result;
             }
-            if dirty_roots.is_empty() {
+            if initial_dirty_roots.is_empty() {
                 debug!("Skipping component tree build: no dirty replay roots");
                 let result = BuildTreeResult::skip_no_invalidation();
                 #[cfg(feature = "debug-dirty-overlay")]
@@ -353,87 +397,133 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
             let mut stale_instance_keys = HashSet::default();
             let mut stale_instance_logic_ids = HashSet::default();
             let mut recomposed_instance_logic_ids = HashSet::default();
+            let mut pending_dirty_instance_keys = invalidations.dirty_instance_keys.clone();
+            let mut replay_roots_for_debug = Vec::new();
+            let mut fallback_to_root_recompose = false;
             #[cfg(feature = "profiling")]
             let mut replayed_nodes = 0_u64;
             #[cfg(feature = "profiling")]
             let total_nodes_before_build =
                 TesseraRuntime::with(|runtime| runtime.component_tree.tree().count() as u64);
 
-            for instance_key in &dirty_roots {
-                #[cfg(feature = "profiling")]
-                {
-                    replayed_nodes = replayed_nodes
-                        .saturating_add(subtree_node_count_by_instance_key(*instance_key));
+            while !pending_dirty_instance_keys.is_empty() {
+                let live_dirty_instance_keys =
+                    retain_live_dirty_instance_keys(&pending_dirty_instance_keys);
+                if live_dirty_instance_keys.is_empty() {
+                    break;
                 }
-                let replay_snapshot = replay_snapshots.get(instance_key).unwrap_or_else(|| {
-                    panic!(
-                        "missing replay snapshot for dirty instance key {instance_key}; this violates replay invariants"
-                    )
-                });
-                let context_snapshot = context_snapshots.get(instance_key).unwrap_or_else(|| {
-                    panic!(
-                        "missing context snapshot for dirty instance key {instance_key}; this violates replay invariants"
-                    )
-                });
-                let replay = replay_snapshot.replay.clone();
-                let replay_instance_logic_id = replay_snapshot.instance_logic_id;
-                let replay_group_path = replay_snapshot.group_path.clone();
-                let replay_instance_key_override = replay_snapshot.instance_key_override;
 
-                let replace_context = TesseraRuntime::with_mut(|runtime| {
-                    runtime
-                        .component_tree
-                        .begin_replace_subtree_by_instance_key(*instance_key)
-                });
-                let replace_context = match replace_context {
-                    Ok(context) => context,
-                    Err(ReplayReplaceError::RootNodeNotReplaceable) => panic!(
-                        "dirty root {} resolved to component tree root; root recomposition must be selected before partial replay",
-                        instance_key
-                    ),
-                    Err(_) => {
-                        panic!(
-                            "begin_replace_subtree_by_instance_key failed for instance key {instance_key}"
-                        )
-                    }
-                };
-
-                with_context_snapshot(context_snapshot, || {
-                    with_replay_scope(
-                        replay_instance_logic_id,
-                        &replay_group_path,
-                        replay_instance_key_override,
-                        || {
-                            replay.runner.run(replay.props.as_ref());
-                        },
-                    );
-                });
-
-                let replace_result = TesseraRuntime::with_mut(|runtime| {
-                    runtime
-                        .component_tree
-                        .finish_replace_subtree(replace_context)
-                });
-                let replace_result = replace_result.unwrap_or_else(|_| {
-                    panic!("finish_replace_subtree failed for instance key {instance_key}")
-                });
-                recomposed_instance_logic_ids.extend(
-                    replace_result
-                        .inserted_instance_logic_ids
-                        .difference(&replace_result.reused_instance_logic_ids)
-                        .copied(),
-                );
-
-                for removed in &replace_result.removed_instance_keys {
-                    if !replace_result.inserted_instance_keys.contains(removed) {
-                        stale_instance_keys.insert(*removed);
-                    }
+                let dirty_roots = collect_dirty_replay_roots(&live_dirty_instance_keys);
+                if dirty_roots.is_empty() {
+                    break;
                 }
-                for removed in &replace_result.removed_instance_logic_ids {
-                    if !replace_result.inserted_instance_logic_ids.contains(removed) {
-                        stale_instance_logic_ids.insert(*removed);
-                    }
+                if dirty_roots_include_tree_root(&dirty_roots) {
+                    fallback_to_root_recompose = true;
+                    break;
                 }
+
+                replay_roots_for_debug.extend(dirty_roots.iter().copied());
+
+                let reuse_guard_dirty_instance_keys =
+                    expand_dirty_instance_keys_for_reuse(&live_dirty_instance_keys);
+                let mut round_covered_instance_keys = HashSet::default();
+
+                with_build_dirty_instance_keys(&reuse_guard_dirty_instance_keys, || {
+                    for instance_key in &dirty_roots {
+                        #[cfg(feature = "profiling")]
+                        {
+                            replayed_nodes = replayed_nodes
+                                .saturating_add(subtree_node_count_by_instance_key(*instance_key));
+                        }
+                        let replay_snapshot =
+                            replay_snapshots.get(instance_key).unwrap_or_else(|| {
+                                panic!(
+                                    "missing replay snapshot for dirty instance key {instance_key}; this violates replay invariants"
+                                )
+                            });
+                        let context_snapshot =
+                            context_snapshots.get(instance_key).unwrap_or_else(|| {
+                                panic!(
+                                    "missing context snapshot for dirty instance key {instance_key}; this violates replay invariants"
+                                )
+                            });
+                        let replay = replay_snapshot.replay.clone();
+                        let replay_instance_logic_id = replay_snapshot.instance_logic_id;
+                        let replay_group_path = replay_snapshot.group_path.clone();
+                        let replay_instance_key_override = replay_snapshot.instance_key_override;
+
+                        let replace_context = TesseraRuntime::with_mut(|runtime| {
+                            runtime
+                                .component_tree
+                                .begin_replace_subtree_by_instance_key(*instance_key)
+                        });
+                        let replace_context = match replace_context {
+                            Ok(context) => context,
+                            Err(ReplayReplaceError::RootNodeNotReplaceable) => panic!(
+                                "dirty root {} resolved to component tree root; root recomposition must be selected before partial replay",
+                                instance_key
+                            ),
+                            Err(_) => {
+                                panic!(
+                                    "begin_replace_subtree_by_instance_key failed for instance key {instance_key}"
+                                )
+                            }
+                        };
+
+                        with_context_snapshot(context_snapshot, || {
+                            with_replay_scope(
+                                replay_instance_logic_id,
+                                &replay_group_path,
+                                replay_instance_key_override,
+                                || {
+                                    replay.runner.run(replay.props.as_ref());
+                                },
+                            );
+                        });
+
+                        let replace_result = TesseraRuntime::with_mut(|runtime| {
+                            runtime
+                                .component_tree
+                                .finish_replace_subtree(replace_context)
+                        });
+                        let replace_result = replace_result.unwrap_or_else(|_| {
+                            panic!("finish_replace_subtree failed for instance key {instance_key}")
+                        });
+                        round_covered_instance_keys
+                            .extend(replace_result.inserted_instance_keys.iter().copied());
+                        recomposed_instance_logic_ids.extend(
+                            replace_result
+                                .inserted_instance_logic_ids
+                                .difference(&replace_result.reused_instance_logic_ids)
+                                .copied(),
+                        );
+
+                        for removed in &replace_result.removed_instance_keys {
+                            if !replace_result.inserted_instance_keys.contains(removed) {
+                                stale_instance_keys.insert(*removed);
+                            }
+                        }
+                        for removed in &replace_result.removed_instance_logic_ids {
+                            if !replace_result.inserted_instance_logic_ids.contains(removed) {
+                                stale_instance_logic_ids.insert(*removed);
+                            }
+                        }
+                    }
+                });
+
+                let round_invalidations = take_build_invalidations();
+                pending_dirty_instance_keys.extend(round_invalidations.dirty_instance_keys);
+                pending_dirty_instance_keys.retain(|instance_key| {
+                    !stale_instance_keys.contains(instance_key)
+                        && !round_covered_instance_keys.contains(instance_key)
+                });
+            }
+
+            if fallback_to_root_recompose {
+                let result = run_root_recompose();
+                #[cfg(feature = "debug-dirty-overlay")]
+                let result = result.with_dirty_replay_info(had_invalidations, Vec::new());
+                return result;
             }
             finalize_frame_component_replay_tracking_partial();
             finalize_frame_component_context_tracking_partial();
@@ -464,14 +554,16 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                     total_nodes_before_build,
                 );
                 #[cfg(feature = "debug-dirty-overlay")]
-                let result = result.with_dirty_replay_info(had_invalidations, dirty_roots.clone());
+                let result = result
+                    .with_dirty_replay_info(had_invalidations, replay_roots_for_debug.clone());
                 result
             }
             #[cfg(not(feature = "profiling"))]
             {
                 let result = BuildTreeResult::partial_replay(build_tree_cost);
                 #[cfg(feature = "debug-dirty-overlay")]
-                let result = result.with_dirty_replay_info(had_invalidations, dirty_roots.clone());
+                let result = result
+                    .with_dirty_replay_info(had_invalidations, replay_roots_for_debug.clone());
                 result
             }
         })
