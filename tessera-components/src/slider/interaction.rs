@@ -1,10 +1,9 @@
+use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, CallbackWith, ComputedData, FocusRequester,
     PointerInput, Px, PxPosition, State,
     accesskit::{Action, Role},
 };
-
-use crate::gesture_recognizer::{DragRecognizer, TapRecognizer};
 
 use super::{ACCESSIBILITY_STEP, SliderArgs, SliderController, SliderLayout};
 

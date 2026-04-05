@@ -5,6 +5,7 @@
 //! Used to show contextual information or actions in a modal sheet.
 use std::time::Duration;
 
+use tessera_foundation::gesture::DragRecognizer;
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusScopeNode,
     FocusTraversalPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
@@ -19,7 +20,6 @@ use crate::{
     animation,
     column::column,
     fluid_glass::{GlassBorder, fluid_glass},
-    gesture_recognizer::DragRecognizer,
     modifier::{ModifierExt, with_keyboard_input, with_pointer_input},
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,

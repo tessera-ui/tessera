@@ -3,6 +3,9 @@
 //! ## Usage
 //!
 //! Show onboarding steps or media carousels that snap between pages.
+use tessera_foundation::gesture::{
+    DragAxis, DragRecognizer, DragSettings, ScrollRecognizer, ScrollSettings,
+};
 use tessera_ui::{
     AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusProperties, KeyboardInput,
     KeyboardInputModifierNode, MeasurementError, Modifier, PointerInput, PointerInputModifierNode,
@@ -16,12 +19,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::CrossAxisAlignment,
-    gesture_recognizer::{
-        DragAxis, DragRecognizer, DragSettings, ScrollRecognizer, ScrollSettings,
-    },
-    modifier::ModifierExt as _,
-    pos_misc::is_position_inside_bounds,
+    alignment::CrossAxisAlignment, modifier::ModifierExt as _, pos_misc::is_position_inside_bounds,
 };
 
 const DEFAULT_SNAP_THRESHOLD: f32 = 0.5;

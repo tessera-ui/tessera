@@ -8,5 +8,6 @@
 #![deny(missing_docs, clippy::unwrap_used)]
 
 pub mod alignment;
+pub mod gesture;
 pub mod modifier;
 pub mod shape_def;

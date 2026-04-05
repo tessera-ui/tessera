@@ -3,6 +3,7 @@
 //! ## Usage
 //!
 //! Use to allow users to select a value from a continuous range.
+use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, CallbackWith, Color,
     ComputedData, Constraint, Dp, FocusProperties, FocusRequester, MeasurementError, Modifier,
@@ -14,7 +15,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    gesture_recognizer::{DragRecognizer, TapRecognizer},
     icon::{IconContent, icon},
     image_vector::TintMode,
     theme::{MaterialAlpha, MaterialTheme},

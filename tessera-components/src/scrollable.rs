@@ -6,6 +6,7 @@
 pub(crate) mod scrollbar;
 use std::{collections::VecDeque, time::Duration};
 
+use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, MeasurementError, Modifier,
     PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, ScrollEventSource, State,
@@ -24,7 +25,6 @@ use tessera_ui::{
 use crate::{
     alignment::Alignment,
     boxed::boxed,
-    gesture_recognizer::{ScrollRecognizer, TapRecognizer},
     modifier::ModifierExt,
     nested_scroll::{NestedScrollConnection, ScrollDelta, ScrollVelocity},
     pos_misc::is_position_inside_bounds,

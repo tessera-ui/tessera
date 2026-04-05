@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use parking_lot::RwLock;
+use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
     Dp, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
@@ -12,7 +13,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    gesture_recognizer::{DragRecognizer, TapRecognizer},
     modifier::{ModifierExt as _, with_pointer_input},
     scrollable::{ScrollBarBehavior, ScrollableController},
     shape_def::{RoundedCorner, Shape},

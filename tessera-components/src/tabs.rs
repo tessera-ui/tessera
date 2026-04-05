@@ -6,6 +6,7 @@
 use std::sync::Arc;
 
 use parking_lot::Mutex;
+use tessera_foundation::gesture::{ScrollRecognizer, ScrollSettings};
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, FocusRequester, FocusState,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
@@ -21,7 +22,6 @@ use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
     column::column,
-    gesture_recognizer::{ScrollRecognizer, ScrollSettings},
     icon::{IconContent, icon as icon_component},
     modifier::{ModifierExt, SemanticsArgs, with_pointer_input},
     shape_def::Shape,

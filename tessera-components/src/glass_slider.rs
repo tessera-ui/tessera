@@ -3,6 +3,7 @@
 //! ## Usage
 //!
 //! Use to select a value from a continuous range.
+use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
     MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, State,
@@ -15,7 +16,6 @@ use tessera_ui::{
 
 use crate::{
     fluid_glass::{GlassBorder, fluid_glass},
-    gesture_recognizer::{DragRecognizer, TapRecognizer},
     modifier::{ModifierExt as _, SemanticsArgs},
     shape_def::Shape,
 };

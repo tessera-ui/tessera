@@ -4,6 +4,7 @@
 //!
 //! Use to collect search queries and show suggestions or results as the user
 //! types.
+use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     CallbackWith, Color, Dp, Modifier, RenderSlot, State, layout::layout_primitive, remember,
     tessera, use_context, winit,
@@ -12,7 +13,6 @@ use tessera_ui::{
 use crate::{
     column::column,
     divider::horizontal_divider,
-    gesture_recognizer::TapRecognizer,
     modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
     pos_misc::is_position_inside_bounds,
     shape_def::Shape,

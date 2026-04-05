@@ -10,8 +10,11 @@
 //! hover cursors use dedicated cursor modifiers, and window actions use
 //! explicit window-action helpers.
 
-use tessera_foundation::modifier::{
-    ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs,
+use tessera_foundation::{
+    gesture::{LongPressRecognizer, TapRecognizer},
+    modifier::{
+        ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs,
+    },
 };
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, ComputedData,
@@ -23,10 +26,7 @@ use tessera_ui::{
     winit::window::CursorIcon,
 };
 
-use crate::{
-    gesture_recognizer::{LongPressRecognizer, TapRecognizer},
-    pos_misc::is_position_in_rect,
-};
+use crate::pos_misc::is_position_in_rect;
 
 type PressCallback = CallbackWith<PointerEventContext, ()>;
 

@@ -4,6 +4,7 @@
 //!
 //! Collect short-form inputs like names, passwords, or search queries.
 use glyphon::Action as GlyphonAction;
+use tessera_foundation::gesture::{TapRecognizer, TapSettings};
 use tessera_ui::{
     Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput,
     LayoutPolicy, MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
@@ -15,7 +16,6 @@ use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     divider::horizontal_divider,
-    gesture_recognizer::{TapRecognizer, TapSettings},
     menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
     modifier::{ModifierExt as _, Padding, with_pointer_input},
     pos_misc::is_position_inside_bounds,

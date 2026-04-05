@@ -4,6 +4,7 @@
 //!
 //! Embed as a bare text input surface when you need to build custom styling.
 use glyphon::Action as GlyphonAction;
+use tessera_foundation::gesture::{ScrollRecognizer, ScrollResult, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData, Dp,
     ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput, KeyboardInputModifierNode, Modifier,
@@ -15,7 +16,6 @@ use tessera_ui::{
 };
 
 use crate::{
-    gesture_recognizer::{ScrollRecognizer, ScrollResult, TapRecognizer},
     modifier::ModifierExt as _,
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
