@@ -1330,37 +1330,35 @@ fn record_layout_policy_dirty(
         return;
     }
     with_layout_dirty_tracker_mut(|tracker| {
-        let (measure_changed, placement_changed, next_layout_inputs) = match tracker
-            .previous_layout_inputs_by_node
-            .remove(&instance_key)
-        {
-            Some(previous) => {
-                let measure_changed = !previous.policy.dyn_measure_eq(layout_policy)
-                    || !previous.modifier.layout_measure_eq(modifier);
-                let placement_changed = !previous.policy.dyn_placement_eq(layout_policy)
-                    || !previous.modifier.layout_placement_eq(modifier);
-                if !measure_changed && !placement_changed {
-                    (false, false, previous)
-                } else {
-                    (
-                        measure_changed,
-                        placement_changed,
-                        LayoutInputSnapshot {
-                            policy: layout_policy.clone_box(),
-                            modifier: modifier.clone(),
-                        },
-                    )
+        let (measure_changed, placement_changed, next_layout_inputs) =
+            match tracker.previous_layout_inputs_by_node.remove(&instance_key) {
+                Some(previous) => {
+                    let measure_changed = !previous.policy.dyn_measure_eq(layout_policy)
+                        || !previous.modifier.layout_measure_eq(modifier);
+                    let placement_changed = !previous.policy.dyn_placement_eq(layout_policy)
+                        || !previous.modifier.layout_placement_eq(modifier);
+                    if !measure_changed && !placement_changed {
+                        (false, false, previous)
+                    } else {
+                        (
+                            measure_changed,
+                            placement_changed,
+                            LayoutInputSnapshot {
+                                policy: layout_policy.clone_box(),
+                                modifier: modifier.clone(),
+                            },
+                        )
+                    }
                 }
-            }
-            None => (
-                true,
-                true,
-                LayoutInputSnapshot {
-                    policy: layout_policy.clone_box(),
-                    modifier: modifier.clone(),
-                },
-            ),
-        };
+                None => (
+                    true,
+                    true,
+                    LayoutInputSnapshot {
+                        policy: layout_policy.clone_box(),
+                        modifier: modifier.clone(),
+                    },
+                ),
+            };
         if measure_changed {
             tracker
                 .pending_measure_self_dirty_nodes
@@ -3406,7 +3404,14 @@ mod tests {
         {
             let _phase_guard = push_phase(RuntimePhase::Build);
             let modifier = Modifier::new().push_layout(DirtyMeasureModifierNode { width: 10 });
-            record_layout_policy_dirty(1, &DirtySplitPolicy { measure_key: 0, placement_key: 0 }, &modifier);
+            record_layout_policy_dirty(
+                1,
+                &DirtySplitPolicy {
+                    measure_key: 0,
+                    placement_key: 0,
+                },
+                &modifier,
+            );
         }
         finalize_frame_layout_dirty_tracking();
         let _ = take_layout_dirty_nodes();
@@ -3415,7 +3420,14 @@ mod tests {
         {
             let _phase_guard = push_phase(RuntimePhase::Build);
             let modifier = Modifier::new().push_layout(DirtyMeasureModifierNode { width: 20 });
-            record_layout_policy_dirty(1, &DirtySplitPolicy { measure_key: 0, placement_key: 0 }, &modifier);
+            record_layout_policy_dirty(
+                1,
+                &DirtySplitPolicy {
+                    measure_key: 0,
+                    placement_key: 0,
+                },
+                &modifier,
+            );
         }
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
