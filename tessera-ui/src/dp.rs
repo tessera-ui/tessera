@@ -426,7 +426,7 @@ impl From<Px> for Dp {
     /// * [`from_pixels_f64`](Self::from_pixels_f64) - For direct pixel-to-dp
     ///   conversion
     fn from(px: Px) -> Self {
-        Dp::from_pixels_f64(px.to_dp().0)
+        px.to_dp()
     }
 }
 
