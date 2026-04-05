@@ -8,7 +8,9 @@ mod interaction;
 mod layout;
 mod semantics;
 
-use tessera_ui::{AxisConstraint, Dp, Modifier, Px, modifier::ModifierCapabilityExt as _};
+use tessera_ui::{
+    AxisConstraint, CallbackWith, Dp, Modifier, Px, modifier::ModifierCapabilityExt as _,
+};
 
 use crate::alignment::Alignment;
 
@@ -18,7 +20,8 @@ use layout::{
 };
 
 pub use interaction::{
-    ClickableArgs, InteractionState, PointerEventContext, SelectableArgs, ToggleableArgs,
+    ClickableArgs, DragDelta, DraggableArgs, InteractionState, PointerEventContext, SelectableArgs,
+    ToggleableArgs,
 };
 pub use layout::{
     AlignmentParentData, MinimumInteractiveComponentEnforcement, Padding, WeightParentData,
@@ -78,6 +81,14 @@ pub trait ModifierExt {
     /// Provides alignment parent data for layered boxed layouts.
     fn align(self, alignment: Alignment) -> Modifier;
 
+    /// Emits drag deltas for free-form dragging.
+    fn draggable<C>(self, on_drag_delta: C) -> Modifier
+    where
+        C: Into<CallbackWith<DragDelta, ()>>;
+
+    /// Emits drag deltas with custom drag configuration.
+    fn draggable_with(self, args: DraggableArgs) -> Modifier;
+
     /// Attaches accessibility semantics metadata to this subtree.
     fn semantics(self, args: SemanticsArgs) -> Modifier;
 
@@ -99,7 +110,7 @@ impl ModifierExt for Modifier {
     }
 
     fn offset(self, x: Dp, y: Dp) -> Modifier {
-        self.push_layout(OffsetModifierNode { x, y })
+        self.push_placement(OffsetModifierNode { x, y })
     }
 
     fn size(self, width: Dp, height: Dp) -> Modifier {
@@ -202,6 +213,20 @@ impl ModifierExt for Modifier {
 
     fn align(self, alignment: Alignment) -> Modifier {
         self.push_parent_data(AlignmentParentDataModifierNode { alignment })
+    }
+
+    fn draggable<C>(self, on_drag_delta: C) -> Modifier
+    where
+        C: Into<CallbackWith<DragDelta, ()>>,
+    {
+        self.draggable_with(DraggableArgs {
+            on_drag_delta: on_drag_delta.into(),
+            ..Default::default()
+        })
+    }
+
+    fn draggable_with(self, args: DraggableArgs) -> Modifier {
+        interaction::apply_draggable_modifier(self, args)
     }
 
     fn semantics(self, args: SemanticsArgs) -> Modifier {

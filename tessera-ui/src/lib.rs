@@ -348,7 +348,7 @@ pub use crate::{
         DrawModifierContext, DrawModifierNode, FocusModifierExt, ImeInputModifierNode,
         KeyboardInputModifierNode, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
         LayoutModifierOutput, Modifier, ParentDataMap, ParentDataModifierNode,
-        PointerInputModifierNode, SemanticsModifierNode,
+        PlacementModifierNode, PointerInputModifierNode, SemanticsModifierNode,
     },
     pipeline_context::PipelineContext,
     plugin::{

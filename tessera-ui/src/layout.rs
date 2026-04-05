@@ -15,7 +15,7 @@ use crate::{
     component_tree::{
         ComponentNodeMetaDatas, ComponentNodeTree, LayoutContext, measure_node, measure_nodes,
     },
-    modifier::{Modifier, ParentDataMap},
+    modifier::{Modifier, OrderedModifierAction, ParentDataMap},
     prop::Prop,
     px::PxPosition,
     render_graph::RenderFragment,
@@ -210,7 +210,11 @@ impl<'a> LayoutInput<'a> {
     {
         let node = self.tree.get(child_id)?;
         let mut data: ParentDataMap = HashMap::default();
-        node.get().modifier.apply_parent_data(&mut data);
+        for action in node.get().modifier.ordered_actions() {
+            if let OrderedModifierAction::ParentData(node) = action {
+                node.apply_parent_data(&mut data);
+            }
+        }
         let value = data.get(&TypeId::of::<T>())?;
         value.downcast_ref::<T>().cloned()
     }
@@ -270,7 +274,11 @@ impl<'a> PlacementInput<'a> {
     {
         let node = self.tree.get(child_id)?;
         let mut data: ParentDataMap = HashMap::default();
-        node.get().modifier.apply_parent_data(&mut data);
+        for action in node.get().modifier.ordered_actions() {
+            if let OrderedModifierAction::ParentData(node) = action {
+                node.apply_parent_data(&mut data);
+            }
+        }
         let value = data.get(&TypeId::of::<T>())?;
         value.downcast_ref::<T>().cloned()
     }

@@ -22,7 +22,10 @@ use crate::{
     layout::{
         LayoutInput, LayoutOutput, LayoutPolicyDyn, LayoutResult, PlacementInput, RenderPolicyDyn,
     },
-    modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier},
+    modifier::{
+        LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier,
+        OrderedModifierAction,
+    },
     prop::CallbackWith,
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
@@ -107,6 +110,12 @@ pub(crate) struct ComponentNodeMetaData {
     /// None if the node is not placed yet.
     pub rel_position: Option<PxPosition>,
     /// The node's start position, relative to the root window.
+    /// Before placement modifiers are applied.
+    /// This will be computed during drawing command's generation.
+    /// None if the node is not drawn yet.
+    pub base_abs_position: Option<PxPosition>,
+    /// The node's start position, relative to the root window.
+    /// After placement modifiers are applied.
     /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
     pub abs_position: Option<PxPosition>,
@@ -136,6 +145,7 @@ impl ComponentNodeMetaData {
             layout_cache_hit: false,
             placement_order: None,
             rel_position: None,
+            base_abs_position: None,
             abs_position: None,
             event_clip_rect: None,
             fragment: RenderFragment::default(),
@@ -169,6 +179,7 @@ fn reset_frame_metadata(node_id: NodeId, component_node_metadatas: &ComponentNod
     metadata.layout_cache_hit = false;
     metadata.placement_order = None;
     metadata.rel_position = None;
+    metadata.base_abs_position = None;
     metadata.abs_position = None;
     metadata.event_clip_rect = None;
     metadata.fragment = RenderFragment::default();
@@ -261,6 +272,11 @@ impl PointerInput<'_> {
         self.pointer_changes.iter().any(|change| {
             !change.is_consumed() && matches!(change.content, CursorEventContent::Released(_))
         })
+    }
+
+    /// Returns the absolute cursor position in window coordinates.
+    pub fn cursor_position_abs(&self) -> Option<PxPosition> {
+        *self.cursor_position_abs
     }
 
     /// Blocks pointer input to other components.
@@ -755,7 +771,15 @@ pub(crate) fn measure_node(
         }
     };
     let layout_policy = &node_data.layout_policy;
-    let layout_modifiers = node_data.modifier.layout_nodes();
+    let layout_modifiers: Vec<_> = node_data
+        .modifier
+        .ordered_actions()
+        .into_iter()
+        .filter_map(|action| match action {
+            OrderedModifierAction::Layout(node) => Some(node.node()),
+            _ => None,
+        })
+        .collect();
     if let Some(layout_ctx) = layout_ctx {
         layout_ctx.diagnostics.inc_measure_node_calls();
         if let Some(entry) = layout_ctx.snapshots.get(&node_data.instance_key) {

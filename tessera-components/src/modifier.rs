@@ -15,8 +15,9 @@ use tessera_ui::{
 };
 
 pub use tessera_foundation::modifier::{
-    ClickableArgs, InteractionState, MinimumInteractiveComponentEnforcement, Padding,
-    PointerEventContext, SelectableArgs, SemanticsArgs, ToggleableArgs,
+    ClickableArgs, DragDelta, DraggableArgs, InteractionState,
+    MinimumInteractiveComponentEnforcement, Padding, PointerEventContext, SelectableArgs,
+    SemanticsArgs, ToggleableArgs,
 };
 
 pub(crate) use tessera_foundation::modifier::{AlignmentParentData, WeightParentData};
@@ -107,6 +108,14 @@ pub trait ModifierExt {
 
     /// Provides alignment parent data for layered boxed layouts.
     fn align(self, alignment: Alignment) -> Modifier;
+
+    /// Emits drag deltas for free-form dragging.
+    fn draggable<C>(self, on_drag_delta: C) -> Modifier
+    where
+        C: Into<CallbackWith<DragDelta, ()>>;
+
+    /// Emits drag deltas with custom drag configuration.
+    fn draggable_with(self, args: DraggableArgs) -> Modifier;
 
     /// Prevents cursor events from propagating to components behind this
     /// subtree.
@@ -267,6 +276,17 @@ impl ModifierExt for Modifier {
 
     fn align(self, alignment: Alignment) -> Modifier {
         FoundationModifierExt::align(self, alignment)
+    }
+
+    fn draggable<C>(self, on_drag_delta: C) -> Modifier
+    where
+        C: Into<CallbackWith<DragDelta, ()>>,
+    {
+        FoundationModifierExt::draggable(self, on_drag_delta)
+    }
+
+    fn draggable_with(self, args: DraggableArgs) -> Modifier {
+        FoundationModifierExt::draggable_with(self, args)
     }
 
     fn block_touch_propagation(self) -> Modifier {

@@ -316,6 +316,16 @@ impl DragRecognizer {
         result
     }
 
+    /// Replaces the recognizer settings while preserving active gesture state.
+    pub fn set_settings(&mut self, settings: DragSettings) {
+        self.settings = settings;
+    }
+
+    /// Returns whether dragging is currently active.
+    pub fn is_dragging(&self) -> bool {
+        self.dragging
+    }
+
     fn reset(&mut self) {
         self.active_pointer = None;
         self.start_position = None;

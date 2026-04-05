@@ -617,10 +617,11 @@ macro_rules! assert_layout {
 #[cfg(test)]
 mod tests {
     use crate::{
-        AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, FrameNanosControl,
-        LayoutInput, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, LayoutOutput,
-        LayoutPolicy, Modifier, NoopRenderPolicy, Px, PxPosition, RenderSlot,
-        SemanticsModifierNode, receive_frame_nanos, remember, tessera,
+        AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
+        FrameNanosControl, LayoutInput, LayoutModifierChild, LayoutModifierInput,
+        LayoutModifierNode, LayoutOutput, LayoutPolicy, Modifier, NoopRenderPolicy,
+        PlacementModifierNode, Px, PxPosition, RenderSlot, SemanticsModifierNode,
+        receive_frame_nanos, remember, tessera,
     };
     #[derive(Clone, PartialEq)]
     struct FixedSizePolicy {
@@ -731,6 +732,59 @@ mod tests {
             ))?;
             child.place(PxPosition::ZERO, output);
             Ok(crate::LayoutModifierOutput { size: child_size })
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    struct AnimatedOffsetPlacementNode {
+        x: i32,
+        y: i32,
+    }
+
+    impl PlacementModifierNode for AnimatedOffsetPlacementNode {
+        fn transform_position(&self, position: PxPosition) -> PxPosition {
+            position.offset(Px::new(self.x), Px::new(self.y))
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    struct TestPaddingModifierNode {
+        padding: i32,
+    }
+
+    impl LayoutModifierNode for TestPaddingModifierNode {
+        fn measure(
+            &self,
+            input: &LayoutModifierInput<'_>,
+            child: &mut dyn LayoutModifierChild,
+            output: &mut LayoutOutput<'_>,
+        ) -> Result<crate::LayoutModifierOutput, crate::MeasurementError> {
+            let padding = Px::new(self.padding);
+            let parent = input.layout_input.parent_constraint();
+            let constraint = Constraint::new(
+                AxisConstraint::new(
+                    (parent.width().min - padding - padding).max(Px::ZERO),
+                    parent
+                        .width()
+                        .max
+                        .map(|value| (value - padding - padding).max(Px::ZERO)),
+                ),
+                AxisConstraint::new(
+                    (parent.height().min - padding - padding).max(Px::ZERO),
+                    parent
+                        .height()
+                        .max
+                        .map(|value| (value - padding - padding).max(Px::ZERO)),
+                ),
+            );
+            let child_size = child.measure(&constraint)?;
+            child.place(PxPosition::new(padding, padding), output);
+            Ok(crate::LayoutModifierOutput {
+                size: ComputedData {
+                    width: child_size.width + padding + padding,
+                    height: child_size.height + padding + padding,
+                },
+            })
         }
     }
 
@@ -854,6 +908,41 @@ mod tests {
     }
 
     #[tessera(crate)]
+    fn animated_offset_modifier_sample() {
+        let x = remember(|| 0_i32);
+
+        receive_frame_nanos(move |frame_nanos| {
+            let next_x = if frame_nanos >= 200_000_000 {
+                100
+            } else if frame_nanos >= 100_000_000 {
+                50
+            } else {
+                0
+            };
+            x.set(next_x);
+            if frame_nanos >= 200_000_000 {
+                FrameNanosControl::Stop
+            } else {
+                FrameNanosControl::Continue
+            }
+        });
+
+        crate::layout::layout_primitive()
+            .layout_policy(FixedSizePolicy {
+                width: 20,
+                height: 20,
+            })
+            .render_policy(NoopRenderPolicy)
+            .modifier(
+                Modifier::new()
+                    .push_semantics(TestTagSemanticsModifier {
+                        tag: "offset_box".to_string(),
+                    })
+                    .push_placement(AnimatedOffsetPlacementNode { x: x.get(), y: 0 }),
+            );
+    }
+
+    #[tessera(crate)]
     fn slot_host(slot: RenderSlot) {
         crate::layout::layout_primitive()
             .layout_policy(VerticalStackPolicy)
@@ -900,6 +989,27 @@ mod tests {
                             .height(20);
                     });
                 });
+            });
+    }
+
+    #[tessera(crate)]
+    fn ordered_layout_modifier_sample() {
+        crate::layout::layout_primitive()
+            .layout_policy(crate::layout::DefaultLayoutPolicy)
+            .render_policy(NoopRenderPolicy)
+            .modifier(
+                Modifier::new()
+                    .push_semantics(TestTagSemanticsModifier {
+                        tag: "ordered_parent".to_string(),
+                    })
+                    .push_layout(TestPaddingModifierNode { padding: 10 })
+                    .push_layout(AnimatedWidthModifierNode {
+                        width: 50,
+                        height: 20,
+                    }),
+            )
+            .child(|| {
+                responsive_box().tag("ordered_child".to_string());
             });
     }
 
@@ -990,6 +1100,27 @@ mod tests {
     }
 
     #[test]
+    fn assert_layout_macro_pumps_offset_modifier_frames() {
+        crate::assert_layout! {
+            viewport: (200, 100),
+            content: {
+                animated_offset_modifier_sample();
+            },
+            expect: {
+                0 => {
+                    node("offset_box").position(0, 0).size(20, 20);
+                },
+                100_000_000 => {
+                    node("offset_box").position(50, 0).size(20, 20);
+                },
+                200_000_000 => {
+                    node("offset_box").position(100, 0).size(20, 20);
+                }
+            }
+        }
+    }
+
+    #[test]
     fn assert_layout_macro_pumps_nested_slot_animation_frames() {
         crate::assert_layout! {
             viewport: (200, 100),
@@ -1006,6 +1137,20 @@ mod tests {
                 200_000_000 => {
                     node("nested_moving").size(100, 20);
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn layout_modifier_order_follows_source_chain() {
+        crate::assert_layout! {
+            viewport: (200, 100),
+            content: {
+                ordered_layout_modifier_sample();
+            },
+            expect: {
+                node("ordered_parent").position(0, 0).size(70, 40);
+                node("ordered_child").position(10, 10).size(50, 20);
             }
         }
     }

@@ -10,7 +10,7 @@ use std::{any::TypeId, sync::Arc};
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, Dp, LayoutModifierChild, LayoutModifierInput,
     LayoutModifierNode, LayoutModifierOutput, LayoutOutput, MeasurementError, ParentDataMap,
-    ParentDataModifierNode, Px, PxPosition,
+    ParentDataModifierNode, PlacementModifierNode, Px, PxPosition,
 };
 
 use crate::alignment::Alignment;
@@ -199,20 +199,9 @@ pub(crate) struct OffsetModifierNode {
     pub y: Dp,
 }
 
-impl LayoutModifierNode for OffsetModifierNode {
-    fn measure(
-        &self,
-        input: &LayoutModifierInput<'_>,
-        child: &mut dyn LayoutModifierChild,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<LayoutModifierOutput, MeasurementError> {
-        let parent_constraint = Constraint::new(
-            input.layout_input.parent_constraint().width(),
-            input.layout_input.parent_constraint().height(),
-        );
-        let child_size = child.measure(&parent_constraint)?;
-        child.place(PxPosition::new(self.x.into(), self.y.into()), output);
-        Ok(LayoutModifierOutput { size: child_size })
+impl PlacementModifierNode for OffsetModifierNode {
+    fn transform_position(&self, position: PxPosition) -> PxPosition {
+        position.offset(self.x.into(), self.y.into())
     }
 }
 

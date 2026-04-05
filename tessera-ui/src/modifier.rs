@@ -74,6 +74,13 @@ pub trait LayoutModifierNode: Send + Sync + 'static {
     ) -> Result<LayoutModifierOutput, MeasurementError>;
 }
 
+/// A node-local placement modifier that transforms the current node position
+/// without affecting measured size.
+pub trait PlacementModifierNode: Send + Sync + 'static {
+    /// Returns the transformed node position relative to the parent.
+    fn transform_position(&self, position: PxPosition) -> PxPosition;
+}
+
 /// A node-local draw modifier.
 pub trait DrawModifierNode: Send + Sync + 'static {
     /// Records drawing behavior around the wrapped content.
@@ -144,6 +151,11 @@ pub trait ModifierCapabilityExt {
     fn push_layout<N>(self, node: N) -> Self
     where
         N: LayoutModifierNode + PartialEq;
+
+    /// Appends a placement modifier node to the current modifier chain.
+    fn push_placement<N>(self, node: N) -> Self
+    where
+        N: PlacementModifierNode + PartialEq;
 
     /// Appends a draw modifier node to the current modifier chain.
     fn push_draw<N>(self, node: N) -> Self
@@ -227,12 +239,20 @@ enum FocusModifierOp {
     RevealHandler(CallbackWith<FocusRevealRequest, bool>),
 }
 
-trait ErasedLayoutModifierNode: Send + Sync + 'static {
+pub(crate) trait ErasedLayoutModifierNode: Send + Sync + 'static {
     fn node(&self) -> Arc<dyn LayoutModifierNode>;
 
     fn measure_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
 
     fn placement_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
+
+    fn as_any(&self) -> &dyn Any;
+}
+
+pub(crate) trait ErasedPlacementModifierNode: Send + Sync + 'static {
+    fn node(&self) -> Arc<dyn PlacementModifierNode>;
+
+    fn eq(&self, other: &dyn ErasedPlacementModifierNode) -> bool;
 
     fn as_any(&self) -> &dyn Any;
 }
@@ -268,9 +288,37 @@ where
     }
 }
 
+struct ComparablePlacementModifierNode<N>
+where
+    N: PlacementModifierNode + PartialEq,
+{
+    node: Arc<N>,
+}
+
+impl<N> ErasedPlacementModifierNode for ComparablePlacementModifierNode<N>
+where
+    N: PlacementModifierNode + PartialEq,
+{
+    fn node(&self) -> Arc<dyn PlacementModifierNode> {
+        self.node.clone()
+    }
+
+    fn eq(&self, other: &dyn ErasedPlacementModifierNode) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|other| self.node.as_ref() == other.node.as_ref())
+    }
+
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+}
+
 #[derive(Clone)]
 enum ModifierAction {
     Layout(Arc<dyn ErasedLayoutModifierNode>),
+    Placement(Arc<dyn ErasedPlacementModifierNode>),
     Draw(Arc<dyn DrawModifierNode>),
     ParentData(Arc<dyn ParentDataModifierNode>),
     Build(Arc<dyn BuildModifierNode>),
@@ -287,6 +335,22 @@ enum ModifierAction {
 }
 
 #[derive(Clone)]
+pub(crate) enum OrderedModifierAction {
+    Layout(Arc<dyn ErasedLayoutModifierNode>),
+    Placement(Arc<dyn ErasedPlacementModifierNode>),
+    Draw(Arc<dyn DrawModifierNode>),
+    ParentData(Arc<dyn ParentDataModifierNode>),
+    Cursor(Arc<dyn CursorModifierNode>),
+    PointerPreviewInput(Arc<dyn PointerInputModifierNode>),
+    PointerInput(Arc<dyn PointerInputModifierNode>),
+    PointerFinalInput(Arc<dyn PointerInputModifierNode>),
+    KeyboardPreviewInput(Arc<dyn KeyboardInputModifierNode>),
+    KeyboardInput(Arc<dyn KeyboardInputModifierNode>),
+    ImePreviewInput(Arc<dyn ImeInputModifierNode>),
+    ImeInput(Arc<dyn ImeInputModifierNode>),
+}
+
+#[derive(Clone)]
 struct ModifierLink {
     prev: Option<Arc<ModifierLink>>,
     action: ModifierAction,
@@ -299,6 +363,12 @@ fn collect_actions(mut node: Option<Arc<ModifierLink>>) -> Vec<ModifierAction> {
         node = current.prev.clone();
     }
     actions.into_vec()
+}
+
+fn collect_actions_in_source_order(node: Option<Arc<ModifierLink>>) -> Vec<ModifierAction> {
+    let mut actions = collect_actions(node);
+    actions.reverse();
+    actions
 }
 
 /// A persistent handle to a modifier chain.
@@ -400,6 +470,17 @@ impl Modifier {
     {
         self.push_action(ModifierAction::Layout(Arc::new(
             ComparableLayoutModifierNode {
+                node: Arc::new(node),
+            },
+        )))
+    }
+
+    pub(crate) fn push_placement<N>(self, node: N) -> Self
+    where
+        N: PlacementModifierNode + PartialEq,
+    {
+        self.push_action(ModifierAction::Placement(Arc::new(
+            ComparablePlacementModifierNode {
                 node: Arc::new(node),
             },
         )))
@@ -617,28 +698,55 @@ impl Modifier {
         self.tail.is_none()
     }
 
-    pub(crate) fn layout_nodes(&self) -> Vec<Arc<dyn LayoutModifierNode>> {
-        collect_actions(self.tail.clone())
+    pub(crate) fn ordered_actions(&self) -> Vec<OrderedModifierAction> {
+        collect_actions_in_source_order(self.tail.clone())
             .into_iter()
             .filter_map(|action| match action {
-                ModifierAction::Layout(node) => Some(node.node()),
-                _ => None,
+                ModifierAction::Layout(node) => Some(OrderedModifierAction::Layout(node)),
+                ModifierAction::Placement(node) => Some(OrderedModifierAction::Placement(node)),
+                ModifierAction::Draw(node) => Some(OrderedModifierAction::Draw(node)),
+                ModifierAction::ParentData(node) => Some(OrderedModifierAction::ParentData(node)),
+                ModifierAction::Cursor(node) => Some(OrderedModifierAction::Cursor(node)),
+                ModifierAction::PointerPreviewInput(node) => {
+                    Some(OrderedModifierAction::PointerPreviewInput(node))
+                }
+                ModifierAction::PointerInput(node) => {
+                    Some(OrderedModifierAction::PointerInput(node))
+                }
+                ModifierAction::PointerFinalInput(node) => {
+                    Some(OrderedModifierAction::PointerFinalInput(node))
+                }
+                ModifierAction::KeyboardPreviewInput(node) => {
+                    Some(OrderedModifierAction::KeyboardPreviewInput(node))
+                }
+                ModifierAction::KeyboardInput(node) => {
+                    Some(OrderedModifierAction::KeyboardInput(node))
+                }
+                ModifierAction::ImePreviewInput(node) => {
+                    Some(OrderedModifierAction::ImePreviewInput(node))
+                }
+                ModifierAction::ImeInput(node) => Some(OrderedModifierAction::ImeInput(node)),
+                ModifierAction::Build(_)
+                | ModifierAction::Semantics(_)
+                | ModifierAction::Focus(_) => None,
             })
             .collect()
     }
 
     pub(crate) fn layout_measure_eq(&self, other: &Self) -> bool {
-        let lhs: Vec<_> = collect_actions(self.tail.clone())
+        let lhs: Vec<_> = self
+            .ordered_actions()
             .into_iter()
             .filter_map(|action| match action {
-                ModifierAction::Layout(node) => Some(node),
+                OrderedModifierAction::Layout(node) => Some(node),
                 _ => None,
             })
             .collect();
-        let rhs: Vec<_> = collect_actions(other.tail.clone())
+        let rhs: Vec<_> = other
+            .ordered_actions()
             .into_iter()
             .filter_map(|action| match action {
-                ModifierAction::Layout(node) => Some(node),
+                OrderedModifierAction::Layout(node) => Some(node),
                 _ => None,
             })
             .collect();
@@ -650,17 +758,35 @@ impl Modifier {
     }
 
     pub(crate) fn layout_placement_eq(&self, other: &Self) -> bool {
-        let lhs: Vec<_> = collect_actions(self.tail.clone())
+        #[derive(Clone)]
+        enum PlacementComparableAction {
+            Layout(Arc<dyn ErasedLayoutModifierNode>),
+            Placement(Arc<dyn ErasedPlacementModifierNode>),
+        }
+
+        let lhs: Vec<_> = self
+            .ordered_actions()
             .into_iter()
             .filter_map(|action| match action {
-                ModifierAction::Layout(node) => Some(node),
+                OrderedModifierAction::Layout(node) => {
+                    Some(PlacementComparableAction::Layout(node))
+                }
+                OrderedModifierAction::Placement(node) => {
+                    Some(PlacementComparableAction::Placement(node))
+                }
                 _ => None,
             })
             .collect();
-        let rhs: Vec<_> = collect_actions(other.tail.clone())
+        let rhs: Vec<_> = other
+            .ordered_actions()
             .into_iter()
             .filter_map(|action| match action {
-                ModifierAction::Layout(node) => Some(node),
+                OrderedModifierAction::Layout(node) => {
+                    Some(PlacementComparableAction::Layout(node))
+                }
+                OrderedModifierAction::Placement(node) => {
+                    Some(PlacementComparableAction::Placement(node))
+                }
                 _ => None,
             })
             .collect();
@@ -668,121 +794,17 @@ impl Modifier {
             && lhs
                 .iter()
                 .zip(rhs.iter())
-                .all(|(lhs, rhs)| lhs.placement_eq(rhs.as_ref()))
-    }
-
-    pub(crate) fn draw_nodes(&self) -> Vec<Arc<dyn DrawModifierNode>> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::Draw(node) => Some(node),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn apply_parent_data(&self, data: &mut ParentDataMap) {
-        for action in collect_actions(self.tail.clone()).into_iter().rev() {
-            if let ModifierAction::ParentData(node) = action {
-                node.apply_parent_data(data);
-            }
-        }
-    }
-
-    pub(crate) fn pointer_preview_input_nodes(&self) -> Vec<Arc<dyn PointerInputModifierNode>> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::PointerPreviewInput(node) => Some(node),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn pointer_input_nodes(&self) -> Vec<Arc<dyn PointerInputModifierNode>> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::PointerInput(node) => Some(node),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn pointer_final_input_nodes(&self) -> Vec<Arc<dyn PointerInputModifierNode>> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::PointerFinalInput(node) => Some(node),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn keyboard_preview_input_nodes(&self) -> Vec<Arc<dyn KeyboardInputModifierNode>> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::KeyboardPreviewInput(node) => Some(node),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn keyboard_input_nodes(&self) -> Vec<Arc<dyn KeyboardInputModifierNode>> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::KeyboardInput(node) => Some(node),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn ime_preview_input_nodes(&self) -> Vec<Arc<dyn ImeInputModifierNode>> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::ImePreviewInput(node) => Some(node),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn ime_input_nodes(&self) -> Vec<Arc<dyn ImeInputModifierNode>> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .filter_map(|action| match action {
-                ModifierAction::ImeInput(node) => Some(node),
-                _ => None,
-            })
-            .collect()
-    }
-
-    pub(crate) fn has_pointer_input_nodes(&self) -> bool {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .any(|action| {
-                matches!(
-                    action,
-                    ModifierAction::PointerPreviewInput(_)
-                        | ModifierAction::PointerInput(_)
-                        | ModifierAction::PointerFinalInput(_)
-                )
-            })
-    }
-
-    pub(crate) fn cursor_icon(&self) -> Option<CursorIcon> {
-        collect_actions(self.tail.clone())
-            .into_iter()
-            .find_map(|action| match action {
-                ModifierAction::Cursor(node) => Some(node.cursor_icon()),
-                _ => None,
-            })
-    }
-
-    pub(crate) fn has_cursor_icon(&self) -> bool {
-        self.cursor_icon().is_some()
+                .all(|(lhs, rhs)| match (lhs, rhs) {
+                    (
+                        PlacementComparableAction::Layout(lhs),
+                        PlacementComparableAction::Layout(rhs),
+                    ) => lhs.placement_eq(rhs.as_ref()),
+                    (
+                        PlacementComparableAction::Placement(lhs),
+                        PlacementComparableAction::Placement(rhs),
+                    ) => lhs.eq(rhs.as_ref()),
+                    _ => false,
+                })
     }
 }
 
@@ -792,6 +814,13 @@ impl ModifierCapabilityExt for Modifier {
         N: LayoutModifierNode + PartialEq,
     {
         Modifier::push_layout(self, node)
+    }
+
+    fn push_placement<N>(self, node: N) -> Self
+    where
+        N: PlacementModifierNode + PartialEq,
+    {
+        Modifier::push_placement(self, node)
     }
 
     fn push_draw<N>(self, node: N) -> Self

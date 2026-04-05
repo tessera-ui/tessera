@@ -2,11 +2,16 @@
 //!
 //! ## Usage
 //!
-//! Configure clickable, toggleable, and selectable modifier behavior.
+//! Configure clickable, toggleable, selectable, and draggable modifier
+//! behavior.
 
 use tessera_ui::{
-    Callback, CallbackWith, FocusProperties, FocusRequester, PxSize, State, accesskit,
+    Callback, CallbackWith, FocusProperties, FocusRequester, Modifier, PointerInput,
+    PointerInputModifierNode, Px, PxPosition, PxSize, State, accesskit,
+    modifier::ModifierCapabilityExt as _, remember,
 };
+
+use crate::gesture::{DragAxis, DragRecognizer, DragSettings};
 
 /// Context for pointer press/release callbacks.
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -18,6 +23,7 @@ pub struct PointerEventContext {
 }
 
 type PressCallback = CallbackWith<PointerEventContext, ()>;
+type DragCallback = CallbackWith<DragDelta, ()>;
 
 /// Arguments for the `clickable` modifier.
 #[derive(Clone)]
@@ -148,6 +154,51 @@ impl Default for SelectableArgs {
     }
 }
 
+/// Pointer delta produced by the `draggable` modifier.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
+pub struct DragDelta {
+    /// Horizontal delta in pixels.
+    pub x: Px,
+    /// Vertical delta in pixels.
+    pub y: Px,
+}
+
+/// Arguments for the `draggable` modifier.
+#[derive(Clone)]
+pub struct DraggableArgs {
+    /// Callback invoked with each drag delta update.
+    pub on_drag_delta: DragCallback,
+    /// Whether dragging is enabled.
+    pub enabled: bool,
+    /// Optional drag axis lock.
+    pub axis: Option<DragAxis>,
+    /// Minimum travel before the drag starts.
+    pub slop_px: f32,
+    /// Whether drag pointer changes should be consumed after dragging starts.
+    pub consume_when_dragging: bool,
+    /// Optional callback invoked when dragging starts.
+    pub on_drag_started: Option<Callback>,
+    /// Optional callback invoked when dragging stops after an active drag.
+    pub on_drag_stopped: Option<Callback>,
+    /// Optional external interaction state updated with the dragged flag.
+    pub interaction_state: Option<State<InteractionState>>,
+}
+
+impl Default for DraggableArgs {
+    fn default() -> Self {
+        Self {
+            on_drag_delta: CallbackWith::default_value(),
+            enabled: true,
+            axis: None,
+            slop_px: DragSettings::default().slop_px,
+            consume_when_dragging: DragSettings::default().consume_when_dragging,
+            on_drag_started: None,
+            on_drag_stopped: None,
+            interaction_state: None,
+        }
+    }
+}
+
 /// Tracks basic interaction flags and derives state-layer alpha.
 #[derive(Clone, PartialEq, Copy, Debug, Default)]
 pub struct InteractionState {
@@ -220,4 +271,117 @@ impl InteractionState {
             0.0
         }
     }
+}
+
+struct DraggablePointerModifierNode {
+    drag_recognizer: State<DragRecognizer>,
+    on_drag_delta: DragCallback,
+    enabled: bool,
+    on_drag_started: Option<Callback>,
+    on_drag_stopped: Option<Callback>,
+    interaction_state: Option<State<InteractionState>>,
+}
+
+impl PointerInputModifierNode for DraggablePointerModifierNode {
+    fn on_pointer_input(&self, input: PointerInput<'_>) {
+        if !self.enabled {
+            return;
+        }
+
+        let cursor_position_abs = input.cursor_position_abs();
+        let within_bounds = cursor_within_bounds(
+            input.cursor_position_rel,
+            PxSize::new(input.computed_data.width, input.computed_data.height),
+        );
+        let (was_dragging, drag_result) = self.drag_recognizer.with_mut(|recognizer| {
+            let was_dragging = recognizer.is_dragging();
+            let drag_result = recognizer.update(
+                input.pass,
+                input.pointer_changes,
+                cursor_position_abs,
+                within_bounds,
+            );
+            (was_dragging, drag_result)
+        });
+
+        if drag_result.started {
+            if let Some(interaction_state) = self.interaction_state {
+                interaction_state.with_mut(|state| state.set_dragged(true));
+            }
+            if let Some(on_drag_started) = self.on_drag_started {
+                on_drag_started.call();
+            }
+        }
+
+        if drag_result.updated {
+            self.on_drag_delta.call(DragDelta {
+                x: drag_result.delta_x,
+                y: drag_result.delta_y,
+            });
+        }
+
+        if drag_result.ended && was_dragging {
+            if let Some(interaction_state) = self.interaction_state {
+                interaction_state.with_mut(|state| state.set_dragged(false));
+            }
+            if let Some(on_drag_stopped) = self.on_drag_stopped {
+                on_drag_stopped.call();
+            }
+        }
+    }
+}
+
+fn cursor_within_bounds(position: Option<PxPosition>, size: PxSize) -> bool {
+    let Some(position) = position else {
+        return false;
+    };
+
+    position.x >= Px::ZERO
+        && position.y >= Px::ZERO
+        && position.x < size.width
+        && position.y < size.height
+}
+
+pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> Modifier {
+    let DraggableArgs {
+        on_drag_delta,
+        enabled,
+        axis,
+        slop_px,
+        consume_when_dragging,
+        on_drag_started,
+        on_drag_stopped,
+        interaction_state,
+    } = args;
+
+    if !enabled {
+        if let Some(interaction_state) = interaction_state {
+            interaction_state.with_mut(|state| state.set_dragged(false));
+        }
+        return base;
+    }
+
+    let drag_recognizer = remember(move || {
+        DragRecognizer::new(DragSettings {
+            slop_px,
+            consume_when_dragging,
+            axis,
+        })
+    });
+    drag_recognizer.with_mut(|recognizer| {
+        recognizer.set_settings(DragSettings {
+            slop_px,
+            consume_when_dragging,
+            axis,
+        });
+    });
+
+    base.push_pointer_input(DraggablePointerModifierNode {
+        drag_recognizer,
+        on_drag_delta,
+        enabled,
+        on_drag_started,
+        on_drag_stopped,
+        interaction_state,
+    })
 }

@@ -23,7 +23,7 @@ use crate::{
     layout::{LayoutResult, RenderInput},
     modifier::{
         DrawModifierContent, DrawModifierContext, ImeInputModifierNode, KeyboardInputModifierNode,
-        PointerInputModifierNode,
+        OrderedModifierAction, PointerInputModifierNode,
     },
     px::{PxPosition, PxSize},
     render_graph::{RenderGraph, RenderGraphBuilder},
@@ -877,24 +877,21 @@ impl ComponentTree {
             let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
                 continue;
             };
-            for modifier in node.modifier.pointer_preview_input_nodes() {
-                let mut dispatch_ctx = PointerInputDispatchContext {
-                    tree: &self.tree,
-                    metadatas: &self.metadatas,
-                    cursor_position: &mut cursor_position,
-                    pointer_changes: pointer_changes.as_mut_slice(),
-                    pointer_change_paths: &pointer_change_paths,
-                    modifiers,
-                    window_requests: &mut window_requests,
-                    focus_owner: &mut self.focus_owner,
-                };
-                run_pointer_modifier_for_node(
-                    &mut dispatch_ctx,
-                    node_id,
-                    PointerEventPass::Initial,
-                    modifier.as_ref(),
-                );
-            }
+            let mut dispatch_ctx = PointerInputDispatchContext {
+                tree: &self.tree,
+                metadatas: &self.metadatas,
+                cursor_position: &mut cursor_position,
+                pointer_changes: pointer_changes.as_mut_slice(),
+                pointer_change_paths: &pointer_change_paths,
+                modifiers,
+                window_requests: &mut window_requests,
+                focus_owner: &mut self.focus_owner,
+            };
+            dispatch_pointer_modifiers_for_node_pass(
+                &mut dispatch_ctx,
+                node_id,
+                PointerEventPass::Initial,
+            );
             let handlers = &node.pointer_preview_handlers;
             for handler in handlers {
                 let mut dispatch_ctx = PointerInputDispatchContext {
@@ -920,24 +917,21 @@ impl ComponentTree {
             let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
                 continue;
             };
-            for modifier in node.modifier.pointer_input_nodes() {
-                let mut dispatch_ctx = PointerInputDispatchContext {
-                    tree: &self.tree,
-                    metadatas: &self.metadatas,
-                    cursor_position: &mut cursor_position,
-                    pointer_changes: pointer_changes.as_mut_slice(),
-                    pointer_change_paths: &pointer_change_paths,
-                    modifiers,
-                    window_requests: &mut window_requests,
-                    focus_owner: &mut self.focus_owner,
-                };
-                run_pointer_modifier_for_node(
-                    &mut dispatch_ctx,
-                    node_id,
-                    PointerEventPass::Main,
-                    modifier.as_ref(),
-                );
-            }
+            let mut dispatch_ctx = PointerInputDispatchContext {
+                tree: &self.tree,
+                metadatas: &self.metadatas,
+                cursor_position: &mut cursor_position,
+                pointer_changes: pointer_changes.as_mut_slice(),
+                pointer_change_paths: &pointer_change_paths,
+                modifiers,
+                window_requests: &mut window_requests,
+                focus_owner: &mut self.focus_owner,
+            };
+            dispatch_pointer_modifiers_for_node_pass(
+                &mut dispatch_ctx,
+                node_id,
+                PointerEventPass::Main,
+            );
             let handlers = &node.pointer_handlers;
             for handler in handlers {
                 let mut dispatch_ctx = PointerInputDispatchContext {
@@ -963,24 +957,21 @@ impl ComponentTree {
             let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
                 continue;
             };
-            for modifier in node.modifier.pointer_final_input_nodes() {
-                let mut dispatch_ctx = PointerInputDispatchContext {
-                    tree: &self.tree,
-                    metadatas: &self.metadatas,
-                    cursor_position: &mut cursor_position,
-                    pointer_changes: pointer_changes.as_mut_slice(),
-                    pointer_change_paths: &pointer_change_paths,
-                    modifiers,
-                    window_requests: &mut window_requests,
-                    focus_owner: &mut self.focus_owner,
-                };
-                run_pointer_modifier_for_node(
-                    &mut dispatch_ctx,
-                    node_id,
-                    PointerEventPass::Final,
-                    modifier.as_ref(),
-                );
-            }
+            let mut dispatch_ctx = PointerInputDispatchContext {
+                tree: &self.tree,
+                metadatas: &self.metadatas,
+                cursor_position: &mut cursor_position,
+                pointer_changes: pointer_changes.as_mut_slice(),
+                pointer_change_paths: &pointer_change_paths,
+                modifiers,
+                window_requests: &mut window_requests,
+                focus_owner: &mut self.focus_owner,
+            };
+            dispatch_pointer_modifiers_for_node_pass(
+                &mut dispatch_ctx,
+                node_id,
+                PointerEventPass::Final,
+            );
             let handlers = &node.pointer_final_handlers;
             for handler in handlers {
                 let mut dispatch_ctx = PointerInputDispatchContext {
@@ -1026,29 +1017,34 @@ impl ComponentTree {
                 let Some(node) = keyboard_dispatch_ctx.tree.get(node_id).map(|n| n.get()) else {
                     continue;
                 };
-                for modifier in node.modifier.keyboard_preview_input_nodes() {
-                    run_keyboard_modifier_for_node(
-                        &mut keyboard_dispatch_ctx,
-                        node_id,
-                        modifier.as_ref(),
-                    );
+                for action in node.modifier.ordered_actions() {
+                    match action {
+                        OrderedModifierAction::KeyboardPreviewInput(modifier) => {
+                            run_keyboard_modifier_for_node(
+                                &mut keyboard_dispatch_ctx,
+                                node_id,
+                                modifier.as_ref(),
+                            );
+                        }
+                        OrderedModifierAction::ImePreviewInput(modifier) => {
+                            run_ime_modifier_for_node(
+                                keyboard_dispatch_ctx.tree,
+                                keyboard_dispatch_ctx.metadatas,
+                                node_id,
+                                modifier.as_ref(),
+                                &mut ime_events,
+                                keyboard_dispatch_ctx.window_requests,
+                                keyboard_dispatch_ctx.focus_owner,
+                            );
+                        }
+                        _ => {}
+                    }
                 }
                 for handler in &node.keyboard_preview_handlers {
                     run_keyboard_handler_for_node(
                         &mut keyboard_dispatch_ctx,
                         node_id,
                         handler.as_ref(),
-                    );
-                }
-                for modifier in node.modifier.ime_preview_input_nodes() {
-                    run_ime_modifier_for_node(
-                        keyboard_dispatch_ctx.tree,
-                        keyboard_dispatch_ctx.metadatas,
-                        node_id,
-                        modifier.as_ref(),
-                        &mut ime_events,
-                        keyboard_dispatch_ctx.window_requests,
-                        keyboard_dispatch_ctx.focus_owner,
                     );
                 }
                 for handler in &node.ime_preview_handlers {
@@ -1068,29 +1064,34 @@ impl ComponentTree {
                 let Some(node) = keyboard_dispatch_ctx.tree.get(node_id).map(|n| n.get()) else {
                     continue;
                 };
-                for modifier in node.modifier.keyboard_input_nodes() {
-                    run_keyboard_modifier_for_node(
-                        &mut keyboard_dispatch_ctx,
-                        node_id,
-                        modifier.as_ref(),
-                    );
+                for action in node.modifier.ordered_actions() {
+                    match action {
+                        OrderedModifierAction::KeyboardInput(modifier) => {
+                            run_keyboard_modifier_for_node(
+                                &mut keyboard_dispatch_ctx,
+                                node_id,
+                                modifier.as_ref(),
+                            );
+                        }
+                        OrderedModifierAction::ImeInput(modifier) => {
+                            run_ime_modifier_for_node(
+                                keyboard_dispatch_ctx.tree,
+                                keyboard_dispatch_ctx.metadatas,
+                                node_id,
+                                modifier.as_ref(),
+                                &mut ime_events,
+                                keyboard_dispatch_ctx.window_requests,
+                                keyboard_dispatch_ctx.focus_owner,
+                            );
+                        }
+                        _ => {}
+                    }
                 }
                 for handler in &node.keyboard_handlers {
                     run_keyboard_handler_for_node(
                         &mut keyboard_dispatch_ctx,
                         node_id,
                         handler.as_ref(),
-                    );
-                }
-                for modifier in node.modifier.ime_input_nodes() {
-                    run_ime_modifier_for_node(
-                        keyboard_dispatch_ctx.tree,
-                        keyboard_dispatch_ctx.metadatas,
-                        node_id,
-                        modifier.as_ref(),
-                        &mut ime_events,
-                        keyboard_dispatch_ctx.window_requests,
-                        keyboard_dispatch_ctx.focus_owner,
                     );
                 }
                 for handler in &node.ime_handlers {
@@ -1142,6 +1143,7 @@ impl ComponentTree {
 }
 
 struct NodeInputContext {
+    base_abs_pos: PxPosition,
     abs_pos: PxPosition,
     event_clip_rect: Option<PxRect>,
     node_computed_data: ComputedData,
@@ -1158,6 +1160,10 @@ fn resolve_node_input_context(
 ) -> Option<NodeInputContext> {
     let Some(metadata) = metadatas.get(&node_id) else {
         warn!("Input metadata missing for node {node_id:?}; skipping input handling");
+        return None;
+    };
+    let Some(base_abs_pos) = metadata.base_abs_position else {
+        warn!("Base absolute position missing for node {node_id:?}; skipping input handling");
         return None;
     };
     let Some(abs_pos) = metadata.abs_position else {
@@ -1185,6 +1191,7 @@ fn resolve_node_input_context(
     let parent_id = node_ref.parent();
 
     Some(NodeInputContext {
+        base_abs_pos,
         abs_pos,
         event_clip_rect,
         node_computed_data,
@@ -1216,6 +1223,7 @@ fn hit_path_node_ids(
         position: PxPosition,
     ) -> Option<Vec<indextree::NodeId>> {
         let metadata = metadatas.get(&node_id)?;
+        let base_abs_pos = metadata.base_abs_position?;
         let abs_pos = metadata.abs_position?;
         let size = metadata.computed_data?;
         if size.width.0 <= 0 || size.height.0 <= 0 {
@@ -1227,15 +1235,15 @@ fn hit_path_node_ids(
             return None;
         }
         let bounds = PxRect::from_position_size(abs_pos, PxSize::new(size.width, size.height));
-        let bounds_contains = bounds.contains(position);
         let node_handles_hover = tree.get(node_id).is_some_and(|node| {
-            let node = node.get();
-            !node.pointer_preview_handlers.is_empty()
-                || !node.pointer_handlers.is_empty()
-                || !node.pointer_final_handlers.is_empty()
-                || node.modifier.has_pointer_input_nodes()
-                || node.modifier.has_cursor_icon()
-        });
+            node_handles_pointer_at_position(node.get(), base_abs_pos, size, position)
+        }) || bounds.contains(position)
+            && tree.get(node_id).is_some_and(|node| {
+                let node = node.get();
+                !node.pointer_preview_handlers.is_empty()
+                    || !node.pointer_handlers.is_empty()
+                    || !node.pointer_final_handlers.is_empty()
+            });
 
         let children: Vec<_> = node_id.children(tree).collect();
         for child_id in children.into_iter().rev() {
@@ -1247,7 +1255,7 @@ fn hit_path_node_ids(
             }
         }
 
-        (bounds_contains && node_handles_hover).then_some(vec![node_id])
+        node_handles_hover.then_some(vec![node_id])
     }
 
     let Some(position) = position else {
@@ -1266,9 +1274,67 @@ fn resolve_hover_cursor_icon(
         .into_iter()
         .rev()
         .find_map(|node_id| {
-            tree.get(node_id)
-                .and_then(|node| node.get().modifier.cursor_icon())
+            let node_ref = tree.get(node_id)?;
+            let metadata = metadatas.get(&node_id)?;
+            let base_abs_pos = metadata.base_abs_position?;
+            let size = metadata.computed_data?;
+            drop(metadata);
+            resolve_node_hover_cursor_icon(node_ref.get(), base_abs_pos, size, position?)
         })
+}
+
+fn node_handles_pointer_at_position(
+    node: &crate::component_tree::ComponentNode,
+    base_abs_pos: PxPosition,
+    size: ComputedData,
+    position: PxPosition,
+) -> bool {
+    let mut current_abs_pos = base_abs_pos;
+    let size = PxSize::new(size.width, size.height);
+    for action in node.modifier.ordered_actions() {
+        match action {
+            OrderedModifierAction::Placement(placement) => {
+                current_abs_pos = placement.node().transform_position(current_abs_pos);
+            }
+            OrderedModifierAction::Cursor(_)
+            | OrderedModifierAction::PointerPreviewInput(_)
+            | OrderedModifierAction::PointerInput(_)
+            | OrderedModifierAction::PointerFinalInput(_) => {
+                let bounds = PxRect::from_position_size(current_abs_pos, size);
+                if bounds.contains(position) {
+                    return true;
+                }
+            }
+            _ => {}
+        }
+    }
+    false
+}
+
+fn resolve_node_hover_cursor_icon(
+    node: &crate::component_tree::ComponentNode,
+    base_abs_pos: PxPosition,
+    size: ComputedData,
+    position: PxPosition,
+) -> Option<winit::window::CursorIcon> {
+    let mut current_abs_pos = base_abs_pos;
+    let size = PxSize::new(size.width, size.height);
+    let mut resolved = None;
+    for action in node.modifier.ordered_actions() {
+        match action {
+            OrderedModifierAction::Placement(placement) => {
+                current_abs_pos = placement.node().transform_position(current_abs_pos);
+            }
+            OrderedModifierAction::Cursor(cursor) => {
+                let bounds = PxRect::from_position_size(current_abs_pos, size);
+                if bounds.contains(position) {
+                    resolved = Some(cursor.cursor_icon());
+                }
+            }
+            _ => {}
+        }
+    }
+    resolved
 }
 
 fn build_pointer_change_paths(
@@ -1382,22 +1448,84 @@ struct PointerInputDispatchContext<'a> {
     focus_owner: &'a mut FocusOwner,
 }
 
+fn dispatch_pointer_modifiers_for_node_pass(
+    dispatch_ctx: &mut PointerInputDispatchContext<'_>,
+    node_id: indextree::NodeId,
+    pass: PointerEventPass,
+) {
+    let Some(NodeInputContext { base_abs_pos, .. }) =
+        resolve_node_input_context(dispatch_ctx.tree, dispatch_ctx.metadatas, node_id)
+    else {
+        return;
+    };
+    let Some(node_ref) = dispatch_ctx.tree.get(node_id) else {
+        return;
+    };
+
+    let mut current_abs_pos = base_abs_pos;
+    for action in node_ref.get().modifier.ordered_actions() {
+        match action {
+            OrderedModifierAction::Placement(placement) => {
+                current_abs_pos = placement.node().transform_position(current_abs_pos);
+            }
+            OrderedModifierAction::PointerPreviewInput(modifier)
+                if pass == PointerEventPass::Initial =>
+            {
+                run_pointer_modifier_for_node(
+                    dispatch_ctx,
+                    node_id,
+                    pass,
+                    current_abs_pos,
+                    modifier.as_ref(),
+                );
+            }
+            OrderedModifierAction::PointerInput(modifier) if pass == PointerEventPass::Main => {
+                run_pointer_modifier_for_node(
+                    dispatch_ctx,
+                    node_id,
+                    pass,
+                    current_abs_pos,
+                    modifier.as_ref(),
+                );
+            }
+            OrderedModifierAction::PointerFinalInput(modifier)
+                if pass == PointerEventPass::Final =>
+            {
+                run_pointer_modifier_for_node(
+                    dispatch_ctx,
+                    node_id,
+                    pass,
+                    current_abs_pos,
+                    modifier.as_ref(),
+                );
+            }
+            _ => {}
+        }
+    }
+}
+
 fn run_pointer_handler_for_node(
     dispatch_ctx: &mut PointerInputDispatchContext<'_>,
     node_id: indextree::NodeId,
     pass: PointerEventPass,
     pointer_handler: &PointerInputHandlerFn,
 ) {
-    run_pointer_input_for_node(dispatch_ctx, node_id, pass, pointer_handler);
+    let Some(NodeInputContext { abs_pos, .. }) =
+        resolve_node_input_context(dispatch_ctx.tree, dispatch_ctx.metadatas, node_id)
+    else {
+        return;
+    };
+    run_pointer_input_for_node(dispatch_ctx, node_id, pass, abs_pos, pointer_handler);
 }
 
 fn run_pointer_modifier_for_node(
     dispatch_ctx: &mut PointerInputDispatchContext<'_>,
     node_id: indextree::NodeId,
     pass: PointerEventPass,
+    abs_pos_override: PxPosition,
     pointer_modifier: &dyn PointerInputModifierNode,
 ) {
-    run_pointer_input_for_node(dispatch_ctx, node_id, pass, |input| {
+    run_pointer_input_for_node(dispatch_ctx, node_id, pass, abs_pos_override, |input| {
         pointer_modifier.on_pointer_input(input)
     });
 }
@@ -1406,12 +1534,14 @@ fn run_pointer_input_for_node<F>(
     dispatch_ctx: &mut PointerInputDispatchContext<'_>,
     node_id: indextree::NodeId,
     pass: PointerEventPass,
+    abs_pos_override: PxPosition,
     dispatch: F,
 ) where
     F: FnOnce(PointerInput<'_>),
 {
     let Some(NodeInputContext {
-        abs_pos,
+        base_abs_pos: _,
+        abs_pos: _,
         event_clip_rect,
         node_computed_data,
         instance_logic_id,
@@ -1424,6 +1554,8 @@ fn run_pointer_input_for_node<F>(
     };
     #[cfg(not(feature = "profiling"))]
     let _ = parent_id;
+
+    let abs_pos = abs_pos_override;
 
     let mut cursor_position_ref = &mut *dispatch_ctx.cursor_position;
     let mut dummy_cursor_position = None;
@@ -1533,6 +1665,7 @@ fn run_keyboard_input_for_node<F>(
         instance_key,
         fn_name,
         parent_id,
+        ..
     }) = resolve_node_input_context(dispatch_ctx.tree, dispatch_ctx.metadatas, node_id)
     else {
         return;
@@ -1630,6 +1763,7 @@ fn run_ime_input_for_node<F>(
         instance_key,
         fn_name,
         parent_id,
+        ..
     }) = resolve_node_input_context(tree, metadatas, node_id)
     else {
         return;
@@ -1961,8 +2095,15 @@ fn record_layout_commands(
         };
         let input = RenderInput::new(node_id, metadatas, compute_resource_manager.clone(), gpu);
         let node_ref = node.get();
-        let mut draw_nodes = node_ref.modifier.draw_nodes();
-        draw_nodes.reverse();
+        let draw_nodes: Vec<_> = node_ref
+            .modifier
+            .ordered_actions()
+            .into_iter()
+            .filter_map(|action| match action {
+                OrderedModifierAction::Draw(node) => Some(node),
+                _ => None,
+            })
+            .collect();
         let mut content = DrawModifierChainContent {
             draw_nodes: &draw_nodes,
             render_policy: node_ref.render_policy.as_ref(),
@@ -1983,7 +2124,7 @@ struct PreparedLayoutMetadata {
 }
 
 fn prepare_layout_metadata_for_node(
-    _tree: &ComponentNodeTree,
+    tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
     start_pos: PxPosition,
     is_root: bool,
@@ -2001,8 +2142,17 @@ fn prepare_layout_metadata_for_node(
             return None;
         }
     };
-    let self_position = start_pos + rel_pos;
+    let base_self_position = start_pos + rel_pos;
+    let mut self_position = base_self_position;
+    if let Some(node) = tree.get(node_id) {
+        for action in node.get().modifier.ordered_actions() {
+            if let OrderedModifierAction::Placement(placement_node) = action {
+                self_position = placement_node.node().transform_position(self_position);
+            }
+        }
+    }
     let cumulative_opacity = current_opacity * metadata.opacity;
+    metadata.base_abs_position = Some(base_self_position);
     metadata.abs_position = Some(self_position);
     metadata.event_clip_rect = parent_clip_rect;
 
