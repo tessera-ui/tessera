@@ -616,12 +616,20 @@ macro_rules! assert_layout {
 
 #[cfg(test)]
 mod tests {
+    use std::num::NonZero;
+
+    use super::reset_runtime_for_layout_test;
+
     use crate::{
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
         FrameNanosControl, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
         LayoutPolicy, LayoutResult, Modifier, NoopRenderPolicy, PlacementModifierNode, Px,
-        PxPosition, RenderSlot, SemanticsModifierNode, layout::MeasureScope, receive_frame_nanos,
-        remember, tessera,
+        PxPosition, RenderSlot, SemanticsModifierNode,
+        component_tree::{NodeRole, direct_layout_children},
+        layout::MeasureScope,
+        receive_frame_nanos, remember,
+        runtime::TesseraRuntime,
+        tessera,
     };
     #[derive(Clone, PartialEq)]
     struct FixedSizePolicy {
@@ -1011,6 +1019,14 @@ mod tests {
             });
     }
 
+    #[tessera(crate)]
+    fn explicit_layout_boundary_sample() {
+        crate::layout::layout().layout_policy(FixedSizePolicy {
+            width: 24,
+            height: 12,
+        });
+    }
+
     #[test]
     fn assert_layout_macro_smoke() {
         crate::assert_layout! {
@@ -1151,5 +1167,72 @@ mod tests {
                 node("ordered_child").position(10, 10).size(50, 20);
             }
         }
+    }
+
+    #[test]
+    fn layout_keeps_composition_boundary_and_emits_layout_child() {
+        reset_runtime_for_layout_test((100, 100));
+        let _ = crate::build_tree::build_component_tree(&explicit_layout_boundary_sample);
+
+        TesseraRuntime::with(|runtime| {
+            let tree = runtime.component_tree.tree();
+            let root = tree
+                .get_node_id_at(NonZero::new(1).expect("root node index must be non-zero"))
+                .expect("root node must exist after build");
+
+            let mut layout_composition = None;
+            let mut layout_node = None;
+
+            for edge in root.traverse(tree) {
+                let indextree::NodeEdge::Start(node_id) = edge else {
+                    continue;
+                };
+                let Some(node_ref) = tree.get(node_id) else {
+                    continue;
+                };
+                let node = node_ref.get();
+                if node.fn_name != "layout" {
+                    continue;
+                }
+
+                match node.role {
+                    NodeRole::Composition => {
+                        layout_composition =
+                            Some((node_id, node.instance_key, node.replay.is_some()));
+                    }
+                    NodeRole::Layout => {
+                        layout_node = Some((node_id, node.instance_key, node.replay.is_none()));
+                    }
+                }
+            }
+
+            let (layout_composition_id, composition_instance_key, has_replay) =
+                layout_composition.expect("layout composition boundary must exist");
+            let (layout_node_id, layout_instance_key, has_no_replay) =
+                layout_node.expect("emitted layout node must exist");
+
+            assert!(
+                has_replay,
+                "layout composition boundary must keep replay metadata"
+            );
+            assert!(
+                has_no_replay,
+                "emitted layout node must not become its own replay boundary"
+            );
+            assert_ne!(
+                composition_instance_key, layout_instance_key,
+                "layout node must keep a distinct node identity"
+            );
+            assert_eq!(
+                layout_node_id.parent(tree),
+                Some(layout_composition_id),
+                "layout node must be emitted directly under the layout composition boundary"
+            );
+            assert_eq!(
+                direct_layout_children(layout_composition_id, tree),
+                vec![layout_node_id],
+                "direct layout children must resolve to the emitted layout node"
+            );
+        });
     }
 }

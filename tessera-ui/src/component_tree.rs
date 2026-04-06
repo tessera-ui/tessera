@@ -42,8 +42,8 @@ pub use node::{
 };
 
 pub(crate) use node::{
-    ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree,
-    WindowRequests, measure_node, measure_nodes,
+    ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
+    WindowRequests, direct_layout_children, measure_node, measure_nodes,
 };
 
 #[cfg(feature = "profiling")]
@@ -1222,6 +1222,22 @@ fn hit_path_node_ids(
         metadatas: &ComponentNodeMetaDatas,
         position: PxPosition,
     ) -> Option<Vec<indextree::NodeId>> {
+        let children: Vec<_> = node_id.children(tree).collect();
+        for child_id in children.into_iter().rev() {
+            if let Some(mut child_path) = collect_hit_path(child_id, tree, metadatas, position) {
+                let mut path = Vec::with_capacity(child_path.len() + 1);
+                if let Some(metadata) = metadatas.get(&node_id)
+                    && metadata.base_abs_position.is_some()
+                    && metadata.abs_position.is_some()
+                    && metadata.computed_data.is_some()
+                {
+                    path.push(node_id);
+                }
+                path.append(&mut child_path);
+                return Some(path);
+            }
+        }
+
         let metadata = metadatas.get(&node_id)?;
         let base_abs_pos = metadata.base_abs_position?;
         let abs_pos = metadata.abs_position?;
@@ -1244,16 +1260,6 @@ fn hit_path_node_ids(
                     || !node.pointer_handlers.is_empty()
                     || !node.pointer_final_handlers.is_empty()
             });
-
-        let children: Vec<_> = node_id.children(tree).collect();
-        for child_id in children.into_iter().rev() {
-            if let Some(mut child_path) = collect_hit_path(child_id, tree, metadatas, position) {
-                let mut path = Vec::with_capacity(child_path.len() + 1);
-                path.push(node_id);
-                path.append(&mut child_path);
-                return Some(path);
-            }
-        }
 
         node_handles_hover.then_some(vec![node_id])
     }
@@ -2040,8 +2046,8 @@ fn collect_children_by_instance_key(
             continue;
         };
         let instance_key = node.get().instance_key;
-        let child_keys = node_id
-            .children(tree)
+        let child_keys = direct_layout_children(node_id, tree)
+            .into_iter()
             .filter_map(|child_id| tree.get(child_id).map(|child| child.get().instance_key))
             .collect();
         children_by_node.insert(instance_key, child_keys);
@@ -2213,6 +2219,17 @@ fn populate_layout_metadata(
             clip_rect,
             current_opacity,
         ) else {
+            for child in node_id.children(tree) {
+                visit(
+                    tree,
+                    metadatas,
+                    start_pos,
+                    false,
+                    child,
+                    clip_rect,
+                    current_opacity,
+                );
+            }
             return;
         };
 
@@ -2291,6 +2308,9 @@ fn build_render_graph_inner(
         clip_rect,
         current_opacity,
     ) else {
+        for child in node_id.children(context.tree) {
+            build_render_graph_inner(context, start_pos, false, child, clip_rect, current_opacity);
+        }
         return;
     };
 
@@ -2341,7 +2361,7 @@ mod tests {
     use super::*;
 
     use crate::{
-        component_tree::ComponentNode,
+        component_tree::{ComponentNode, NodeRole},
         layout::{DefaultLayoutPolicy, NoopRenderPolicy},
         modifier::Modifier,
     };
@@ -2349,6 +2369,7 @@ mod tests {
     fn node(name: &str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
         ComponentNode {
             fn_name: name.to_string(),
+            role: NodeRole::Layout,
             instance_logic_id,
             instance_key,
             pointer_preview_handlers: Vec::new(),

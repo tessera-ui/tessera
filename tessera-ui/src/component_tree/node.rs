@@ -44,9 +44,18 @@ use crate::profiler::{Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
 
 /// A ComponentNode is a node in the component tree.
 /// It represents all information about a component.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(crate) enum NodeRole {
+    Composition,
+    Layout,
+}
+
 pub(crate) struct ComponentNode {
     /// Component function's name, for debugging purposes.
     pub(crate) fn_name: String,
+    /// Whether this tree node represents a composition boundary or an explicit
+    /// layout node.
+    pub(crate) role: NodeRole,
     /// Stable logic identifier of this concrete component instance.
     pub(crate) instance_logic_id: u64,
     /// Stable instance identifier for this node in the current frame.
@@ -169,6 +178,28 @@ impl Default for ComponentNodeMetaData {
     fn default() -> Self {
         Self::none()
     }
+}
+
+pub(crate) fn direct_layout_children(node_id: NodeId, tree: &ComponentNodeTree) -> Vec<NodeId> {
+    fn collect(node_id: NodeId, tree: &ComponentNodeTree, output: &mut Vec<NodeId>) {
+        let Some(node_ref) = tree.get(node_id) else {
+            return;
+        };
+        if node_ref.get().role == NodeRole::Layout {
+            output.push(node_id);
+            return;
+        }
+
+        for child_id in node_id.children(tree) {
+            collect(child_id, tree, output);
+        }
+    }
+
+    let mut children = Vec::new();
+    for child_id in node_id.children(tree) {
+        collect(child_id, tree, &mut children);
+    }
+    children
 }
 
 fn reset_frame_metadata(node_id: NodeId, component_node_metadatas: &ComponentNodeMetaDatas) {
@@ -733,7 +764,7 @@ pub(crate) fn measure_node(
         Some(node_data.fn_name.as_str()),
     ));
 
-    let children: Vec<_> = node_id.children(tree).collect();
+    let children = direct_layout_children(node_id, tree);
     let timer = Instant::now();
 
     debug!(

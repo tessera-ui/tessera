@@ -3,8 +3,8 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, Constraint, Dp,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
+    Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     current_frame_nanos,
     layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
@@ -23,6 +23,15 @@ use crate::{
 enum ScrollOrientation {
     Vertical,
     Horizontal,
+}
+
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+struct ZeroLayout;
+
+impl LayoutPolicy for ZeroLayout {
+    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        Ok(LayoutResult::new(ComputedData::ZERO))
+    }
 }
 
 const HOVER_FADE_DURATION_SECS: f32 = 0.2;
@@ -840,11 +849,13 @@ pub fn scrollbar_v(
 
     // If scrollbar should be hidden, don't render anything
     if !should_show {
+        layout().layout_policy(ZeroLayout);
         return;
     }
 
     // Ensure the scrollbar is visible
     if args.visible <= Px::ZERO || args.total <= Px::ZERO || args.thickness <= Dp::ZERO {
+        layout().layout_policy(ZeroLayout);
         return;
     }
 
@@ -955,11 +966,13 @@ pub fn scrollbar_h(
 
     // If scrollbar should be hidden, don't render anything
     if !should_show {
+        layout().layout_policy(ZeroLayout);
         return;
     }
 
     // Ensure the scrollbar is visible
     if args.visible <= Px::ZERO || args.total <= Px::ZERO || args.thickness <= Dp::ZERO {
+        layout().layout_policy(ZeroLayout);
         return;
     }
 

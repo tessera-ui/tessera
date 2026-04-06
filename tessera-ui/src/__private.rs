@@ -6,7 +6,7 @@ use indextree::NodeId;
 
 use crate::{
     State,
-    component_tree::ComponentNode,
+    component_tree::{ComponentNode, NodeRole},
     layout::{DefaultLayoutPolicy, NoopRenderPolicy},
     modifier::Modifier,
     prop::ErasedComponentRunner,
@@ -61,6 +61,38 @@ pub fn register_component_node(fn_name: &str, _component_type_id: u64) -> NodeId
     TesseraRuntime::with_mut(|runtime| {
         runtime.component_tree.add_node(ComponentNode {
             fn_name: fn_name.to_string(),
+            role: NodeRole::Composition,
+            instance_logic_id: 0,
+            instance_key: 0,
+            pointer_preview_handlers: Vec::new(),
+            pointer_handlers: Vec::new(),
+            pointer_final_handlers: Vec::new(),
+            keyboard_preview_handlers: Vec::new(),
+            keyboard_handlers: Vec::new(),
+            ime_preview_handlers: Vec::new(),
+            ime_handlers: Vec::new(),
+            focus_requester_binding: None,
+            focus_registration: None,
+            focus_restorer_fallback: None,
+            focus_traversal_policy: None,
+            focus_changed_handler: None,
+            focus_event_handler: None,
+            focus_beyond_bounds_handler: None,
+            focus_reveal_handler: None,
+            modifier: Modifier::default(),
+            layout_policy: Box::new(DefaultLayoutPolicy),
+            render_policy: Box::new(NoopRenderPolicy),
+            replay: None,
+            props_unchanged_from_previous: false,
+        })
+    })
+}
+
+pub fn register_layout_node(fn_name: &str, _component_type_id: u64) -> NodeId {
+    TesseraRuntime::with_mut(|runtime| {
+        runtime.component_tree.add_node(ComponentNode {
+            fn_name: fn_name.to_string(),
+            role: NodeRole::Layout,
             instance_logic_id: 0,
             instance_key: 0,
             pointer_preview_handlers: Vec::new(),

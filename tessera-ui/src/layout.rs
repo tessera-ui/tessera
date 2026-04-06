@@ -4,7 +4,7 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::HashMap,
-    hash::{Hash, Hasher},
+    hash::{DefaultHasher, Hash, Hasher},
     sync::Arc,
 };
 
@@ -132,8 +132,7 @@ impl<'a> LayoutChild<'a> {
     where
         T: Clone + Send + Sync + 'static,
     {
-        let child_id = resolve_parent_data_child_id(self.tree, self.node_id)?;
-        let node = self.tree.get(child_id)?;
+        let node = self.tree.get(self.node_id)?;
         let mut data: ParentDataMap = HashMap::default();
         for action in node.get().modifier.ordered_actions() {
             if let OrderedModifierAction::ParentData(node) = action {
@@ -223,8 +222,7 @@ impl<'a> PlacementChild<'a> {
     where
         T: Clone + Send + Sync + 'static,
     {
-        let child_id = resolve_parent_data_child_id(self.tree, self.node_id)?;
-        let node = self.tree.get(child_id)?;
+        let node = self.tree.get(self.node_id)?;
         let mut data: ParentDataMap = HashMap::default();
         for action in node.get().modifier.ordered_actions() {
             if let OrderedModifierAction::ParentData(node) = action {
@@ -542,48 +540,6 @@ impl<'a> LayoutInput<'a> {
             })
             .collect()
     }
-}
-
-fn resolve_parent_data_child_id(
-    tree: &ComponentNodeTree,
-    child_id: crate::NodeId,
-) -> Option<crate::NodeId> {
-    let node = tree.get(child_id)?;
-    let node = node.get();
-    let has_parent_data = node
-        .modifier
-        .ordered_actions()
-        .into_iter()
-        .any(|action| matches!(action, OrderedModifierAction::ParentData(_)));
-    if has_parent_data || !is_parent_data_transparent_wrapper(tree, child_id) {
-        return Some(child_id);
-    }
-
-    let mut children = child_id.children(tree);
-    let only_child = children.next()?;
-    if children.next().is_some() {
-        return Some(child_id);
-    }
-    resolve_parent_data_child_id(tree, only_child)
-}
-
-fn is_parent_data_transparent_wrapper(tree: &ComponentNodeTree, node_id: crate::NodeId) -> bool {
-    let Some(node_ref) = tree.get(node_id) else {
-        return false;
-    };
-    let node = node_ref.get();
-    if !node.modifier.is_empty() {
-        return false;
-    }
-    if !node.layout_policy.dyn_eq(&DefaultLayoutPolicy) {
-        return false;
-    }
-    if !node.render_policy.dyn_eq(&NoopRenderPolicy) {
-        return false;
-    }
-
-    let mut children = node_id.children(tree);
-    children.next().is_some() && children.next().is_none()
 }
 
 /// Cached output from pure layout.
@@ -956,23 +912,24 @@ where
 
 /// # layout
 ///
-/// Attach a layout policy, render policy, modifier chain, and optional child
-/// slot to the current component node.
+/// Emit an explicit layout node with a layout policy, render policy, modifier
+/// chain, and optional child slot.
 ///
 /// ## Usage
 ///
-/// Build framework or internal components that need to define custom node
-/// layout and rendering behavior.
+/// Build framework or internal components that need to define explicit layout
+/// and rendering behavior inside a tessera composition boundary.
 ///
 /// ## Parameters
 ///
 /// - `layout_policy` - pure layout policy used for measuring and placing the
-///   current node
+///   emitted layout node
 /// - `render_policy` - render policy used to record draw and compute commands
-///   for the current node
+///   for the emitted layout node
 /// - `modifier` - node-local modifier chain attached before child content is
 ///   emitted
-/// - `child` - optional child slot rendered as this node's content subtree
+/// - `child` - optional child slot rendered as the emitted node's content
+///   subtree
 ///
 /// ## Examples
 /// ```
@@ -997,6 +954,29 @@ pub fn layout(
     modifier: Modifier,
     child: Option<RenderSlot>,
 ) {
+    let layout_node_component_type_id = layout_node_component_type_id();
+    let layout_node_id =
+        crate::__private::register_layout_node("layout", layout_node_component_type_id);
+    let _layout_node_ctx_guard = crate::__private::push_current_node(
+        layout_node_id,
+        layout_node_component_type_id,
+        "layout",
+    );
+    let layout_instance_key = crate::__private::current_instance_key();
+    let layout_instance_logic_id = crate::__private::current_instance_logic_id();
+    let _layout_scope_guard = {
+        struct LayoutNodeScopeGuard;
+
+        impl Drop for LayoutNodeScopeGuard {
+            fn drop(&mut self) {
+                crate::__private::finish_component_node();
+            }
+        }
+
+        LayoutNodeScopeGuard
+    };
+
+    crate::__private::set_current_node_identity(layout_instance_key, layout_instance_logic_id);
     modifier.attach();
     TesseraRuntime::with_mut(|runtime| {
         runtime.set_current_layout_policy_boxed(layout_policy.into_box());
@@ -1005,6 +985,12 @@ pub fn layout(
     if let Some(child) = child {
         child.render();
     }
+}
+
+fn layout_node_component_type_id() -> u64 {
+    let mut hasher = DefaultHasher::new();
+    "layout_node".hash(&mut hasher);
+    hasher.finish()
 }
 
 /// Default layout policy that stacks children at (0,0) and uses the bounding
