@@ -4,9 +4,11 @@
 //!
 //! Display labels, headings, and other text content.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-    Px, PxPosition, RenderInput, RenderPolicy, accesskit::Role, layout::layout, tessera,
-    use_context,
+    Color, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderInput, RenderPolicy,
+    accesskit::Role,
+    layout::{MeasureScope, layout},
+    tessera, use_context,
 };
 
 use crate::{
@@ -118,11 +120,7 @@ impl PartialEq for TextLayout {
 }
 
 impl LayoutPolicy for TextLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let max_width = input.parent_constraint().width().resolve_max();
         let max_height = input.parent_constraint().height().resolve_max();
 
@@ -137,10 +135,10 @@ impl LayoutPolicy for TextLayout {
             },
         );
 
-        Ok(ComputedData {
+        Ok(LayoutResult::new(ComputedData {
             width: info.size[0].into(),
             height: info.size[1].into(),
-        })
+        }))
     }
 }
 

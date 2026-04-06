@@ -3193,7 +3193,7 @@ mod tests {
     use crate::execution_context::{
         reset_execution_context, with_execution_context, with_execution_context_mut,
     };
-    use crate::layout::{LayoutInput, LayoutOutput, LayoutPolicy};
+    use crate::layout::{LayoutPolicy, MeasureScope};
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
     use crate::prop::{Callback, RenderSlot};
 
@@ -3304,10 +3304,9 @@ mod tests {
     impl LayoutPolicy for DirtySplitPolicy {
         fn measure(
             &self,
-            _input: &LayoutInput<'_>,
-            _output: &mut LayoutOutput<'_>,
-        ) -> Result<crate::ComputedData, crate::MeasurementError> {
-            Ok(crate::ComputedData::ZERO)
+            _input: &MeasureScope<'_>,
+        ) -> Result<crate::LayoutResult, crate::MeasurementError> {
+            Ok(crate::LayoutResult::new(crate::ComputedData::ZERO))
         }
 
         fn measure_eq(&self, other: &Self) -> bool {
@@ -3329,13 +3328,12 @@ mod tests {
             &self,
             _input: &LayoutModifierInput<'_>,
             child: &mut dyn LayoutModifierChild,
-            output: &mut crate::LayoutOutput<'_>,
         ) -> Result<crate::LayoutModifierOutput, crate::MeasurementError> {
             let size = child.measure(&crate::Constraint::exact(
                 crate::Px::new(self.width as i32),
                 crate::Px::new(10),
             ))?;
-            child.place(crate::PxPosition::ZERO, output);
+            child.place(crate::PxPosition::ZERO);
             Ok(crate::LayoutModifierOutput { size })
         }
     }

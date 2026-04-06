@@ -8,13 +8,11 @@ use std::{collections::VecDeque, time::Duration};
 
 use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer};
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, MeasurementError, Modifier,
-    PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, ScrollEventSource, State,
-    current_frame_nanos,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
+    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot,
+    ScrollEventSource, State, current_frame_nanos,
     focus::FocusRevealRequest,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, RenderInput, RenderPolicy, layout,
-    },
+    layout::{LayoutPolicy, MeasureScope, PlacementScope, RenderInput, RenderPolicy, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     receive_frame_nanos, remember, tessera,
     time::Instant,
@@ -471,11 +469,9 @@ struct ScrollableAlongsideLayout {
 }
 
 impl LayoutPolicy for ScrollableAlongsideLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         let mut final_size = ComputedData::ZERO;
         let mut content_constraint = Constraint::new(
             input.parent_constraint().width(),
@@ -483,48 +479,48 @@ impl LayoutPolicy for ScrollableAlongsideLayout {
         );
 
         if self.vertical {
-            let scrollbar_node_id = input.children_ids()[1];
-            let size = input.measure_child_in_parent_constraint(scrollbar_node_id)?;
+            let scrollbar = children[1];
+            let size = scrollbar.measure_in_parent_constraint(input.parent_constraint())?;
             content_constraint.width -= size.width;
             final_size.width += size.width;
         }
 
         if self.horizontal {
-            let scrollbar_node_id = if self.vertical {
-                input.children_ids()[2]
+            let scrollbar = if self.vertical {
+                children[2]
             } else {
-                input.children_ids()[1]
+                children[1]
             };
-            let size = input.measure_child_in_parent_constraint(scrollbar_node_id)?;
+            let size = scrollbar.measure_in_parent_constraint(input.parent_constraint())?;
             content_constraint.height -= size.height;
             final_size.height += size.height;
         }
 
-        let content_node_id = input.children_ids()[0];
-        let content_measurement = input.measure_child(content_node_id, &content_constraint)?;
+        let content = children[0];
+        let content_measurement = content.measure(&content_constraint)?;
         final_size.width += content_measurement.width;
         final_size.height += content_measurement.height;
 
-        output.place_child(content_node_id, PxPosition::ZERO);
+        result.place_child(content, PxPosition::ZERO);
         if self.vertical {
-            output.place_child(
-                input.children_ids()[1],
+            result.place_child(
+                children[1],
                 PxPosition::new(content_measurement.width, Px::ZERO),
             );
         }
         if self.horizontal {
-            let scrollbar_node_id = if self.vertical {
-                input.children_ids()[2]
+            let scrollbar = if self.vertical {
+                children[2]
             } else {
-                input.children_ids()[1]
+                children[1]
             };
-            output.place_child(
-                scrollbar_node_id,
+            result.place_child(
+                scrollbar,
                 PxPosition::new(Px::ZERO, content_measurement.height),
             );
         }
 
-        Ok(final_size)
+        Ok(result.with_size(final_size))
     }
 }
 
@@ -545,11 +541,9 @@ impl PartialEq for ScrollableInnerLayout {
 }
 
 impl LayoutPolicy for ScrollableInnerLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         let mut child_constraint = *input.parent_constraint().as_ref();
 
         if self.vertical {
@@ -559,8 +553,9 @@ impl LayoutPolicy for ScrollableInnerLayout {
             child_constraint.width = AxisConstraint::NONE;
         }
 
-        let child_node_id = input.children_ids()[0];
-        let child_measurement = input.measure_child(child_node_id, &child_constraint)?;
+        let child = children[0];
+        let child_measurement = child.measure(&child_constraint)?;
+        let child_measurement = child_measurement.size();
         let next_child_size = self
             .controller
             .with(|c| c.override_child_size.unwrap_or(child_measurement));
@@ -570,7 +565,7 @@ impl LayoutPolicy for ScrollableInnerLayout {
         }
 
         let current_child_position = self.controller.with(|c| c.child_position());
-        output.place_child(child_node_id, current_child_position);
+        result.place_child(child, current_child_position);
 
         let width = input
             .parent_constraint()
@@ -586,7 +581,7 @@ impl LayoutPolicy for ScrollableInnerLayout {
         if needs_visible_size_update {
             self.controller.with_mut(|c| c.visible_size = computed_data);
         }
-        Ok(computed_data)
+        Ok(result.with_size(computed_data))
     }
 
     fn measure_eq(&self, other: &Self) -> bool {
@@ -595,13 +590,14 @@ impl LayoutPolicy for ScrollableInnerLayout {
             && self.has_override == other.has_override
     }
 
-    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
-        let Some(&child_node_id) = input.children_ids().first() else {
-            return true;
+    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        let mut result = LayoutResult::default();
+        let Some(&child) = input.children().first() else {
+            return Some(result.into_placements());
         };
         let child_position = self.controller.with(|c| c.child_position());
-        output.place_child(child_node_id, child_position);
-        true
+        result.place_child(child, child_position);
+        Some(result.into_placements())
     }
 }
 
@@ -640,7 +636,7 @@ impl RenderPolicy for ScrollableInnerLayout {
 /// use tessera_components::{
 ///     column::column, modifier::ModifierExt as _, scrollable::scrollable, text::text,
 /// };
-/// use tessera_ui::{Dp, Modifier, tessera};
+/// use tessera_ui::{Dp, LayoutResult, Modifier, tessera};
 ///
 /// #[tessera]
 /// fn demo() {

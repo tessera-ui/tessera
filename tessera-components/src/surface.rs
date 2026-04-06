@@ -4,12 +4,12 @@
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
+    Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester, LayoutResult,
     MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize,
     RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
     modifier::ModifierCapabilityExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -517,20 +517,17 @@ impl PartialEq for SurfaceLayout {
 }
 
 impl LayoutPolicy for SurfaceLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
         let effective_surface_constraint = *input.parent_constraint().as_ref();
+        let children = input.children();
 
-        let child_measurement = if !input.children_ids().is_empty() {
+        let child_measurement = if !children.is_empty() {
             let child_measurements = input.measure_children(
-                input
-                    .children_ids()
+                children
                     .iter()
                     .copied()
-                    .map(|node_id| (node_id, effective_surface_constraint))
+                    .map(|child| (child, effective_surface_constraint))
                     .collect(),
             )?;
             let mut max_width = Px::ZERO;
@@ -552,7 +549,7 @@ impl LayoutPolicy for SurfaceLayout {
 
         let (width, height) = compute_surface_size(effective_surface_constraint, child_measurement);
 
-        if !input.children_ids().is_empty() {
+        if !children.is_empty() {
             let (extra_x, extra_y) = compute_content_offset(
                 self.args.content_alignment,
                 width,
@@ -564,12 +561,12 @@ impl LayoutPolicy for SurfaceLayout {
                 x: extra_x,
                 y: extra_y,
             };
-            for &child_id in input.children_ids().iter() {
-                output.place_child(child_id, origin);
+            for &child in &children {
+                result.place_child(child, origin);
             }
         }
 
-        Ok(ComputedData { width, height })
+        Ok(result.with_size(ComputedData { width, height }))
     }
 }
 
@@ -791,7 +788,7 @@ fn surface_content(
 ///     surface::surface,
 ///     text::text,
 /// };
-/// use tessera_ui::{Dp, Modifier};
+/// use tessera_ui::{Dp, LayoutResult, Modifier};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()

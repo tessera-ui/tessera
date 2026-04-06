@@ -13,8 +13,9 @@ use std::{
 use parking_lot::Mutex;
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
-    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot, State, key,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlot, State,
+    key,
+    layout::{LayoutPolicy, MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context,
 };
@@ -262,7 +263,7 @@ where
 ///     lazy_staggered_grid::{StaggeredGridCells, lazy_vertical_staggered_grid},
 ///     text::text,
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{LayoutResult, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -567,12 +568,8 @@ enum StaggeredGridAxis {
 struct ZeroLayout;
 
 impl LayoutPolicy for ZeroLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData::ZERO)
+    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        Ok(LayoutResult::new(ComputedData::ZERO))
     }
 }
 
@@ -615,12 +612,10 @@ impl PartialEq for LazyStaggeredGridLayout {
 }
 
 impl LayoutPolicy for LazyStaggeredGridLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        if input.children_ids().len() != self.visible_items.len() {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        if children.len() != self.visible_items.len() {
             return Err(MeasurementError::MeasureFnFailed(
                 "Lazy staggered grid measured child count mismatch".into(),
             ));
@@ -628,11 +623,7 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
 
         let (placements, total_main) = self.controller.with_mut(|c| {
             let mut placements = Vec::with_capacity(self.visible_items.len());
-            let mut visible_iter = self
-                .visible_items
-                .iter()
-                .zip(input.children_ids().iter())
-                .peekable();
+            let mut visible_iter = self.visible_items.iter().zip(children.iter()).peekable();
 
             let mut lane_offsets = vec![Px::ZERO; self.slots.len()];
 
@@ -646,12 +637,13 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
                 let item_start = lane_offsets[lane];
                 let mut item_main = c.cache.item_main(index).unwrap_or(self.estimated_item_main);
 
-                if let Some((visible, child_id)) = visible_iter.peek()
+                if let Some((visible, child)) = visible_iter.peek()
                     && visible.item_index == index
                 {
                     let child_constraint =
                         self.axis.child_constraint(lane_cross, self.item_alignment);
-                    let child_size = input.measure_child(**child_id, &child_constraint)?;
+                    let child_size = child.measure(&child_constraint)?;
+                    let child_size = child_size.size();
                     item_main = self.axis.main(&child_size);
                     c.cache.record_measurement(index, item_main);
 
@@ -666,10 +658,7 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
                     let position = self
                         .axis
                         .position(item_start + self.padding_main, cross_offset);
-                    placements.push(StaggeredPlacement {
-                        child_id: **child_id,
-                        position,
-                    });
+                    placements.push((**child, position));
 
                     visible_iter.next();
                 }
@@ -697,11 +686,11 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
             self.max_viewport_main,
         );
 
-        for placement in placements {
-            output.place_child(placement.child_id, placement.position);
+        for (child, position) in placements {
+            result.place_child(child, position);
         }
 
-        Ok(self.axis.pack_size(reported_main, cross_with_padding))
+        Ok(result.with_size(self.axis.pack_size(reported_main, cross_with_padding)))
     }
 }
 
@@ -1156,12 +1145,6 @@ fn calculate_alignment_offsets(
 }
 
 #[derive(Clone, PartialEq)]
-struct StaggeredPlacement {
-    child_id: NodeId,
-    position: PxPosition,
-}
-
-#[derive(Clone, PartialEq)]
 enum LazySlot {
     Items(LazyItemsSlot),
 }
@@ -1457,8 +1440,10 @@ fn finalize_lane_offsets(lane_offsets: &[Px], spacing: Px) -> Px {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-        NoopRenderPolicy, Px, PxPosition, layout::layout, remember, tessera,
+        ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, NoopRenderPolicy, Px,
+        PxPosition,
+        layout::{MeasureScope, layout},
+        remember, tessera,
     };
 
     use crate::{
@@ -1478,15 +1463,11 @@ mod tests {
     }
 
     impl LayoutPolicy for FixedTestLayout {
-        fn measure(
-            &self,
-            _input: &LayoutInput<'_>,
-            _output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, MeasurementError> {
-            Ok(ComputedData {
+        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
-            })
+            }))
         }
     }
 

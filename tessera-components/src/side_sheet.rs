@@ -7,10 +7,10 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusScopeNode,
-    FocusTraversalPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    Callback, CallbackWith, Color, Constraint, Dp, FocusScopeNode, FocusTraversalPolicy,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -443,18 +443,19 @@ fn build_side_sheet_nested_scroll_connection(
 /// Place side sheet if present. Extracted to reduce complexity of the parent
 /// function.
 fn place_side_sheet_if_present(
-    input: &LayoutInput<'_>,
-    output: &mut LayoutOutput<'_>,
+    input: &MeasureScope<'_>,
+    result: &mut LayoutResult,
     is_open: bool,
     progress: f32,
     position: SideSheetPosition,
     drag_offset: f32,
 ) {
-    if input.children_ids().len() <= 2 {
+    let children = input.children();
+    if children.len() <= 2 {
         return;
     }
 
-    let side_sheet_id = input.children_ids()[2];
+    let side_sheet = children[2];
     let parent_width = input
         .parent_constraint()
         .width()
@@ -475,7 +476,7 @@ fn place_side_sheet_if_present(
 
     let constraint = Constraint::exact(sheet_width, parent_height);
 
-    let child_size = match input.measure_child(side_sheet_id, &constraint) {
+    let child_size = match side_sheet.measure(&constraint) {
         Ok(s) => s,
         Err(_) => return,
     };
@@ -488,7 +489,7 @@ fn place_side_sheet_if_present(
         position,
         drag_offset,
     );
-    output.place_child(side_sheet_id, PxPosition::new(Px(x), Px(0)));
+    result.place_child(side_sheet, PxPosition::new(Px(x), Px(0)));
 }
 
 /// # modal_side_sheet_provider
@@ -820,30 +821,29 @@ struct SideSheetLayout {
 }
 
 impl LayoutPolicy for SideSheetLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let main_content_id = input.children_ids()[0];
-        let main_content_size = input.measure_child_in_parent_constraint(main_content_id)?;
-        output.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let main_content = children[0];
+        let main_content_size =
+            main_content.measure_in_parent_constraint(input.parent_constraint())?;
+        result.place_child(main_content, PxPosition::new(Px(0), Px(0)));
 
-        if input.children_ids().len() > 1 {
-            let scrim_id = input.children_ids()[1];
-            input.measure_child_in_parent_constraint(scrim_id)?;
-            output.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
+        if children.len() > 1 {
+            let scrim = children[1];
+            scrim.measure_in_parent_constraint(input.parent_constraint())?;
+            result.place_child(scrim, PxPosition::new(Px(0), Px(0)));
         }
 
         place_side_sheet_if_present(
             input,
-            output,
+            &mut result,
             self.is_open,
             self.progress,
             self.position,
             self.drag_offset,
         );
 
-        Ok(main_content_size)
+        Ok(result.with_size(main_content_size.size()))
     }
 }

@@ -13,8 +13,9 @@ use std::{
 use parking_lot::Mutex;
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
-    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot, State, key,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlot, State,
+    key,
+    layout::{LayoutChild, LayoutPolicy, MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context,
 };
@@ -283,12 +284,8 @@ where
 struct ZeroLayout;
 
 impl LayoutPolicy for ZeroLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData::ZERO)
+    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        Ok(LayoutResult::new(ComputedData::ZERO))
     }
 }
 
@@ -332,12 +329,10 @@ impl PartialEq for LazyGridLayout {
 }
 
 impl LayoutPolicy for LazyGridLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        if input.children_ids().len() != self.visible_items.len() {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        if children.len() != self.visible_items.len() {
             return Err(MeasurementError::MeasureFnFailed(
                 "Lazy grid measured child count mismatch".into(),
             ));
@@ -347,7 +342,7 @@ impl LayoutPolicy for LazyGridLayout {
         let line_count = self.line_range.end.saturating_sub(self.line_range.start);
         let mut line_max = vec![Px::ZERO; line_count];
 
-        for (visible, child_id) in self.visible_items.iter().zip(input.children_ids().iter()) {
+        for (visible, child) in self.visible_items.iter().zip(children.iter()) {
             let cell_cross = self
                 .slots
                 .sizes
@@ -355,16 +350,16 @@ impl LayoutPolicy for LazyGridLayout {
                 .copied()
                 .unwrap_or(Px::ZERO);
             let child_constraint = self.axis.child_constraint(cell_cross, self.item_alignment);
-            let child_size = input.measure_child(*child_id, &child_constraint)?;
+            let child_size = child.measure(&child_constraint)?;
             let line_idx = visible.line_index - self.line_range.start;
             if let Some(line_value) = line_max.get_mut(line_idx) {
-                *line_value = (*line_value).max(self.axis.main(&child_size));
+                *line_value = (*line_value).max(self.axis.main(&child_size.size()));
             }
             measured_items.push(MeasuredGridItem {
-                child_id: *child_id,
+                child: *child,
                 line_index: visible.line_index,
                 slot_index: visible.slot_index,
-                size: child_size,
+                size: child_size.size(),
             });
         }
 
@@ -404,10 +399,7 @@ impl LayoutPolicy for LazyGridLayout {
                 let position = self
                     .axis
                     .position(line_offset + self.padding_main, cross_offset);
-                placements.push(GridPlacement {
-                    child_id: item.child_id,
-                    position,
-                });
+                placements.push((item.child, position));
             }
 
             let total_main = c
@@ -432,11 +424,11 @@ impl LayoutPolicy for LazyGridLayout {
             self.max_viewport_main,
         );
 
-        for placement in placements {
-            output.place_child(placement.child_id, placement.position);
+        for (child, position) in placements {
+            result.place_child(child, position);
         }
 
-        Ok(self.axis.pack_size(reported_main, cross_with_padding))
+        Ok(result.with_size(self.axis.pack_size(reported_main, cross_with_padding)))
     }
 }
 
@@ -483,7 +475,7 @@ impl LayoutPolicy for LazyGridLayout {
 ///     lazy_grid::{GridCells, lazy_vertical_grid},
 ///     text::text,
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{LayoutResult, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -1202,14 +1194,8 @@ fn calculate_alignment_offsets(
 }
 
 #[derive(Clone, PartialEq)]
-struct GridPlacement {
-    child_id: NodeId,
-    position: PxPosition,
-}
-
-#[derive(Clone, PartialEq)]
-struct MeasuredGridItem {
-    child_id: NodeId,
+struct MeasuredGridItem<'a> {
+    child: LayoutChild<'a>,
     line_index: usize,
     slot_index: usize,
     size: ComputedData,
@@ -1560,8 +1546,10 @@ fn sanitize_spacing(px: Px) -> Px {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, PxPosition, layout::layout, remember, tessera,
+        AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
+        NoopRenderPolicy, Px, PxPosition,
+        layout::{MeasureScope, layout},
+        remember, tessera,
     };
 
     use crate::{
@@ -1579,15 +1567,11 @@ mod tests {
     }
 
     impl LayoutPolicy for FixedTestLayout {
-        fn measure(
-            &self,
-            _input: &LayoutInput<'_>,
-            _output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, MeasurementError> {
-            Ok(ComputedData {
+        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
-            })
+            }))
         }
     }
 

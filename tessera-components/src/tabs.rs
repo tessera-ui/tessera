@@ -8,10 +8,10 @@ use std::sync::Arc;
 use parking_lot::Mutex;
 use tessera_foundation::gesture::{ScrollRecognizer, ScrollSettings};
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, Dp, FocusRequester, FocusState,
+    AxisConstraint, Color, ComputedData, Constraint, Dp, FocusRequester, FocusState, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -649,20 +649,18 @@ impl PartialEq for TabsLayout {
 }
 
 impl LayoutPolicy for TabsLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         let tabs_effective_constraint = Constraint::new(
             input.parent_constraint().width(),
             input.parent_constraint().height(),
         );
 
-        let container_id = input.children_ids()[0];
-        let divider_id = input.children_ids()[1];
-        let indicator_id = input.children_ids()[2];
-        let title_ids = &input.children_ids()[3..];
+        let container = children[0];
+        let divider = children[1];
+        let indicator = children[2];
+        let title_ids = &children[3..];
         let num_tabs = title_ids.len();
         let active_tab = self
             .controller
@@ -909,7 +907,7 @@ impl LayoutPolicy for TabsLayout {
             AxisConstraint::exact(indicator_width),
             AxisConstraint::exact(indicator_height),
         );
-        let _ = input.measure_child(indicator_id, &indicator_constraint)?;
+        let _ = indicator.measure(&indicator_constraint)?;
 
         let divider_height: Px = TabsDefaults::DIVIDER_HEIGHT.into();
         let divider_width = if is_scrollable {
@@ -921,7 +919,7 @@ impl LayoutPolicy for TabsLayout {
             AxisConstraint::exact(divider_width),
             AxisConstraint::exact(divider_height),
         );
-        let _ = input.measure_child(divider_id, &divider_constraint)?;
+        let _ = divider.measure(&divider_constraint)?;
 
         let tab_bar_height = titles_max_height.max(self.args.min_tab_height.into());
         let should_update_tab_bar_height =
@@ -952,16 +950,16 @@ impl LayoutPolicy for TabsLayout {
             AxisConstraint::exact(final_width),
             AxisConstraint::exact(tab_bar_height),
         );
-        let _ = input.measure_child(container_id, &container_constraint)?;
+        let _ = container.measure(&container_constraint)?;
 
         for (i, &title_id) in title_ids.iter().enumerate() {
             let x = tab_lefts.get(i).copied().unwrap_or(Px(0)) - current_scroll_px;
-            output.place_child(title_id, PxPosition::new(x, title_offset_y));
+            result.place_child(title_id, PxPosition::new(x, title_offset_y));
         }
 
-        output.place_child(container_id, PxPosition::new(Px(0), Px(0)));
-        output.place_child(
-            divider_id,
+        result.place_child(container, PxPosition::new(Px(0), Px(0)));
+        result.place_child(
+            divider,
             PxPosition::new(
                 if is_scrollable {
                     -current_scroll_px
@@ -971,18 +969,18 @@ impl LayoutPolicy for TabsLayout {
                 tab_bar_height - divider_height,
             ),
         );
-        output.place_child(
-            indicator_id,
+        result.place_child(
+            indicator,
             PxPosition::new(
                 indicator_x - current_scroll_px,
                 tab_bar_height - indicator_height,
             ),
         );
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: final_width,
             height: final_height,
-        })
+        }))
     }
 }
 
@@ -1036,7 +1034,7 @@ impl RenderPolicy for TabsLayout {
 ///     tabs::{TabsController, tab, tabs},
 ///     text::text,
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{LayoutResult, remember, tessera};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]

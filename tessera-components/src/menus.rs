@@ -8,10 +8,10 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Dp, FocusRequester, FocusScopeNode,
-    FocusTraversalPolicy, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, PxSize,
-    RenderSlot, State,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, ParentConstraint, Px,
+    PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context, winit,
 };
@@ -244,34 +244,29 @@ impl PartialEq for MenuLayout {
 }
 
 impl LayoutPolicy for MenuLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let main_content_id = input
-            .children_ids()
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let main_content = children
             .first()
             .copied()
             .expect("main content should exist");
-        let main_size = input.measure_child_in_parent_constraint(main_content_id)?;
-        output.place_child(main_content_id, PxPosition::new(Px::ZERO, Px::ZERO));
+        let main_size = main_content.measure_in_parent_constraint(input.parent_constraint())?;
+        result.place_child(main_content, PxPosition::new(Px::ZERO, Px::ZERO));
 
-        let background_id = input
-            .children_ids()
+        let background = children
             .get(1)
             .copied()
             .expect("menu background should exist");
-        let menu_id = input
-            .children_ids()
-            .get(2)
-            .copied()
-            .expect("menu surface should exist");
+        let menu = children.get(2).copied().expect("menu surface should exist");
 
-        let background_size = input.measure_child_in_parent_constraint(background_id)?;
-        output.place_child(background_id, PxPosition::new(Px::ZERO, Px::ZERO));
+        let background_size = background.measure_in_parent_constraint(input.parent_constraint())?;
+        result.place_child(background, PxPosition::new(Px::ZERO, Px::ZERO));
 
-        let menu_size = input.measure_child_in_parent_constraint(menu_id)?;
+        let menu_size = menu.measure_in_parent_constraint(input.parent_constraint())?;
+        let background_size = background_size.size();
+        let menu_size = menu_size.size();
+        let main_size = main_size.size();
         let available = if background_size.width > Px::ZERO && background_size.height > Px::ZERO {
             background_size
         } else {
@@ -285,14 +280,14 @@ impl LayoutPolicy for MenuLayout {
         });
         let menu_position =
             resolve_menu_position(anchor, self.placement, menu_size, available, self.offset);
-        output.place_child(menu_id, menu_position);
+        result.place_child(menu, menu_position);
 
         *self.bounds.write() = Some(MenuBounds {
             origin: menu_position,
             size: menu_size,
         });
 
-        Ok(main_size)
+        Ok(result.with_size(main_size))
     }
 }
 
@@ -402,7 +397,7 @@ fn apply_close_action(controller: State<MenuController>, on_dismiss: &Option<Cal
 ///     menus::{MenuPlacement, menu_item, menu_provider},
 ///     text::text,
 /// };
-/// use tessera_ui::{Callback, Dp};
+/// use tessera_ui::{Callback, Dp, LayoutResult};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()

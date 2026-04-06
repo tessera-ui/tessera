@@ -4,8 +4,10 @@
 //!
 //! Highlight selected text ranges or focusable regions inside editors.
 use tessera_ui::{
-    Color, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
-    RenderInput, RenderPolicy, layout::layout, tessera,
+    Color, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Px, RenderInput,
+    RenderPolicy,
+    layout::{MeasureScope, layout},
+    tessera,
 };
 
 use crate::pipelines::shape::command::ShapeCommand;
@@ -43,15 +45,11 @@ struct SelectionHighlightLayout {
 }
 
 impl LayoutPolicy for SelectionHighlightLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData {
+    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        Ok(LayoutResult::new(ComputedData {
             width: self.width,
             height: self.height,
-        })
+        }))
     }
 }
 

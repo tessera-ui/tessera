@@ -4,8 +4,8 @@
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
 use tessera_ui::{
-    Color, ComputedData, Constraint, Dp, MeasurementError, Modifier, Px, PxPosition,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    layout::{LayoutPolicy, MeasureScope, layout},
     tessera,
 };
 
@@ -50,11 +50,8 @@ struct GlassProgressFillLayout {
 }
 
 impl LayoutPolicy for GlassProgressFillLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
         let available_width = input
             .parent_constraint()
             .width()
@@ -67,20 +64,20 @@ impl LayoutPolicy for GlassProgressFillLayout {
             .unwrap_or(Px(0));
 
         let width_px = Px((available_width.to_f32() * self.value).round() as i32);
-        let child_id = input
-            .children_ids()
+        let child = input
+            .children()
             .first()
             .copied()
             .expect("progress fill child should exist");
 
         let child_constraint = Constraint::exact(width_px, available_height);
-        input.measure_child(child_id, &child_constraint)?;
-        output.place_child(child_id, PxPosition::new(Px(0), Px(0)));
+        child.measure(&child_constraint)?;
+        result.place_child(child, PxPosition::new(Px(0), Px(0)));
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: width_px,
             height: available_height,
-        })
+        }))
     }
 }
 
@@ -162,19 +159,16 @@ struct GlassProgressLayout {
 }
 
 impl LayoutPolicy for GlassProgressLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let track_id = input
-            .children_ids()
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let track = input
+            .children()
             .first()
             .copied()
             .expect("track should exist");
         let constraint = Constraint::new(input.parent_constraint().width(), self.height);
-        let track_measurement = input.measure_child(track_id, &constraint)?;
-        output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
-        Ok(track_measurement)
+        let track_measurement = track.measure(&constraint)?;
+        result.place_child(track, PxPosition::new(Px(0), Px(0)));
+        Ok(result.with_size(track_measurement.size()))
     }
 }

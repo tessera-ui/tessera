@@ -19,9 +19,7 @@ use crate::{
         FocusDirection, FocusRegistration, FocusRequester, FocusRevealRequest, FocusState,
         FocusTraversalPolicy,
     },
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicyDyn, LayoutResult, PlacementInput, RenderPolicyDyn,
-    },
+    layout::{LayoutInput, LayoutPolicyDyn, LayoutResult, PlacementScope, RenderPolicyDyn},
     modifier::{
         LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier,
         OrderedModifierAction,
@@ -592,7 +590,6 @@ struct MeasureLayoutContext<'a, 'ctx> {
     children: &'a [NodeId],
     component_node_metadatas: &'a ComponentNodeMetaDatas,
     layout_ctx: Option<&'a LayoutContext<'ctx>>,
-    resolve_instance_key: &'a dyn Fn(NodeId) -> u64,
 }
 
 fn measure_base_layout(
@@ -607,11 +604,11 @@ fn measure_base_layout(
         layout_ctx.component_node_metadatas,
         layout_ctx.layout_ctx,
     );
-    let mut output = LayoutOutput::new(layout_ctx.resolve_instance_key);
-    let size = layout_policy.measure_dyn(&input, &mut output)?;
+    let scope = input.measure_scope();
+    let layout_result = layout_policy.measure_dyn(&scope)?;
     Ok(MeasuredNodeLayout {
-        size,
-        placements: output.finish(),
+        size: layout_result.size,
+        placements: layout_result.placements,
         measured_children: input.take_measured_children(),
     })
 }
@@ -629,6 +626,7 @@ fn measure_with_layout_modifiers(
     struct ModifierChildRunner<'a, 'b> {
         next: &'b mut dyn FnMut(&Constraint) -> Result<MeasuredNodeLayout, MeasurementError>,
         last: Option<MeasuredNodeLayout>,
+        placements: Vec<(u64, PxPosition)>,
         _marker: std::marker::PhantomData<&'a ()>,
     }
 
@@ -640,13 +638,14 @@ fn measure_with_layout_modifiers(
             Ok(size)
         }
 
-        fn place(&mut self, position: PxPosition, output: &mut LayoutOutput<'_>) {
+        fn place(&mut self, position: PxPosition) {
             let measured = self
                 .last
                 .as_ref()
                 .expect("layout modifier child must be measured before placement");
             for (instance_key, child_position) in &measured.placements {
-                output.place_instance_key(*instance_key, position + *child_position);
+                self.placements
+                    .push((*instance_key, position + *child_position));
             }
         }
     }
@@ -666,19 +665,19 @@ fn measure_with_layout_modifiers(
     let modifier_input = LayoutModifierInput {
         layout_input: &input,
     };
-    let mut output = LayoutOutput::new(layout_ctx.resolve_instance_key);
     let mut child = ModifierChildRunner {
         next: &mut next,
         last: None,
+        placements: Vec::new(),
         _marker: std::marker::PhantomData,
     };
-    let size = head.measure(&modifier_input, &mut child, &mut output)?.size;
+    let size = head.measure(&modifier_input, &mut child)?.size;
     if let Some(measured) = child.last.as_ref() {
         input.extend_measured_children(measured.measured_children.clone());
     }
     Ok(MeasuredNodeLayout {
         size,
-        placements: output.finish(),
+        placements: child.placements,
         measured_children: input.take_measured_children(),
     })
 }
@@ -690,7 +689,6 @@ fn relayout_base_layout(
     cached_child_sizes: &[ComputedData],
     constraint: &Constraint,
     cached_size: ComputedData,
-    resolve_instance_key: &dyn Fn(NodeId) -> u64,
 ) -> Option<Vec<(u64, PxPosition)>> {
     if cached_child_sizes.len() != children.len() {
         return None;
@@ -701,18 +699,14 @@ fn relayout_base_layout(
         .copied()
         .zip(cached_child_sizes.iter().copied())
         .collect();
-    let input = PlacementInput::new(
+    let scope = PlacementScope::new(
         tree,
         ParentConstraint::new(constraint),
         children,
         &child_sizes,
         cached_size,
     );
-    let mut output = LayoutOutput::new(resolve_instance_key);
-    if !layout_policy.place_children_dyn(&input, &mut output) {
-        return None;
-    }
-    Some(output.finish())
+    layout_policy.place_children_dyn(&scope)
 }
 
 /// Measures a single node recursively, returning its size or an error.
@@ -739,7 +733,7 @@ pub(crate) fn measure_node(
         Some(node_data.fn_name.as_str()),
     ));
 
-    let children: Vec<_> = node_id.children(tree).collect(); // No .as_ref() needed for &Arena
+    let children: Vec<_> = node_id.children(tree).collect();
     let timer = Instant::now();
 
     debug!(
@@ -759,17 +753,6 @@ pub(crate) fn measure_node(
     let _instance_ctx_guard = push_current_component_instance_key(node_data.instance_key);
     let _phase_guard = push_phase(RuntimePhase::Measure);
 
-    let resolve_instance_key = |child_id: NodeId| {
-        if let Some(child) = tree.get(child_id) {
-            child.get().instance_key
-        } else {
-            debug_assert!(
-                false,
-                "Child node must exist when resolving layout placements"
-            );
-            0
-        }
-    };
     let layout_policy = &node_data.layout_policy;
     let layout_modifiers: Vec<_> = node_data
         .modifier
@@ -903,7 +886,6 @@ pub(crate) fn measure_node(
                                 &cached_child_sizes,
                                 parent_constraint,
                                 cached_result.size,
-                                &resolve_instance_key,
                             ) {
                                 Some(placements) => placements,
                                 None => {
@@ -969,7 +951,6 @@ pub(crate) fn measure_node(
         children: &children,
         component_node_metadatas,
         layout_ctx,
-        resolve_instance_key: &resolve_instance_key,
     };
     let measured = measure_with_layout_modifiers(
         &layout_modifiers,

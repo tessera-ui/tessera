@@ -22,8 +22,10 @@
 //! See [`CheckmarkArgs`] for configuration options and usage examples in the
 //! [`checkmark`] function documentation.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
-    RenderInput, RenderPolicy, layout::layout, tessera,
+    Color, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px, RenderInput,
+    RenderPolicy,
+    layout::{MeasureScope, layout},
+    tessera,
 };
 
 use crate::pipelines::checkmark::command::CheckmarkCommand;
@@ -38,15 +40,11 @@ struct CheckmarkLayout {
 }
 
 impl LayoutPolicy for CheckmarkLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData {
+    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        Ok(LayoutResult::new(ComputedData {
             width: self.size,
             height: self.size,
-        })
+        }))
     }
 }
 

@@ -21,7 +21,7 @@ use crate::{
     FocusProperties, FocusRequester, FocusScopeNode, FocusState, FocusTraversalPolicy, ImeInput,
     KeyboardInput, MeasurementError, PointerInput, PxPosition,
     focus::{FocusDirection, FocusNode, FocusRevealRequest},
-    layout::{LayoutInput, LayoutOutput, RenderInput},
+    layout::{LayoutInput, RenderInput},
     prop::CallbackWith,
     runtime::{TesseraRuntime, ensure_build_phase},
     winit::window::CursorIcon,
@@ -36,7 +36,7 @@ pub trait LayoutModifierChild {
     fn measure(&mut self, constraint: &Constraint) -> Result<ComputedData, MeasurementError>;
 
     /// Places the wrapped content at the provided relative position.
-    fn place(&mut self, position: PxPosition, output: &mut LayoutOutput<'_>);
+    fn place(&mut self, position: PxPosition);
 }
 
 /// Input passed to layout modifier nodes.
@@ -70,7 +70,6 @@ pub trait LayoutModifierNode: Send + Sync + 'static {
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
-        output: &mut LayoutOutput<'_>,
     ) -> Result<LayoutModifierOutput, MeasurementError>;
 }
 

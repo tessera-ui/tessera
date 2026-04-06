@@ -8,11 +8,9 @@ use tessera_foundation::gesture::{
 };
 use tessera_ui::{
     AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusProperties, KeyboardInput,
-    KeyboardInputModifierNode, MeasurementError, Modifier, PointerInput, PointerInputModifierNode,
-    Px, PxPosition, State, key,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, RenderInput, RenderPolicy, layout,
-    },
+    KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier, PointerInput,
+    PointerInputModifierNode, Px, PxPosition, State, key,
+    layout::{LayoutPolicy, MeasureScope, PlacementScope, RenderInput, RenderPolicy, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     receive_frame_nanos, remember, tessera, winit,
 };
@@ -482,18 +480,16 @@ impl PartialEq for PagerLayout {
 }
 
 impl LayoutPolicy for PagerLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         if self.page_count == 0 {
-            return Ok(ComputedData::min_from_constraint(
+            return Ok(result.with_size(ComputedData::min_from_constraint(
                 input.parent_constraint().as_ref(),
-            ));
+            )));
         }
 
-        if input.children_ids().len() != self.visible_pages.len() {
+        if children.len() != self.visible_pages.len() {
             return Err(MeasurementError::MeasureFnFailed(
                 "Pager measured child count mismatch".into(),
             ));
@@ -526,16 +522,16 @@ impl LayoutPolicy for PagerLayout {
             }
         };
 
-        let children_to_measure: Vec<_> = input
-            .children_ids()
+        let children_to_measure: Vec<_> = children
             .iter()
-            .map(|&child_id| (child_id, child_constraint))
+            .copied()
+            .map(|child| (child, child_constraint))
             .collect();
         let measurements = input.measure_children(children_to_measure)?;
 
         let mut max_cross = Px::ZERO;
         for size in measurements.values() {
-            max_cross = max_cross.max(self.axis.cross(*size));
+            max_cross = max_cross.max(self.axis.cross(size.size()));
         }
         let container_cross = cross_dimension.clamp(max_cross);
 
@@ -553,10 +549,11 @@ impl LayoutPolicy for PagerLayout {
         let scroll_offset = self.controller.with(|c| c.scroll_offset_px());
         let page_step = page_main + page_spacing;
 
-        for (&child_id, &page_index) in input.children_ids().iter().zip(self.visible_pages.iter()) {
+        for (&child, &page_index) in children.iter().zip(self.visible_pages.iter()) {
             let measured = measurements
-                .get(&child_id)
+                .get(&child)
                 .copied()
+                .map(|size| size.size())
                 .unwrap_or(ComputedData::ZERO);
             let cross_offset = compute_cross_offset(
                 container_cross,
@@ -565,10 +562,10 @@ impl LayoutPolicy for PagerLayout {
             );
             let page_offset = padding + px_mul(page_step, page_index) + scroll_offset;
             let position = self.axis.position(page_offset, cross_offset);
-            output.place_child(child_id, position);
+            result.place_child(child, position);
         }
 
-        Ok(self.axis.pack_size(container_main, container_cross))
+        Ok(result.with_size(self.axis.pack_size(container_main, container_cross)))
     }
 
     fn measure_eq(&self, other: &Self) -> bool {
@@ -592,14 +589,15 @@ impl LayoutPolicy for PagerLayout {
             && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
+    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        let mut result = LayoutResult::default();
         if self.page_count == 0 {
-            return true;
+            return Some(result.into_placements());
         }
 
-        let child_ids = input.children_ids();
-        if child_ids.len() != self.visible_pages.len() {
-            return false;
+        let children = input.children();
+        if children.len() != self.visible_pages.len() {
+            return None;
         }
 
         let container_cross = self.axis.cross(input.size());
@@ -608,10 +606,8 @@ impl LayoutPolicy for PagerLayout {
             .with(|controller| controller.page_size + controller.page_spacing);
         let padding = self.content_padding;
 
-        for (&child_id, &page_index) in child_ids.iter().zip(self.visible_pages.iter()) {
-            let Some(measured) = input.child_size(child_id) else {
-                return false;
-            };
+        for (&child, &page_index) in children.iter().zip(self.visible_pages.iter()) {
+            let measured = child.size();
             let cross_offset = compute_cross_offset(
                 container_cross,
                 self.axis.cross(measured),
@@ -619,10 +615,10 @@ impl LayoutPolicy for PagerLayout {
             );
             let page_offset = padding + px_mul(page_step, page_index) + self.scroll_offset;
             let position = self.axis.position(page_offset, cross_offset);
-            output.place_child(child_id, position);
+            result.place_child(child, position);
         }
 
-        true
+        Some(result.into_placements())
     }
 }
 
@@ -636,14 +632,10 @@ impl RenderPolicy for PagerLayout {
 struct ZeroLayout;
 
 impl LayoutPolicy for ZeroLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData::min_from_constraint(
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        Ok(LayoutResult::new(ComputedData::min_from_constraint(
             input.parent_constraint().as_ref(),
-        ))
+        )))
     }
 }
 
@@ -860,7 +852,7 @@ fn apply_pager_input_modifiers(
 /// ```
 /// use tessera_components::pager::horizontal_pager;
 /// use tessera_components::text::text;
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{LayoutResult, remember, tessera};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]

@@ -8,10 +8,10 @@ use std::{sync::Arc, time::Duration};
 use parking_lot::Mutex;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
-    MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -216,11 +216,9 @@ struct NavigationRailItemLayout {
 }
 
 impl LayoutPolicy for NavigationRailItemLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         let parent_width = input
             .parent_constraint()
             .width()
@@ -229,12 +227,12 @@ impl LayoutPolicy for NavigationRailItemLayout {
         let min_height = self.item_min_height.to_px();
         let parent_height = input.parent_constraint().height().clamp(min_height);
 
-        let indicator_background_id = input.children_ids()[0];
-        let indicator_ripple_id = input.children_ids()[1];
+        let indicator_background = children[0];
+        let indicator_ripple = children[1];
         let mut child_index = 2;
 
         let icon_id = if self.has_icon {
-            let id = input.children_ids()[child_index];
+            let id = children[child_index];
             child_index += 1;
             Some(id)
         } else {
@@ -242,32 +240,40 @@ impl LayoutPolicy for NavigationRailItemLayout {
         };
 
         let label_id = if self.has_label {
-            let id = input.children_ids()[child_index];
+            let id = children[child_index];
             Some(id)
         } else {
             None
         };
 
         let child_constraint = Constraint::NONE;
-        let children_to_measure: Vec<_> = input
-            .children_ids()
+        let children_to_measure: Vec<_> = children
             .iter()
-            .map(|&child_id| (child_id, child_constraint))
+            .copied()
+            .map(|child| (child, child_constraint))
             .collect();
         let children_results = input.measure_children(children_to_measure)?;
 
         let indicator_size = children_results
-            .get(&indicator_background_id)
-            .unwrap_or(&ComputedData::ZERO);
+            .get(&indicator_background)
+            .copied()
+            .map(|size| size.size())
+            .unwrap_or(ComputedData::ZERO);
         let indicator_ripple_size = children_results
-            .get(&indicator_ripple_id)
-            .unwrap_or(&ComputedData::ZERO);
+            .get(&indicator_ripple)
+            .copied()
+            .map(|size| size.size())
+            .unwrap_or(ComputedData::ZERO);
         let icon_size = icon_id
             .and_then(|id| children_results.get(&id))
-            .unwrap_or(&ComputedData::ZERO);
+            .copied()
+            .map(|size| size.size())
+            .unwrap_or(ComputedData::ZERO);
         let label_size = label_id
             .and_then(|id| children_results.get(&id))
-            .unwrap_or(&ComputedData::ZERO);
+            .copied()
+            .map(|size| size.size())
+            .unwrap_or(ComputedData::ZERO);
 
         let width = parent_width;
         let height = parent_height;
@@ -277,13 +283,13 @@ impl LayoutPolicy for NavigationRailItemLayout {
                 let horizontal_padding = ITEM_HORIZONTAL_PADDING.to_px();
                 let ripple_x = horizontal_padding;
                 let ripple_y = (height - indicator_ripple_size.height) / 2;
-                output.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
+                result.place_child(indicator_ripple, PxPosition::new(ripple_x, ripple_y));
 
                 let indicator_x =
                     ripple_x + (indicator_ripple_size.width - indicator_size.width) / 2;
                 let indicator_y = (height - indicator_size.height) / 2;
-                output.place_child(
-                    indicator_background_id,
+                result.place_child(
+                    indicator_background,
                     PxPosition::new(indicator_x, indicator_y),
                 );
 
@@ -292,7 +298,7 @@ impl LayoutPolicy for NavigationRailItemLayout {
 
                 if let Some(icon_id) = icon_id {
                     let icon_y = (height - icon_size.height) / 2;
-                    output.place_child(icon_id, PxPosition::new(content_x, icon_y));
+                    result.place_child(icon_id, PxPosition::new(content_x, icon_y));
                 }
 
                 if let Some(label_id) = label_id {
@@ -302,10 +308,10 @@ impl LayoutPolicy for NavigationRailItemLayout {
                     } else {
                         content_x
                     };
-                    output.place_child(label_id, PxPosition::new(label_x, label_y));
+                    result.place_child(label_id, PxPosition::new(label_x, label_y));
                 }
 
-                return Ok(ComputedData { width, height });
+                return Ok(result.with_size(ComputedData { width, height }));
             }
             NavigationRailIconPosition::Top => {}
         }
@@ -315,19 +321,19 @@ impl LayoutPolicy for NavigationRailItemLayout {
             let ripple_y = (height - indicator_ripple_size.height) / 2;
             let indicator_x = (width - indicator_size.width) / 2;
             let indicator_y = (height - indicator_size.height) / 2;
-            output.place_child(
-                indicator_background_id,
+            result.place_child(
+                indicator_background,
                 PxPosition::new(indicator_x, indicator_y),
             );
-            output.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
+            result.place_child(indicator_ripple, PxPosition::new(ripple_x, ripple_y));
 
             if let Some(icon_id) = icon_id {
                 let icon_x = (width - icon_size.width) / 2;
                 let icon_y = (height - icon_size.height) / 2;
-                output.place_child(icon_id, PxPosition::new(icon_x, icon_y));
+                result.place_child(icon_id, PxPosition::new(icon_x, icon_y));
             }
 
-            return Ok(ComputedData { width, height });
+            return Ok(result.with_size(ComputedData { width, height }));
         }
 
         let indicator_vertical_padding_px = TOP_ICON_INDICATOR_VERTICAL_PADDING.to_px();
@@ -351,21 +357,21 @@ impl LayoutPolicy for NavigationRailItemLayout {
             + indicator_vertical_padding_px
             + INDICATOR_TOP_TO_LABEL_PADDING.to_px();
 
-        output.place_child(
-            indicator_background_id,
+        result.place_child(
+            indicator_background,
             PxPosition::new(indicator_x, indicator_y),
         );
-        output.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
+        result.place_child(indicator_ripple, PxPosition::new(ripple_x, ripple_y));
 
         if let Some(icon_id) = icon_id {
-            output.place_child(icon_id, PxPosition::new(icon_x, icon_y));
+            result.place_child(icon_id, PxPosition::new(icon_x, icon_y));
         }
 
         if let Some(label_id) = label_id {
-            output.place_child(label_id, PxPosition::new(label_x, label_y));
+            result.place_child(label_id, PxPosition::new(label_x, label_y));
         }
 
-        Ok(ComputedData { width, height })
+        Ok(result.with_size(ComputedData { width, height }))
     }
 }
 
@@ -565,7 +571,7 @@ impl NavigationRailValue {
 /// use tessera_components::navigation_rail::{
 ///     NavigationRailController, NavigationRailValue, navigation_rail, navigation_rail_item,
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{LayoutResult, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {

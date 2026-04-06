@@ -6,9 +6,10 @@
 use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
-    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, State,
+    LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px,
+    PxPosition, State,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera,
     winit::window::CursorIcon,
@@ -314,7 +315,7 @@ fn process_pointer_gestures(
 ///
 /// ```
 /// use tessera_components::glass_slider::{GlassSliderController, glass_slider};
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{LayoutResult, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -387,11 +388,8 @@ struct GlassSliderFillLayout {
 }
 
 impl LayoutPolicy for GlassSliderFillLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
         let available_width = input
             .parent_constraint()
             .width()
@@ -404,20 +402,20 @@ impl LayoutPolicy for GlassSliderFillLayout {
             .unwrap_or(Px(0));
 
         let width_px = Px((available_width.to_f32() * self.value).round() as i32);
-        let child_id = input
-            .children_ids()
+        let child = input
+            .children()
             .first()
             .copied()
             .expect("progress fill child should exist");
 
         let child_constraint = Constraint::exact(width_px, available_height);
-        input.measure_child(child_id, &child_constraint)?;
-        output.place_child(child_id, PxPosition::new(Px(0), Px(0)));
+        child.measure(&child_constraint)?;
+        result.place_child(child, PxPosition::new(Px(0), Px(0)));
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: width_px,
             height: available_height,
-        })
+        }))
     }
 }
 
@@ -487,22 +485,19 @@ struct GlassSliderLayout {
 }
 
 impl LayoutPolicy for GlassSliderLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
         let self_width = input.parent_constraint().width().clamp(self.fallback_width);
         let self_height = self.track_height;
 
-        let track_id = input.children_ids()[0];
+        let track = input.children()[0];
         let track_constraint = Constraint::exact(self_width, self_height);
-        input.measure_child(track_id, &track_constraint)?;
-        output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+        track.measure(&track_constraint)?;
+        result.place_child(track, PxPosition::new(Px(0), Px(0)));
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: self_width,
             height: self_height,
-        })
+        }))
     }
 }

@@ -6,11 +6,11 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, MeasurementError, Modifier,
-    Px, PxPosition, State,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
+    MeasurementError, Modifier, Px, PxPosition, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout},
+    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
     receive_frame_nanos, remember, tessera,
 };
 
@@ -137,7 +137,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 /// ```
 /// use tessera_components::glass_switch::{GlassSwitchController, glass_switch};
 /// use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{LayoutResult, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -283,39 +283,37 @@ struct GlassSwitchLayout {
 }
 
 impl LayoutPolicy for GlassSwitchLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let track_id = input.children_ids()[0];
-        let thumb_id = input.children_ids()[1];
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let track = children[0];
+        let thumb = children[1];
 
         let track_constraint = Constraint::exact(self.width, self.height);
         let thumb_constraint = Constraint::NONE;
 
-        let nodes_constraints = vec![(track_id, track_constraint), (thumb_id, thumb_constraint)];
+        let nodes_constraints = vec![(track, track_constraint), (thumb, thumb_constraint)];
         let sizes_map = input.measure_children(nodes_constraints)?;
 
         let thumb_size = sizes_map
-            .get(&thumb_id)
+            .get(&thumb)
             .expect("thumb size should be measured");
 
         let eased_progress = animation::easing(self.progress);
 
-        output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+        result.place_child(track, PxPosition::new(Px(0), Px(0)));
 
         let start_x = self.thumb_padding;
         let end_x = self.width - thumb_size.width - self.thumb_padding;
         let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased_progress;
         let thumb_y = (self.height - thumb_size.height) / 2;
 
-        output.place_child(thumb_id, PxPosition::new(Px(thumb_x as i32), thumb_y));
+        result.place_child(thumb, PxPosition::new(Px(thumb_x as i32), thumb_y));
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: self.width,
             height: self.height,
-        })
+        }))
     }
 
     fn measure_eq(&self, other: &Self) -> bool {
@@ -331,26 +329,25 @@ impl LayoutPolicy for GlassSwitchLayout {
             && self.progress == other.progress
     }
 
-    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
-        let ids = input.children_ids();
-        if ids.len() < 2 {
-            return true;
+    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        if children.len() < 2 {
+            return Some(result.into_placements());
         }
-        let track_id = ids[0];
-        let thumb_id = ids[1];
-        let Some(thumb_size) = input.child_size(thumb_id) else {
-            return false;
-        };
+        let track = children[0];
+        let thumb = children[1];
+        let thumb_size = thumb.size();
 
         let eased_progress = animation::easing(self.progress);
-        output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+        result.place_child(track, PxPosition::new(Px(0), Px(0)));
 
         let start_x = self.thumb_padding;
         let end_x = self.width - thumb_size.width - self.thumb_padding;
         let thumb_x = start_x.0 as f32 + (end_x.0 - start_x.0) as f32 * eased_progress;
         let thumb_y = (self.height - thumb_size.height) / 2;
 
-        output.place_child(thumb_id, PxPosition::new(Px(thumb_x as i32), thumb_y));
-        true
+        result.place_child(thumb, PxPosition::new(Px(thumb_x as i32), thumb_y));
+        Some(result.into_placements())
     }
 }

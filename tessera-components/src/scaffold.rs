@@ -164,8 +164,9 @@ pub fn scaffold(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-        NoopRenderPolicy, Px, layout::layout, tessera,
+        ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, NoopRenderPolicy, Px,
+        layout::{MeasureScope, layout},
+        tessera,
     };
 
     use crate::modifier::{ModifierExt as _, SemanticsArgs};
@@ -179,15 +180,11 @@ mod tests {
     }
 
     impl LayoutPolicy for FixedTestLayout {
-        fn measure(
-            &self,
-            _input: &LayoutInput<'_>,
-            _output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, MeasurementError> {
-            Ok(ComputedData {
+        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
-            })
+            }))
         }
     }
 

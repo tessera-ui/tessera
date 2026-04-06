@@ -13,8 +13,9 @@ use std::{
 use parking_lot::Mutex;
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, ComputedData, Constraint, Dp, FocusDirection,
-    MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot, State, key,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout},
+    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlot, State,
+    key,
+    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context,
 };
@@ -40,7 +41,7 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 ///
 /// ```
 /// use tessera_components::lazy_list::{LazyListController, lazy_column};
-/// use tessera_ui::{retain_with_key, tessera};
+/// use tessera_ui::{LayoutResult, retain_with_key, tessera};
 ///
 /// #[tessera]
 /// fn scrollable_page(page_id: String) {
@@ -650,12 +651,8 @@ fn lazy_list_view(
 struct ZeroLayout;
 
 impl LayoutPolicy for ZeroLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData::ZERO)
+    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        Ok(LayoutResult::new(ComputedData::ZERO))
     }
 }
 
@@ -693,22 +690,20 @@ impl PartialEq for LazyListLayout {
 }
 
 impl LayoutPolicy for LazyListLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        if input.children_ids().len() != self.visible_item_indices.len() {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        if children.len() != self.visible_item_indices.len() {
             return Err(MeasurementError::MeasureFnFailed(
                 "Lazy list measured child count mismatch".into(),
             ));
         }
 
-        let mut measured_children: Vec<(usize, NodeId)> = self
+        let mut measured_children: Vec<_> = self
             .visible_item_indices
             .iter()
             .copied()
-            .zip(input.children_ids().iter().copied())
+            .zip(children.iter().copied())
             .collect();
         measured_children.sort_unstable_by_key(|(item_index, _)| *item_index);
 
@@ -716,11 +711,12 @@ impl LayoutPolicy for LazyListLayout {
         apply_cross_padding(&mut child_constraint, self.axis, self.padding_cross);
         let mut measured_entries = Vec::with_capacity(self.visible_item_indices.len());
         let mut inner_cross = Px::ZERO;
-        for (item_index, child_id) in &measured_children {
-            let child_size = input.measure_child(*child_id, &child_constraint)?;
+        for (item_index, child) in &measured_children {
+            let child_size = child.measure(&child_constraint)?;
+            let child_size = child_size.size();
             let measured_main = self.axis.main(&child_size);
             inner_cross = inner_cross.max(self.axis.cross(&child_size));
-            measured_entries.push((*item_index, *child_id, child_size, measured_main));
+            measured_entries.push((*item_index, *child, child_size, measured_main));
         }
 
         let has_cache_updates = self.controller.with(|c| {
@@ -758,14 +754,9 @@ impl LayoutPolicy for LazyListLayout {
         });
         let mut placements = Vec::with_capacity(measured_entries.len());
         for ((item_index, child_id, child_size, _), offset_main) in
-            measured_entries.into_iter().zip(item_offsets.into_iter())
+            measured_entries.into_iter().zip(item_offsets)
         {
-            placements.push(Placement {
-                item_index,
-                child_id,
-                offset_main,
-                size: child_size,
-            });
+            placements.push((item_index, child_id, offset_main, child_size));
         }
 
         let total_main_with_padding = total_main + self.padding_main + self.padding_main;
@@ -791,30 +782,29 @@ impl LayoutPolicy for LazyListLayout {
         for placement in &placements {
             let cross_offset = compute_cross_offset(
                 inner_cross,
-                self.axis.cross(&placement.size),
+                self.axis.cross(&placement.3),
                 self.cross_axis_alignment,
             );
-            let mut main_offset = placement.offset_main + self.padding_main;
-            if self.is_sticky(placement.item_index) {
+            let mut main_offset = placement.2 + self.padding_main;
+            if self.is_sticky(placement.0) {
                 let sticky_start = self.scroll_offset + self.padding_main;
                 main_offset = main_offset.max(sticky_start);
-                if let Some(next_index) = self.next_sticky_after(placement.item_index) {
+                if let Some(next_index) = self.next_sticky_after(placement.0) {
                     let next_offset = self.controller.with(|c| {
                         c.cache
                             .offset_for(next_index, self.estimated_item_main, self.item_spacing)
                     });
-                    let max_offset =
-                        next_offset + self.padding_main - self.axis.main(&placement.size);
+                    let max_offset = next_offset + self.padding_main - self.axis.main(&placement.3);
                     main_offset = main_offset.min(max_offset);
                 }
             }
             let position = self
                 .axis
                 .position(main_offset, self.padding_cross + cross_offset);
-            output.place_child(placement.child_id, position);
+            result.place_child(placement.1, position);
         }
 
-        Ok(self.axis.pack_size(reported_main, cross_with_padding))
+        Ok(result.with_size(self.axis.pack_size(reported_main, cross_with_padding)))
     }
 
     fn measure_eq(&self, other: &Self) -> bool {
@@ -844,62 +834,52 @@ impl LayoutPolicy for LazyListLayout {
             && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
-        if input.children_ids().len() != self.visible_item_indices.len() {
-            return false;
+    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        if children.len() != self.visible_item_indices.len() {
+            return None;
         }
 
         let mut placements = Vec::with_capacity(self.visible_item_indices.len());
         let mut inner_cross = Px::ZERO;
-        for (&item_index, &child_id) in self
-            .visible_item_indices
-            .iter()
-            .zip(input.children_ids().iter())
-        {
-            let Some(child_size) = input.child_size(child_id) else {
-                return false;
-            };
+        for (&item_index, &child) in self.visible_item_indices.iter().zip(children.iter()) {
+            let child_size = child.size();
             let measured_cross = self.axis.cross(&child_size);
             inner_cross = inner_cross.max(measured_cross);
             let offset_main = self.controller.with(|c| {
                 c.cache
                     .offset_for(item_index, self.estimated_item_main, self.item_spacing)
             });
-            placements.push(Placement {
-                item_index,
-                child_id,
-                offset_main,
-                size: child_size,
-            });
+            placements.push((item_index, child, offset_main, child_size));
         }
 
         for placement in &placements {
             let cross_offset = compute_cross_offset(
                 inner_cross,
-                self.axis.cross(&placement.size),
+                self.axis.cross(&placement.3),
                 self.cross_axis_alignment,
             );
-            let mut main_offset = placement.offset_main + self.padding_main;
-            if self.is_sticky(placement.item_index) {
+            let mut main_offset = placement.2 + self.padding_main;
+            if self.is_sticky(placement.0) {
                 let sticky_start = self.scroll_offset + self.padding_main;
                 main_offset = main_offset.max(sticky_start);
-                if let Some(next_index) = self.next_sticky_after(placement.item_index) {
+                if let Some(next_index) = self.next_sticky_after(placement.0) {
                     let next_offset = self.controller.with(|c| {
                         c.cache
                             .offset_for(next_index, self.estimated_item_main, self.item_spacing)
                     });
-                    let max_offset =
-                        next_offset + self.padding_main - self.axis.main(&placement.size);
+                    let max_offset = next_offset + self.padding_main - self.axis.main(&placement.3);
                     main_offset = main_offset.min(max_offset);
                 }
             }
             let position = self
                 .axis
                 .position(main_offset, self.padding_cross + cross_offset);
-            output.place_child(placement.child_id, position);
+            result.place_child(placement.1, position);
         }
 
-        true
+        Some(result.into_placements())
     }
 }
 
@@ -1091,14 +1071,6 @@ impl LazyListAxis {
             Self::Horizontal => constraint.width().resolve_max(),
         }
     }
-}
-
-#[derive(Clone, PartialEq)]
-struct Placement {
-    item_index: usize,
-    child_id: NodeId,
-    offset_main: Px,
-    size: ComputedData,
 }
 
 #[derive(Clone)]
@@ -1535,8 +1507,10 @@ fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, PxPosition, layout::layout, remember, tessera,
+        AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
+        NoopRenderPolicy, Px, PxPosition,
+        layout::{MeasureScope, layout},
+        remember, tessera,
     };
 
     use crate::{
@@ -1553,15 +1527,11 @@ mod tests {
     }
 
     impl LayoutPolicy for FixedTestLayout {
-        fn measure(
-            &self,
-            _input: &LayoutInput<'_>,
-            _output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, MeasurementError> {
-            Ok(ComputedData {
+        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
-            })
+            }))
         }
     }
 

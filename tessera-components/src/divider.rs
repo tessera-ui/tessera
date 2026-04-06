@@ -4,8 +4,10 @@
 //!
 //! Separate sections in lists, menus, and settings screens.
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
-    MeasurementError, Px, RenderInput, RenderPolicy, layout::layout, tessera, use_context,
+    AxisConstraint, Color, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px,
+    RenderInput, RenderPolicy,
+    layout::{MeasureScope, layout},
+    tessera, use_context,
 };
 
 use crate::{pipelines::simple_rect::command::SimpleRectCommand, theme::MaterialTheme};
@@ -53,11 +55,7 @@ struct DividerLayout {
 }
 
 impl LayoutPolicy for DividerLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (width, height) = match self.orientation {
             DividerOrientation::Horizontal => (
                 input
@@ -85,7 +83,7 @@ impl LayoutPolicy for DividerLayout {
             ),
         };
 
-        Ok(ComputedData { width, height })
+        Ok(LayoutResult::new(ComputedData { width, height }))
     }
 }
 

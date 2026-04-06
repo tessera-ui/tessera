@@ -6,11 +6,11 @@
 use std::time::Duration;
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, MeasurementError, Modifier,
-    Px, PxPosition, PxSize, RenderSlot, State,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
+    MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout},
+    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -161,18 +161,16 @@ impl PartialEq for SwitchLayout {
 }
 
 impl LayoutPolicy for SwitchLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let track_id = input.children_ids()[0];
-        let state_layer_id = input.children_ids()[1];
-        let thumb_id = input.children_ids()[2];
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let track = children[0];
+        let state_layer = children[1];
+        let thumb = children[2];
         let thumb_constraint = Constraint::NONE;
-        let track_size = input.measure_child(track_id, &thumb_constraint)?;
-        let state_layer_size = input.measure_child(state_layer_id, &thumb_constraint)?;
-        let thumb_size = input.measure_child(thumb_id, &thumb_constraint)?;
+        let track_size = track.measure(&thumb_constraint)?;
+        let state_layer_size = state_layer.measure(&thumb_constraint)?;
+        let thumb_size = thumb.measure(&thumb_constraint)?;
 
         let self_width_px = track_size
             .width
@@ -206,26 +204,26 @@ impl LayoutPolicy for SwitchLayout {
         let state_layer_x = thumb_center_x - state_layer_size.width.0 / 2;
         let state_layer_y = thumb_center_y - state_layer_size.height.0 / 2;
 
-        output.place_child(
-            track_id,
+        result.place_child(
+            track,
             PxPosition::new(Px(track_origin_x), Px(track_origin_y)),
         );
-        output.place_child(
-            thumb_id,
+        result.place_child(
+            thumb,
             PxPosition::new(
                 Px(track_origin_x + thumb_x.0),
                 Px(track_origin_y + (track_size.height.0 - thumb_size.height.0) / 2),
             ),
         );
-        output.place_child(
-            state_layer_id,
+        result.place_child(
+            state_layer,
             PxPosition::new(Px(state_layer_x), Px(state_layer_y)),
         );
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: self_width_px,
             height: self_height_px,
-        })
+        }))
     }
 
     fn measure_eq(&self, other: &Self) -> bool {
@@ -245,23 +243,18 @@ impl LayoutPolicy for SwitchLayout {
             && self.is_pressed == other.is_pressed
     }
 
-    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
-        let ids = input.children_ids();
-        if ids.len() < 3 {
-            return true;
+    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        if children.len() < 3 {
+            return Some(result.into_placements());
         }
-        let track_id = ids[0];
-        let state_layer_id = ids[1];
-        let thumb_id = ids[2];
-        let Some(track_size) = input.child_size(track_id) else {
-            return false;
-        };
-        let Some(state_layer_size) = input.child_size(state_layer_id) else {
-            return false;
-        };
-        let Some(thumb_size) = input.child_size(thumb_id) else {
-            return false;
-        };
+        let track = children[0];
+        let state_layer = children[1];
+        let thumb = children[2];
+        let track_size = track.size();
+        let state_layer_size = state_layer.size();
+        let thumb_size = thumb.size();
 
         let self_width_px = input.size().width;
         let self_height_px = input.size().height;
@@ -289,22 +282,22 @@ impl LayoutPolicy for SwitchLayout {
         let state_layer_x = thumb_center_x - state_layer_size.width.0 / 2;
         let state_layer_y = thumb_center_y - state_layer_size.height.0 / 2;
 
-        output.place_child(
-            track_id,
+        result.place_child(
+            track,
             PxPosition::new(Px(track_origin_x), Px(track_origin_y)),
         );
-        output.place_child(
-            thumb_id,
+        result.place_child(
+            thumb,
             PxPosition::new(
                 Px(track_origin_x + thumb_x.0),
                 Px(track_origin_y + (track_size.height.0 - thumb_size.height.0) / 2),
             ),
         );
-        output.place_child(
-            state_layer_id,
+        result.place_child(
+            state_layer,
             PxPosition::new(Px(state_layer_x), Px(state_layer_y)),
         );
-        true
+        Some(result.into_placements())
     }
 }
 
@@ -314,25 +307,22 @@ struct SwitchThumbLayout {
 }
 
 impl LayoutPolicy for SwitchThumbLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
         let constraint = Constraint::new(
             AxisConstraint::exact(self.size),
             AxisConstraint::exact(self.size),
         );
 
-        for child_id in input.children_ids() {
-            let _ = input.measure_child(*child_id, &constraint)?;
-            output.place_child(*child_id, PxPosition::ZERO);
+        for child in input.children() {
+            let _ = child.measure(&constraint)?;
+            result.place_child(child, PxPosition::ZERO);
         }
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: self.size,
             height: self.size,
-        })
+        }))
     }
 }
 
@@ -740,8 +730,10 @@ fn render_switch(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-        NoopRenderPolicy, Px, PxPosition, layout::layout, receive_frame_nanos, remember, tessera,
+        ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, NoopRenderPolicy, Px,
+        PxPosition,
+        layout::{MeasureScope, layout},
+        receive_frame_nanos, remember, tessera,
     };
 
     use crate::modifier::{ModifierExt as _, SemanticsArgs};
@@ -755,23 +747,20 @@ mod tests {
     }
 
     impl LayoutPolicy for OffsetChildPolicy {
-        fn measure(
-            &self,
-            input: &LayoutInput<'_>,
-            output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, MeasurementError> {
-            let child_id = input
-                .children_ids()
+        fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            let mut result = LayoutResult::default();
+            let child = input
+                .children()
                 .first()
                 .copied()
                 .expect("offset child policy requires a child");
-            let child = input.measure_child_in_parent_constraint(child_id)?;
-            output.place_child(child_id, PxPosition::new(Px::new(self.x), Px::ZERO));
+            let child_size = child.measure_in_parent_constraint(input.parent_constraint())?;
+            result.place_child(child, PxPosition::new(Px::new(self.x), Px::ZERO));
 
-            Ok(ComputedData {
-                width: Px::new(self.x + child.width.raw()),
-                height: child.height,
-            })
+            Ok(result.with_size(ComputedData {
+                width: Px::new(self.x + child_size.width.raw()),
+                height: child_size.height,
+            }))
         }
     }
 
@@ -782,20 +771,17 @@ mod tests {
     }
 
     impl LayoutPolicy for FixedSizePolicy {
-        fn measure(
-            &self,
-            input: &LayoutInput<'_>,
-            output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, MeasurementError> {
-            for child_id in input.children_ids() {
-                let _ = input.measure_child_in_parent_constraint(*child_id)?;
-                output.place_child(*child_id, PxPosition::ZERO);
+        fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            let mut result = LayoutResult::default();
+            for child in input.children() {
+                let _ = child.measure_in_parent_constraint(input.parent_constraint())?;
+                result.place_child(child, PxPosition::ZERO);
             }
 
-            Ok(ComputedData {
+            Ok(result.with_size(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
-            })
+            }))
         }
     }
 

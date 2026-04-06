@@ -7,9 +7,10 @@
 use std::collections::HashMap;
 
 use tessera_ui::{
-    CallbackWith, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, current_frame_nanos, layout::layout, receive_frame_nanos,
-    remember, tessera, use_context,
+    CallbackWith, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot, current_frame_nanos,
+    layout::{MeasureScope, layout},
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -406,19 +407,16 @@ struct ElasticContainerLayout {
 }
 
 impl LayoutPolicy for ElasticContainerLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let child_id = input.children_ids()[0];
-        let child_size = input.measure_child_in_parent_constraint(child_id)?;
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let child = input.children()[0];
+        let child_size = child.measure_in_parent_constraint(input.parent_constraint())?;
         let additional_width = child_size.width.mul_f32(0.15 * self.progress);
-        output.place_child(child_id, PxPosition::new(additional_width / 2, Px::ZERO));
+        result.place_child(child, PxPosition::new(additional_width / 2, Px::ZERO));
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: child_size.width + additional_width,
             height: child_size.height,
-        })
+        }))
     }
 }

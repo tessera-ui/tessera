@@ -4,10 +4,10 @@
 //!
 //! Use to indicate the completion of a task or a specific value in a range.
 use tessera_ui::{
-    Color, ComputedData, Constraint, Dp, MeasurementError, Modifier, ParentConstraint, Px,
-    PxPosition,
+    Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
+    ParentConstraint, Px, PxPosition,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
     receive_frame_nanos, remember, tessera,
     time::Instant,
     use_context,
@@ -47,18 +47,15 @@ struct LinearProgressLayout {
 }
 
 impl LayoutPolicy for LinearProgressLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
         let (self_width, self_height) = resolve_linear_size(input.parent_constraint());
         let is_butt = self.stroke_cap.effective_is_butt(self_width, self_height);
         let gap_fraction =
             adjusted_linear_gap_fraction(self_width, self_height, self.gap_size, is_butt);
         let child_height = self_height;
 
-        let children_ids = input.children_ids();
+        let children = input.children();
 
         if let Some(progress) = self.progress {
             let progress = if progress.is_nan() {
@@ -68,10 +65,10 @@ impl LayoutPolicy for LinearProgressLayout {
             };
             let track_start = progress + progress.min(gap_fraction);
 
-            let track_id = children_ids[0];
-            let indicator_id = children_ids[1];
+            let track = children[0];
+            let indicator = children[1];
             let stop_id = if self.draw_stop_indicator {
-                children_ids.get(2).copied()
+                children.get(2).copied()
             } else {
                 None
             };
@@ -80,12 +77,12 @@ impl LayoutPolicy for LinearProgressLayout {
                 linear_segment_bounds(0.0, progress, self_width, self_height, is_butt)
             {
                 let constraint = Constraint::new(w, child_height);
-                input.measure_child(indicator_id, &constraint)?;
-                output.place_child(indicator_id, PxPosition::new(x, Px(0)));
+                indicator.measure(&constraint)?;
+                result.place_child(indicator, PxPosition::new(x, Px(0)));
             } else {
                 let constraint = Constraint::new(Px(0), child_height);
-                input.measure_child(indicator_id, &constraint)?;
-                output.place_child(indicator_id, PxPosition::new(Px(0), Px(0)));
+                indicator.measure(&constraint)?;
+                result.place_child(indicator, PxPosition::new(Px(0), Px(0)));
             }
 
             if track_start <= 1.0
@@ -93,19 +90,19 @@ impl LayoutPolicy for LinearProgressLayout {
                     linear_segment_bounds(track_start, 1.0, self_width, self_height, is_butt)
             {
                 let constraint = Constraint::new(w, child_height);
-                input.measure_child(track_id, &constraint)?;
-                output.place_child(track_id, PxPosition::new(x, Px(0)));
+                track.measure(&constraint)?;
+                result.place_child(track, PxPosition::new(x, Px(0)));
             } else {
                 let constraint = Constraint::new(Px(0), child_height);
-                input.measure_child(track_id, &constraint)?;
-                output.place_child(track_id, PxPosition::new(Px(0), Px(0)));
+                track.measure(&constraint)?;
+                result.place_child(track, PxPosition::new(Px(0), Px(0)));
             }
 
-            if let Some(stop_id) = stop_id {
+            if let Some(stop) = stop_id {
                 let (pos, stop_size) = stop_indicator_bounds(self_width, self_height);
                 let constraint = Constraint::new(stop_size, stop_size);
-                input.measure_child(stop_id, &constraint)?;
-                output.place_child(stop_id, pos);
+                stop.measure(&constraint)?;
+                result.place_child(stop, pos);
             }
         } else {
             let cycle = self.animation_cycle.unwrap_or(0.0);
@@ -114,23 +111,26 @@ impl LayoutPolicy for LinearProgressLayout {
             let second_head = keyframe_0_to_1(cycle, 650, 850, 1750, emphasized_accelerate);
             let second_tail = keyframe_0_to_1(cycle, 900, 850, 1750, emphasized_accelerate);
 
-            let track_before_id = children_ids[0];
-            let line1_id = children_ids[1];
-            let track_between_id = children_ids[2];
-            let line2_id = children_ids[3];
-            let track_after_id = children_ids[4];
+            let track_before = children[0];
+            let line1 = children[1];
+            let track_between = children[2];
+            let line2 = children[3];
+            let track_after = children[4];
 
-            let mut set_segment = |node_id, start: f32, end: f32| -> Result<(), MeasurementError> {
+            let mut set_segment = |child: tessera_ui::layout::LayoutChild<'_>,
+                                   start: f32,
+                                   end: f32|
+             -> Result<(), MeasurementError> {
                 if let Some((x, w)) =
                     linear_segment_bounds(start, end, self_width, self_height, is_butt)
                 {
                     let constraint = Constraint::new(w, child_height);
-                    input.measure_child(node_id, &constraint)?;
-                    output.place_child(node_id, PxPosition::new(x, Px(0)));
+                    child.measure(&constraint)?;
+                    result.place_child(child, PxPosition::new(x, Px(0)));
                 } else {
                     let constraint = Constraint::new(Px(0), child_height);
-                    input.measure_child(node_id, &constraint)?;
-                    output.place_child(node_id, PxPosition::new(Px(0), Px(0)));
+                    child.measure(&constraint)?;
+                    result.place_child(child, PxPosition::new(Px(0), Px(0)));
                 }
                 Ok(())
             };
@@ -141,15 +141,15 @@ impl LayoutPolicy for LinearProgressLayout {
                 } else {
                     0.0
                 };
-                set_segment(track_before_id, start, 1.0)?;
+                set_segment(track_before, start, 1.0)?;
             } else {
-                set_segment(track_before_id, 0.0, 0.0)?;
+                set_segment(track_before, 0.0, 0.0)?;
             }
 
             if first_head - first_tail > 0.0 {
-                set_segment(line1_id, first_head, first_tail)?;
+                set_segment(line1, first_head, first_tail)?;
             } else {
-                set_segment(line1_id, 0.0, 0.0)?;
+                set_segment(line1, 0.0, 0.0)?;
             }
 
             if first_tail > gap_fraction {
@@ -163,15 +163,15 @@ impl LayoutPolicy for LinearProgressLayout {
                 } else {
                     1.0
                 };
-                set_segment(track_between_id, start, end)?;
+                set_segment(track_between, start, end)?;
             } else {
-                set_segment(track_between_id, 0.0, 0.0)?;
+                set_segment(track_between, 0.0, 0.0)?;
             }
 
             if second_head - second_tail > 0.0 {
-                set_segment(line2_id, second_head, second_tail)?;
+                set_segment(line2, second_head, second_tail)?;
             } else {
-                set_segment(line2_id, 0.0, 0.0)?;
+                set_segment(line2, 0.0, 0.0)?;
             }
 
             if second_tail > gap_fraction {
@@ -180,16 +180,16 @@ impl LayoutPolicy for LinearProgressLayout {
                 } else {
                     1.0
                 };
-                set_segment(track_after_id, 0.0, end)?;
+                set_segment(track_after, 0.0, end)?;
             } else {
-                set_segment(track_after_id, 0.0, 0.0)?;
+                set_segment(track_after, 0.0, 0.0)?;
             }
         }
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: self_width,
             height: self_height,
-        })
+        }))
     }
 }
 
@@ -206,16 +206,12 @@ struct CircularProgressLayout {
 }
 
 impl LayoutPolicy for CircularProgressLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let diameter_px = self.diameter.to_px();
-        Ok(ComputedData {
+        Ok(LayoutResult::new(ComputedData {
             width: diameter_px,
             height: diameter_px,
-        })
+        }))
     }
 }
 

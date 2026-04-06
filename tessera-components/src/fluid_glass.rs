@@ -4,11 +4,11 @@
 //!
 //! Use as a background for buttons, panels, or other UI elements.
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, Dp, FocusRequester, MeasurementError, Modifier,
-    PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, State,
+    Callback, Color, ComputedData, Constraint, Dp, FocusRequester, LayoutResult, MeasurementError,
+    Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
     modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera,
 };
@@ -354,11 +354,8 @@ struct FluidGlassLayout {
 }
 
 impl LayoutPolicy for FluidGlassLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
         let effective_glass_constraint = *input.parent_constraint().as_ref();
 
         let child_constraint = Constraint::new(
@@ -366,17 +363,17 @@ impl LayoutPolicy for FluidGlassLayout {
             remove_padding_from_constraint(effective_glass_constraint.height, self.padding.into()),
         );
 
-        let child_measurement = if !input.children_ids().is_empty() {
-            let child_measurement =
-                input.measure_child(input.children_ids()[0], &child_constraint)?;
-            output.place_child(
-                input.children_ids()[0],
+        let children = input.children();
+        let child_measurement = if let Some(&child) = children.first() {
+            let child_measurement = child.measure(&child_constraint)?;
+            result.place_child(
+                child,
                 PxPosition {
                     x: self.padding.into(),
                     y: self.padding.into(),
                 },
             );
-            child_measurement
+            child_measurement.size()
         } else {
             ComputedData {
                 width: Px(0),
@@ -390,7 +387,7 @@ impl LayoutPolicy for FluidGlassLayout {
         let width = effective_glass_constraint.width.clamp(min_width);
         let height = effective_glass_constraint.height.clamp(min_height);
 
-        Ok(ComputedData { width, height })
+        Ok(result.with_size(ComputedData { width, height }))
     }
 }
 

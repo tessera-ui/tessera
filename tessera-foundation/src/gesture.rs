@@ -94,16 +94,16 @@ impl TapRecognizer {
                 continue;
             }
             match change.content {
-                CursorEventContent::Pressed(button) if button == self.settings.button => {
-                    if within_bounds {
-                        self.active_pointer = Some(change.pointer_id);
-                        self.press_position = cursor_position;
-                        self.canceled = false;
-                        result.pressed = true;
-                        result.press_timestamp = Some(change.timestamp);
-                        if self.settings.consume_on_press {
-                            change.consume();
-                        }
+                CursorEventContent::Pressed(button)
+                    if button == self.settings.button && within_bounds =>
+                {
+                    self.active_pointer = Some(change.pointer_id);
+                    self.press_position = cursor_position;
+                    self.canceled = false;
+                    result.pressed = true;
+                    result.press_timestamp = Some(change.timestamp);
+                    if self.settings.consume_on_press {
+                        change.consume();
                     }
                 }
                 CursorEventContent::Moved(_) => {
@@ -115,10 +115,8 @@ impl TapRecognizer {
                         self.canceled = true;
                     }
                 }
-                CursorEventContent::Scroll(_) => {
-                    if Some(change.pointer_id) == self.active_pointer {
-                        self.canceled = true;
-                    }
+                CursorEventContent::Scroll(_) if Some(change.pointer_id) == self.active_pointer => {
+                    self.canceled = true;
                 }
                 CursorEventContent::Released(button) if button == self.settings.button => {
                     if Some(change.pointer_id) != self.active_pointer {
@@ -242,13 +240,11 @@ impl DragRecognizer {
                 continue;
             }
             match change.content {
-                CursorEventContent::Pressed(PressKeyEventType::Left) => {
-                    if within_bounds {
-                        self.active_pointer = Some(change.pointer_id);
-                        self.start_position = cursor_position;
-                        self.last_position = cursor_position;
-                        self.dragging = false;
-                    }
+                CursorEventContent::Pressed(PressKeyEventType::Left) if within_bounds => {
+                    self.active_pointer = Some(change.pointer_id);
+                    self.start_position = cursor_position;
+                    self.last_position = cursor_position;
+                    self.dragging = false;
                 }
                 CursorEventContent::Moved(_) => {
                     if Some(change.pointer_id) != self.active_pointer {
@@ -412,14 +408,12 @@ impl LongPressRecognizer {
                 continue;
             }
             match change.content {
-                CursorEventContent::Pressed(PressKeyEventType::Left) => {
-                    if within_bounds {
-                        self.active_pointer = Some(change.pointer_id);
-                        self.press_position = cursor_position;
-                        self.press_time = Some(change.timestamp);
-                        self.canceled = false;
-                        self.triggered = false;
-                    }
+                CursorEventContent::Pressed(PressKeyEventType::Left) if within_bounds => {
+                    self.active_pointer = Some(change.pointer_id);
+                    self.press_position = cursor_position;
+                    self.press_time = Some(change.timestamp);
+                    self.canceled = false;
+                    self.triggered = false;
                 }
                 CursorEventContent::Moved(_) => {
                     if Some(change.pointer_id) != self.active_pointer {
@@ -435,10 +429,8 @@ impl LongPressRecognizer {
                     }
                     self.try_trigger(change.timestamp, within_bounds, change, &mut result);
                 }
-                CursorEventContent::Scroll(_) => {
-                    if Some(change.pointer_id) == self.active_pointer {
-                        self.canceled = true;
-                    }
+                CursorEventContent::Scroll(_) if Some(change.pointer_id) == self.active_pointer => {
+                    self.canceled = true;
                 }
                 CursorEventContent::Released(PressKeyEventType::Left) => {
                     if Some(change.pointer_id) != self.active_pointer {

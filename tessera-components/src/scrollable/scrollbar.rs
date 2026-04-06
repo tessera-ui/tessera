@@ -3,11 +3,11 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
-    Dp, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, Constraint, Dp,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout},
+    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
     modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera,
 };
@@ -38,20 +38,18 @@ struct ScrollBarVLayout {
 }
 
 impl LayoutPolicy for ScrollBarVLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let track_node_id = input.children_ids()[0];
-        let size = input.measure_child(track_node_id, &Constraint::NONE)?;
-        output.place_child(track_node_id, PxPosition::ZERO);
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let track = children[0];
+        let size = track.measure(&Constraint::NONE)?;
+        result.place_child(track, PxPosition::ZERO);
 
-        let thumb_node_id = input.children_ids()[1];
-        input.measure_child(thumb_node_id, &Constraint::NONE)?;
-        output.place_child(thumb_node_id, PxPosition::new(Px::ZERO, self.thumb_offset));
+        let thumb = children[1];
+        thumb.measure(&Constraint::NONE)?;
+        result.place_child(thumb, PxPosition::new(Px::ZERO, self.thumb_offset));
 
-        Ok(size)
+        Ok(result.with_size(size.size()))
     }
 
     fn measure_eq(&self, _other: &Self) -> bool {
@@ -62,16 +60,18 @@ impl LayoutPolicy for ScrollBarVLayout {
         self.thumb_offset == other.thumb_offset
     }
 
-    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
-        let Some(&track_node_id) = input.children_ids().first() else {
-            return true;
+    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let Some(&track) = children.first() else {
+            return Some(result.into_placements());
         };
-        output.place_child(track_node_id, PxPosition::ZERO);
-        let Some(&thumb_node_id) = input.children_ids().get(1) else {
-            return true;
+        result.place_child(track, PxPosition::ZERO);
+        let Some(&thumb) = children.get(1) else {
+            return Some(result.into_placements());
         };
-        output.place_child(thumb_node_id, PxPosition::new(Px::ZERO, self.thumb_offset));
-        true
+        result.place_child(thumb, PxPosition::new(Px::ZERO, self.thumb_offset));
+        Some(result.into_placements())
     }
 }
 
@@ -81,20 +81,18 @@ struct ScrollBarHLayout {
 }
 
 impl LayoutPolicy for ScrollBarHLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let track_node_id = input.children_ids()[0];
-        let size = input.measure_child(track_node_id, &Constraint::NONE)?;
-        output.place_child(track_node_id, PxPosition::ZERO);
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let track = children[0];
+        let size = track.measure(&Constraint::NONE)?;
+        result.place_child(track, PxPosition::ZERO);
 
-        let thumb_node_id = input.children_ids()[1];
-        input.measure_child(thumb_node_id, &Constraint::NONE)?;
-        output.place_child(thumb_node_id, PxPosition::new(self.thumb_offset, Px::ZERO));
+        let thumb = children[1];
+        thumb.measure(&Constraint::NONE)?;
+        result.place_child(thumb, PxPosition::new(self.thumb_offset, Px::ZERO));
 
-        Ok(size)
+        Ok(result.with_size(size.size()))
     }
 
     fn measure_eq(&self, _other: &Self) -> bool {
@@ -105,16 +103,18 @@ impl LayoutPolicy for ScrollBarHLayout {
         self.thumb_offset == other.thumb_offset
     }
 
-    fn place_children(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>) -> bool {
-        let Some(&track_node_id) = input.children_ids().first() else {
-            return true;
+    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let Some(&track) = children.first() else {
+            return Some(result.into_placements());
         };
-        output.place_child(track_node_id, PxPosition::ZERO);
-        let Some(&thumb_node_id) = input.children_ids().get(1) else {
-            return true;
+        result.place_child(track, PxPosition::ZERO);
+        let Some(&thumb) = children.get(1) else {
+            return Some(result.into_placements());
         };
-        output.place_child(thumb_node_id, PxPosition::new(self.thumb_offset, Px::ZERO));
-        true
+        result.place_child(thumb, PxPosition::new(self.thumb_offset, Px::ZERO));
+        Some(result.into_placements())
     }
 }
 #[derive(Clone, PartialEq)]

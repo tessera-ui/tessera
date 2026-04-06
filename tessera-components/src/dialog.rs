@@ -8,8 +8,9 @@ use std::time::Duration;
 
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Dp, FocusScopeNode, FocusTraversalPolicy,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    current_frame_nanos,
+    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -343,20 +344,17 @@ struct DialogContentLayout {
 }
 
 impl LayoutPolicy for DialogContentLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let Some(child_id) = input.children_ids().first().copied() else {
-            return Ok(ComputedData {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let Some(child) = input.children().first().copied() else {
+            return Ok(result.with_size(ComputedData {
                 width: Px(0),
                 height: Px(0),
-            });
+            }));
         };
-        let computed = input.measure_child_in_parent_constraint(child_id)?;
-        output.place_child(child_id, PxPosition::ZERO);
-        Ok(computed)
+        let computed = child.measure_in_parent_constraint(input.parent_constraint())?;
+        result.place_child(child, PxPosition::ZERO);
+        Ok(result.with_size(computed.size()))
     }
 }
 

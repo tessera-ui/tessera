@@ -5,9 +5,10 @@
 //! Highlight counts or status markers on top of icons and other UI elements.
 
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
+    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
     MeasurementError, Px, PxPosition, PxSize, RenderInput, RenderPolicy, RenderSlot,
-    layout::layout, provide_context, tessera, use_context,
+    layout::{MeasureScope, layout},
+    provide_context, tessera, use_context,
 };
 
 use crate::{
@@ -34,13 +35,11 @@ fn relax_min_constraint(axis: AxisConstraint) -> AxisConstraint {
 struct BadgedBoxLayout;
 
 impl LayoutPolicy for BadgedBoxLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         debug_assert_eq!(
-            input.children_ids().len(),
+            children.len(),
             2,
             "badged_box expects exactly two children: anchor and badge",
         );
@@ -52,22 +51,22 @@ impl LayoutPolicy for BadgedBoxLayout {
             relax_min_constraint(input.parent_constraint().height()),
         );
 
-        let anchor_id = input.children_ids()[0];
-        let badge_id = input.children_ids()[1];
+        let anchor = children[0];
+        let badge = children[1];
 
-        let to_measure = vec![(badge_id, badge_constraint), (anchor_id, parent_constraint)];
+        let to_measure = vec![(badge, badge_constraint), (anchor, parent_constraint)];
 
         let results = input.measure_children(to_measure)?;
-        let anchor = results
-            .get(&anchor_id)
+        let anchor_size = results
+            .get(&anchor)
             .copied()
             .expect("badged_box anchor must be measured");
         let badge_data = results
-            .get(&badge_id)
+            .get(&badge)
             .copied()
             .expect("badged_box badge must be measured");
 
-        output.place_child(anchor_id, PxPosition::new(Px(0), Px(0)));
+        result.place_child(anchor, PxPosition::new(Px(0), Px(0)));
 
         let badge_size_px = BadgeDefaults::SIZE.to_px();
         let has_content = badge_data.width > badge_size_px;
@@ -86,15 +85,15 @@ impl LayoutPolicy for BadgedBoxLayout {
         }
         .to_px();
 
-        let badge_x = anchor.width - horizontal_offset;
+        let badge_x = anchor_size.width - horizontal_offset;
         let badge_y = -badge_data.height + vertical_offset;
 
-        output.place_child(badge_id, PxPosition::new(badge_x, badge_y));
+        result.place_child(badge, PxPosition::new(badge_x, badge_y));
 
-        Ok(ComputedData {
-            width: anchor.width,
-            height: anchor.height,
-        })
+        Ok(result.with_size(ComputedData {
+            width: anchor_size.width,
+            height: anchor_size.height,
+        }))
     }
 }
 
@@ -104,11 +103,7 @@ struct BadgeLayout {
 }
 
 impl LayoutPolicy for BadgeLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let size_px = BadgeDefaults::SIZE.to_px();
         let intrinsic = Constraint::new(
             AxisConstraint::new(size_px, None),
@@ -124,7 +119,7 @@ impl LayoutPolicy for BadgeLayout {
         let width = resolve_dimension(effective.width, size_px);
         let height = resolve_dimension(effective.height, size_px);
 
-        Ok(ComputedData { width, height })
+        Ok(LayoutResult::new(ComputedData { width, height }))
     }
 }
 
@@ -160,13 +155,11 @@ struct BadgeWithContentLayout {
 }
 
 impl LayoutPolicy for BadgeWithContentLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         debug_assert_eq!(
-            input.children_ids().len(),
+            children.len(),
             1,
             "badge_with_content expects a single row child",
         );
@@ -192,8 +185,8 @@ impl LayoutPolicy for BadgeWithContentLayout {
             AxisConstraint::new(Px::ZERO, max_height),
         );
 
-        let row_id = input.children_ids()[0];
-        let row_data = input.measure_child(row_id, &child_constraint)?;
+        let row = children[0];
+        let row_data = row.measure(&child_constraint)?;
 
         let measured_width = (row_data.width + self.padding_px * 2).max(min_size_px);
         let measured_height = row_data.height.max(min_size_px);
@@ -203,9 +196,9 @@ impl LayoutPolicy for BadgeWithContentLayout {
 
         let x = (width - row_data.width).max(Px(0)) / 2;
         let y = (height - row_data.height).max(Px(0)) / 2;
-        output.place_child(row_id, PxPosition::new(x, y));
+        result.place_child(row, PxPosition::new(x, y));
 
-        Ok(ComputedData { width, height })
+        Ok(result.with_size(ComputedData { width, height }))
     }
 }
 

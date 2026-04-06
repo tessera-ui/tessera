@@ -5,9 +5,11 @@
 //! Pair a primary action with a related secondary action or menu.
 
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput,
-    LayoutPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, accesskit::Role,
-    layout::layout, tessera, use_context,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot,
+    accesskit::Role,
+    layout::{MeasureScope, layout},
+    tessera, use_context,
 };
 
 use crate::{
@@ -584,13 +586,10 @@ struct SplitButtonLayoutPolicy {
 }
 
 impl LayoutPolicy for SplitButtonLayoutPolicy {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let child_ids = input.children_ids();
-        if child_ids.len() != 2 {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        if children.len() != 2 {
             return Err(MeasurementError::MeasureFnFailed(
                 "SplitButtonLayout requires exactly two children.".to_string(),
             ));
@@ -602,14 +601,15 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
             AxisConstraint::new(Px::ZERO, layout_constraint.height.resolve_max()),
         );
 
-        let leading_id = child_ids[0];
+        let leading = children[0];
         let leading_size = input
-            .measure_children(vec![(leading_id, child_constraint)])?
-            .get(&leading_id)
+            .measure_children(vec![(leading, child_constraint)])?
+            .get(&leading)
             .copied()
+            .map(|size| size.size())
             .unwrap_or(ComputedData::ZERO);
 
-        let trailing_id = child_ids[1];
+        let trailing = children[1];
         let trailing_max_width = layout_constraint
             .width
             .resolve_max()
@@ -619,9 +619,10 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
             leading_size.height,
         );
         let trailing_size = input
-            .measure_children(vec![(trailing_id, trailing_constraint)])?
-            .get(&trailing_id)
+            .measure_children(vec![(trailing, trailing_constraint)])?
+            .get(&trailing)
             .copied()
+            .map(|size| size.size())
             .unwrap_or(ComputedData::ZERO);
 
         let content_width = leading_size.width + trailing_size.width + self.spacing;
@@ -629,22 +630,22 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
         let final_width = resolve_dimension(layout_constraint.width, content_width);
         let final_height = resolve_dimension(layout_constraint.height, content_height);
 
-        output.place_child(
-            leading_id,
+        result.place_child(
+            leading,
             PxPosition::new(Px::ZERO, center_offset(leading_size.height, final_height)),
         );
-        output.place_child(
-            trailing_id,
+        result.place_child(
+            trailing,
             PxPosition::new(
                 leading_size.width + self.spacing,
                 center_offset(trailing_size.height, final_height),
             ),
         );
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: final_width,
             height: final_height,
-        })
+        }))
     }
 }
 

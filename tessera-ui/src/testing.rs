@@ -618,10 +618,10 @@ macro_rules! assert_layout {
 mod tests {
     use crate::{
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
-        FrameNanosControl, LayoutInput, LayoutModifierChild, LayoutModifierInput,
-        LayoutModifierNode, LayoutOutput, LayoutPolicy, Modifier, NoopRenderPolicy,
-        PlacementModifierNode, Px, PxPosition, RenderSlot, SemanticsModifierNode,
-        receive_frame_nanos, remember, tessera,
+        FrameNanosControl, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
+        LayoutPolicy, LayoutResult, Modifier, NoopRenderPolicy, PlacementModifierNode, Px,
+        PxPosition, RenderSlot, SemanticsModifierNode, layout::MeasureScope, receive_frame_nanos,
+        remember, tessera,
     };
     #[derive(Clone, PartialEq)]
     struct FixedSizePolicy {
@@ -632,18 +632,18 @@ mod tests {
     impl LayoutPolicy for FixedSizePolicy {
         fn measure(
             &self,
-            input: &LayoutInput<'_>,
-            output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, crate::MeasurementError> {
-            for child_id in input.children_ids() {
-                let _ = input.measure_child_in_parent_constraint(*child_id)?;
-                output.place_child(*child_id, PxPosition::ZERO);
+            input: &MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            let mut result = LayoutResult::default();
+            for child in input.children() {
+                let _ = child.measure_in_parent_constraint(input.parent_constraint())?;
+                result.place_child(child, PxPosition::ZERO);
             }
 
-            Ok(ComputedData {
+            Ok(result.with_size(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
-            })
+            }))
         }
     }
 
@@ -653,23 +653,23 @@ mod tests {
     impl LayoutPolicy for VerticalStackPolicy {
         fn measure(
             &self,
-            input: &LayoutInput<'_>,
-            output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, crate::MeasurementError> {
+            input: &MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            let mut result = LayoutResult::default();
             let mut current_y = Px::ZERO;
             let mut max_width = Px::ZERO;
 
-            for child_id in input.children_ids() {
-                let child = input.measure_child_in_parent_constraint(*child_id)?;
-                output.place_child(*child_id, PxPosition::new(Px::ZERO, current_y));
-                current_y += child.height;
-                max_width = max_width.max(child.width);
+            for child in input.children() {
+                let child_size = child.measure_in_parent_constraint(input.parent_constraint())?;
+                result.place_child(child, PxPosition::new(Px::ZERO, current_y));
+                current_y += child_size.height;
+                max_width = max_width.max(child_size.width);
             }
 
-            Ok(ComputedData {
+            Ok(result.with_size(ComputedData {
                 width: max_width,
                 height: current_y,
-            })
+            }))
         }
     }
 
@@ -681,21 +681,21 @@ mod tests {
     impl LayoutPolicy for OffsetChildPolicy {
         fn measure(
             &self,
-            input: &LayoutInput<'_>,
-            output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, crate::MeasurementError> {
-            let child_id = input
-                .children_ids()
+            input: &MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            let mut result = LayoutResult::default();
+            let child = input
+                .children()
                 .first()
                 .copied()
                 .expect("offset child policy requires a child");
-            let child = input.measure_child_in_parent_constraint(child_id)?;
-            output.place_child(child_id, PxPosition::new(Px::new(self.x), Px::ZERO));
+            let child_size = child.measure_in_parent_constraint(input.parent_constraint())?;
+            result.place_child(child, PxPosition::new(Px::new(self.x), Px::ZERO));
 
-            Ok(ComputedData {
-                width: Px::new(self.x + child.width.raw()),
-                height: child.height,
-            })
+            Ok(result.with_size(ComputedData {
+                width: Px::new(self.x + child_size.width.raw()),
+                height: child_size.height,
+            }))
         }
     }
 
@@ -724,13 +724,12 @@ mod tests {
             &self,
             _input: &LayoutModifierInput<'_>,
             child: &mut dyn LayoutModifierChild,
-            output: &mut LayoutOutput<'_>,
         ) -> Result<crate::LayoutModifierOutput, crate::MeasurementError> {
             let child_size = child.measure(&Constraint::exact(
                 Px::new(self.width),
                 Px::new(self.height),
             ))?;
-            child.place(PxPosition::ZERO, output);
+            child.place(PxPosition::ZERO);
             Ok(crate::LayoutModifierOutput { size: child_size })
         }
     }
@@ -757,7 +756,6 @@ mod tests {
             &self,
             input: &LayoutModifierInput<'_>,
             child: &mut dyn LayoutModifierChild,
-            output: &mut LayoutOutput<'_>,
         ) -> Result<crate::LayoutModifierOutput, crate::MeasurementError> {
             let padding = Px::new(self.padding);
             let parent = input.layout_input.parent_constraint();
@@ -778,7 +776,7 @@ mod tests {
                 ),
             );
             let child_size = child.measure(&constraint)?;
-            child.place(PxPosition::new(padding, padding), output);
+            child.place(PxPosition::new(padding, padding));
             Ok(crate::LayoutModifierOutput {
                 size: ComputedData {
                     width: child_size.width + padding + padding,
@@ -1022,8 +1020,8 @@ mod tests {
             },
             expect: {
                 node("root").size(800, 600).position(0, 0);
-                node("title_box").x(0).y(0).size(200, 40);
-                node("button_box").below("title_box").align_start_with("title_box").size(120, 32);
+                node("title").x(0).y(0).size(200, 40);
+                node("button").below("title").align_start_with("title").size(120, 32);
             }
         }
     }

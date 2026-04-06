@@ -4,9 +4,9 @@
 //!
 //! Wrap tall lists or cards into multiple columns.
 use tessera_ui::{
-    AxisConstraint, ComputedData, Constraint, Dp, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    AxisConstraint, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot,
+    layout::{LayoutChild, LayoutPolicy, MeasureScope, layout},
     tessera,
 };
 
@@ -36,7 +36,7 @@ use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 ///
 /// ```
 /// use tessera_components::{flow_column::flow_column, text::text};
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{LayoutResult, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -97,16 +97,13 @@ struct FlowColumnLayout {
 }
 
 impl LayoutPolicy for FlowColumnLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         let child_weights = collect_child_weights(input);
         let n = child_weights.len();
-        let children_ids = input.children_ids();
         assert_eq!(
-            children_ids.len(),
+            children.len(),
             n,
             "Mismatch between children defined in scope and runtime children count"
         );
@@ -120,12 +117,12 @@ impl LayoutPolicy for FlowColumnLayout {
         let use_weighted_remeasure = max_height.is_some();
         let mut unweighted_nodes = Vec::new();
         let mut weighted_nodes = Vec::new();
-        for (idx, &child_id) in children_ids.iter().enumerate().take(n) {
+        for (idx, child_id) in children.iter().enumerate().take(n) {
             let weight = child_weights.get(idx).copied().flatten().unwrap_or(0.0);
             if weight > 0.0 && use_weighted_remeasure {
-                weighted_nodes.push((child_id, child_constraint));
+                weighted_nodes.push((*child_id, child_constraint));
             } else {
-                unweighted_nodes.push((child_id, child_constraint));
+                unweighted_nodes.push((*child_id, child_constraint));
             }
         }
 
@@ -141,17 +138,17 @@ impl LayoutPolicy for FlowColumnLayout {
         };
 
         let mut children_sizes = vec![None; n];
-        for (i, &child_id) in children_ids.iter().enumerate().take(n) {
+        for (i, child_id) in children.iter().enumerate().take(n) {
             if let Some(results) = &unweighted_results
-                && let Some(child_size) = results.get(&child_id)
+                && let Some(child_size) = results.get(child_id)
             {
-                children_sizes[i] = Some(*child_size);
+                children_sizes[i] = Some(child_size.size());
                 continue;
             }
             if let Some(results) = &weighted_results
-                && let Some(child_size) = results.get(&child_id)
+                && let Some(child_size) = results.get(child_id)
             {
-                children_sizes[i] = Some(*child_size);
+                children_sizes[i] = Some(child_size.size());
             }
         }
 
@@ -166,7 +163,7 @@ impl LayoutPolicy for FlowColumnLayout {
         if let Some(max_height) = max_height {
             apply_weighted_children_column(WeightedColumnMeasureInput {
                 input,
-                children_ids,
+                children: &children,
                 flow_constraint: &flow_constraint,
                 lines: &lines,
                 children_sizes: &mut children_sizes,
@@ -186,8 +183,8 @@ impl LayoutPolicy for FlowColumnLayout {
             resolve_dimension(flow_constraint.height, content_height, "FlowColumn height");
 
         place_flow_column(
-            output,
-            children_ids,
+            &mut result,
+            &children,
             &lines,
             &children_sizes,
             &line_metrics,
@@ -200,20 +197,20 @@ impl LayoutPolicy for FlowColumnLayout {
             final_height,
         );
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: final_width,
             height: final_height,
-        })
+        }))
     }
 }
 
-fn collect_child_weights(input: &LayoutInput<'_>) -> Vec<Option<f32>> {
+fn collect_child_weights(input: &MeasureScope<'_>) -> Vec<Option<f32>> {
     input
-        .children_ids()
+        .children()
         .iter()
-        .map(|&child_id| {
-            input
-                .child_parent_data::<crate::modifier::WeightParentData>(child_id)
+        .map(|child_id| {
+            child_id
+                .parent_data::<crate::modifier::WeightParentData>()
                 .map(|data| data.weight)
         })
         .collect()
@@ -282,8 +279,8 @@ fn build_column_lines(
 }
 
 struct WeightedColumnMeasureInput<'a, 'b> {
-    input: &'a LayoutInput<'b>,
-    children_ids: &'a [tessera_ui::NodeId],
+    input: &'a MeasureScope<'b>,
+    children: &'a [LayoutChild<'b>],
     flow_constraint: &'a Constraint,
     lines: &'a [Vec<usize>],
     children_sizes: &'a mut [Option<ComputedData>],
@@ -297,7 +294,7 @@ fn apply_weighted_children_column(
 ) -> Result<(), MeasurementError> {
     let WeightedColumnMeasureInput {
         input,
-        children_ids,
+        children,
         flow_constraint,
         lines,
         children_sizes,
@@ -354,7 +351,7 @@ fn apply_weighted_children_column(
         .iter()
         .map(|(idx, allocated)| {
             (
-                children_ids[*idx],
+                children[*idx],
                 Constraint::new(flow_constraint.width, AxisConstraint::exact(*allocated)),
             )
         })
@@ -362,9 +359,9 @@ fn apply_weighted_children_column(
     let weighted_results = input.measure_children(weighted_constraints)?;
 
     for (idx, _) in allocations {
-        let child_id = children_ids[idx];
+        let child_id = children[idx];
         if let Some(child_size) = weighted_results.get(&child_id) {
-            children_sizes[idx] = Some(*child_size);
+            children_sizes[idx] = Some(child_size.size());
         }
     }
 
@@ -416,8 +413,8 @@ fn compute_column_content_size(line_metrics: &[LineMetric], line_spacing: Px) ->
 
 #[allow(clippy::too_many_arguments)]
 fn place_flow_column(
-    output: &mut LayoutOutput<'_>,
-    children_ids: &[tessera_ui::NodeId],
+    result: &mut LayoutResult,
+    children: &[LayoutChild<'_>],
     lines: &[Vec<usize>],
     children_sizes: &[Option<ComputedData>],
     line_metrics: &[LineMetric],
@@ -457,13 +454,13 @@ fn place_flow_column(
         let mut current_y = start_main;
         for (pos, idx) in line.iter().enumerate() {
             if let Some(child_size) = children_sizes[*idx] {
-                let child_id = children_ids[*idx];
+                let child_id = children[*idx];
                 let x_offset = calculate_cross_axis_offset(
                     child_size.width,
                     line_metric.cross,
                     cross_axis_alignment,
                 );
-                output.place_child(child_id, PxPosition::new(current_x + x_offset, current_y));
+                result.place_child(child_id, PxPosition::new(current_x + x_offset, current_y));
                 current_y += child_size.height;
                 if pos + 1 < line.len() {
                     current_y += item_gap;
@@ -555,8 +552,10 @@ fn px_from_i64(value: i64) -> Px {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, layout::layout, tessera,
+        AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
+        NoopRenderPolicy, Px,
+        layout::{MeasureScope, layout},
+        tessera,
     };
 
     use crate::{
@@ -573,15 +572,11 @@ mod tests {
     }
 
     impl LayoutPolicy for FixedTestLayout {
-        fn measure(
-            &self,
-            _input: &LayoutInput<'_>,
-            _output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, MeasurementError> {
-            Ok(ComputedData {
+        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
-            })
+            }))
         }
     }
 

@@ -4,8 +4,10 @@
 //!
 //! Show insertion point feedback inside text editing components.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
-    RenderInput, RenderPolicy, layout::layout, tessera,
+    Color, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px, RenderInput,
+    RenderPolicy,
+    layout::{MeasureScope, layout},
+    tessera,
 };
 
 use crate::pipelines::shape::command::ShapeCommand;
@@ -21,15 +23,11 @@ struct CursorLayout {
 }
 
 impl LayoutPolicy for CursorLayout {
-    fn measure(
-        &self,
-        _input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        Ok(ComputedData {
+    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        Ok(LayoutResult::new(ComputedData {
             width: CURSOR_WIDRH.into(),
             height: self.height,
-        })
+        }))
     }
 }
 

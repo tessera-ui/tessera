@@ -8,10 +8,10 @@ use std::{sync::Arc, time::Duration};
 use parking_lot::Mutex;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
-    MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    layout::{LayoutPolicy, MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -195,11 +195,9 @@ struct NavigationBarItemLayout {
 }
 
 impl LayoutPolicy for NavigationBarItemLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         let parent_width = input
             .parent_constraint()
             .width()
@@ -209,12 +207,12 @@ impl LayoutPolicy for NavigationBarItemLayout {
         let min_height = CONTAINER_HEIGHT.to_px();
         let parent_height = input.parent_constraint().height().clamp(min_height);
 
-        let indicator_background_id = input.children_ids()[0];
-        let indicator_ripple_id = input.children_ids()[1];
+        let indicator_background = children[0];
+        let indicator_ripple = children[1];
         let mut child_index = 2;
 
         let icon_id = if self.has_icon {
-            let id = input.children_ids()[child_index];
+            let id = children[child_index];
             child_index += 1;
             Some(id)
         } else {
@@ -222,7 +220,7 @@ impl LayoutPolicy for NavigationBarItemLayout {
         };
 
         let label_id = if self.has_label {
-            let id = input.children_ids()[child_index];
+            let id = children[child_index];
             Some(id)
         } else {
             None
@@ -230,17 +228,17 @@ impl LayoutPolicy for NavigationBarItemLayout {
 
         let child_constraint = Constraint::NONE;
 
-        let indicator_size = input.measure_child(indicator_background_id, &child_constraint)?;
-        let indicator_ripple_size = input.measure_child(indicator_ripple_id, &child_constraint)?;
+        let indicator_size = indicator_background.measure(&child_constraint)?;
+        let indicator_ripple_size = indicator_ripple.measure(&child_constraint)?;
 
         let icon_size = if let Some(icon_id) = icon_id {
-            Some(input.measure_child(icon_id, &child_constraint)?)
+            Some(icon_id.measure(&child_constraint)?)
         } else {
             None
         };
 
         let label_size = if let Some(label_id) = label_id {
-            Some(input.measure_child(label_id, &child_constraint)?)
+            Some(label_id.measure(&child_constraint)?)
         } else {
             None
         };
@@ -253,26 +251,26 @@ impl LayoutPolicy for NavigationBarItemLayout {
             let ripple_y = (height - indicator_ripple_size.height) / 2;
             let indicator_x = (width - indicator_size.width) / 2;
             let indicator_y = (height - indicator_size.height) / 2;
-            output.place_child(
-                indicator_background_id,
+            result.place_child(
+                indicator_background,
                 PxPosition::new(indicator_x, indicator_y),
             );
-            output.place_child(indicator_ripple_id, PxPosition::new(ripple_x, ripple_y));
+            result.place_child(indicator_ripple, PxPosition::new(ripple_x, ripple_y));
 
             if let (Some(icon_id), Some(icon_size)) = (icon_id, icon_size) {
                 let icon_x = (width - icon_size.width) / 2;
                 let icon_y = (height - icon_size.height) / 2;
-                output.place_child(icon_id, PxPosition::new(icon_x, icon_y));
+                result.place_child(icon_id, PxPosition::new(icon_x, icon_y));
             }
 
-            return Ok(ComputedData { width, height });
+            return Ok(result.with_size(ComputedData { width, height }));
         }
 
-        let icon_size = icon_size.unwrap_or(ComputedData {
+        let icon_size = icon_size.map(|size| size.size()).unwrap_or(ComputedData {
             width: Px::ZERO,
             height: Px::ZERO,
         });
-        let label_size = label_size.unwrap_or(ComputedData {
+        let label_size = label_size.map(|size| size.size()).unwrap_or(ComputedData {
             width: Px::ZERO,
             height: Px::ZERO,
         });
@@ -309,26 +307,26 @@ impl LayoutPolicy for NavigationBarItemLayout {
             + indicator_vertical_padding_px
             + INDICATOR_TO_LABEL_PADDING.to_px();
 
-        output.place_child(
-            indicator_background_id,
+        result.place_child(
+            indicator_background,
             PxPosition::new(indicator_x, Px(indicator_y.0 + offset.0)),
         );
-        output.place_child(
-            indicator_ripple_id,
+        result.place_child(
+            indicator_ripple,
             PxPosition::new(ripple_x, Px(ripple_y.0 + offset.0)),
         );
 
         if let Some(icon_id) = icon_id {
-            output.place_child(icon_id, PxPosition::new(icon_x, Px(icon_y.0 + offset.0)));
+            result.place_child(icon_id, PxPosition::new(icon_x, Px(icon_y.0 + offset.0)));
         }
 
         if (self.always_show_label || self.selection_fraction != 0.0)
             && let Some(label_id) = label_id
         {
-            output.place_child(label_id, PxPosition::new(label_x, Px(label_y.0 + offset.0)));
+            result.place_child(label_id, PxPosition::new(label_x, Px(label_y.0 + offset.0)));
         }
 
-        Ok(ComputedData { width, height })
+        Ok(result.with_size(ComputedData { width, height }))
     }
 }
 

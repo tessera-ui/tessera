@@ -9,7 +9,7 @@ use std::{any::TypeId, sync::Arc};
 
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, Dp, LayoutModifierChild, LayoutModifierInput,
-    LayoutModifierNode, LayoutModifierOutput, LayoutOutput, MeasurementError, ParentDataMap,
+    LayoutModifierNode, LayoutModifierOutput, MeasurementError, ParentDataMap,
     ParentDataModifierNode, PlacementModifierNode, Px, PxPosition,
 };
 
@@ -167,7 +167,6 @@ impl LayoutModifierNode for PaddingModifierNode {
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
-        output: &mut LayoutOutput<'_>,
     ) -> Result<LayoutModifierOutput, MeasurementError> {
         let left_px: Px = self.padding.left.into();
         let top_px: Px = self.padding.top.into();
@@ -183,7 +182,7 @@ impl LayoutModifierNode for PaddingModifierNode {
             shrink_dimension(parent_constraint.height, top_px, bottom_px),
         );
         let child_size = child.measure(&constraint)?;
-        child.place(PxPosition::new(left_px, top_px), output);
+        child.place(PxPosition::new(left_px, top_px));
         Ok(LayoutModifierOutput {
             size: ComputedData {
                 width: child_size.width + left_px + right_px,
@@ -218,7 +217,6 @@ impl LayoutModifierNode for ConstraintModifierNode {
         &self,
         input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
-        output: &mut LayoutOutput<'_>,
     ) -> Result<LayoutModifierOutput, MeasurementError> {
         let parent_width = input.layout_input.parent_constraint().width();
         let parent_height = input.layout_input.parent_constraint().height();
@@ -227,7 +225,7 @@ impl LayoutModifierNode for ConstraintModifierNode {
             resolve_axis_constraint(parent_height, self.height_override, self.fill_height),
         );
         let child_size = child.measure(&constraint)?;
-        child.place(PxPosition::ZERO, output);
+        child.place(PxPosition::ZERO);
         Ok(LayoutModifierOutput { size: child_size })
     }
 }
@@ -240,7 +238,6 @@ impl LayoutModifierNode for MinimumInteractiveModifierNode {
         &self,
         _input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
-        output: &mut LayoutOutput<'_>,
     ) -> Result<LayoutModifierOutput, MeasurementError> {
         const MIN_SIZE: Dp = Dp(48.0);
         let child_size = child.measure(&Constraint::NONE)?;
@@ -249,7 +246,7 @@ impl LayoutModifierNode for MinimumInteractiveModifierNode {
         let height = child_size.height.max(min_px);
         let x = ((width - child_size.width) / 2).max(Px(0));
         let y = ((height - child_size.height) / 2).max(Px(0));
-        child.place(PxPosition::new(x, y), output);
+        child.place(PxPosition::new(x, y));
         Ok(LayoutModifierOutput {
             size: ComputedData { width, height },
         })

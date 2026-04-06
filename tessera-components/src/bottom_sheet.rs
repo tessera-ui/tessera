@@ -7,10 +7,10 @@ use std::time::Duration;
 
 use tessera_foundation::gesture::DragRecognizer;
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusScopeNode,
-    FocusTraversalPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
-    current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
+    AxisConstraint, Callback, CallbackWith, Color, Constraint, Dp, FocusScopeNode,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
+    State, current_frame_nanos,
+    layout::{LayoutPolicy, MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -342,17 +342,18 @@ fn handle_drag_gestures(
 /// Place bottom sheet if present. Extracted to reduce complexity of the parent
 /// function.
 fn place_bottom_sheet_if_present(
-    input: &LayoutInput<'_>,
-    output: &mut LayoutOutput<'_>,
+    input: &MeasureScope<'_>,
+    result: &mut LayoutResult,
     is_open: bool,
     drag_offset: f32,
     progress: f32,
 ) {
-    if input.children_ids().len() <= 2 {
+    let children = input.children();
+    if children.len() <= 2 {
         return;
     }
 
-    let bottom_sheet_id = input.children_ids()[2];
+    let bottom_sheet = children[2];
 
     let parent_width = input
         .parent_constraint()
@@ -385,7 +386,7 @@ fn place_bottom_sheet_if_present(
 
     let constraint = Constraint::new(sheet_width, AxisConstraint::new(Px::ZERO, Some(max_height)));
 
-    let child_size = match input.measure_child(bottom_sheet_id, &constraint) {
+    let child_size = match bottom_sheet.measure(&constraint) {
         Ok(s) => s,
         Err(_) => return,
     };
@@ -404,7 +405,7 @@ fn place_bottom_sheet_if_present(
         Px(0)
     };
 
-    output.place_child(bottom_sheet_id, PxPosition::new(x, Px(y)));
+    result.place_child(bottom_sheet, PxPosition::new(x, Px(y)));
 }
 #[tessera]
 fn bottom_sheet_drag_handle(controller: Option<State<BottomSheetController>>, on_close: Callback) {
@@ -709,23 +710,28 @@ struct BottomSheetLayout {
 }
 
 impl LayoutPolicy for BottomSheetLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let main_content_id = input.children_ids()[0];
-        let main_content_size = input.measure_child_in_parent_constraint(main_content_id)?;
-        output.place_child(main_content_id, PxPosition::new(Px(0), Px(0)));
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let main_content = children[0];
+        let main_content_size =
+            main_content.measure_in_parent_constraint(input.parent_constraint())?;
+        result.place_child(main_content, PxPosition::new(Px(0), Px(0)));
 
-        if input.children_ids().len() > 1 {
-            let scrim_id = input.children_ids()[1];
-            input.measure_child_in_parent_constraint(scrim_id)?;
-            output.place_child(scrim_id, PxPosition::new(Px(0), Px(0)));
+        if children.len() > 1 {
+            let scrim = children[1];
+            scrim.measure_in_parent_constraint(input.parent_constraint())?;
+            result.place_child(scrim, PxPosition::new(Px(0), Px(0)));
         }
 
-        place_bottom_sheet_if_present(input, output, self.is_open, self.drag_offset, self.progress);
+        place_bottom_sheet_if_present(
+            input,
+            &mut result,
+            self.is_open,
+            self.drag_offset,
+            self.progress,
+        );
 
-        Ok(main_content_size)
+        Ok(result.with_size(main_content_size.size()))
     }
 }

@@ -10,8 +10,8 @@ use std::{
 
 use image::GenericImageView;
 use tessera_ui::{
-    AssetExt, ComputedData, MeasurementError, Modifier, Px,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
+    AssetExt, ComputedData, LayoutResult, MeasurementError, Modifier, Px,
+    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
     tessera,
 };
 use thiserror::Error;
@@ -145,18 +145,14 @@ struct ImageLayout {
 }
 
 impl LayoutPolicy for ImageLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let intrinsic_width = Px(self.data.width as i32);
         let intrinsic_height = Px(self.data.height as i32);
 
         let width = input.parent_constraint().width().clamp(intrinsic_width);
         let height = input.parent_constraint().height().clamp(intrinsic_height);
 
-        Ok(ComputedData { width, height })
+        Ok(LayoutResult::new(ComputedData { width, height }))
     }
 }
 

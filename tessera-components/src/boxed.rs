@@ -4,8 +4,10 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use tessera_ui::{
-    AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, layout::layout, tessera,
+    AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot,
+    layout::{MeasureScope, layout},
+    tessera,
 };
 
 use crate::alignment::Alignment;
@@ -93,15 +95,13 @@ struct BoxedLayout {
 }
 
 impl LayoutPolicy for BoxedLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        let child_alignments = collect_child_alignments(input);
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
+        let child_alignments = collect_child_alignments(&children);
         let n = child_alignments.len();
         debug_assert_eq!(
-            input.children_ids().len(),
+            children.len(),
             n,
             "Mismatch between children defined in scope and runtime children count"
         );
@@ -112,15 +112,15 @@ impl LayoutPolicy for BoxedLayout {
         let mut max_child_height = Px(0);
         let mut children_sizes = vec![None; n];
 
-        let children_to_measure: Vec<_> = input
-            .children_ids()
+        let children_to_measure: Vec<_> = children
             .iter()
-            .map(|&child_id| (child_id, effective_constraint))
+            .map(|child| (*child, effective_constraint))
             .collect();
 
         let children_results = input.measure_children(children_to_measure)?;
 
-        for (i, &child_id) in input.children_ids().iter().enumerate().take(n) {
+        for (i, child) in children.iter().enumerate().take(n) {
+            let child_id = *child;
             if let Some(child_result) = children_results.get(&child_id) {
                 max_child_width = max_child_width.max(child_result.width);
                 max_child_height = max_child_height.max(child_result.height);
@@ -133,7 +133,7 @@ impl LayoutPolicy for BoxedLayout {
 
         for (i, child_size_opt) in children_sizes.iter().enumerate() {
             if let Some(child_size) = child_size_opt {
-                let child_id = input.children_ids()[i];
+                let child_id = children[i];
                 let child_alignment = child_alignments[i].unwrap_or(self.alignment);
                 let (x, y) = compute_child_offset(
                     child_alignment,
@@ -142,24 +142,25 @@ impl LayoutPolicy for BoxedLayout {
                     child_size.width,
                     child_size.height,
                 );
-                output.place_child(child_id, PxPosition::new(x, y));
+                result.place_child(child_id, PxPosition::new(x, y));
             }
         }
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: final_width,
             height: final_height,
-        })
+        }))
     }
 }
 
-fn collect_child_alignments(input: &LayoutInput<'_>) -> Vec<Option<Alignment>> {
-    input
-        .children_ids()
+fn collect_child_alignments(
+    children: &[tessera_ui::layout::LayoutChild<'_>],
+) -> Vec<Option<Alignment>> {
+    children
         .iter()
-        .map(|&child_id| {
-            input
-                .child_parent_data::<crate::modifier::AlignmentParentData>(child_id)
+        .map(|child| {
+            child
+                .parent_data::<crate::modifier::AlignmentParentData>()
                 .map(|data| data.alignment)
         })
         .collect()
@@ -168,8 +169,10 @@ fn collect_child_alignments(input: &LayoutInput<'_>) -> Vec<Option<Alignment>> {
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, layout::layout, tessera,
+        AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
+        NoopRenderPolicy, Px,
+        layout::{MeasureScope, layout},
+        tessera,
     };
 
     use crate::{
@@ -186,15 +189,11 @@ mod tests {
     }
 
     impl LayoutPolicy for FixedTestLayout {
-        fn measure(
-            &self,
-            _input: &LayoutInput<'_>,
-            _output: &mut LayoutOutput<'_>,
-        ) -> Result<ComputedData, MeasurementError> {
-            Ok(ComputedData {
+        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
-            })
+            }))
         }
     }
 

@@ -6,8 +6,8 @@
 use std::sync::{Arc, OnceLock};
 
 use tessera_ui::{
-    AssetExt, AxisConstraint, Color, ComputedData, Dp, MeasurementError, Px,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
+    AssetExt, AxisConstraint, Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
+    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
     tessera, use_context,
 };
 
@@ -149,11 +149,7 @@ struct IconLayout {
 }
 
 impl LayoutPolicy for IconLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        _output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (intrinsic_width, intrinsic_height) = intrinsic_dimensions(&self.content);
         let size_px = self.size.to_px();
 
@@ -166,7 +162,7 @@ impl LayoutPolicy for IconLayout {
             .intersect(input.parent_constraint().height())
             .clamp(intrinsic_height);
 
-        Ok(ComputedData { width, height })
+        Ok(LayoutResult::new(ComputedData { width, height }))
     }
 }
 

@@ -4,6 +4,7 @@ use std::{
     any::{Any, TypeId},
     cell::RefCell,
     collections::HashMap,
+    hash::{Hash, Hasher},
     sync::Arc,
 };
 
@@ -40,6 +41,430 @@ pub struct LayoutInput<'a> {
     measured_children: RefCell<HashMap<crate::NodeId, ChildMeasure>>,
 }
 
+/// A direct child layout node available during a measure pass.
+#[derive(Clone, Copy)]
+pub struct LayoutChild<'a> {
+    node_id: crate::NodeId,
+    instance_key: u64,
+    tree: &'a ComponentNodeTree,
+    metadatas: &'a ComponentNodeMetaDatas,
+    layout_ctx: Option<&'a LayoutContext<'a>>,
+    measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
+}
+
+impl PartialEq for LayoutChild<'_> {
+    fn eq(&self, other: &Self) -> bool {
+        self.node_id == other.node_id
+    }
+}
+
+impl Eq for LayoutChild<'_> {}
+
+impl Hash for LayoutChild<'_> {
+    fn hash<H: Hasher>(&self, state: &mut H) {
+        self.node_id.hash(state);
+    }
+}
+
+impl<'a> LayoutChild<'a> {
+    /// Measures this child under the given constraint.
+    pub fn measure(&self, constraint: &Constraint) -> Result<MeasuredChild, MeasurementError> {
+        let size = measure_node(
+            self.node_id,
+            constraint,
+            self.tree,
+            self.metadatas,
+            self.layout_ctx,
+        )?;
+        let mut measured_children = self.measured_children.borrow_mut();
+        if let Some(entry) = measured_children.get_mut(&self.node_id) {
+            let consistent =
+                entry.consistent && entry.constraint == *constraint && entry.size == size;
+            entry.constraint = *constraint;
+            entry.size = size;
+            entry.consistent = consistent;
+        } else {
+            measured_children.insert(
+                self.node_id,
+                ChildMeasure {
+                    constraint: *constraint,
+                    size,
+                    consistent: true,
+                },
+            );
+        }
+        Ok(MeasuredChild {
+            instance_key: self.instance_key,
+            width: size.width,
+            height: size.height,
+        })
+    }
+
+    /// Measures this child without recording it for layout cache keys.
+    pub fn measure_untracked(
+        &self,
+        constraint: &Constraint,
+    ) -> Result<MeasuredChild, MeasurementError> {
+        let size = measure_node(
+            self.node_id,
+            constraint,
+            self.tree,
+            self.metadatas,
+            self.layout_ctx,
+        )?;
+        Ok(MeasuredChild {
+            instance_key: self.instance_key,
+            width: size.width,
+            height: size.height,
+        })
+    }
+
+    /// Measures this child using the inherited parent constraint.
+    pub fn measure_in_parent_constraint(
+        &self,
+        parent_constraint: ParentConstraint<'_>,
+    ) -> Result<MeasuredChild, MeasurementError> {
+        self.measure(parent_constraint.as_ref())
+    }
+
+    /// Reads a typed parent-data payload from this direct child layout node.
+    pub fn parent_data<T>(&self) -> Option<T>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        let child_id = resolve_parent_data_child_id(self.tree, self.node_id)?;
+        let node = self.tree.get(child_id)?;
+        let mut data: ParentDataMap = HashMap::default();
+        for action in node.get().modifier.ordered_actions() {
+            if let OrderedModifierAction::ParentData(node) = action {
+                node.apply_parent_data(&mut data);
+            }
+        }
+        let value = data.get(&TypeId::of::<T>())?;
+        value.downcast_ref::<T>().cloned()
+    }
+
+    pub(crate) const fn node_id(&self) -> crate::NodeId {
+        self.node_id
+    }
+
+    pub(crate) const fn instance_key(&self) -> u64 {
+        self.instance_key
+    }
+}
+
+/// A measured child returned from [`LayoutChild::measure`].
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct MeasuredChild {
+    instance_key: u64,
+    /// The measured width of the child.
+    pub width: Px,
+    /// The measured height of the child.
+    pub height: Px,
+}
+
+impl MeasuredChild {
+    /// Returns the measured size for this child.
+    pub const fn size(&self) -> ComputedData {
+        ComputedData {
+            width: self.width,
+            height: self.height,
+        }
+    }
+
+    pub(crate) const fn instance_key(&self) -> u64 {
+        self.instance_key
+    }
+}
+
+/// Batched child measurement results keyed internally by layout-node id.
+pub struct MeasuredChildren {
+    by_node_id: HashMap<crate::NodeId, MeasuredChild>,
+}
+
+impl MeasuredChildren {
+    pub(crate) fn new(by_node_id: HashMap<crate::NodeId, MeasuredChild>) -> Self {
+        Self { by_node_id }
+    }
+
+    /// Returns the measured result for the given child handle.
+    pub fn get(&self, child: &LayoutChild<'_>) -> Option<&MeasuredChild> {
+        self.by_node_id.get(&child.node_id())
+    }
+
+    /// Returns an iterator over all measured child values.
+    pub fn values(&self) -> impl Iterator<Item = &MeasuredChild> {
+        self.by_node_id.values()
+    }
+
+    /// Consumes the collection and returns the measured child values.
+    pub fn into_values(self) -> impl Iterator<Item = MeasuredChild> {
+        self.by_node_id.into_values()
+    }
+}
+
+/// A direct child available during a placement-only pass.
+#[derive(Clone, Copy)]
+pub struct PlacementChild<'a> {
+    node_id: crate::NodeId,
+    instance_key: u64,
+    tree: &'a ComponentNodeTree,
+    size: ComputedData,
+}
+
+impl<'a> PlacementChild<'a> {
+    /// Returns the cached measured size from the preceding measure pass.
+    pub const fn size(&self) -> ComputedData {
+        self.size
+    }
+
+    /// Reads a typed parent-data payload from the child.
+    pub fn parent_data<T>(&self) -> Option<T>
+    where
+        T: Clone + Send + Sync + 'static,
+    {
+        let child_id = resolve_parent_data_child_id(self.tree, self.node_id)?;
+        let node = self.tree.get(child_id)?;
+        let mut data: ParentDataMap = HashMap::default();
+        for action in node.get().modifier.ordered_actions() {
+            if let OrderedModifierAction::ParentData(node) = action {
+                node.apply_parent_data(&mut data);
+            }
+        }
+        let value = data.get(&TypeId::of::<T>())?;
+        value.downcast_ref::<T>().cloned()
+    }
+
+    pub(crate) const fn instance_key(&self) -> u64 {
+        self.instance_key
+    }
+}
+
+/// Shared measurement helpers available during a layout pass.
+pub struct MeasureScope<'a> {
+    tree: &'a ComponentNodeTree,
+    metadatas: &'a ComponentNodeMetaDatas,
+    layout_ctx: Option<&'a LayoutContext<'a>>,
+    measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
+    parent_constraint: ParentConstraint<'a>,
+    children_ids: &'a [crate::NodeId],
+}
+
+impl<'a> MeasureScope<'a> {
+    pub(crate) fn new(
+        tree: &'a ComponentNodeTree,
+        metadatas: &'a ComponentNodeMetaDatas,
+        layout_ctx: Option<&'a LayoutContext<'a>>,
+        measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
+        parent_constraint: ParentConstraint<'a>,
+        children_ids: &'a [crate::NodeId],
+    ) -> Self {
+        Self {
+            tree,
+            metadatas,
+            layout_ctx,
+            measured_children,
+            parent_constraint,
+            children_ids,
+        }
+    }
+
+    /// Returns the inherited constraint.
+    pub const fn parent_constraint(&self) -> ParentConstraint<'a> {
+        self.parent_constraint
+    }
+
+    /// Returns the direct child layout nodes of the current node.
+    pub fn children(&self) -> Vec<LayoutChild<'_>> {
+        self.children_ids
+            .iter()
+            .map(|&node_id| {
+                let instance_key = self
+                    .tree
+                    .get(node_id)
+                    .expect("Direct child layout node must exist")
+                    .get()
+                    .instance_key;
+                LayoutChild {
+                    node_id,
+                    instance_key,
+                    tree: self.tree,
+                    metadatas: self.metadatas,
+                    layout_ctx: self.layout_ctx,
+                    measured_children: self.measured_children,
+                }
+            })
+            .collect()
+    }
+
+    /// Measures all specified child nodes under the given constraint,
+    /// preserving input order.
+    pub fn measure_children<'b>(
+        &self,
+        nodes_to_measure: Vec<(LayoutChild<'b>, Constraint)>,
+    ) -> Result<MeasuredChildren, MeasurementError> {
+        let constraints: HashMap<crate::NodeId, Constraint> = nodes_to_measure
+            .iter()
+            .map(|(child, constraint)| (child.node_id(), *constraint))
+            .collect();
+        let results = measure_nodes(
+            nodes_to_measure
+                .iter()
+                .map(|(child, constraint)| (child.node_id(), *constraint))
+                .collect(),
+            self.tree,
+            self.metadatas,
+            self.layout_ctx,
+        );
+
+        let mut successful_results = HashMap::new();
+        for (child_id, result) in results {
+            match result {
+                Ok(size) => {
+                    if let Some(constraint) = constraints.get(&child_id) {
+                        let mut measured_children = self.measured_children.borrow_mut();
+                        if let Some(entry) = measured_children.get_mut(&child_id) {
+                            let consistent = entry.consistent
+                                && entry.constraint == *constraint
+                                && entry.size == size;
+                            entry.constraint = *constraint;
+                            entry.size = size;
+                            entry.consistent = consistent;
+                        } else {
+                            measured_children.insert(
+                                child_id,
+                                ChildMeasure {
+                                    constraint: *constraint,
+                                    size,
+                                    consistent: true,
+                                },
+                            );
+                        }
+                    }
+                    successful_results.insert(
+                        child_id,
+                        MeasuredChild {
+                            instance_key: self
+                                .tree
+                                .get(child_id)
+                                .expect("Measured child must exist in the tree")
+                                .get()
+                                .instance_key,
+                            width: size.width,
+                            height: size.height,
+                        },
+                    );
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+        }
+        Ok(MeasuredChildren::new(successful_results))
+    }
+
+    /// Measures child nodes without recording them for layout cache keys.
+    pub fn measure_children_untracked<'b>(
+        &self,
+        nodes_to_measure: Vec<(LayoutChild<'b>, Constraint)>,
+    ) -> Result<MeasuredChildren, MeasurementError> {
+        let results = measure_nodes(
+            nodes_to_measure
+                .iter()
+                .map(|(child, constraint)| (child.node_id(), *constraint))
+                .collect(),
+            self.tree,
+            self.metadatas,
+            self.layout_ctx,
+        );
+
+        let mut successful_results = HashMap::new();
+        for (child_id, result) in results {
+            match result {
+                Ok(size) => {
+                    successful_results.insert(
+                        child_id,
+                        MeasuredChild {
+                            instance_key: self
+                                .tree
+                                .get(child_id)
+                                .expect("Measured child must exist in the tree")
+                                .get()
+                                .instance_key,
+                            width: size.width,
+                            height: size.height,
+                        },
+                    );
+                }
+                Err(e) => {
+                    return Err(e);
+                }
+            };
+        }
+        Ok(MeasuredChildren::new(successful_results))
+    }
+}
+
+/// Shared placement helpers available during a cached placement pass.
+pub struct PlacementScope<'a> {
+    tree: &'a ComponentNodeTree,
+    parent_constraint: ParentConstraint<'a>,
+    children_ids: &'a [crate::NodeId],
+    child_sizes: &'a HashMap<crate::NodeId, ComputedData>,
+    size: ComputedData,
+}
+
+impl<'a> PlacementScope<'a> {
+    pub(crate) fn new(
+        tree: &'a ComponentNodeTree,
+        parent_constraint: ParentConstraint<'a>,
+        children_ids: &'a [crate::NodeId],
+        child_sizes: &'a HashMap<crate::NodeId, ComputedData>,
+        size: ComputedData,
+    ) -> Self {
+        Self {
+            tree,
+            parent_constraint,
+            children_ids,
+            child_sizes,
+            size,
+        }
+    }
+
+    /// Returns the inherited constraint.
+    pub const fn parent_constraint(&self) -> ParentConstraint<'a> {
+        self.parent_constraint
+    }
+
+    /// Returns the direct child layout nodes of the current node.
+    pub fn children(&self) -> Vec<PlacementChild<'_>> {
+        self.children_ids
+            .iter()
+            .map(|&node_id| {
+                let node = self
+                    .tree
+                    .get(node_id)
+                    .expect("Direct child layout node must exist");
+                PlacementChild {
+                    node_id,
+                    instance_key: node.get().instance_key,
+                    tree: self.tree,
+                    size: self
+                        .child_sizes
+                        .get(&node_id)
+                        .copied()
+                        .expect("Placement child size must exist for a direct child layout node"),
+                }
+            })
+            .collect()
+    }
+
+    /// Returns the cached size of the current node.
+    pub const fn size(&self) -> ComputedData {
+        self.size
+    }
+}
+
 impl<'a> LayoutInput<'a> {
     pub(crate) fn new(
         tree: &'a ComponentNodeTree,
@@ -63,11 +488,6 @@ impl<'a> LayoutInput<'a> {
         self.parent_constraint
     }
 
-    /// Returns the children node ids of the current node.
-    pub fn children_ids(&self) -> &'a [crate::NodeId] {
-        self.children_ids
-    }
-
     pub(crate) fn take_measured_children(&self) -> HashMap<crate::NodeId, ChildMeasure> {
         std::mem::take(&mut *self.measured_children.borrow_mut())
     }
@@ -89,200 +509,38 @@ impl<'a> LayoutInput<'a> {
         }
     }
 
-    fn record_child_measure(
-        &self,
-        child_id: crate::NodeId,
-        constraint: Constraint,
-        size: ComputedData,
-    ) {
-        let mut measured_children = self.measured_children.borrow_mut();
-        if let Some(entry) = measured_children.get_mut(&child_id) {
-            let consistent =
-                entry.consistent && entry.constraint == constraint && entry.size == size;
-            entry.constraint = constraint;
-            entry.size = size;
-            entry.consistent = consistent;
-        } else {
-            measured_children.insert(
-                child_id,
-                ChildMeasure {
-                    constraint,
-                    size,
-                    consistent: true,
-                },
-            );
-        }
-    }
-
-    /// Measures all specified child nodes under the given constraint.
-    pub fn measure_children(
-        &self,
-        nodes_to_measure: Vec<(crate::NodeId, Constraint)>,
-    ) -> Result<HashMap<crate::NodeId, ComputedData>, MeasurementError> {
-        let constraints: HashMap<crate::NodeId, Constraint> = nodes_to_measure
-            .iter()
-            .map(|(child_id, constraint)| (*child_id, *constraint))
-            .collect();
-        let results = measure_nodes(nodes_to_measure, self.tree, self.metadatas, self.layout_ctx);
-
-        let mut successful_results = HashMap::new();
-        for (child_id, result) in results {
-            match result {
-                Ok(size) => {
-                    if let Some(constraint) = constraints.get(&child_id) {
-                        self.record_child_measure(child_id, *constraint, size);
-                    }
-                    successful_results.insert(child_id, size);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-        }
-        Ok(successful_results)
-    }
-
-    /// Measures child nodes without recording them for layout cache keys.
-    pub fn measure_children_untracked(
-        &self,
-        nodes_to_measure: Vec<(crate::NodeId, Constraint)>,
-    ) -> Result<HashMap<crate::NodeId, ComputedData>, MeasurementError> {
-        let results = measure_nodes(nodes_to_measure, self.tree, self.metadatas, self.layout_ctx);
-
-        let mut successful_results = HashMap::new();
-        for (child_id, result) in results {
-            match result {
-                Ok(size) => {
-                    successful_results.insert(child_id, size);
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-        }
-        Ok(successful_results)
-    }
-
-    /// Measures a single child node under the given constraint.
-    pub fn measure_child(
-        &self,
-        child_id: crate::NodeId,
-        constraint: &Constraint,
-    ) -> Result<ComputedData, MeasurementError> {
-        let size = measure_node(
-            child_id,
-            constraint,
+    pub(crate) fn measure_scope(&self) -> MeasureScope<'_> {
+        MeasureScope::new(
             self.tree,
             self.metadatas,
             self.layout_ctx,
-        )?;
-        self.record_child_measure(child_id, *constraint, size);
-        Ok(size)
-    }
-
-    /// Measures a child node without recording it for layout cache keys.
-    pub fn measure_child_untracked(
-        &self,
-        child_id: crate::NodeId,
-        constraint: &Constraint,
-    ) -> Result<ComputedData, MeasurementError> {
-        measure_node(
-            child_id,
-            constraint,
-            self.tree,
-            self.metadatas,
-            self.layout_ctx,
+            &self.measured_children,
+            self.parent_constraint,
+            self.children_ids,
         )
     }
 
-    /// Measures a single child node using this node's inherited constraint.
-    pub fn measure_child_in_parent_constraint(
-        &self,
-        child_id: crate::NodeId,
-    ) -> Result<ComputedData, MeasurementError> {
-        self.measure_child(child_id, self.parent_constraint.as_ref())
-    }
-
-    /// Reads a typed parent-data payload from an immediate child node.
-    pub fn child_parent_data<T>(&self, child_id: crate::NodeId) -> Option<T>
-    where
-        T: Clone + Send + Sync + 'static,
-    {
-        let child_id = resolve_parent_data_child_id(self.tree, child_id)?;
-        let node = self.tree.get(child_id)?;
-        let mut data: ParentDataMap = HashMap::default();
-        for action in node.get().modifier.ordered_actions() {
-            if let OrderedModifierAction::ParentData(node) = action {
-                node.apply_parent_data(&mut data);
-            }
-        }
-        let value = data.get(&TypeId::of::<T>())?;
-        value.downcast_ref::<T>().cloned()
-    }
-}
-
-/// Input for a placement-only pass that reuses cached child measurements.
-pub struct PlacementInput<'a> {
-    tree: &'a ComponentNodeTree,
-    parent_constraint: ParentConstraint<'a>,
-    children_ids: &'a [crate::NodeId],
-    child_sizes: &'a HashMap<crate::NodeId, ComputedData>,
-    size: ComputedData,
-}
-
-impl<'a> PlacementInput<'a> {
-    pub(crate) fn new(
-        tree: &'a ComponentNodeTree,
-        parent_constraint: ParentConstraint<'a>,
-        children_ids: &'a [crate::NodeId],
-        child_sizes: &'a HashMap<crate::NodeId, ComputedData>,
-        size: ComputedData,
-    ) -> Self {
-        Self {
-            tree,
-            parent_constraint,
-            children_ids,
-            child_sizes,
-            size,
-        }
-    }
-
-    /// Returns the inherited constraint.
-    pub const fn parent_constraint(&self) -> ParentConstraint<'a> {
-        self.parent_constraint
-    }
-
-    /// Returns the children node ids of the current node.
-    pub fn children_ids(&self) -> &'a [crate::NodeId] {
+    /// Returns the direct child layout nodes of the current node.
+    pub fn children(&self) -> Vec<LayoutChild<'_>> {
         self.children_ids
-    }
-
-    /// Returns the measured size of a direct child from the cached measurement
-    /// pass.
-    pub fn child_size(&self, child_id: crate::NodeId) -> Option<ComputedData> {
-        self.child_sizes.get(&child_id).copied()
-    }
-
-    /// Returns the cached size of the current node.
-    pub const fn size(&self) -> ComputedData {
-        self.size
-    }
-
-    /// Reads a typed parent-data payload from an immediate child node.
-    pub fn child_parent_data<T>(&self, child_id: crate::NodeId) -> Option<T>
-    where
-        T: Clone + Send + Sync + 'static,
-    {
-        let child_id = resolve_parent_data_child_id(self.tree, child_id)?;
-        let node = self.tree.get(child_id)?;
-        let mut data: ParentDataMap = HashMap::default();
-        for action in node.get().modifier.ordered_actions() {
-            if let OrderedModifierAction::ParentData(node) = action {
-                node.apply_parent_data(&mut data);
-            }
-        }
-        let value = data.get(&TypeId::of::<T>())?;
-        value.downcast_ref::<T>().cloned()
+            .iter()
+            .map(|&node_id| {
+                let instance_key = self
+                    .tree
+                    .get(node_id)
+                    .expect("Direct child layout node must exist")
+                    .get()
+                    .instance_key;
+                LayoutChild {
+                    node_id,
+                    instance_key,
+                    tree: self.tree,
+                    metadatas: self.metadatas,
+                    layout_ctx: self.layout_ctx,
+                    measured_children: &self.measured_children,
+                }
+            })
+            .collect()
     }
 }
 
@@ -328,35 +586,6 @@ fn is_parent_data_transparent_wrapper(tree: &ComponentNodeTree, node_id: crate::
     children.next().is_some() && children.next().is_none()
 }
 
-/// Output collected during pure layout.
-pub struct LayoutOutput<'a> {
-    placements: Vec<(u64, PxPosition)>,
-    resolve_instance_key: &'a dyn Fn(crate::NodeId) -> u64,
-}
-
-impl<'a> LayoutOutput<'a> {
-    pub(crate) fn new(resolve_instance_key: &'a dyn Fn(crate::NodeId) -> u64) -> Self {
-        Self {
-            placements: Vec::new(),
-            resolve_instance_key,
-        }
-    }
-
-    /// Sets the relative position of a child node.
-    pub fn place_child(&mut self, child_id: crate::NodeId, position: PxPosition) {
-        let instance_key = (self.resolve_instance_key)(child_id);
-        self.placements.push((instance_key, position));
-    }
-
-    pub(crate) fn place_instance_key(&mut self, instance_key: u64, position: PxPosition) {
-        self.placements.push((instance_key, position));
-    }
-
-    pub(crate) fn finish(self) -> Vec<(u64, PxPosition)> {
-        self.placements
-    }
-}
-
 /// Cached output from pure layout.
 #[derive(Clone)]
 pub struct LayoutResult {
@@ -364,6 +593,65 @@ pub struct LayoutResult {
     pub size: ComputedData,
     /// Child placements keyed by instance_key.
     pub placements: Vec<(u64, PxPosition)>,
+}
+
+impl LayoutResult {
+    /// Creates a layout result for the current node.
+    pub const fn new(size: ComputedData) -> Self {
+        Self {
+            size,
+            placements: Vec::new(),
+        }
+    }
+
+    /// Places a child relative to the current node origin.
+    pub fn place_child<T>(&mut self, child: T, position: PxPosition)
+    where
+        T: LayoutPlacementTarget,
+    {
+        self.placements.push((child.instance_key(), position));
+    }
+
+    /// Replaces the computed size while preserving recorded placements.
+    pub const fn with_size(mut self, size: ComputedData) -> Self {
+        self.size = size;
+        self
+    }
+
+    /// Consumes the result and returns only the recorded placements.
+    pub fn into_placements(self) -> Vec<(u64, PxPosition)> {
+        self.placements
+    }
+}
+
+impl Default for LayoutResult {
+    fn default() -> Self {
+        Self::new(ComputedData::ZERO)
+    }
+}
+
+/// A direct child handle that can be placed by [`LayoutResult`].
+pub trait LayoutPlacementTarget: Copy {
+    #[doc(hidden)]
+    fn instance_key(&self) -> u64;
+}
+
+impl LayoutPlacementTarget for LayoutChild<'_> {
+    fn instance_key(&self) -> u64 {
+        self.instance_key()
+    }
+}
+
+impl LayoutPlacementTarget for MeasuredChild {
+    fn instance_key(&self) -> u64 {
+        self.instance_key()
+    }
+}
+
+impl LayoutPlacementTarget for PlacementChild<'_> {
+    fn instance_key(&self) -> u64 {
+        self.instance_key()
+    }
 }
 
 /// Input for a render record pass.
@@ -435,11 +723,7 @@ impl RenderMetadataMut<'_> {
 /// Pure layout policy for measuring and placing child nodes.
 pub trait LayoutPolicy: Send + Sync + Clone + PartialEq + 'static {
     /// Computes layout for the current node.
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError>;
+    fn measure(&self, scope: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
 
     /// Compares measurement-relevant state for layout dirty tracking.
     fn measure_eq(&self, other: &Self) -> bool {
@@ -453,10 +737,10 @@ pub trait LayoutPolicy: Send + Sync + Clone + PartialEq + 'static {
 
     /// Recomputes child placements using cached child measurements.
     ///
-    /// Returns `true` when the placement pass was handled without
+    /// Returns placements when the placement pass was handled without
     /// remeasurement.
-    fn place_children(&self, _input: &PlacementInput<'_>, _output: &mut LayoutOutput<'_>) -> bool {
-        false
+    fn place_children(&self, _scope: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        None
     }
 }
 
@@ -472,14 +756,9 @@ pub trait LayoutPolicyDyn: Send + Sync {
     /// Returns a typed reference for downcasting.
     fn as_any(&self) -> &dyn Any;
     /// Measures layout using a type-erased policy.
-    fn measure_dyn(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError>;
+    fn measure_dyn(&self, scope: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
     /// Recomputes child placements using cached child measurements.
-    fn place_children_dyn(&self, input: &PlacementInput<'_>, output: &mut LayoutOutput<'_>)
-    -> bool;
+    fn place_children_dyn(&self, scope: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>>;
     /// Compares two type-erased policies for equality.
     fn dyn_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
     /// Compares two type-erased policies for measurement-relevant equality.
@@ -498,20 +777,12 @@ where
         self
     }
 
-    fn measure_dyn(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        LayoutPolicy::measure(self, input, output)
+    fn measure_dyn(&self, scope: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        LayoutPolicy::measure(self, scope)
     }
 
-    fn place_children_dyn(
-        &self,
-        input: &PlacementInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> bool {
-        LayoutPolicy::place_children(self, input, output)
+    fn place_children_dyn(&self, scope: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        LayoutPolicy::place_children(self, scope)
     }
 
     fn dyn_eq(&self, other: &dyn LayoutPolicyDyn) -> bool {
@@ -742,36 +1013,35 @@ pub fn layout(
 pub struct DefaultLayoutPolicy;
 
 impl LayoutPolicy for DefaultLayoutPolicy {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
-        if input.children_ids().is_empty() {
-            return Ok(ComputedData::min_from_constraint(
-                input.parent_constraint().as_ref(),
-            ));
+    fn measure(&self, scope: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let children = scope.children();
+        if children.is_empty() {
+            return Ok(LayoutResult::new(ComputedData::min_from_constraint(
+                scope.parent_constraint().as_ref(),
+            )));
         }
 
-        let nodes_to_measure = input
-            .children_ids()
+        let nodes_to_measure = children
             .iter()
-            .map(|&child_id| (child_id, *input.parent_constraint().as_ref()))
+            .map(|child| (*child, *scope.parent_constraint().as_ref()))
             .collect();
-        let sizes = input.measure_children(nodes_to_measure)?;
+        let sizes = scope.measure_children(nodes_to_measure)?;
 
+        let mut result = LayoutResult::new(ComputedData::ZERO);
         let mut final_width = Px(0);
         let mut final_height = Px(0);
-        for (child_id, size) in sizes {
-            output.place_child(child_id, PxPosition::ZERO);
+        for size in sizes.into_values() {
+            result.place_child(size, PxPosition::ZERO);
+            let size = size.size();
             final_width = final_width.max(size.width);
             final_height = final_height.max(size.height);
         }
 
-        Ok(ComputedData {
+        result.size = ComputedData {
             width: final_width,
             height: final_height,
-        })
+        };
+        Ok(result)
     }
 }
 

@@ -6,10 +6,11 @@
 use glyphon::Action as GlyphonAction;
 use tessera_foundation::gesture::{TapRecognizer, TapSettings};
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput,
-    LayoutPolicy, MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
-    layout::layout, modifier::CursorModifierExt as _, provide_context, remember, tessera,
-    use_context, winit,
+    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
+    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
+    layout::{MeasureScope, layout},
+    modifier::CursorModifierExt as _,
+    provide_context, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -548,37 +549,35 @@ struct OutlinedFloatingLabelLayout {
 }
 
 impl LayoutPolicy for OutlinedFloatingLabelLayout {
-    fn measure(
-        &self,
-        input: &LayoutInput<'_>,
-        output: &mut LayoutOutput<'_>,
-    ) -> Result<ComputedData, MeasurementError> {
+    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        let children = input.children();
         debug_assert_eq!(
-            input.children_ids().len(),
+            children.len(),
             2,
             "OutlinedFloatingLabel expects exactly two children"
         );
-        let notch_id = input.children_ids()[0];
-        let label_id = input.children_ids()[1];
+        let notch = children[0];
+        let label = children[1];
 
         let parent_constraint = *input.parent_constraint().as_ref();
-        let label_measurement = input.measure_child(label_id, &parent_constraint)?;
+        let label_measurement = label.measure(&parent_constraint)?;
         let notch_width = label_measurement.width + self.notch_padding * 2;
         let notch_height = label_measurement.height + self.notch_vertical_padding * 2;
         let notch_constraint = Constraint::exact(notch_width, notch_height);
-        let _ = input.measure_child(notch_id, &notch_constraint)?;
+        let _ = notch.measure(&notch_constraint)?;
 
         let notch_position = PxPosition::new(
             self.label_offset.x - self.notch_padding,
             self.label_offset.y - self.notch_vertical_padding,
         );
-        output.place_child(notch_id, notch_position);
-        output.place_child(label_id, self.label_offset);
+        result.place_child(notch, notch_position);
+        result.place_child(label, self.label_offset);
 
-        Ok(ComputedData {
+        Ok(result.with_size(ComputedData {
             width: Px(0),
             height: Px(0),
-        })
+        }))
     }
 }
 
