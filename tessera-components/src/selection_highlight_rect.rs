@@ -5,7 +5,7 @@
 //! Highlight selected text ranges or focusable regions inside editors.
 use tessera_ui::{
     Color, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
-    RenderInput, RenderPolicy, layout::layout_primitive, tessera,
+    RenderInput, RenderPolicy, layout::layout, tessera,
 };
 
 use crate::pipelines::shape::command::ShapeCommand;
@@ -33,9 +33,7 @@ pub fn selection_highlight_rect(width: Px, height: Px, color: Color) {
         height,
         color,
     };
-    layout_primitive()
-        .layout_policy(policy.clone())
-        .render_policy(policy);
+    layout().layout_policy(policy.clone()).render_policy(policy);
 }
 #[derive(Clone, PartialEq)]
 struct SelectionHighlightLayout {

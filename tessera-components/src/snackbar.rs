@@ -7,8 +7,8 @@
 use std::{collections::VecDeque, time::Duration};
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, State, current_frame_nanos,
-    layout::layout_primitive, receive_frame_nanos, tessera, use_context,
+    Callback, CallbackWith, Color, Dp, Modifier, State, current_frame_nanos, layout::layout,
+    receive_frame_nanos, tessera, use_context,
 };
 
 use crate::{
@@ -648,12 +648,12 @@ pub fn snackbar_host(
     };
     let data = SnackbarData::new(record, state);
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let data = data.clone();
         if let Some(snackbar_slot) = snackbar_slot {
             snackbar_slot.call(data.clone());
         } else {
-            layout_primitive()
+            layout()
                 .modifier(Modifier::new().padding(SnackbarDefaults::HOST_PADDING))
                 .child(move || {
                     snackbar_from_data(data.clone());

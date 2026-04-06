@@ -8,8 +8,8 @@ use std::collections::HashMap;
 
 use tessera_ui::{
     CallbackWith, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, current_frame_nanos, layout::layout_primitive,
-    receive_frame_nanos, remember, tessera, use_context,
+    Modifier, Px, PxPosition, RenderSlot, current_frame_nanos, layout::layout, receive_frame_nanos,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -393,7 +393,7 @@ fn elastic_container(
         });
     }
 
-    layout_primitive()
+    layout()
         .layout_policy(ElasticContainerLayout { progress })
         .child(move || {
             child.render();

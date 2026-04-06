@@ -790,7 +790,7 @@ mod tests {
 
     #[tessera(crate)]
     fn tagged_box(tag: String, width: i32, height: i32) {
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(FixedSizePolicy { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
@@ -798,7 +798,7 @@ mod tests {
 
     #[tessera(crate)]
     fn responsive_box(tag: String) {
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(crate::layout::DefaultLayoutPolicy)
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
@@ -806,7 +806,7 @@ mod tests {
 
     #[tessera(crate)]
     fn stack_content() {
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(VerticalStackPolicy)
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new())
@@ -818,7 +818,7 @@ mod tests {
 
     #[tessera(crate)]
     fn sample_layout() {
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(FixedSizePolicy {
                 width: 800,
                 height: 600,
@@ -860,7 +860,7 @@ mod tests {
             }
         });
 
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(OffsetChildPolicy { x: offset.get() })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new())
@@ -889,7 +889,7 @@ mod tests {
             }
         });
 
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(crate::layout::DefaultLayoutPolicy)
             .render_policy(NoopRenderPolicy)
             .modifier(
@@ -927,7 +927,7 @@ mod tests {
             }
         });
 
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(FixedSizePolicy {
                 width: 20,
                 height: 20,
@@ -944,7 +944,7 @@ mod tests {
 
     #[tessera(crate)]
     fn slot_host(slot: RenderSlot) {
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(VerticalStackPolicy)
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new())
@@ -973,7 +973,7 @@ mod tests {
             }
         });
 
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(FixedSizePolicy {
                 width: 200,
                 height: 100,
@@ -994,7 +994,7 @@ mod tests {
 
     #[tessera(crate)]
     fn ordered_layout_modifier_sample() {
-        crate::layout::layout_primitive()
+        crate::layout::layout()
             .layout_policy(crate::layout::DefaultLayoutPolicy)
             .render_policy(NoopRenderPolicy)
             .modifier(

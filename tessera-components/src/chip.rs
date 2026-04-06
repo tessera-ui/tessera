@@ -4,7 +4,7 @@
 //!
 //! Present compact actions, filters, or input tokens in dense UIs.
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, accesskit::Role, layout::layout_primitive, tessera, use_context,
+    Callback, Color, Dp, Modifier, accesskit::Role, layout::layout, tessera, use_context,
 };
 
 use crate::{
@@ -630,7 +630,7 @@ pub fn chip(
         let trailing_icon = trailing_icon.clone();
         let label = label.clone();
         provide_text_style(typography.label_large, move || {
-            layout_primitive()
+            layout()
                 .modifier(Modifier::new().padding(padding))
                 .child(move || {
                     let leading_icon = leading_icon.clone();

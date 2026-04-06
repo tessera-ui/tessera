@@ -5,8 +5,7 @@
 //! Separate sections in lists, menus, and settings screens.
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
-    MeasurementError, Px, RenderInput, RenderPolicy, layout::layout_primitive, tessera,
-    use_context,
+    MeasurementError, Px, RenderInput, RenderPolicy, layout::layout, tessera, use_context,
 };
 
 use crate::{pipelines::simple_rect::command::SimpleRectCommand, theme::MaterialTheme};
@@ -130,9 +129,7 @@ pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
         color,
         orientation: DividerOrientation::Horizontal,
     };
-    layout_primitive()
-        .layout_policy(policy)
-        .render_policy(policy);
+    layout().layout_policy(policy).render_policy(policy);
 }
 
 /// # vertical_divider
@@ -166,7 +163,5 @@ pub fn vertical_divider(thickness: Option<Dp>, color: Option<Color>) {
         color,
         orientation: DividerOrientation::Vertical,
     };
-    layout_primitive()
-        .layout_policy(policy)
-        .render_policy(policy);
+    layout().layout_policy(policy).render_policy(policy);
 }

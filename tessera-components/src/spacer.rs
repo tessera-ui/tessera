@@ -5,7 +5,7 @@
 //! Use to add gaps between components or to create flexible, expanding regions.
 use tessera_ui::{
     ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-    layout::layout_primitive, tessera,
+    layout::layout, tessera,
 };
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -57,7 +57,5 @@ impl LayoutPolicy for SpacerLayout {
 /// ```
 #[tessera]
 pub fn spacer(modifier: Modifier) {
-    layout_primitive()
-        .modifier(modifier)
-        .layout_policy(SpacerLayout);
+    layout().modifier(modifier).layout_policy(SpacerLayout);
 }

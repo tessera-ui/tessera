@@ -4,7 +4,7 @@
 //!
 //! Trigger actions, submit forms, or navigate.
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, accesskit::Role, layout::layout_primitive, tessera,
+    Callback, Color, Dp, Modifier, RenderSlot, accesskit::Role, layout::layout, tessera,
     use_context,
 };
 
@@ -192,7 +192,7 @@ pub fn button(
     create_surface_builder(&button_args).child(move || {
         let child = child;
         let modifier = Modifier::new().padding_all(button_args.padding);
-        layout_primitive().modifier(modifier).child(move || {
+        layout().modifier(modifier).child(move || {
             if let Some(child) = child.as_ref() {
                 let child = *child;
                 provide_text_style(typography.label_large, move || child.render());

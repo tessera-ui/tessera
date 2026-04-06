@@ -9,9 +9,7 @@ use std::time::Duration;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Dp, FocusScopeNode, FocusTraversalPolicy,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
-    },
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -270,7 +268,7 @@ fn dialog_content_wrapper(
         focus_scope.restore_focus();
     }
     let policy = DialogContentLayout { alpha };
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(policy.clone())
         .render_policy(policy)
@@ -327,7 +325,7 @@ fn dialog_content_wrapper(
                                     .block_input(true)
                                     .with_child(move || {
                                         let content = content;
-                                        layout_primitive()
+                                        layout()
                                             .modifier(Modifier::new().padding_all(padding))
                                             .child(move || {
                                                 content.render();

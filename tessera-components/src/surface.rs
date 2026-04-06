@@ -9,9 +9,7 @@ use tessera_ui::{
     RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
-    },
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
     modifier::ModifierCapabilityExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -721,7 +719,7 @@ fn surface_content(
         scheme,
         absolute_tonal_elevation,
     };
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(policy.clone())
         .render_policy(policy)
@@ -953,7 +951,7 @@ pub fn surface(
         });
     }
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let mut builder = surface_content().resolved(resolved.clone());
         if let Some(interaction_state) = interaction_state {
             builder = builder.interaction_state(interaction_state);

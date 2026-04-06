@@ -10,7 +10,7 @@ use tessera_ui::{
     ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput, KeyboardInputModifierNode, Modifier,
     PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, SemanticsModifierNode, State,
     accesskit::{Action, Role},
-    layout::layout_primitive,
+    layout::layout,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context, winit,
 };
@@ -427,7 +427,7 @@ pub fn text_input(
         scroll_recognizer,
     );
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let surface_args = editor_args.clone();
         create_surface_args(&surface_args, &controller).with_child(move || {
             text_input_padded_content()
@@ -468,7 +468,7 @@ fn text_input_editor(props: TextInputProps) {
         scroll_recognizer,
     );
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         text_input_padded_content()
             .padding(editor_args.padding)
             .controller(controller);
@@ -478,7 +478,7 @@ fn text_input_editor(props: TextInputProps) {
 #[tessera]
 fn text_input_padded_content(padding: Dp, controller: Option<State<TextInputController>>) {
     let controller = controller.expect("text_input_padded_content requires controller to be set");
-    layout_primitive()
+    layout()
         .modifier(Modifier::new().padding_all(padding))
         .child(move || {
             text_edit_core().controller(controller);

@@ -7,7 +7,7 @@
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput, LayoutPolicy,
     MeasurementError, Px, PxPosition, PxSize, RenderInput, RenderPolicy, RenderSlot,
-    layout::layout_primitive, provide_context, tessera, use_context,
+    layout::layout, provide_context, tessera, use_context,
 };
 
 use crate::{
@@ -290,12 +290,10 @@ impl BadgeDefaults {
 /// ```
 #[tessera]
 pub fn badged_box(badge: Option<RenderSlot>, content: Option<RenderSlot>) {
-    layout_primitive()
-        .layout_policy(BadgedBoxLayout)
-        .child(move || {
-            content.unwrap_or_else(RenderSlot::empty).render();
-            badge.unwrap_or_else(RenderSlot::empty).render();
-        });
+    layout().layout_policy(BadgedBoxLayout).child(move || {
+        content.unwrap_or_else(RenderSlot::empty).render();
+        badge.unwrap_or_else(RenderSlot::empty).render();
+    });
 }
 
 /// # badge
@@ -333,9 +331,7 @@ pub fn badge(container_color: Option<Color>, content_color: Option<Color>) {
     let _ = content_color;
     let container_color = container_color.unwrap_or_else(BadgeDefaults::container_color);
     let policy = BadgeLayout { container_color };
-    layout_primitive()
-        .layout_policy(policy)
-        .render_policy(policy);
+    layout().layout_policy(policy).render_policy(policy);
 }
 
 /// # badge_with_content
@@ -399,7 +395,7 @@ pub fn badge_with_content(
         container_color,
         padding_px,
     };
-    layout_primitive()
+    layout()
         .layout_policy(policy)
         .render_policy(policy)
         .child(move || {

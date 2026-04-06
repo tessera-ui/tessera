@@ -11,9 +11,7 @@ use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, Dp, FocusRequester, FocusState,
     MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
-    },
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -1190,7 +1188,7 @@ fn render_tabs(args: TabsConfig, controller: State<TabsController>, content: Ren
         indicator_x_px,
         indicator_width_px,
     };
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(policy.clone())
         .render_policy(policy)

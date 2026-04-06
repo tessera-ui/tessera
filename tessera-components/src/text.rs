@@ -5,7 +5,7 @@
 //! Display labels, headings, and other text content.
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-    Px, PxPosition, RenderInput, RenderPolicy, accesskit::Role, layout::layout_primitive, tessera,
+    Px, PxPosition, RenderInput, RenderPolicy, accesskit::Role, layout::layout, tessera,
     use_context,
 };
 
@@ -94,7 +94,7 @@ pub fn text(
         size,
         line_height,
     };
-    layout_primitive()
+    layout()
         .modifier(modifier.semantics(semantics))
         .layout_policy(policy.clone())
         .render_policy(policy);

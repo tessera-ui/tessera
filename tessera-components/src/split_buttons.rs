@@ -7,7 +7,7 @@
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput,
     LayoutPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, accesskit::Role,
-    layout::layout_primitive, tessera, use_context,
+    layout::layout, tessera, use_context,
 };
 
 use crate::{
@@ -362,7 +362,7 @@ pub fn split_button_layout(
     let leading_button = leading_button.unwrap_or_else(RenderSlot::empty);
     let trailing_button = trailing_button.unwrap_or_else(RenderSlot::empty);
     let spacing = Px::from(spacing.unwrap_or(SplitButtonDefaults::SPACING)).max(Px::ZERO);
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(SplitButtonLayoutPolicy { spacing })
         .child(move || {
@@ -770,7 +770,7 @@ fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
     .with_child(move || {
         let content = content;
         provide_text_style(typography.label_large, move || {
-            layout_primitive()
+            layout()
                 .modifier(Modifier::new().padding(content_padding))
                 .child(move || {
                     content.render();

@@ -14,7 +14,7 @@ use parking_lot::Mutex;
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
     MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot, State, key,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context,
 };
@@ -781,7 +781,7 @@ fn lazy_staggered_grid_view(
     let visible_items = plan.visible_items(visible_range.clone());
 
     if visible_items.is_empty() {
-        layout_primitive().layout_policy(ZeroLayout);
+        layout().layout_policy(ZeroLayout);
         return;
     }
 
@@ -807,7 +807,7 @@ fn lazy_staggered_grid_view(
         })
         .collect();
 
-    layout_primitive()
+    layout()
         .modifier(focus_modifier)
         .layout_policy(LazyStaggeredGridLayout {
             axis,
@@ -1458,7 +1458,7 @@ fn finalize_lane_offsets(lane_offsets: &[Px], spacing: Px) -> Px {
 mod tests {
     use tessera_ui::{
         ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-        NoopRenderPolicy, Px, PxPosition, layout::layout_primitive, remember, tessera,
+        NoopRenderPolicy, Px, PxPosition, layout::layout, remember, tessera,
     };
 
     use crate::{
@@ -1492,7 +1492,7 @@ mod tests {
 
     #[tessera]
     fn fixed_test_box(tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {

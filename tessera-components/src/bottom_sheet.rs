@@ -10,7 +10,7 @@ use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusScopeNode,
     FocusTraversalPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -414,7 +414,7 @@ fn bottom_sheet_drag_handle(controller: Option<State<BottomSheetController>>, on
         handle_drag_gestures(controller, drag_recognizer, &mut input, &on_close);
     });
 
-    layout_primitive().modifier(modifier).child(|| {
+    layout().modifier(modifier).child(|| {
         column()
             .modifier(Modifier::new().fill_max_width())
             .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -513,7 +513,7 @@ fn bottom_sheet_content_wrapper(
     if just_opened {
         focus_scope.restore_focus();
     }
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let bottom_sheet_content = bottom_sheet_content;
         let nested_scroll_connection = nested_scroll_connection.clone();
         let content_wrapper = move || {
@@ -680,7 +680,7 @@ pub fn bottom_sheet_provider(
 
     let progress = calc_progress_from_timer(timer_opt);
 
-    layout_primitive()
+    layout()
         .layout_policy(BottomSheetLayout {
             progress,
             is_open,

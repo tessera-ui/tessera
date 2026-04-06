@@ -5,7 +5,7 @@
 //! Trigger data reloads when users pull down at the top of a scrollable view.
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, Modifier, Px, RenderSlot, State, current_frame_nanos,
-    layout::layout_primitive, provide_context, receive_frame_nanos, remember, tessera, use_context,
+    layout::layout, provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -486,7 +486,7 @@ pub fn pull_refresh(
         }))
         .with_parent(parent_nested_scroll);
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let child = child;
         let nested_scroll_connection = nested_scroll_connection.clone();
         boxed()
@@ -500,7 +500,7 @@ pub fn pull_refresh(
                         child.render();
                     },
                 );
-                layout_primitive()
+                layout()
                     .modifier(Modifier::new().align(Alignment::TopCenter))
                     .child(move || {
                         let offset = indicator_offset_dp(
@@ -538,7 +538,7 @@ struct PullRefreshIndicatorOffsetArgs {
 }
 
 fn pull_refresh_indicator_with_offset(args: PullRefreshIndicatorOffsetArgs) {
-    layout_primitive()
+    layout()
         .modifier(Modifier::new().offset(Dp(0.0), args.offset))
         .child(move || {
             pull_refresh_indicator()

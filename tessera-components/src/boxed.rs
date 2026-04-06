@@ -5,7 +5,7 @@
 //! Use to create layered UIs, overlays, or composite controls.
 use tessera_ui::{
     AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot, layout::layout_primitive, tessera,
+    Modifier, Px, PxPosition, RenderSlot, layout::layout, tessera,
 };
 
 use crate::alignment::Alignment;
@@ -79,7 +79,7 @@ fn compute_child_offset(
 /// ```
 #[tessera]
 pub fn boxed(alignment: Alignment, modifier: Modifier, children: RenderSlot) {
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(BoxedLayout { alignment })
         .child(move || {
@@ -169,7 +169,7 @@ fn collect_child_alignments(input: &LayoutInput<'_>) -> Vec<Option<Alignment>> {
 mod tests {
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+        Modifier, NoopRenderPolicy, Px, layout::layout, tessera,
     };
 
     use crate::{
@@ -200,7 +200,7 @@ mod tests {
 
     #[tessera]
     fn fixed_test_box(tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -211,7 +211,7 @@ mod tests {
 
     #[tessera]
     fn forwarded_modifier_test_box(modifier: Modifier, tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(modifier.then(Modifier::new().semantics(SemanticsArgs {
@@ -230,7 +230,7 @@ mod tests {
             ))
             .children(|| {
                 boxed_start_box();
-                layout_primitive()
+                layout()
                     .modifier(Modifier::new().align(Alignment::BottomEnd))
                     .child(|| {
                         boxed_end_box();

@@ -7,8 +7,8 @@
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusState,
     FocusTraversalPolicy, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier, Px,
-    PxPosition, RenderSlot, accesskit::Role, layout::layout_primitive,
-    modifier::FocusModifierExt as _, provide_context, tessera, use_context,
+    PxPosition, RenderSlot, accesskit::Role, layout::layout, modifier::FocusModifierExt as _,
+    provide_context, tessera, use_context,
 };
 
 use crate::{
@@ -329,7 +329,7 @@ pub fn segmented_button(
         provide_text_style(typography.label_large, move || {
             let leading_icon = leading_icon.clone();
             let label_outer = label_outer.clone();
-            layout_primitive()
+            layout()
                 .modifier(Modifier::new().padding(padding))
                 .child(move || {
                     let leading_icon = leading_icon.clone();
@@ -449,9 +449,9 @@ pub fn single_choice_segmented_button_row(
     let modifier = modifier
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let content = content;
-        layout_primitive()
+        layout()
             .layout_policy(layout_policy.clone())
             .child(move || {
                 let content = content;
@@ -543,9 +543,9 @@ pub fn multi_choice_segmented_button_row(
     let modifier = modifier
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let content = content;
-        layout_primitive()
+        layout()
             .layout_policy(layout_policy.clone())
             .child(move || {
                 let content = content;

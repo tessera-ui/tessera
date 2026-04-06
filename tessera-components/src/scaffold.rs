@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Layer top/bottom bars, floating buttons, and snackbars above app content.
-use tessera_ui::{Dp, Modifier, RenderSlot, layout::layout_primitive, tessera};
+use tessera_ui::{Dp, Modifier, RenderSlot, layout::layout, tessera};
 
 use crate::{
     alignment::Alignment,
@@ -112,31 +112,31 @@ pub fn scaffold(
     let snackbar_alignment = snackbar_alignment.unwrap_or(Alignment::BottomCenter);
     let snackbar_offset = overlay_offset(snackbar_alignment, snackbar_offset, bottom_bar_height);
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         boxed().children(move || {
             if let Some(content) = content {
-                layout_primitive()
+                layout()
                     .modifier(Modifier::new().padding(content_padding).fill_max_size())
                     .child(move || {
                         content.render();
                     });
             }
             if let Some(bottom_bar) = bottom_bar {
-                layout_primitive()
+                layout()
                     .modifier(Modifier::new().align(Alignment::BottomCenter))
                     .child(move || {
                         bottom_bar.render();
                     });
             }
             if let Some(top_bar) = top_bar {
-                layout_primitive()
+                layout()
                     .modifier(Modifier::new().align(Alignment::TopCenter))
                     .child(move || {
                         top_bar.render();
                     });
             }
             if let Some(snackbar_host) = snackbar_host {
-                layout_primitive()
+                layout()
                     .modifier(
                         Modifier::new()
                             .align(snackbar_alignment)
@@ -147,7 +147,7 @@ pub fn scaffold(
                     });
             }
             if let Some(floating_action_button) = floating_action_button {
-                layout_primitive()
+                layout()
                     .modifier(
                         Modifier::new()
                             .align(fab_alignment)
@@ -165,7 +165,7 @@ pub fn scaffold(
 mod tests {
     use tessera_ui::{
         ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-        NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+        NoopRenderPolicy, Px, layout::layout, tessera,
     };
 
     use crate::modifier::{ModifierExt as _, SemanticsArgs};
@@ -193,7 +193,7 @@ mod tests {
 
     #[tessera]
     fn fixed_test_box(tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {

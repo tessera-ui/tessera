@@ -11,8 +11,7 @@ use tessera_ui::{
     KeyboardInputModifierNode, MeasurementError, Modifier, PointerInput, PointerInputModifierNode,
     Px, PxPosition, State, key,
     layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, RenderInput, RenderPolicy,
-        layout_primitive,
+        LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, RenderInput, RenderPolicy, layout,
     },
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     receive_frame_nanos, remember, tessera, winit,
@@ -1030,7 +1029,7 @@ fn pager_render(args: PagerConfig, controller: State<PagerController>, axis: Pag
     );
 
     if visible_pages.is_empty() {
-        layout_primitive()
+        layout()
             .modifier(args.modifier.clone())
             .layout_policy(ZeroLayout);
         return;
@@ -1070,7 +1069,7 @@ fn pager_render(args: PagerConfig, controller: State<PagerController>, axis: Pag
         scroll_offset: controller.with(|current| current.scroll_offset_px()),
         controller,
     };
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(policy.clone())
         .render_policy(policy)

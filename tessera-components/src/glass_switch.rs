@@ -10,7 +10,7 @@ use tessera_ui::{
     Px, PxPosition, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout},
     receive_frame_nanos, remember, tessera,
 };
 
@@ -234,7 +234,7 @@ pub fn glass_switch(
     let progress = controller.with(|c| c.animation_progress());
     let track_color = interpolate_color(track_off_color, track_on_color, progress);
 
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(GlassSwitchLayout {
             width: width_px,

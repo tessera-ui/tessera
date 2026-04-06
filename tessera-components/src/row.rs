@@ -5,8 +5,7 @@
 //! Use to stack children horizontally.
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutPolicy,
-    MeasurementError, Modifier, NodeId, Px, PxPosition, RenderSlot, layout::layout_primitive,
-    tessera,
+    MeasurementError, Modifier, NodeId, Px, PxPosition, RenderSlot, layout::layout, tessera,
 };
 
 use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
@@ -121,7 +120,7 @@ pub fn row(
     children: RenderSlot,
 ) {
     let modifier = modifier.unwrap_or_default();
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(RowLayout {
             main_axis_alignment,
@@ -472,7 +471,7 @@ fn calculate_cross_axis_offset(
 mod tests {
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+        Modifier, NoopRenderPolicy, Px, layout::layout, tessera,
     };
 
     use crate::{
@@ -527,7 +526,7 @@ mod tests {
 
     #[tessera]
     fn fixed_test_box(tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -538,7 +537,7 @@ mod tests {
 
     #[tessera]
     fn fill_width_test_box(tag: String, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FillWidthTestLayout { height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -558,11 +557,9 @@ mod tests {
             .cross_axis_alignment(CrossAxisAlignment::Start)
             .children(|| {
                 row_fixed_box();
-                layout_primitive()
-                    .modifier(Modifier::new().weight(1.0))
-                    .child(|| {
-                        row_weighted_content_box();
-                    });
+                layout().modifier(Modifier::new().weight(1.0)).child(|| {
+                    row_weighted_content_box();
+                });
             });
     }
 

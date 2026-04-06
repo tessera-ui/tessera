@@ -6,8 +6,8 @@
 //! types.
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    CallbackWith, Color, Dp, Modifier, RenderSlot, State, layout::layout_primitive, remember,
-    tessera, use_context, winit,
+    CallbackWith, Color, Dp, Modifier, RenderSlot, State, layout::layout, remember, tessera,
+    use_context, winit,
 };
 
 use crate::{
@@ -370,7 +370,7 @@ pub fn docked_search_bar(
 fn render_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
     let render_args = build_search_bar_props(args, kind);
     let modifier = render_args.modifier.clone();
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let mut builder = search_bar_inner()
             .kind(render_args.kind)
             .enabled(render_args.enabled)
@@ -580,7 +580,7 @@ fn search_bar_inner(
         content,
     };
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let placeholder = placeholder.clone();
         let leading_icon = leading_icon;
         let trailing_icon = trailing_icon;
@@ -638,7 +638,7 @@ fn render_results_surface(args: &SearchResultsSurfaceArgs) {
             column().children(move || {
                 horizontal_divider().color(divider_color);
                 let content = content;
-                layout_primitive()
+                layout()
                     .modifier(Modifier::new().padding_all(content_padding))
                     .child(move || {
                         content.render();

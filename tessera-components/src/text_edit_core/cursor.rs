@@ -5,7 +5,7 @@
 //! Show insertion point feedback inside text editing components.
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
-    RenderInput, RenderPolicy, layout::layout_primitive, tessera,
+    RenderInput, RenderPolicy, layout::layout, tessera,
 };
 
 use crate::pipelines::shape::command::ShapeCommand;
@@ -80,9 +80,7 @@ fn cursor_visual(
         visible,
         color,
     };
-    layout_primitive()
-        .layout_policy(policy.clone())
-        .render_policy(policy);
+    layout().layout_policy(policy.clone()).render_policy(policy);
 }
 
 pub(super) fn cursor(

@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Use for visually distinctive actions in layered or modern UIs.
-use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, layout::layout_primitive, tessera};
+use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, layout::layout, tessera};
 
 use crate::{
     button::ButtonDefaults,
@@ -156,7 +156,7 @@ pub fn glass_button(
         None,
     );
 
-    layout_primitive().modifier(outer_modifier).child(move || {
+    layout().modifier(outer_modifier).child(move || {
         let mut builder = fluid_glass()
             .modifier(Modifier::new())
             .tint_color(button_args.tint_color)

@@ -5,7 +5,7 @@
 //! Use to indicate the completion of a task or a specific value in a range.
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, MeasurementError, Modifier, Px, PxPosition,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     tessera,
 };
 
@@ -33,7 +33,7 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
 #[tessera]
 fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Shape) {
     let value = value.clamp(0.0, 1.0);
-    layout_primitive()
+    layout()
         .layout_policy(GlassProgressFillLayout { value })
         .child(move || {
             fluid_glass()
@@ -133,7 +133,7 @@ pub fn glass_progress(
     let blur_radius = blur_radius.unwrap_or(Dp(8.0));
     let track_border_width = track_border_width.unwrap_or(Dp(1.0));
     let height_px = height.to_px();
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(GlassProgressLayout { height: height_px })
         .child(move || {

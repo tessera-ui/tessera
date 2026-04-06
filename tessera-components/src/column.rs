@@ -6,7 +6,7 @@
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, LayoutInput, LayoutOutput, LayoutPolicy,
     MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot,
-    layout::layout_primitive, tessera,
+    layout::layout, tessera,
 };
 
 use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
@@ -54,7 +54,7 @@ pub fn column(
     children: RenderSlot,
 ) {
     let modifier = modifier.unwrap_or_default();
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(ColumnLayout {
             main_axis_alignment,
@@ -478,7 +478,7 @@ fn calculate_cross_axis_offset_for_column(
 mod tests {
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+        Modifier, NoopRenderPolicy, Px, layout::layout, tessera,
     };
 
     use crate::{
@@ -533,7 +533,7 @@ mod tests {
 
     #[tessera]
     fn fixed_test_box(tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -544,7 +544,7 @@ mod tests {
 
     #[tessera]
     fn fill_height_test_box(tag: String, width: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FillHeightTestLayout { width })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -598,13 +598,11 @@ mod tests {
                     .tag("column_weighted_fixed".to_string())
                     .width(20)
                     .height(10);
-                layout_primitive()
-                    .modifier(Modifier::new().weight(1.0))
-                    .child(|| {
-                        fill_height_test_box()
-                            .tag("column_weighted_fill".to_string())
-                            .width(15);
-                    });
+                layout().modifier(Modifier::new().weight(1.0)).child(|| {
+                    fill_height_test_box()
+                        .tag("column_weighted_fill".to_string())
+                        .width(15);
+                });
             });
     }
 

@@ -11,9 +11,7 @@ use std::{
 use image::GenericImageView;
 use tessera_ui::{
     AssetExt, ComputedData, MeasurementError, Modifier, Px,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
-    },
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
     tessera,
 };
 use thiserror::Error;
@@ -211,7 +209,7 @@ impl RenderPolicy for ImageLayout {
 pub fn image(#[prop(skip_setter)] data: Option<Arc<ImageData>>, modifier: Modifier) {
     let data = data.unwrap_or_else(placeholder_image_data);
     let policy = ImageLayout { data: data.clone() };
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(policy.clone())
         .render_policy(policy);

@@ -7,9 +7,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, Dp, MeasurementError, Modifier, ParentConstraint, Px,
     PxPosition,
     accesskit::Role,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
-    },
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
     receive_frame_nanos, remember, tessera,
     time::Instant,
     use_context,
@@ -557,7 +555,7 @@ pub fn linear_progress_indicator(
     let gap_size = gap_size.unwrap_or(ProgressIndicatorDefaults::LINEAR_INDICATOR_TRACK_GAP_SIZE);
     let draw_stop_indicator = draw_stop_indicator.unwrap_or(true);
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let animation_start = remember(Instant::now);
         let frame_tick = remember(|| 0_u64);
         let should_receive_frames = remember(|| progress.is_none());
@@ -606,7 +604,7 @@ pub fn linear_progress_indicator(
             Some(linear_cycle_progress(animation_start.get(), 1750))
         };
 
-        layout_primitive()
+        layout()
             .modifier(Modifier::new().semantics(semantics))
             .layout_policy(LinearProgressLayout {
                 progress,
@@ -816,7 +814,7 @@ pub fn circular_progress_indicator(
         gap_size,
         animation_start: animation_start.get(),
     };
-    layout_primitive()
+    layout()
         .modifier(Modifier::new().semantics(semantics))
         .layout_policy(policy.clone())
         .render_policy(policy);

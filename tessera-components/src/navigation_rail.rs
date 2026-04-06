@@ -11,7 +11,7 @@ use tessera_ui::{
     MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -139,7 +139,7 @@ fn navigation_rail_item_view_content(
     .round()
     .max(0.0) as i32);
 
-    layout_primitive()
+    layout()
         .layout_policy(NavigationRailItemLayout {
             icon_position,
             has_label,
@@ -436,7 +436,7 @@ fn navigation_rail_item_view(
     };
 
     let modifier = Modifier::new().selectable_with(selectable_args);
-    layout_primitive().modifier(modifier).child({
+    layout().modifier(modifier).child({
         let item = item.clone();
         move || {
             navigation_rail_item_view_content()
@@ -503,7 +503,7 @@ pub fn navigation_rail_item(
         index
     };
 
-    layout_primitive()
+    layout()
         .modifier(Modifier::new().padding(Padding::new(
             Dp::ZERO,
             Dp::ZERO,
@@ -639,7 +639,7 @@ pub fn navigation_rail(
     let modifier = Modifier::new()
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::vertical().wrap(true));
-    layout_primitive().modifier(modifier).child({
+    layout().modifier(modifier).child({
         let composition = composition.clone();
         move || {
             let composition = composition.clone();
@@ -670,8 +670,7 @@ pub fn navigation_rail(
                                     .children(move || {
                                         header.render();
                                     });
-                                layout_primitive()
-                                    .modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
+                                layout().modifier(Modifier::new().height(HEADER_BOTTOM_PADDING));
                             }
 
                             let provided_context = content_context.clone();

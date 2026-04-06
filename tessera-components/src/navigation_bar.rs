@@ -11,7 +11,7 @@ use tessera_ui::{
     MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -122,7 +122,7 @@ fn navigation_bar_item_view_content(
         .round()
         .max(0.0) as i32);
 
-    layout_primitive()
+    layout()
         .layout_policy(NavigationBarItemLayout {
             selection_fraction,
             always_show_label,
@@ -385,7 +385,7 @@ fn navigation_bar_item_view(
     };
 
     let modifier = Modifier::new().selectable_with(selectable_args);
-    layout_primitive().modifier(modifier).child({
+    layout().modifier(modifier).child({
         let item = item.clone();
         move || {
             navigation_bar_item_view_content()
@@ -453,7 +453,7 @@ pub fn navigation_bar_item(
         index
     };
 
-    layout_primitive()
+    layout()
         .modifier(Modifier::new().weight(1.0))
         .child(move || {
             let item = NavigationBarItemDefinition {
@@ -534,7 +534,7 @@ pub fn navigation_bar(controller: Option<State<NavigationBarController>>, conten
     let modifier = Modifier::new()
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
-    layout_primitive().modifier(modifier).child({
+    layout().modifier(modifier).child({
         let composition = composition.clone();
         move || {
             let composition = composition.clone();

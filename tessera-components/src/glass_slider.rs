@@ -8,7 +8,7 @@ use tessera_ui::{
     CallbackWith, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester,
     MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, State,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera,
     winit::window::CursorIcon,
@@ -378,7 +378,7 @@ fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
         .with_child(|| {});
 
     let clamped = value.clamp(0.0, 1.0);
-    layout_primitive().layout_policy(GlassSliderFillLayout { value: clamped });
+    layout().layout_policy(GlassSliderFillLayout { value: clamped });
 }
 
 #[derive(Clone, PartialEq)]
@@ -457,7 +457,7 @@ fn render_glass_slider(args: GlassSliderConfig) {
         drag_recognizer,
     );
 
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(GlassSliderLayout {
             track_height: args.track_height.to_px(),

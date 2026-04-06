@@ -10,7 +10,7 @@ use tessera_ui::{
     Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout},
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -636,7 +636,7 @@ fn render_switch(
             + (SwitchDefaults::THUMB_DIAMETER.0 - off_diameter.0) * eased_progress_f64)
     };
     let thumb_size_px = thumb_diameter_dp.to_px();
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(SwitchLayout {
             track_width: width,
@@ -702,7 +702,7 @@ fn render_switch(
             } else {
                 state_layer.with_child(|| {});
             }
-            layout_primitive()
+            layout()
                 .layout_policy(SwitchThumbLayout {
                     size: thumb_size_px,
                 })
@@ -741,8 +741,7 @@ fn render_switch(
 mod tests {
     use tessera_ui::{
         ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Modifier,
-        NoopRenderPolicy, Px, PxPosition, layout::layout_primitive, receive_frame_nanos, remember,
-        tessera,
+        NoopRenderPolicy, Px, PxPosition, layout::layout, receive_frame_nanos, remember, tessera,
     };
 
     use crate::modifier::{ModifierExt as _, SemanticsArgs};
@@ -802,7 +801,7 @@ mod tests {
 
     #[tessera]
     fn tagged_probe(tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedSizePolicy { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {
@@ -836,7 +835,7 @@ mod tests {
         }
 
         let offset = controller.with(|c| (c.animation_progress() * 100.0).round() as i32);
-        layout_primitive()
+        layout()
             .layout_policy(OffsetChildPolicy { x: offset })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new())

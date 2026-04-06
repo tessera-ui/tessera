@@ -14,7 +14,7 @@ use parking_lot::Mutex;
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, ComputedData, Constraint, Dp, FocusDirection,
     MeasurementError, Modifier, NodeId, ParentConstraint, Px, PxPosition, RenderSlot, State, key,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context,
 };
@@ -594,7 +594,7 @@ fn lazy_list_view(
     });
 
     if visible_children.children.is_empty() {
-        layout_primitive().layout_policy(ZeroLayout);
+        layout().layout_policy(ZeroLayout);
         return;
     }
 
@@ -619,7 +619,7 @@ fn lazy_list_view(
         .collect();
 
     let children = visible_children.children;
-    layout_primitive()
+    layout()
         .modifier(focus_modifier)
         .layout_policy(LazyListLayout {
             axis,
@@ -1536,7 +1536,7 @@ fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
 mod tests {
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, PxPosition, layout::layout_primitive, remember, tessera,
+        Modifier, NoopRenderPolicy, Px, PxPosition, layout::layout, remember, tessera,
     };
 
     use crate::{
@@ -1567,7 +1567,7 @@ mod tests {
 
     #[tessera]
     fn fixed_test_box(tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {

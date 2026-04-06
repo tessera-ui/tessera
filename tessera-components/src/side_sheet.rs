@@ -10,7 +10,7 @@ use tessera_ui::{
     Callback, CallbackWith, Color, ComputedData, Constraint, Dp, FocusScopeNode,
     FocusTraversalPolicy, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -688,7 +688,7 @@ fn side_sheet_provider_render(
 
     let progress = calc_progress_from_timer(timer_opt);
 
-    layout_primitive()
+    layout()
         .layout_policy(SideSheetLayout {
             progress,
             is_open,
@@ -748,7 +748,7 @@ fn side_sheet_content_wrapper(
     if just_opened {
         focus_scope.restore_focus();
     }
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let content = content;
         if is_modal {
             surface()
@@ -767,7 +767,7 @@ fn side_sheet_content_wrapper(
                         position,
                         parent_nested_scroll,
                     );
-                    layout_primitive()
+                    layout()
                         .modifier(Modifier::new().padding_all(Dp(16.0)))
                         .child(move || {
                             let content = content;
@@ -795,7 +795,7 @@ fn side_sheet_content_wrapper(
                         position,
                         parent_nested_scroll,
                     );
-                    layout_primitive()
+                    layout()
                         .modifier(Modifier::new().padding_all(Dp(16.0)))
                         .child(move || {
                             let content = content;

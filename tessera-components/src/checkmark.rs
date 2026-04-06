@@ -23,7 +23,7 @@
 //! [`checkmark`] function documentation.
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError, Px,
-    RenderInput, RenderPolicy, layout::layout_primitive, tessera,
+    RenderInput, RenderPolicy, layout::layout, tessera,
 };
 
 use crate::pipelines::checkmark::command::CheckmarkCommand;
@@ -106,7 +106,5 @@ pub fn checkmark(
         progress,
         padding,
     };
-    layout_primitive()
-        .layout_policy(policy.clone())
-        .render_policy(policy);
+    layout().layout_policy(policy.clone()).render_policy(policy);
 }

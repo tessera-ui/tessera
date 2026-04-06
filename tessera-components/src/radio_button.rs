@@ -8,7 +8,7 @@ use std::time::Duration;
 
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, Dp, FocusState, FocusTraversalPolicy, Modifier,
-    Px, PxSize, RenderSlot, State, accesskit::Role, current_frame_nanos, layout::layout_primitive,
+    Px, PxSize, RenderSlot, State, accesskit::Role, current_frame_nanos, layout::layout,
     modifier::FocusModifierExt as _, provide_context, receive_frame_nanos, remember, tessera,
     use_context,
 };
@@ -190,7 +190,7 @@ pub fn radio_group(
         }
         .wrap(wrap),
     );
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let content = content;
         provide_context(
             || RadioGroupContext,

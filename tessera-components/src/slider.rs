@@ -9,7 +9,7 @@ use tessera_ui::{
     ComputedData, Constraint, Dp, FocusProperties, FocusRequester, MeasurementError, Modifier,
     PointerInput, PointerInputModifierNode, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
 };
@@ -150,7 +150,7 @@ fn range_slider_thumb(
         accessibility,
     );
 
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .child(move || render_handle(thumb_layout, handle_width, &colors));
 }
@@ -1174,7 +1174,7 @@ fn render_slider(args: SliderConfig) {
         clamped_value,
     );
 
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(SliderLayoutPolicy {
             args: args.clone(),
@@ -1514,7 +1514,7 @@ fn render_centered_slider(args: SliderConfig) {
         clamped_value,
     );
 
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(CenteredSliderLayoutPolicy {
             args: args.clone(),
@@ -1849,7 +1849,7 @@ fn render_range_slider(args: RangeSliderConfig) {
         end,
     );
 
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(RangeSliderLayoutPolicy {
             args: args.clone(),

@@ -6,7 +6,7 @@
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, Dp, MeasurementError, Modifier, Px, PxPosition,
     RenderSlot,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     tessera,
 };
 
@@ -69,7 +69,7 @@ pub fn flow_column(
     let line_spacing = sanitize_spacing(Px::from(line_spacing));
     let max_items_per_line = max_items_per_line.unwrap_or(usize::MAX);
     let max_lines = max_lines.unwrap_or(usize::MAX);
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(FlowColumnLayout {
             main_axis_alignment,
@@ -556,7 +556,7 @@ fn px_from_i64(value: i64) -> Px {
 mod tests {
     use tessera_ui::{
         AxisConstraint, ComputedData, LayoutInput, LayoutOutput, LayoutPolicy, MeasurementError,
-        Modifier, NoopRenderPolicy, Px, layout::layout_primitive, tessera,
+        Modifier, NoopRenderPolicy, Px, layout::layout, tessera,
     };
 
     use crate::{
@@ -587,7 +587,7 @@ mod tests {
 
     #[tessera]
     fn fixed_test_box(tag: String, width: i32, height: i32) {
-        layout_primitive()
+        layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
             .modifier(Modifier::new().semantics(SemanticsArgs {

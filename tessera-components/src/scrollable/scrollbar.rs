@@ -7,7 +7,7 @@ use tessera_ui::{
     Dp, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     current_frame_nanos,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, layout},
     modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera,
 };
@@ -891,7 +891,7 @@ pub fn scrollbar_v(
     let progress = compute_thumb_progress(args.offset, args.total);
     let thumb_y = args.visible.to_f32() * progress;
 
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(ScrollBarVLayout {
             thumb_offset: Px::from_f32(thumb_y),
@@ -1006,7 +1006,7 @@ pub fn scrollbar_h(
     let progress = compute_thumb_progress(args.offset, args.total);
     let thumb_x = args.visible.to_f32() * progress;
 
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(ScrollBarHLayout {
             thumb_offset: Px::from_f32(thumb_x),

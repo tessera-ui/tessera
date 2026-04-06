@@ -11,7 +11,7 @@ use tessera_ui::{
     FocusTraversalPolicy, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, PxSize,
     RenderSlot, State,
     accesskit::Role,
-    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout_primitive},
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context, winit,
 };
@@ -528,7 +528,7 @@ pub fn menu_provider(
     }
 
     // Measurement: place main content, background, and menu based on anchor.
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(MenuLayout {
             placement: provider_args.placement,
@@ -621,7 +621,7 @@ fn menu_panel(
         focus_scope.restore_focus();
     }
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let menu_content = menu_content;
         surface()
             .style(SurfaceStyle::Filled {
@@ -974,7 +974,7 @@ fn menu_item_surface(
         Modifier::new()
     };
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let mut surface_args = surface()
             .style(SurfaceStyle::Filled {
                 color: Color::TRANSPARENT,

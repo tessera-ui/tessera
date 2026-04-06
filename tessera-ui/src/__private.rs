@@ -14,7 +14,7 @@ use crate::{
 };
 
 pub use crate::{
-    layout::layout_primitive,
+    layout::layout,
     prop::{Prop, make_component_runner},
     runtime::{
         CurrentComponentInstanceGuard, GroupGuard, NodeContextGuard, PathGroupGuard, PhaseGuard,

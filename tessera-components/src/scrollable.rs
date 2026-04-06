@@ -13,8 +13,7 @@ use tessera_ui::{
     current_frame_nanos,
     focus::FocusRevealRequest,
     layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, RenderInput, RenderPolicy,
-        layout_primitive,
+        LayoutInput, LayoutOutput, LayoutPolicy, PlacementInput, RenderInput, RenderPolicy, layout,
     },
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     receive_frame_nanos, remember, tessera,
@@ -681,7 +680,7 @@ pub fn scrollable(
 
     match scrollbar_layout {
         ScrollBarLayout::Alongside => {
-            layout_primitive().modifier(modifier).child(move || {
+            layout().modifier(modifier).child(move || {
                 scrollable_with_alongside_scrollbar()
                     .controller(controller)
                     .vertical(vertical)
@@ -695,7 +694,7 @@ pub fn scrollable(
             });
         }
         ScrollBarLayout::Overlay => {
-            layout_primitive().modifier(modifier).child(move || {
+            layout().modifier(modifier).child(move || {
                 scrollable_with_overlay_scrollbar()
                     .controller(controller)
                     .vertical(vertical)
@@ -801,7 +800,7 @@ fn scrollable_with_alongside_scrollbar(
     let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
     let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
 
-    layout_primitive()
+    layout()
         .layout_policy(ScrollableAlongsideLayout {
             vertical,
             horizontal,
@@ -1170,7 +1169,7 @@ fn scrollable_viewport(
         horizontal,
         has_override,
     };
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(policy.clone())
         .render_policy(policy)

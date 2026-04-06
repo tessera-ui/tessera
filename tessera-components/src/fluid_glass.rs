@@ -8,9 +8,7 @@ use tessera_ui::{
     PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
-    },
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
     modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera,
 };
@@ -271,7 +269,7 @@ pub fn fluid_glass(
         border,
     };
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         let mut builder = fluid_glass_inner()
             .render(render.clone())
             .blur_radius(blur_radius)
@@ -336,7 +334,7 @@ fn fluid_glass_inner(
         contrast,
         padding,
     };
-    layout_primitive()
+    layout()
         .modifier(modifier)
         .layout_policy(policy.clone())
         .render_policy(policy)

@@ -31,9 +31,7 @@ use tessera_platform::clipboard;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Dp, FocusRequester, MeasurementError, Px, PxPosition, State,
     current_frame_nanos,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
-    },
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
     receive_frame_nanos, tessera,
     time::Instant,
     winit,
@@ -3418,7 +3416,7 @@ pub fn text_edit_core(controller: Option<State<TextEditorController>>) {
         controller,
         layout_version,
     };
-    layout_primitive()
+    layout()
         .layout_policy(policy.clone())
         .render_policy(policy)
         .child(move || {

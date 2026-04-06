@@ -8,7 +8,7 @@ use tessera_foundation::gesture::{TapRecognizer, TapSettings};
 use tessera_ui::{
     Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutInput, LayoutOutput,
     LayoutPolicy, MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
-    layout::layout_primitive, modifier::CursorModifierExt as _, provide_context, remember, tessera,
+    layout::layout, modifier::CursorModifierExt as _, provide_context, remember, tessera,
     use_context, winit,
 };
 
@@ -594,7 +594,7 @@ fn outlined_floating_label(
     notch_padding: Dp,
     notch_vertical_padding: Dp,
 ) {
-    layout_primitive()
+    layout()
         .layout_policy(OutlinedFloatingLabelLayout {
             label_offset: PxPosition::new(label_offset_x.into(), label_offset_y.into()),
             notch_padding: notch_padding.into(),
@@ -753,7 +753,7 @@ fn render_text_field(
                                         && let Some(placeholder_text) = placeholder_text.as_ref()
                                     {
                                         let placeholder_text = placeholder_text.clone();
-                                        layout_primitive()
+                                        layout()
                                             .modifier(Modifier::new().align(Alignment::TopStart))
                                             .child(move || {
                                                 let (font_size, line_height) = placeholder_style;
@@ -787,7 +787,7 @@ fn render_text_field(
                                                     notch_padding,
                                                     notch_vertical_padding,
                                                 };
-                                                layout_primitive()
+                                                layout()
                                                     .modifier(
                                                         Modifier::new().align(Alignment::TopStart),
                                                     )
@@ -809,7 +809,7 @@ fn render_text_field(
                                                             );
                                                     });
                                             } else {
-                                                layout_primitive()
+                                                layout()
                                                     .modifier(
                                                         Modifier::new().align(Alignment::TopStart),
                                                     )
@@ -828,7 +828,7 @@ fn render_text_field(
                                                     });
                                             }
                                         } else {
-                                            layout_primitive()
+                                            layout()
                                                 .modifier(
                                                     Modifier::new().align(Alignment::TopStart),
                                                 )
@@ -882,7 +882,7 @@ fn render_text_field(
                 };
 
                 if show_indicator {
-                    layout_primitive()
+                    layout()
                         .modifier(Modifier::new().align(Alignment::BottomStart))
                         .child(move || {
                             horizontal_divider()
@@ -1254,7 +1254,7 @@ pub fn text_field(
         }
     });
 
-    layout_primitive().modifier(modifier).child(move || {
+    layout().modifier(modifier).child(move || {
         if menu_policy.enabled {
             let render_args = render_args.clone();
             let editor_args = editor_args.clone();

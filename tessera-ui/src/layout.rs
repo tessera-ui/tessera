@@ -589,7 +589,7 @@ impl Clone for Box<dyn RenderPolicyDyn> {
     }
 }
 
-/// Type-erased layout policy handle consumed by [`layout_primitive`].
+/// Type-erased layout policy handle consumed by [`layout`].
 ///
 /// Most callers do not construct this type directly. Instead, pass any
 /// [`LayoutPolicy`] to the `layout_policy(...)` builder method and rely on the
@@ -636,7 +636,7 @@ where
     }
 }
 
-/// Type-erased render policy handle consumed by [`layout_primitive`].
+/// Type-erased render policy handle consumed by [`layout`].
 ///
 /// Most callers do not construct this type directly. Instead, pass any
 /// [`RenderPolicy`] to the `render_policy(...)` builder method and rely on the
@@ -683,7 +683,7 @@ where
     }
 }
 
-/// # layout_primitive
+/// # layout
 ///
 /// Attach a layout policy, render policy, modifier chain, and optional child
 /// slot to the current component node.
@@ -707,12 +707,12 @@ where
 /// ```
 /// use tessera_ui::{
 ///     Modifier, NoopRenderPolicy, RenderSlot,
-///     layout::{DefaultLayoutPolicy, layout_primitive},
+///     layout::{DefaultLayoutPolicy, layout},
 /// };
 ///
 /// #[tessera_ui::tessera]
 /// fn primitive_example(modifier: Modifier, child: RenderSlot) {
-///     layout_primitive()
+///     layout()
 ///         .layout_policy(DefaultLayoutPolicy)
 ///         .render_policy(NoopRenderPolicy)
 ///         .modifier(modifier)
@@ -720,7 +720,7 @@ where
 /// }
 /// ```
 #[tessera(crate)]
-pub fn layout_primitive(
+pub fn layout(
     #[prop(into)] layout_policy: LayoutPolicyHandle,
     #[prop(into)] render_policy: RenderPolicyHandle,
     modifier: Modifier,

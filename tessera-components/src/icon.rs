@@ -7,9 +7,7 @@ use std::sync::{Arc, OnceLock};
 
 use tessera_ui::{
     AssetExt, AxisConstraint, Color, ComputedData, Dp, MeasurementError, Px,
-    layout::{
-        LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout_primitive,
-    },
+    layout::{LayoutInput, LayoutOutput, LayoutPolicy, RenderInput, RenderPolicy, layout},
     tessera, use_context,
 };
 
@@ -251,9 +249,7 @@ pub fn icon(
         tint_mode,
         rotation,
     };
-    layout_primitive()
-        .layout_policy(policy.clone())
-        .render_policy(policy);
+    layout().layout_policy(policy.clone()).render_policy(policy);
 }
 
 fn intrinsic_dimensions(content: &IconContent) -> (Px, Px) {
