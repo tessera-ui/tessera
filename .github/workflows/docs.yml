@@ -104,7 +104,7 @@ jobs:
                 <h1>Tessera</h1>
                 <p>Browse the generated Rust API documentation or open the web example.</p>
                 <nav>
-                  <a href="./tessera/">API Documentation</a>
+                  <a href="./tessera_ui/">API Documentation</a>
                   <a href="./example/">Web Example</a>
                 </nav>
               </main>
