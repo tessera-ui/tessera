@@ -54,17 +54,8 @@ impl LayoutPolicy for BadgedBoxLayout {
         let anchor = children[0];
         let badge = children[1];
 
-        let to_measure = vec![(badge, badge_constraint), (anchor, parent_constraint)];
-
-        let results = input.measure_children(to_measure)?;
-        let anchor_size = results
-            .get(&anchor)
-            .copied()
-            .expect("badged_box anchor must be measured");
-        let badge_data = results
-            .get(&badge)
-            .copied()
-            .expect("badged_box badge must be measured");
+        let badge_data = badge.measure(&badge_constraint)?;
+        let anchor_size = anchor.measure(&parent_constraint)?;
 
         result.place_child(anchor, PxPosition::new(Px(0), Px(0)));
 
@@ -124,7 +115,7 @@ impl LayoutPolicy for BadgeLayout {
 }
 
 impl RenderPolicy for BadgeLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
         let size = metadata
             .computed_data()
@@ -203,7 +194,7 @@ impl LayoutPolicy for BadgeWithContentLayout {
 }
 
 impl RenderPolicy for BadgeWithContentLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
         let size = metadata
             .computed_data()

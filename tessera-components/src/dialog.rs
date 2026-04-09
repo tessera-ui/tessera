@@ -359,7 +359,7 @@ impl LayoutPolicy for DialogContentLayout {
 }
 
 impl RenderPolicy for DialogContentLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         input.metadata_mut().multiply_opacity(self.alpha);
     }
 }

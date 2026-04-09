@@ -157,7 +157,7 @@ impl LayoutPolicy for ImageLayout {
 }
 
 impl RenderPolicy for ImageLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let image_command = ImageCommand {
             data: self.data.clone(),
             opacity: 1.0,

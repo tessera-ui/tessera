@@ -54,13 +54,13 @@ pub struct LayoutModifierOutput {
 /// Draw continuation used by draw modifier nodes.
 pub trait DrawModifierContent {
     /// Records the wrapped content.
-    fn draw(&mut self, input: &RenderInput<'_>);
+    fn draw(&mut self, input: &mut RenderInput<'_>);
 }
 
 /// Draw input passed to draw modifier nodes.
-pub struct DrawModifierContext<'a> {
+pub struct DrawModifierContext<'a, 'b> {
     /// The render input for the current node.
-    pub render_input: &'a RenderInput<'a>,
+    pub render_input: &'a mut RenderInput<'b>,
 }
 
 /// A node-local layout modifier.
@@ -83,7 +83,7 @@ pub trait PlacementModifierNode: Send + Sync + 'static {
 /// A node-local draw modifier.
 pub trait DrawModifierNode: Send + Sync + 'static {
     /// Records drawing behavior around the wrapped content.
-    fn draw(&self, ctx: &mut DrawModifierContext<'_>, content: &mut dyn DrawModifierContent);
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent);
 }
 
 /// A node-local parent-data modifier.

@@ -292,12 +292,8 @@ impl LayoutPolicy for GlassSwitchLayout {
         let track_constraint = Constraint::exact(self.width, self.height);
         let thumb_constraint = Constraint::NONE;
 
-        let nodes_constraints = vec![(track, track_constraint), (thumb, thumb_constraint)];
-        let sizes_map = input.measure_children(nodes_constraints)?;
-
-        let thumb_size = sizes_map
-            .get(&thumb)
-            .expect("thumb size should be measured");
+        let _ = track.measure(&track_constraint)?;
+        let thumb_size = thumb.measure(&thumb_constraint)?;
 
         let eased_progress = animation::easing(self.progress);
 

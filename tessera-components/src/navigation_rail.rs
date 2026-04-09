@@ -247,31 +247,16 @@ impl LayoutPolicy for NavigationRailItemLayout {
         };
 
         let child_constraint = Constraint::NONE;
-        let children_to_measure: Vec<_> = children
-            .iter()
-            .copied()
-            .map(|child| (child, child_constraint))
-            .collect();
-        let children_results = input.measure_children(children_to_measure)?;
-
-        let indicator_size = children_results
-            .get(&indicator_background)
-            .copied()
-            .map(|size| size.size())
-            .unwrap_or(ComputedData::ZERO);
-        let indicator_ripple_size = children_results
-            .get(&indicator_ripple)
-            .copied()
-            .map(|size| size.size())
-            .unwrap_or(ComputedData::ZERO);
+        let indicator_size = indicator_background.measure(&child_constraint)?.size();
+        let indicator_ripple_size = indicator_ripple.measure(&child_constraint)?.size();
         let icon_size = icon_id
-            .and_then(|id| children_results.get(&id))
-            .copied()
+            .map(|id| id.measure(&child_constraint))
+            .transpose()?
             .map(|size| size.size())
             .unwrap_or(ComputedData::ZERO);
         let label_size = label_id
-            .and_then(|id| children_results.get(&id))
-            .copied()
+            .map(|id| id.measure(&child_constraint))
+            .transpose()?
             .map(|size| size.size())
             .unwrap_or(ComputedData::ZERO);
 

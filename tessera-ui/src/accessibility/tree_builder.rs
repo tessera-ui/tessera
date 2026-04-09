@@ -93,7 +93,6 @@ fn traverse_and_collect(
     let accessibility_node = metadata.accessibility.clone();
     let abs_position = metadata.abs_position;
     let computed_data = metadata.computed_data;
-    drop(metadata);
 
     let mut has_accessible_descendants = false;
 

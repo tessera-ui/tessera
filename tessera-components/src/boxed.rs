@@ -112,20 +112,11 @@ impl LayoutPolicy for BoxedLayout {
         let mut max_child_height = Px(0);
         let mut children_sizes = vec![None; n];
 
-        let children_to_measure: Vec<_> = children
-            .iter()
-            .map(|child| (*child, effective_constraint))
-            .collect();
-
-        let children_results = input.measure_children(children_to_measure)?;
-
         for (i, child) in children.iter().enumerate().take(n) {
-            let child_id = *child;
-            if let Some(child_result) = children_results.get(&child_id) {
-                max_child_width = max_child_width.max(child_result.width);
-                max_child_height = max_child_height.max(child_result.height);
-                children_sizes[i] = Some(*child_result);
-            }
+            let child_result = child.measure(&effective_constraint)?;
+            max_child_width = max_child_width.max(child_result.width);
+            max_child_height = max_child_height.max(child_result.height);
+            children_sizes[i] = Some(child_result);
         }
 
         let final_width = resolve_final_dimension(effective_constraint.width, max_child_width);

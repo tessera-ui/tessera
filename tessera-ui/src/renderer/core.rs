@@ -5,8 +5,6 @@
 //! Drive frame submission and GPU resource setup for Tessera applications.
 
 use std::{io, sync::Arc, time::Duration};
-
-use parking_lot::RwLock;
 use winit::window::Window;
 
 use crate::{
@@ -59,7 +57,7 @@ pub(crate) struct RenderTimingBreakdown {
 struct ComputeState {
     target_a: wgpu::TextureView,
     target_b: wgpu::TextureView,
-    resource_manager: Arc<RwLock<ComputeResourceManager>>,
+    resource_manager: ComputeResourceManager,
 }
 
 struct BlitState {
@@ -354,9 +352,14 @@ impl RenderCore {
         self.targets.sample_count
     }
 
-    /// Returns the shared compute resource manager.
-    pub fn compute_resource_manager(&self) -> Arc<RwLock<ComputeResourceManager>> {
-        self.compute.resource_manager.clone()
+    /// Returns the frame-local compute resource manager.
+    pub fn compute_resource_manager_mut(&mut self) -> &mut ComputeResourceManager {
+        &mut self.compute.resource_manager
+    }
+
+    /// Returns the device and compute manager used during record.
+    pub fn record_resources(&mut self) -> (&wgpu::Device, &mut ComputeResourceManager) {
+        (&self.device, &mut self.compute.resource_manager)
     }
 
     /// Returns the timing breakdown for the most recent render call.

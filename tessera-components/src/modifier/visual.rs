@@ -50,10 +50,11 @@ pub(crate) struct AlphaModifierNode {
 }
 
 impl DrawModifierNode for AlphaModifierNode {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_>, content: &mut dyn DrawModifierContent) {
-        let mut metadata = ctx.render_input.metadata_mut();
-        metadata.multiply_opacity(self.alpha);
-        drop(metadata);
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
+        {
+            let mut metadata = ctx.render_input.metadata_mut();
+            metadata.multiply_opacity(self.alpha);
+        }
         content.draw(ctx.render_input);
     }
 }
@@ -62,7 +63,7 @@ impl DrawModifierNode for AlphaModifierNode {
 pub(crate) struct ClipModifierNode;
 
 impl DrawModifierNode for ClipModifierNode {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_>, content: &mut dyn DrawModifierContent) {
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
         ctx.render_input.metadata_mut().set_clips_children(true);
         content.draw(ctx.render_input);
     }
@@ -75,19 +76,20 @@ pub(crate) struct BackgroundModifierNode {
 }
 
 impl DrawModifierNode for BackgroundModifierNode {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_>, content: &mut dyn DrawModifierContent) {
-        let mut metadata = ctx.render_input.metadata_mut();
-        let size = metadata
-            .computed_data()
-            .expect("background modifier must have computed size before record");
-        metadata
-            .fragment_mut()
-            .push_draw_command(shape_background_command(
-                self.color,
-                self.shape,
-                size.into(),
-            ));
-        drop(metadata);
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
+        {
+            let mut metadata = ctx.render_input.metadata_mut();
+            let size = metadata
+                .computed_data()
+                .expect("background modifier must have computed size before record");
+            metadata
+                .fragment_mut()
+                .push_draw_command(shape_background_command(
+                    self.color,
+                    self.shape,
+                    size.into(),
+                ));
+        }
         content.draw(ctx.render_input);
     }
 }
@@ -100,7 +102,7 @@ pub(crate) struct BorderModifierNode {
 }
 
 impl DrawModifierNode for BorderModifierNode {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_>, content: &mut dyn DrawModifierContent) {
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
         content.draw(ctx.render_input);
         let mut metadata = ctx.render_input.metadata_mut();
         let size = metadata

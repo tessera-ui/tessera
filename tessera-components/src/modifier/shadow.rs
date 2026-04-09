@@ -47,20 +47,21 @@ pub(crate) struct ShadowModifierNode {
 }
 
 impl DrawModifierNode for ShadowModifierNode {
-    fn draw(&self, ctx: &mut DrawModifierContext<'_>, content: &mut dyn DrawModifierContent) {
-        let mut metadata = ctx.render_input.metadata_mut();
-        let Some(size) = metadata.computed_data() else {
-            return;
-        };
-        let size = PxSize::from(size);
-        if size.width.0 > 0 && size.height.0 > 0 {
-            record_md3_shadow(
-                metadata.fragment_mut(),
-                self.shadow,
-                self.shape.resolve_for_size(size),
-            );
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
+        {
+            let mut metadata = ctx.render_input.metadata_mut();
+            let Some(size) = metadata.computed_data() else {
+                return;
+            };
+            let size = PxSize::from(size);
+            if size.width.0 > 0 && size.height.0 > 0 {
+                record_md3_shadow(
+                    metadata.fragment_mut(),
+                    self.shadow,
+                    self.shape.resolve_for_size(size),
+                );
+            }
         }
-        drop(metadata);
         content.draw(ctx.render_input);
     }
 }

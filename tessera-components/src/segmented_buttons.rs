@@ -606,41 +606,28 @@ impl LayoutPolicy for SegmentedButtonRowLayout {
             row_constraint.height,
         );
 
-        let children_to_measure: Vec<_> = children
-            .iter()
-            .map(|&child| (child, child_constraint))
-            .collect();
         let mut children_sizes = vec![None; children.len()];
         let mut total_width = Px::ZERO;
         let mut max_width = Px::ZERO;
         let mut max_height = Px::ZERO;
-        let results = input.measure_children(children_to_measure)?;
-
         for (index, &child) in children.iter().enumerate() {
-            if let Some(child_result) = results.get(&child) {
-                children_sizes[index] = Some(child_result.size());
-                total_width += child_result.width;
-                max_width = max_width.max(child_result.width);
-                max_height = max_height.max(child_result.height);
-            }
+            let child_result = child.measure(&child_constraint)?;
+            children_sizes[index] = Some(child_result.size());
+            total_width += child_result.width;
+            max_width = max_width.max(child_result.width);
+            max_height = max_height.max(child_result.height);
         }
 
         if self.equal_width && max_width > Px::ZERO {
             let equal_constraint = Constraint::new(max_width, row_constraint.height);
-            let children_to_measure: Vec<_> = children
-                .iter()
-                .map(|&child| (child, equal_constraint))
-                .collect();
-            let results = input.measure_children(children_to_measure)?;
             total_width = Px::ZERO;
             max_height = Px::ZERO;
 
             for (index, &child) in children.iter().enumerate() {
-                if let Some(child_result) = results.get(&child) {
-                    children_sizes[index] = Some(child_result.size());
-                    total_width += child_result.width;
-                    max_height = max_height.max(child_result.height);
-                }
+                let child_result = child.measure(&equal_constraint)?;
+                children_sizes[index] = Some(child_result.size());
+                total_width += child_result.width;
+                max_height = max_height.max(child_result.height);
             }
         }
 

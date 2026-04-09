@@ -1812,7 +1812,7 @@ impl TesseraRuntime {
 
     pub(crate) fn set_current_accessibility(&mut self, accessibility: Option<AccessibilityNode>) {
         if let Some(node_id) = current_node_id()
-            && let Some(mut metadata) = self.component_tree.metadatas().get_mut(&node_id)
+            && let Some(metadata) = self.component_tree.metadatas_mut().get_mut(&node_id)
         {
             metadata.accessibility = accessibility;
         } else {
@@ -1828,7 +1828,7 @@ impl TesseraRuntime {
         handler: Option<AccessibilityActionHandler>,
     ) {
         if let Some(node_id) = current_node_id()
-            && let Some(mut metadata) = self.component_tree.metadatas().get_mut(&node_id)
+            && let Some(metadata) = self.component_tree.metadatas_mut().get_mut(&node_id)
         {
             metadata.accessibility_action_handler = handler;
         } else {

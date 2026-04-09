@@ -54,7 +54,7 @@ impl LayoutPolicy for SelectionHighlightLayout {
 }
 
 impl RenderPolicy for SelectionHighlightLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let drawable = ShapeCommand::Rect {
             color: self.color,
             corner_radii: glam::Vec4::ZERO.into(),

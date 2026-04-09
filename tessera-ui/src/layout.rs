@@ -5,16 +5,14 @@ use std::{
     cell::RefCell,
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
-    sync::Arc,
 };
-
-use parking_lot::RwLock;
 
 use crate::{
     ComputeResourceManager, ComputedData, Constraint, MeasurementError, ParentConstraint, Px,
     RenderSlot,
     component_tree::{
-        ComponentNodeMetaDatas, ComponentNodeTree, LayoutContext, measure_node, measure_nodes,
+        ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, LayoutContext,
+        measure_node,
     },
     modifier::{Modifier, OrderedModifierAction, ParentDataMap},
     prop::Prop,
@@ -36,7 +34,7 @@ pub struct LayoutInput<'a> {
     tree: &'a ComponentNodeTree,
     parent_constraint: ParentConstraint<'a>,
     children_ids: &'a [crate::NodeId],
-    metadatas: &'a ComponentNodeMetaDatas,
+    metadatas: *mut ComponentNodeMetaDatas,
     layout_ctx: Option<&'a LayoutContext<'a>>,
     measured_children: RefCell<HashMap<crate::NodeId, ChildMeasure>>,
 }
@@ -47,7 +45,7 @@ pub struct LayoutChild<'a> {
     node_id: crate::NodeId,
     instance_key: u64,
     tree: &'a ComponentNodeTree,
-    metadatas: &'a ComponentNodeMetaDatas,
+    metadatas: *mut ComponentNodeMetaDatas,
     layout_ctx: Option<&'a LayoutContext<'a>>,
     measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
 }
@@ -69,11 +67,15 @@ impl Hash for LayoutChild<'_> {
 impl<'a> LayoutChild<'a> {
     /// Measures this child under the given constraint.
     pub fn measure(&self, constraint: &Constraint) -> Result<MeasuredChild, MeasurementError> {
+        // SAFETY: Layout measurement is single-threaded. `LayoutChild` handles
+        // are created from a unique metadata borrow that outlives the measure
+        // pass and are only used during that pass.
+        let metadatas = unsafe { &mut *self.metadatas };
         let size = measure_node(
             self.node_id,
             constraint,
             self.tree,
-            self.metadatas,
+            metadatas,
             self.layout_ctx,
         )?;
         let mut measured_children = self.measured_children.borrow_mut();
@@ -105,11 +107,13 @@ impl<'a> LayoutChild<'a> {
         &self,
         constraint: &Constraint,
     ) -> Result<MeasuredChild, MeasurementError> {
+        // SAFETY: See `LayoutChild::measure`.
+        let metadatas = unsafe { &mut *self.metadatas };
         let size = measure_node(
             self.node_id,
             constraint,
             self.tree,
-            self.metadatas,
+            metadatas,
             self.layout_ctx,
         )?;
         Ok(MeasuredChild {
@@ -143,10 +147,6 @@ impl<'a> LayoutChild<'a> {
         value.downcast_ref::<T>().cloned()
     }
 
-    pub(crate) const fn node_id(&self) -> crate::NodeId {
-        self.node_id
-    }
-
     pub(crate) const fn instance_key(&self) -> u64 {
         self.instance_key
     }
@@ -173,32 +173,6 @@ impl MeasuredChild {
 
     pub(crate) const fn instance_key(&self) -> u64 {
         self.instance_key
-    }
-}
-
-/// Batched child measurement results keyed internally by layout-node id.
-pub struct MeasuredChildren {
-    by_node_id: HashMap<crate::NodeId, MeasuredChild>,
-}
-
-impl MeasuredChildren {
-    pub(crate) fn new(by_node_id: HashMap<crate::NodeId, MeasuredChild>) -> Self {
-        Self { by_node_id }
-    }
-
-    /// Returns the measured result for the given child handle.
-    pub fn get(&self, child: &LayoutChild<'_>) -> Option<&MeasuredChild> {
-        self.by_node_id.get(&child.node_id())
-    }
-
-    /// Returns an iterator over all measured child values.
-    pub fn values(&self) -> impl Iterator<Item = &MeasuredChild> {
-        self.by_node_id.values()
-    }
-
-    /// Consumes the collection and returns the measured child values.
-    pub fn into_values(self) -> impl Iterator<Item = MeasuredChild> {
-        self.by_node_id.into_values()
     }
 }
 
@@ -241,7 +215,7 @@ impl<'a> PlacementChild<'a> {
 /// Shared measurement helpers available during a layout pass.
 pub struct MeasureScope<'a> {
     tree: &'a ComponentNodeTree,
-    metadatas: &'a ComponentNodeMetaDatas,
+    metadatas: *mut ComponentNodeMetaDatas,
     layout_ctx: Option<&'a LayoutContext<'a>>,
     measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
     parent_constraint: ParentConstraint<'a>,
@@ -251,7 +225,7 @@ pub struct MeasureScope<'a> {
 impl<'a> MeasureScope<'a> {
     pub(crate) fn new(
         tree: &'a ComponentNodeTree,
-        metadatas: &'a ComponentNodeMetaDatas,
+        metadatas: *mut ComponentNodeMetaDatas,
         layout_ctx: Option<&'a LayoutContext<'a>>,
         measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
         parent_constraint: ParentConstraint<'a>,
@@ -293,113 +267,6 @@ impl<'a> MeasureScope<'a> {
                 }
             })
             .collect()
-    }
-
-    /// Measures all specified child nodes under the given constraint,
-    /// preserving input order.
-    pub fn measure_children<'b>(
-        &self,
-        nodes_to_measure: Vec<(LayoutChild<'b>, Constraint)>,
-    ) -> Result<MeasuredChildren, MeasurementError> {
-        let constraints: HashMap<crate::NodeId, Constraint> = nodes_to_measure
-            .iter()
-            .map(|(child, constraint)| (child.node_id(), *constraint))
-            .collect();
-        let results = measure_nodes(
-            nodes_to_measure
-                .iter()
-                .map(|(child, constraint)| (child.node_id(), *constraint))
-                .collect(),
-            self.tree,
-            self.metadatas,
-            self.layout_ctx,
-        );
-
-        let mut successful_results = HashMap::new();
-        for (child_id, result) in results {
-            match result {
-                Ok(size) => {
-                    if let Some(constraint) = constraints.get(&child_id) {
-                        let mut measured_children = self.measured_children.borrow_mut();
-                        if let Some(entry) = measured_children.get_mut(&child_id) {
-                            let consistent = entry.consistent
-                                && entry.constraint == *constraint
-                                && entry.size == size;
-                            entry.constraint = *constraint;
-                            entry.size = size;
-                            entry.consistent = consistent;
-                        } else {
-                            measured_children.insert(
-                                child_id,
-                                ChildMeasure {
-                                    constraint: *constraint,
-                                    size,
-                                    consistent: true,
-                                },
-                            );
-                        }
-                    }
-                    successful_results.insert(
-                        child_id,
-                        MeasuredChild {
-                            instance_key: self
-                                .tree
-                                .get(child_id)
-                                .expect("Measured child must exist in the tree")
-                                .get()
-                                .instance_key,
-                            width: size.width,
-                            height: size.height,
-                        },
-                    );
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-        }
-        Ok(MeasuredChildren::new(successful_results))
-    }
-
-    /// Measures child nodes without recording them for layout cache keys.
-    pub fn measure_children_untracked<'b>(
-        &self,
-        nodes_to_measure: Vec<(LayoutChild<'b>, Constraint)>,
-    ) -> Result<MeasuredChildren, MeasurementError> {
-        let results = measure_nodes(
-            nodes_to_measure
-                .iter()
-                .map(|(child, constraint)| (child.node_id(), *constraint))
-                .collect(),
-            self.tree,
-            self.metadatas,
-            self.layout_ctx,
-        );
-
-        let mut successful_results = HashMap::new();
-        for (child_id, result) in results {
-            match result {
-                Ok(size) => {
-                    successful_results.insert(
-                        child_id,
-                        MeasuredChild {
-                            instance_key: self
-                                .tree
-                                .get(child_id)
-                                .expect("Measured child must exist in the tree")
-                                .get()
-                                .instance_key,
-                            width: size.width,
-                            height: size.height,
-                        },
-                    );
-                }
-                Err(e) => {
-                    return Err(e);
-                }
-            };
-        }
-        Ok(MeasuredChildren::new(successful_results))
     }
 }
 
@@ -468,7 +335,7 @@ impl<'a> LayoutInput<'a> {
         tree: &'a ComponentNodeTree,
         parent_constraint: ParentConstraint<'a>,
         children_ids: &'a [crate::NodeId],
-        metadatas: &'a ComponentNodeMetaDatas,
+        metadatas: *mut ComponentNodeMetaDatas,
         layout_ctx: Option<&'a LayoutContext<'a>>,
     ) -> Self {
         Self {
@@ -613,9 +480,9 @@ impl LayoutPlacementTarget for PlacementChild<'_> {
 /// Input for a render record pass.
 pub struct RenderInput<'a> {
     current_node_id: crate::NodeId,
-    metadatas: &'a ComponentNodeMetaDatas,
-    /// Shared GPU compute resources for the current frame.
-    pub compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+    metadatas: &'a mut ComponentNodeMetaDatas,
+    /// Mutable GPU compute resources for the current frame.
+    pub compute_resource_manager: &'a mut ComputeResourceManager,
     /// GPU device for issuing render-side allocations.
     pub gpu: &'a wgpu::Device,
 }
@@ -623,8 +490,8 @@ pub struct RenderInput<'a> {
 impl<'a> RenderInput<'a> {
     pub(crate) fn new(
         current_node_id: crate::NodeId,
-        metadatas: &'a ComponentNodeMetaDatas,
-        compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+        metadatas: &'a mut ComponentNodeMetaDatas,
+        compute_resource_manager: &'a mut ComputeResourceManager,
         gpu: &'a wgpu::Device,
     ) -> Self {
         Self {
@@ -636,7 +503,7 @@ impl<'a> RenderInput<'a> {
     }
 
     /// Returns a mutable render metadata handle for the current node.
-    pub fn metadata_mut(&self) -> RenderMetadataMut<'_> {
+    pub fn metadata_mut(&mut self) -> RenderMetadataMut<'_> {
         let metadata = self
             .metadatas
             .get_mut(&self.current_node_id)
@@ -647,11 +514,7 @@ impl<'a> RenderInput<'a> {
 
 /// Mutable render metadata available during the record pass.
 pub struct RenderMetadataMut<'a> {
-    metadata: dashmap::mapref::one::RefMut<
-        'a,
-        crate::NodeId,
-        crate::component_tree::ComponentNodeMetaData,
-    >,
+    metadata: &'a mut ComponentNodeMetaData,
 }
 
 impl RenderMetadataMut<'_> {
@@ -703,7 +566,7 @@ pub trait LayoutPolicy: Send + Sync + Clone + PartialEq + 'static {
 /// Render policy for recording draw and compute commands for the current node.
 pub trait RenderPolicy: Send + Sync + Clone + PartialEq + 'static {
     /// Records draw and compute commands for the current node.
-    fn record(&self, _input: &RenderInput<'_>) {}
+    fn record(&self, _input: &mut RenderInput<'_>) {}
 }
 
 /// Type-erased layout policy used by the runtime.
@@ -773,7 +636,7 @@ pub trait RenderPolicyDyn: Send + Sync {
     /// Returns a typed reference for downcasting.
     fn as_any(&self) -> &dyn Any;
     /// Records render commands using a type-erased policy.
-    fn record_dyn(&self, input: &RenderInput<'_>);
+    fn record_dyn(&self, input: &mut RenderInput<'_>);
     /// Compares two type-erased policies for equality.
     fn dyn_eq(&self, other: &dyn RenderPolicyDyn) -> bool;
     /// Clones the type-erased policy.
@@ -788,7 +651,7 @@ where
         self
     }
 
-    fn record_dyn(&self, input: &RenderInput<'_>) {
+    fn record_dyn(&self, input: &mut RenderInput<'_>) {
         RenderPolicy::record(self, input);
     }
 
@@ -1007,18 +870,13 @@ impl LayoutPolicy for DefaultLayoutPolicy {
             )));
         }
 
-        let nodes_to_measure = children
-            .iter()
-            .map(|child| (*child, *scope.parent_constraint().as_ref()))
-            .collect();
-        let sizes = scope.measure_children(nodes_to_measure)?;
-
         let mut result = LayoutResult::new(ComputedData::ZERO);
         let mut final_width = Px(0);
         let mut final_height = Px(0);
-        for size in sizes.into_values() {
-            result.place_child(size, PxPosition::ZERO);
-            let size = size.size();
+        for child in children {
+            let measurement = child.measure(scope.parent_constraint().as_ref())?;
+            result.place_child(measurement, PxPosition::ZERO);
+            let size = measurement.size();
             final_width = final_width.max(size.width);
             final_height = final_height.max(size.height);
         }

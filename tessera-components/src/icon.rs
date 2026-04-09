@@ -167,7 +167,7 @@ impl LayoutPolicy for IconLayout {
 }
 
 impl RenderPolicy for IconLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
         match &self.content {
             IconContent::Vector(data) => {

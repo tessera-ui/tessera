@@ -367,7 +367,7 @@ impl RenderCore {
         let compute = ComputeState {
             target_a: compute_target_a,
             target_b: compute_target_b,
-            resource_manager: Arc::new(RwLock::new(ComputeResourceManager::new())),
+            resource_manager: ComputeResourceManager::new(),
         };
 
         let blit = BlitState {

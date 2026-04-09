@@ -690,46 +690,31 @@ impl LayoutPolicy for TabsLayout {
                 Px(final_width.0 / num_tabs as i32)
             };
 
-            let measure_constraints: Vec<_> = title_ids
-                .iter()
-                .map(|&id| {
-                    (
-                        id,
-                        Constraint::new(AxisConstraint::exact(tab_width), AxisConstraint::NONE),
-                    )
-                })
-                .collect();
-            let title_results = input.measure_children_untracked(measure_constraints)?;
-
             let mut titles_max_height = Px(0);
             for &title_id in title_ids {
-                if let Some(result) = title_results.get(&title_id) {
-                    titles_max_height = titles_max_height.max(result.height);
-                }
+                let result = title_id.measure_untracked(&Constraint::new(
+                    AxisConstraint::exact(tab_width),
+                    AxisConstraint::NONE,
+                ))?;
+                titles_max_height = titles_max_height.max(result.height);
             }
 
-            let intrinsic_constraints: Vec<_> = title_ids
+            let intrinsic_results: Vec<_> = title_ids
                 .iter()
                 .map(|&id| {
-                    (
-                        id,
-                        Constraint::new(
-                            AxisConstraint::at_most(tab_width),
-                            AxisConstraint::exact(titles_max_height),
-                        ),
-                    )
+                    id.measure_untracked(&Constraint::new(
+                        AxisConstraint::at_most(tab_width),
+                        AxisConstraint::exact(titles_max_height),
+                    ))
                 })
-                .collect();
-            let intrinsic_results = input.measure_children_untracked(intrinsic_constraints)?;
+                .collect::<Result<_, _>>()?;
 
             let indicator_widths: Vec<Px> = title_ids
                 .iter()
-                .map(|id| {
+                .enumerate()
+                .map(|(idx, _id)| {
                     if match_content_size {
-                        let intrinsic_width = intrinsic_results
-                            .get(id)
-                            .map_or(Px(0), |s| s.width)
-                            .min(tab_width);
+                        let intrinsic_width = intrinsic_results[idx].width.min(tab_width);
                         let content_width =
                             (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
                         Px::saturating_from_f32(content_width).max(indicator_min_width)
@@ -757,51 +742,32 @@ impl LayoutPolicy for TabsLayout {
             let min_tab_width: Px = self.args.min_scrollable_tab_width.into();
             let edge_padding: Px = self.args.edge_padding.into();
 
-            let measure_constraints: Vec<_> = title_ids
-                .iter()
-                .map(|&id| {
-                    (
-                        id,
-                        Constraint::new(
-                            AxisConstraint::at_least(min_tab_width),
-                            AxisConstraint::NONE,
-                        ),
-                    )
-                })
-                .collect();
-            let title_results = input.measure_children_untracked(measure_constraints)?;
-
             let mut tab_widths = Vec::with_capacity(num_tabs);
             let mut titles_max_height = Px(0);
             for &title_id in title_ids {
-                if let Some(result) = title_results.get(&title_id) {
-                    tab_widths.push(result.width);
-                    titles_max_height = titles_max_height.max(result.height);
-                }
+                let result = title_id.measure_untracked(&Constraint::new(
+                    AxisConstraint::at_least(min_tab_width),
+                    AxisConstraint::NONE,
+                ))?;
+                tab_widths.push(result.width);
+                titles_max_height = titles_max_height.max(result.height);
             }
 
-            let intrinsic_constraints: Vec<_> = title_ids
+            let intrinsic_results: Vec<_> = title_ids
                 .iter()
                 .map(|&id| {
-                    (
-                        id,
-                        Constraint::new(
-                            AxisConstraint::NONE,
-                            AxisConstraint::exact(titles_max_height),
-                        ),
-                    )
+                    id.measure_untracked(&Constraint::new(
+                        AxisConstraint::NONE,
+                        AxisConstraint::exact(titles_max_height),
+                    ))
                 })
-                .collect();
-            let intrinsic_results = input.measure_children_untracked(intrinsic_constraints)?;
+                .collect::<Result<_, _>>()?;
 
             let mut indicator_widths = Vec::with_capacity(num_tabs);
-            for (idx, &title_id) in title_ids.iter().enumerate() {
+            for (idx, &_title_id) in title_ids.iter().enumerate() {
                 let tab_width = tab_widths.get(idx).copied().unwrap_or(Px(0));
                 if match_content_size {
-                    let intrinsic_width = intrinsic_results
-                        .get(&title_id)
-                        .map_or(Px(0), |s| s.width)
-                        .min(tab_width);
+                    let intrinsic_width = intrinsic_results[idx].width.min(tab_width);
                     let content_width = (intrinsic_width.to_f32() - horizontal_padding).max(0.0);
                     let indicator_width =
                         Px::saturating_from_f32(content_width).max(indicator_min_width);
@@ -931,20 +897,12 @@ impl LayoutPolicy for TabsLayout {
         let final_height = tab_bar_height;
         let title_offset_y = Px((tab_bar_height.0 - titles_max_height.0) / 2).max(Px(0));
 
-        let title_constraints: Vec<_> = title_ids
-            .iter()
-            .enumerate()
-            .map(|(idx, &id)| {
-                (
-                    id,
-                    Constraint::new(
-                        AxisConstraint::exact(tab_widths.get(idx).copied().unwrap_or(Px(0))),
-                        AxisConstraint::exact(tab_bar_height),
-                    ),
-                )
-            })
-            .collect();
-        let _ = input.measure_children(title_constraints)?;
+        for (idx, &title_id) in title_ids.iter().enumerate() {
+            let _ = title_id.measure(&Constraint::new(
+                AxisConstraint::exact(tab_widths.get(idx).copied().unwrap_or(Px(0))),
+                AxisConstraint::exact(tab_bar_height),
+            ))?;
+        }
 
         let container_constraint = Constraint::new(
             AxisConstraint::exact(final_width),
@@ -985,7 +943,7 @@ impl LayoutPolicy for TabsLayout {
 }
 
 impl RenderPolicy for TabsLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         input.metadata_mut().set_clips_children(true);
     }
 }

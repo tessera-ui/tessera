@@ -216,7 +216,7 @@ impl LayoutPolicy for CircularProgressLayout {
 }
 
 impl RenderPolicy for CircularProgressLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let diameter_px = self.diameter.to_px();
         let stroke_px = self.stroke_width.to_px();
 

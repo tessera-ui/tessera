@@ -32,7 +32,7 @@ impl LayoutPolicy for CursorLayout {
 }
 
 impl RenderPolicy for CursorLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         if !self.visible {
             return;
         }

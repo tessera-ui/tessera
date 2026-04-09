@@ -304,10 +304,9 @@ impl Default for TesseraConfig {
 ///
 /// ## Thread Safety
 ///
-/// The renderer runs on the main thread and coordinates with other threads for:
-/// - Component tree building (potentially parallelized)
-/// - Resource management
-/// - Event processing
+/// The renderer runs on the main thread and coordinates frame building,
+/// resource management, and event processing from a single UI-thread
+/// execution flow.
 ///
 /// ## Usage
 ///
@@ -1101,7 +1100,7 @@ Fps: {:.2}
         };
 
         // Clear any existing compute resources
-        args.app.compute_resource_manager().write().clear();
+        args.app.compute_resource_manager_mut().clear();
         let layout_dirty_nodes = take_layout_dirty_nodes();
 
         let (
@@ -1113,6 +1112,7 @@ Fps: {:.2}
             pending_focus_reveal_retry,
         ) = TesseraRuntime::with_mut(|rt| {
             let component_tree = &mut rt.component_tree;
+            let (gpu, compute_resource_manager) = args.app.record_resources();
             component_tree.compute(
                 crate::component_tree::ComputeParams {
                     screen_size,
@@ -1126,8 +1126,8 @@ Fps: {:.2}
                     layout_dirty_nodes: &layout_dirty_nodes,
                 },
                 crate::component_tree::ComputeMode::Full {
-                    compute_resource_manager: args.app.compute_resource_manager(),
-                    gpu: args.app.device(),
+                    compute_resource_manager,
+                    gpu,
                 },
             )
         });
@@ -2081,8 +2081,8 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
             self.plugins.suspended(&context);
         }
 
-        if let Some(app) = self.app.take() {
-            app.compute_resource_manager().write().clear();
+        if let Some(mut app) = self.app.take() {
+            app.compute_resource_manager_mut().clear();
         }
 
         // Clean up AccessKit adapter

@@ -522,16 +522,12 @@ impl LayoutPolicy for PagerLayout {
             }
         };
 
-        let children_to_measure: Vec<_> = children
-            .iter()
-            .copied()
-            .map(|child| (child, child_constraint))
-            .collect();
-        let measurements = input.measure_children(children_to_measure)?;
-
         let mut max_cross = Px::ZERO;
-        for size in measurements.values() {
-            max_cross = max_cross.max(self.axis.cross(size.size()));
+        let mut measured_children = Vec::with_capacity(children.len());
+        for &child in &children {
+            let measurement = child.measure(&child_constraint)?;
+            max_cross = max_cross.max(self.axis.cross(measurement.size()));
+            measured_children.push((child, measurement.size()));
         }
         let container_cross = cross_dimension.clamp(max_cross);
 
@@ -550,10 +546,9 @@ impl LayoutPolicy for PagerLayout {
         let page_step = page_main + page_spacing;
 
         for (&child, &page_index) in children.iter().zip(self.visible_pages.iter()) {
-            let measured = measurements
-                .get(&child)
-                .copied()
-                .map(|size| size.size())
+            let measured = measured_children
+                .iter()
+                .find_map(|(measured_child, size)| (*measured_child == child).then_some(*size))
                 .unwrap_or(ComputedData::ZERO);
             let cross_offset = compute_cross_offset(
                 container_cross,
@@ -623,7 +618,7 @@ impl LayoutPolicy for PagerLayout {
 }
 
 impl RenderPolicy for PagerLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         input.metadata_mut().set_clips_children(true);
     }
 }

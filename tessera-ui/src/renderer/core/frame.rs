@@ -600,7 +600,7 @@ impl RenderCore {
                             device: state.device,
                             queue: state.queue,
                             config: state.config,
-                            resource_manager: &mut state.compute.resource_manager.write(),
+                            resource_manager: &mut state.compute.resource_manager,
                         };
                         let texture_size = wgpu::Extent3d {
                             width: state.config.width,
@@ -627,7 +627,7 @@ impl RenderCore {
                             device: state.device,
                             queue: state.queue,
                             config: state.config,
-                            resource_manager: &mut state.compute.resource_manager.write(),
+                            resource_manager: &mut state.compute.resource_manager,
                         };
                         let Some(slot) = resources.local_slot_mut(write_resource) else {
                             return;
@@ -654,7 +654,7 @@ impl RenderCore {
                             device: state.device,
                             queue: state.queue,
                             config: state.config,
-                            resource_manager: &mut state.compute.resource_manager.write(),
+                            resource_manager: &mut state.compute.resource_manager,
                         };
                         let Some(slot) = resources.external_slot_mut(write_resource) else {
                             return;

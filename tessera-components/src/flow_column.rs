@@ -126,29 +126,20 @@ impl LayoutPolicy for FlowColumnLayout {
             }
         }
 
-        let unweighted_results = if unweighted_nodes.is_empty() {
-            None
-        } else {
-            Some(input.measure_children(unweighted_nodes)?)
-        };
-        let weighted_results = if weighted_nodes.is_empty() {
-            None
-        } else {
-            Some(input.measure_children_untracked(weighted_nodes)?)
-        };
-
         let mut children_sizes = vec![None; n];
         for (i, child_id) in children.iter().enumerate().take(n) {
-            if let Some(results) = &unweighted_results
-                && let Some(child_size) = results.get(child_id)
+            if let Some((_, constraint)) = unweighted_nodes
+                .iter()
+                .find(|(candidate, _)| candidate == child_id)
             {
-                children_sizes[i] = Some(child_size.size());
+                children_sizes[i] = Some(child_id.measure(constraint)?.size());
                 continue;
             }
-            if let Some(results) = &weighted_results
-                && let Some(child_size) = results.get(child_id)
+            if let Some((_, constraint)) = weighted_nodes
+                .iter()
+                .find(|(candidate, _)| candidate == child_id)
             {
-                children_sizes[i] = Some(child_size.size());
+                children_sizes[i] = Some(child_id.measure_untracked(constraint)?.size());
             }
         }
 
@@ -293,7 +284,7 @@ fn apply_weighted_children_column(
     args: WeightedColumnMeasureInput<'_, '_>,
 ) -> Result<(), MeasurementError> {
     let WeightedColumnMeasureInput {
-        input,
+        input: _input,
         children,
         flow_constraint,
         lines,
@@ -347,22 +338,13 @@ fn apply_weighted_children_column(
         return Ok(());
     }
 
-    let weighted_constraints: Vec<_> = allocations
-        .iter()
-        .map(|(idx, allocated)| {
-            (
-                children[*idx],
-                Constraint::new(flow_constraint.width, AxisConstraint::exact(*allocated)),
-            )
-        })
-        .collect();
-    let weighted_results = input.measure_children(weighted_constraints)?;
-
-    for (idx, _) in allocations {
+    for &(idx, allocated) in &allocations {
         let child_id = children[idx];
-        if let Some(child_size) = weighted_results.get(&child_id) {
-            children_sizes[idx] = Some(child_size.size());
-        }
+        let child_size = child_id.measure(&Constraint::new(
+            flow_constraint.width,
+            AxisConstraint::exact(allocated),
+        ))?;
+        children_sizes[idx] = Some(child_size.size());
     }
 
     Ok(())

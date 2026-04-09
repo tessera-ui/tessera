@@ -57,14 +57,14 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 ### Component Tree & Node Metadata
 
-- The component tree is managed internally by `ComponentTree` and node metadata structures, supporting parallel measurement and rendering.
+- The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.
 
 ---
 
 ## 📏 Layout & Measurement System
 
 - Use `Constraint` and interval-based `AxisConstraint` to describe size constraints.
-- `measure_nodes` supports parallel measurement of multiple child nodes.
+- Layout policies measure direct child layout nodes through handle-based APIs such as `MeasureScope`, `LayoutChild`, and `LayoutResult`.
 - `place_node` is used to position child nodes.
 - Default layout: If no layout policy is attached to the current node, `DefaultLayoutPolicy` stacks children at (0,0), and the container size is the minimal bounding rectangle.
 

@@ -143,12 +143,13 @@ impl LayoutPolicy for TextLayout {
 }
 
 impl RenderPolicy for TextLayout {
-    fn record(&self, input: &RenderInput<'_>) {
-        let metadata = input.metadata_mut();
-        let computed = metadata
-            .computed_data()
-            .expect("ComputedData must exist during record");
-        drop(metadata);
+    fn record(&self, input: &mut RenderInput<'_>) {
+        let computed = {
+            let metadata = input.metadata_mut();
+            metadata
+                .computed_data()
+                .expect("ComputedData must exist during record")
+        };
 
         // Use TextData::get() with the computed bounds to retrieve cached data
         let text_data = TextData::get(

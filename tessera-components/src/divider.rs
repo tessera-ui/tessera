@@ -88,7 +88,7 @@ impl LayoutPolicy for DividerLayout {
 }
 
 impl RenderPolicy for DividerLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         input
             .metadata_mut()
             .fragment_mut()

@@ -1,17 +1,9 @@
 mod constraint;
 mod node;
 
-use std::{
-    num::NonZero,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-};
+use std::{num::NonZero, sync::Arc};
 
-use dashmap::DashMap;
-use parking_lot::RwLock;
-use rustc_hash::{FxBuildHasher, FxHashMap as HashMap, FxHashSet as HashSet};
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use tracing::{debug, warn};
 
 use crate::{
@@ -28,7 +20,7 @@ use crate::{
     px::{PxPosition, PxSize},
     render_graph::{RenderGraph, RenderGraphBuilder},
     runtime::{
-        LayoutDirtyNodes, RuntimePhase, StructureReconcileResult,
+        LayoutDirtyNodes, RuntimePhase, StructureReconcileResult, TesseraRuntime,
         push_current_component_instance_key, push_current_node_with_instance_logic_id, push_phase,
     },
     time::Instant,
@@ -43,12 +35,13 @@ pub use node::{
 
 pub(crate) use node::{
     ComponentNode, ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, NodeRole,
-    WindowRequests, direct_layout_children, measure_node, measure_nodes,
+    WindowRequests, direct_layout_children, measure_node,
 };
 
 #[cfg(feature = "profiling")]
 use crate::profiler::{NodeMeta, Phase as ProfilerPhase, ScopeGuard as ProfilerScopeGuard};
 
+#[derive(Clone)]
 pub(crate) struct LayoutSnapshotEntry {
     pub constraint_key: Constraint,
     pub layout_result: LayoutResult,
@@ -56,43 +49,46 @@ pub(crate) struct LayoutSnapshotEntry {
     pub child_sizes: Vec<ComputedData>,
 }
 
-pub(crate) type LayoutSnapshotMap = DashMap<u64, LayoutSnapshotEntry, FxBuildHasher>;
-
 #[derive(Default)]
-struct LayoutSnapshotStore {
-    entries: LayoutSnapshotMap,
+pub(crate) struct LayoutSnapshotMap {
+    entries: HashMap<u64, LayoutSnapshotEntry>,
 }
 
-thread_local! {
-    static LAYOUT_SNAPSHOT_STORE: LayoutSnapshotStore = LayoutSnapshotStore::default();
-}
+impl LayoutSnapshotMap {
+    pub(crate) fn clear(&mut self) {
+        self.entries.clear();
+    }
 
-fn with_layout_snapshot_entries<R>(f: impl FnOnce(&LayoutSnapshotMap) -> R) -> R {
-    LAYOUT_SNAPSHOT_STORE.with(|store| f(&store.entries))
+    pub(crate) fn remove(&mut self, instance_key: &u64) -> Option<LayoutSnapshotEntry> {
+        self.entries.remove(instance_key)
+    }
+
+    pub(crate) fn insert(
+        &mut self,
+        instance_key: u64,
+        entry: LayoutSnapshotEntry,
+    ) -> Option<LayoutSnapshotEntry> {
+        self.entries.insert(instance_key, entry)
+    }
+
+    pub(crate) fn get_cloned(&self, instance_key: &u64) -> Option<LayoutSnapshotEntry> {
+        self.entries.get(instance_key).cloned()
+    }
 }
 
 pub(crate) fn clear_layout_snapshots() {
-    with_layout_snapshot_entries(LayoutSnapshotMap::clear);
-}
-
-fn remove_layout_snapshots(keys: &HashSet<u64>) {
-    if keys.is_empty() {
-        return;
-    }
-    with_layout_snapshot_entries(|snapshots| {
-        for key in keys {
-            snapshots.remove(key);
-        }
+    TesseraRuntime::with_mut(|runtime| {
+        runtime.component_tree.clear_layout_snapshots();
     });
 }
 
 #[derive(Clone, Copy)]
 pub(crate) struct LayoutContext<'a> {
-    pub snapshots: &'a LayoutSnapshotMap,
+    snapshots: *mut LayoutSnapshotMap,
     pub measure_self_nodes: &'a HashSet<u64>,
     pub placement_self_nodes: &'a HashSet<u64>,
     pub dirty_effective_nodes: &'a HashSet<u64>,
-    pub diagnostics: &'a LayoutDiagnosticsCollector,
+    diagnostics: *mut LayoutDiagnosticsCollector,
 }
 
 #[cfg_attr(not(feature = "profiling"), allow(dead_code))]
@@ -115,64 +111,18 @@ pub struct LayoutFrameDiagnostics {
 
 #[derive(Default)]
 pub(crate) struct LayoutDiagnosticsCollector {
-    measure_node_calls: AtomicU64,
-    cache_hits_direct: AtomicU64,
-    cache_hits_boundary: AtomicU64,
-    cache_miss_no_entry: AtomicU64,
-    cache_miss_constraint: AtomicU64,
-    cache_miss_dirty_self: AtomicU64,
-    cache_miss_child_size: AtomicU64,
-    cache_store_count: AtomicU64,
-    cache_drop_non_cacheable_count: AtomicU64,
+    measure_node_calls: u64,
+    cache_hits_direct: u64,
+    cache_hits_boundary: u64,
+    cache_miss_no_entry: u64,
+    cache_miss_constraint: u64,
+    cache_miss_dirty_self: u64,
+    cache_miss_child_size: u64,
+    cache_store_count: u64,
+    cache_drop_non_cacheable_count: u64,
 }
 
 impl LayoutDiagnosticsCollector {
-    #[inline]
-    pub(crate) fn inc_measure_node_calls(&self) {
-        self.measure_node_calls.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub(crate) fn inc_cache_hit_direct(&self) {
-        self.cache_hits_direct.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub(crate) fn inc_cache_hit_boundary(&self) {
-        self.cache_hits_boundary.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub(crate) fn inc_cache_miss_no_entry(&self) {
-        self.cache_miss_no_entry.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub(crate) fn inc_cache_miss_constraint(&self) {
-        self.cache_miss_constraint.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub(crate) fn inc_cache_miss_dirty_self(&self) {
-        self.cache_miss_dirty_self.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub(crate) fn inc_cache_miss_child_size(&self) {
-        self.cache_miss_child_size.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub(crate) fn inc_cache_store_count(&self) {
-        self.cache_store_count.fetch_add(1, Ordering::Relaxed);
-    }
-
-    #[inline]
-    pub(crate) fn inc_cache_drop_non_cacheable_count(&self) {
-        self.cache_drop_non_cacheable_count
-            .fetch_add(1, Ordering::Relaxed);
-    }
-
     fn snapshot(
         &self,
         dirty_nodes_param: u64,
@@ -180,24 +130,131 @@ impl LayoutDiagnosticsCollector {
         dirty_nodes_with_ancestors: u64,
         dirty_expand_ns: u64,
     ) -> LayoutFrameDiagnostics {
-        let cache_hits_direct = self.cache_hits_direct.load(Ordering::Relaxed);
-        let cache_hits_boundary = self.cache_hits_boundary.load(Ordering::Relaxed);
+        let cache_hits_direct = self.cache_hits_direct;
+        let cache_hits_boundary = self.cache_hits_boundary;
         LayoutFrameDiagnostics {
             dirty_nodes_param,
             dirty_nodes_structural,
             dirty_nodes_with_ancestors,
             dirty_expand_ns,
-            measure_node_calls: self.measure_node_calls.load(Ordering::Relaxed),
+            measure_node_calls: self.measure_node_calls,
             cache_hits_direct,
             cache_hits_boundary,
-            cache_miss_no_entry: self.cache_miss_no_entry.load(Ordering::Relaxed),
-            cache_miss_constraint: self.cache_miss_constraint.load(Ordering::Relaxed),
-            cache_miss_dirty_self: self.cache_miss_dirty_self.load(Ordering::Relaxed),
-            cache_miss_child_size: self.cache_miss_child_size.load(Ordering::Relaxed),
-            cache_store_count: self.cache_store_count.load(Ordering::Relaxed),
-            cache_drop_non_cacheable_count: self
-                .cache_drop_non_cacheable_count
-                .load(Ordering::Relaxed),
+            cache_miss_no_entry: self.cache_miss_no_entry,
+            cache_miss_constraint: self.cache_miss_constraint,
+            cache_miss_dirty_self: self.cache_miss_dirty_self,
+            cache_miss_child_size: self.cache_miss_child_size,
+            cache_store_count: self.cache_store_count,
+            cache_drop_non_cacheable_count: self.cache_drop_non_cacheable_count,
+        }
+    }
+}
+
+impl LayoutContext<'_> {
+    pub(crate) fn new<'a>(
+        snapshots: &'a mut LayoutSnapshotMap,
+        measure_self_nodes: &'a HashSet<u64>,
+        placement_self_nodes: &'a HashSet<u64>,
+        dirty_effective_nodes: &'a HashSet<u64>,
+        diagnostics: &'a mut LayoutDiagnosticsCollector,
+    ) -> LayoutContext<'a> {
+        LayoutContext {
+            snapshots,
+            measure_self_nodes,
+            placement_self_nodes,
+            dirty_effective_nodes,
+            diagnostics,
+        }
+    }
+
+    #[inline]
+    pub(crate) fn snapshot(&self, instance_key: u64) -> Option<LayoutSnapshotEntry> {
+        // SAFETY: Layout snapshots are owned by the single-threaded compute
+        // pass. The pointer is created from a unique mutable borrow for the
+        // duration of the pass and only accessed on the same thread.
+        unsafe { (*self.snapshots).get_cloned(&instance_key) }
+    }
+
+    #[inline]
+    pub(crate) fn insert_snapshot(&self, instance_key: u64, entry: LayoutSnapshotEntry) {
+        // SAFETY: See `snapshot`.
+        unsafe {
+            (*self.snapshots).insert(instance_key, entry);
+        }
+    }
+
+    #[inline]
+    pub(crate) fn remove_snapshot(&self, instance_key: u64) {
+        // SAFETY: See `snapshot`.
+        unsafe {
+            (*self.snapshots).remove(&instance_key);
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_measure_node_calls(&self) {
+        // SAFETY: Layout diagnostics are owned by the single-threaded compute pass.
+        // The pointer is created from a unique mutable borrow for the duration of
+        // that pass and is only accessed on the same thread during recursive
+        // layout measurement.
+        unsafe {
+            (*self.diagnostics).measure_node_calls += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_cache_hit_direct(&self) {
+        unsafe {
+            (*self.diagnostics).cache_hits_direct += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_cache_hit_boundary(&self) {
+        unsafe {
+            (*self.diagnostics).cache_hits_boundary += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_cache_miss_no_entry(&self) {
+        unsafe {
+            (*self.diagnostics).cache_miss_no_entry += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_cache_miss_constraint(&self) {
+        unsafe {
+            (*self.diagnostics).cache_miss_constraint += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_cache_miss_dirty_self(&self) {
+        unsafe {
+            (*self.diagnostics).cache_miss_dirty_self += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_cache_miss_child_size(&self) {
+        unsafe {
+            (*self.diagnostics).cache_miss_child_size += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_cache_store_count(&self) {
+        unsafe {
+            (*self.diagnostics).cache_store_count += 1;
+        }
+    }
+
+    #[inline]
+    pub(crate) fn inc_cache_drop_non_cacheable_count(&self) {
+        unsafe {
+            (*self.diagnostics).cache_drop_non_cacheable_count += 1;
         }
     }
 }
@@ -218,7 +275,7 @@ pub(crate) struct ComputeParams<'a> {
 #[derive(Debug)]
 pub(crate) enum ComputeMode<'a> {
     Full {
-        compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+        compute_resource_manager: &'a mut ComputeResourceManager,
         gpu: &'a wgpu::Device,
     },
     #[cfg(feature = "testing")]
@@ -231,6 +288,7 @@ pub struct ComponentTree {
     tree: indextree::Arena<ComponentNode>,
     /// Components' metadatas
     metadatas: ComponentNodeMetaDatas,
+    layout_snapshots: LayoutSnapshotMap,
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
     /// Detached old-subtree nodes keyed by instance key during replay replace.
@@ -280,11 +338,12 @@ impl ComponentTree {
     pub fn new() -> Self {
         let tree = indextree::Arena::new();
         let node_queue = Vec::new();
-        let metadatas = ComponentNodeMetaDatas::with_hasher(FxBuildHasher);
+        let metadatas = ComponentNodeMetaDatas::new();
         Self {
             tree,
             node_queue,
             metadatas,
+            layout_snapshots: LayoutSnapshotMap::default(),
             replay_reuse_candidates: HashMap::default(),
             active_pointer_paths: HashMap::default(),
             focus_owner: FocusOwner::new(),
@@ -295,6 +354,7 @@ impl ComponentTree {
     pub fn clear(&mut self) {
         self.tree.clear();
         self.metadatas.clear();
+        self.layout_snapshots.clear();
         self.node_queue.clear();
         self.replay_reuse_candidates.clear();
         self.active_pointer_paths.clear();
@@ -602,6 +662,23 @@ impl ComponentTree {
         &self.metadatas
     }
 
+    pub(crate) fn metadatas_mut(&mut self) -> &mut ComponentNodeMetaDatas {
+        &mut self.metadatas
+    }
+
+    pub(crate) fn clear_layout_snapshots(&mut self) {
+        self.layout_snapshots.clear();
+    }
+
+    fn remove_layout_snapshots(&mut self, keys: &HashSet<u64>) {
+        if keys.is_empty() {
+            return;
+        }
+        for key in keys {
+            self.layout_snapshots.remove(key);
+        }
+    }
+
     pub(crate) fn focus_owner(&self) -> &FocusOwner {
         &self.focus_owner
     }
@@ -748,7 +825,7 @@ impl ComponentTree {
             changed_nodes: structural_dirty_nodes,
             removed_nodes,
         } = crate::runtime::reconcile_layout_structure(&current_children_by_node);
-        remove_layout_snapshots(&removed_nodes);
+        self.remove_layout_snapshots(&removed_nodes);
 
         let mut dirty_nodes_self = layout_dirty_nodes.measure_self_nodes.clone();
         dirty_nodes_self.extend(layout_dirty_nodes.placement_self_nodes.iter().copied());
@@ -759,48 +836,46 @@ impl ComponentTree {
         let dirty_nodes_effective =
             expand_dirty_nodes_with_ancestors(root_node, &self.tree, &dirty_nodes_self);
         let dirty_expand_ns = dirty_prepare_start.elapsed().as_nanos() as u64;
-        let diagnostics = LayoutDiagnosticsCollector::default();
+        let mut diagnostics = LayoutDiagnosticsCollector::default();
 
         self.focus_owner
             .sync_from_component_tree(root_node, &self.tree);
         self.focus_owner.commit_pending();
 
-        let diagnostics_snapshot = with_layout_snapshot_entries(|snapshots| {
-            let layout_ctx = LayoutContext {
-                snapshots,
-                measure_self_nodes: &layout_dirty_nodes.measure_self_nodes,
-                placement_self_nodes: &layout_dirty_nodes.placement_self_nodes,
-                dirty_effective_nodes: &dirty_nodes_effective,
-                diagnostics: &diagnostics,
-            };
+        let layout_ctx = LayoutContext::new(
+            &mut self.layout_snapshots,
+            &layout_dirty_nodes.measure_self_nodes,
+            &layout_dirty_nodes.placement_self_nodes,
+            &dirty_nodes_effective,
+            &mut diagnostics,
+        );
 
-            let measure_timer = Instant::now();
-            debug!("Start measuring the component tree...");
+        let measure_timer = Instant::now();
+        debug!("Start measuring the component tree...");
 
-            match measure_node(
-                root_node,
-                &screen_constraint,
-                &self.tree,
-                &self.metadatas,
-                Some(&layout_ctx),
-            ) {
-                Ok(_root_computed_data) => {
-                    debug!("Component tree measured in {:?}", measure_timer.elapsed());
-                }
-                Err(e) => {
-                    panic!(
-                        "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
-                    );
-                }
+        match measure_node(
+            root_node,
+            &screen_constraint,
+            &self.tree,
+            &mut self.metadatas,
+            Some(&layout_ctx),
+        ) {
+            Ok(_root_computed_data) => {
+                debug!("Component tree measured in {:?}", measure_timer.elapsed());
             }
+            Err(e) => {
+                panic!(
+                    "Root node ({root_node:?}) measurement failed: {e:?}. Aborting draw command computation."
+                );
+            }
+        }
 
-            diagnostics.snapshot(
-                dirty_nodes_param,
-                dirty_nodes_structural,
-                dirty_nodes_effective.len() as u64,
-                dirty_expand_ns,
-            )
-        });
+        let diagnostics_snapshot = diagnostics.snapshot(
+            dirty_nodes_param,
+            dirty_nodes_structural,
+            dirty_nodes_effective.len() as u64,
+            dirty_expand_ns,
+        );
 
         let (compute_resource_manager, gpu) = match mode {
             ComputeMode::Full {
@@ -809,7 +884,7 @@ impl ComponentTree {
             } => (compute_resource_manager, gpu),
             #[cfg(feature = "testing")]
             ComputeMode::LayoutOnly => {
-                populate_layout_metadata(root_node, &self.tree, &self.metadatas);
+                populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
                 return (
                     RenderGraph::default(),
                     WindowRequests::default(),
@@ -825,16 +900,16 @@ impl ComponentTree {
         record_layout_commands(
             root_node,
             &self.tree,
-            &self.metadatas,
-            compute_resource_manager.clone(),
+            &mut self.metadatas,
+            compute_resource_manager,
             gpu,
         );
         let record_cost = record_timer.elapsed();
-        populate_layout_metadata(root_node, &self.tree, &self.metadatas);
+        populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
 
         let compute_draw_timer = Instant::now();
         debug!("Start computing render graph...");
-        let graph = build_render_graph(root_node, &self.tree, &self.metadatas, screen_size);
+        let graph = build_render_graph(root_node, &self.tree, &mut self.metadatas, screen_size);
         self.focus_owner
             .sync_layout_from_component_tree(root_node, &self.tree, &self.metadatas);
         debug!(
@@ -1178,8 +1253,6 @@ fn resolve_node_input_context(
         );
         return None;
     };
-    drop(metadata);
-
     let Some(node_ref) = tree.get(node_id) else {
         warn!("Node not found for node {node_id:?}; skipping input handling");
         return None;
@@ -1284,7 +1357,6 @@ fn resolve_hover_cursor_icon(
             let metadata = metadatas.get(&node_id)?;
             let base_abs_pos = metadata.base_abs_position?;
             let size = metadata.computed_data?;
-            drop(metadata);
             resolve_node_hover_cursor_icon(node_ref.get(), base_abs_pos, size, position?)
         })
 }
@@ -2058,8 +2130,8 @@ fn collect_children_by_instance_key(
 fn record_layout_commands(
     root_node: indextree::NodeId,
     tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
-    compute_resource_manager: Arc<RwLock<ComputeResourceManager>>,
+    metadatas: &mut ComponentNodeMetaDatas,
+    compute_resource_manager: &mut ComputeResourceManager,
     gpu: &wgpu::Device,
 ) {
     struct DrawModifierChainContent<'a> {
@@ -2068,7 +2140,7 @@ fn record_layout_commands(
     }
 
     impl DrawModifierContent for DrawModifierChainContent<'_> {
-        fn draw(&mut self, input: &RenderInput<'_>) {
+        fn draw(&mut self, input: &mut RenderInput<'_>) {
             if let Some((draw_modifier, remaining)) = self.draw_nodes.split_first() {
                 let mut draw_ctx = DrawModifierContext {
                     render_input: input,
@@ -2099,7 +2171,7 @@ fn record_layout_commands(
                 Some(node.get().fn_name.as_str()),
             ))
         };
-        let input = RenderInput::new(node_id, metadatas, compute_resource_manager.clone(), gpu);
+        let mut input = RenderInput::new(node_id, metadatas, compute_resource_manager, gpu);
         let node_ref = node.get();
         let draw_nodes: Vec<_> = node_ref
             .modifier
@@ -2114,7 +2186,7 @@ fn record_layout_commands(
             draw_nodes: &draw_nodes,
             render_policy: node_ref.render_policy.as_ref(),
         };
-        content.draw(&input);
+        content.draw(&mut input);
         stack.extend(node_id.children(tree));
     }
 }
@@ -2131,14 +2203,14 @@ struct PreparedLayoutMetadata {
 
 fn prepare_layout_metadata_for_node(
     tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
+    metadatas: &mut ComponentNodeMetaDatas,
     start_pos: PxPosition,
     is_root: bool,
     node_id: indextree::NodeId,
     parent_clip_rect: Option<PxRect>,
     current_opacity: f32,
 ) -> Option<PreparedLayoutMetadata> {
-    let mut metadata = metadatas.get_mut(&node_id)?;
+    let metadata = metadatas.get_mut(&node_id)?;
     let rel_pos = match metadata.rel_position {
         Some(pos) => pos,
         None if is_root => PxPosition::ZERO,
@@ -2199,11 +2271,11 @@ fn prepare_layout_metadata_for_node(
 fn populate_layout_metadata(
     root_node: indextree::NodeId,
     tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
+    metadatas: &mut ComponentNodeMetaDatas,
 ) {
     fn visit(
         tree: &ComponentNodeTree,
-        metadatas: &ComponentNodeMetaDatas,
+        metadatas: &mut ComponentNodeMetaDatas,
         start_pos: PxPosition,
         is_root: bool,
         node_id: indextree::NodeId,
@@ -2262,7 +2334,7 @@ fn populate_layout_metadata(
 fn build_render_graph(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
+    metadatas: &mut ComponentNodeMetaDatas,
     screen_size: PxSize,
 ) -> RenderGraph {
     let screen_rect = PxRect {
@@ -2285,7 +2357,7 @@ fn build_render_graph(
 
 struct RenderGraphBuildContext<'a> {
     tree: &'a ComponentNodeTree,
-    metadatas: &'a ComponentNodeMetaDatas,
+    metadatas: &'a mut ComponentNodeMetaDatas,
     builder: &'a mut RenderGraphBuilder,
     screen_rect: PxRect,
 }
@@ -2321,7 +2393,7 @@ fn build_render_graph_inner(
     }
 
     let fragment = match context.metadatas.get_mut(&node_id) {
-        Some(mut metadata) => metadata.take_fragment(),
+        Some(metadata) => metadata.take_fragment(),
         None => {
             warn!("Missing metadata for node {node_id:?}; skipping render graph build");
             return;

@@ -166,49 +166,49 @@ impl LayoutSnapshot {
             let mut nodes_by_selector = HashMap::default();
             let mut nodes_by_fn_name: HashMap<String, Vec<LayoutNodeSnapshot>> = HashMap::default();
 
-            for metadata_entry in metadatas.iter() {
-                let node_id = *metadata_entry.key();
-                let metadata = metadata_entry.value();
-                let Some(computed_data) = metadata.computed_data else {
-                    continue;
-                };
-                let Some(abs_position) = metadata.abs_position else {
-                    continue;
-                };
-                let Some(node) = tree.get(node_id) else {
-                    continue;
-                };
+            metadatas.with_entries(|entries| {
+                for (&node_id, metadata) in entries {
+                    let Some(computed_data) = metadata.computed_data else {
+                        continue;
+                    };
+                    let Some(abs_position) = metadata.abs_position else {
+                        continue;
+                    };
+                    let Some(node) = tree.get(node_id) else {
+                        continue;
+                    };
 
-                let snapshot = LayoutNodeSnapshot {
-                    fn_name: node.get().fn_name.clone(),
-                    position: abs_position,
-                    size: PxSize::new(computed_data.width, computed_data.height),
-                };
-                nodes_by_fn_name
-                    .entry(snapshot.fn_name.clone())
-                    .or_default()
-                    .push(snapshot.clone());
+                    let snapshot = LayoutNodeSnapshot {
+                        fn_name: node.get().fn_name.clone(),
+                        position: abs_position,
+                        size: PxSize::new(computed_data.width, computed_data.height),
+                    };
+                    nodes_by_fn_name
+                        .entry(snapshot.fn_name.clone())
+                        .or_default()
+                        .push(snapshot.clone());
 
-                if node.parent().is_none() {
-                    root = Some(snapshot.clone());
+                    if node.parent().is_none() {
+                        root = Some(snapshot.clone());
+                    }
+
+                    if let Some(selector) = metadata
+                        .accessibility
+                        .as_ref()
+                        .and_then(|accessibility| accessibility.key.as_ref())
+                    {
+                        assert_ne!(
+                            selector, "root",
+                            "`root` is reserved for the root node selector in layout tests"
+                        );
+                        let replaced = nodes_by_selector.insert(selector.clone(), snapshot.clone());
+                        assert!(
+                            replaced.is_none(),
+                            "duplicate layout test selector `{selector}`"
+                        );
+                    }
                 }
-
-                if let Some(selector) = metadata
-                    .accessibility
-                    .as_ref()
-                    .and_then(|accessibility| accessibility.key.as_ref())
-                {
-                    assert_ne!(
-                        selector, "root",
-                        "`root` is reserved for the root node selector in layout tests"
-                    );
-                    let replaced = nodes_by_selector.insert(selector.clone(), snapshot.clone());
-                    assert!(
-                        replaced.is_none(),
-                        "duplicate layout test selector `{selector}`"
-                    );
-                }
-            }
+            });
 
             Self {
                 root: root.expect("layout test root node not found after layout"),

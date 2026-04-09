@@ -602,7 +602,7 @@ impl LayoutPolicy for ScrollableInnerLayout {
 }
 
 impl RenderPolicy for ScrollableInnerLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         input.metadata_mut().set_clips_children(true);
     }
 }

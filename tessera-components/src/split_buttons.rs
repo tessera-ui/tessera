@@ -602,12 +602,7 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
         );
 
         let leading = children[0];
-        let leading_size = input
-            .measure_children(vec![(leading, child_constraint)])?
-            .get(&leading)
-            .copied()
-            .map(|size| size.size())
-            .unwrap_or(ComputedData::ZERO);
+        let leading_size = leading.measure(&child_constraint)?.size();
 
         let trailing = children[1];
         let trailing_max_width = layout_constraint
@@ -618,12 +613,7 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
             AxisConstraint::new(Px::ZERO, trailing_max_width),
             leading_size.height,
         );
-        let trailing_size = input
-            .measure_children(vec![(trailing, trailing_constraint)])?
-            .get(&trailing)
-            .copied()
-            .map(|size| size.size())
-            .unwrap_or(ComputedData::ZERO);
+        let trailing_size = trailing.measure(&trailing_constraint)?.size();
 
         let content_width = leading_size.width + trailing_size.width + self.spacing;
         let content_height = leading_size.height.max(trailing_size.height);

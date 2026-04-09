@@ -523,16 +523,10 @@ impl LayoutPolicy for SurfaceLayout {
         let children = input.children();
 
         let child_measurement = if !children.is_empty() {
-            let child_measurements = input.measure_children(
-                children
-                    .iter()
-                    .copied()
-                    .map(|child| (child, effective_surface_constraint))
-                    .collect(),
-            )?;
             let mut max_width = Px::ZERO;
             let mut max_height = Px::ZERO;
-            for measurement in child_measurements.values() {
+            for &child in &children {
+                let measurement = child.measure(&effective_surface_constraint)?;
                 max_width = max_width.max(measurement.width);
                 max_height = max_height.max(measurement.height);
             }
@@ -571,7 +565,7 @@ impl LayoutPolicy for SurfaceLayout {
 }
 
 impl RenderPolicy for SurfaceLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let state_layer_alpha = if self.args.show_state_layer {
             self.interaction_state
                 .as_ref()

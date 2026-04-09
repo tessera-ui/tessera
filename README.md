@@ -29,7 +29,7 @@ Tessera is a cross-platform UI library focused on performance and extensibility.
 - Constraint-based layout system
 - Achieve any visual effect (native support for custom shaders)
 - Standalone basic component library (including `text_input`, `scrollable`, and more)
-- Parallel layout support
+- Handle-based layout and measurement API
 - Cross-platform support(TODO for mobile and platform-specific features)
 - Modern performance profiling system
 

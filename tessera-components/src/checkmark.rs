@@ -49,7 +49,7 @@ impl LayoutPolicy for CheckmarkLayout {
 }
 
 impl RenderPolicy for CheckmarkLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let command = CheckmarkCommand::new()
             .with_color(self.color)
             .with_stroke_width(self.stroke_width)

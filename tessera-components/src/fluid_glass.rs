@@ -392,7 +392,7 @@ impl LayoutPolicy for FluidGlassLayout {
 }
 
 impl RenderPolicy for FluidGlassLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         if self.blur_radius > Dp(0.0) {
             let blur_command =
                 DualBlurCommand::horizontal_then_vertical(self.blur_radius.to_pixels_f32());
@@ -403,8 +403,7 @@ impl RenderPolicy for FluidGlassLayout {
         if let Some(contrast_value) = self.contrast
             && contrast_value != 1.0
         {
-            let mean_command =
-                MeanCommand::new(input.gpu, &mut input.compute_resource_manager.write());
+            let mean_command = MeanCommand::new(input.gpu, input.compute_resource_manager);
             let contrast_command =
                 ContrastCommand::new(contrast_value, mean_command.result_buffer_ref());
             let mut metadata = input.metadata_mut();

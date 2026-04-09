@@ -4,7 +4,7 @@
 //! text editing components, including text buffer management, selection and
 //! cursor handling, rendering logic, and keyboard event mapping. It is designed
 //! to be shared across UI components via the `TextEditorController` wrapper,
-//! enabling consistent and thread-safe access to editor state.
+//! enabling consistent access to editor state.
 //! and efficient text editing experiences.
 //!
 //! Typical use cases include single-line and multi-line text editors, input
@@ -3372,7 +3372,7 @@ impl LayoutPolicy for TextEditLayout {
 }
 
 impl RenderPolicy for TextEditLayout {
-    fn record(&self, input: &RenderInput<'_>) {
+    fn record(&self, input: &mut RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
         metadata.set_clips_children(true);
         if let Some(text_data) = self.controller.with(|c| c.current_text_data()) {
