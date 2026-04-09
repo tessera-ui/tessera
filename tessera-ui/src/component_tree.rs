@@ -922,20 +922,8 @@ impl ComponentTree {
         let mut window_requests = WindowRequests::default();
         debug!("Start executing typed input dispatch...");
 
-        let node_ids_preorder: Vec<_> = root_node
-            .traverse(&self.tree)
-            .filter_map(|edge| match edge {
-                indextree::NodeEdge::Start(id) => Some(id),
-                indextree::NodeEdge::End(_) => None,
-            })
-            .collect();
-        let node_ids_postorder: Vec<_> = root_node
-            .reverse_traverse(&self.tree)
-            .filter_map(|edge| match edge {
-                indextree::NodeEdge::Start(id) => Some(id),
-                indextree::NodeEdge::End(_) => None,
-            })
-            .collect();
+        let node_ids_preorder = layout_node_ids_preorder(root_node, &self.tree);
+        let node_ids_postorder = layout_node_ids_postorder(root_node, &self.tree);
         let pointer_change_paths = build_pointer_change_paths(
             root_node,
             &self.tree,
@@ -1233,6 +1221,15 @@ fn resolve_node_input_context(
     metadatas: &ComponentNodeMetaDatas,
     node_id: indextree::NodeId,
 ) -> Option<NodeInputContext> {
+    let Some(node_ref) = tree.get(node_id) else {
+        warn!("Node not found for node {node_id:?}; skipping input handling");
+        return None;
+    };
+    let node = node_ref.get();
+    if node.role != NodeRole::Layout {
+        return None;
+    }
+
     let Some(metadata) = metadatas.get(&node_id) else {
         warn!("Input metadata missing for node {node_id:?}; skipping input handling");
         return None;
@@ -1253,11 +1250,6 @@ fn resolve_node_input_context(
         );
         return None;
     };
-    let Some(node_ref) = tree.get(node_id) else {
-        warn!("Node not found for node {node_id:?}; skipping input handling");
-        return None;
-    };
-    let node = node_ref.get();
     let instance_logic_id = node.instance_logic_id;
     let instance_key = node.instance_key;
     let fn_name = node.fn_name.as_str().to_owned();
@@ -1273,6 +1265,38 @@ fn resolve_node_input_context(
         fn_name,
         parent_id,
     })
+}
+
+fn layout_node_ids_preorder(
+    root_node: indextree::NodeId,
+    tree: &ComponentNodeTree,
+) -> Vec<indextree::NodeId> {
+    root_node
+        .traverse(tree)
+        .filter_map(|edge| match edge {
+            indextree::NodeEdge::Start(id) => tree
+                .get(id)
+                .filter(|node| node.get().role == NodeRole::Layout)
+                .map(|_| id),
+            indextree::NodeEdge::End(_) => None,
+        })
+        .collect()
+}
+
+fn layout_node_ids_postorder(
+    root_node: indextree::NodeId,
+    tree: &ComponentNodeTree,
+) -> Vec<indextree::NodeId> {
+    root_node
+        .reverse_traverse(tree)
+        .filter_map(|edge| match edge {
+            indextree::NodeEdge::Start(id) => tree
+                .get(id)
+                .filter(|node| node.get().role == NodeRole::Layout)
+                .map(|_| id),
+            indextree::NodeEdge::End(_) => None,
+        })
+        .collect()
 }
 
 fn attach_ime_position_if_needed(window_requests: &mut WindowRequests, abs_pos: PxPosition) {
@@ -2438,10 +2462,15 @@ mod tests {
         modifier::Modifier,
     };
 
-    fn node(name: &str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
+    fn node_with_role(
+        name: &str,
+        role: NodeRole,
+        instance_logic_id: u64,
+        instance_key: u64,
+    ) -> ComponentNode {
         ComponentNode {
             fn_name: name.to_string(),
-            role: NodeRole::Layout,
+            role,
             instance_logic_id,
             instance_key,
             pointer_preview_handlers: Vec::new(),
@@ -2465,6 +2494,10 @@ mod tests {
             replay: None,
             props_unchanged_from_previous: false,
         }
+    }
+
+    fn node(name: &str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
+        node_with_role(name, NodeRole::Layout, instance_logic_id, instance_key)
     }
 
     #[test]
@@ -2582,5 +2615,27 @@ mod tests {
         assert!(!replace_result.removed_instance_keys.contains(&3));
         assert!(!replace_result.removed_instance_logic_ids.contains(&2));
         assert!(!replace_result.removed_instance_logic_ids.contains(&3));
+    }
+
+    #[test]
+    fn layout_node_input_traversal_skips_composition_nodes() {
+        let mut tree = ComponentTree::new();
+
+        let root = tree.add_node(node_with_role("root", NodeRole::Composition, 1, 1));
+        let layout_a = tree.add_node(node("layout_a", 2, 2));
+        tree.pop_node();
+
+        let composition = tree.add_node(node_with_role("wrapper", NodeRole::Composition, 3, 3));
+        let layout_b = tree.add_node(node("layout_b", 4, 4));
+        tree.pop_node();
+        tree.pop_node();
+        tree.pop_node();
+
+        let preorder = layout_node_ids_preorder(root, tree.tree());
+        let postorder = layout_node_ids_postorder(root, tree.tree());
+
+        assert_eq!(preorder, vec![layout_a, layout_b]);
+        assert_eq!(postorder, vec![layout_b, layout_a]);
+        assert_eq!(composition.children(tree.tree()).count(), 1);
     }
 }
