@@ -158,7 +158,17 @@ impl RenderCore {
     ) -> Self {
         // Looking for adapters
         let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
-        instance_desc.backends = wgpu::Backends::all();
+        #[cfg(not(target_os = "windows"))]
+        {
+            instance_desc.backends = wgpu::Backends::all();
+        }
+        #[cfg(target_os = "windows")]
+        {
+            instance_desc.backends = wgpu::Backends::DX12;
+            instance_desc.backend_options.dx12.presentation_system =
+                wgpu::Dx12SwapchainKind::DxgiFromVisual;
+        }
+        info!("Using WGPU instance config: {instance_desc:#?}");
         let instance: wgpu::Instance = wgpu::Instance::new(instance_desc);
         // Create a surface
         let surface = match instance.create_surface(window.clone()) {
@@ -170,6 +180,8 @@ impl RenderCore {
         };
         // Looking for a compatible adapter
         let adapter = Self::request_adapter_for_surface(&instance, &surface).await;
+        let adapter_info = adapter.get_info();
+        info!("Using WGPU adapter: {adapter_info:#?}");
         // Create a device and queue
         let (device, queue) = Self::request_device_and_queue_for_adapter(&adapter).await;
         // Create surface configuration
@@ -198,7 +210,7 @@ impl RenderCore {
         surface.configure(&device, &config);
 
         // Create pipeline cache if supported
-        let pipeline_cache = initialize_cache(&device, &adapter.get_info());
+        let pipeline_cache = initialize_cache(&device, &adapter_info);
 
         // Create MSAA Target
         let (msaa_texture, msaa_view) = Self::make_msaa_resources(&device, sample_count, &config);
@@ -389,7 +401,7 @@ impl RenderCore {
             size_changed: false,
             pipelines,
             pipeline_cache,
-            adapter_info: adapter.get_info(),
+            adapter_info,
             targets,
             compute,
             blit,
