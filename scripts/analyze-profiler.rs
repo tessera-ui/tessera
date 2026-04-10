@@ -498,7 +498,7 @@ fn print_summary(summary: &Summary) {
     if summary.frame_total_count > 0 {
         let avg = summary.frame_total_sum as f64 / summary.frame_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Frame total (wall)"),
+            Cell::new("Frame cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -515,7 +515,7 @@ fn print_summary(summary: &Summary) {
     if summary.build_tree_count > 0 {
         let avg = summary.build_tree_total as f64 / summary.build_tree_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Build tree (wall)"),
+            Cell::new("Build cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -530,7 +530,7 @@ fn print_summary(summary: &Summary) {
     if summary.draw_count > 0 {
         let avg = summary.draw_total as f64 / summary.draw_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Draw/compute (wall)"),
+            Cell::new("Draw/compute cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -545,19 +545,18 @@ fn print_summary(summary: &Summary) {
     if summary.render_count > 0 {
         let avg = summary.render_total as f64 / summary.render_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Render (wall)"),
+            Cell::new("Render cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(""),
             Cell::new(""),
         ]));
     }
 
-    // Node-scope totals (CPU-time sum; may exceed wall time because samples
-    // overlap).
+    // Node-scope totals (exclusive time attributed to component nodes).
     if summary.build_total_count > 0 {
         let avg = summary.build_total_sum as f64 / summary.build_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Build total (exclusive CPU)"),
+            Cell::new("Build total"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -572,7 +571,7 @@ fn print_summary(summary: &Summary) {
     if summary.measure_total_count > 0 {
         let avg = summary.measure_total_sum as f64 / summary.measure_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Measure total (exclusive CPU)"),
+            Cell::new("Measure total"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -587,7 +586,7 @@ fn print_summary(summary: &Summary) {
     if summary.input_total_count > 0 {
         let avg = summary.input_total_sum as f64 / summary.input_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Input total (exclusive CPU)"),
+            Cell::new("Input total"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -603,7 +602,7 @@ fn print_summary(summary: &Summary) {
     if summary.unaccounted_total_count > 0 {
         let avg = summary.unaccounted_total_sum as f64 / summary.unaccounted_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Unaccounted (wall)").fg(Color::DarkGrey),
+            Cell::new("Unaccounted cost").fg(Color::DarkGrey),
             Cell::new(format!("{} ms", format_ms(avg))).fg(Color::DarkGrey),
             Cell::new(format!(
                 "{} ms",

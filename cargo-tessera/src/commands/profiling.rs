@@ -983,31 +983,31 @@ fn build_frame_rows(summary: &Summary) -> Vec<CompactTimingRow> {
     let mut rows = Vec::new();
     if summary.frame_total_count > 0 {
         rows.push(CompactTimingRow {
-            label: "Frame wall time",
+            label: "Frame cost",
             avg_ns: summary.frame_total_sum as f64 / summary.frame_total_count as f64,
         });
     }
     if summary.build_tree_count > 0 {
         rows.push(CompactTimingRow {
-            label: "Build wall time",
+            label: "Build cost",
             avg_ns: summary.build_tree_total as f64 / summary.build_tree_count as f64,
         });
     }
     if summary.draw_count > 0 {
         rows.push(CompactTimingRow {
-            label: "Draw/compute wall time",
+            label: "Draw/compute cost",
             avg_ns: summary.draw_total as f64 / summary.draw_count as f64,
         });
     }
     if summary.record_count > 0 {
         rows.push(CompactTimingRow {
-            label: "Record wall time",
+            label: "Record cost",
             avg_ns: summary.record_total as f64 / summary.record_count as f64,
         });
     }
     if summary.render_count > 0 {
         rows.push(CompactTimingRow {
-            label: "Render wall time",
+            label: "Render cost",
             avg_ns: summary.render_total as f64 / summary.render_count as f64,
         });
     }
@@ -1202,7 +1202,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.frame_total_count > 0 {
         let avg = summary.frame_total_sum as f64 / summary.frame_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Frame wall time"),
+            Cell::new("Frame cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1218,7 +1218,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.build_tree_count > 0 {
         let avg = summary.build_tree_total as f64 / summary.build_tree_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Build wall time"),
+            Cell::new("Build cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1233,7 +1233,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.draw_count > 0 {
         let avg = summary.draw_total as f64 / summary.draw_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Draw/compute wall time"),
+            Cell::new("Draw/compute cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1248,7 +1248,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.record_count > 0 {
         let avg = summary.record_total as f64 / summary.record_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Record wall time"),
+            Cell::new("Record cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1263,7 +1263,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.render_count > 0 {
         let avg = summary.render_total as f64 / summary.render_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Render wall time"),
+            Cell::new("Render cost"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1354,7 +1354,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.build_total_count > 0 {
         let avg = summary.build_total_sum as f64 / summary.build_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Build total (exclusive CPU)"),
+            Cell::new("Build total"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1369,7 +1369,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.measure_total_count > 0 {
         let avg = summary.measure_total_sum as f64 / summary.measure_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Measure total (exclusive CPU)"),
+            Cell::new("Measure total"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1384,7 +1384,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.record_total_count > 0 {
         let avg = summary.record_total_sum as f64 / summary.record_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Record total (exclusive CPU)"),
+            Cell::new("Record total"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1399,7 +1399,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.input_total_count > 0 {
         let avg = summary.input_total_sum as f64 / summary.input_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Input total (exclusive CPU)"),
+            Cell::new("Input total"),
             Cell::new(format!("{} ms", format_ms(avg))),
             Cell::new(format!(
                 "{} ms",
@@ -1415,7 +1415,7 @@ fn print_summary_verbose(summary: &Summary) {
     if summary.unaccounted_total_count > 0 {
         let avg = summary.unaccounted_total_sum as f64 / summary.unaccounted_total_count as f64;
         table.add_row(Row::from(vec![
-            Cell::new("Unaccounted wall time").fg(Color::DarkGrey),
+            Cell::new("Unaccounted cost").fg(Color::DarkGrey),
             Cell::new(format!("{} ms", format_ms(avg))).fg(Color::DarkGrey),
             Cell::new(format!(
                 "{} ms",
