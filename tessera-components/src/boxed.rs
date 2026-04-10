@@ -106,21 +106,22 @@ impl LayoutPolicy for BoxedLayout {
             "Mismatch between children defined in scope and runtime children count"
         );
 
-        let effective_constraint = *input.parent_constraint().as_ref();
+        let parent_constraint = *input.parent_constraint().as_ref();
+        let child_constraint = input.parent_constraint().without_min();
 
         let mut max_child_width = Px(0);
         let mut max_child_height = Px(0);
         let mut children_sizes = vec![None; n];
 
         for (i, child) in children.iter().enumerate().take(n) {
-            let child_result = child.measure(&effective_constraint)?;
+            let child_result = child.measure(&child_constraint)?;
             max_child_width = max_child_width.max(child_result.width);
             max_child_height = max_child_height.max(child_result.height);
             children_sizes[i] = Some(child_result);
         }
 
-        let final_width = resolve_final_dimension(effective_constraint.width, max_child_width);
-        let final_height = resolve_final_dimension(effective_constraint.height, max_child_height);
+        let final_width = resolve_final_dimension(parent_constraint.width, max_child_width);
+        let final_height = resolve_final_dimension(parent_constraint.height, max_child_height);
 
         for (i, child_size_opt) in children_sizes.iter().enumerate() {
             if let Some(child_size) = child_size_opt {

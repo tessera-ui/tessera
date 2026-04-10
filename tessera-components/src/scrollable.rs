@@ -473,6 +473,7 @@ impl LayoutPolicy for ScrollableAlongsideLayout {
         let mut result = LayoutResult::default();
         let children = input.children();
         let mut final_size = ComputedData::ZERO;
+        let child_constraint = input.parent_constraint().without_min();
         let mut content_constraint = Constraint::new(
             input.parent_constraint().width(),
             input.parent_constraint().height(),
@@ -480,7 +481,7 @@ impl LayoutPolicy for ScrollableAlongsideLayout {
 
         if self.vertical {
             let scrollbar = children[1];
-            let size = scrollbar.measure_in_parent_constraint(input.parent_constraint())?;
+            let size = scrollbar.measure(&child_constraint)?;
             content_constraint.width -= size.width;
             final_size.width += size.width;
         }
@@ -491,7 +492,7 @@ impl LayoutPolicy for ScrollableAlongsideLayout {
             } else {
                 children[1]
             };
-            let size = scrollbar.measure_in_parent_constraint(input.parent_constraint())?;
+            let size = scrollbar.measure(&child_constraint)?;
             content_constraint.height -= size.height;
             final_size.height += size.height;
         }

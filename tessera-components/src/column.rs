@@ -84,28 +84,28 @@ impl LayoutPolicy for ColumnLayout {
             "Mismatch between children defined in scope and runtime children count"
         );
 
-        let column_effective_constraint = *input.parent_constraint().as_ref();
+        let column_parent_constraint = *input.parent_constraint().as_ref();
 
         let mut children_sizes = vec![None; n];
         let mut max_child_width = Px(0);
 
         let has_weighted_children = child_weights.iter().any(|&weight| weight > 0.0);
         let should_use_weight_for_height =
-            has_weighted_children && column_effective_constraint.height.resolve_max().is_some();
+            has_weighted_children && column_parent_constraint.height.resolve_max().is_some();
 
         let (final_column_width, final_column_height, total_measured_children_height) =
             if should_use_weight_for_height {
                 measure_weighted_column(
                     input,
                     &child_weights,
-                    &column_effective_constraint,
+                    &column_parent_constraint,
                     &mut children_sizes,
                     &mut max_child_width,
                 )?
             } else {
                 measure_unweighted_column(
                     input,
-                    &column_effective_constraint,
+                    &column_parent_constraint,
                     &mut children_sizes,
                     &mut max_child_width,
                 )?
@@ -168,13 +168,13 @@ fn measure_unweighted_children_for_column(
     indices: &[usize],
     children_sizes: &mut [Option<ComputedData>],
     max_child_width: &mut Px,
-    column_effective_constraint: &Constraint,
+    column_parent_constraint: &Constraint,
 ) -> Result<Px, MeasurementError> {
     let mut total = Px(0);
 
     let parent_offered_constraint_for_child = Constraint::new(
-        column_effective_constraint.width,
-        column_effective_constraint.height.without_min(),
+        column_parent_constraint.width,
+        column_parent_constraint.height.without_min(),
     );
 
     for &child_idx in indices {
@@ -194,7 +194,7 @@ struct WeightedColumnMeasureContext<'a> {
     input: &'a MeasureScope<'a>,
     children_sizes: &'a mut [Option<ComputedData>],
     max_child_width: &'a mut Px,
-    column_effective_constraint: &'a Constraint,
+    column_parent_constraint: &'a Constraint,
     child_weights: &'a [f32],
 }
 
@@ -214,7 +214,7 @@ fn measure_weighted_children_for_column(
             Px((remaining_height.0 as f32 * (child_weight / total_weight)) as i32);
         let child_id = ctx.input.children()[child_idx];
         let parent_offered_constraint_for_child = Constraint::new(
-            ctx.column_effective_constraint.width,
+            ctx.column_parent_constraint.width,
             AxisConstraint::exact(allocated_height),
         );
         let child_result = child_id.measure(&parent_offered_constraint_for_child)?;
@@ -226,21 +226,21 @@ fn measure_weighted_children_for_column(
 }
 
 fn calculate_final_column_height(
-    column_effective_constraint: &Constraint,
+    column_parent_constraint: &Constraint,
     measured_children_height: Px,
 ) -> Px {
-    column_effective_constraint
+    column_parent_constraint
         .height
         .clamp(measured_children_height)
 }
 
 fn calculate_final_column_width(
-    column_effective_constraint: &Constraint,
+    column_parent_constraint: &Constraint,
     max_child_width: Px,
     parent_constraint: ParentConstraint<'_>,
 ) -> Px {
     let _ = parent_constraint;
-    column_effective_constraint.width.clamp(max_child_width)
+    column_parent_constraint.width.clamp(max_child_width)
 }
 
 /// Measure column when height uses weighted allocation.
@@ -248,11 +248,11 @@ fn calculate_final_column_width(
 fn measure_weighted_column(
     input: &MeasureScope<'_>,
     child_weights: &[f32],
-    column_effective_constraint: &Constraint,
+    column_parent_constraint: &Constraint,
     children_sizes: &mut [Option<ComputedData>],
     max_child_width: &mut Px,
 ) -> Result<(Px, Px, Px), MeasurementError> {
-    let available_height_for_children = column_effective_constraint
+    let available_height_for_children = column_parent_constraint
         .height
         .resolve_max()
         .expect("Column height Fill expected with finite max constraint");
@@ -265,7 +265,7 @@ fn measure_weighted_column(
         &unweighted_children_indices,
         children_sizes,
         max_child_width,
-        column_effective_constraint,
+        column_parent_constraint,
     )?;
 
     let remaining_height_for_weighted_children =
@@ -276,7 +276,7 @@ fn measure_weighted_column(
             input,
             children_sizes,
             max_child_width,
-            column_effective_constraint,
+            column_parent_constraint,
             child_weights,
         },
         &weighted_children_indices,
@@ -290,9 +290,9 @@ fn measure_weighted_column(
         .fold(Px(0), |acc, h| acc + h);
 
     let final_column_height =
-        calculate_final_column_height(column_effective_constraint, total_measured_children_height);
+        calculate_final_column_height(column_parent_constraint, total_measured_children_height);
     let final_column_width = calculate_final_column_width(
-        column_effective_constraint,
+        column_parent_constraint,
         *max_child_width,
         input.parent_constraint(),
     );
@@ -319,7 +319,7 @@ fn collect_child_weights(input: &MeasureScope<'_>) -> Vec<f32> {
 
 fn measure_unweighted_column(
     input: &MeasureScope<'_>,
-    column_effective_constraint: &Constraint,
+    column_parent_constraint: &Constraint,
     children_sizes: &mut [Option<ComputedData>],
     max_child_width: &mut Px,
 ) -> Result<(Px, Px, Px), MeasurementError> {
@@ -327,8 +327,8 @@ fn measure_unweighted_column(
     let mut total_children_measured_height = Px(0);
 
     let parent_offered_constraint_for_child = Constraint::new(
-        column_effective_constraint.width,
-        column_effective_constraint.height.without_min(),
+        column_parent_constraint.width,
+        column_parent_constraint.height.without_min(),
     );
 
     for (i, child_id) in input.children().iter().enumerate().take(n) {
@@ -339,9 +339,9 @@ fn measure_unweighted_column(
     }
 
     let final_column_height =
-        calculate_final_column_height(column_effective_constraint, total_children_measured_height);
+        calculate_final_column_height(column_parent_constraint, total_children_measured_height);
     let final_column_width = calculate_final_column_width(
-        column_effective_constraint,
+        column_parent_constraint,
         *max_child_width,
         input.parent_constraint(),
     );

@@ -643,8 +643,9 @@ mod tests {
             input: &MeasureScope<'_>,
         ) -> Result<LayoutResult, crate::MeasurementError> {
             let mut result = LayoutResult::default();
+            let child_constraint = input.parent_constraint().without_min();
             for child in input.children() {
-                let _ = child.measure_in_parent_constraint(input.parent_constraint())?;
+                let _ = child.measure(&child_constraint)?;
                 result.place_child(child, PxPosition::ZERO);
             }
 
@@ -666,9 +667,10 @@ mod tests {
             let mut result = LayoutResult::default();
             let mut current_y = Px::ZERO;
             let mut max_width = Px::ZERO;
+            let child_constraint = input.parent_constraint().without_min();
 
             for child in input.children() {
-                let child_size = child.measure_in_parent_constraint(input.parent_constraint())?;
+                let child_size = child.measure(&child_constraint)?;
                 result.place_child(child, PxPosition::new(Px::ZERO, current_y));
                 current_y += child_size.height;
                 max_width = max_width.max(child_size.width);
@@ -692,12 +694,13 @@ mod tests {
             input: &MeasureScope<'_>,
         ) -> Result<LayoutResult, crate::MeasurementError> {
             let mut result = LayoutResult::default();
+            let child_constraint = input.parent_constraint().without_min();
             let child = input
                 .children()
                 .first()
                 .copied()
                 .expect("offset child policy requires a child");
-            let child_size = child.measure_in_parent_constraint(input.parent_constraint())?;
+            let child_size = child.measure(&child_constraint)?;
             result.place_child(child, PxPosition::new(Px::new(self.x), Px::ZERO));
 
             Ok(result.with_size(ComputedData {

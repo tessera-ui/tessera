@@ -487,14 +487,11 @@ fn try_build_simple_rect_command(
     }
 }
 
-fn compute_surface_size(
-    effective_surface_constraint: Constraint,
-    child_measurement: ComputedData,
-) -> (Px, Px) {
-    let width = effective_surface_constraint
+fn compute_surface_size(parent_constraint: Constraint, child_measurement: ComputedData) -> (Px, Px) {
+    let width = parent_constraint
         .width
         .clamp(child_measurement.width);
-    let height = effective_surface_constraint
+    let height = parent_constraint
         .height
         .clamp(child_measurement.height);
 
@@ -519,14 +516,15 @@ impl PartialEq for SurfaceLayout {
 impl LayoutPolicy for SurfaceLayout {
     fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
-        let effective_surface_constraint = *input.parent_constraint().as_ref();
+        let parent_constraint = *input.parent_constraint().as_ref();
+        let child_constraint = input.parent_constraint().without_min();
         let children = input.children();
 
         let child_measurement = if !children.is_empty() {
             let mut max_width = Px::ZERO;
             let mut max_height = Px::ZERO;
             for &child in &children {
-                let measurement = child.measure(&effective_surface_constraint)?;
+                let measurement = child.measure(&child_constraint)?;
                 max_width = max_width.max(measurement.width);
                 max_height = max_height.max(measurement.height);
             }
@@ -541,7 +539,7 @@ impl LayoutPolicy for SurfaceLayout {
             }
         };
 
-        let (width, height) = compute_surface_size(effective_surface_constraint, child_measurement);
+        let (width, height) = compute_surface_size(parent_constraint, child_measurement);
 
         if !children.is_empty() {
             let (extra_x, extra_y) = compute_content_offset(

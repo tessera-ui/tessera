@@ -3273,9 +3273,10 @@ impl LayoutPolicy for TextEditLayout {
 
         let place_rect_children =
             |rects: &[RectDef], child_offset: usize, result: &mut LayoutResult| {
+                let child_constraint = input.parent_constraint().without_min();
                 for (index, rect_def) in rects.iter().enumerate() {
                     if let Some(rect_node) = children.get(child_offset + index).copied() {
-                        rect_node.measure_in_parent_constraint(input.parent_constraint())?;
+                        rect_node.measure(&child_constraint)?;
                         result.place_child(rect_node, PxPosition::new(rect_def.x, rect_def.y));
                     }
                 }
@@ -3291,7 +3292,8 @@ impl LayoutPolicy for TextEditLayout {
             if let Some(cursor_rect) = cursor_rect {
                 let cursor_node_index = selection_rects.len() + composition_rects.len();
                 if let Some(cursor_node) = children.get(cursor_node_index).copied() {
-                    cursor_node.measure_in_parent_constraint(input.parent_constraint())?;
+                    let child_constraint = input.parent_constraint().without_min();
+                    cursor_node.measure(&child_constraint)?;
                     result.place_child(cursor_node, PxPosition::new(cursor_rect.x, cursor_rect.y));
                 }
             }
@@ -3362,7 +3364,8 @@ impl LayoutPolicy for TextEditLayout {
         if let Some(cursor_rect) = cursor_rect {
             let cursor_node_index = selection_rects_len + composition_rects_len;
             if let Some(cursor_node) = children.get(cursor_node_index).copied() {
-                cursor_node.measure_in_parent_constraint(input.parent_constraint())?;
+                let child_constraint = input.parent_constraint().without_min();
+                cursor_node.measure(&child_constraint)?;
                 result.place_child(cursor_node, PxPosition::new(cursor_rect.x, cursor_rect.y));
             }
         }

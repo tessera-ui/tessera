@@ -247,11 +247,12 @@ impl LayoutPolicy for MenuLayout {
     fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
+        let child_constraint = input.parent_constraint().without_min();
         let main_content = children
             .first()
             .copied()
             .expect("main content should exist");
-        let main_size = main_content.measure_in_parent_constraint(input.parent_constraint())?;
+        let main_size = main_content.measure(&child_constraint)?;
         result.place_child(main_content, PxPosition::new(Px::ZERO, Px::ZERO));
 
         let background = children
@@ -260,10 +261,10 @@ impl LayoutPolicy for MenuLayout {
             .expect("menu background should exist");
         let menu = children.get(2).copied().expect("menu surface should exist");
 
-        let background_size = background.measure_in_parent_constraint(input.parent_constraint())?;
+        let background_size = background.measure(&child_constraint)?;
         result.place_child(background, PxPosition::new(Px::ZERO, Px::ZERO));
 
-        let menu_size = menu.measure_in_parent_constraint(input.parent_constraint())?;
+        let menu_size = menu.measure(&child_constraint)?;
         let background_size = background_size.size();
         let menu_size = menu_size.size();
         let main_size = main_size.size();

@@ -713,14 +713,14 @@ impl LayoutPolicy for BottomSheetLayout {
     fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
+        let child_constraint = input.parent_constraint().without_min();
         let main_content = children[0];
-        let main_content_size =
-            main_content.measure_in_parent_constraint(input.parent_constraint())?;
+        let main_content_size = main_content.measure(&child_constraint)?;
         result.place_child(main_content, PxPosition::new(Px(0), Px(0)));
 
         if children.len() > 1 {
             let scrim = children[1];
-            scrim.measure_in_parent_constraint(input.parent_constraint())?;
+            scrim.measure(&child_constraint)?;
             result.place_child(scrim, PxPosition::new(Px(0), Px(0)));
         }
 

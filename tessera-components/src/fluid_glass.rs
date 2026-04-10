@@ -356,11 +356,11 @@ struct FluidGlassLayout {
 impl LayoutPolicy for FluidGlassLayout {
     fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
-        let effective_glass_constraint = *input.parent_constraint().as_ref();
+        let parent_constraint = *input.parent_constraint().as_ref();
 
         let child_constraint = Constraint::new(
-            remove_padding_from_constraint(effective_glass_constraint.width, self.padding.into()),
-            remove_padding_from_constraint(effective_glass_constraint.height, self.padding.into()),
+            remove_padding_from_constraint(parent_constraint.width, self.padding.into()),
+            remove_padding_from_constraint(parent_constraint.height, self.padding.into()),
         );
 
         let children = input.children();
@@ -384,8 +384,8 @@ impl LayoutPolicy for FluidGlassLayout {
         let padding_px: Px = self.padding.into();
         let min_width = child_measurement.width + padding_px * 2;
         let min_height = child_measurement.height + padding_px * 2;
-        let width = effective_glass_constraint.width.clamp(min_width);
-        let height = effective_glass_constraint.height.clamp(min_height);
+        let width = parent_constraint.width.clamp(min_width);
+        let height = parent_constraint.height.clamp(min_height);
 
         Ok(result.with_size(ComputedData { width, height }))
     }

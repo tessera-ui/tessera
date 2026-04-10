@@ -675,16 +675,16 @@ impl LayoutPolicy for SegmentedButtonRowLayout {
 }
 
 fn calculate_final_row_width(
-    row_effective_constraint: &Constraint,
+    row_parent_constraint: &Constraint,
     total_children_measured_width: Px,
 ) -> Px {
-    row_effective_constraint
+    row_parent_constraint
         .width
         .clamp(total_children_measured_width)
 }
 
-fn calculate_final_row_height(row_effective_constraint: &Constraint, max_child_height: Px) -> Px {
-    row_effective_constraint.height.clamp(max_child_height)
+fn calculate_final_row_height(row_parent_constraint: &Constraint, max_child_height: Px) -> Px {
+    row_parent_constraint.height.clamp(max_child_height)
 }
 
 fn calculate_cross_axis_offset(

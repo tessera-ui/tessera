@@ -352,7 +352,8 @@ impl LayoutPolicy for DialogContentLayout {
                 height: Px(0),
             }));
         };
-        let computed = child.measure_in_parent_constraint(input.parent_constraint())?;
+        let child_constraint = input.parent_constraint().without_min();
+        let computed = child.measure(&child_constraint)?;
         result.place_child(child, PxPosition::ZERO);
         Ok(result.with_size(computed.size()))
     }

@@ -749,12 +749,13 @@ mod tests {
     impl LayoutPolicy for OffsetChildPolicy {
         fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let mut result = LayoutResult::default();
+            let child_constraint = input.parent_constraint().without_min();
             let child = input
                 .children()
                 .first()
                 .copied()
                 .expect("offset child policy requires a child");
-            let child_size = child.measure_in_parent_constraint(input.parent_constraint())?;
+            let child_size = child.measure(&child_constraint)?;
             result.place_child(child, PxPosition::new(Px::new(self.x), Px::ZERO));
 
             Ok(result.with_size(ComputedData {
@@ -773,8 +774,9 @@ mod tests {
     impl LayoutPolicy for FixedSizePolicy {
         fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let mut result = LayoutResult::default();
+            let child_constraint = input.parent_constraint().without_min();
             for child in input.children() {
-                let _ = child.measure_in_parent_constraint(input.parent_constraint())?;
+                let _ = child.measure(&child_constraint)?;
                 result.place_child(child, PxPosition::ZERO);
             }
 

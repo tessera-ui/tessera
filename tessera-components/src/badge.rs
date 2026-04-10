@@ -44,11 +44,10 @@ impl LayoutPolicy for BadgedBoxLayout {
             "badged_box expects exactly two children: anchor and badge",
         );
 
-        let parent_constraint = *input.parent_constraint().as_ref();
-
+        let parent_constraint = input.parent_constraint().without_min();
         let badge_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            relax_min_constraint(input.parent_constraint().height()),
+            relax_min_constraint(parent_constraint.width),
+            relax_min_constraint(parent_constraint.height),
         );
 
         let anchor = children[0];

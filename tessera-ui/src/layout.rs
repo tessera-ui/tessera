@@ -123,14 +123,6 @@ impl<'a> LayoutChild<'a> {
         })
     }
 
-    /// Measures this child using the inherited parent constraint.
-    pub fn measure_in_parent_constraint(
-        &self,
-        parent_constraint: ParentConstraint<'_>,
-    ) -> Result<MeasuredChild, MeasurementError> {
-        self.measure(parent_constraint.as_ref())
-    }
-
     /// Reads a typed parent-data payload from this direct child layout node.
     pub fn parent_data<T>(&self) -> Option<T>
     where

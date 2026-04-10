@@ -560,7 +560,7 @@ impl LayoutPolicy for OutlinedFloatingLabelLayout {
         let notch = children[0];
         let label = children[1];
 
-        let parent_constraint = *input.parent_constraint().as_ref();
+        let parent_constraint = input.parent_constraint().without_min();
         let label_measurement = label.measure(&parent_constraint)?;
         let notch_width = label_measurement.width + self.notch_padding * 2;
         let notch_height = label_measurement.height + self.notch_vertical_padding * 2;

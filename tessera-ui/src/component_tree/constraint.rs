@@ -173,6 +173,14 @@ impl<'a> ParentConstraint<'a> {
     pub const fn as_ref(self) -> &'a Constraint {
         self.0
     }
+
+    /// Returns the inherited constraint with both lower bounds cleared.
+    pub const fn without_min(self) -> Constraint {
+        Constraint {
+            width: self.0.width.without_min(),
+            height: self.0.height.without_min(),
+        }
+    }
 }
 
 /// A two-dimensional interval constraint.

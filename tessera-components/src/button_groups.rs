@@ -410,7 +410,8 @@ impl LayoutPolicy for ElasticContainerLayout {
     fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let child = input.children()[0];
-        let child_size = child.measure_in_parent_constraint(input.parent_constraint())?;
+        let child_constraint = input.parent_constraint().without_min();
+        let child_size = child.measure(&child_constraint)?;
         let additional_width = child_size.width.mul_f32(0.15 * self.progress);
         result.place_child(child, PxPosition::new(additional_width / 2, Px::ZERO));
 

@@ -652,10 +652,7 @@ impl LayoutPolicy for TabsLayout {
     fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
-        let tabs_effective_constraint = Constraint::new(
-            input.parent_constraint().width(),
-            input.parent_constraint().height(),
-        );
+        let parent_constraint = *input.parent_constraint().as_ref();
 
         let container = children[0];
         let divider = children[1];
@@ -669,7 +666,7 @@ impl LayoutPolicy for TabsLayout {
 
         let horizontal_padding = self.args.tab_padding.to_px().to_f32() * 2.0;
         let indicator_min_width: Px = self.args.indicator_min_width.into();
-        let available_width = tabs_effective_constraint.width.resolve_max();
+        let available_width = parent_constraint.width.resolve_max();
 
         let is_scrollable = self.args.scrollable || available_width.is_none();
         let match_content_size = matches!(self.args.variant, TabsVariant::Primary);
