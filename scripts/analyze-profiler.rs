@@ -552,7 +552,8 @@ fn print_summary(summary: &Summary) {
         ]));
     }
 
-    // Node-scope totals (CPU-time sum; may exceed wall time because samples overlap).
+    // Node-scope totals (CPU-time sum; may exceed wall time because samples
+    // overlap).
     if summary.build_total_count > 0 {
         let avg = summary.build_total_sum as f64 / summary.build_total_count as f64;
         table.add_row(Row::from(vec![
