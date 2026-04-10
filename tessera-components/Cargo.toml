@@ -14,7 +14,7 @@ image = { version = "0.25.9", default-features = false, features = [
     "png",
     "jpeg",
 ] }
-glyphon = "0.10.0"
+glyphon = { package = "tessera-glyphon", version = "0.10.0", path = "../tessera-glyphon" }
 tracing = "0.1.44"
 parking_lot = "0.12.5"
 tessera-foundation = { path = "../tessera-foundation" }

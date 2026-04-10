@@ -2,6 +2,7 @@ use std::{any::TypeId, mem};
 
 use downcast_rs::Downcast;
 use smallvec::SmallVec;
+use tracing::{debug, error, warn};
 
 use crate::{
     DrawCommand, Px, PxPosition, PxRect, PxSize,
@@ -373,17 +374,44 @@ impl RenderCore {
     /// # Returns
     ///
     /// * `Ok(())` if rendering succeeds
-    /// * `Err(wgpu::SurfaceError)` if there are issues with the surface
     pub(crate) fn render(
         &mut self,
         execution: RenderGraphExecution,
         #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
-    ) -> Result<(), wgpu::SurfaceError> {
+    ) {
         let render_start = Instant::now();
         let current_frame = self.frame_index;
         self.last_render_breakdown = None;
         let acquire_start = Instant::now();
-        let output_frame = self.surface.get_current_texture()?;
+        let (output_frame, reconfigure_after_present) = match self.surface.get_current_texture() {
+            wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
+            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
+                debug!("Surface suboptimal, rendering frame before reconfiguring...");
+                (frame, true)
+            }
+            wgpu::CurrentSurfaceTexture::Timeout => {
+                warn!("Surface timeout. Frame will be dropped.");
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Occluded => {
+                warn!("Surface occluded. Frame will be dropped.");
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Outdated => {
+                debug!("Surface outdated, reconfiguring...");
+                self.resize_surface();
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Lost => {
+                warn!("Surface lost, recreating surface...");
+                self.recreate_surface();
+                return;
+            }
+            wgpu::CurrentSurfaceTexture::Validation => {
+                error!("Surface validation error. Frame will be dropped.");
+                return;
+            }
+        };
         let acquire = acquire_start.elapsed();
 
         let texture_size = wgpu::Extent3d {
@@ -512,6 +540,9 @@ impl RenderCore {
 
         let present_start = Instant::now();
         output_frame.present();
+        if reconfigure_after_present {
+            self.resize_surface();
+        }
         let present = present_start.elapsed();
         self.external_textures.collect_garbage(current_frame, 2);
         self.frame_index = self.frame_index.wrapping_add(1);
@@ -523,8 +554,6 @@ impl RenderCore {
             present,
             total: render_start.elapsed(),
         });
-
-        Ok(())
     }
 
     fn execute_render_pass(

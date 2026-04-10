@@ -6,6 +6,7 @@ members = [
     "tessera-foundation",
     "tessera-platform",
     "tessera-components",
+    "tessera-glyphon",
     "tessera-build",
     "tessera-macros",
     "tessera-shard",

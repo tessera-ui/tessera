@@ -298,15 +298,18 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             command.data.text_area(start_pos)
         });
 
+        let mut font_system = write_font_system();
         self.renderer
             .prepare(
-                context.device,
-                context.queue,
-                &mut write_font_system(),
-                &mut self.atlas,
-                &self.viewport,
+                glyphon::PrepareContext::new(
+                    context.device,
+                    context.queue,
+                    &mut font_system,
+                    &mut self.atlas,
+                    &self.viewport,
+                    &mut self.swash_cache,
+                ),
                 text_areas,
-                &mut self.swash_cache,
             )
             .expect("glyphon prepare failed");
 

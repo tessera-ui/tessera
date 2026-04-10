@@ -59,6 +59,7 @@ const GITHUB_REPO: &str = "tessera";
 const PUBLISHABLE_PACKAGES: &[&str] = &[
     "tessera-ui",
     "tessera-foundation",
+    "tessera-glyphon",
     "tessera-components",
     "tessera-macros",
     "tessera-shard",
@@ -536,6 +537,14 @@ fn read_toml(path: &Path) -> Result<DocumentMut> {
     Ok(doc)
 }
 
+fn dependency_target_name(dep_name: &str, item: &toml_edit::Item) -> String {
+    item.as_table_like()
+        .and_then(|dep_table| dep_table.get("package"))
+        .and_then(|package| package.as_str())
+        .unwrap_or(dep_name)
+        .to_string()
+}
+
 #[derive(Debug, Clone)]
 struct Package {
     name: String,
@@ -598,9 +607,10 @@ impl Workspace {
 
             let mut dependencies = Vec::new();
             if let Some(deps) = doc.get("dependencies").and_then(|d| d.as_table_like()) {
-                for (dep_name, _) in deps.iter() {
-                    if member_names.contains(dep_name) {
-                        dependencies.push(dep_name.to_string());
+                for (dep_name, item) in deps.iter() {
+                    let target_name = dependency_target_name(dep_name, item);
+                    if member_names.contains(&target_name) {
+                        dependencies.push(target_name);
                     }
                 }
             }
@@ -696,11 +706,15 @@ fn replace_paths_in_doc(
             // Collect keys up-front to avoid borrowing issues while mutating the table.
             let keys: Vec<_> = table.iter().map(|(k, _)| k.to_string()).collect();
             for dep in keys {
+                let Some(item) = table.get(&dep) else {
+                    continue;
+                };
+                let target_name = dependency_target_name(&dep, item);
                 // Skip replacing the package itself.
-                if dep == target_package {
+                if target_name == target_package {
                     continue;
                 }
-                if let Some(ver) = package_versions.get(&dep) {
+                if let Some(ver) = package_versions.get(&target_name) {
                     if let Some(item) = table.get_mut(&dep) {
                         if let Some(dep_table) = item.as_table_like_mut() {
                             if dep_table.remove("path").is_some() {

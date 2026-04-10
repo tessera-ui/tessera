@@ -110,7 +110,7 @@ impl ShapePipeline {
 
         let pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Shape Pipeline Layout"),
-            bind_group_layouts: &[&bind_group_layout],
+            bind_group_layouts: &[Some(&bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -236,8 +236,8 @@ impl ShapePipeline {
         let cached_pipeline_layout = gpu.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Shape Cached Pipeline Layout"),
             bind_group_layouts: &[
-                &cache_texture_bind_group_layout,
-                &cache_transform_bind_group_layout,
+                Some(&cache_texture_bind_group_layout),
+                Some(&cache_transform_bind_group_layout),
             ],
             immediate_size: 0,
         });

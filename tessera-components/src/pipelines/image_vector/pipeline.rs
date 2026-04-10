@@ -186,7 +186,7 @@ impl ImageVectorPipeline {
             layout: Some(
                 &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("image_vector_raster_pipeline_layout"),
-                    bind_group_layouts: &[&raster_bind_group_layout],
+                    bind_group_layouts: &[Some(&raster_bind_group_layout)],
                     immediate_size: 0,
                 }),
             ),
@@ -222,7 +222,7 @@ impl ImageVectorPipeline {
             layout: Some(
                 &device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                     label: Some("image_vector_sample_pipeline_layout"),
-                    bind_group_layouts: &[&sample_bind_group_layout],
+                    bind_group_layouts: &[Some(&sample_bind_group_layout)],
                     immediate_size: 0,
                 }),
             ),

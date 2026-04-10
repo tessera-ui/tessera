@@ -5,6 +5,7 @@
 //! Drive frame submission and GPU resource setup for Tessera applications.
 
 use std::{io, sync::Arc, time::Duration};
+
 use winit::window::Window;
 
 use crate::{
@@ -255,6 +256,8 @@ pub struct RenderCore {
     /// Avoiding release the window
     #[allow(unused)]
     window: Arc<Window>,
+    /// WGPU instance used to recreate surfaces when the swapchain is lost.
+    instance: wgpu::Instance,
     /// WGPU device
     device: wgpu::Device,
     /// WGPU surface

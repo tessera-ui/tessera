@@ -1,0 +1,3 @@
+[submodule "tessera-glyphon"]
+	path = tessera-glyphon
+	url = https://github.com/tessera-ui/tessera-glyphon

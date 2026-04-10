@@ -1208,22 +1208,7 @@ Fps: {:.2}
         }
 
         debug!("Rendering draw commands...");
-        if let Err(e) = args.app.render(execution) {
-            match e {
-                wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost => {
-                    debug!("Surface outdated/lost, resizing...");
-                    args.app.resize_surface();
-                }
-                wgpu::SurfaceError::Timeout => warn!("Surface timeout. Frame will be dropped."),
-                wgpu::SurfaceError::OutOfMemory => {
-                    error!("Surface out of memory. Panicking.");
-                    panic!("Surface out of memory");
-                }
-                _ => {
-                    error!("Surface error: {e}. Attempting to continue.");
-                }
-            }
-        }
+        args.app.render(execution);
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");
         render_cost
@@ -1247,22 +1232,7 @@ Fps: {:.2}
         }
 
         debug!("Rendering draw commands...");
-        if let Err(e) = args.app.render(execution, dirty_overlay_rects) {
-            match e {
-                wgpu::SurfaceError::Outdated | wgpu::SurfaceError::Lost => {
-                    debug!("Surface outdated/lost, resizing...");
-                    args.app.resize_surface();
-                }
-                wgpu::SurfaceError::Timeout => warn!("Surface timeout. Frame will be dropped."),
-                wgpu::SurfaceError::OutOfMemory => {
-                    error!("Surface out of memory. Panicking.");
-                    panic!("Surface out of memory");
-                }
-                _ => {
-                    error!("Surface error: {e}. Attempting to continue.");
-                }
-            }
-        }
+        args.app.render(execution, dirty_overlay_rects);
         let render_cost = render_timer.elapsed();
         debug!("Rendered to surface in {render_cost:?}");
         render_cost

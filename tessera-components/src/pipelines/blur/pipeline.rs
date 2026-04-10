@@ -350,18 +350,18 @@ impl BlurPipeline {
         let downsample_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Blur Downsample Pipeline Layout"),
-                bind_group_layouts: &[&downsample_bind_group_layout],
+                bind_group_layouts: &[Some(&downsample_bind_group_layout)],
                 immediate_size: 0,
             });
         let blur_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Blur Pipeline Layout"),
-            bind_group_layouts: &[&blur_bind_group_layout],
+            bind_group_layouts: &[Some(&blur_bind_group_layout)],
             immediate_size: 0,
         });
         let upsample_pipeline_layout =
             device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
                 label: Some("Blur Upsample Pipeline Layout"),
-                bind_group_layouts: &[&upsample_bind_group_layout],
+                bind_group_layouts: &[Some(&upsample_bind_group_layout)],
                 immediate_size: 0,
             });
 

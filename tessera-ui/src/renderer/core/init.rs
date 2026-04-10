@@ -157,10 +157,9 @@ impl RenderCore {
         window_transparent: bool,
     ) -> Self {
         // Looking for adapters
-        let instance: wgpu::Instance = wgpu::Instance::new(&wgpu::InstanceDescriptor {
-            backends: wgpu::Backends::all(),
-            ..Default::default()
-        });
+        let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
+        instance_desc.backends = wgpu::Backends::all();
+        let instance: wgpu::Instance = wgpu::Instance::new(instance_desc);
         // Create a surface
         let surface = match instance.create_surface(window.clone()) {
             Ok(surface) => surface,
@@ -255,7 +254,7 @@ impl RenderCore {
 
         let blit_pipeline_layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
             label: Some("Blit Pipeline Layout"),
-            bind_group_layouts: &[&blit_bind_group_layout],
+            bind_group_layouts: &[Some(&blit_bind_group_layout)],
             immediate_size: 0,
         });
 
@@ -381,6 +380,7 @@ impl RenderCore {
 
         Self {
             window,
+            instance,
             device,
             surface,
             queue,
@@ -473,6 +473,23 @@ impl RenderCore {
     }
 
     pub(crate) fn resize_surface(&mut self) {
+        if self.size.width > 0 && self.size.height > 0 {
+            self.config.width = self.size.width;
+            self.config.height = self.size.height;
+            self.surface.configure(&self.device, &self.config);
+            self.rebuild_pass_targets();
+        }
+    }
+
+    pub(crate) fn recreate_surface(&mut self) {
+        let surface = match self.instance.create_surface(self.window.clone()) {
+            Ok(surface) => surface,
+            Err(err) => {
+                error!("Failed to recreate surface: {err:?}");
+                return;
+            }
+        };
+        self.surface = surface;
         if self.size.width > 0 && self.size.height > 0 {
             self.config.width = self.size.width;
             self.config.height = self.size.height;

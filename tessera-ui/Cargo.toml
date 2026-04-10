@@ -22,7 +22,7 @@ tracing = "0.1.44"
 tracing-subscriber = { version = "0.3.22", features = ["env-filter"] }
 parking_lot = { version = "0.12.5", features = ["deadlock_detection"] }
 pollster = "0.4.0"
-wgpu = "28.0.0"
+wgpu = "29.0.1"
 indextree = "4.7.4"
 slotmap = "1.1.1"
 rustc-hash = "2.1.1"
