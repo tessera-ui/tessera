@@ -17,6 +17,94 @@ use winit::platform::android::activity::AndroidApp;
 /// The result type used by plugin lifecycle hooks.
 pub type PluginResult = Result<(), Box<dyn Error + Send + Sync>>;
 
+type DesktopWakeHandler = Arc<dyn Fn() + Send + Sync>;
+
+/// Host-managed desktop window actions exposed to UI and platform plugins.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum DesktopWindowAction {
+    /// Minimizes the active window.
+    Minimize,
+    /// Maximizes the active window.
+    Maximize,
+    /// Toggles the active window maximized state.
+    ToggleMaximize,
+    /// Requests application shutdown through the renderer host.
+    Close,
+}
+
+impl DesktopWindowAction {
+    pub(crate) fn merge_pending(current: Option<Self>, new: Self) -> Self {
+        match (current, new) {
+            (Some(Self::Close), _) | (_, Self::Close) => Self::Close,
+            (_, new) => new,
+        }
+    }
+}
+
+/// Desktop platform services exposed to plugins.
+#[derive(Clone)]
+pub struct DesktopPlatformContext {
+    window: Arc<Window>,
+    pending_action: Arc<RwLock<Option<DesktopWindowAction>>>,
+    wake_handler: DesktopWakeHandler,
+}
+
+impl DesktopPlatformContext {
+    /// Returns the active window associated with the renderer.
+    pub fn window(&self) -> &Window {
+        &self.window
+    }
+
+    /// Clones the underlying window handle for long-lived usage.
+    pub fn window_handle(&self) -> Arc<Window> {
+        self.window.clone()
+    }
+
+    /// Minimizes the current window.
+    pub fn minimize(&self) {
+        self.request_action(DesktopWindowAction::Minimize);
+    }
+
+    /// Maximizes the current window.
+    pub fn maximize(&self) {
+        self.request_action(DesktopWindowAction::Maximize);
+    }
+
+    /// Toggles the maximized state of the current window.
+    pub fn toggle_maximize(&self) {
+        self.request_action(DesktopWindowAction::ToggleMaximize);
+    }
+
+    /// Requests host-managed application shutdown.
+    pub fn request_close(&self) {
+        self.request_action(DesktopWindowAction::Close);
+    }
+
+    fn request_action(&self, action: DesktopWindowAction) {
+        let mut pending_action = self.pending_action.write();
+        let next_action = DesktopWindowAction::merge_pending(*pending_action, action);
+        let changed = *pending_action != Some(next_action);
+        *pending_action = Some(next_action);
+        drop(pending_action);
+
+        if changed {
+            (self.wake_handler)();
+        }
+    }
+
+    pub(crate) fn new(
+        window: Arc<Window>,
+        pending_action: Arc<RwLock<Option<DesktopWindowAction>>>,
+        wake_handler: DesktopWakeHandler,
+    ) -> Self {
+        Self {
+            window,
+            pending_action,
+            wake_handler,
+        }
+    }
+}
+
 /// Lifecycle hooks for platform plugins.
 pub trait Plugin: Send + Sync + 'static {
     /// Returns the plugin name for logging and diagnostics.
@@ -78,20 +166,25 @@ impl<P: Plugin> PluginEntry for PluginSlot<P> {
 /// Platform context shared with plugins during lifecycle events.
 #[derive(Clone)]
 pub struct PluginContext {
-    window: Arc<Window>,
+    desktop: DesktopPlatformContext,
     #[cfg(target_os = "android")]
     android_app: AndroidApp,
 }
 
 impl PluginContext {
+    /// Returns desktop platform services associated with the renderer.
+    pub fn desktop(&self) -> &DesktopPlatformContext {
+        &self.desktop
+    }
+
     /// Returns the active window associated with the renderer.
     pub fn window(&self) -> &Window {
-        &self.window
+        self.desktop.window()
     }
 
     /// Clones the underlying window handle for long-lived usage.
     pub fn window_handle(&self) -> Arc<Window> {
-        self.window.clone()
+        self.desktop.window_handle()
     }
 
     /// Returns the Android application handle when running on Android.
@@ -101,16 +194,16 @@ impl PluginContext {
     }
 
     #[cfg(target_os = "android")]
-    pub(crate) fn new(window: Arc<Window>, android_app: AndroidApp) -> Self {
+    pub(crate) fn new(desktop: DesktopPlatformContext, android_app: AndroidApp) -> Self {
         Self {
-            window,
+            desktop,
             android_app,
         }
     }
 
     #[cfg(not(target_os = "android"))]
-    pub(crate) fn new(window: Arc<Window>) -> Self {
-        Self { window }
+    pub(crate) fn new(desktop: DesktopPlatformContext) -> Self {
+        Self { desktop }
     }
 }
 

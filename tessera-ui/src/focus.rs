@@ -14,13 +14,15 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
     NodeId, PxRect,
-    component_tree::{ComponentNodeMetaDatas, ComponentNodeTree},
+    component_tree::{
+        ComponentNodeMetaDatas, ComponentNodeTree, nearest_replay_boundary_instance_key,
+    },
     execution_context::{with_execution_context, with_execution_context_mut},
     prop::CallbackWith,
     px::PxSize,
     runtime::{
         TesseraRuntime, focus_read_subscribers, focus_requester_read_subscribers,
-        has_persistent_focus_handle, record_component_invalidation_for_instance_key,
+        has_persistent_focus_handle, record_replay_boundary_invalidation_for_instance_key,
         track_focus_read_dependency, track_focus_requester_read_dependency,
     },
 };
@@ -803,7 +805,7 @@ impl FocusManager {
 
 #[derive(Clone, Copy, Debug)]
 struct FocusAttachment {
-    host_instance_key: u64,
+    host_replay_boundary_key: u64,
     live_node_id: Option<NodeId>,
     focus_rect: Option<PxRect>,
     traversal_order: Option<u64>,
@@ -814,7 +816,7 @@ struct FocusAttachment {
 impl FocusAttachment {
     fn root_scope() -> Self {
         Self {
-            host_instance_key: 0,
+            host_replay_boundary_key: 0,
             live_node_id: None,
             focus_rect: None,
             traversal_order: None,
@@ -1075,7 +1077,7 @@ impl FocusOwner {
             let is_root_scope = matches!(
                 node.attachment,
                 Some(FocusAttachment {
-                    host_instance_key: 0,
+                    host_replay_boundary_key: 0,
                     ..
                 })
             );
@@ -1259,11 +1261,12 @@ impl FocusOwner {
                 .nodes
                 .entry(registration.id)
                 .or_insert_with(|| FocusTreeNode::new(registration.kind));
+            let host_replay_boundary_key = nearest_replay_boundary_instance_key(node_id, tree);
             entry.kind = registration.kind;
             entry.last_parent = parent_focus_id;
             entry.last_scope_parent = current_scope_id;
             entry.attachment = Some(FocusAttachment {
-                host_instance_key: node.instance_key,
+                host_replay_boundary_key,
                 live_node_id: Some(node_id),
                 focus_rect: None,
                 traversal_order: None,
@@ -1378,7 +1381,7 @@ impl FocusOwner {
                             .and_then(|attachment| attachment.traversal_order)
                             .unwrap_or(u64::MAX),
                         node.attachment
-                            .map(|attachment| attachment.host_instance_key)
+                            .map(|attachment| attachment.host_replay_boundary_key)
                             .unwrap_or(u64::MAX),
                     ),
                 )
@@ -2012,7 +2015,7 @@ impl FocusOwner {
         }
         for requester_id in changed {
             for reader in focus_requester_read_subscribers(requester_id) {
-                record_component_invalidation_for_instance_key(reader);
+                record_replay_boundary_invalidation_for_instance_key(reader);
             }
         }
     }
@@ -2066,13 +2069,15 @@ impl FocusOwner {
                 changed: true,
             });
             for reader in focus_read_subscribers(id) {
-                record_component_invalidation_for_instance_key(reader);
+                record_replay_boundary_invalidation_for_instance_key(reader);
             }
             if let Some(node) = self.nodes.get(&id)
                 && let Some(attachment) = node.attachment
-                && attachment.host_instance_key != 0
+                && attachment.host_replay_boundary_key != 0
             {
-                record_component_invalidation_for_instance_key(attachment.host_instance_key);
+                record_replay_boundary_invalidation_for_instance_key(
+                    attachment.host_replay_boundary_key,
+                );
             }
             if let Some(requesters) = self.requesters_by_handle.get(&id) {
                 changed_requesters.extend(requesters.iter().copied());
@@ -2098,7 +2103,7 @@ impl FocusOwner {
 
         for requester_id in changed_requesters {
             for reader in focus_requester_read_subscribers(requester_id) {
-                record_component_invalidation_for_instance_key(reader);
+                record_replay_boundary_invalidation_for_instance_key(reader);
             }
         }
     }

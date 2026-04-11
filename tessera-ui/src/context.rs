@@ -18,8 +18,9 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use crate::{
     execution_context::{with_execution_context, with_execution_context_mut},
     runtime::{
-        RuntimePhase, compute_context_slot_key, current_component_instance_key_from_scope,
-        current_phase, ensure_build_phase, record_component_invalidation_for_instance_key,
+        RuntimePhase, compute_context_slot_key, current_phase,
+        current_replay_boundary_instance_key_from_scope, ensure_build_phase,
+        record_replay_boundary_invalidation_for_instance_key,
     },
 };
 
@@ -296,7 +297,7 @@ fn track_context_read_dependency(slot: u32, generation: u64) {
     if !matches!(current_phase(), Some(RuntimePhase::Build)) {
         return;
     }
-    let Some(reader_instance_key) = current_component_instance_key_from_scope() else {
+    let Some(reader_instance_key) = current_replay_boundary_instance_key_from_scope() else {
         return;
     };
 
@@ -524,7 +525,7 @@ where
         };
         let subscribers = context_read_subscribers(self.slot, self.generation);
         for instance_key in subscribers {
-            record_component_invalidation_for_instance_key(instance_key);
+            record_replay_boundary_invalidation_for_instance_key(instance_key);
         }
         result
     }

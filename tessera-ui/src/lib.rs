@@ -352,8 +352,8 @@ pub use crate::{
     },
     pipeline_context::PipelineContext,
     plugin::{
-        Plugin, PluginContext, PluginResult, register_plugin, register_plugin_boxed, with_plugin,
-        with_plugin_mut,
+        DesktopPlatformContext, DesktopWindowAction, Plugin, PluginContext, PluginResult,
+        register_plugin, register_plugin_boxed, with_plugin, with_plugin_mut,
     },
     prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith, Slot},
     px::{Px, PxPosition, PxRect, PxSize},

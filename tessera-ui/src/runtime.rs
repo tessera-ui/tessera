@@ -672,7 +672,7 @@ pub(crate) fn clear_redraw_waker() {
     with_redraw_waker_mut(|waker| *waker = None);
 }
 
-pub(crate) fn current_component_instance_key_from_scope() -> Option<u64> {
+pub(crate) fn current_replay_boundary_instance_key_from_scope() -> Option<u64> {
     with_execution_context(|context| context.current_component_instance_stack.last().copied())
 }
 
@@ -687,7 +687,7 @@ fn with_persistent_focus_handle_store_mut<R>(
 }
 
 fn current_persistent_focus_handle_key<K: Hash>(slot_key: K) -> PersistentFocusHandleKey {
-    let Some(instance_key) = current_component_instance_key_from_scope() else {
+    let Some(instance_key) = current_replay_boundary_instance_key_from_scope() else {
         panic!("persistent focus handles must be requested during a component build");
     };
     let slot_hash = hash_components(&[&slot_key]);
@@ -860,7 +860,7 @@ fn consume_pending_build_invalidation(instance_key: u64) -> bool {
     with_build_invalidation_tracker_mut(|tracker| tracker.dirty_instance_keys.remove(&instance_key))
 }
 
-pub(crate) fn record_component_invalidation_for_instance_key(instance_key: u64) {
+pub(crate) fn record_replay_boundary_invalidation_for_instance_key(instance_key: u64) {
     let inserted = with_build_invalidation_tracker_mut(|tracker| {
         tracker.dirty_instance_keys.insert(instance_key)
     });
@@ -873,7 +873,7 @@ fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
     if !matches!(current_phase(), Some(RuntimePhase::Build)) {
         return;
     }
-    let Some(reader_instance_key) = current_component_instance_key_from_scope() else {
+    let Some(reader_instance_key) = current_replay_boundary_instance_key_from_scope() else {
         return;
     };
 
@@ -914,7 +914,7 @@ fn track_focus_dependency(kind: FocusReadDependencyKind) {
     if !matches!(current_phase(), Some(RuntimePhase::Build)) {
         return;
     }
-    let Some(reader_instance_key) = current_component_instance_key_from_scope() else {
+    let Some(reader_instance_key) = current_replay_boundary_instance_key_from_scope() else {
         return;
     };
 
@@ -971,7 +971,7 @@ pub(crate) fn track_render_slot_read_dependency(handle: FunctorHandle) {
     if !matches!(current_phase(), Some(RuntimePhase::Build)) {
         return;
     }
-    let Some(reader_instance_key) = current_component_instance_key_from_scope() else {
+    let Some(reader_instance_key) = current_replay_boundary_instance_key_from_scope() else {
         return;
     };
 
@@ -1270,7 +1270,7 @@ where
     let frame_nanos_state = remember(current_frame_nanos);
     let _ = frame_nanos_state.get();
 
-    let owner_instance_key = current_component_instance_key_from_scope()
+    let owner_instance_key = current_replay_boundary_instance_key_from_scope()
         .unwrap_or_else(|| panic!("receive_frame_nanos requires an active component node context"));
     let key = compute_frame_nanos_receiver_key();
 
@@ -1601,7 +1601,7 @@ where
 
         let subscribers = state_read_subscribers(self.slot, self.generation);
         for instance_key in subscribers {
-            record_component_invalidation_for_instance_key(instance_key);
+            record_replay_boundary_invalidation_for_instance_key(instance_key);
         }
         result
     }
@@ -2698,7 +2698,7 @@ where
     F: Fn() + Send + Sync + 'static,
 {
     let render = Arc::new(render) as Arc<dyn Fn() + Send + Sync>;
-    let creator_instance_key = current_component_instance_key_from_scope()
+    let creator_instance_key = current_replay_boundary_instance_key_from_scope()
         .unwrap_or_else(|| panic!("RenderSlot handles must be created during a component build"));
     let (cell, handle) = remember_functor_cell_with_key((), {
         let render = Arc::clone(&render);
@@ -2706,8 +2706,8 @@ where
     });
     cell.update(render);
     for instance_key in render_slot_read_subscribers(handle) {
-        if instance_key != creator_instance_key {
-            record_component_invalidation_for_instance_key(instance_key);
+        if instance_key != creator_instance_key && !is_instance_key_build_dirty(instance_key) {
+            record_replay_boundary_invalidation_for_instance_key(instance_key);
         }
     }
     handle
@@ -2724,17 +2724,18 @@ where
     F: Fn(T) + Send + Sync + 'static,
 {
     let render = Arc::new(render) as Arc<dyn Fn(T) + Send + Sync>;
-    let creator_instance_key = current_component_instance_key_from_scope().unwrap_or_else(|| {
-        panic!("RenderSlotWith handles must be created during a component build")
-    });
+    let creator_instance_key =
+        current_replay_boundary_instance_key_from_scope().unwrap_or_else(|| {
+            panic!("RenderSlotWith handles must be created during a component build")
+        });
     let (cell, handle) = remember_functor_cell_with_key((), {
         let render = Arc::clone(&render);
         move || RenderSlotWithCell::new(render)
     });
     cell.update(render);
     for instance_key in render_slot_read_subscribers(handle) {
-        if instance_key != creator_instance_key {
-            record_component_invalidation_for_instance_key(instance_key);
+        if instance_key != creator_instance_key && !is_instance_key_build_dirty(instance_key) {
+            record_replay_boundary_invalidation_for_instance_key(instance_key);
         }
     }
     handle
@@ -3195,7 +3196,25 @@ mod tests {
     };
     use crate::layout::{LayoutPolicy, MeasureScope};
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
-    use crate::prop::{Callback, RenderSlot};
+    use crate::prop::{Callback, ComponentReplayData, RenderSlot, make_component_runner};
+
+    fn seed_previous_replay_snapshot(instance_key: u64) {
+        let replay = ComponentReplayData::new(make_component_runner::<()>(|_| {}), &());
+        with_component_replay_tracker_mut(|tracker| {
+            tracker.previous_nodes.insert(
+                instance_key,
+                ReplayNodeSnapshot {
+                    instance_key,
+                    parent_instance_key: None,
+                    instance_logic_id: 0,
+                    group_path: Vec::new(),
+                    instance_key_override: None,
+                    fn_name: "test_component".to_string(),
+                    replay,
+                },
+            );
+        });
+    }
 
     fn with_test_component_scope<R>(component_type_id: u64, f: impl FnOnce() -> R) -> R {
         reset_execution_context();
@@ -3210,7 +3229,7 @@ mod tests {
     #[test]
     fn frame_receiver_uses_component_scope_instance_key() {
         let _instance_guard = push_current_component_instance_key(7);
-        assert_eq!(current_component_instance_key_from_scope(), Some(7));
+        assert_eq!(current_replay_boundary_instance_key_from_scope(), Some(7));
     }
 
     #[test]
@@ -3561,6 +3580,7 @@ mod tests {
     #[test]
     fn render_slot_update_invalidates_reader_instance() {
         reset_slots();
+        reset_component_replay_tracking();
         reset_render_slot_read_dependencies();
         reset_build_invalidations();
 
@@ -3568,11 +3588,12 @@ mod tests {
         let first = with_test_component_scope(11002, || RenderSlot::new(|| {}));
 
         let reader_instance_key = with_test_component_scope(11003, || {
-            let instance_key =
-                current_component_instance_key_from_scope().expect("reader must have instance key");
+            let instance_key = current_replay_boundary_instance_key_from_scope()
+                .expect("reader must have instance key");
             first.render();
             instance_key
         });
+        seed_previous_replay_snapshot(reader_instance_key);
 
         assert!(!has_pending_build_invalidations());
 
@@ -3586,6 +3607,43 @@ mod tests {
         let mut expected = HashSet::default();
         expected.insert(reader_instance_key);
         assert_eq!(invalidations.dirty_instance_keys, expected);
+    }
+
+    #[test]
+    fn render_slot_update_skips_reader_already_dirty_in_current_build() {
+        reset_slots();
+        reset_component_replay_tracking();
+        reset_render_slot_read_dependencies();
+        reset_build_invalidations();
+        reset_execution_context();
+
+        begin_recompose_slot_epoch();
+        let first = with_test_component_scope(12002, || RenderSlot::new(|| {}));
+
+        let reader_instance_key = with_test_component_scope(12003, || {
+            let instance_key = current_replay_boundary_instance_key_from_scope()
+                .expect("reader must have instance key");
+            first.render();
+            instance_key
+        });
+        seed_previous_replay_snapshot(reader_instance_key);
+
+        assert!(!has_pending_build_invalidations());
+
+        begin_recompose_slot_epoch();
+        let mut dirty = HashSet::default();
+        dirty.insert(reader_instance_key);
+        with_build_dirty_instance_keys(&dirty, || {
+            let mut arena = crate::Arena::<()>::new();
+            let node_id = arena.new_node(());
+            let _phase_guard = push_phase(RuntimePhase::Build);
+            let _node_guard = push_current_node(node_id, 12002, "test_component");
+            let _instance_guard = push_current_component_instance_key(current_instance_key());
+            let second = RenderSlot::new(|| {});
+            assert!(first == second);
+        });
+
+        assert!(!has_pending_build_invalidations());
     }
 
     #[test]

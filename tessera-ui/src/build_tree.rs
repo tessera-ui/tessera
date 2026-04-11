@@ -4,9 +4,9 @@
 //!
 //! Rebuild or partially replay the component tree before layout and rendering.
 
-use std::{cell::RefCell, time::Duration};
+use std::{cell::RefCell, fmt::Write as _, time::Duration};
 
-use rustc_hash::FxHashSet as HashSet;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use tessera_macros::tessera;
 use tracing::{debug, instrument};
 
@@ -228,6 +228,105 @@ fn collect_dirty_replay_roots(dirty_instance_keys: &HashSet<u64>) -> Vec<u64> {
     })
 }
 
+fn missing_replay_snapshot_panic_message(
+    instance_key: u64,
+    replay_snapshots: &HashMap<u64, crate::runtime::ReplayNodeSnapshot>,
+    context_snapshots: &HashMap<u64, crate::context::ContextMap>,
+) -> String {
+    let mut message = String::new();
+    let _ = writeln!(
+        message,
+        "missing replay snapshot for dirty instance key {instance_key}; this violates replay invariants"
+    );
+    let _ = writeln!(
+        message,
+        "previous replay snapshot present: {}",
+        replay_snapshots.contains_key(&instance_key)
+    );
+    let _ = writeln!(
+        message,
+        "previous context snapshot present: {}",
+        context_snapshots.contains_key(&instance_key)
+    );
+
+    TesseraRuntime::with(|runtime| {
+        let tree = runtime.component_tree.tree();
+        let Some(node_id) = runtime
+            .component_tree
+            .find_node_id_by_instance_key(instance_key)
+        else {
+            let _ = writeln!(message, "current tree node: <missing>");
+            return;
+        };
+
+        let Some(node_ref) = tree.get(node_id) else {
+            let _ = writeln!(message, "current tree node: <removed>");
+            return;
+        };
+
+        let node = node_ref.get();
+        let _ = writeln!(
+            message,
+            "current node: fn={}, role={:?}, instance_logic_id={}, has_replay={}, props_unchanged_from_previous={}",
+            node.fn_name,
+            node.role,
+            node.instance_logic_id,
+            node.replay.is_some(),
+            node.props_unchanged_from_previous,
+        );
+
+        let mut nearest_replayable_ancestor = None;
+        let mut ancestry = Vec::new();
+        let mut cursor = Some(node_id);
+        while let Some(current_id) = cursor {
+            let Some(current_ref) = tree.get(current_id) else {
+                break;
+            };
+            let current = current_ref.get();
+            if nearest_replayable_ancestor.is_none() && current.replay.is_some() {
+                nearest_replayable_ancestor = Some((
+                    current.instance_key,
+                    current.fn_name.clone(),
+                    replay_snapshots.contains_key(&current.instance_key),
+                    context_snapshots.contains_key(&current.instance_key),
+                ));
+            }
+
+            ancestry.push(format!(
+                "{}[key={}, logic={}, role={:?}, replay={}, prev_replay_snapshot={}, prev_context_snapshot={}]",
+                current.fn_name,
+                current.instance_key,
+                current.instance_logic_id,
+                current.role,
+                current.replay.is_some(),
+                replay_snapshots.contains_key(&current.instance_key),
+                context_snapshots.contains_key(&current.instance_key),
+            ));
+
+            cursor = current_ref.parent();
+        }
+
+        if let Some((ancestor_key, ancestor_name, has_replay_snapshot, has_context_snapshot)) =
+            nearest_replayable_ancestor
+        {
+            let _ = writeln!(
+                message,
+                "nearest replayable ancestor: {}[key={}, prev_replay_snapshot={}, prev_context_snapshot={}]",
+                ancestor_name, ancestor_key, has_replay_snapshot, has_context_snapshot,
+            );
+        } else {
+            let _ = writeln!(message, "nearest replayable ancestor: <none>");
+        }
+
+        let _ = writeln!(message, "ancestry (self -> root):");
+        for entry in ancestry {
+            let _ = writeln!(message, "  - {entry}");
+        }
+    });
+
+    message
+}
+
 fn retain_live_dirty_instance_keys(dirty_instance_keys: &HashSet<u64>) -> HashSet<u64> {
     TesseraRuntime::with(|runtime| {
         dirty_instance_keys
@@ -421,6 +520,19 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                     fallback_to_root_recompose = true;
                     break;
                 }
+                if let Some(instance_key) = dirty_roots.iter().copied().find(|instance_key| {
+                    !replay_snapshots.contains_key(instance_key)
+                        || !context_snapshots.contains_key(instance_key)
+                }) {
+                    panic!(
+                        "{}",
+                        missing_replay_snapshot_panic_message(
+                            instance_key,
+                            &replay_snapshots,
+                            &context_snapshots,
+                        )
+                    );
+                }
 
                 replay_roots_for_debug.extend(dirty_roots.iter().copied());
 
@@ -438,13 +550,23 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                         let replay_snapshot =
                             replay_snapshots.get(instance_key).unwrap_or_else(|| {
                                 panic!(
-                                    "missing replay snapshot for dirty instance key {instance_key}; this violates replay invariants"
+                                    "{}",
+                                    missing_replay_snapshot_panic_message(
+                                        *instance_key,
+                                        &replay_snapshots,
+                                        &context_snapshots,
+                                    )
                                 )
                             });
                         let context_snapshot =
                             context_snapshots.get(instance_key).unwrap_or_else(|| {
                                 panic!(
-                                    "missing context snapshot for dirty instance key {instance_key}; this violates replay invariants"
+                                    "{}",
+                                    missing_replay_snapshot_panic_message(
+                                        *instance_key,
+                                        &replay_snapshots,
+                                        &context_snapshots,
+                                    )
                                 )
                             });
                         let replay = replay_snapshot.replay.clone();

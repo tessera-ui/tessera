@@ -22,6 +22,7 @@ use crate::{
         LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier,
         OrderedModifierAction,
     },
+    plugin::DesktopWindowAction,
     prop::CallbackWith,
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
@@ -35,6 +36,7 @@ use crate::{
 use super::{
     LayoutContext, LayoutSnapshotEntry,
     constraint::{Constraint, ParentConstraint},
+    nearest_replay_boundary_instance_key,
 };
 
 #[cfg(feature = "profiling")]
@@ -330,6 +332,7 @@ pub struct PointerInput<'a> {
     pub key_modifiers: winit::keyboard::ModifiersState,
     pub(crate) ime_request: &'a mut Option<ImeRequest>,
     pub(crate) window_action: &'a mut Option<WindowAction>,
+    pub(crate) desktop_window_action: &'a mut Option<DesktopWindowAction>,
 }
 
 impl PointerInput<'_> {
@@ -363,6 +366,10 @@ impl PointerInput<'_> {
         self.block_cursor();
     }
 
+    fn set_desktop_window_action(&mut self, action: DesktopWindowAction) {
+        *self.desktop_window_action = Some(action);
+    }
+
     fn set_window_action(&mut self, action: WindowAction) {
         *self.window_action = Some(action);
     }
@@ -374,22 +381,22 @@ impl PointerInput<'_> {
 
     /// Requests that the current window be minimized.
     pub fn minimize_window(&mut self) {
-        self.set_window_action(WindowAction::Minimize);
+        self.set_desktop_window_action(DesktopWindowAction::Minimize);
     }
 
     /// Requests that the current window be maximized.
     pub fn maximize_window(&mut self) {
-        self.set_window_action(WindowAction::Maximize);
+        self.set_desktop_window_action(DesktopWindowAction::Maximize);
     }
 
     /// Requests that the current window toggle maximized state.
     pub fn toggle_maximize_window(&mut self) {
-        self.set_window_action(WindowAction::ToggleMaximize);
+        self.set_desktop_window_action(DesktopWindowAction::ToggleMaximize);
     }
 
     /// Requests that the current window close.
     pub fn close_window(&mut self) {
-        self.set_window_action(WindowAction::Close);
+        self.set_desktop_window_action(DesktopWindowAction::Close);
     }
 
     /// Returns the IME session bridge for the current frame.
@@ -469,8 +476,10 @@ pub(crate) struct WindowRequests {
     /// (which is processed later in the state handling pass) will overwrite
     /// previous requests.
     pub ime_request: Option<ImeRequest>,
-    /// A window action request for the current frame.
+    /// A node-bound window action request for the current frame.
     pub window_action: Option<WindowAction>,
+    /// A desktop window action request for the current frame.
+    pub desktop_window_action: Option<DesktopWindowAction>,
 }
 
 /// Window actions that components can request.
@@ -478,14 +487,6 @@ pub(crate) struct WindowRequests {
 pub enum WindowAction {
     /// Begin a system drag move for the window.
     DragWindow,
-    /// Minimize the window.
-    Minimize,
-    /// Maximize the window.
-    Maximize,
-    /// Toggle maximized state.
-    ToggleMaximize,
-    /// Request application close.
-    Close,
 }
 
 /// Frame-local IME bridge used by input handlers to publish text input state.
@@ -819,7 +820,8 @@ pub(crate) fn measure_node(
         node_data.instance_logic_id,
         node_data.fn_name.as_str(),
     );
-    let _instance_ctx_guard = push_current_component_instance_key(node_data.instance_key);
+    let replay_boundary_instance_key = nearest_replay_boundary_instance_key(node_id, tree);
+    let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
     let _phase_guard = push_phase(RuntimePhase::Measure);
 
     let layout_policy = &node_data.layout_policy;

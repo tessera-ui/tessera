@@ -7,7 +7,7 @@ use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 use tracing::{debug, warn};
 
 use crate::{
-    ComputeResourceManager, Px, PxRect,
+    ComputeResourceManager, NodeId, Px, PxRect,
     cursor::{CursorEventContent, PointerChange},
     focus::{
         FocusDirection, FocusHandleId, FocusOwner, PendingFocusCallbackInvocation, bind_focus_owner,
@@ -73,6 +73,31 @@ impl LayoutSnapshotMap {
 
     pub(crate) fn get_cloned(&self, instance_key: &u64) -> Option<LayoutSnapshotEntry> {
         self.entries.get(instance_key).cloned()
+    }
+}
+
+pub(crate) fn nearest_replay_boundary_instance_key(
+    node_id: NodeId,
+    tree: &ComponentNodeTree,
+) -> u64 {
+    let mut current_id = node_id;
+    let mut fallback = 0;
+
+    loop {
+        let Some(node_ref) = tree.get(current_id) else {
+            return fallback;
+        };
+        let node = node_ref.get();
+        if fallback == 0 {
+            fallback = node.instance_key;
+        }
+        if node.replay.is_some() {
+            return node.instance_key;
+        }
+        let Some(parent_id) = node_ref.parent() else {
+            return fallback;
+        };
+        current_id = parent_id;
     }
 }
 
@@ -1689,9 +1714,11 @@ fn run_pointer_input_for_node<F>(
         parent_id,
         Some(fn_name.as_str()),
     ));
+    let replay_boundary_instance_key =
+        nearest_replay_boundary_instance_key(node_id, dispatch_ctx.tree);
     let _node_ctx_guard =
         push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
-    let _instance_ctx_guard = push_current_component_instance_key(instance_key);
+    let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
     let _phase_guard = push_phase(RuntimePhase::Input);
     let _focus_owner_guard = bind_focus_owner(dispatch_ctx.focus_owner);
     let input = PointerInput {
@@ -1703,6 +1730,7 @@ fn run_pointer_input_for_node<F>(
         key_modifiers: dispatch_ctx.modifiers,
         ime_request: &mut dispatch_ctx.window_requests.ime_request,
         window_action: &mut dispatch_ctx.window_requests.window_action,
+        desktop_window_action: &mut dispatch_ctx.window_requests.desktop_window_action,
     };
     dispatch(input);
     for (local_change, &original_index) in local_pointer_changes
@@ -1764,7 +1792,7 @@ fn run_keyboard_input_for_node<F>(
         event_clip_rect: _,
         node_computed_data,
         instance_logic_id,
-        instance_key,
+        instance_key: _,
         fn_name,
         parent_id,
         ..
@@ -1782,9 +1810,11 @@ fn run_keyboard_input_for_node<F>(
         parent_id,
         Some(fn_name.as_str()),
     ));
+    let replay_boundary_instance_key =
+        nearest_replay_boundary_instance_key(node_id, dispatch_ctx.tree);
     let _node_ctx_guard =
         push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
-    let _instance_ctx_guard = push_current_component_instance_key(instance_key);
+    let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
     let _phase_guard = push_phase(RuntimePhase::Input);
     let _focus_owner_guard = bind_focus_owner(dispatch_ctx.focus_owner);
     let input = KeyboardInput {
@@ -1862,7 +1892,7 @@ fn run_ime_input_for_node<F>(
         event_clip_rect: _,
         node_computed_data,
         instance_logic_id,
-        instance_key,
+        instance_key: _,
         fn_name,
         parent_id,
         ..
@@ -1880,9 +1910,10 @@ fn run_ime_input_for_node<F>(
         parent_id,
         Some(fn_name.as_str()),
     ));
+    let replay_boundary_instance_key = nearest_replay_boundary_instance_key(node_id, tree);
     let _node_ctx_guard =
         push_current_node_with_instance_logic_id(node_id, instance_logic_id, fn_name.as_str());
-    let _instance_ctx_guard = push_current_component_instance_key(instance_key);
+    let _instance_ctx_guard = push_current_component_instance_key(replay_boundary_instance_key);
     let _phase_guard = push_phase(RuntimePhase::Input);
     let _focus_owner_guard = bind_focus_owner(focus_owner);
     let input = ImeInput {

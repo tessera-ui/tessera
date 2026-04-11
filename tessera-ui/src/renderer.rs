@@ -42,7 +42,7 @@ use crate::{
     focus::{FocusDirection, flush_pending_focus_callbacks},
     keyboard_state::KeyboardState,
     pipeline_context::PipelineContext,
-    plugin::{PluginContext, PluginHost},
+    plugin::{DesktopPlatformContext, DesktopWindowAction, PluginContext, PluginHost},
     px::PxSize,
     render_graph::{RenderGraph, RenderGraphExecution},
     render_module::RenderModule,
@@ -394,6 +394,9 @@ pub struct Renderer<F: Fn()> {
     accessibility_adapter: Option<AccessKitAdapter>,
     /// Event loop proxy for posting user events (accessibility/runtime wakeups)
     event_loop_proxy: Option<winit::event_loop::EventLoopProxy<RendererUserEvent>>,
+    /// Pending programmatic desktop window action requested through plugin
+    /// APIs.
+    pending_desktop_window_action: Arc<RwLock<Option<DesktopWindowAction>>>,
     /// Incrementing frame index for profiling and debugging.
     frame_index: u64,
     /// Global redraw gate. While `true`, redraw requests are coalesced until
@@ -552,6 +555,7 @@ impl<F: Fn()> Renderer<F> {
             config,
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
+            pending_desktop_window_action: Arc::new(RwLock::new(None)),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
@@ -613,6 +617,7 @@ impl<F: Fn()> Renderer<F> {
             config,
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
+            pending_desktop_window_action: Arc::new(RwLock::new(None)),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
@@ -749,6 +754,7 @@ impl<F: Fn()> Renderer<F> {
             config,
             accessibility_adapter: None,
             event_loop_proxy: Some(event_loop_proxy),
+            pending_desktop_window_action: Arc::new(RwLock::new(None)),
             frame_index: 0,
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
@@ -789,6 +795,7 @@ struct RenderFrameContext<'a, F: Fn()> {
 struct RenderFrameOutcome {
     accessibility_update: Option<TreeUpdate>,
     window_action: Option<WindowAction>,
+    desktop_window_action: Option<DesktopWindowAction>,
     runtime_pending_work: RuntimePendingWork,
     #[cfg(feature = "debug-dirty-overlay")]
     overlay_clear_pending: bool,
@@ -1438,6 +1445,7 @@ Fps: {:.2}
         }
 
         let window_action = window_requests.window_action;
+        let desktop_window_action = window_requests.desktop_window_action;
 
         let ime_bridge_update = args
             .ime_bridge_state
@@ -1482,6 +1490,7 @@ Fps: {:.2}
         RenderFrameOutcome {
             accessibility_update,
             window_action,
+            desktop_window_action,
             runtime_pending_work,
             #[cfg(feature = "debug-dirty-overlay")]
             overlay_clear_pending,
@@ -1490,19 +1499,51 @@ Fps: {:.2}
 }
 
 impl<F: Fn()> Renderer<F> {
+    fn desktop_platform_context(&self) -> Option<DesktopPlatformContext> {
+        let app = self.app.as_ref()?;
+        let redraw_pending = self.redraw_request_pending.clone();
+        let window = app.window_arc();
+        let wake_handler = Arc::new(move || {
+            Self::try_request_redraw(window.as_ref(), redraw_pending.as_ref());
+        });
+        Some(DesktopPlatformContext::new(
+            app.window_arc(),
+            self.pending_desktop_window_action.clone(),
+            wake_handler,
+        ))
+    }
+
+    fn take_pending_desktop_window_action(&self) -> Option<DesktopWindowAction> {
+        self.pending_desktop_window_action.write().take()
+    }
+
+    fn merge_desktop_window_actions(
+        frame_action: Option<DesktopWindowAction>,
+        pending_action: Option<DesktopWindowAction>,
+    ) -> Option<DesktopWindowAction> {
+        match (frame_action, pending_action) {
+            (None, None) => None,
+            (Some(action), None) | (None, Some(action)) => Some(action),
+            (Some(frame_action), Some(pending_action)) => Some(DesktopWindowAction::merge_pending(
+                Some(frame_action),
+                pending_action,
+            )),
+        }
+    }
+
     #[cfg(target_os = "android")]
     fn plugin_context(&self, event_loop: &ActiveEventLoop) -> Option<PluginContext> {
-        let app = self.app.as_ref()?;
+        let desktop = self.desktop_platform_context()?;
         Some(PluginContext::new(
-            app.window_arc(),
+            desktop,
             event_loop.android_app().clone(),
         ))
     }
 
     #[cfg(not(target_os = "android"))]
     fn plugin_context(&self, _event_loop: &ActiveEventLoop) -> Option<PluginContext> {
-        let app = self.app.as_ref()?;
-        Some(PluginContext::new(app.window_arc()))
+        let desktop = self.desktop_platform_context()?;
+        Some(PluginContext::new(desktop))
     }
 
     fn try_request_redraw(window: &Window, redraw_pending: &AtomicBool) {
@@ -1631,16 +1672,22 @@ impl<F: Fn()> Renderer<F> {
                     warn!("Failed to start window drag: {}", err);
                 }
             }
-            WindowAction::Minimize => {
+        }
+        self.update_native_window_shape(window);
+    }
+
+    fn apply_desktop_window_action(&mut self, window: &Window, action: DesktopWindowAction) {
+        match action {
+            DesktopWindowAction::Minimize => {
                 window.set_minimized(true);
             }
-            WindowAction::Maximize => {
+            DesktopWindowAction::Maximize => {
                 window.set_maximized(true);
             }
-            WindowAction::ToggleMaximize => {
+            DesktopWindowAction::ToggleMaximize => {
                 window.set_maximized(!window.is_maximized());
             }
-            WindowAction::Close => {
+            DesktopWindowAction::Close => {
                 self.pending_close_requested = true;
             }
         }
@@ -1848,6 +1895,7 @@ impl<F: Fn()> Renderer<F> {
         let RenderFrameOutcome {
             accessibility_update,
             window_action,
+            desktop_window_action,
             runtime_pending_work,
             #[cfg(feature = "debug-dirty-overlay")]
             overlay_clear_pending,
@@ -1877,6 +1925,13 @@ impl<F: Fn()> Renderer<F> {
 
         if let Some(action) = window_action {
             self.apply_window_action(app.window(), action);
+        }
+        let desktop_window_action = Self::merge_desktop_window_actions(
+            desktop_window_action,
+            self.take_pending_desktop_window_action(),
+        );
+        if let Some(action) = desktop_window_action {
+            self.apply_desktop_window_action(app.window(), action);
         }
 
         self.frame_index = self.frame_index.wrapping_add(1);
