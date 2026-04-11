@@ -10,8 +10,8 @@ mod visual;
 
 use tessera_foundation::modifier::ModifierExt as FoundationModifierExt;
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier, modifier::ModifierCapabilityExt as _,
-    use_context,
+    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier,
+    modifier::ModifierCapabilityExt as _, use_context,
 };
 
 pub use tessera_foundation::modifier::{
