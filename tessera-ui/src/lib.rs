@@ -325,7 +325,7 @@ pub use crate::{
     component_tree::{
         AxisConstraint, ComponentTree, ComputedData, Constraint, ImeInput, ImeInputHandlerFn,
         ImeRequest, ImeSession, KeyboardInput, KeyboardInputHandlerFn, MeasurementError,
-        ParentConstraint, PointerEventPass, PointerInput, PointerInputHandlerFn, WindowAction,
+        ParentConstraint, PointerEventPass, PointerInput, PointerInputHandlerFn,
     },
     context::{Context, provide_context, use_context},
     cursor::{

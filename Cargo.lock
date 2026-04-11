@@ -1683,6 +1683,7 @@ version = "0.1.0"
 dependencies = [
  "tessera-build",
  "tessera-components",
+ "tessera-platform",
  "tessera-ui",
  "wasm-bindgen",
 ]

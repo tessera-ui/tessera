@@ -22,7 +22,6 @@ use crate::{
         LayoutModifierChild, LayoutModifierInput, LayoutModifierNode, Modifier,
         OrderedModifierAction,
     },
-    plugin::DesktopWindowAction,
     prop::CallbackWith,
     px::{PxPosition, PxSize},
     render_graph::RenderFragment,
@@ -331,8 +330,7 @@ pub struct PointerInput<'a> {
     /// The current state of the keyboard modifiers at the time of the event.
     pub key_modifiers: winit::keyboard::ModifiersState,
     pub(crate) ime_request: &'a mut Option<ImeRequest>,
-    pub(crate) window_action: &'a mut Option<WindowAction>,
-    pub(crate) desktop_window_action: &'a mut Option<DesktopWindowAction>,
+    pub(crate) request_window_drag: &'a mut bool,
 }
 
 impl PointerInput<'_> {
@@ -366,37 +364,9 @@ impl PointerInput<'_> {
         self.block_cursor();
     }
 
-    fn set_desktop_window_action(&mut self, action: DesktopWindowAction) {
-        *self.desktop_window_action = Some(action);
-    }
-
-    fn set_window_action(&mut self, action: WindowAction) {
-        *self.window_action = Some(action);
-    }
-
     /// Begins a system drag move for the current window.
     pub fn drag_window(&mut self) {
-        self.set_window_action(WindowAction::DragWindow);
-    }
-
-    /// Requests that the current window be minimized.
-    pub fn minimize_window(&mut self) {
-        self.set_desktop_window_action(DesktopWindowAction::Minimize);
-    }
-
-    /// Requests that the current window be maximized.
-    pub fn maximize_window(&mut self) {
-        self.set_desktop_window_action(DesktopWindowAction::Maximize);
-    }
-
-    /// Requests that the current window toggle maximized state.
-    pub fn toggle_maximize_window(&mut self) {
-        self.set_desktop_window_action(DesktopWindowAction::ToggleMaximize);
-    }
-
-    /// Requests that the current window close.
-    pub fn close_window(&mut self) {
-        self.set_desktop_window_action(DesktopWindowAction::Close);
+        *self.request_window_drag = true;
     }
 
     /// Returns the IME session bridge for the current frame.
@@ -476,17 +446,8 @@ pub(crate) struct WindowRequests {
     /// (which is processed later in the state handling pass) will overwrite
     /// previous requests.
     pub ime_request: Option<ImeRequest>,
-    /// A node-bound window action request for the current frame.
-    pub window_action: Option<WindowAction>,
-    /// A desktop window action request for the current frame.
-    pub desktop_window_action: Option<DesktopWindowAction>,
-}
-
-/// Window actions that components can request.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum WindowAction {
-    /// Begin a system drag move for the window.
-    DragWindow,
+    /// Whether a node requested a native window drag for the current frame.
+    pub request_window_drag: bool,
 }
 
 /// Frame-local IME bridge used by input handlers to publish text input state.

@@ -19,6 +19,7 @@ path = "src/main.rs"
 [dependencies]
 tessera-ui = { path = "../tessera-ui" }
 tessera-components = { path = "../tessera-components" }
+tessera-platform = { path = "../tessera-platform" }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen = "0.2.105"

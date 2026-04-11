@@ -1,7 +1,10 @@
 mod app;
 pub mod res;
 
-use tessera_ui::{EntryPoint, renderer::TesseraConfig};
+use tessera_ui::{
+    EntryPoint,
+    renderer::{TesseraConfig, WindowConfig},
+};
 
 use app::app;
 
@@ -14,11 +17,16 @@ use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 pub fn run() -> EntryPoint {
     EntryPoint::new(app)
         .config(TesseraConfig {
+            window: WindowConfig {
+                decorations: false,
+                ..Default::default()
+            },
             #[cfg(target_family = "wasm")]
             web: WebConfig::default().with_canvas_id(env!("CARGO_CRATE_NAME")),
             ..Default::default()
         })
         .package(tessera_components::ComponentsPackage)
+        .package(tessera_platform::PlatformPackage)
 }
 
 #[cfg(target_family = "wasm")]

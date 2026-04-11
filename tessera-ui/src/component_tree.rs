@@ -30,7 +30,7 @@ pub use constraint::{AxisConstraint, Constraint, ParentConstraint};
 pub use node::{
     ComputedData, ImeInput, ImeInputHandlerFn, ImeRequest, ImeSession, KeyboardInput,
     KeyboardInputHandlerFn, MeasurementError, PointerEventPass, PointerInput,
-    PointerInputHandlerFn, WindowAction,
+    PointerInputHandlerFn,
 };
 
 pub(crate) use node::{
@@ -1729,8 +1729,7 @@ fn run_pointer_input_for_node<F>(
         pointer_changes: &mut local_pointer_changes,
         key_modifiers: dispatch_ctx.modifiers,
         ime_request: &mut dispatch_ctx.window_requests.ime_request,
-        window_action: &mut dispatch_ctx.window_requests.window_action,
-        desktop_window_action: &mut dispatch_ctx.window_requests.desktop_window_action,
+        request_window_drag: &mut dispatch_ctx.window_requests.request_window_drag,
     };
     dispatch(input);
     for (local_change, &original_index) in local_pointer_changes

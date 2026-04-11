@@ -30,9 +30,7 @@ use winit::{
 use crate::{
     ImeRequest, ImeState, PxPosition,
     build_tree::build_component_tree,
-    component_tree::{
-        LayoutFrameDiagnostics, WindowAction, WindowRequests, clear_layout_snapshots,
-    },
+    component_tree::{LayoutFrameDiagnostics, WindowRequests, clear_layout_snapshots},
     context::{reset_component_context_tracking, reset_context_read_dependencies},
     cursor::{
         CursorEvent, CursorEventContent, CursorState, GestureState, MOUSE_POINTER_ID,
@@ -794,8 +792,7 @@ struct RenderFrameContext<'a, F: Fn()> {
 
 struct RenderFrameOutcome {
     accessibility_update: Option<TreeUpdate>,
-    window_action: Option<WindowAction>,
-    desktop_window_action: Option<DesktopWindowAction>,
+    request_window_drag: bool,
     runtime_pending_work: RuntimePendingWork,
     #[cfg(feature = "debug-dirty-overlay")]
     overlay_clear_pending: bool,
@@ -1444,8 +1441,7 @@ Fps: {:.2}
             }
         }
 
-        let window_action = window_requests.window_action;
-        let desktop_window_action = window_requests.desktop_window_action;
+        let request_window_drag = window_requests.request_window_drag;
 
         let ime_bridge_update = args
             .ime_bridge_state
@@ -1489,8 +1485,7 @@ Fps: {:.2}
 
         RenderFrameOutcome {
             accessibility_update,
-            window_action,
-            desktop_window_action,
+            request_window_drag,
             runtime_pending_work,
             #[cfg(feature = "debug-dirty-overlay")]
             overlay_clear_pending,
@@ -1515,20 +1510,6 @@ impl<F: Fn()> Renderer<F> {
 
     fn take_pending_desktop_window_action(&self) -> Option<DesktopWindowAction> {
         self.pending_desktop_window_action.write().take()
-    }
-
-    fn merge_desktop_window_actions(
-        frame_action: Option<DesktopWindowAction>,
-        pending_action: Option<DesktopWindowAction>,
-    ) -> Option<DesktopWindowAction> {
-        match (frame_action, pending_action) {
-            (None, None) => None,
-            (Some(action), None) | (None, Some(action)) => Some(action),
-            (Some(frame_action), Some(pending_action)) => Some(DesktopWindowAction::merge_pending(
-                Some(frame_action),
-                pending_action,
-            )),
-        }
     }
 
     #[cfg(target_os = "android")]
@@ -1665,13 +1646,9 @@ impl<F: Fn()> Renderer<F> {
         event_loop.exit();
     }
 
-    fn apply_window_action(&mut self, window: &Window, action: WindowAction) {
-        match action {
-            WindowAction::DragWindow => {
-                if let Err(err) = window.drag_window() {
-                    warn!("Failed to start window drag: {}", err);
-                }
-            }
+    fn apply_window_drag(&mut self, window: &Window) {
+        if let Err(err) = window.drag_window() {
+            warn!("Failed to start window drag: {}", err);
         }
         self.update_native_window_shape(window);
     }
@@ -1894,8 +1871,7 @@ impl<F: Fn()> Renderer<F> {
 
         let RenderFrameOutcome {
             accessibility_update,
-            window_action,
-            desktop_window_action,
+            request_window_drag,
             runtime_pending_work,
             #[cfg(feature = "debug-dirty-overlay")]
             overlay_clear_pending,
@@ -1923,14 +1899,10 @@ impl<F: Fn()> Renderer<F> {
             })
         };
 
-        if let Some(action) = window_action {
-            self.apply_window_action(app.window(), action);
+        if request_window_drag {
+            self.apply_window_drag(app.window());
         }
-        let desktop_window_action = Self::merge_desktop_window_actions(
-            desktop_window_action,
-            self.take_pending_desktop_window_action(),
-        );
-        if let Some(action) = desktop_window_action {
+        if let Some(action) = self.take_pending_desktop_window_action() {
             self.apply_desktop_window_action(app.window(), action);
         }
 

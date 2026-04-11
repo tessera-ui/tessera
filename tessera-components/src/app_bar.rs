@@ -4,13 +4,11 @@
 //!
 //! Use for screen titles, navigation affordances, and primary actions at the
 //! top of a view.
-use tessera_ui::{
-    Color, Dp, Modifier, RenderSlot, WindowAction, provide_context, tessera, use_context,
-};
+use tessera_ui::{Color, Dp, Modifier, RenderSlot, provide_context, tessera, use_context};
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    icon::{IconContent, icon},
+    icon_button::icon_button,
     material_icons::filled,
     modifier::{ModifierExt as _, Padding},
     row::row,
@@ -58,90 +56,6 @@ impl AppBarDefaults {
     pub fn action_icon_color(scheme: &MaterialColorScheme) -> Color {
         scheme.on_surface_variant
     }
-}
-
-impl WindowControlButtonBuilder {
-    /// Sets the icon content using any supported icon source.
-    pub fn icon(mut self, icon: impl Into<IconContent>) -> Self {
-        self.props.icon = Some(icon.into());
-        self
-    }
-}
-
-fn render_window_control_icon(content: IconContent, tint: Color) {
-    let builder = match content {
-        IconContent::Vector(data) => icon().vector(data),
-        IconContent::Raster(data) => icon().raster(data),
-    };
-
-    builder.size(Dp(18.0)).tint(tint);
-}
-
-/// # window_control_button
-///
-/// Render a desktop window control button for minimize, maximize, and close
-/// actions.
-///
-/// ## Usage
-///
-/// Use in custom desktop title bars or top app bars for undecorated windows.
-///
-/// ## Parameters
-///
-/// - `modifier` — modifier chain applied before the default button size and
-///   window action.
-/// - `action` — optional window action requested when the button is activated.
-/// - `icon` — optional icon content shown at the center of the button.
-/// - `tint` — optional icon tint override.
-///
-/// ## Examples
-/// ```rust
-/// # use tessera_ui::tessera;
-/// # #[tessera]
-/// # fn component() {
-/// use tessera_components::{app_bar::window_control_button, material_icons::filled};
-/// # use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::WindowAction;
-///
-/// # material_theme()
-/// #     .theme(|| MaterialTheme::default())
-/// #     .child(|| {
-/// window_control_button()
-///     .action(WindowAction::Close)
-///     .icon(filled::CLOSE_SVG);
-/// #     });
-/// # }
-/// # component();
-/// ```
-#[tessera]
-pub fn window_control_button(
-    modifier: Modifier,
-    action: Option<WindowAction>,
-    #[prop(skip_setter)] icon: Option<IconContent>,
-    tint: Option<Color>,
-) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
-    let action = action.expect("window_control_button action must be provided");
-    let icon = icon.expect("window_control_button icon must be provided");
-    let tint = tint.unwrap_or_else(|| match action {
-        WindowAction::Close => scheme.error,
-        WindowAction::DragWindow
-        | WindowAction::Minimize
-        | WindowAction::Maximize
-        | WindowAction::ToggleMaximize => scheme.on_surface_variant,
-    });
-
-    surface()
-        .modifier(modifier.size(Dp(40.0), Dp(32.0)).window_action(action))
-        .style(Color::TRANSPARENT.into())
-        .content_color(tint)
-        .content_alignment(Alignment::Center)
-        .with_child(move || {
-            render_window_control_icon(icon.clone(), tint);
-        });
 }
 
 /// # app_bar
@@ -252,27 +166,27 @@ impl TopAppBarBuilder {
     /// Appends a desktop minimize window control button.
     pub fn window_control_minimize(self) -> Self {
         self.action(|| {
-            window_control_button()
-                .action(WindowAction::Minimize)
-                .icon(filled::MINIMIZE_SVG);
+            icon_button()
+                .icon(filled::MINIMIZE_SVG)
+                .on_click(tessera_platform::window::minimize);
         })
     }
 
     /// Appends a desktop maximize or restore window control button.
     pub fn window_control_toggle_maximize(self) -> Self {
         self.action(|| {
-            window_control_button()
-                .action(WindowAction::ToggleMaximize)
-                .icon(filled::FULLSCREEN_SVG);
+            icon_button()
+                .icon(filled::FULLSCREEN_SVG)
+                .on_click(tessera_platform::window::toggle_maximize);
         })
     }
 
     /// Appends a desktop close window control button.
     pub fn window_control_close(self) -> Self {
         self.action(|| {
-            window_control_button()
-                .action(WindowAction::Close)
-                .icon(filled::CLOSE_SVG);
+            icon_button()
+                .icon(filled::CLOSE_SVG)
+                .on_click(tessera_platform::window::close);
         })
     }
 }

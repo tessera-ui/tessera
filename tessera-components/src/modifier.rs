@@ -10,8 +10,8 @@ mod visual;
 
 use tessera_foundation::modifier::ModifierExt as FoundationModifierExt;
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier, WindowAction,
-    modifier::ModifierCapabilityExt as _, use_context,
+    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier, modifier::ModifierCapabilityExt as _,
+    use_context,
 };
 
 pub use tessera_foundation::modifier::{
@@ -26,7 +26,7 @@ use crate::{alignment::Alignment, shape_def::Shape};
 
 use interaction::{
     apply_block_touch_propagation_modifier, apply_clickable_modifier, apply_selectable_modifier,
-    apply_toggleable_modifier, apply_window_action_modifier, apply_window_drag_region_modifier,
+    apply_toggleable_modifier, apply_window_drag_region_modifier,
 };
 use visual::{AlphaModifierNode, BackgroundModifierNode, BorderModifierNode, ClipModifierNode};
 
@@ -154,9 +154,6 @@ pub trait ModifierExt {
 
     /// Marks this subtree as a draggable window region.
     fn window_drag_region(self) -> Modifier;
-
-    /// Requests a window action when tapped.
-    fn window_action(self, action: WindowAction) -> Modifier;
 }
 
 impl ModifierExt for Modifier {
@@ -348,9 +345,5 @@ impl ModifierExt for Modifier {
 
     fn window_drag_region(self) -> Modifier {
         apply_window_drag_region_modifier(self)
-    }
-
-    fn window_action(self, action: WindowAction) -> Modifier {
-        apply_window_action_modifier(self, action)
     }
 }
