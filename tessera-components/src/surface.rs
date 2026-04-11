@@ -487,13 +487,12 @@ fn try_build_simple_rect_command(
     }
 }
 
-fn compute_surface_size(parent_constraint: Constraint, child_measurement: ComputedData) -> (Px, Px) {
-    let width = parent_constraint
-        .width
-        .clamp(child_measurement.width);
-    let height = parent_constraint
-        .height
-        .clamp(child_measurement.height);
+fn compute_surface_size(
+    parent_constraint: Constraint,
+    child_measurement: ComputedData,
+) -> (Px, Px) {
+    let width = parent_constraint.width.clamp(child_measurement.width);
+    let height = parent_constraint.height.clamp(child_measurement.height);
 
     (width, height)
 }
