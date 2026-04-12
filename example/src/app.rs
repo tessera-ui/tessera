@@ -15,12 +15,20 @@ pub fn app() {
     material_theme().child(|| {
         scaffold()
             .top_bar(|| {
-                top_app_bar()
-                    .title("Examples")
-                    .title_area_modifier(Modifier::new().window_drag_region())
-                    .window_control_minimize()
-                    .window_control_toggle_maximize()
-                    .window_control_close();
+                #[cfg(not(target_arch = "wasm32"))]
+                {
+                    top_app_bar()
+                        .title("Examples")
+                        .title_area_modifier(Modifier::new().window_drag_region())
+                        .window_control_minimize()
+                        .window_control_toggle_maximize()
+                        .window_control_close();
+                }
+
+                #[cfg(target_arch = "wasm32")]
+                {
+                    top_app_bar().title("Examples");
+                }
             })
             .content(|| {
                 surface()
