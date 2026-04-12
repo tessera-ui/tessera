@@ -34,7 +34,7 @@ jobs:
       - name: Install rust-script
         run: cargo install rust-script
       - name: Check formatting
-        run: cargo fmt --all -- --check && rust-script scripts/check-imports.rs .
+        run: rust-script scripts/check-imports.rs --check .
 
   check_macos:
     name: Check macOS

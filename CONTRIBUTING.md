@@ -105,7 +105,13 @@ All code, including documentation within the code (like `rustdoc` comments) and 
   - However, it is recommended to always use the following command (at the project root):
 
     ```bash
-    rust-script scripts/check-imports.rs . --fix
+    rust-script scripts/check-imports.rs .
+    ```
+
+  - To run it in check-only mode (no file modification), use:
+
+    ```bash
+    rust-script scripts/check-imports.rs --check .
     ```
 
   - Nix users: just type `fmt` inside `nix develop` - it's a smart alias that runs the same command above from any directory

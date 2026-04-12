@@ -31,11 +31,10 @@
 //! ```
 
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::{BTreeMap, HashMap, HashSet},
     fs,
     path::{Path, PathBuf},
     process::Command,
-    sync::{Arc, Mutex},
 };
 
 use anyhow::{Result, bail};
@@ -143,46 +142,158 @@ fn main() -> Result<()> {
 
     let files_to_process = collect_rs_files(&cli.paths);
 
-    let failed_items = Arc::new(Mutex::new(Vec::new()));
+    let mut errors = Vec::new();
 
-    // Collect all file paths that need rustfmt
+    // Collect file paths that need rustfmt writes in fix mode.
     let mut fmt_targets = Vec::new();
 
     for file_path in &files_to_process {
         match process_file(file_path, !cli.check, &mut fmt_targets) {
             Ok(_) => {}
             Err(e) => {
-                println!("{}: {}", file_path.display(), e);
-                failed_items.lock().unwrap().push(file_path.clone());
+                errors.push(format!("{}: {}", file_path.display(), e));
                 continue;
             }
         }
     }
 
-    let failed_items = Arc::try_unwrap(failed_items).unwrap().into_inner().unwrap();
-    if !failed_items.is_empty() {
-        bail!("Failed to process {} files.", failed_items.len());
+    // In check mode, run rustfmt --check on all discovered Rust files.
+    // In fix mode, run rustfmt on files that were rewritten by this script.
+    match run_rustfmt_if_needed(cli.check, &files_to_process, &fmt_targets) {
+        Ok(failed_batches) => {
+            if failed_batches > 0 {
+                if cli.check {
+                    errors.push(format!(
+                        "rustfmt --check reported formatting issues in {} batch(es).",
+                        failed_batches
+                    ));
+                } else {
+                    errors.push(format!(
+                        "rustfmt reported formatting failures in {} batch(es).",
+                        failed_batches
+                    ));
+                }
+            }
+        }
+        Err(e) => {
+            errors.push(format!("Failed to execute rustfmt: {}", e));
+        }
     }
 
-    // Batch format all files that need it
-    run_rustfmt_if_needed(!cli.check, &fmt_targets)?;
+    if !errors.is_empty() {
+        bail!("Found {} issue(s):\n{}", errors.len(), errors.join("\n"));
+    }
 
     Ok(())
 }
 
-fn run_rustfmt_if_needed(cli_fix: bool, fmt_targets: &[PathBuf]) -> Result<()> {
-    if cli_fix && !fmt_targets.is_empty() {
-        let mut cmd = Command::new("rustfmt");
-        cmd.arg("--edition=2024");
-        for path in fmt_targets {
-            cmd.arg(path);
-        }
-        let status = cmd.status()?;
-        if !status.success() {
-            bail!("Failed to run rustfmt on files: {:?}", fmt_targets);
+fn run_rustfmt_if_needed(
+    cli_check: bool,
+    check_targets: &[PathBuf],
+    fix_targets: &[PathBuf],
+) -> Result<usize> {
+    let targets = if cli_check {
+        check_targets
+    } else {
+        fix_targets
+    };
+
+    if targets.is_empty() {
+        return Ok(0);
+    }
+
+    let mut manifest_edition_cache = HashMap::new();
+    let mut edition_groups: BTreeMap<Option<String>, Vec<PathBuf>> = BTreeMap::new();
+    for target in targets {
+        let edition = resolve_file_edition(target, &mut manifest_edition_cache)?;
+        edition_groups
+            .entry(edition)
+            .or_default()
+            .push(target.clone());
+    }
+
+    let mut failed_batches = 0;
+
+    for (edition, grouped_targets) in edition_groups {
+        for batch in grouped_targets.chunks(200) {
+            let mut cmd = Command::new("rustfmt");
+            if let Some(edition) = &edition {
+                cmd.arg(format!("--edition={}", edition));
+            }
+            if cli_check {
+                cmd.arg("--check");
+            }
+            for path in batch {
+                cmd.arg(path);
+            }
+
+            let status = cmd.status()?;
+            if !status.success() {
+                failed_batches += 1;
+            }
         }
     }
-    Ok(())
+
+    Ok(failed_batches)
+}
+
+fn resolve_file_edition(
+    file_path: &Path,
+    manifest_edition_cache: &mut HashMap<PathBuf, Option<String>>,
+) -> Result<Option<String>> {
+    let mut current = file_path.parent();
+    while let Some(dir) = current {
+        let manifest_path = dir.join("Cargo.toml");
+        if manifest_path.exists() {
+            if let Some(cached) = manifest_edition_cache.get(&manifest_path) {
+                if cached.is_some() {
+                    return Ok(cached.clone());
+                }
+            } else {
+                let edition = parse_package_edition(&manifest_path)?;
+                manifest_edition_cache.insert(manifest_path.clone(), edition.clone());
+                if edition.is_some() {
+                    return Ok(edition);
+                }
+            }
+        }
+        current = dir.parent();
+    }
+
+    Ok(None)
+}
+
+fn parse_package_edition(manifest_path: &Path) -> Result<Option<String>> {
+    let content = fs::read_to_string(manifest_path)?;
+
+    let mut in_package = false;
+    for line in content.lines() {
+        let trimmed = line.trim();
+
+        if trimmed.starts_with('[') && trimmed.ends_with(']') {
+            in_package = trimmed == "[package]";
+            continue;
+        }
+
+        if !in_package {
+            continue;
+        }
+
+        if let Some(rest) = trimmed.strip_prefix("edition") {
+            let rest = rest.trim_start();
+            if !rest.starts_with('=') {
+                continue;
+            }
+            let value = rest[1..].trim_start();
+            if let Some(value) = value.strip_prefix('"') {
+                if let Some(end_idx) = value.find('"') {
+                    return Ok(Some(value[..end_idx].to_string()));
+                }
+            }
+        }
+    }
+
+    Ok(None)
 }
 
 fn process_file(file_path: &Path, cli_fix: bool, fmt_targets: &mut Vec<PathBuf>) -> Result<()> {
