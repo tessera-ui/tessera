@@ -727,21 +727,48 @@ impl AtlasPage {
                 | wgpu::TextureUsages::COPY_SRC,
             view_formats: &[],
         });
+        #[cfg(target_arch = "wasm32")]
+        {
+            // WebGPU does not support `clear_texture` on the web backend.
+            let zeroed = vec![0; (width as usize) * (height as usize) * 4];
+            queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: 0,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &zeroed,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(width * 4),
+                    rows_per_image: Some(height),
+                },
+                wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
 
-        let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
-            label: Some("image_vector_atlas_clear_encoder"),
-        });
-        encoder.clear_texture(
-            &texture,
-            &wgpu::ImageSubresourceRange {
-                aspect: wgpu::TextureAspect::All,
-                base_mip_level: 0,
-                mip_level_count: Some(1),
-                base_array_layer: 0,
-                array_layer_count: Some(1),
-            },
-        );
-        queue.submit(std::iter::once(encoder.finish()));
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let mut encoder = device.create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("image_vector_atlas_clear_encoder"),
+            });
+            encoder.clear_texture(
+                &texture,
+                &wgpu::ImageSubresourceRange {
+                    aspect: wgpu::TextureAspect::All,
+                    base_mip_level: 0,
+                    mip_level_count: Some(1),
+                    base_array_layer: 0,
+                    array_layer_count: Some(1),
+                },
+            );
+            queue.submit(std::iter::once(encoder.finish()));
+        }
 
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         Self {
