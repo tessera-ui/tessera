@@ -1,4 +1,5 @@
 mod app;
+mod pages;
 pub mod res;
 
 use tessera_ui::{
