@@ -329,7 +329,7 @@ pub use crate::{
     },
     context::{Context, provide_context, use_context},
     cursor::{
-        CursorEvent, CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PointerId,
+        CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PointerId,
         PressKeyEventType, ScrollEventContent, ScrollEventSource,
     },
     dp::Dp,
@@ -391,6 +391,3 @@ pub use tessera_shard;
 
 #[cfg(target_os = "android")]
 pub use {jni, ndk_context, ndk_sys};
-
-/// Backward-compatible alias for the primary focus requester handle.
-pub type Focus = FocusRequester;

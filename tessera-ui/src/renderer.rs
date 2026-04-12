@@ -33,7 +33,7 @@ use crate::{
     component_tree::{LayoutFrameDiagnostics, WindowRequests, clear_layout_snapshots},
     context::{reset_component_context_tracking, reset_context_read_dependencies},
     cursor::{
-        CursorEvent, CursorEventContent, CursorState, GestureState, MOUSE_POINTER_ID,
+        CursorEventContent, CursorState, GestureState, MOUSE_POINTER_ID, PointerChange,
         PressKeyEventType,
     },
     dp::SCALE_FACTOR,
@@ -1704,7 +1704,7 @@ impl<F: Fn()> Renderer<F> {
         let px_position = PxPosition::from_f64_arr2([position.x, position.y]);
         // Update cursor position
         self.cursor_state.update_position(px_position);
-        self.cursor_state.push_event(CursorEvent {
+        self.cursor_state.push_event(PointerChange {
             timestamp: Instant::now(),
             pointer_id: MOUSE_POINTER_ID,
             content: CursorEventContent::Moved(px_position),
@@ -1791,7 +1791,7 @@ impl<F: Fn()> Renderer<F> {
                 return;
             }
         }
-        let event = CursorEvent {
+        let event = PointerChange {
             timestamp: Instant::now(),
             pointer_id: MOUSE_POINTER_ID,
             content: event_content,
@@ -1807,7 +1807,7 @@ impl<F: Fn()> Renderer<F> {
             return;
         }
         let event_content = CursorEventContent::from_scroll_event(delta);
-        let event = CursorEvent {
+        let event = PointerChange {
             timestamp: Instant::now(),
             pointer_id: MOUSE_POINTER_ID,
             content: event_content,

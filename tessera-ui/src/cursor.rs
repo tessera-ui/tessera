@@ -64,13 +64,13 @@ impl Default for TouchScrollConfig {
 /// Central state manager for cursor and touch interactions.
 ///
 /// `CursorState` is the main interface for handling all cursor-related events
-/// in the Tessera UI framework. It manages cursor position tracking, event
-/// queuing, and multi-touch support for touch gestures.
+/// in the Tessera UI framework. It manages cursor position tracking, pointer
+/// change queuing, and multi-touch support for touch gestures.
 #[derive(Default)]
 pub struct CursorState {
     /// Current cursor position, if any cursor is active.
     position: Option<PxPosition>,
-    /// Bounded queue of cursor events awaiting processing.
+    /// Bounded queue of pointer changes awaiting processing.
     events: VecDeque<PointerChange>,
     /// Active touch points mapped by their unique touch IDs.
     touch_points: HashMap<u64, TouchPointState>,
@@ -89,7 +89,7 @@ impl CursorState {
         }
     }
 
-    /// Adds a cursor event to the processing queue.
+    /// Adds a pointer change to the processing queue.
     ///
     /// Events are stored in a bounded queue to prevent memory issues during UI
     /// performance problems. If the queue exceeds [`KEEP_EVENTS_COUNT`],
@@ -97,7 +97,7 @@ impl CursorState {
     ///
     /// # Arguments
     ///
-    /// * `event` - The cursor event to add to the queue
+    /// * `event` - The pointer change to add to the queue
     pub fn push_event(&mut self, event: PointerChange) {
         self.events.push_back(event);
 
@@ -120,9 +120,9 @@ impl CursorState {
         self.position = position.into();
     }
 
-    /// Retrieves and clears all pending cursor events.
+    /// Retrieves and clears all pending pointer changes.
     ///
-    /// This method returns all queued cursor events and clears the internal
+    /// This method returns all queued pointer changes and clears the internal
     /// event queue. Events are returned in chronological order (oldest first).
     ///
     /// This is typically called once per frame by the UI framework to process
@@ -308,7 +308,7 @@ pub struct PointerChange {
     pub timestamp: Instant,
     /// Pointer identifier for this input stream.
     pub pointer_id: PointerId,
-    /// The specific type and data of this cursor event.
+    /// The specific type and data of this pointer change.
     pub content: CursorEventContent,
     /// Classification of the gesture associated with this event.
     ///
@@ -363,9 +363,6 @@ pub enum CursorEventContent {
     /// A scroll action occurred (mouse wheel or touch drag).
     Scroll(ScrollEventContent),
 }
-
-/// Backward-compatible alias for older naming.
-pub type CursorEvent = PointerChange;
 
 /// Describes the high-level gesture classification of a cursor event.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

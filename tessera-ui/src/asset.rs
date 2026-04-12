@@ -120,16 +120,6 @@ where
     Ok(loaded)
 }
 
-/// Backward-compatible alias kept for previously generated code.
-#[doc(hidden)]
-pub fn read_with_weak_cache<T, F>(asset_id: u64, loader: F) -> io::Result<Arc<[u8]>>
-where
-    T: 'static,
-    F: FnOnce() -> io::Result<Arc<[u8]>>,
-{
-    read_with_lru_cache::<T, F>(asset_id, loader)
-}
-
 fn cache_instance() -> &'static RwLock<AssetLruCache> {
     ASSET_BYTES_CACHE.get_or_init(|| RwLock::new(AssetLruCache::default()))
 }
