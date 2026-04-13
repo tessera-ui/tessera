@@ -82,8 +82,7 @@ pub fn text(
         .or_else(|| use_context::<ContentColor>().map(|c| c.get().current))
         .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
         .unwrap_or_else(|| ContentColor::default().current);
-    let size = size
-        .unwrap_or(resolved_style.font_size);
+    let size = size.unwrap_or(resolved_style.font_size);
     let accessibility_label = accessibility_label
         .clone()
         .or_else(|| (!content.is_empty()).then(|| content.clone()));

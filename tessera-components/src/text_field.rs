@@ -663,14 +663,12 @@ fn render_text_field(
     };
     let floating_label_offset_x = Dp(0.0);
     let floating_label_offset_y = if is_outlined {
-        Dp(
-            -content_padding.0
-                - (label_floating_style
-                    .line_height
-                    .unwrap_or(Dp(label_floating_style.font_size.0 * 1.2))
-                    .0
-                    * 0.5),
-        )
+        Dp(-content_padding.0
+            - (label_floating_style
+                .line_height
+                .unwrap_or(Dp(label_floating_style.font_size.0 * 1.2))
+                .0
+                * 0.5))
     } else {
         Dp(TextFieldDefaults::FLOATING_LABEL_Y_OFFSET.0 - content_padding.0)
     };
@@ -782,9 +780,10 @@ fn render_text_field(
                                                     label_font_size: label_floating_style.font_size,
                                                     label_line_height: label_floating_style
                                                         .line_height
-                                                        .unwrap_or(Dp(
-                                                            label_floating_style.font_size.0 * 1.2,
-                                                        )),
+                                                        .unwrap_or(Dp(label_floating_style
+                                                            .font_size
+                                                            .0
+                                                            * 1.2)),
                                                     label_offset_x: floating_label_offset_x,
                                                     label_offset_y: floating_label_offset_y,
                                                     notch_fill_color,
