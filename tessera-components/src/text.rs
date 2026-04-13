@@ -36,6 +36,7 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 /// - `modifier` — modifier chain applied to the text node.
 /// - `content` — text content to display.
 /// - `color` — optional text color override.
+/// - `style` — optional text style override for typography presets.
 /// - `size` — optional font size override.
 /// - `line_height` — optional line height override.
 /// - `accessibility_label` — optional accessibility label override.
@@ -52,7 +53,10 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 ///     text()
 ///         .content("Hello, world!")
 ///         .color(Color::new(0.2, 0.5, 0.8, 1.0))
-///         .size(Dp(32.0));
+///         .style(tessera_components::theme::TextStyle {
+///             font_size: Dp(32.0),
+///             line_height: Some(Dp(40.0)),
+///         });
 /// }
 ///
 /// demo();
@@ -62,20 +66,24 @@ pub fn text(
     modifier: Modifier,
     #[prop(into)] content: String,
     color: Option<Color>,
+    style: Option<TextStyle>,
     size: Option<Dp>,
     line_height: Option<Dp>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
     let theme = use_context::<MaterialTheme>();
+    let inherited_style = use_context::<TextStyle>().map(|s| s.get());
+    let resolved_style = style
+        .or(inherited_style)
+        .or_else(|| theme.map(|t| t.get().typography.body_large))
+        .unwrap_or_default();
     let color = color
         .or_else(|| use_context::<ContentColor>().map(|c| c.get().current))
         .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
         .unwrap_or_else(|| ContentColor::default().current);
     let size = size
-        .or_else(|| use_context::<TextStyle>().map(|s| s.get().font_size))
-        .or_else(|| theme.map(|t| t.get().typography.body_large.font_size))
-        .unwrap_or_else(|| TextStyle::default().font_size);
+        .unwrap_or(resolved_style.font_size);
     let accessibility_label = accessibility_label
         .clone()
         .or_else(|| (!content.is_empty()).then(|| content.clone()));
@@ -85,9 +93,8 @@ pub fn text(
         description: accessibility_description,
         ..Default::default()
     };
-    let inherited_style = use_context::<TextStyle>().map(|s| s.get());
     let line_height = line_height
-        .or_else(|| inherited_style.and_then(|style| style.line_height))
+        .or(resolved_style.line_height)
         .unwrap_or(Dp(size.0 * 1.2));
 
     let policy = TextLayout {

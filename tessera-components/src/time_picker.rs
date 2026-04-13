@@ -19,7 +19,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{ContentColor, MaterialTheme},
+    theme::{ContentColor, MaterialTheme, TextStyle},
 };
 
 const TIME_CELL_WIDTH: Dp = Dp(72.0);
@@ -321,7 +321,10 @@ fn time_picker_inner(args: TimePickerConfig) {
                     {
                         text()
                             .content(":")
-                            .size(typography.headline_small.font_size)
+                            .style(TextStyle {
+                                font_size: typography.headline_small.font_size,
+                                line_height: typography.headline_small.line_height,
+                            })
                             .color(scheme.on_surface_variant);
                     };
                     {
@@ -552,7 +555,10 @@ fn time_stepper_column(
                 {
                     text()
                         .content(label)
-                        .size(typography.label_small.font_size)
+                        .style(TextStyle {
+                            font_size: typography.label_small.font_size,
+                            line_height: typography.label_small.line_height,
+                        })
                         .color(scheme.on_surface_variant);
                 };
             }

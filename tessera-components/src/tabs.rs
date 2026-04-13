@@ -527,9 +527,6 @@ pub fn tab_label(
     let text_content = text.clone();
     let icon_size = icon_size.unwrap_or(Dp(24.0));
     let horizontal_padding = horizontal_text_padding.unwrap_or(TabsDefaults::TAB_PADDING);
-    let font_size = style.font_size;
-    let line_height = style.line_height.unwrap_or(Dp(style.font_size.0 * 1.2));
-
     // Determine container height based on content type
     let small_height = TabsDefaults::MIN_TAB_HEIGHT;
     let large_height = TabsDefaults::LARGE_TAB_HEIGHT;
@@ -590,8 +587,7 @@ pub fn tab_label(
                                 text_component()
                                     .content(text_content.clone())
                                     .color(content_color)
-                                    .size(font_size)
-                                    .line_height(line_height);
+                                    .style(style);
                             };
                         });
                 } else if has_icon {
@@ -615,8 +611,7 @@ pub fn tab_label(
                     text_component()
                         .content(text_content.clone())
                         .color(content_color)
-                        .size(font_size)
-                        .line_height(line_height);
+                        .style(style);
                 }
             };
         });

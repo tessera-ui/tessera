@@ -24,7 +24,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{ContentColor, MaterialAlpha, MaterialTheme},
+    theme::{ContentColor, MaterialAlpha, MaterialTheme, TextStyle},
 };
 
 const DATE_COLUMNS: usize = 7;
@@ -537,7 +537,10 @@ fn date_picker_inner(args: DatePickerConfig) {
                                 {
                                     text()
                                         .content(title_text.clone())
-                                        .size(typography.title_small.font_size)
+                                        .style(TextStyle {
+                                            font_size: typography.title_small.font_size,
+                                            line_height: typography.title_small.line_height,
+                                        })
                                         .color(scheme.on_surface_variant);
                                 };
 
@@ -545,7 +548,10 @@ fn date_picker_inner(args: DatePickerConfig) {
                                 {
                                     text()
                                         .content(headline_text.clone())
-                                        .size(typography.headline_small.font_size)
+                                        .style(TextStyle {
+                                            font_size: typography.headline_small.font_size,
+                                            line_height: typography.headline_small.line_height,
+                                        })
                                         .color(scheme.on_surface);
                                 };
                             });

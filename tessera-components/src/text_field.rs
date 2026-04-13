@@ -29,7 +29,7 @@ use crate::{
         DisplayTransformText, TextInputController, TextInputProps, create_surface_args,
         text_input_core,
     },
-    theme::{ContentColor, MaterialColorScheme, MaterialTheme, TextSelectionColors},
+    theme::{ContentColor, MaterialColorScheme, MaterialTheme, TextSelectionColors, TextStyle},
 };
 
 /// Defaults for Material text fields.
@@ -414,19 +414,16 @@ fn editor_content_len(controller: &State<TextInputController>) -> usize {
     controller.with(|c| c.text().len())
 }
 
-fn label_floating_text_style(theme: &MaterialTheme) -> (Dp, Option<Dp>) {
-    let style = theme.typography.body_small;
-    (style.font_size, style.line_height)
+fn label_floating_text_style(theme: &MaterialTheme) -> TextStyle {
+    theme.typography.body_small
 }
 
-fn label_resting_text_style(theme: &MaterialTheme) -> (Dp, Option<Dp>) {
-    let style = theme.typography.body_large;
-    (style.font_size, style.line_height)
+fn label_resting_text_style(theme: &MaterialTheme) -> TextStyle {
+    theme.typography.body_large
 }
 
-fn placeholder_text_style(theme: &MaterialTheme) -> (Dp, Option<Dp>) {
-    let style = theme.typography.body_large;
-    (style.font_size, style.line_height)
+fn placeholder_text_style(theme: &MaterialTheme) -> TextStyle {
+    theme.typography.body_large
 }
 
 fn resolve_label_color(scheme: &MaterialColorScheme, focused: bool) -> Color {
@@ -604,8 +601,10 @@ fn outlined_floating_label(
             text()
                 .content(label_text.clone())
                 .color(label_color)
-                .size(label_font_size)
-                .line_height(label_line_height);
+                .style(TextStyle {
+                    font_size: label_font_size,
+                    line_height: Some(label_line_height),
+                });
         });
 }
 
@@ -633,15 +632,19 @@ fn render_text_field(
     let prefix = args.prefix;
     let suffix = args.suffix;
     let content_padding = args.padding;
-    let (label_floating_font_size, label_floating_line_height) = {
-        let (font_size, line_height) = label_floating_text_style(&theme);
-        let line_height = line_height.unwrap_or(Dp(font_size.0 * 1.2));
-        (font_size, line_height)
+    let label_floating_style = {
+        let style = label_floating_text_style(&theme);
+        TextStyle {
+            font_size: style.font_size,
+            line_height: Some(style.line_height.unwrap_or(Dp(style.font_size.0 * 1.2))),
+        }
     };
-    let (label_resting_font_size, label_resting_line_height) = {
-        let (font_size, line_height) = label_resting_text_style(&theme);
-        let line_height = line_height.unwrap_or(Dp(font_size.0 * 1.2));
-        (font_size, line_height)
+    let label_resting_style = {
+        let style = label_resting_text_style(&theme);
+        TextStyle {
+            font_size: style.font_size,
+            line_height: Some(style.line_height.unwrap_or(Dp(style.font_size.0 * 1.2))),
+        }
     };
     let placeholder_style = placeholder_text_style(&theme);
     let scheme = theme.color_scheme;
@@ -660,7 +663,14 @@ fn render_text_field(
     };
     let floating_label_offset_x = Dp(0.0);
     let floating_label_offset_y = if is_outlined {
-        Dp(-content_padding.0 - (label_floating_line_height.0 * 0.5))
+        Dp(
+            -content_padding.0
+                - (label_floating_style
+                    .line_height
+                    .unwrap_or(Dp(label_floating_style.font_size.0 * 1.2))
+                    .0
+                    * 0.5),
+        )
     } else {
         Dp(TextFieldDefaults::FLOATING_LABEL_Y_OFFSET.0 - content_padding.0)
     };
@@ -755,19 +765,10 @@ fn render_text_field(
                                         layout()
                                             .modifier(Modifier::new().align(Alignment::TopStart))
                                             .child(move || {
-                                                let (font_size, line_height) = placeholder_style;
-                                                if let Some(line_height) = line_height {
-                                                    text()
-                                                        .content(placeholder_text.clone())
-                                                        .color(placeholder_color)
-                                                        .size(font_size)
-                                                        .line_height(line_height);
-                                                } else {
-                                                    text()
-                                                        .content(placeholder_text.clone())
-                                                        .color(placeholder_color)
-                                                        .size(font_size);
-                                                }
+                                                text()
+                                                    .content(placeholder_text.clone())
+                                                    .color(placeholder_color)
+                                                    .style(placeholder_style);
                                             });
                                     }
 
@@ -778,8 +779,12 @@ fn render_text_field(
                                                 let floating_args = OutlinedFloatingLabelArgs {
                                                     label_text: label_text.clone(),
                                                     label_color,
-                                                    label_font_size: label_floating_font_size,
-                                                    label_line_height: label_floating_line_height,
+                                                    label_font_size: label_floating_style.font_size,
+                                                    label_line_height: label_floating_style
+                                                        .line_height
+                                                        .unwrap_or(Dp(
+                                                            label_floating_style.font_size.0 * 1.2,
+                                                        )),
                                                     label_offset_x: floating_label_offset_x,
                                                     label_offset_y: floating_label_offset_y,
                                                     notch_fill_color,
@@ -816,14 +821,11 @@ fn render_text_field(
                                                         text()
                                                             .content(label_text.clone())
                                                             .color(label_color)
-                                                            .size(label_floating_font_size)
+                                                            .style(label_floating_style)
                                                             .modifier(Modifier::new().offset(
                                                                 floating_label_offset_x,
                                                                 floating_label_offset_y,
-                                                            ))
-                                                            .line_height(
-                                                                label_floating_line_height,
-                                                            );
+                                                            ));
                                                     });
                                             }
                                         } else {
@@ -835,8 +837,7 @@ fn render_text_field(
                                                     text()
                                                         .content(label_text.clone())
                                                         .color(label_color)
-                                                        .size(label_resting_font_size)
-                                                        .line_height(label_resting_line_height);
+                                                        .style(label_resting_style);
                                                 });
                                         }
                                     }
