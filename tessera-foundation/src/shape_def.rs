@@ -32,6 +32,15 @@ impl RoundedCorner {
         g2_k_value: 3.0,
     };
 
+    /// Creates a rounded corner with the specified radius and a default G2
+    /// k value.
+    pub const fn new(radius: Dp) -> Self {
+        RoundedCorner::Manual {
+            radius,
+            g2_k_value: 3.0,
+        }
+    }
+
     /// Helper to create a manual corner.
     pub const fn manual(radius: Dp, g2_k_value: f32) -> Self {
         Self::Manual { radius, g2_k_value }

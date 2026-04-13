@@ -282,62 +282,65 @@ pub fn top_app_bar(
             let actions = actions.clone();
             let title_text = title.clone();
             let title_mod = title_area_modifier.clone();
-            row().children(move || {
-                let navigation_icon = navigation_icon;
-                let actions = actions.clone();
-                if let Some(navigation_icon) = navigation_icon {
-                    let nav_color = navigation_icon_color;
-                    provide_context(
-                        || ContentColor { current: nav_color },
-                        || {
-                            navigation_icon.render();
-                        },
-                    );
-                } else if extra_inset.0 > 0.0 {
-                    let spacer_width = extra_inset;
-                    spacer().modifier(Modifier::new().width(spacer_width));
-                }
-
-                let title_text = title_text.clone();
-                let title_mod = title_mod.clone();
-                row()
-                    .modifier(title_mod.fill_max_size().weight(1.0))
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .children(move || {
-                        if title_text.is_empty() {
-                            spacer().modifier(Modifier::new().fill_max_width());
-                        } else {
-                            let text_value = title_text.clone();
-                            provide_text_style(title_style, move || {
-                                text().content(text_value.clone());
-                            });
-                        }
-                    });
-
-                if !actions.is_empty() {
-                    let actions_len = actions.len();
-                    let spacing = actions_spacing;
-                    let action_color = action_icon_color;
+            row()
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    let navigation_icon = navigation_icon;
                     let actions = actions.clone();
-                    provide_context(
-                        || ContentColor {
-                            current: action_color,
-                        },
-                        || {
-                            row()
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .children(move || {
-                                    for (index, action) in actions.iter().cloned().enumerate() {
-                                        action.render();
-                                        if spacing.0 > 0.0 && index + 1 < actions_len {
-                                            let spacer_width = spacing;
-                                            spacer().modifier(Modifier::new().width(spacer_width));
-                                        }
-                                    }
+                    if let Some(navigation_icon) = navigation_icon {
+                        let nav_color = navigation_icon_color;
+                        provide_context(
+                            || ContentColor { current: nav_color },
+                            || {
+                                navigation_icon.render();
+                            },
+                        );
+                    } else if extra_inset.0 > 0.0 {
+                        let spacer_width = extra_inset;
+                        spacer().modifier(Modifier::new().width(spacer_width));
+                    }
+
+                    let title_text = title_text.clone();
+                    let title_mod = title_mod.clone();
+                    row()
+                        .modifier(title_mod.fill_max_size().weight(1.0))
+                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                        .children(move || {
+                            if title_text.is_empty() {
+                                spacer().modifier(Modifier::new().fill_max_width());
+                            } else {
+                                let text_value = title_text.clone();
+                                provide_text_style(title_style, move || {
+                                    text().content(text_value.clone());
                                 });
-                        },
-                    );
-                }
-            });
+                            }
+                        });
+
+                    if !actions.is_empty() {
+                        let actions_len = actions.len();
+                        let spacing = actions_spacing;
+                        let action_color = action_icon_color;
+                        let actions = actions.clone();
+                        provide_context(
+                            || ContentColor {
+                                current: action_color,
+                            },
+                            || {
+                                row()
+                                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                                    .children(move || {
+                                        for (index, action) in actions.iter().cloned().enumerate() {
+                                            action.render();
+                                            if spacing.0 > 0.0 && index + 1 < actions_len {
+                                                let spacer_width = spacing;
+                                                spacer()
+                                                    .modifier(Modifier::new().width(spacer_width));
+                                            }
+                                        }
+                                    });
+                            },
+                        );
+                    }
+                });
         });
 }

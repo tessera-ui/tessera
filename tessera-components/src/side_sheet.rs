@@ -29,7 +29,7 @@ use crate::{
 
 const ANIM_TIME: Duration = Duration::from_millis(300);
 const SCRIM_ALPHA: f32 = 0.32;
-const MAX_SHEET_WIDTH: Dp = Dp(360.0);
+const MAX_SHEET_WIDTH: Dp = Dp(250.0);
 const CORNER_RADIUS: Dp = Dp(16.0);
 const MODAL_ELEVATION: Dp = Dp(1.0);
 
@@ -683,9 +683,7 @@ fn side_sheet_provider_render(
         });
     }
 
-    if !(is_open || is_animating) {
-        return;
-    }
+    let show_side_sheet = is_open || is_animating;
 
     let progress = calc_progress_from_timer(timer_opt);
 
@@ -700,15 +698,17 @@ fn side_sheet_provider_render(
             let side_sheet_content = side_sheet_content;
             main_content.render();
 
-            render_scrim(sheet_type, on_close_request, progress, is_open);
+            if show_side_sheet {
+                render_scrim(sheet_type, on_close_request, progress, is_open);
 
-            side_sheet_content_wrapper()
-                .sheet_type(sheet_type)
-                .position(position)
-                .controller_state(controller)
-                .on_close_request_handle(on_close_request)
-                .just_opened(just_opened)
-                .content_slot(side_sheet_content);
+                side_sheet_content_wrapper()
+                    .sheet_type(sheet_type)
+                    .position(position)
+                    .controller_state(controller)
+                    .on_close_request_handle(on_close_request)
+                    .just_opened(just_opened)
+                    .content_slot(side_sheet_content);
+            }
         });
 }
 
