@@ -10,13 +10,20 @@ use std::{
 
 use image::GenericImageView;
 use tessera_ui::{
-    AssetExt, ComputedData, LayoutResult, MeasurementError, Modifier, Px,
+    AssetExt, Color, ComputedData, LayoutResult, MeasurementError, Modifier, Px,
     layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
     tessera,
 };
 use thiserror::Error;
 
-use crate::pipelines::image::command::ImageCommand;
+use crate::{
+    image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
+    painter::{Painter, PainterLoadError, TryIntoPainter, try_painter_asset},
+    pipelines::{
+        image::command::ImageCommand,
+        image_vector::command::{ImageVectorCommand, ImageVectorData},
+    },
+};
 
 pub use crate::pipelines::image::command::ImageData;
 
@@ -111,9 +118,39 @@ impl TryIntoImageData for &Path {
 }
 
 impl ImageBuilder {
+    /// Replaces the image content with a shared painter value.
+    pub fn painter(mut self, painter: impl Into<Painter>) -> Self {
+        self.props.painter = Some(painter.into());
+        self
+    }
+
+    /// Decodes image content from any supported source.
+    pub fn try_painter<T>(mut self, source: T) -> Result<Self, PainterLoadError>
+    where
+        T: TryIntoPainter,
+    {
+        self.props.painter = Some(source.try_into_painter()?);
+        Ok(self)
+    }
+
+    /// Decodes image content from an asset handle.
+    pub fn try_painter_asset<T>(mut self, asset: T) -> Result<Self, PainterLoadError>
+    where
+        T: AssetExt,
+    {
+        self.props.painter = Some(try_painter_asset(asset)?);
+        Ok(self)
+    }
+
     /// Replaces the image data with already-decoded raster pixels.
     pub fn raster(mut self, data: impl Into<Arc<ImageData>>) -> Self {
-        self.props.data = Some(data.into());
+        self.props.painter = Some(Painter::Raster(data.into()));
+        self
+    }
+
+    /// Replaces the image content with already-decoded vector geometry.
+    pub fn vector(mut self, data: impl Into<Arc<ImageVectorData>>) -> Self {
+        self.props.painter = Some(Painter::Vector(data.into()));
         self
     }
 
@@ -122,7 +159,16 @@ impl ImageBuilder {
     where
         T: TryIntoImageData,
     {
-        self.props.data = Some(Arc::new(source.try_into_image_data()?));
+        self.props.painter = Some(Painter::Raster(Arc::new(source.try_into_image_data()?)));
+        Ok(self)
+    }
+
+    /// Decodes vector image data from bytes/path input and stores it.
+    pub fn try_vector<T>(mut self, source: T) -> Result<Self, ImageVectorLoadError>
+    where
+        T: TryIntoImageVectorData,
+    {
+        self.props.painter = Some(Painter::Vector(source.try_into_image_vector_data()?));
         Ok(self)
     }
 
@@ -134,20 +180,41 @@ impl ImageBuilder {
         let bytes = asset
             .read()
             .map_err(|source| ImageLoadError::AssetRead { source })?;
-        self.props.data = Some(Arc::new(decode_image_from_bytes(bytes.as_ref())?));
+        self.props.painter = Some(Painter::Raster(Arc::new(decode_image_from_bytes(
+            bytes.as_ref(),
+        )?)));
+        Ok(self)
+    }
+
+    /// Decodes vector image data from an asset handle and stores it.
+    pub fn try_vector_asset<T>(mut self, asset: T) -> Result<Self, ImageVectorLoadError>
+    where
+        T: AssetExt,
+    {
+        let bytes = asset
+            .read()
+            .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
+        self.props.painter = Some(Painter::Vector(
+            bytes.as_ref().try_into_image_vector_data()?,
+        ));
         Ok(self)
     }
 }
 
 #[derive(Clone, PartialEq)]
 struct ImageLayout {
-    data: Arc<ImageData>,
+    painter: Painter,
 }
 
 impl LayoutPolicy for ImageLayout {
     fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let intrinsic_width = Px(self.data.width as i32);
-        let intrinsic_height = Px(self.data.height as i32);
+        let (intrinsic_width, intrinsic_height) = match &self.painter {
+            Painter::Vector(data) => (
+                clamp_f32_to_px(data.viewport_width),
+                clamp_f32_to_px(data.viewport_height),
+            ),
+            Painter::Raster(data) => (Px(data.width as i32), Px(data.height as i32)),
+        };
 
         let width = input.parent_constraint().width().clamp(intrinsic_width);
         let height = input.parent_constraint().height().clamp(intrinsic_height);
@@ -158,14 +225,30 @@ impl LayoutPolicy for ImageLayout {
 
 impl RenderPolicy for ImageLayout {
     fn record(&self, input: &mut RenderInput<'_>) {
-        let image_command = ImageCommand {
-            data: self.data.clone(),
-            opacity: 1.0,
-        };
-        input
-            .metadata_mut()
-            .fragment_mut()
-            .push_draw_command(image_command);
+        match &self.painter {
+            Painter::Raster(data) => {
+                let image_command = ImageCommand {
+                    data: data.clone(),
+                    opacity: 1.0,
+                };
+                input
+                    .metadata_mut()
+                    .fragment_mut()
+                    .push_draw_command(image_command);
+            }
+            Painter::Vector(data) => {
+                let vector_command = ImageVectorCommand {
+                    data: data.clone(),
+                    tint: Color::WHITE,
+                    tint_mode: TintMode::Multiply,
+                    rotation: 0.0,
+                };
+                input
+                    .metadata_mut()
+                    .fragment_mut()
+                    .push_draw_command(vector_command);
+            }
+        }
     }
 }
 
@@ -176,11 +259,11 @@ impl RenderPolicy for ImageLayout {
 ///
 /// ## Usage
 ///
-/// Display a static asset or pre-decoded image pixels.
+/// Display a raster or vector asset using a shared painter payload.
 ///
 /// ## Parameters
 ///
-/// - `data` - optional decoded raster image pixels.
+/// - `painter` - optional painter payload for vector or raster imagery.
 /// - `modifier` - node-local layout, drawing, and interaction modifiers.
 ///
 /// ## Examples
@@ -198,15 +281,22 @@ impl RenderPolicy for ImageLayout {
 ///     height: 1,
 /// };
 ///
-/// image().raster(image_data);
+/// image().painter(image_data);
 /// # }
 /// ```
 #[tessera]
-pub fn image(#[prop(skip_setter)] data: Option<Arc<ImageData>>, modifier: Modifier) {
-    let data = data.unwrap_or_else(placeholder_image_data);
-    let policy = ImageLayout { data: data.clone() };
+pub fn image(#[prop(skip_setter)] painter: Option<Painter>, modifier: Modifier) {
+    let painter = painter.unwrap_or_else(|| Painter::Raster(placeholder_image_data()));
+    let policy = ImageLayout {
+        painter: painter.clone(),
+    };
     layout()
         .modifier(modifier)
         .layout_policy(policy.clone())
         .render_policy(policy);
+}
+
+fn clamp_f32_to_px(value: f32) -> Px {
+    let clamped = value.max(0.0).min(i32::MAX as f32);
+    Px(clamped.round() as i32)
 }

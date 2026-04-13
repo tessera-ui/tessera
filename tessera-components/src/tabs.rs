@@ -20,8 +20,9 @@ use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     boxed::boxed,
     column::column,
-    icon::{IconContent, icon as icon_component},
+    icon::icon as icon_component,
     modifier::{ModifierExt, SemanticsArgs, with_pointer_input},
+    painter::Painter,
     shape_def::Shape,
     spacer::spacer,
     surface::surface,
@@ -333,10 +334,7 @@ struct TabsCompositionContext {
 #[derive(Clone, PartialEq)]
 enum TabTitle {
     Custom(RenderSlot),
-    Label {
-        text: String,
-        icon: Option<IconContent>,
-    },
+    Label { text: String, icon: Option<Painter> },
 }
 
 impl TabBuilder {
@@ -370,14 +368,14 @@ impl TabBuilder {
 
     /// Set the built-in Material icon for the tab and clear any custom title
     /// slot.
-    pub fn icon(mut self, icon: impl Into<IconContent>) -> Self {
+    pub fn icon(mut self, icon: impl Into<Painter>) -> Self {
         self.props.title_slot = None;
         self.props.label_icon = Some(icon.into());
         self
     }
 
     /// Set the built-in Material label and icon for the tab.
-    pub fn label_with_icon(self, label: impl Into<String>, icon: impl Into<IconContent>) -> Self {
+    pub fn label_with_icon(self, label: impl Into<String>, icon: impl Into<Painter>) -> Self {
         self.label(label).icon(icon)
     }
 }
@@ -419,7 +417,7 @@ impl TabBuilder {
 pub fn tab(
     #[prop(skip_setter)] title_slot: Option<RenderSlot>,
     #[prop(skip_setter)] label_text: Option<String>,
-    #[prop(skip_setter)] label_icon: Option<IconContent>,
+    #[prop(skip_setter)] label_icon: Option<Painter>,
 ) {
     let composition = use_context::<TabsCompositionContext>()
         .expect("tab must be used inside tabs")
@@ -508,7 +506,7 @@ pub fn tab(
 #[tessera]
 pub fn tab_label(
     #[prop(into)] text: String,
-    #[prop(into)] icon: Option<IconContent>,
+    #[prop(into)] icon: Option<Painter>,
     horizontal_text_padding: Option<Dp>,
     icon_size: Option<Dp>,
 ) {
@@ -560,20 +558,10 @@ pub fn tab_label(
                             let icon_content = icon_content.clone();
                             {
                                 if let Some(ic) = icon_content.clone() {
-                                    match ic {
-                                        IconContent::Vector(data) => {
-                                            icon_component()
-                                                .vector(data)
-                                                .size(icon_size)
-                                                .tint(content_color);
-                                        }
-                                        IconContent::Raster(data) => {
-                                            icon_component()
-                                                .raster(data)
-                                                .size(icon_size)
-                                                .tint(content_color);
-                                        }
-                                    }
+                                    icon_component()
+                                        .painter(ic)
+                                        .size(icon_size)
+                                        .tint(content_color);
                                 }
                             };
                             {
@@ -592,20 +580,10 @@ pub fn tab_label(
                         });
                 } else if has_icon {
                     if let Some(ic) = icon_content.clone() {
-                        match ic {
-                            IconContent::Vector(data) => {
-                                icon_component()
-                                    .vector(data)
-                                    .size(icon_size)
-                                    .tint(content_color);
-                            }
-                            IconContent::Raster(data) => {
-                                icon_component()
-                                    .raster(data)
-                                    .size(icon_size)
-                                    .tint(content_color);
-                            }
-                        }
+                        icon_component()
+                            .painter(ic)
+                            .size(icon_size)
+                            .tint(content_color);
                     }
                 } else if has_text {
                     text_component()

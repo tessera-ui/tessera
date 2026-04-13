@@ -20,8 +20,9 @@ use crate::{
     alignment::CrossAxisAlignment,
     checkmark::checkmark,
     column::column,
-    icon::{IconContent, icon},
+    icon::icon,
     modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
+    painter::Painter,
     pos_misc::is_position_in_rect,
     row::row,
     shape_def::Shape,
@@ -659,8 +660,8 @@ struct MenuItemConfig {
     pub label: String,
     pub supporting_text: Option<String>,
     pub trailing_text: Option<String>,
-    pub leading_icon: Option<IconContent>,
-    pub trailing_icon: Option<IconContent>,
+    pub leading_icon: Option<Painter>,
+    pub trailing_icon: Option<Painter>,
     pub submenu_content: Option<RenderSlot>,
     pub submenu_placement: MenuPlacement,
     pub selected: bool,
@@ -765,8 +766,8 @@ pub fn menu_item(
     #[prop(into)] label: String,
     #[prop(into)] supporting_text: Option<String>,
     #[prop(into)] trailing_text: Option<String>,
-    #[prop(into)] leading_icon: Option<IconContent>,
-    #[prop(into)] trailing_icon: Option<IconContent>,
+    #[prop(into)] leading_icon: Option<Painter>,
+    #[prop(into)] trailing_icon: Option<Painter>,
     submenu_content: Option<RenderSlot>,
     submenu_placement: Option<MenuPlacement>,
     selected: bool,
@@ -907,15 +908,8 @@ fn render_trailing(args: &MenuItemConfig, enabled: bool) {
     }
 }
 
-fn render_menu_icon(content: IconContent, tint: Color) {
-    match content {
-        IconContent::Vector(data) => {
-            icon().vector(data).size(MENU_LEADING_SIZE).tint(tint);
-        }
-        IconContent::Raster(data) => {
-            icon().raster(data).size(MENU_LEADING_SIZE).tint(tint);
-        }
-    }
+fn render_menu_icon(content: Painter, tint: Color) {
+    icon().painter(content).size(MENU_LEADING_SIZE).tint(tint);
 }
 
 #[tessera]

@@ -16,8 +16,9 @@ use tessera_ui::{
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
-    icon::{IconContent, icon as icon_component},
+    icon::icon as icon_component,
     modifier::{ModifierExt as _, Padding},
+    painter::Painter,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -250,7 +251,7 @@ pub fn segmented_button(
     selected: bool,
     enabled: Option<bool>,
     #[prop(into)] label: String,
-    #[prop(into)] icon: Option<IconContent>,
+    #[prop(into)] icon: Option<Painter>,
     modifier: Option<Modifier>,
     shape: Option<Shape>,
     colors: Option<SegmentedButtonColors>,
@@ -344,18 +345,9 @@ pub fn segmented_button(
 
                             if let Some(icon_content) = leading_icon.clone() {
                                 has_content = true;
-                                match icon_content.clone() {
-                                    IconContent::Vector(data) => {
-                                        icon_component()
-                                            .vector(data)
-                                            .size(SegmentedButtonDefaults::ICON_SIZE);
-                                    }
-                                    IconContent::Raster(data) => {
-                                        icon_component()
-                                            .raster(data)
-                                            .size(SegmentedButtonDefaults::ICON_SIZE);
-                                    }
-                                }
+                                icon_component()
+                                    .painter(icon_content)
+                                    .size(SegmentedButtonDefaults::ICON_SIZE);
                             }
 
                             if !label.is_empty() {

@@ -101,6 +101,7 @@ pub mod navigation_rail;
 mod nested_scroll;
 mod padding_utils;
 pub mod pager;
+pub mod painter;
 pub mod pipelines;
 pub mod pos_misc;
 pub mod progress;

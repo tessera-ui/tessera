@@ -15,8 +15,9 @@ use tessera_ui::{
 };
 
 use crate::{
-    icon::{IconContent, icon},
+    icon::icon,
     image_vector::TintMode,
+    painter::Painter,
     theme::{MaterialAlpha, MaterialTheme},
 };
 
@@ -657,7 +658,7 @@ struct SliderConfig {
     pub steps: usize,
     /// Optional icon content to display at the start of the slider (only for
     /// Medium sizes and above).
-    pub inset_icon: Option<IconContent>,
+    pub inset_icon: Option<Painter>,
     /// Optional external controller for drag and focus state.
     ///
     /// When this is `None`, `slider` and `centered_slider` create and own an
@@ -779,7 +780,7 @@ struct SliderParams {
     accessibility_description: Option<String>,
     show_stop_indicator: Option<bool>,
     steps: usize,
-    inset_icon: Option<IconContent>,
+    inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
 }
 
@@ -1108,7 +1109,7 @@ pub fn slider(
     #[prop(into)] accessibility_description: Option<String>,
     show_stop_indicator: Option<bool>,
     steps: usize,
-    #[prop(into)] inset_icon: Option<IconContent>,
+    #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
 ) {
     let args = slider_config_from_params(SliderParams {
@@ -1197,18 +1198,11 @@ fn render_slider(args: SliderConfig) {
                     scheme.on_primary
                 };
 
-                match inset_icon.clone() {
-                    IconContent::Vector(data) => {
-                        icon()
-                            .vector(data)
-                            .tint(tint)
-                            .tint_mode(TintMode::Solid)
-                            .size(icon_size);
-                    }
-                    IconContent::Raster(data) => {
-                        icon().raster(data).size(icon_size);
-                    }
-                }
+                icon()
+                    .painter(inset_icon.clone())
+                    .tint(tint)
+                    .tint_mode(TintMode::Solid)
+                    .size(icon_size);
             }
 
             if args.steps > 0 {
@@ -1438,7 +1432,7 @@ pub fn centered_slider(
     #[prop(into)] accessibility_description: Option<String>,
     show_stop_indicator: Option<bool>,
     steps: usize,
-    #[prop(into)] inset_icon: Option<IconContent>,
+    #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
 ) {
     let args = slider_config_from_params(SliderParams {

@@ -8,8 +8,9 @@ use tessera_ui::{Callback, Color, Dp, Modifier, tessera, use_context};
 use crate::{
     button::{ButtonDefaults, button},
     glass_button::glass_button,
-    icon::{IconContent, icon},
+    icon::icon,
     modifier::ModifierExt as _,
+    painter::Painter,
     shape_def::Shape,
     theme::MaterialTheme,
 };
@@ -30,7 +31,7 @@ pub enum IconButtonVariant {
 
 impl IconButtonBuilder {
     /// Sets the icon content using any supported icon source.
-    pub fn icon(mut self, icon: impl Into<IconContent>) -> Self {
+    pub fn icon(mut self, icon: impl Into<Painter>) -> Self {
         self.props.icon = Some(icon.into());
         self
     }
@@ -58,19 +59,14 @@ impl IconButtonBuilder {
 
 impl GlassIconButtonBuilder {
     /// Sets the icon content using any supported icon source.
-    pub fn icon(mut self, icon: impl Into<IconContent>) -> Self {
+    pub fn icon(mut self, icon: impl Into<Painter>) -> Self {
         self.props.icon = Some(icon.into());
         self
     }
 }
 
-fn render_icon_content(content: IconContent, tint: Color) {
-    let builder = match content {
-        IconContent::Vector(data) => icon().vector(data),
-        IconContent::Raster(data) => icon().raster(data),
-    };
-
-    builder.size(Dp(24.0)).tint(tint);
+fn render_icon_content(content: Painter, tint: Color) {
+    icon().painter(content).size(Dp(24.0)).tint(tint);
 }
 
 /// # icon_button
@@ -107,7 +103,7 @@ fn render_icon_content(content: IconContent, tint: Color) {
 #[tessera]
 pub fn icon_button(
     variant: Option<IconButtonVariant>,
-    #[prop(skip_setter)] icon: Option<IconContent>,
+    #[prop(skip_setter)] icon: Option<Painter>,
     on_click: Option<Callback>,
     enabled: Option<bool>,
     color: Option<Color>,
@@ -218,7 +214,7 @@ pub fn icon_button(
 /// ```
 #[tessera]
 pub fn glass_icon_button(
-    #[prop(skip_setter)] icon: Option<IconContent>,
+    #[prop(skip_setter)] icon: Option<Painter>,
     modifier: Modifier,
     on_click: Option<Callback>,
     padding: Option<Dp>,

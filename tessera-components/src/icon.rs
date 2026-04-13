@@ -14,39 +14,13 @@ use tessera_ui::{
 use crate::{
     image::{ImageLoadError, TryIntoImageData},
     image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
+    painter::{Painter, PainterLoadError, TryIntoPainter, try_painter_asset},
     pipelines::{
         image::command::{ImageCommand, ImageData},
         image_vector::command::{ImageVectorCommand, ImageVectorData},
     },
     theme::{ContentColor, MaterialTheme},
 };
-
-/// Icon payload used by [`icon`] to render either vector or raster content.
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum IconContent {
-    /// Vector icon content backed by decoded vector geometry.
-    Vector(Arc<ImageVectorData>),
-    /// Raster icon content backed by decoded image pixels.
-    Raster(Arc<ImageData>),
-}
-
-impl From<Arc<ImageVectorData>> for IconContent {
-    fn from(data: Arc<ImageVectorData>) -> Self {
-        Self::Vector(data)
-    }
-}
-
-impl From<Arc<ImageData>> for IconContent {
-    fn from(data: Arc<ImageData>) -> Self {
-        Self::Raster(data)
-    }
-}
-
-impl From<crate::material_icons::Asset> for IconContent {
-    fn from(asset: crate::material_icons::Asset) -> Self {
-        Self::Vector(asset.into())
-    }
-}
 
 fn placeholder_raster_data() -> Arc<ImageData> {
     static PLACEHOLDER: OnceLock<Arc<ImageData>> = OnceLock::new();
@@ -70,15 +44,39 @@ fn default_tint_color() -> Color {
 }
 
 impl IconBuilder {
+    /// Sets icon content using a shared painter value.
+    pub fn painter(mut self, painter: impl Into<Painter>) -> Self {
+        self.props.content = Some(painter.into());
+        self
+    }
+
+    /// Decodes icon content from any supported source.
+    pub fn try_painter<T>(mut self, source: T) -> Result<Self, PainterLoadError>
+    where
+        T: TryIntoPainter,
+    {
+        self.props.content = Some(source.try_into_painter()?);
+        Ok(self)
+    }
+
+    /// Decodes icon content from an asset handle.
+    pub fn try_painter_asset<T>(mut self, asset: T) -> Result<Self, PainterLoadError>
+    where
+        T: AssetExt,
+    {
+        self.props.content = Some(try_painter_asset(asset)?);
+        Ok(self)
+    }
+
     /// Sets vector icon content using already-decoded vector geometry.
     pub fn vector(mut self, data: impl Into<Arc<ImageVectorData>>) -> Self {
-        self.props.content = Some(IconContent::Vector(data.into()));
+        self.props.content = Some(Painter::Vector(data.into()));
         self
     }
 
     /// Sets raster icon content using already-decoded image pixels.
     pub fn raster(mut self, data: impl Into<Arc<ImageData>>) -> Self {
-        self.props.content = Some(IconContent::Raster(data.into()));
+        self.props.content = Some(Painter::Raster(data.into()));
         self
     }
 
@@ -87,7 +85,7 @@ impl IconBuilder {
     where
         T: TryIntoImageVectorData,
     {
-        self.props.content = Some(IconContent::Vector(source.try_into_image_vector_data()?));
+        self.props.content = Some(Painter::Vector(source.try_into_image_vector_data()?));
         Ok(self)
     }
 
@@ -96,7 +94,7 @@ impl IconBuilder {
     where
         T: TryIntoImageData,
     {
-        self.props.content = Some(IconContent::Raster(Arc::new(source.try_into_image_data()?)));
+        self.props.content = Some(Painter::Raster(Arc::new(source.try_into_image_data()?)));
         Ok(self)
     }
 
@@ -108,7 +106,7 @@ impl IconBuilder {
         let bytes = asset
             .read()
             .map_err(|source| ImageVectorLoadError::AssetRead { source })?;
-        self.props.content = Some(IconContent::Vector(
+        self.props.content = Some(Painter::Vector(
             bytes.as_ref().try_into_image_vector_data()?,
         ));
         Ok(self)
@@ -122,7 +120,7 @@ impl IconBuilder {
         let bytes = asset
             .read()
             .map_err(|source| ImageLoadError::AssetRead { source })?;
-        self.props.content = Some(IconContent::Raster(Arc::new(
+        self.props.content = Some(Painter::Raster(Arc::new(
             bytes.as_ref().try_into_image_data()?,
         )));
         Ok(self)
@@ -139,7 +137,7 @@ impl From<crate::material_icons::Asset> for Arc<ImageVectorData> {
 
 #[derive(Clone, PartialEq)]
 struct IconLayout {
-    content: IconContent,
+    content: Painter,
     size: Dp,
     width: Option<AxisConstraint>,
     height: Option<AxisConstraint>,
@@ -170,7 +168,7 @@ impl RenderPolicy for IconLayout {
     fn record(&self, input: &mut RenderInput<'_>) {
         let mut metadata = input.metadata_mut();
         match &self.content {
-            IconContent::Vector(data) => {
+            Painter::Vector(data) => {
                 let command = ImageVectorCommand {
                     data: data.clone(),
                     tint: self.tint,
@@ -179,7 +177,7 @@ impl RenderPolicy for IconLayout {
                 };
                 metadata.fragment_mut().push_draw_command(command);
             }
-            IconContent::Raster(data) => {
+            Painter::Raster(data) => {
                 let command = ImageCommand {
                     data: data.clone(),
                     opacity: 1.0,
@@ -201,7 +199,7 @@ impl RenderPolicy for IconLayout {
 ///
 /// ## Parameters
 ///
-/// - `content` - optional vector or raster icon payload.
+/// - `content` - optional painter payload for vector or raster imagery.
 /// - `size` - optional preferred square size.
 /// - `width` / `height` - optional explicit layout dimensions.
 /// - `tint` - optional tint override for vector icons.
@@ -218,14 +216,14 @@ impl RenderPolicy for IconLayout {
 /// use tessera_ui::Color;
 ///
 /// icon()
-///     .vector(filled::STAR_SVG)
+///     .painter(filled::STAR_SVG)
 ///     .size(tessera_ui::Dp(20.0))
 ///     .tint(Color::new(0.2, 0.5, 0.8, 1.0));
 /// # }
 /// ```
 #[tessera]
 pub fn icon(
-    #[prop(skip_setter)] content: Option<IconContent>,
+    #[prop(skip_setter)] content: Option<Painter>,
     size: Option<Dp>,
     width: Option<AxisConstraint>,
     height: Option<AxisConstraint>,
@@ -233,7 +231,7 @@ pub fn icon(
     tint_mode: TintMode,
     rotation: f32,
 ) {
-    let content = content.unwrap_or_else(|| IconContent::Raster(placeholder_raster_data()));
+    let content = content.unwrap_or_else(|| Painter::Raster(placeholder_raster_data()));
     let size = size.unwrap_or(Dp(24.0));
     let tint = tint.unwrap_or_else(default_tint_color);
     let policy = IconLayout {
@@ -248,13 +246,13 @@ pub fn icon(
     layout().layout_policy(policy.clone()).render_policy(policy);
 }
 
-fn intrinsic_dimensions(content: &IconContent) -> (Px, Px) {
+fn intrinsic_dimensions(content: &Painter) -> (Px, Px) {
     match content {
-        IconContent::Vector(data) => (
+        Painter::Vector(data) => (
             px_from_f32(data.viewport_width),
             px_from_f32(data.viewport_height),
         ),
-        IconContent::Raster(data) => (clamp_u32_to_px(data.width), clamp_u32_to_px(data.height)),
+        Painter::Raster(data) => (clamp_u32_to_px(data.width), clamp_u32_to_px(data.height)),
     }
 }
 
