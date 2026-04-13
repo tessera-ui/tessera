@@ -838,8 +838,8 @@ fn apply_pager_input_modifiers(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures paging, spacing, and layout behavior; see
-///   [`PagerConfig`].
+/// - `args` — configures paging, spacing, and layout behavior through the
+///   component's builder parameters.
 /// - `page_content` — closure that renders each page by index.
 ///
 /// ## Examples
@@ -917,8 +917,8 @@ pub fn horizontal_pager(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures paging, spacing, and layout behavior; see
-///   [`PagerConfig`].
+/// - `args` — configures paging, spacing, and layout behavior through the
+///   component's builder parameters.
 /// - `page_content` — closure that renders each page by index.
 ///
 /// ## Examples

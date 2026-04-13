@@ -52,7 +52,7 @@ pub enum BottomSheetStyle {
 /// Controller for [`bottom_sheet_provider`], managing open/closed state.
 ///
 /// This controller can be created by the application and passed through
-/// [`bottom_sheet_provider().controller(...)`]. It is used to control the
+/// `bottom_sheet_provider().controller(...)`. It is used to control the
 /// visibility of the sheet programmatically.
 #[derive(Clone, PartialEq)]
 pub struct BottomSheetController {

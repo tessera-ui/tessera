@@ -307,7 +307,7 @@ fn process_pointer_gestures(
 /// ## Parameters
 ///
 /// - `args` — configures the slider's value, appearance, and `on_change`
-///   callback; see [`GlassSliderConfig`].
+///   callback through the component's builder parameters.
 /// - `controller` — optional controller; use [`glass_slider`] to provide your
 ///   own.
 ///

@@ -1065,8 +1065,8 @@ fn range_slider_colors(args: &RangeSliderConfig) -> SliderColors {
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and callbacks; see
-///   [`SliderConfig`].
+/// - `args` — configures the slider's value, appearance, and callbacks through
+///   the component's builder parameters.
 /// - `controller` — optional; use [`slider`] to provide your own controller.
 ///
 /// ## Examples
@@ -1386,8 +1386,8 @@ fn measure_centered_slider(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and callbacks; see
-///   [`SliderConfig`].
+/// - `args` — configures the slider's value, appearance, and callbacks through
+///   the component's builder parameters.
 /// - `controller` — optional controller; use [`centered_slider`] to supply one.
 ///
 /// ## Examples
@@ -1707,8 +1707,8 @@ fn measure_range_slider(
 ///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's range, appearance, and callbacks; see
-///   [`RangeSliderConfig`].
+/// - `args` — configures the slider's range, appearance, and callbacks through
+///   the component's builder parameters.
 /// - `controller` — optional controller; use [`range_slider`] to supply one.
 ///
 /// ## Examples

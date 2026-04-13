@@ -35,7 +35,7 @@ impl LayoutPolicy for SpacerLayout {
 ///
 /// ## Parameters
 ///
-/// - `args` — props for this component; see [`SpacerArgs`].
+/// - `modifier` — modifier chain applied to the spacer node.
 ///
 /// ## Examples
 ///

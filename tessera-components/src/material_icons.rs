@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Use style modules (for example [`filled`]) to obtain icon assets, then pass
-//! them to [`crate::icon::IconArgs`] or decode with
+//! them to `icon().try_vector_asset(...)` or decode with
 //! [`TryIntoImageVectorData`].
 use std::sync::Arc;
 

@@ -81,7 +81,7 @@
 //! ## Barrier Requirements
 //!
 //! Some rendering effects need to sample from previously rendered content
-//! (e.g., blur effects). Implement [`DrawCommand::barrier()`] to return
+//! (e.g., blur effects). Implement [`DrawCommand::sample_region()`] to return
 //! `SampleBackground` requirements for such commands.
 //!
 //! ## Multi-Pass Rendering

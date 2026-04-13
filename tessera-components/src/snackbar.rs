@@ -130,7 +130,7 @@ impl From<SnackbarRequest> for ResolvedSnackbar {
     }
 }
 
-/// Data describing the current snackbar shown by a [`SnackbarHost`].
+/// Data describing the current snackbar shown by [`snackbar_host`].
 #[derive(Clone, PartialEq)]
 pub struct SnackbarData {
     message: String,
