@@ -1270,7 +1270,8 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # Usage
 ///
-/// Annotate a public zero-argument function that returns `tessera_ui::EntryPoint`.
+/// Annotate a public zero-argument function that returns
+/// `tessera_ui::EntryPoint`.
 #[proc_macro_attribute]
 pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
     let crate_path: syn::Path = match parse_crate_path(attr) {
