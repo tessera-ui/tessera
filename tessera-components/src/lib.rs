@@ -53,7 +53,13 @@
 //! # }
 //! # component();
 //! ```
-#![deny(missing_docs, clippy::unwrap_used)]
+#![deny(
+    missing_docs,
+    clippy::unwrap_used,
+    rustdoc::broken_intra_doc_links,
+    rustdoc::invalid_rust_codeblocks,
+    rustdoc::invalid_html_tags
+)]
 
 mod animation;
 pub mod app_bar;

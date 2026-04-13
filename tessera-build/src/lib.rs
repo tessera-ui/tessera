@@ -1,3 +1,17 @@
+//! Build-time utilities for Tessera packages.
+//!
+//! ## Usage
+//!
+//! Load `tessera-config.toml` and generate compiled asset bindings in build
+//! scripts.
+
+#![deny(
+    missing_docs,
+    clippy::unwrap_used,
+    rustdoc::broken_intra_doc_links,
+    rustdoc::invalid_rust_codeblocks,
+    rustdoc::invalid_html_tags
+)]
 use std::{
     collections::{BTreeMap, HashMap},
     env,
@@ -16,17 +30,25 @@ use backend_platform::generate_platform_backend_tokens;
 mod backend_embed;
 mod backend_platform;
 
+/// Environment variable selecting the asset backend (`embed` or `platform`).
 pub const ASSET_BACKEND_ENV: &str = "TESSERA_ASSET_BACKEND";
+/// The conventional filename for Tessera project configurations.
 pub const TESSERA_CONFIG_FILE: &str = "tessera-config.toml";
+/// Generated Rust source filename written under `OUT_DIR`.
 pub const GENERATED_ASSET_FILE: &str = "tessera_assets.rs";
 
+/// Backend strategy used when generating asset access code.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum AssetBackend {
+    /// Assets are directly embedded within the binary executable.
     Embed,
+    /// Assets are loaded using the platform's native asset management system
+    /// (e.g. Android assets).
     Platform,
 }
 
 impl AssetBackend {
+    /// Returns the canonical backend name.
     pub fn as_str(self) -> &'static str {
         match self {
             Self::Embed => "embed",
@@ -34,6 +56,8 @@ impl AssetBackend {
         }
     }
 
+    /// Reads `ASSET_BACKEND_ENV` and parses the backend, defaulting to
+    /// `AssetBackend::Embed` when the variable is not set.
     pub fn from_env_or_default() -> Result<Self> {
         match env::var(ASSET_BACKEND_ENV) {
             Ok(value) => value.parse(),
@@ -57,21 +81,29 @@ impl std::str::FromStr for AssetBackend {
     }
 }
 
+/// Configuration schema loaded from `tessera-config.toml`.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct TesseraConfig {
+    /// Permissions requested by the package.
     #[serde(default)]
     pub permissions: Vec<String>,
+    /// Asset collection and filtering configuration.
     pub assets: Option<AssetsConfig>,
+    /// Plugin wrapper generation settings.
     pub plugin: Option<PluginConfig>,
 }
 
+/// Asset directory and filtering configuration.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AssetsConfig {
+    /// Asset directory relative to the package root. Defaults to `assets`.
     pub dir: Option<String>,
+    /// Tree-shaking rules for excluding matched assets.
     pub tree_shaking: Option<AssetsTreeShakingConfig>,
 }
 
 impl AssetsConfig {
+    /// Returns configured exclusion patterns or an empty slice.
     pub fn tree_shaking_exclude_patterns(&self) -> &[String] {
         self.tree_shaking
             .as_ref()
@@ -79,20 +111,27 @@ impl AssetsConfig {
     }
 }
 
+/// Tree-shaking rules applied during asset discovery.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AssetsTreeShakingConfig {
+    /// Patterns of asset paths to exclude from the generated bundle.
     #[serde(default)]
     pub exclude: Vec<String>,
 }
 
+/// Plugin-specific configuration options.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct PluginConfig {
+    /// Android-specific plugin integration settings.
     pub android: Option<PluginAndroidConfig>,
 }
 
+/// Android plugin integration metadata.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct PluginAndroidConfig {
+    /// Android module path used by generated plugin glue code.
     pub module: Option<String>,
+    /// Java/Kotlin package name used for Android integration.
     pub package: Option<String>,
 }
 
@@ -151,6 +190,9 @@ impl ModuleNode {
     }
 }
 
+/// Loads `tessera-config.toml` from a package directory.
+///
+/// Returns `Ok(None)` when the config file does not exist.
 pub fn load_tessera_config_from_dir(dir: &Path) -> Result<Option<TesseraConfig>> {
     let path = dir.join(TESSERA_CONFIG_FILE);
     if !path.exists() {
@@ -163,16 +205,23 @@ pub fn load_tessera_config_from_dir(dir: &Path) -> Result<Option<TesseraConfig>>
     Ok(Some(config))
 }
 
+/// Builds the canonical asset namespace (`{package_name}/{package_version}`).
 pub fn asset_namespace(package_name: &str, package_version: &str) -> String {
     format!("{package_name}/{package_version}")
 }
 
+/// Resolves the configured asset directory path under `manifest_dir`.
+///
+/// Returns `None` when `config` does not contain an `assets` section.
 pub fn resolve_assets_dir(manifest_dir: &Path, config: Option<&TesseraConfig>) -> Option<PathBuf> {
     let assets = config.and_then(|cfg| cfg.assets.as_ref())?;
     let dir = assets.dir.as_deref().unwrap_or("assets");
     Some(manifest_dir.join(dir))
 }
 
+/// Generates the asset bindings source file during build.
+///
+/// The generated file is written to `OUT_DIR/tessera_assets.rs`.
 pub fn generate_assets() -> Result<()> {
     let manifest_dir = PathBuf::from(
         env::var("CARGO_MANIFEST_DIR").context("Missing CARGO_MANIFEST_DIR for build script")?,

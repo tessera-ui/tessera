@@ -3,6 +3,13 @@
 //! This crate provides procedural macros for the Tessera UI framework.
 //! The main export is the `#[tessera]` attribute macro, which transforms
 //! regular Rust functions into Tessera UI components.
+#![deny(
+    missing_docs,
+    clippy::unwrap_used,
+    rustdoc::broken_intra_doc_links,
+    rustdoc::invalid_rust_codeblocks,
+    rustdoc::invalid_html_tags
+)]
 
 use std::hash::{DefaultHasher, Hash, Hasher};
 

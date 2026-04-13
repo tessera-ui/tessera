@@ -267,7 +267,13 @@
 //! components and modifiers.
 //!
 //! For more details, see the [Layout Guide](https://tessera-ui.github.io/guide/component.html#layout).
-#![deny(missing_docs, clippy::unwrap_used)]
+#![deny(
+    missing_docs,
+    clippy::unwrap_used,
+    rustdoc::broken_intra_doc_links,
+    rustdoc::invalid_rust_codeblocks,
+    rustdoc::invalid_html_tags
+)]
 
 extern crate self as tessera_ui;
 

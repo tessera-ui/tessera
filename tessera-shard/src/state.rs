@@ -4,7 +4,9 @@
 //!
 //! Use `ShardState` to access shard-scoped data managed by the router.
 
+/// Public handle APIs for shard-scoped state access.
 pub mod handle;
+/// Internal map and slot storage used by shard state handles.
 pub mod storage;
 
 pub use handle::ShardState;
