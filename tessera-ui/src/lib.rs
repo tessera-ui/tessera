@@ -309,9 +309,6 @@ pub mod testing;
 mod thread_utils;
 pub mod time;
 
-#[cfg(feature = "shard")]
-pub mod router;
-
 pub use accesskit;
 pub use indextree::{Arena, NodeId};
 pub use tessera_macros::{entry, tessera};
@@ -383,11 +380,6 @@ pub use crate::{
 };
 
 use ime_state::ImeState;
-
-#[cfg(feature = "shard")]
-pub use tessera_macros::shard;
-#[cfg(feature = "shard")]
-pub use tessera_shard;
 
 #[cfg(target_os = "android")]
 pub use {jni, ndk_context, ndk_sys};

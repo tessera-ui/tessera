@@ -224,6 +224,7 @@ fn field_compare_expr(field_ident: &Ident, ty: &Type) -> proc_macro2::TokenStrea
 #[derive(Default)]
 struct ShardMacroArgs {
     crate_path: Option<Path>,
+    shard_crate_path: Option<Path>,
     state_type: Option<Type>,
     lifecycle: Option<Ident>,
 }
@@ -309,6 +310,15 @@ impl Parse for ShardMacroArgs {
                     }
                     args.crate_path = Some(input.parse::<Path>()?);
                 }
+                "shard_crate_path" => {
+                    if args.shard_crate_path.is_some() {
+                        return Err(syn::Error::new(
+                            key.span(),
+                            "duplicate `shard_crate_path` argument",
+                        ));
+                    }
+                    args.shard_crate_path = Some(input.parse::<Path>()?);
+                }
                 "state" => {
                     if args.state_type.is_some() {
                         return Err(syn::Error::new(key.span(), "duplicate `state` argument"));
@@ -327,7 +337,7 @@ impl Parse for ShardMacroArgs {
                 _ => {
                     return Err(syn::Error::new(
                         key.span(),
-                        "unsupported #[shard(...)] argument; expected `state`, `lifecycle`, or `crate_path`",
+                        "unsupported #[shard(...)] argument; expected `state`, `lifecycle`, `crate_path`, or `shard_crate_path`",
                     ));
                 }
             }
@@ -1296,7 +1306,7 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// # Features
 ///
 /// * Generates a `StructNameDestination` (UpperCamelCase + `Destination`)
-///   implementing `tessera_ui::router::RouterDestination`
+///   implementing `tessera_shard::router::RouterDestination`
 /// * Optional state injection via `#[shard(state = T)]`, where `T`:
 ///   - Must implement `Default + Send + Sync + 'static`
 ///   - Is constructed (or reused) and exposed as local variable `state` with
@@ -1325,7 +1335,7 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 /// struct ProfilePageDestination { /* non-state params as public fields */ }
 /// impl RouterDestination for ProfilePageDestination {
 ///     fn exec_component(&self) { profile_page(/* fields */); }
-///     fn shard_id(&self) -> &'static str { "<module>::profile_page" }
+///     fn destination_id() -> &'static str { "<module>::profile_page" }
 /// }
 /// ```
 ///
@@ -1336,8 +1346,8 @@ pub fn entry(attr: TokenStream, item: TokenStream) -> TokenStream {
 ///
 /// # See Also
 ///
-/// * Routing helpers: `tessera_ui::router::{shard_home, router_outlet}`
-/// * Router controller internals: `tessera_ui::router::RouterController`
+/// * Routing helper: `tessera_shard::shard_home`
+/// * Router controller internals: `tessera_shard::RouterController`
 ///
 /// # Errors
 ///
@@ -1356,9 +1366,12 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         }
     };
 
-    let crate_path: syn::Path = shard_args
+    let ui_crate_path: syn::Path = shard_args
         .crate_path
         .unwrap_or_else(|| syn::parse_quote!(::tessera_ui));
+    let shard_crate_path: syn::Path = shard_args
+        .shard_crate_path
+        .unwrap_or_else(|| syn::parse_quote!(::tessera_shard));
 
     let func = parse_macro_input!(input as ItemFn);
     if let Some(conflicting_attr) = func
@@ -1414,9 +1427,9 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 .into();
             }
             if lifecycle_name == "scope" {
-                quote! { #crate_path::router::ShardStateLifeCycle::Scope }
+                quote! { #shard_crate_path::router::ShardStateLifeCycle::Scope }
             } else if lifecycle_name == "shard" {
-                quote! { #crate_path::router::ShardStateLifeCycle::Shard }
+                quote! { #shard_crate_path::router::ShardStateLifeCycle::Shard }
             } else {
                 return syn::Error::new_spanned(
                     lifecycle,
@@ -1426,7 +1439,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 .into();
             }
         }
-        None => quote! { #crate_path::router::ShardStateLifeCycle::Shard },
+        None => quote! { #shard_crate_path::router::ShardStateLifeCycle::Shard },
     };
 
     let func_body = func.block;
@@ -1463,7 +1476,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
             .retain(|attr| !attr.path().is_ident("router"));
         pat_type.attrs.push(syn::parse_quote!(#[prop(skip_setter)]));
         pat_type.attrs.push(
-            syn::parse_quote!(#[default(Some(#crate_path::__private::current_router_controller()))]),
+            syn::parse_quote!(#[default(Some(#shard_crate_path::__private::current_router_controller()))]),
         );
     }
 
@@ -1510,24 +1523,24 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     #(#dest_fields),*
                 }
 
-                impl #crate_path::router::RouterDestination for #struct_name {
+                impl #shard_crate_path::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
                         let mut __tessera_builder = #func_name();
                         #(#destination_builder_setters)*
                         drop(__tessera_builder);
                     }
 
-                    fn shard_id(&self) -> &'static str {
+                    fn destination_id() -> &'static str {
                         concat!(module_path!(), "::", #func_name_str)
                     }
                 }
 
                 #(#func_attrs)*
-                #[#crate_path::tessera(#crate_path)]
+                #[#ui_crate_path::tessera(#ui_crate_path)]
                 #func_vis #func_sig_modified {
                     const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
                     #router_binding
-                    #crate_path::__private::with_current_router_shard_state::<#state_type, _, _>(
+                    #shard_crate_path::__private::with_current_router_shard_state::<#state_type, _, _>(
                         SHARD_ID,
                         #state_lifecycle_tokens,
                         |state| {
@@ -1542,20 +1555,20 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                     #(#dest_fields),*
                 }
 
-                impl #crate_path::router::RouterDestination for #struct_name {
+                impl #shard_crate_path::router::RouterDestination for #struct_name {
                     fn exec_component(&self) {
                         let mut __tessera_builder = #func_name();
                         #(#destination_builder_setters)*
                         drop(__tessera_builder);
                     }
 
-                    fn shard_id(&self) -> &'static str {
+                    fn destination_id() -> &'static str {
                         concat!(module_path!(), "::", #func_name_str)
                     }
                 }
 
                 #(#func_attrs)*
-                #[#crate_path::tessera(#crate_path)]
+                #[#ui_crate_path::tessera(#ui_crate_path)]
                 #func_vis #func_sig_modified {
                     #router_binding
                     #func_body

@@ -65,7 +65,7 @@ where
 {
     let (cancel, registration) = AbortHandle::new_pair();
     let wrapped = Abortable::new(fut, registration);
-    let handle = crate::tokio_runtime::get().spawn(async move {
+    let handle = crate::async_support::tokio_runtime::get().spawn(async move {
         let _ = wrapped.await;
     });
     (handle, cancel)

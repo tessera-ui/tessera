@@ -7,6 +7,6 @@ pub fn get() -> &'static tokio::runtime::Runtime {
         tokio::runtime::Builder::new_multi_thread()
             .enable_all()
             .build()
-            .unwrap()
+            .expect("failed to build tokio runtime for tessera-shard")
     })
 }

@@ -11,6 +11,8 @@ homepage.workspace = true
 dashmap = "6.1.0"
 futures-util = "0.3.31"
 parking_lot = "0.12.5"
+tessera-macros = { path = "../tessera-macros" }
+tessera-ui = { path = "../tessera-ui" }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
 tokio = { version = "1.49.0", features = ["full"] }

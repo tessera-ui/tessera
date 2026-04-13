@@ -5,7 +5,6 @@ use std::sync::Arc;
 use indextree::NodeId;
 
 use crate::{
-    State,
     component_tree::{ComponentNode, NodeRole},
     layout::{DefaultLayoutPolicy, NoopRenderPolicy},
     modifier::Modifier,
@@ -22,11 +21,6 @@ pub use crate::{
     },
 };
 
-#[cfg(feature = "shard")]
-use crate::router::RouterController;
-#[cfg(feature = "shard")]
-use tessera_shard::{ShardState, ShardStateLifeCycle};
-
 pub fn record_current_context_snapshot_for(instance_key: u64) {
     crate::context::record_current_context_snapshot_for(instance_key);
 }
@@ -39,22 +33,21 @@ pub fn current_instance_key() -> u64 {
     crate::runtime::current_instance_key()
 }
 
-#[cfg(feature = "shard")]
-pub fn current_router_controller() -> State<RouterController> {
-    crate::router::current_router_controller()
+pub fn current_phase() -> Option<RuntimePhase> {
+    crate::runtime::current_phase()
 }
 
-#[cfg(feature = "shard")]
-pub fn with_current_router_shard_state<T, F, R>(
-    shard_id: &str,
-    life_cycle: ShardStateLifeCycle,
-    f: F,
-) -> R
+pub fn current_replay_boundary_instance_key_from_scope() -> Option<u64> {
+    crate::runtime::current_replay_boundary_instance_key_from_scope()
+}
+
+pub fn context_from_previous_snapshot_for_instance<T>(
+    instance_key: u64,
+) -> Option<crate::context::Context<T>>
 where
-    T: Default + Send + Sync + 'static,
-    F: FnOnce(ShardState<T>) -> R,
+    T: Send + Sync + 'static,
 {
-    crate::router::with_current_router_shard_state(shard_id, life_cycle, f)
+    crate::context::context_from_previous_snapshot_for_instance(instance_key)
 }
 
 pub fn register_component_node(fn_name: &str, _component_type_id: u64) -> NodeId {

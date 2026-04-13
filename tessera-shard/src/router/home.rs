@@ -1,70 +1,17 @@
-//! Controller-driven shard routing primitives.
-//!
-//! ## Usage
-//!
-//! Mount `shard_home` at the app shell root, then render `router_outlet` where
-//! the current shard page should appear.
-
 use std::sync::Arc;
 
-use tessera_macros::tessera;
-
-pub use tessera_shard::{
-    ShardState, ShardStateLifeCycle,
-    router::{RouterController, RouterDestination},
+use tessera_ui::{
+    __private::{
+        RuntimePhase, context_from_previous_snapshot_for_instance, current_phase,
+        current_replay_boundary_instance_key_from_scope,
+    },
+    State, provide_context, remember, tessera, use_context,
 };
 
 use crate::{
-    RenderSlot, State,
-    context::{context_from_previous_snapshot_for_instance, provide_context, use_context},
-    runtime::{
-        RuntimePhase, current_phase, current_replay_boundary_instance_key_from_scope, remember,
-    },
+    router::{RouterContext, RouterController, RouterDestination},
+    state::{ShardState, ShardStateLifeCycle},
 };
-
-#[derive(Clone)]
-struct RouterContext {
-    controller: State<RouterController>,
-}
-
-/// Shared destination handle used by `RouterController` builders and
-/// `shard_home`.
-pub struct RouterDestinationHandle {
-    inner: Arc<dyn RouterDestination>,
-}
-
-impl RouterDestinationHandle {
-    fn clone_destination(&self) -> Arc<dyn RouterDestination> {
-        Arc::clone(&self.inner)
-    }
-}
-
-impl<T> From<T> for RouterDestinationHandle
-where
-    T: RouterDestination + 'static,
-{
-    fn from(value: T) -> Self {
-        Self {
-            inner: Arc::new(value),
-        }
-    }
-}
-
-impl Clone for RouterDestinationHandle {
-    fn clone(&self) -> Self {
-        Self {
-            inner: Arc::clone(&self.inner),
-        }
-    }
-}
-
-impl PartialEq for RouterDestinationHandle {
-    fn eq(&self, other: &Self) -> bool {
-        Arc::ptr_eq(&self.inner, &other.inner)
-    }
-}
-
-impl Eq for RouterDestinationHandle {}
 
 fn resolve_router_controller_state() -> State<RouterController> {
     match current_phase() {
@@ -105,8 +52,7 @@ where
     controller.with(|router| router.init_or_get_with_lifecycle(shard_id, life_cycle, f))
 }
 
-/// Render the current destination from the nearest shard home.
-pub fn router_outlet() {
+fn router_outlet() {
     let executed = current_router_controller().with(RouterController::exec_current);
     assert!(executed, "Router stack should not be empty");
 }
@@ -118,25 +64,23 @@ pub fn router_outlet() {
 ///
 /// ## Usage
 ///
-/// Mount the root route for an app shell and optionally render custom chrome
-/// around `router_outlet()`.
+/// Mount the root route for an app shell.
 ///
 /// ## Parameters
 ///
 /// - `root` — initial destination used when `controller` is omitted
 /// - `controller` — optional external router controller state
-/// - `child` — optional shell content; defaults to `router_outlet()`
 ///
 /// ## Examples
 ///
 /// ```rust
-/// use tessera_ui::router::shard_home;
+/// use tessera_shard::shard_home;
 ///
 /// # #[derive(Clone)]
 /// # struct DemoDestination;
-/// # impl tessera_ui::router::RouterDestination for DemoDestination {
+/// # impl tessera_shard::router::RouterDestination for DemoDestination {
 /// #     fn exec_component(&self) {}
-/// #     fn shard_id(&self) -> &'static str { "demo" }
+/// #     fn destination_id() -> &'static str { "demo" }
 /// # }
 /// # #[tessera_ui::tessera]
 /// # fn demo() {
@@ -144,16 +88,15 @@ pub fn router_outlet() {
 /// # }
 /// # demo();
 /// ```
-#[tessera(crate)]
+#[tessera(tessera_ui)]
 pub fn shard_home(
-    #[prop(into)] root: Option<RouterDestinationHandle>,
+    #[prop(skip_setter)] root: Option<Arc<dyn RouterDestination>>,
     controller: Option<State<RouterController>>,
-    child: Option<RenderSlot>,
 ) {
     let internal_controller = remember({
         let root = root.clone();
         move || match root.clone() {
-            Some(root) => RouterController::with_root_shared(root.clone_destination()),
+            Some(root) => RouterController::with_root_shared(root),
             None => RouterController::new(),
         }
     });
@@ -166,14 +109,15 @@ pub fn shard_home(
         panic!("shard_home requires `root` when `controller` is not provided");
     }
 
-    provide_context(
-        || RouterContext { controller },
-        move || {
-            if let Some(child) = child {
-                child.render();
-            } else {
-                router_outlet();
-            }
-        },
-    );
+    provide_context(|| RouterContext { controller }, router_outlet);
+}
+
+impl ShardHomeBuilder {
+    pub fn root<T>(mut self, root: T) -> Self
+    where
+        T: RouterDestination + 'static,
+    {
+        self.props.root = Some(Arc::new(root));
+        self
+    }
 }
