@@ -1684,6 +1684,7 @@ dependencies = [
  "tessera-build",
  "tessera-components",
  "tessera-platform",
+ "tessera-shard",
  "tessera-ui",
  "wasm-bindgen",
 ]
@@ -5114,6 +5115,8 @@ dependencies = [
  "dashmap",
  "futures-util",
  "parking_lot",
+ "tessera-macros",
+ "tessera-ui",
  "tokio",
  "wasm-bindgen-futures",
 ]
@@ -5145,7 +5148,6 @@ dependencies = [
  "slotmap",
  "smallvec",
  "tessera-macros",
- "tessera-shard",
  "tracing",
  "tracing-subscriber",
  "wasm-bindgen-futures",

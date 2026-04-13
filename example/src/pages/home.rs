@@ -1,5 +1,5 @@
 use tessera_components::text::text;
-use tessera_ui::shard;
+use tessera_shard::shard;
 
 #[shard]
 pub fn home() {

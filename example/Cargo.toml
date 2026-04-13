@@ -17,6 +17,7 @@ name = "example"
 path = "src/main.rs"
 
 [dependencies]
+tessera-shard = { path = "../tessera-shard" }
 tessera-ui = { path = "../tessera-ui" }
 tessera-components = { path = "../tessera-components" }
 tessera-platform = { path = "../tessera-platform" }
