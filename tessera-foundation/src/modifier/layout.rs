@@ -236,14 +236,24 @@ pub(crate) struct MinimumInteractiveModifierNode;
 impl LayoutModifierNode for MinimumInteractiveModifierNode {
     fn measure(
         &self,
-        _input: &LayoutModifierInput<'_>,
+        input: &LayoutModifierInput<'_>,
         child: &mut dyn LayoutModifierChild,
     ) -> Result<LayoutModifierOutput, MeasurementError> {
         const MIN_SIZE: Dp = Dp(48.0);
-        let child_size = child.measure(&Constraint::NONE)?;
+        let parent_constraint = Constraint::new(
+            input.layout_input.parent_constraint().width(),
+            input.layout_input.parent_constraint().height(),
+        );
+        let child_constraint = Constraint::new(
+            parent_constraint.width.without_min(),
+            parent_constraint.height.without_min(),
+        );
+        let child_size = child.measure(&child_constraint)?;
         let min_px: Px = MIN_SIZE.into();
-        let width = child_size.width.max(min_px);
-        let height = child_size.height.max(min_px);
+        let width = parent_constraint.width.clamp(child_size.width.max(min_px));
+        let height = parent_constraint
+            .height
+            .clamp(child_size.height.max(min_px));
         let x = ((width - child_size.width) / 2).max(Px(0));
         let y = ((height - child_size.height) / 2).max(Px(0));
         child.place(PxPosition::new(x, y));
