@@ -1685,6 +1685,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
         if let Some(state_type) = state_type {
             quote! {
+                #[derive(Clone, PartialEq)]
                 #func_vis struct #struct_name {
                     #(#dest_fields),*
                 }
@@ -1717,6 +1718,7 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
             }
         } else {
             quote! {
+                #[derive(Clone, PartialEq)]
                 #func_vis struct #struct_name {
                     #(#dest_fields),*
                 }
