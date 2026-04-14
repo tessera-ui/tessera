@@ -259,7 +259,7 @@ struct FloatingActionButtonResolvedArgs {
 #[tessera]
 pub fn floating_action_button(
     size: Option<FloatingActionButtonSize>,
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     enabled: Option<bool>,
     container_color: Option<Color>,
     content_color: Option<Color>,
@@ -279,7 +279,7 @@ pub fn floating_action_button(
         .get();
     let args = FloatingActionButtonResolvedArgs {
         size: size.unwrap_or_default(),
-        modifier,
+        modifier: modifier.unwrap_or_default(),
         enabled: enabled.unwrap_or(true),
         container_color: container_color
             .unwrap_or_else(|| FloatingActionButtonDefaults::container_color(&theme.color_scheme)),

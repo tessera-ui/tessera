@@ -380,8 +380,8 @@ pub fn pull_refresh_indicator(
 pub fn pull_refresh(
     modifier: Option<Modifier>,
     on_refresh: Option<Callback>,
-    refreshing: bool,
-    enabled: bool,
+    refreshing: Option<bool>,
+    enabled: Option<bool>,
     refresh_threshold: Option<Dp>,
     refreshing_offset: Option<Dp>,
     indicator_size: Option<Dp>,
@@ -393,6 +393,8 @@ pub fn pull_refresh(
     controller: Option<State<PullRefreshController>>,
     child: Option<RenderSlot>,
 ) {
+    let refreshing = refreshing.unwrap_or(false);
+    let enabled = enabled.unwrap_or(true);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()

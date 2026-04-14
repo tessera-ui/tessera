@@ -416,8 +416,8 @@ pub fn split_button_layout(
 /// ```
 #[tessera]
 pub fn split_leading_button(
-    variant: SplitButtonVariant,
-    size: SplitButtonSize,
+    variant: Option<SplitButtonVariant>,
+    size: Option<SplitButtonSize>,
     enabled: Option<bool>,
     modifier: Option<Modifier>,
     on_click: Option<Callback>,
@@ -425,6 +425,8 @@ pub fn split_leading_button(
     #[prop(into)] accessibility_description: Option<String>,
     content: Option<RenderSlot>,
 ) {
+    let variant = variant.unwrap_or_default();
+    let size = size.unwrap_or_default();
     let content = content.unwrap_or_else(RenderSlot::empty);
     render_split_button(
         SplitButtonItemArgs::leading(
@@ -486,8 +488,8 @@ pub fn split_leading_button(
 /// ```
 #[tessera]
 pub fn split_trailing_button(
-    variant: SplitButtonVariant,
-    size: SplitButtonSize,
+    variant: Option<SplitButtonVariant>,
+    size: Option<SplitButtonSize>,
     enabled: Option<bool>,
     modifier: Option<Modifier>,
     on_click: Option<Callback>,
@@ -495,6 +497,8 @@ pub fn split_trailing_button(
     #[prop(into)] accessibility_description: Option<String>,
     content: Option<RenderSlot>,
 ) {
+    let variant = variant.unwrap_or_default();
+    let size = size.unwrap_or_default();
     let content = content.unwrap_or_else(RenderSlot::empty);
     render_split_button(
         SplitButtonItemArgs::trailing(

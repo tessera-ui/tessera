@@ -3232,10 +3232,11 @@ mod tests {
     struct RuntimeValueBeta;
 
     #[tessera(crate)]
-    fn generic_value_component<T>(value: usize)
+    fn generic_value_component<T>(value: Option<usize>)
     where
         T: Send + Sync + 'static,
     {
+        let value = value.unwrap_or_default();
         let _ = std::any::TypeId::of::<T>();
         TYPE_GENERIC_COMPONENT_HITS.fetch_add(value, Ordering::SeqCst);
     }
@@ -3254,7 +3255,9 @@ mod tests {
     }
 
     #[tessera(crate)]
-    fn required_controller_component(controller: ControllerHandle) {
+    fn required_controller_component(controller: Option<ControllerHandle>) {
+        let controller = controller
+            .expect("missing required prop `controller` in `required_controller_component`");
         REQUIRED_CONTROLLER_VALUE.store(controller.id, Ordering::SeqCst);
     }
 
@@ -3264,9 +3267,8 @@ mod tests {
     }
 
     #[tessera(crate)]
-    fn defaulted_controller_component(
-        #[default(ControllerHandle { id: 7 })] controller: ControllerHandle,
-    ) {
+    fn defaulted_controller_component(controller: Option<ControllerHandle>) {
+        let controller = controller.unwrap_or(ControllerHandle { id: 7 });
         DEFAULTED_CONTROLLER_VALUE.store(controller.id, Ordering::SeqCst);
     }
 
@@ -3723,7 +3725,7 @@ mod tests {
     }
 
     #[test]
-    fn tessera_uses_default_attr_without_default_trait() {
+    fn tessera_uses_function_body_default_for_omitted_option_props() {
         DEFAULTED_CONTROLLER_VALUE.store(0, Ordering::SeqCst);
 
         with_test_component_scope(11015, || {

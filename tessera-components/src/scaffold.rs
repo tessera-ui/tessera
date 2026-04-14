@@ -239,7 +239,7 @@ impl LayoutPolicy for ScaffoldLayout {
 /// ## Parameters
 ///
 /// - `modifier` — optional modifier chain applied to the scaffold container.
-/// - `content_padding` — padding applied around the content area.
+/// - `content_padding` — optional padding applied around the content area.
 /// - `content` — optional main content slot.
 /// - `top_bar` — optional top bar slot.
 /// - `bottom_bar` — optional bottom bar slot.
@@ -247,10 +247,11 @@ impl LayoutPolicy for ScaffoldLayout {
 /// - `floating_action_button_alignment` — optional floating action button
 ///   alignment.
 /// - `floating_action_button_offset` — additional x/y offset applied to the
-///   floating action button.
+///   floating action button, defaulting to `0dp`.
 /// - `snackbar_host` — optional snackbar host slot.
 /// - `snackbar_alignment` — optional snackbar host alignment.
-/// - `snackbar_offset` — additional x/y offset applied to the snackbar host.
+/// - `snackbar_offset` — additional x/y offset applied to the snackbar host,
+///   defaulting to `0dp`.
 ///
 /// ## Examples
 ///
@@ -281,20 +282,23 @@ impl LayoutPolicy for ScaffoldLayout {
 #[tessera]
 pub fn scaffold(
     modifier: Option<Modifier>,
-    content_padding: Padding,
+    content_padding: Option<Padding>,
     content: Option<RenderSlot>,
     top_bar: Option<RenderSlot>,
     bottom_bar: Option<RenderSlot>,
     floating_action_button: Option<RenderSlot>,
     floating_action_button_alignment: Option<Alignment>,
-    floating_action_button_offset: [Dp; 2],
+    floating_action_button_offset: Option<[Dp; 2]>,
     snackbar_host: Option<RenderSlot>,
     snackbar_alignment: Option<Alignment>,
-    snackbar_offset: [Dp; 2],
+    snackbar_offset: Option<[Dp; 2]>,
 ) {
     let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_size());
+    let content_padding = content_padding.unwrap_or(Padding::all(Dp(0.0)));
     let fab_alignment = floating_action_button_alignment.unwrap_or(Alignment::BottomEnd);
+    let floating_action_button_offset = floating_action_button_offset.unwrap_or([Dp(0.0), Dp(0.0)]);
     let snackbar_alignment = snackbar_alignment.unwrap_or(Alignment::BottomCenter);
+    let snackbar_offset = snackbar_offset.unwrap_or([Dp(0.0), Dp(0.0)]);
 
     layout()
         .modifier(modifier)
@@ -357,7 +361,11 @@ mod tests {
     }
 
     #[tessera]
-    fn fixed_test_box(tag: String, width: i32, height: i32) {
+    fn fixed_test_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or_default();
+        let height = height.unwrap_or_default();
+
         layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)

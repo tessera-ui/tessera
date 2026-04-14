@@ -83,16 +83,23 @@ struct NavigationRailCompositionContext {
 
 #[tessera]
 fn navigation_rail_item_view_content(
-    item: NavigationRailItemDefinition,
-    icon_position: NavigationRailIconPosition,
-    is_selected: bool,
-    was_selected: bool,
-    selection_progress: f32,
-    indicator_start_width: Dp,
-    item_min_height: Dp,
+    item: Option<NavigationRailItemDefinition>,
+    icon_position: Option<NavigationRailIconPosition>,
+    is_selected: Option<bool>,
+    was_selected: Option<bool>,
+    selection_progress: Option<f32>,
+    indicator_start_width: Option<Dp>,
+    item_min_height: Option<Dp>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
 ) {
+    let item = item.unwrap_or_default();
+    let icon_position = icon_position.unwrap_or_default();
+    let is_selected = is_selected.unwrap_or(false);
+    let was_selected = was_selected.unwrap_or(false);
+    let selection_progress = selection_progress.unwrap_or(0.0);
+    let indicator_start_width = indicator_start_width.unwrap_or(Dp(0.0));
+    let item_min_height = item_min_height.unwrap_or(Dp(0.0));
     let interaction_state = interaction_state.expect("interaction_state must be set");
     let ripple_state = ripple_state.expect("ripple_state must be set");
     let theme = use_context::<MaterialTheme>()
@@ -363,16 +370,24 @@ impl LayoutPolicy for NavigationRailItemLayout {
 #[tessera]
 fn navigation_rail_item_view(
     controller: Option<State<NavigationRailController>>,
-    index: usize,
-    item: NavigationRailItemDefinition,
-    selected_index: usize,
-    previous_index: usize,
-    selection_progress: f32,
-    icon_position: NavigationRailIconPosition,
-    indicator_start_width: Dp,
-    item_min_height: Dp,
+    index: Option<usize>,
+    item: Option<NavigationRailItemDefinition>,
+    selected_index: Option<usize>,
+    previous_index: Option<usize>,
+    selection_progress: Option<f32>,
+    icon_position: Option<NavigationRailIconPosition>,
+    indicator_start_width: Option<Dp>,
+    item_min_height: Option<Dp>,
 ) {
     let controller = controller.expect("controller must be set");
+    let index = index.unwrap_or(0);
+    let item = item.unwrap_or_default();
+    let selected_index = selected_index.unwrap_or(0);
+    let previous_index = previous_index.unwrap_or(0);
+    let selection_progress = selection_progress.unwrap_or(0.0);
+    let icon_position = icon_position.unwrap_or_default();
+    let indicator_start_width = indicator_start_width.unwrap_or(Dp(0.0));
+    let item_min_height = item_min_height.unwrap_or(Dp(0.0));
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
 
@@ -480,10 +495,12 @@ struct NavigationRailItemDefinition {
 /// ```
 #[tessera]
 pub fn navigation_rail_item(
-    #[prop(into)] label: String,
+    #[prop(into)] label: Option<String>,
     icon: Option<RenderSlot>,
-    on_click: Callback,
+    on_click: Option<Callback>,
 ) {
+    let label = label.unwrap_or_default();
+    let on_click = on_click.unwrap_or_default();
     let composition = use_context::<NavigationRailCompositionContext>()
         .expect("navigation_rail_item must be used inside navigation_rail")
         .get();
@@ -572,9 +589,10 @@ impl NavigationRailValue {
 #[tessera]
 pub fn navigation_rail(
     controller: Option<State<NavigationRailController>>,
-    content: RenderSlot,
+    content: Option<RenderSlot>,
     header: Option<RenderSlot>,
 ) {
+    let content = content.unwrap_or_else(RenderSlot::empty);
     let controller = controller.unwrap_or_else(|| remember(|| NavigationRailController::new(0)));
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")

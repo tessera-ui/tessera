@@ -458,7 +458,7 @@ pub fn switch(
     modifier: Option<Modifier>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     enabled: Option<bool>,
-    checked: bool,
+    checked: Option<bool>,
     width: Option<Dp>,
     height: Option<Dp>,
     track_color: Option<Color>,
@@ -474,6 +474,7 @@ pub fn switch(
     #[prop(skip_setter)] controller: Option<State<SwitchController>>,
     child: Option<RenderSlot>,
 ) {
+    let checked = checked.unwrap_or(false);
     let controller = controller.unwrap_or_else(|| remember(|| SwitchController::new(checked)));
     render_switch(
         modifier,
@@ -788,7 +789,11 @@ mod tests {
     }
 
     #[tessera]
-    fn tagged_probe(tag: String, width: i32, height: i32) {
+    fn tagged_probe(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or_default();
+        let height = height.unwrap_or_default();
+
         layout()
             .layout_policy(FixedSizePolicy { width, height })
             .render_policy(NoopRenderPolicy)

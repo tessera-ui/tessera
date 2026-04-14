@@ -798,17 +798,25 @@ fn handle_state_h(
 
 #[tessera]
 pub fn scrollbar_v(
-    total: Px,
-    visible: Px,
-    offset: Px,
-    thickness: Dp,
+    total: Option<Px>,
+    visible: Option<Px>,
+    offset: Option<Px>,
+    thickness: Option<Dp>,
     state: Option<State<ScrollableController>>,
-    scrollbar_behavior: ScrollBarBehavior,
-    track_color: Color,
-    thumb_color: Color,
-    thumb_hover_color: Color,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
+    track_color: Option<Color>,
+    thumb_color: Option<Color>,
+    thumb_hover_color: Option<Color>,
     scrollbar_state: Option<ScrollBarState>,
 ) {
+    let total = total.unwrap_or(Px::ZERO);
+    let visible = visible.unwrap_or(Px::ZERO);
+    let offset = offset.unwrap_or(Px::ZERO);
+    let thickness = thickness.unwrap_or(Dp(0.0));
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let track_color = track_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_color = thumb_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_hover_color = thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     let state = state.expect("scrollbar_v requires state");
     let args = ScrollBarConfig {
         total,
@@ -915,17 +923,25 @@ pub fn scrollbar_v(
 
 #[tessera]
 pub fn scrollbar_h(
-    total: Px,
-    visible: Px,
-    offset: Px,
-    thickness: Dp,
+    total: Option<Px>,
+    visible: Option<Px>,
+    offset: Option<Px>,
+    thickness: Option<Dp>,
     state: Option<State<ScrollableController>>,
-    scrollbar_behavior: ScrollBarBehavior,
-    track_color: Color,
-    thumb_color: Color,
-    thumb_hover_color: Color,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
+    track_color: Option<Color>,
+    thumb_color: Option<Color>,
+    thumb_hover_color: Option<Color>,
     scrollbar_state: Option<ScrollBarState>,
 ) {
+    let total = total.unwrap_or(Px::ZERO);
+    let visible = visible.unwrap_or(Px::ZERO);
+    let offset = offset.unwrap_or(Px::ZERO);
+    let thickness = thickness.unwrap_or(Dp(0.0));
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let track_color = track_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_color = thumb_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_hover_color = thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     let state = state.expect("scrollbar_h requires state");
     let args = ScrollBarConfig {
         total,

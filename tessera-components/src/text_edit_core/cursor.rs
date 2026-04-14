@@ -65,11 +65,15 @@ impl RenderPolicy for CursorLayout {
 /// * `current_frame_nanos` - Current frame timestamp used to sample visibility
 #[tessera]
 fn cursor_visual(
-    height_px: Px,
-    blink_start_frame_nanos: u64,
-    current_frame_nanos: u64,
-    color: Color,
+    height_px: Option<Px>,
+    blink_start_frame_nanos: Option<u64>,
+    current_frame_nanos: Option<u64>,
+    color: Option<Color>,
 ) {
+    let height_px = height_px.unwrap_or(Px::ZERO);
+    let blink_start_frame_nanos = blink_start_frame_nanos.unwrap_or(0);
+    let current_frame_nanos = current_frame_nanos.unwrap_or(0);
+    let color = color.unwrap_or(Color::TRANSPARENT);
     let elapsed_nanos = current_frame_nanos.saturating_sub(blink_start_frame_nanos);
     let visible = elapsed_nanos % 1_000_000_000 < 500_000_000;
 

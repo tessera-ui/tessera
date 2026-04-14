@@ -408,7 +408,11 @@ fn place_bottom_sheet_if_present(
     result.place_child(bottom_sheet, PxPosition::new(x, Px(y)));
 }
 #[tessera]
-fn bottom_sheet_drag_handle(controller: Option<State<BottomSheetController>>, on_close: Callback) {
+fn bottom_sheet_drag_handle(
+    controller: Option<State<BottomSheetController>>,
+    on_close: Option<Callback>,
+) {
+    let on_close = on_close.unwrap_or_default();
     let controller = controller.expect("bottom_sheet_drag_handle requires controller");
     let drag_recognizer = remember(DragRecognizer::default);
     let modifier = with_pointer_input(Modifier::new(), move |mut input| {
@@ -488,12 +492,15 @@ fn build_bottom_sheet_nested_scroll_connection(
 
 #[tessera]
 fn bottom_sheet_content_wrapper(
-    style: BottomSheetStyle,
+    style: Option<BottomSheetStyle>,
     bottom_sheet_content: Option<RenderSlot>,
     controller: Option<State<BottomSheetController>>,
-    on_close: Callback,
-    just_opened: bool,
+    on_close: Option<Callback>,
+    just_opened: Option<bool>,
 ) {
+    let style = style.unwrap_or_default();
+    let on_close = on_close.unwrap_or_default();
+    let just_opened = just_opened.unwrap_or(false);
     let controller = controller.expect("bottom_sheet_content_wrapper requires controller");
     let bottom_sheet_content =
         bottom_sheet_content.expect("bottom_sheet_content_wrapper requires sheet content");
@@ -620,13 +627,15 @@ fn bottom_sheet_content_wrapper(
 #[tessera]
 pub fn bottom_sheet_provider(
     on_close_request: Option<Callback>,
-    style: BottomSheetStyle,
-    is_open: bool,
+    style: Option<BottomSheetStyle>,
+    is_open: Option<bool>,
     controller: Option<State<BottomSheetController>>,
     main_content: Option<RenderSlot>,
     bottom_sheet_content: Option<RenderSlot>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
+    let style = style.unwrap_or_default();
+    let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let bottom_sheet_content = bottom_sheet_content.unwrap_or_else(RenderSlot::empty);
     let external_controller = controller;

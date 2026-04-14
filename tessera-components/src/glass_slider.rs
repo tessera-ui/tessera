@@ -336,7 +336,7 @@ fn process_pointer_gestures(
 /// ```
 #[tessera]
 pub fn glass_slider(
-    value: f32,
+    value: Option<f32>,
     modifier: Option<Modifier>,
     on_change: Option<CallbackWith<f32>>,
     track_height: Option<Dp>,
@@ -344,11 +344,14 @@ pub fn glass_slider(
     progress_tint_color: Option<Color>,
     blur_radius: Option<Dp>,
     track_border_width: Option<Dp>,
-    disabled: bool,
+    disabled: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     controller: Option<State<GlassSliderController>>,
 ) {
+    let defaults = GlassSliderConfig::default();
+    let value = value.unwrap_or(defaults.value);
+    let disabled = disabled.unwrap_or(defaults.disabled);
     let mut slider_args = glass_slider_config_from_params(GlassSliderParams {
         value,
         modifier,
@@ -371,7 +374,14 @@ pub fn glass_slider(
 }
 
 #[tessera]
-fn glass_slider_progress_fill(value: f32, tint_color: Color, blur_radius: Dp) {
+fn glass_slider_progress_fill(
+    value: Option<f32>,
+    tint_color: Option<Color>,
+    blur_radius: Option<Dp>,
+) {
+    let value = value.unwrap_or(0.0);
+    let tint_color = tint_color.unwrap_or(Color::TRANSPARENT);
+    let blur_radius = blur_radius.unwrap_or(Dp(0.0));
     fluid_glass()
         .tint_color(tint_color)
         .blur_radius(blur_radius)

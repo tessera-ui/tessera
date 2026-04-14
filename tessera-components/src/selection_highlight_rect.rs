@@ -29,7 +29,10 @@ use crate::pipelines::shape::command::ShapeCommand;
 /// - `color`: The fill color of the rectangle, including alpha for transparency
 ///   (`Color`).
 #[tessera]
-pub fn selection_highlight_rect(width: Px, height: Px, color: Color) {
+pub fn selection_highlight_rect(width: Option<Px>, height: Option<Px>, color: Option<Color>) {
+    let width = width.unwrap_or(Px::ZERO);
+    let height = height.unwrap_or(Px::ZERO);
+    let color = color.unwrap_or(Color::TRANSPARENT);
     let policy = SelectionHighlightLayout {
         width,
         height,

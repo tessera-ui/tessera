@@ -160,7 +160,7 @@ fn interpolate_color(off: Color, on: Color, progress: f32) -> Color {
 pub fn glass_switch(
     modifier: Option<Modifier>,
     on_toggle: Option<CallbackWith<bool, ()>>,
-    checked: bool,
+    checked: Option<bool>,
     width: Option<Dp>,
     height: Option<Dp>,
     track_on_color: Option<Color>,
@@ -174,6 +174,7 @@ pub fn glass_switch(
     #[prop(into)] accessibility_description: Option<String>,
     #[prop(skip_setter)] controller: Option<State<GlassSwitchController>>,
 ) {
+    let checked = checked.unwrap_or(false);
     let width = width.unwrap_or(Dp(52.0));
     let height = height.unwrap_or(Dp(32.0));
     let track_on_color = track_on_color.unwrap_or(Color::new(0.2, 0.7, 1.0, 0.5));

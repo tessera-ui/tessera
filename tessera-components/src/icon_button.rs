@@ -215,7 +215,7 @@ pub fn icon_button(
 #[tessera]
 pub fn glass_icon_button(
     #[prop(skip_setter)] icon: Option<Painter>,
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     on_click: Option<Callback>,
     padding: Option<Dp>,
     tint_color: Option<Color>,
@@ -236,6 +236,7 @@ pub fn glass_icon_button(
         .get()
         .color_scheme;
     let content_color = content_color.unwrap_or(scheme.on_surface);
+    let modifier = modifier.unwrap_or_default();
 
     let mut builder = glass_button()
         .modifier(modifier)

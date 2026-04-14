@@ -503,12 +503,12 @@ fn render_chip_icon(icon_content: Painter, tint: Color) {
 pub fn chip(
     variant: Option<ChipVariant>,
     style: Option<ChipStyle>,
-    #[prop(into)] label: String,
+    #[prop(into)] label: Option<String>,
     #[prop(skip_setter)] leading_icon: Option<Painter>,
     #[prop(skip_setter)] trailing_icon: Option<Painter>,
     selected: Option<bool>,
     enabled: Option<bool>,
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     colors: Option<ChipColors>,
     border: Option<ChipBorder>,
     shape: Option<Shape>,
@@ -517,6 +517,8 @@ pub fn chip(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
+    let label = label.unwrap_or_default();
+    let modifier = modifier.unwrap_or_default();
     let args = ChipResolvedArgs {
         variant: variant.unwrap_or_default(),
         style: style.unwrap_or_default(),

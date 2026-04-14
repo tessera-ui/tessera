@@ -220,12 +220,17 @@ impl ButtonGroupsState {
 /// ```
 #[tessera]
 pub fn button_groups(
-    size: ButtonGroupsSize,
-    style: ButtonGroupsStyle,
-    selection_mode: ButtonGroupsSelectionMode,
-    #[prop(skip_setter)] child_closures: Vec<RenderSlot>,
-    #[prop(skip_setter)] on_click_closures: Vec<CallbackWith<bool>>,
+    size: Option<ButtonGroupsSize>,
+    style: Option<ButtonGroupsStyle>,
+    selection_mode: Option<ButtonGroupsSelectionMode>,
+    #[prop(skip_setter)] child_closures: Option<Vec<RenderSlot>>,
+    #[prop(skip_setter)] on_click_closures: Option<Vec<CallbackWith<bool>>>,
 ) {
+    let size = size.unwrap_or_default();
+    let style = style.unwrap_or_default();
+    let selection_mode = selection_mode.unwrap_or_default();
+    let child_closures = child_closures.unwrap_or_default();
+    let on_click_closures = on_click_closures.unwrap_or_default();
     let state = remember(ButtonGroupsState::default);
     let layout = ButtonGroupsLayout::new(size, style);
     let child_len = child_closures.len();
@@ -366,10 +371,11 @@ impl ElasticState {
 #[tessera]
 fn elastic_container(
     state: Option<tessera_ui::State<ButtonGroupsState>>,
-    index: usize,
+    index: Option<usize>,
     child: Option<RenderSlot>,
 ) {
     let state = state.expect("elastic_container requires state");
+    let index = index.unwrap_or(0);
     let child = child.expect("elastic_container requires child content");
     let frame_tick = remember(|| 0_u64);
     let _ = frame_tick.with(|tick| *tick);

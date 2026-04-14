@@ -453,19 +453,24 @@ struct DatePickerConfig {
 /// ```
 #[tessera]
 pub fn date_picker(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     initial_selected_date: Option<CalendarDate>,
     initial_displayed_month: Option<YearMonth>,
     year_range: Option<RangeInclusive<i32>>,
     selectable_dates: Option<Arc<dyn SelectableDates>>,
-    display_mode: DatePickerDisplayMode,
-    first_day_of_week: Weekday,
-    show_weekday_labels: bool,
-    show_mode_toggle: bool,
+    display_mode: Option<DatePickerDisplayMode>,
+    first_day_of_week: Option<Weekday>,
+    show_weekday_labels: Option<bool>,
+    show_mode_toggle: Option<bool>,
     #[prop(into)] title: Option<String>,
     #[prop(into)] headline: Option<String>,
     state: Option<State<DatePickerState>>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let display_mode = display_mode.unwrap_or_default();
+    let first_day_of_week = first_day_of_week.unwrap_or_default();
+    let show_weekday_labels = show_weekday_labels.unwrap_or(true);
+    let show_mode_toggle = show_mode_toggle.unwrap_or(true);
     let year_range = year_range.unwrap_or(DatePickerDefaults::YEAR_RANGE);
     let selectable_dates = selectable_dates.unwrap_or_else(DatePickerDefaults::all_dates);
     let state = state.unwrap_or_else(|| {
@@ -632,14 +637,18 @@ pub fn date_picker_dialog(
     #[prop(into)] title: Option<String>,
     confirm_button: Option<RenderSlot>,
     dismiss_button: Option<RenderSlot>,
-    picker_modifier: Modifier,
-    picker_first_day_of_week: Weekday,
-    picker_show_weekday_labels: bool,
-    picker_show_mode_toggle: bool,
+    picker_modifier: Option<Modifier>,
+    picker_first_day_of_week: Option<Weekday>,
+    picker_show_weekday_labels: Option<bool>,
+    picker_show_mode_toggle: Option<bool>,
     #[prop(into)] picker_title: Option<String>,
     #[prop(into)] picker_headline: Option<String>,
 ) {
-    let state = state.expect("date_picker_dialog requires state to be set");
+    let state = state.unwrap_or_else(|| remember(DatePickerState::default));
+    let picker_modifier = picker_modifier.unwrap_or_default();
+    let picker_first_day_of_week = picker_first_day_of_week.unwrap_or_default();
+    let picker_show_weekday_labels = picker_show_weekday_labels.unwrap_or(true);
+    let picker_show_mode_toggle = picker_show_mode_toggle.unwrap_or(true);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()

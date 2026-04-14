@@ -130,12 +130,13 @@ fn apply_range_thumb_semantics(
 #[tessera]
 fn range_slider_thumb(
     thumb_layout: Option<SliderLayout>,
-    handle_width: Px,
+    handle_width: Option<Px>,
     colors: Option<SliderColors>,
     focus: Option<FocusRequester>,
     accessibility: Option<RangeThumbAccessibility>,
 ) {
     let thumb_layout = thumb_layout.expect("range_slider_thumb requires thumb layout to be set");
+    let handle_width = handle_width.unwrap_or(Px::ZERO);
     let colors = colors.expect("range_slider_thumb requires colors to be set");
     let focus = focus.expect("range_slider_thumb requires focus to be set");
     let accessibility = accessibility.expect("range_slider_thumb requires accessibility to be set");
@@ -1097,21 +1098,26 @@ fn range_slider_colors(args: &RangeSliderConfig) -> SliderColors {
 #[tessera]
 pub fn slider(
     modifier: Option<Modifier>,
-    value: f32,
+    value: Option<f32>,
     on_change: Option<CallbackWith<f32>>,
-    size: SliderSize,
+    size: Option<SliderSize>,
     active_track_color: Option<Color>,
     inactive_track_color: Option<Color>,
     thumb_diameter: Option<Dp>,
     thumb_color: Option<Color>,
-    disabled: bool,
+    disabled: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     show_stop_indicator: Option<bool>,
-    steps: usize,
+    steps: Option<usize>,
     #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
 ) {
+    let defaults = SliderConfig::default();
+    let value = value.unwrap_or(defaults.value);
+    let size = size.unwrap_or(defaults.size);
+    let disabled = disabled.unwrap_or(defaults.disabled);
+    let steps = steps.unwrap_or(defaults.steps);
     let args = slider_config_from_params(SliderParams {
         modifier,
         value,
@@ -1420,21 +1426,26 @@ fn measure_centered_slider(
 #[tessera]
 pub fn centered_slider(
     modifier: Option<Modifier>,
-    value: f32,
+    value: Option<f32>,
     on_change: Option<CallbackWith<f32>>,
-    size: SliderSize,
+    size: Option<SliderSize>,
     active_track_color: Option<Color>,
     inactive_track_color: Option<Color>,
     thumb_diameter: Option<Dp>,
     thumb_color: Option<Color>,
-    disabled: bool,
+    disabled: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     show_stop_indicator: Option<bool>,
-    steps: usize,
+    steps: Option<usize>,
     #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
 ) {
+    let defaults = SliderConfig::default();
+    let value = value.unwrap_or(defaults.value);
+    let size = size.unwrap_or(defaults.size);
+    let disabled = disabled.unwrap_or(defaults.disabled);
+    let steps = steps.unwrap_or(defaults.steps);
     let args = slider_config_from_params(SliderParams {
         modifier,
         value,
@@ -1734,20 +1745,25 @@ fn measure_range_slider(
 #[tessera]
 pub fn range_slider(
     modifier: Option<Modifier>,
-    value: (f32, f32),
+    value: Option<(f32, f32)>,
     on_change: Option<CallbackWith<(f32, f32)>>,
-    size: SliderSize,
+    size: Option<SliderSize>,
     active_track_color: Option<Color>,
     inactive_track_color: Option<Color>,
     thumb_diameter: Option<Dp>,
     thumb_color: Option<Color>,
-    disabled: bool,
+    disabled: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     show_stop_indicator: Option<bool>,
-    steps: usize,
+    steps: Option<usize>,
     controller: Option<State<RangeSliderController>>,
 ) {
+    let defaults = RangeSliderConfig::default();
+    let value = value.unwrap_or(defaults.value);
+    let size = size.unwrap_or(defaults.size);
+    let disabled = disabled.unwrap_or(defaults.disabled);
+    let steps = steps.unwrap_or(defaults.steps);
     let args = range_slider_config_from_params(RangeSliderParams {
         modifier,
         value,

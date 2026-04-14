@@ -497,24 +497,35 @@ impl LayoutPolicy for LazyGridLayout {
 #[tessera]
 pub fn lazy_vertical_grid(
     modifier: Option<Modifier>,
-    scroll_smoothing: f32,
-    scrollbar_behavior: ScrollBarBehavior,
+    scroll_smoothing: Option<f32>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
     scrollbar_track_color: Option<Color>,
     scrollbar_thumb_color: Option<Color>,
     scrollbar_thumb_hover_color: Option<Color>,
-    scrollbar_layout: ScrollBarLayout,
-    columns: GridCells,
-    main_axis_spacing: Dp,
-    cross_axis_spacing: Dp,
-    cross_axis_alignment: MainAxisAlignment,
-    item_alignment: CrossAxisAlignment,
-    overscan: usize,
-    estimated_item_size: Dp,
-    content_padding: Dp,
+    scrollbar_layout: Option<ScrollBarLayout>,
+    columns: Option<GridCells>,
+    main_axis_spacing: Option<Dp>,
+    cross_axis_spacing: Option<Dp>,
+    cross_axis_alignment: Option<MainAxisAlignment>,
+    item_alignment: Option<CrossAxisAlignment>,
+    overscan: Option<usize>,
+    estimated_item_size: Option<Dp>,
+    content_padding: Option<Dp>,
     max_viewport_main: Option<Px>,
     controller: Option<State<LazyGridController>>,
     #[prop(skip_setter)] content: Option<RenderSlot>,
 ) {
+    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let scrollbar_layout = scrollbar_layout.unwrap_or_default();
+    let columns = columns.unwrap_or_default();
+    let main_axis_spacing = main_axis_spacing.unwrap_or(Dp(0.0));
+    let cross_axis_spacing = cross_axis_spacing.unwrap_or(Dp(0.0));
+    let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
+    let item_alignment = item_alignment.unwrap_or_default();
+    let overscan = overscan.unwrap_or(0);
+    let estimated_item_size = estimated_item_size.unwrap_or(Dp(0.0));
+    let content_padding = content_padding.unwrap_or(Dp(0.0));
     let content = content.unwrap_or_else(RenderSlot::empty);
     let slots = collect_vertical_grid_slots(content);
     let controller = controller.unwrap_or_else(|| remember(LazyGridController::new));
@@ -676,24 +687,35 @@ fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
 #[tessera]
 pub fn lazy_horizontal_grid(
     modifier: Option<Modifier>,
-    scroll_smoothing: f32,
-    scrollbar_behavior: ScrollBarBehavior,
+    scroll_smoothing: Option<f32>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
     scrollbar_track_color: Option<Color>,
     scrollbar_thumb_color: Option<Color>,
     scrollbar_thumb_hover_color: Option<Color>,
-    scrollbar_layout: ScrollBarLayout,
-    rows: GridCells,
-    main_axis_spacing: Dp,
-    cross_axis_spacing: Dp,
-    cross_axis_alignment: MainAxisAlignment,
-    item_alignment: CrossAxisAlignment,
-    overscan: usize,
-    estimated_item_size: Dp,
-    content_padding: Dp,
+    scrollbar_layout: Option<ScrollBarLayout>,
+    rows: Option<GridCells>,
+    main_axis_spacing: Option<Dp>,
+    cross_axis_spacing: Option<Dp>,
+    cross_axis_alignment: Option<MainAxisAlignment>,
+    item_alignment: Option<CrossAxisAlignment>,
+    overscan: Option<usize>,
+    estimated_item_size: Option<Dp>,
+    content_padding: Option<Dp>,
     max_viewport_main: Option<Px>,
     controller: Option<State<LazyGridController>>,
     #[prop(skip_setter)] content: Option<RenderSlot>,
 ) {
+    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let scrollbar_layout = scrollbar_layout.unwrap_or_default();
+    let rows = rows.unwrap_or_default();
+    let main_axis_spacing = main_axis_spacing.unwrap_or(Dp(0.0));
+    let cross_axis_spacing = cross_axis_spacing.unwrap_or(Dp(0.0));
+    let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
+    let item_alignment = item_alignment.unwrap_or_default();
+    let overscan = overscan.unwrap_or(0);
+    let estimated_item_size = estimated_item_size.unwrap_or(Dp(0.0));
+    let content_padding = content_padding.unwrap_or(Dp(0.0));
     let content = content.unwrap_or_else(RenderSlot::empty);
     let slots = collect_horizontal_grid_slots(content);
     let controller = controller.unwrap_or_else(|| remember(LazyGridController::new));
@@ -778,21 +800,32 @@ enum LazyGridAxis {
 
 #[tessera]
 fn lazy_grid_view(
-    axis: LazyGridAxis,
-    grid_cells: GridCells,
-    main_axis_spacing: Px,
-    cross_axis_spacing: Px,
-    cross_axis_alignment: MainAxisAlignment,
-    item_alignment: CrossAxisAlignment,
-    estimated_line_main: Px,
-    overscan: usize,
+    axis: Option<LazyGridAxis>,
+    grid_cells: Option<GridCells>,
+    main_axis_spacing: Option<Px>,
+    cross_axis_spacing: Option<Px>,
+    cross_axis_alignment: Option<MainAxisAlignment>,
+    item_alignment: Option<CrossAxisAlignment>,
+    estimated_line_main: Option<Px>,
+    overscan: Option<usize>,
     max_viewport_main: Option<Px>,
-    padding_main: Px,
-    padding_cross: Px,
+    padding_main: Option<Px>,
+    padding_cross: Option<Px>,
     controller: Option<State<LazyGridController>>,
-    slots: Vec<LazySlot>,
+    slots: Option<Vec<LazySlot>>,
     scroll_controller: Option<State<ScrollableController>>,
 ) {
+    let axis = axis.unwrap_or_default();
+    let grid_cells = grid_cells.unwrap_or_default();
+    let main_axis_spacing = main_axis_spacing.unwrap_or(Px::ZERO);
+    let cross_axis_spacing = cross_axis_spacing.unwrap_or(Px::ZERO);
+    let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
+    let item_alignment = item_alignment.unwrap_or_default();
+    let estimated_line_main = estimated_line_main.unwrap_or(Px::ZERO);
+    let overscan = overscan.unwrap_or(0);
+    let padding_main = padding_main.unwrap_or(Px::ZERO);
+    let padding_cross = padding_cross.unwrap_or(Px::ZERO);
+    let slots = slots.unwrap_or_default();
     let controller = controller.expect("lazy_grid_view requires controller");
     let scroll_controller = scroll_controller.expect("lazy_grid_view requires scroll_controller");
 
@@ -1576,7 +1609,11 @@ mod tests {
     }
 
     #[tessera]
-    fn fixed_test_box(tag: String, width: i32, height: i32) {
+    fn fixed_test_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or(0);
+        let height = height.unwrap_or(0);
+
         layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)

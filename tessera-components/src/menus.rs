@@ -431,12 +431,13 @@ pub fn menu_provider(
     close_on_background: Option<bool>,
     close_on_escape: Option<bool>,
     on_dismiss: Option<Callback>,
-    is_open: bool,
+    is_open: Option<bool>,
     controller: Option<State<MenuController>>,
     focus_restorer_fallback: Option<FocusRequester>,
     main_content: Option<RenderSlot>,
     menu_content: Option<RenderSlot>,
 ) {
+    let is_open = is_open.unwrap_or(false);
     let provider_args = MenuProviderConfig {
         placement: placement.unwrap_or_default(),
         offset: offset.unwrap_or([Dp(0.0), MENU_VERTICAL_GAP]),
@@ -555,11 +556,13 @@ pub fn menu_provider(
 
 #[tessera]
 fn menu_panel(
-    provider: MenuProviderConfig,
+    provider: Option<MenuProviderConfig>,
     controller: Option<State<MenuController>>,
     menu_content: Option<RenderSlot>,
-    just_opened: bool,
+    just_opened: Option<bool>,
 ) {
+    let provider = provider.unwrap_or_default();
+    let just_opened = just_opened.unwrap_or(false);
     let controller = controller.expect("menu_panel requires controller");
     let menu_content = menu_content.expect("menu_panel requires menu content");
     let focus_scope = remember(FocusScopeNode::new).get();
@@ -763,14 +766,14 @@ impl Default for MenuItemConfig {
 /// ```
 #[tessera]
 pub fn menu_item(
-    #[prop(into)] label: String,
+    #[prop(into)] label: Option<String>,
     #[prop(into)] supporting_text: Option<String>,
     #[prop(into)] trailing_text: Option<String>,
     #[prop(into)] leading_icon: Option<Painter>,
     #[prop(into)] trailing_icon: Option<Painter>,
     submenu_content: Option<RenderSlot>,
     submenu_placement: Option<MenuPlacement>,
-    selected: bool,
+    selected: Option<bool>,
     enabled: Option<bool>,
     close_on_click: Option<bool>,
     height: Option<Dp>,
@@ -779,6 +782,8 @@ pub fn menu_item(
     disabled_color: Option<Color>,
     on_click: Option<Callback>,
 ) {
+    let label = label.unwrap_or_default();
+    let selected = selected.unwrap_or(false);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -914,10 +919,11 @@ fn render_menu_icon(content: Painter, tint: Color) {
 
 #[tessera]
 fn menu_item_surface(
-    item: MenuItemConfig,
+    item: Option<MenuItemConfig>,
     submenu_controller: Option<State<MenuController>>,
     focus_requester: Option<FocusRequester>,
 ) {
+    let item = item.unwrap_or_default();
     let enabled = item.enabled && (item.on_click.is_some() || item.submenu_content.is_some());
     let has_submenu = item.submenu_content.is_some();
     let keyboard_submenu_controller = submenu_controller;
@@ -1071,7 +1077,8 @@ fn menu_item_surface(
 }
 
 #[tessera]
-fn menu_item_inner(args: MenuItemConfig) {
+fn menu_item_inner(args: Option<MenuItemConfig>) {
+    let args = args.unwrap_or_default();
     let submenu_content = args.submenu_content;
 
     if let Some(submenu_content) = submenu_content {

@@ -31,7 +31,16 @@ fn capsule_shape_for_height(height: Dp) -> Shape {
 }
 
 #[tessera]
-fn glass_progress_fill(value: f32, tint_color: Color, blur_radius: Dp, shape: Shape) {
+fn glass_progress_fill(
+    value: Option<f32>,
+    tint_color: Option<Color>,
+    blur_radius: Option<Dp>,
+    shape: Option<Shape>,
+) {
+    let value = value.unwrap_or(0.0);
+    let tint_color = tint_color.unwrap_or(Color::TRANSPARENT);
+    let blur_radius = blur_radius.unwrap_or(Dp(0.0));
+    let shape = shape.unwrap_or(Shape::CAPSULE);
     let value = value.clamp(0.0, 1.0);
     layout()
         .layout_policy(GlassProgressFillLayout { value })
@@ -115,7 +124,7 @@ impl LayoutPolicy for GlassProgressFillLayout {
 /// ```
 #[tessera]
 pub fn glass_progress(
-    value: f32,
+    value: Option<f32>,
     modifier: Option<Modifier>,
     height: Option<Dp>,
     track_tint_color: Option<Color>,
@@ -123,6 +132,7 @@ pub fn glass_progress(
     blur_radius: Option<Dp>,
     track_border_width: Option<Dp>,
 ) {
+    let value = value.unwrap_or(0.0);
     let modifier = modifier.unwrap_or_else(default_progress_modifier);
     let height = height.unwrap_or(Dp(12.0));
     let track_tint_color = track_tint_color.unwrap_or(Color::new(0.3, 0.3, 0.3, 0.15));

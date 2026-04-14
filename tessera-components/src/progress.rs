@@ -852,11 +852,12 @@ pub fn circular_progress_indicator(
 /// ```
 #[tessera]
 pub fn progress(
-    value: f32,
+    value: Option<f32>,
     modifier: Option<Modifier>,
     progress_color: Option<Color>,
     track_color: Option<Color>,
 ) {
+    let value = value.unwrap_or(0.0);
     linear_progress_indicator()
         .progress(value)
         .modifier(modifier.unwrap_or_else(|| {

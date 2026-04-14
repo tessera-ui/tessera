@@ -778,11 +778,11 @@ where
 /// ## Parameters
 ///
 /// - `layout_policy` - pure layout policy used for measuring and placing the
-///   emitted layout node
+///   emitted layout node, defaulting to [`DefaultLayoutPolicy`]
 /// - `render_policy` - render policy used to record draw and compute commands
-///   for the emitted layout node
+///   for the emitted layout node, defaulting to [`NoopRenderPolicy`]
 /// - `modifier` - node-local modifier chain attached before child content is
-///   emitted
+///   emitted, defaulting to an empty [`Modifier`]
 /// - `child` - optional child slot rendered as the emitted node's content
 ///   subtree
 ///
@@ -804,11 +804,14 @@ where
 /// ```
 #[tessera(crate)]
 pub fn layout(
-    #[prop(into)] layout_policy: LayoutPolicyHandle,
-    #[prop(into)] render_policy: RenderPolicyHandle,
-    modifier: Modifier,
+    #[prop(into)] layout_policy: Option<LayoutPolicyHandle>,
+    #[prop(into)] render_policy: Option<RenderPolicyHandle>,
+    modifier: Option<Modifier>,
     child: Option<RenderSlot>,
 ) {
+    let layout_policy = layout_policy.unwrap_or(LayoutPolicyHandle::from(DefaultLayoutPolicy));
+    let render_policy = render_policy.unwrap_or(RenderPolicyHandle::from(NoopRenderPolicy));
+    let modifier = modifier.unwrap_or_default();
     let layout_node_component_type_id = layout_node_component_type_id();
     let layout_node_id =
         crate::__private::register_layout_node("layout", layout_node_component_type_id);

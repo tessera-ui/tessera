@@ -656,17 +656,22 @@ impl RenderPolicy for ScrollableInnerLayout {
 #[tessera]
 pub fn scrollable(
     modifier: Option<Modifier>,
-    vertical: bool,
-    horizontal: bool,
-    scroll_smoothing: f32,
-    scrollbar_behavior: ScrollBarBehavior,
+    vertical: Option<bool>,
+    horizontal: Option<bool>,
+    scroll_smoothing: Option<f32>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
     scrollbar_track_color: Option<Color>,
     scrollbar_thumb_color: Option<Color>,
     scrollbar_thumb_hover_color: Option<Color>,
-    scrollbar_layout: ScrollBarLayout,
+    scrollbar_layout: Option<ScrollBarLayout>,
     controller: Option<State<ScrollableController>>,
     child: Option<RenderSlot>,
 ) {
+    let vertical = vertical.unwrap_or(false);
+    let horizontal = horizontal.unwrap_or(false);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let scrollbar_layout = scrollbar_layout.unwrap_or_default();
     let controller = controller.unwrap_or_else(|| remember(ScrollableController::new));
     let child = child.unwrap_or_else(RenderSlot::empty);
     let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_size());
@@ -731,14 +736,19 @@ impl ScrollableViewportBuilder {
 #[tessera]
 fn scrollbar_v_bound(
     controller: Option<State<ScrollableController>>,
-    thickness: Dp,
-    scrollbar_behavior: ScrollBarBehavior,
-    track_color: Color,
-    thumb_color: Color,
-    thumb_hover_color: Color,
+    thickness: Option<Dp>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
+    track_color: Option<Color>,
+    thumb_color: Option<Color>,
+    thumb_hover_color: Option<Color>,
     scrollbar_state: Option<ScrollBarState>,
 ) {
     let controller = controller.expect("scrollbar_v_bound requires controller");
+    let thickness = thickness.unwrap_or(Dp(0.0));
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let track_color = track_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_color = thumb_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_hover_color = thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     scrollbar_v()
         .total(controller.with(|c| c.child_size().height))
         .visible(controller.with(|c| c.visible_size().height))
@@ -757,14 +767,19 @@ fn scrollbar_v_bound(
 #[tessera]
 fn scrollbar_h_bound(
     controller: Option<State<ScrollableController>>,
-    thickness: Dp,
-    scrollbar_behavior: ScrollBarBehavior,
-    track_color: Color,
-    thumb_color: Color,
-    thumb_hover_color: Color,
+    thickness: Option<Dp>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
+    track_color: Option<Color>,
+    thumb_color: Option<Color>,
+    thumb_hover_color: Option<Color>,
     scrollbar_state: Option<ScrollBarState>,
 ) {
     let controller = controller.expect("scrollbar_h_bound requires controller");
+    let thickness = thickness.unwrap_or(Dp(0.0));
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let track_color = track_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_color = thumb_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_hover_color = thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     scrollbar_h()
         .total(controller.with(|c| c.child_size().width))
         .visible(controller.with(|c| c.visible_size().width))
@@ -783,15 +798,22 @@ fn scrollbar_h_bound(
 #[tessera]
 fn scrollable_with_alongside_scrollbar(
     controller: Option<State<ScrollableController>>,
-    vertical: bool,
-    horizontal: bool,
-    scroll_smoothing: f32,
-    scrollbar_behavior: ScrollBarBehavior,
-    scrollbar_track_color: Color,
-    scrollbar_thumb_color: Color,
-    scrollbar_thumb_hover_color: Color,
+    vertical: Option<bool>,
+    horizontal: Option<bool>,
+    scroll_smoothing: Option<f32>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
+    scrollbar_track_color: Option<Color>,
+    scrollbar_thumb_color: Option<Color>,
+    scrollbar_thumb_hover_color: Option<Color>,
     child: Option<RenderSlot>,
 ) {
+    let vertical = vertical.unwrap_or(false);
+    let horizontal = horizontal.unwrap_or(false);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let scrollbar_track_color = scrollbar_track_color.unwrap_or(Color::TRANSPARENT);
+    let scrollbar_thumb_color = scrollbar_thumb_color.unwrap_or(Color::TRANSPARENT);
+    let scrollbar_thumb_hover_color = scrollbar_thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     let controller = controller.expect("scrollable_with_alongside_scrollbar requires controller");
     let child = child.unwrap_or_else(RenderSlot::empty);
     let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
@@ -840,15 +862,22 @@ fn scrollable_with_alongside_scrollbar(
 #[tessera]
 fn scrollable_with_overlay_scrollbar(
     controller: Option<State<ScrollableController>>,
-    vertical: bool,
-    horizontal: bool,
-    scroll_smoothing: f32,
-    scrollbar_behavior: ScrollBarBehavior,
-    scrollbar_track_color: Color,
-    scrollbar_thumb_color: Color,
-    scrollbar_thumb_hover_color: Color,
+    vertical: Option<bool>,
+    horizontal: Option<bool>,
+    scroll_smoothing: Option<f32>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
+    scrollbar_track_color: Option<Color>,
+    scrollbar_thumb_color: Option<Color>,
+    scrollbar_thumb_hover_color: Option<Color>,
     child: Option<RenderSlot>,
 ) {
+    let vertical = vertical.unwrap_or(false);
+    let horizontal = horizontal.unwrap_or(false);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let scrollbar_track_color = scrollbar_track_color.unwrap_or(Color::TRANSPARENT);
+    let scrollbar_thumb_color = scrollbar_thumb_color.unwrap_or(Color::TRANSPARENT);
+    let scrollbar_thumb_hover_color = scrollbar_thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     let controller = controller.expect("scrollable_with_overlay_scrollbar requires controller");
     let child = child.unwrap_or_else(RenderSlot::empty);
 
@@ -1109,15 +1138,19 @@ impl PointerInputModifierNode for ScrollableViewportPointerModifierNode {
 
 #[tessera]
 fn scrollable_viewport(
-    vertical: bool,
-    horizontal: bool,
-    scroll_smoothing: f32,
-    scrollbar_behavior: ScrollBarBehavior,
+    vertical: Option<bool>,
+    horizontal: Option<bool>,
+    scroll_smoothing: Option<f32>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
     controller: Option<State<ScrollableController>>,
     scrollbar_state_v: Option<ScrollBarState>,
     scrollbar_state_h: Option<ScrollBarState>,
     child: Option<RenderSlot>,
 ) {
+    let vertical = vertical.unwrap_or(false);
+    let horizontal = horizontal.unwrap_or(false);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let controller = controller.expect("scrollable_viewport requires controller");
     let scrollbar_state_v =
         scrollbar_state_v.unwrap_or_else(|| controller.with(|c| c.scrollbar_state_v()));

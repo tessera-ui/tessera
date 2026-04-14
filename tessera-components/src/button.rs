@@ -138,7 +138,7 @@ struct ButtonResolvedArgs {
 #[tessera]
 pub fn button(
     enabled: Option<bool>,
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     color: Option<Color>,
     content_color: Option<Color>,
     shape: Option<Shape>,
@@ -162,7 +162,7 @@ pub fn button(
         .color_scheme;
     let button_args = ButtonResolvedArgs {
         enabled: enabled.unwrap_or(true),
-        modifier,
+        modifier: modifier.unwrap_or_default(),
         color: color.unwrap_or(scheme.primary),
         content_color,
         shape: shape.unwrap_or(Shape::CAPSULE),

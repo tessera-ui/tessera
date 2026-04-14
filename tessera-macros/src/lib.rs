@@ -411,14 +411,12 @@ fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature,
 
         let field_setter_attr = parse_setter_attr(&arg.attrs)?;
         let prop_attr = parse_prop_field_attr(&arg.attrs)?;
-        let default_expr = parse_component_default_attr(&arg.attrs)?;
         fields.push(PropFieldSpec {
             ident: pat_ident.ident.clone(),
             ty: (*arg.ty).clone(),
             setter: field_setter_attr,
             helper: infer_prop_helper_kind(arg.ty.as_ref()),
             skip_eq: prop_attr.skip_eq,
-            default_expr,
         });
     }
 
@@ -457,7 +455,10 @@ struct PropFieldSpec {
     setter: SetterAttrConfig,
     helper: Option<PropHelperKind>,
     skip_eq: bool,
-    default_expr: Option<Expr>,
+}
+
+fn is_required_component_field(field: &PropFieldSpec) -> bool {
+    option_inner_type(&field.ty).is_none()
 }
 
 fn stored_value_ty(field_ty: &Type) -> Type {
@@ -467,26 +468,6 @@ fn stored_value_ty(field_ty: &Type) -> Type {
 fn stored_field_ty(field_ty: &Type) -> Type {
     let value_ty = stored_value_ty(field_ty);
     parse_quote!(::core::option::Option<#value_ty>)
-}
-
-fn parse_component_default_attr(attrs: &[syn::Attribute]) -> syn::Result<Option<Expr>> {
-    let mut default_expr = None;
-    for attr in attrs {
-        if !attr.path().is_ident("default") {
-            continue;
-        }
-
-        if default_expr.is_some() {
-            return Err(syn::Error::new_spanned(
-                attr,
-                "duplicate #[default(...)] on component parameter",
-            ));
-        }
-
-        default_expr = Some(attr.parse_args::<Expr>()?);
-    }
-
-    Ok(default_expr)
 }
 
 fn generate_default_setter_method_for_path(
@@ -704,6 +685,109 @@ fn generate_helper_setter_methods(
     }
 }
 
+fn generate_constructor_param_and_assignment(
+    field: &PropFieldSpec,
+    crate_path: &Path,
+) -> syn::Result<(proc_macro2::TokenStream, proc_macro2::TokenStream)> {
+    let ident = &field.ident;
+    let field_ty = &field.ty;
+    let value_ty = stored_value_ty(field_ty);
+    let helper_uses_into = matches!(
+        field.helper,
+        Some(
+            PropHelperKind::Callback
+                | PropHelperKind::CallbackWith
+                | PropHelperKind::RenderSlot
+                | PropHelperKind::RenderSlotWith
+        )
+    );
+
+    if let Some(helper) = field.helper {
+        match helper {
+            PropHelperKind::Callback => {
+                let matches_type = matches!(
+                    &value_ty,
+                    Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Callback")
+                );
+                if !matches_type {
+                    return Err(syn::Error::new_spanned(
+                        &field.ty,
+                        "`#[prop(callback)]` requires `Callback` or `Option<Callback>`",
+                    ));
+                }
+            }
+            PropHelperKind::CallbackWith => {
+                let Some((arg_ty, ret_ty)) = parse_functor_signature(&value_ty, "CallbackWith")
+                else {
+                    return Err(syn::Error::new_spanned(
+                        &field.ty,
+                        "`#[prop(callback_with)]` requires `CallbackWith<T, R>` or `Option<CallbackWith<T, R>>`",
+                    ));
+                };
+
+                if is_unit_type(&arg_ty) {
+                    let param = quote! {
+                        #ident: impl Fn() -> #ret_ty + Send + Sync + 'static
+                    };
+                    let assignment = quote! {
+                        __tessera_builder.props.#ident =
+                            Some(#crate_path::CallbackWith::new(move |()| #ident()));
+                    };
+                    return Ok((param, assignment));
+                }
+            }
+            PropHelperKind::RenderSlot => {
+                let matches_type = matches!(
+                    &value_ty,
+                    Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "RenderSlot")
+                );
+                if !matches_type {
+                    return Err(syn::Error::new_spanned(
+                        &field.ty,
+                        "`#[prop(render_slot)]` requires `RenderSlot` or `Option<RenderSlot>`",
+                    ));
+                }
+            }
+            PropHelperKind::RenderSlotWith => {
+                let Some((arg_ty, _)) = parse_functor_signature(&value_ty, "RenderSlotWith") else {
+                    return Err(syn::Error::new_spanned(
+                        &field.ty,
+                        "`#[prop(render_slot_with)]` requires `RenderSlotWith<T, R>` or `Option<RenderSlotWith<T, R>>`",
+                    ));
+                };
+
+                if is_unit_type(&arg_ty) {
+                    let param = quote! {
+                        #ident: impl Fn() + Send + Sync + 'static
+                    };
+                    let assignment = quote! {
+                        __tessera_builder.props.#ident =
+                            Some(#crate_path::RenderSlotWith::new(move |()| #ident()));
+                    };
+                    return Ok((param, assignment));
+                }
+            }
+        }
+    }
+
+    let constructor_param = if field.setter.into || helper_uses_into {
+        quote!(#ident: impl Into<#field_ty>)
+    } else {
+        quote!(#ident: #field_ty)
+    };
+    let constructor_assignment = if field.setter.into || helper_uses_into {
+        quote! {
+            __tessera_builder.props.#ident = Some(#ident.into());
+        }
+    } else {
+        quote! {
+            __tessera_builder.props.#ident = Some(#ident);
+        }
+    };
+
+    Ok((constructor_param, constructor_assignment))
+}
+
 /// Automatically converts a struct into component props and
 fn pascal_case_ident(base: &Ident, suffix: &str) -> Ident {
     let mut output = String::new();
@@ -911,6 +995,9 @@ fn generate_builder_methods(
 ) -> syn::Result<Vec<proc_macro2::TokenStream>> {
     let mut methods = Vec::new();
     for field in fields {
+        if is_required_component_field(field) {
+            continue;
+        }
         let ident = &field.ident;
         let field_path = quote!(props.#ident);
         if let Some(helper) = field.helper {
@@ -1258,6 +1345,26 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             let prop_type: syn::Type = syn::parse_quote!(#props_ident #ty_generics);
             let component_type_id_tokens = component_type_id_tokens(fn_name, &prop_type);
             let field_idents: Vec<_> = fields.iter().map(|field| field.ident.clone()).collect();
+            let required_fields: Vec<_> = fields
+                .iter()
+                .filter(|field| is_required_component_field(field))
+                .collect();
+            let constructor_params_and_assignments: Vec<_> = match required_fields
+                .iter()
+                .map(|field| generate_constructor_param_and_assignment(field, &crate_path))
+                .collect::<syn::Result<Vec<_>>>()
+            {
+                Ok(entries) => entries,
+                Err(err) => return err.to_compile_error().into(),
+            };
+            let constructor_params: Vec<_> = constructor_params_and_assignments
+                .iter()
+                .map(|(param, _)| param.clone())
+                .collect();
+            let constructor_assignments: Vec<_> = constructor_params_and_assignments
+                .iter()
+                .map(|(_, assignment)| assignment.clone())
+                .collect();
             let field_defs: Vec<_> = fields
                 .iter()
                 .map(|field| {
@@ -1272,28 +1379,8 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     let ident = &field.ident;
                     let ty = &field.ty;
                     if option_inner_type(ty).is_some() {
-                        if let Some(default_expr) = &field.default_expr {
-                            return quote! {
-                                let #ident: #ty = if let Some(value) = __tessera_props.#ident.clone() {
-                                    Some(value)
-                                } else {
-                                    #default_expr
-                                };
-                            };
-                        }
-
                         return quote! {
                             let #ident: #ty = __tessera_props.#ident.clone();
-                        };
-                    }
-
-                    if let Some(default_expr) = &field.default_expr {
-                        return quote! {
-                            let #ident: #ty = if let Some(value) = __tessera_props.#ident.clone() {
-                                value
-                            } else {
-                                #default_expr
-                            };
                         };
                     }
 
@@ -1366,8 +1453,12 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
 
                 #(#fn_attrs)*
-                #fn_vis fn #fn_name #item_generics() -> #builder_ident #ty_generics #where_clause {
-                    #builder_ident::default()
+                #fn_vis fn #fn_name #item_generics(
+                    #(#constructor_params),*
+                ) -> #builder_ident #ty_generics #where_clause {
+                    let mut __tessera_builder = #builder_ident::default();
+                    #(#constructor_assignments)*
+                    __tessera_builder
                 }
 
                 fn #impl_ident #item_generics(__tessera_props: &#props_ident #ty_generics) #where_clause {
@@ -1613,16 +1704,16 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let func_attrs = &func.attrs;
     let func_vis = &func.vis;
-    let router_binding =
-        router_params
-            .first()
-            .map_or_else(proc_macro2::TokenStream::new, |param| {
-                let router_ident = &param.ident;
-                quote! {
-                    let #router_ident = #router_ident
-                        .expect("`#[router]` injection is only available inside shard_home");
-                }
-            });
+    let router_binding = router_params.first().map_or_else(
+        proc_macro2::TokenStream::new,
+        |param| {
+            let router_ident = &param.ident;
+            quote! {
+                let #router_ident = #router_ident
+                    .unwrap_or_else(|| #shard_crate_path::__private::current_router_controller());
+            }
+        },
+    );
     let mut func_sig_modified = func.sig.clone();
     for input in &mut func_sig_modified.inputs {
         let FnArg::Typed(pat_type) = input else {
@@ -1641,9 +1732,6 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
             .attrs
             .retain(|attr| !attr.path().is_ident("router"));
         pat_type.attrs.push(syn::parse_quote!(#[prop(skip_setter)]));
-        pat_type.attrs.push(
-            syn::parse_quote!(#[default(Some(#shard_crate_path::__private::current_router_controller()))]),
-        );
     }
 
     // Generate struct name for the new RouterDestination

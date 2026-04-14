@@ -246,13 +246,18 @@ fn make_keyboard_handler(
 
 #[tessera]
 fn dialog_content_wrapper(
-    style: DialogStyle,
-    alpha: f32,
-    padding: Dp,
-    just_opened: bool,
-    on_close_request: Callback,
+    style: Option<DialogStyle>,
+    alpha: Option<f32>,
+    padding: Option<Dp>,
+    just_opened: Option<bool>,
+    on_close_request: Option<Callback>,
     content: Option<RenderSlot>,
 ) {
+    let style = style.unwrap_or_default();
+    let alpha = alpha.unwrap_or(1.0);
+    let padding = padding.unwrap_or(Dp(24.0));
+    let just_opened = just_opened.unwrap_or(false);
+    let on_close_request = on_close_request.unwrap_or_default();
     let content = content.expect("dialog_content_wrapper requires content");
     let focus_scope = remember(FocusScopeNode::new).get();
     let modifier = with_keyboard_input(
@@ -412,14 +417,17 @@ impl RenderPolicy for DialogContentLayout {
 #[tessera]
 pub fn dialog_provider(
     on_close_request: Option<Callback>,
-    padding: Dp,
-    style: DialogStyle,
-    is_open: bool,
+    padding: Option<Dp>,
+    style: Option<DialogStyle>,
+    is_open: Option<bool>,
     #[prop(skip_setter)] controller: Option<State<DialogController>>,
     main_content: Option<RenderSlot>,
     dialog_content: Option<RenderSlot>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
+    let padding = padding.unwrap_or(Dp(24.0));
+    let style = style.unwrap_or_default();
+    let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let dialog_content = dialog_content.unwrap_or_else(RenderSlot::empty);
     let external_controller = controller;
@@ -450,13 +458,15 @@ pub fn dialog_provider(
 #[tessera]
 fn dialog_provider_render(
     on_close_request: Option<Callback>,
-    padding: Dp,
-    style: DialogStyle,
+    padding: Option<Dp>,
+    style: Option<DialogStyle>,
     controller: Option<State<DialogController>>,
     main_content: Option<RenderSlot>,
     dialog_content: Option<RenderSlot>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
+    let padding = padding.unwrap_or(Dp(24.0));
+    let style = style.unwrap_or_default();
     let controller = controller.expect("dialog_provider_render requires controller");
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let dialog_content = dialog_content.unwrap_or_else(RenderSlot::empty);
@@ -560,10 +570,11 @@ fn dialog_provider_render(
 pub fn basic_dialog(
     icon: Option<RenderSlot>,
     #[prop(into)] headline: Option<String>,
-    #[prop(into)] supporting_text: String,
+    #[prop(into)] supporting_text: Option<String>,
     confirm_button: Option<RenderSlot>,
     dismiss_button: Option<RenderSlot>,
 ) {
+    let supporting_text = supporting_text.unwrap_or_default();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()

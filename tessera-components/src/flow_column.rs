@@ -55,20 +55,24 @@ use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 #[tessera]
 pub fn flow_column(
     modifier: Option<Modifier>,
-    main_axis_alignment: MainAxisAlignment,
-    cross_axis_alignment: CrossAxisAlignment,
-    line_alignment: MainAxisAlignment,
-    item_spacing: Dp,
-    line_spacing: Dp,
+    main_axis_alignment: Option<MainAxisAlignment>,
+    cross_axis_alignment: Option<CrossAxisAlignment>,
+    line_alignment: Option<MainAxisAlignment>,
+    item_spacing: Option<Dp>,
+    line_spacing: Option<Dp>,
     max_items_per_line: Option<usize>,
     max_lines: Option<usize>,
-    children: RenderSlot,
+    children: Option<RenderSlot>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let item_spacing = sanitize_spacing(Px::from(item_spacing));
-    let line_spacing = sanitize_spacing(Px::from(line_spacing));
+    let main_axis_alignment = main_axis_alignment.unwrap_or_default();
+    let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
+    let line_alignment = line_alignment.unwrap_or_default();
+    let item_spacing = sanitize_spacing(Px::from(item_spacing.unwrap_or(Dp(0.0))));
+    let line_spacing = sanitize_spacing(Px::from(line_spacing.unwrap_or(Dp(0.0))));
     let max_items_per_line = max_items_per_line.unwrap_or(usize::MAX);
     let max_lines = max_lines.unwrap_or(usize::MAX);
+    let children = children.unwrap_or_else(RenderSlot::empty);
     layout()
         .modifier(modifier)
         .layout_policy(FlowColumnLayout {
@@ -563,7 +567,11 @@ mod tests {
     }
 
     #[tessera]
-    fn fixed_test_box(tag: String, width: i32, height: i32) {
+    fn fixed_test_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or_default();
+        let height = height.unwrap_or_default();
+
         layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)

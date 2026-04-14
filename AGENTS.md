@@ -42,7 +42,10 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Configurable components must use a single public entrypoint declared with named owned parameters: `#[tessera] pub fn component(foo: Foo, bar: Bar, ...)`.
 - Public component calls must use the generated builder syntax: `component().foo(value).bar(value);`.
 - Do not introduce public wrapper variants (`*_with_controller`, `*_impl`, or extra public forwarding layers).
-- Component parameters must use owned types that satisfy the macro requirements (`Clone`, `Default`, `Send`, `Sync`, and `'static` through the generated props model). Use `Option<T>` when a value has no natural default.
+- Component parameters must use owned types that satisfy the macro requirements (`Clone`, `Default`, `Send`, `Sync`, and `'static` through the generated props model).
+- `#[tessera]` parameter-level `#[default(...)]` is not supported. Do not introduce it in new or migrated code.
+- For parameters with optional/default behavior, use `Option<T>` and resolve defaults explicitly in the component body (for example, `unwrap_or`, `unwrap_or_else`, or an explicit `if let Some(...)` fallback).
+- Keep truly required parameters as non-`Option` constructor parameters.
 - For optional external controllers, use `Option<State<...>>`; when `None`, create internal state with `remember`.
 - Callback parameters should use `Callback` / `CallbackWith<...>`.
 - Slot parameters should use `RenderSlot` / slot wrappers as needed by signature.

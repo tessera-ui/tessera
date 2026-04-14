@@ -311,11 +311,11 @@ where
 #[tessera]
 pub fn lazy_column(
     modifier: Option<Modifier>,
-    cross_axis_alignment: CrossAxisAlignment,
-    item_spacing: Dp,
-    overscan: usize,
-    estimated_item_size: Dp,
-    content_padding: Dp,
+    cross_axis_alignment: Option<CrossAxisAlignment>,
+    item_spacing: Option<Dp>,
+    overscan: Option<usize>,
+    estimated_item_size: Option<Dp>,
+    content_padding: Option<Dp>,
     max_viewport_main: Option<Px>,
     controller: Option<State<LazyListController>>,
     #[prop(skip_setter)] content: Option<RenderSlot>,
@@ -325,11 +325,11 @@ pub fn lazy_column(
     let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
     lazy_column_slots(LazyListSlotsArgs {
         modifier: modifier.unwrap_or_default(),
-        cross_axis_alignment,
-        item_spacing,
-        overscan,
-        estimated_item_size,
-        content_padding,
+        cross_axis_alignment: cross_axis_alignment.unwrap_or_default(),
+        item_spacing: item_spacing.unwrap_or(Dp(0.0)),
+        overscan: overscan.unwrap_or(0),
+        estimated_item_size: estimated_item_size.unwrap_or(Dp(0.0)),
+        content_padding: content_padding.unwrap_or(Dp(0.0)),
         max_viewport_main,
         controller,
         slots,
@@ -449,11 +449,11 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
 #[tessera]
 pub fn lazy_row(
     modifier: Option<Modifier>,
-    cross_axis_alignment: CrossAxisAlignment,
-    item_spacing: Dp,
-    overscan: usize,
-    estimated_item_size: Dp,
-    content_padding: Dp,
+    cross_axis_alignment: Option<CrossAxisAlignment>,
+    item_spacing: Option<Dp>,
+    overscan: Option<usize>,
+    estimated_item_size: Option<Dp>,
+    content_padding: Option<Dp>,
     max_viewport_main: Option<Px>,
     controller: Option<State<LazyListController>>,
     #[prop(skip_setter)] content: Option<RenderSlot>,
@@ -463,11 +463,11 @@ pub fn lazy_row(
     let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
     lazy_row_slots(LazyListSlotsArgs {
         modifier: modifier.unwrap_or_default(),
-        cross_axis_alignment,
-        item_spacing,
-        overscan,
-        estimated_item_size,
-        content_padding,
+        cross_axis_alignment: cross_axis_alignment.unwrap_or_default(),
+        item_spacing: item_spacing.unwrap_or(Dp(0.0)),
+        overscan: overscan.unwrap_or(0),
+        estimated_item_size: estimated_item_size.unwrap_or(Dp(0.0)),
+        content_padding: content_padding.unwrap_or(Dp(0.0)),
         max_viewport_main,
         controller,
         slots,
@@ -532,18 +532,26 @@ fn lazy_row_slots(args: LazyListSlotsArgs) {
 
 #[tessera]
 fn lazy_list_view(
-    axis: LazyListAxis,
-    cross_axis_alignment: CrossAxisAlignment,
-    item_spacing: Px,
-    estimated_item_main: Px,
-    overscan: usize,
+    axis: Option<LazyListAxis>,
+    cross_axis_alignment: Option<CrossAxisAlignment>,
+    item_spacing: Option<Px>,
+    estimated_item_main: Option<Px>,
+    overscan: Option<usize>,
     max_viewport_main: Option<Px>,
-    padding_main: Px,
-    padding_cross: Px,
+    padding_main: Option<Px>,
+    padding_cross: Option<Px>,
     controller: Option<State<LazyListController>>,
-    slots: Vec<LazySlot>,
+    slots: Option<Vec<LazySlot>>,
     scroll_controller: Option<State<ScrollableController>>,
 ) {
+    let axis = axis.unwrap_or_default();
+    let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
+    let item_spacing = item_spacing.unwrap_or(Px::ZERO);
+    let estimated_item_main = estimated_item_main.unwrap_or(Px::ZERO);
+    let overscan = overscan.unwrap_or(0);
+    let padding_main = padding_main.unwrap_or(Px::ZERO);
+    let padding_cross = padding_cross.unwrap_or(Px::ZERO);
+    let slots = slots.unwrap_or_default();
     let controller = controller.expect("lazy_list_view requires controller");
     let scroll_controller = scroll_controller.expect("lazy_list_view requires scroll_controller");
     let plan = LazySlotPlan::new(slots.clone());
@@ -1536,7 +1544,11 @@ mod tests {
     }
 
     #[tessera]
-    fn fixed_test_box(tag: String, width: i32, height: i32) {
+    fn fixed_test_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or(0);
+        let height = height.unwrap_or(0);
+
         layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)

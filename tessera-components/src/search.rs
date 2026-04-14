@@ -244,26 +244,37 @@ enum SearchBarLayoutKind {
 /// ```
 #[tessera]
 pub fn search_bar(
-    modifier: Modifier,
-    #[default(true)] enabled: bool,
-    read_only: bool,
-    is_active: bool,
+    modifier: Option<Modifier>,
+    enabled: Option<bool>,
+    read_only: Option<bool>,
+    is_active: Option<bool>,
     #[prop(into)] placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
     on_query_change: Option<CallbackWith<String, String>>,
     on_search: Option<CallbackWith<String, ()>>,
     on_active_change: Option<CallbackWith<bool, ()>>,
-    #[default(SearchBarProps::default().shape)] shape: Shape,
-    #[default(SearchBarProps::default().colors)] colors: SearchBarColors,
-    #[default(SearchBarProps::default().tonal_elevation)] tonal_elevation: Dp,
-    #[default(SearchBarProps::default().shadow_elevation)] shadow_elevation: Dp,
-    #[default(SearchBarProps::default().dropdown_shape)] dropdown_shape: Shape,
-    #[default(SearchBarProps::default().dropdown_gap)] dropdown_gap: Dp,
-    #[default(SearchBarProps::default().content_padding)] content_padding: Dp,
+    shape: Option<Shape>,
+    colors: Option<SearchBarColors>,
+    tonal_elevation: Option<Dp>,
+    shadow_elevation: Option<Dp>,
+    dropdown_shape: Option<Shape>,
+    dropdown_gap: Option<Dp>,
+    content_padding: Option<Dp>,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let enabled = enabled.unwrap_or(true);
+    let read_only = read_only.unwrap_or(false);
+    let is_active = is_active.unwrap_or(false);
+    let shape = shape.unwrap_or(SearchBarProps::default().shape);
+    let colors = colors.unwrap_or(SearchBarProps::default().colors);
+    let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
+    let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
+    let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
+    let dropdown_gap = dropdown_gap.unwrap_or(SearchBarProps::default().dropdown_gap);
+    let content_padding = content_padding.unwrap_or(SearchBarProps::default().content_padding);
     render_search_bar(
         SearchBarProps {
             modifier,
@@ -321,26 +332,37 @@ pub fn search_bar(
 /// ```
 #[tessera]
 pub fn docked_search_bar(
-    modifier: Modifier,
-    #[default(true)] enabled: bool,
-    read_only: bool,
-    is_active: bool,
+    modifier: Option<Modifier>,
+    enabled: Option<bool>,
+    read_only: Option<bool>,
+    is_active: Option<bool>,
     #[prop(into)] placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
     on_query_change: Option<CallbackWith<String, String>>,
     on_search: Option<CallbackWith<String, ()>>,
     on_active_change: Option<CallbackWith<bool, ()>>,
-    #[default(SearchBarProps::default().shape)] shape: Shape,
-    #[default(SearchBarProps::default().colors)] colors: SearchBarColors,
-    #[default(SearchBarProps::default().tonal_elevation)] tonal_elevation: Dp,
-    #[default(SearchBarProps::default().shadow_elevation)] shadow_elevation: Dp,
-    #[default(SearchBarProps::default().dropdown_shape)] dropdown_shape: Shape,
-    #[default(SearchBarProps::default().dropdown_gap)] dropdown_gap: Dp,
-    #[default(SearchBarProps::default().content_padding)] content_padding: Dp,
+    shape: Option<Shape>,
+    colors: Option<SearchBarColors>,
+    tonal_elevation: Option<Dp>,
+    shadow_elevation: Option<Dp>,
+    dropdown_shape: Option<Shape>,
+    dropdown_gap: Option<Dp>,
+    content_padding: Option<Dp>,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let enabled = enabled.unwrap_or(true);
+    let read_only = read_only.unwrap_or(false);
+    let is_active = is_active.unwrap_or(false);
+    let shape = shape.unwrap_or(SearchBarProps::default().shape);
+    let colors = colors.unwrap_or(SearchBarProps::default().colors);
+    let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
+    let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
+    let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
+    let dropdown_gap = dropdown_gap.unwrap_or(SearchBarProps::default().dropdown_gap);
+    let content_padding = content_padding.unwrap_or(SearchBarProps::default().content_padding);
     render_search_bar(
         SearchBarProps {
             modifier,
@@ -475,25 +497,35 @@ struct SearchResultsSurfaceArgs {
 
 #[tessera]
 fn search_bar_inner(
-    kind: SearchBarLayoutKind,
-    enabled: bool,
-    read_only: bool,
+    kind: Option<SearchBarLayoutKind>,
+    enabled: Option<bool>,
+    read_only: Option<bool>,
     #[prop(into)] placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
     on_query_change: Option<CallbackWith<String, String>>,
     on_search: Option<CallbackWith<String, ()>>,
     on_active_change: Option<CallbackWith<bool, ()>>,
-    shape: Shape,
-    colors: SearchBarColors,
-    tonal_elevation: Dp,
-    shadow_elevation: Dp,
-    dropdown_shape: Shape,
-    dropdown_gap: Dp,
-    content_padding: Dp,
+    shape: Option<Shape>,
+    colors: Option<SearchBarColors>,
+    tonal_elevation: Option<Dp>,
+    shadow_elevation: Option<Dp>,
+    dropdown_shape: Option<Shape>,
+    dropdown_gap: Option<Dp>,
+    content_padding: Option<Dp>,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
 ) {
+    let kind = kind.unwrap_or_default();
+    let enabled = enabled.unwrap_or(true);
+    let read_only = read_only.unwrap_or(false);
+    let shape = shape.unwrap_or(SearchBarProps::default().shape);
+    let colors = colors.unwrap_or(SearchBarProps::default().colors);
+    let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
+    let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
+    let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
+    let dropdown_gap = dropdown_gap.unwrap_or(SearchBarProps::default().dropdown_gap);
+    let content_padding = content_padding.unwrap_or(SearchBarProps::default().content_padding);
     let controller = controller.expect("search_bar_inner requires controller");
     let content = content.unwrap_or_else(RenderSlot::empty);
     let on_query_change = on_query_change.unwrap_or_else(CallbackWith::identity);

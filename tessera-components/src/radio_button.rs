@@ -177,11 +177,13 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 /// ```
 #[tessera]
 pub fn radio_group(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     orientation: Option<RadioGroupOrientation>,
-    wrap: bool,
+    wrap: Option<bool>,
     content: Option<RenderSlot>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let wrap = wrap.unwrap_or(false);
     let content = content.unwrap_or_else(RenderSlot::empty);
     let modifier = modifier.focus_group().focus_traversal_policy(
         match orientation.unwrap_or_default() {
@@ -245,9 +247,9 @@ pub fn radio_group(
 /// ```
 #[tessera]
 pub fn radio_button(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     on_select: Option<CallbackWith<bool, ()>>,
-    selected: bool,
+    selected: Option<bool>,
     size: Option<Dp>,
     touch_target_size: Option<Dp>,
     stroke_width: Option<Dp>,
@@ -256,11 +258,14 @@ pub fn radio_button(
     unselected_color: Option<Color>,
     disabled_selected_color: Option<Color>,
     disabled_unselected_color: Option<Color>,
-    enabled: bool,
+    enabled: Option<bool>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     controller: Option<State<RadioButtonController>>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let selected = selected.unwrap_or(false);
+    let enabled = enabled.unwrap_or(true);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -315,22 +320,33 @@ pub fn radio_button(
 
 #[tessera]
 fn radio_button_inner(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     on_select: Option<CallbackWith<bool, ()>>,
-    selected: bool,
-    size: Dp,
-    touch_target_size: Dp,
-    stroke_width: Dp,
-    dot_size: Dp,
-    selected_color: Color,
-    unselected_color: Color,
-    disabled_selected_color: Color,
-    disabled_unselected_color: Color,
-    enabled: bool,
+    selected: Option<bool>,
+    size: Option<Dp>,
+    touch_target_size: Option<Dp>,
+    stroke_width: Option<Dp>,
+    dot_size: Option<Dp>,
+    selected_color: Option<Color>,
+    unselected_color: Option<Color>,
+    disabled_selected_color: Option<Color>,
+    disabled_unselected_color: Option<Color>,
+    enabled: Option<bool>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
     controller: Option<State<RadioButtonController>>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let selected = selected.unwrap_or(false);
+    let size = size.unwrap_or(Dp(20.0));
+    let touch_target_size = touch_target_size.unwrap_or(Dp(48.0));
+    let stroke_width = stroke_width.unwrap_or(Dp(2.0));
+    let dot_size = dot_size.unwrap_or(Dp(10.0));
+    let selected_color = selected_color.unwrap_or(Color::TRANSPARENT);
+    let unselected_color = unselected_color.unwrap_or(Color::TRANSPARENT);
+    let disabled_selected_color = disabled_selected_color.unwrap_or(Color::TRANSPARENT);
+    let disabled_unselected_color = disabled_unselected_color.unwrap_or(Color::TRANSPARENT);
+    let enabled = enabled.unwrap_or(true);
     let _ = selected;
     let radio_group = use_context::<RadioGroupContext>().map(|context| context.get());
     let controller = controller.expect("radio_button_inner requires controller to be set");

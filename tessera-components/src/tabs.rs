@@ -505,11 +505,12 @@ pub fn tab(
 /// ```
 #[tessera]
 pub fn tab_label(
-    #[prop(into)] text: String,
+    #[prop(into)] text: Option<String>,
     #[prop(into)] icon: Option<Painter>,
     horizontal_text_padding: Option<Dp>,
     icon_size: Option<Dp>,
 ) {
+    let text = text.unwrap_or_default();
     let typography = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -988,10 +989,10 @@ impl RenderPolicy for TabsLayout {
 /// ```
 #[tessera]
 pub fn tabs(
-    modifier: Modifier,
-    variant: TabsVariant,
+    modifier: Option<Modifier>,
+    variant: Option<TabsVariant>,
     controller: Option<State<TabsController>>,
-    initial_active_tab: usize,
+    initial_active_tab: Option<usize>,
     indicator_color: Option<Color>,
     container_color: Option<Color>,
     active_content_color: Option<Color>,
@@ -1004,11 +1005,16 @@ pub fn tabs(
     enabled: Option<bool>,
     disabled_content_color: Option<Color>,
     divider_color: Option<Color>,
-    scrollable: bool,
+    scrollable: Option<bool>,
     edge_padding: Option<Dp>,
     min_scrollable_tab_width: Option<Dp>,
-    content: RenderSlot,
+    content: Option<RenderSlot>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let variant = variant.unwrap_or_default();
+    let initial_active_tab = initial_active_tab.unwrap_or(0);
+    let scrollable = scrollable.unwrap_or(false);
+    let content = content.unwrap_or_else(RenderSlot::empty);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()

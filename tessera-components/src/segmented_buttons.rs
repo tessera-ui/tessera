@@ -248,9 +248,9 @@ impl SegmentedButtonDefaults {
 /// ```
 #[tessera]
 pub fn segmented_button(
-    selected: bool,
+    selected: Option<bool>,
     enabled: Option<bool>,
-    #[prop(into)] label: String,
+    #[prop(into)] label: Option<String>,
     #[prop(into)] icon: Option<Painter>,
     modifier: Option<Modifier>,
     shape: Option<Shape>,
@@ -261,6 +261,8 @@ pub fn segmented_button(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
+    let selected = selected.unwrap_or(false);
+    let label = label.unwrap_or_default();
     let enabled = enabled.unwrap_or(true);
     let modifier = modifier.unwrap_or_default();
     let shape = shape.unwrap_or_else(SegmentedButtonDefaults::shape);

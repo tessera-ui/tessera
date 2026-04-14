@@ -228,12 +228,14 @@ pub fn icon(
     width: Option<AxisConstraint>,
     height: Option<AxisConstraint>,
     tint: Option<Color>,
-    tint_mode: TintMode,
-    rotation: f32,
+    tint_mode: Option<TintMode>,
+    rotation: Option<f32>,
 ) {
     let content = content.unwrap_or_else(|| Painter::Raster(placeholder_raster_data()));
     let size = size.unwrap_or(Dp(24.0));
     let tint = tint.unwrap_or_else(default_tint_color);
+    let tint_mode = tint_mode.unwrap_or_default();
+    let rotation = rotation.unwrap_or(0.0);
     let policy = IconLayout {
         content,
         size,

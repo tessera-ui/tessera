@@ -230,22 +230,25 @@ impl CheckmarkState {
 /// ```
 #[tessera]
 pub fn checkbox(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     on_toggle: Option<CallbackWith<bool, ()>>,
-    checked: bool,
+    checked: Option<bool>,
     size: Option<Dp>,
     color: Option<Color>,
     checked_color: Option<Color>,
     checkmark_color: Option<Color>,
     checkmark_stroke_width: Option<f32>,
     shape: Option<Shape>,
-    disabled: bool,
+    disabled: Option<bool>,
     disabled_color: Option<Color>,
     disabled_checkmark_color: Option<Color>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     #[prop(skip_setter)] controller: Option<State<CheckboxController>>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let checked = checked.unwrap_or(false);
+    let disabled = disabled.unwrap_or(false);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -283,21 +286,31 @@ pub fn checkbox(
 
 #[tessera]
 fn checkbox_inner(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     on_toggle: Option<CallbackWith<bool, ()>>,
-    size: Dp,
-    color: Color,
-    checked_color: Color,
-    checkmark_color: Color,
-    checkmark_stroke_width: f32,
-    shape: Shape,
-    disabled: bool,
-    disabled_color: Color,
-    disabled_checkmark_color: Color,
+    size: Option<Dp>,
+    color: Option<Color>,
+    checked_color: Option<Color>,
+    checkmark_color: Option<Color>,
+    checkmark_stroke_width: Option<f32>,
+    shape: Option<Shape>,
+    disabled: Option<bool>,
+    disabled_color: Option<Color>,
+    disabled_checkmark_color: Option<Color>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
     controller: Option<State<CheckboxController>>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let size = size.unwrap_or(CheckboxDefaults::GLYPH_SIZE);
+    let color = color.unwrap_or(Color::TRANSPARENT);
+    let checked_color = checked_color.unwrap_or(Color::TRANSPARENT);
+    let checkmark_color = checkmark_color.unwrap_or(Color::TRANSPARENT);
+    let checkmark_stroke_width = checkmark_stroke_width.unwrap_or(2.5);
+    let shape = shape.unwrap_or(Shape::CAPSULE);
+    let disabled = disabled.unwrap_or(false);
+    let disabled_color = disabled_color.unwrap_or(Color::TRANSPARENT);
+    let disabled_checkmark_color = disabled_checkmark_color.unwrap_or(Color::TRANSPARENT);
     let controller = controller.expect("checkbox_inner requires controller to be set");
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {

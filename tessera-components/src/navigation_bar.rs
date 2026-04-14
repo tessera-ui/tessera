@@ -67,13 +67,17 @@ struct NavigationBarCompositionContext {
 
 #[tessera]
 fn navigation_bar_item_view_content(
-    item: NavigationBarItemDefinition,
-    is_selected: bool,
-    was_selected: bool,
-    animation_progress: f32,
+    item: Option<NavigationBarItemDefinition>,
+    is_selected: Option<bool>,
+    was_selected: Option<bool>,
+    animation_progress: Option<f32>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
 ) {
+    let item = item.unwrap_or_default();
+    let is_selected = is_selected.unwrap_or(false);
+    let was_selected = was_selected.unwrap_or(false);
+    let animation_progress = animation_progress.unwrap_or(0.0);
     let interaction_state = interaction_state.expect("interaction_state must be set");
     let ripple_state = ripple_state.expect("ripple_state must be set");
     let theme = use_context::<MaterialTheme>()
@@ -333,13 +337,18 @@ impl LayoutPolicy for NavigationBarItemLayout {
 #[tessera]
 fn navigation_bar_item_view(
     controller: Option<State<NavigationBarController>>,
-    index: usize,
-    item: NavigationBarItemDefinition,
-    selected_index: usize,
-    previous_index: usize,
-    animation_progress: f32,
+    index: Option<usize>,
+    item: Option<NavigationBarItemDefinition>,
+    selected_index: Option<usize>,
+    previous_index: Option<usize>,
+    animation_progress: Option<f32>,
 ) {
     let controller = controller.expect("controller must be set");
+    let index = index.unwrap_or(0);
+    let item = item.unwrap_or_default();
+    let selected_index = selected_index.unwrap_or(0);
+    let previous_index = previous_index.unwrap_or(0);
+    let animation_progress = animation_progress.unwrap_or(0.0);
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
 
@@ -436,11 +445,14 @@ struct NavigationBarItemDefinition {
 /// ```
 #[tessera]
 pub fn navigation_bar_item(
-    #[prop(into)] label: String,
+    #[prop(into)] label: Option<String>,
     icon: Option<RenderSlot>,
-    on_click: Callback,
-    label_behavior: NavigationBarLabelBehavior,
+    on_click: Option<Callback>,
+    label_behavior: Option<NavigationBarLabelBehavior>,
 ) {
+    let label = label.unwrap_or_default();
+    let on_click = on_click.unwrap_or_default();
+    let label_behavior = label_behavior.unwrap_or_default();
     let composition = use_context::<NavigationBarCompositionContext>()
         .expect("navigation_bar_item must be used inside navigation_bar")
         .get();
@@ -498,7 +510,11 @@ pub fn navigation_bar_item(
 /// }
 /// ```
 #[tessera]
-pub fn navigation_bar(controller: Option<State<NavigationBarController>>, content: RenderSlot) {
+pub fn navigation_bar(
+    controller: Option<State<NavigationBarController>>,
+    content: Option<RenderSlot>,
+) {
+    let content = content.unwrap_or_else(RenderSlot::empty);
     let controller = controller.unwrap_or_else(|| remember(|| NavigationBarController::new(0)));
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")

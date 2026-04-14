@@ -109,7 +109,7 @@ impl GlassButtonBuilder {
 /// ```
 #[tessera]
 pub fn glass_button(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     on_click: Option<Callback>,
     padding: Option<Dp>,
     tint_color: Option<Color>,
@@ -126,7 +126,7 @@ pub fn glass_button(
     child: Option<RenderSlot>,
 ) {
     let button_args = GlassButtonResolvedArgs {
-        modifier,
+        modifier: modifier.unwrap_or_default(),
         on_click,
         padding: padding.unwrap_or(Dp(12.0)),
         tint_color: tint_color.unwrap_or(Color::new(0.5, 0.5, 0.5, 0.1)),

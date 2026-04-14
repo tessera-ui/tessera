@@ -580,16 +580,25 @@ impl LayoutPolicy for OutlinedFloatingLabelLayout {
 
 #[tessera]
 fn outlined_floating_label(
-    label_text: String,
-    label_color: Color,
-    label_font_size: Dp,
-    label_line_height: Dp,
-    label_offset_x: Dp,
-    label_offset_y: Dp,
-    notch_fill_color: Color,
-    notch_padding: Dp,
-    notch_vertical_padding: Dp,
+    label_text: Option<String>,
+    label_color: Option<Color>,
+    label_font_size: Option<Dp>,
+    label_line_height: Option<Dp>,
+    label_offset_x: Option<Dp>,
+    label_offset_y: Option<Dp>,
+    notch_fill_color: Option<Color>,
+    notch_padding: Option<Dp>,
+    notch_vertical_padding: Option<Dp>,
 ) {
+    let label_text = label_text.unwrap_or_default();
+    let label_color = label_color.unwrap_or(Color::TRANSPARENT);
+    let label_font_size = label_font_size.unwrap_or(Dp(0.0));
+    let label_line_height = label_line_height.unwrap_or(Dp(0.0));
+    let label_offset_x = label_offset_x.unwrap_or(Dp(0.0));
+    let label_offset_y = label_offset_y.unwrap_or(Dp(0.0));
+    let notch_fill_color = notch_fill_color.unwrap_or(Color::TRANSPARENT);
+    let notch_padding = notch_padding.unwrap_or(Dp(0.0));
+    let notch_vertical_padding = notch_vertical_padding.unwrap_or(Dp(0.0));
     layout()
         .layout_policy(OutlinedFloatingLabelLayout {
             label_offset: PxPosition::new(label_offset_x.into(), label_offset_y.into()),
@@ -1056,45 +1065,103 @@ fn configure_text_field_menu(
 /// ```
 #[tessera]
 pub fn text_field(
-    #[default(true)] enabled: bool,
-    read_only: bool,
-    modifier: Modifier,
+    enabled: Option<bool>,
+    read_only: Option<bool>,
+    modifier: Option<Modifier>,
     on_change: Option<CallbackWith<String, String>>,
     on_submit: Option<Callback>,
-    #[default(TextFieldProps::default().min_width)] min_width: Option<Dp>,
-    #[default(TextFieldProps::default().min_height)] min_height: Option<Dp>,
-    #[default(TextFieldProps::default().background_color)] background_color: Option<Color>,
-    border_width: Dp,
+    min_width: Option<Dp>,
+    min_height: Option<Dp>,
+    background_color: Option<Color>,
+    border_width: Option<Dp>,
     border_color: Option<Color>,
-    #[default(TextFieldProps::default().shape)] shape: Shape,
-    #[default(TextFieldProps::default().padding)] padding: Dp,
-    #[default(TextFieldProps::default().focus_border_color)] focus_border_color: Option<Color>,
+    shape: Option<Shape>,
+    padding: Option<Dp>,
+    focus_border_color: Option<Color>,
     focus_border_width: Option<Dp>,
-    #[default(TextFieldProps::default().focus_background_color)] focus_background_color: Option<
-        Color,
-    >,
-    #[default(TextFieldProps::default().selection_color)] selection_color: Option<Color>,
-    #[default(TextFieldProps::default().text_color)] text_color: Option<Color>,
-    #[default(TextFieldProps::default().cursor_color)] cursor_color: Option<Color>,
+    focus_background_color: Option<Color>,
+    selection_color: Option<Color>,
+    text_color: Option<Color>,
+    cursor_color: Option<Color>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     #[prop(into)] initial_text: Option<String>,
-    #[default(TextFieldProps::default().font_size)] font_size: Dp,
-    #[default(TextFieldProps::default().line_height)] line_height: Option<Dp>,
+    font_size: Option<Dp>,
+    line_height: Option<Dp>,
     #[prop(into)] label: Option<String>,
     #[prop(into)] placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
     prefix: Option<RenderSlot>,
     suffix: Option<RenderSlot>,
-    #[default(true)] show_indicator: bool,
-    line_limit: TextFieldLineLimit,
-    context_menu: TextFieldContextMenu,
+    show_indicator: Option<bool>,
+    line_limit: Option<TextFieldLineLimit>,
+    context_menu: Option<TextFieldContextMenu>,
     input_transform: Option<CallbackWith<String, String>>,
     obfuscation_char: Option<char>,
     #[prop(skip_setter)] display_transform: Option<DisplayTransform>,
     controller: Option<State<TextInputController>>,
 ) {
+    let enabled = enabled.unwrap_or(true);
+    let read_only = read_only.unwrap_or(false);
+    let modifier = modifier.unwrap_or_default();
+    let min_width = if let Some(v) = min_width {
+        Some(v)
+    } else {
+        TextFieldProps::default().min_width
+    };
+    let min_height = if let Some(v) = min_height {
+        Some(v)
+    } else {
+        TextFieldProps::default().min_height
+    };
+    let background_color = if let Some(v) = background_color {
+        Some(v)
+    } else {
+        TextFieldProps::default().background_color
+    };
+    let border_width = border_width.unwrap_or(TextFieldProps::default().border_width);
+    let border_color = if let Some(v) = border_color {
+        Some(v)
+    } else {
+        TextFieldProps::default().border_color
+    };
+    let shape = shape.unwrap_or(TextFieldProps::default().shape);
+    let padding = padding.unwrap_or(TextFieldProps::default().padding);
+    let focus_border_color = if let Some(v) = focus_border_color {
+        Some(v)
+    } else {
+        TextFieldProps::default().focus_border_color
+    };
+    let focus_background_color = if let Some(v) = focus_background_color {
+        Some(v)
+    } else {
+        TextFieldProps::default().focus_background_color
+    };
+    let selection_color = if let Some(v) = selection_color {
+        Some(v)
+    } else {
+        TextFieldProps::default().selection_color
+    };
+    let text_color = if let Some(v) = text_color {
+        Some(v)
+    } else {
+        TextFieldProps::default().text_color
+    };
+    let cursor_color = if let Some(v) = cursor_color {
+        Some(v)
+    } else {
+        TextFieldProps::default().cursor_color
+    };
+    let font_size = font_size.unwrap_or(TextFieldProps::default().font_size);
+    let line_height = if let Some(v) = line_height {
+        Some(v)
+    } else {
+        TextFieldProps::default().line_height
+    };
+    let show_indicator = show_indicator.unwrap_or(true);
+    let line_limit = line_limit.unwrap_or(TextFieldProps::default().line_limit);
+    let context_menu = context_menu.unwrap_or(TextFieldProps::default().context_menu);
     let args = TextFieldProps {
         enabled,
         read_only,

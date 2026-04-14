@@ -250,8 +250,8 @@ impl ListItemDefaults {
 pub fn list_item(
     modifier: Option<Modifier>,
     enabled: Option<bool>,
-    selected: bool,
-    #[prop(into)] headline: String,
+    selected: Option<bool>,
+    #[prop(into)] headline: Option<String>,
     #[prop(into)] overline_text: Option<String>,
     #[prop(into)] supporting_text: Option<String>,
     leading: Option<RenderSlot>,
@@ -273,6 +273,8 @@ pub fn list_item(
     let typography = theme.typography;
     let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_width());
     let enabled = enabled.unwrap_or(true);
+    let selected = selected.unwrap_or(false);
+    let headline = headline.unwrap_or_default();
     let colors = colors.unwrap_or_else(ListItemDefaults::colors);
     let shape = shape.unwrap_or_else(ListItemDefaults::shape);
     let content_padding = content_padding.unwrap_or(ListItemDefaults::CONTENT_PADDING);
@@ -399,18 +401,23 @@ pub fn list_item(
 
 #[tessera]
 fn render_text_line(
-    #[prop(into)] text_value: String,
-    style: crate::theme::TextStyle,
-    color: Color,
+    #[prop(into)] text_value: Option<String>,
+    style: Option<crate::theme::TextStyle>,
+    color: Option<Color>,
 ) {
+    let text_value = text_value.unwrap_or_default();
+    let style = style.unwrap_or_default();
+    let color = color.unwrap_or(Color::TRANSPARENT);
     provide_text_style(style, move || {
         text().content(text_value.clone()).color(color);
     });
 }
 
 #[tessera]
-fn render_slot(content: Option<RenderSlot>, color: Color, min_size: Dp) {
+fn render_slot(content: Option<RenderSlot>, color: Option<Color>, min_size: Option<Dp>) {
     let content = content.unwrap_or_else(RenderSlot::empty);
+    let color = color.unwrap_or(Color::TRANSPARENT);
+    let min_size = min_size.unwrap_or(Dp(0.0));
     provide_context(
         || ContentColor { current: color },
         move || {

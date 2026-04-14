@@ -180,7 +180,7 @@ pub fn fluid_glass(
     noise_scale: Option<f32>,
     time: Option<f32>,
     contrast: Option<f32>,
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     padding: Option<Dp>,
     ripple_center: Option<[f32; 2]>,
     ripple_radius: Option<f32>,
@@ -205,7 +205,7 @@ pub fn fluid_glass(
     let border = border.or_else(default_glass_border);
     let block_input = block_input.unwrap_or(false);
     let accessibility_focusable = accessibility_focusable.unwrap_or(false);
-    let mut modifier = modifier;
+    let mut modifier = modifier.unwrap_or_default();
     let interactive = on_click.is_some();
     let focus_requester = remember(FocusRequester::new).get();
     let interaction_state = interactive.then(|| remember(InteractionState::new));
@@ -291,15 +291,20 @@ pub fn fluid_glass(
 
 #[tessera]
 fn fluid_glass_inner(
-    render: FluidGlassRenderArgs,
-    blur_radius: Dp,
+    render: Option<FluidGlassRenderArgs>,
+    blur_radius: Option<Dp>,
     contrast: Option<f32>,
-    padding: Dp,
-    interactive: bool,
-    block_input: bool,
+    padding: Option<Dp>,
+    interactive: Option<bool>,
+    block_input: Option<bool>,
     ripple_state: Option<State<RippleState>>,
     child: Option<RenderSlot>,
 ) {
+    let render = render.unwrap_or_default();
+    let blur_radius = blur_radius.unwrap_or(Dp(0.0));
+    let padding = padding.unwrap_or(Dp(0.0));
+    let interactive = interactive.unwrap_or(false);
+    let block_input = block_input.unwrap_or(false);
     let mut render = render.clone();
     let frame_nanos = current_frame_nanos();
     if let Some((progress, center)) = ripple_state.as_ref().and_then(|state| {

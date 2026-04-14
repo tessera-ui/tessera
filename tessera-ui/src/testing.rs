@@ -798,7 +798,10 @@ mod tests {
     }
 
     #[tessera(crate)]
-    fn tagged_box(tag: String, width: i32, height: i32) {
+    fn tagged_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or_default();
+        let height = height.unwrap_or_default();
         crate::layout::layout()
             .layout_policy(FixedSizePolicy { width, height })
             .render_policy(NoopRenderPolicy)
@@ -806,7 +809,8 @@ mod tests {
     }
 
     #[tessera(crate)]
-    fn responsive_box(tag: String) {
+    fn responsive_box(tag: Option<String>) {
+        let tag = tag.unwrap_or_default();
         crate::layout::layout()
             .layout_policy(crate::layout::DefaultLayoutPolicy)
             .render_policy(NoopRenderPolicy)
@@ -952,7 +956,8 @@ mod tests {
     }
 
     #[tessera(crate)]
-    fn slot_host(slot: RenderSlot) {
+    fn slot_host(slot: Option<RenderSlot>) {
+        let slot = slot.unwrap_or_default();
         crate::layout::layout()
             .layout_policy(VerticalStackPolicy)
             .render_policy(NoopRenderPolicy)

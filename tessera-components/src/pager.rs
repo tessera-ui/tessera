@@ -873,19 +873,30 @@ fn apply_pager_input_modifiers(
 #[tessera]
 pub fn horizontal_pager(
     modifier: Option<Modifier>,
-    page_count: usize,
-    initial_page: usize,
-    page_size: PagerPageSize,
-    page_spacing: Dp,
-    content_padding: Dp,
-    beyond_viewport_page_count: usize,
-    cross_axis_alignment: CrossAxisAlignment,
-    user_scroll_enabled: bool,
+    page_count: Option<usize>,
+    initial_page: Option<usize>,
+    page_size: Option<PagerPageSize>,
+    page_spacing: Option<Dp>,
+    content_padding: Option<Dp>,
+    beyond_viewport_page_count: Option<usize>,
+    cross_axis_alignment: Option<CrossAxisAlignment>,
+    user_scroll_enabled: Option<bool>,
     snap_threshold: Option<f32>,
     scroll_smoothing: Option<f32>,
     page_content: Option<CallbackWith<usize>>,
     controller: Option<State<PagerController>>,
 ) {
+    let page_count = page_count.unwrap_or(PagerConfig::default().page_count);
+    let initial_page = initial_page.unwrap_or(PagerConfig::default().initial_page);
+    let page_size = page_size.unwrap_or(PagerConfig::default().page_size);
+    let page_spacing = page_spacing.unwrap_or(PagerConfig::default().page_spacing);
+    let content_padding = content_padding.unwrap_or(PagerConfig::default().content_padding);
+    let beyond_viewport_page_count =
+        beyond_viewport_page_count.unwrap_or(PagerConfig::default().beyond_viewport_page_count);
+    let cross_axis_alignment =
+        cross_axis_alignment.unwrap_or(PagerConfig::default().cross_axis_alignment);
+    let user_scroll_enabled =
+        user_scroll_enabled.unwrap_or(PagerConfig::default().user_scroll_enabled);
     let pager_args = pager_config_from_params(PagerParams {
         modifier,
         page_count,
@@ -949,19 +960,30 @@ pub fn horizontal_pager(
 #[tessera]
 pub fn vertical_pager(
     modifier: Option<Modifier>,
-    page_count: usize,
-    initial_page: usize,
-    page_size: PagerPageSize,
-    page_spacing: Dp,
-    content_padding: Dp,
-    beyond_viewport_page_count: usize,
-    cross_axis_alignment: CrossAxisAlignment,
-    user_scroll_enabled: bool,
+    page_count: Option<usize>,
+    initial_page: Option<usize>,
+    page_size: Option<PagerPageSize>,
+    page_spacing: Option<Dp>,
+    content_padding: Option<Dp>,
+    beyond_viewport_page_count: Option<usize>,
+    cross_axis_alignment: Option<CrossAxisAlignment>,
+    user_scroll_enabled: Option<bool>,
     snap_threshold: Option<f32>,
     scroll_smoothing: Option<f32>,
     page_content: Option<CallbackWith<usize>>,
     controller: Option<State<PagerController>>,
 ) {
+    let page_count = page_count.unwrap_or(PagerConfig::default().page_count);
+    let initial_page = initial_page.unwrap_or(PagerConfig::default().initial_page);
+    let page_size = page_size.unwrap_or(PagerConfig::default().page_size);
+    let page_spacing = page_spacing.unwrap_or(PagerConfig::default().page_spacing);
+    let content_padding = content_padding.unwrap_or(PagerConfig::default().content_padding);
+    let beyond_viewport_page_count =
+        beyond_viewport_page_count.unwrap_or(PagerConfig::default().beyond_viewport_page_count);
+    let cross_axis_alignment =
+        cross_axis_alignment.unwrap_or(PagerConfig::default().cross_axis_alignment);
+    let user_scroll_enabled =
+        user_scroll_enabled.unwrap_or(PagerConfig::default().user_scroll_enabled);
     let pager_args = pager_config_from_params(PagerParams {
         modifier,
         page_count,

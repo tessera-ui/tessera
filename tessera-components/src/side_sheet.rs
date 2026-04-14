@@ -532,12 +532,14 @@ fn place_side_sheet_if_present(
 #[tessera]
 pub fn modal_side_sheet_provider(
     on_close_request: Option<Callback>,
-    position: SideSheetPosition,
-    is_open: bool,
+    position: Option<SideSheetPosition>,
+    is_open: Option<bool>,
     controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
+    let position = position.unwrap_or_default();
+    let is_open = is_open.unwrap_or(false);
     side_sheet_provider_inner()
         .sheet_type(SideSheetType::Modal)
         .on_close_request_handle(on_close_request.unwrap_or_default())
@@ -589,12 +591,14 @@ pub fn modal_side_sheet_provider(
 #[tessera]
 pub fn standard_side_sheet_provider(
     on_close_request: Option<Callback>,
-    position: SideSheetPosition,
-    is_open: bool,
+    position: Option<SideSheetPosition>,
+    is_open: Option<bool>,
     controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
+    let position = position.unwrap_or_default();
+    let is_open = is_open.unwrap_or(false);
     side_sheet_provider_inner()
         .sheet_type(SideSheetType::Standard)
         .on_close_request_handle(on_close_request.unwrap_or_default())
@@ -607,14 +611,18 @@ pub fn standard_side_sheet_provider(
 
 #[tessera]
 fn side_sheet_provider_inner(
-    sheet_type: SideSheetType,
-    on_close_request: Callback,
-    position: SideSheetPosition,
-    is_open: bool,
+    sheet_type: Option<SideSheetType>,
+    on_close_request: Option<Callback>,
+    position: Option<SideSheetPosition>,
+    is_open: Option<bool>,
     controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
+    let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
+    let on_close_request = on_close_request.unwrap_or_default();
+    let position = position.unwrap_or_default();
+    let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = side_sheet_content.unwrap_or_else(RenderSlot::empty);
     let external_controller = controller;
@@ -642,13 +650,15 @@ fn side_sheet_provider_inner(
 
 #[tessera]
 fn side_sheet_provider_render(
-    sheet_type: SideSheetType,
+    sheet_type: Option<SideSheetType>,
     on_close_request: Option<Callback>,
-    position: SideSheetPosition,
+    position: Option<SideSheetPosition>,
     #[prop(skip_setter)] controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
+    let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
+    let position = position.unwrap_or_default();
     let on_close_request = on_close_request.unwrap_or_default();
     let controller = controller.expect("side_sheet_provider_render requires controller");
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
@@ -714,13 +724,16 @@ fn side_sheet_provider_render(
 
 #[tessera]
 fn side_sheet_content_wrapper(
-    sheet_type: SideSheetType,
-    position: SideSheetPosition,
+    sheet_type: Option<SideSheetType>,
+    position: Option<SideSheetPosition>,
     #[prop(skip_setter)] controller: Option<State<SideSheetController>>,
     on_close_request: Option<Callback>,
-    just_opened: bool,
+    just_opened: Option<bool>,
     content: Option<RenderSlot>,
 ) {
+    let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
+    let position = position.unwrap_or_default();
+    let just_opened = just_opened.unwrap_or(false);
     let controller = controller.expect("side_sheet_content_wrapper requires controller");
     let on_close_request = on_close_request.unwrap_or_default();
     let content = content.expect("side_sheet_content_wrapper requires content");

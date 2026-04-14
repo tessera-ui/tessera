@@ -80,7 +80,14 @@ fn compute_child_offset(
 /// # component();
 /// ```
 #[tessera]
-pub fn boxed(alignment: Alignment, modifier: Modifier, children: RenderSlot) {
+pub fn boxed(
+    alignment: Option<Alignment>,
+    modifier: Option<Modifier>,
+    children: Option<RenderSlot>,
+) {
+    let alignment = alignment.unwrap_or_default();
+    let modifier = modifier.unwrap_or_default();
+    let children = children.unwrap_or_else(RenderSlot::empty);
     layout()
         .modifier(modifier)
         .layout_policy(BoxedLayout { alignment })
@@ -190,7 +197,11 @@ mod tests {
     }
 
     #[tessera]
-    fn fixed_test_box(tag: String, width: i32, height: i32) {
+    fn fixed_test_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or_default();
+        let height = height.unwrap_or_default();
+
         layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
@@ -201,7 +212,17 @@ mod tests {
     }
 
     #[tessera]
-    fn forwarded_modifier_test_box(modifier: Modifier, tag: String, width: i32, height: i32) {
+    fn forwarded_modifier_test_box(
+        modifier: Option<Modifier>,
+        tag: Option<String>,
+        width: Option<i32>,
+        height: Option<i32>,
+    ) {
+        let modifier = modifier.unwrap_or_default();
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or_default();
+        let height = height.unwrap_or_default();
+
         layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)

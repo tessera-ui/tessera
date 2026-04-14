@@ -8,7 +8,7 @@ use std::{collections::VecDeque, time::Duration};
 
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, Modifier, State, current_frame_nanos, layout::layout,
-    receive_frame_nanos, tessera, use_context,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -473,11 +473,11 @@ impl SnackbarDefaults {
 /// ```
 #[tessera]
 pub fn snackbar(
-    modifier: Modifier,
-    #[prop(into)] message: String,
+    modifier: Option<Modifier>,
+    #[prop(into)] message: Option<String>,
     #[prop(into)] action_label: Option<String>,
-    with_dismiss_action: bool,
-    action_on_new_line: bool,
+    with_dismiss_action: Option<bool>,
+    action_on_new_line: Option<bool>,
     shape: Option<Shape>,
     container_color: Option<Color>,
     content_color: Option<Color>,
@@ -487,6 +487,10 @@ pub fn snackbar(
     on_action: Option<Callback>,
     on_dismiss: Option<Callback>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let message = message.unwrap_or_default();
+    let with_dismiss_action = with_dismiss_action.unwrap_or(false);
+    let action_on_new_line = action_on_new_line.unwrap_or(false);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -613,11 +617,12 @@ pub fn snackbar(
 /// ```
 #[tessera]
 pub fn snackbar_host(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     state: Option<State<SnackbarHostState>>,
     snackbar: Option<CallbackWith<SnackbarData>>,
 ) {
-    let state = state.expect("snackbar_host requires state to be set");
+    let modifier = modifier.unwrap_or_default();
+    let state = state.unwrap_or_else(|| remember(SnackbarHostState::default));
     let snackbar_slot = snackbar;
     let frame_nanos = current_frame_nanos();
     let should_poll = state.with(|host| host.should_poll(frame_nanos));

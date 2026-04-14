@@ -63,8 +63,8 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 /// ```
 #[tessera]
 pub fn text(
-    modifier: Modifier,
-    #[prop(into)] content: String,
+    modifier: Option<Modifier>,
+    #[prop(into)] content: Option<String>,
     color: Option<Color>,
     style: Option<TextStyle>,
     size: Option<Dp>,
@@ -72,6 +72,8 @@ pub fn text(
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let content = content.unwrap_or_default();
     let theme = use_context::<MaterialTheme>();
     let inherited_style = use_context::<TextStyle>().map(|s| s.get());
     let resolved_style = style

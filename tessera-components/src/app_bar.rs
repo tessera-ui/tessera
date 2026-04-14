@@ -98,7 +98,7 @@ impl AppBarDefaults {
 /// ```
 #[tessera]
 pub fn app_bar(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     container_color: Option<Color>,
     content_color: Option<Color>,
     elevation: Option<Dp>,
@@ -107,6 +107,7 @@ pub fn app_bar(
     cross_axis_alignment: Option<CrossAxisAlignment>,
     content: Option<RenderSlot>,
 ) {
+    let modifier = modifier.unwrap_or_default();
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -242,20 +243,24 @@ impl TopAppBarBuilder {
 /// ```
 #[tessera]
 pub fn top_app_bar(
-    modifier: Modifier,
+    modifier: Option<Modifier>,
     container_color: Option<Color>,
     content_color: Option<Color>,
     elevation: Option<Dp>,
     content_padding: Option<Padding>,
-    #[prop(into)] title: String,
-    title_area_modifier: Modifier,
+    #[prop(into)] title: Option<String>,
+    title_area_modifier: Option<Modifier>,
     navigation_icon: Option<RenderSlot>,
-    #[prop(skip_setter)] actions: Vec<RenderSlot>,
+    #[prop(skip_setter)] actions: Option<Vec<RenderSlot>>,
     navigation_icon_color: Option<Color>,
     action_icon_color: Option<Color>,
     title_inset: Option<Dp>,
     actions_spacing: Option<Dp>,
 ) {
+    let modifier = modifier.unwrap_or_default();
+    let title = title.unwrap_or_default();
+    let title_area_modifier = title_area_modifier.unwrap_or_default();
+    let actions = actions.unwrap_or_default();
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();

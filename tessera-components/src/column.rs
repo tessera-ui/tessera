@@ -50,11 +50,14 @@ use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
 #[tessera]
 pub fn column(
     modifier: Option<Modifier>,
-    main_axis_alignment: MainAxisAlignment,
-    cross_axis_alignment: CrossAxisAlignment,
-    children: RenderSlot,
+    main_axis_alignment: Option<MainAxisAlignment>,
+    cross_axis_alignment: Option<CrossAxisAlignment>,
+    children: Option<RenderSlot>,
 ) {
     let modifier = modifier.unwrap_or_default();
+    let main_axis_alignment = main_axis_alignment.unwrap_or_default();
+    let cross_axis_alignment = cross_axis_alignment.unwrap_or_default();
+    let children = children.unwrap_or_else(RenderSlot::empty);
     layout()
         .modifier(modifier)
         .layout_policy(ColumnLayout {
@@ -492,7 +495,11 @@ mod tests {
     }
 
     #[tessera]
-    fn fixed_test_box(tag: String, width: i32, height: i32) {
+    fn fixed_test_box(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or_default();
+        let height = height.unwrap_or_default();
+
         layout()
             .layout_policy(FixedTestLayout { width, height })
             .render_policy(NoopRenderPolicy)
@@ -503,7 +510,10 @@ mod tests {
     }
 
     #[tessera]
-    fn fill_height_test_box(tag: String, width: i32) {
+    fn fill_height_test_box(tag: Option<String>, width: Option<i32>) {
+        let tag = tag.unwrap_or_default();
+        let width = width.unwrap_or_default();
+
         layout()
             .layout_policy(FillHeightTestLayout { width })
             .render_policy(NoopRenderPolicy)

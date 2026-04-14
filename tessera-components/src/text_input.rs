@@ -334,36 +334,77 @@ impl TextInputBuilder {
 /// ```
 #[tessera]
 pub fn text_input(
-    #[default(true)] enabled: bool,
-    read_only: bool,
-    modifier: Modifier,
+    enabled: Option<bool>,
+    read_only: Option<bool>,
+    modifier: Option<Modifier>,
     on_change: Option<CallbackWith<String, String>>,
     on_submit: Option<Callback>,
     min_width: Option<Dp>,
     min_height: Option<Dp>,
-    #[default(TextInputProps::default().background_color)] background_color: Option<Color>,
-    #[default(TextInputProps::default().border_width)] border_width: Dp,
-    #[default(TextInputProps::default().border_color)] border_color: Option<Color>,
-    #[default(TextInputProps::default().shape)] shape: Shape,
-    #[default(TextInputProps::default().padding)] padding: Dp,
-    #[default(TextInputProps::default().focus_border_color)] focus_border_color: Option<Color>,
+    background_color: Option<Color>,
+    border_width: Option<Dp>,
+    border_color: Option<Color>,
+    shape: Option<Shape>,
+    padding: Option<Dp>,
+    focus_border_color: Option<Color>,
     focus_border_width: Option<Dp>,
-    #[default(TextInputProps::default().focus_background_color)] focus_background_color: Option<
-        Color,
-    >,
-    #[default(TextInputProps::default().selection_color)] selection_color: Option<Color>,
-    #[default(TextInputProps::default().text_color)] text_color: Option<Color>,
-    #[default(TextInputProps::default().cursor_color)] cursor_color: Option<Color>,
+    focus_background_color: Option<Color>,
+    selection_color: Option<Color>,
+    text_color: Option<Color>,
+    cursor_color: Option<Color>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     #[prop(into)] initial_text: Option<String>,
-    #[default(TextInputProps::default().font_size)] font_size: Dp,
+    font_size: Option<Dp>,
     line_height: Option<Dp>,
-    single_line: bool,
+    single_line: Option<bool>,
     input_transform: Option<CallbackWith<String, String>>,
     display_transform: Option<DisplayTransform>,
     controller: Option<State<TextInputController>>,
 ) {
+    let enabled = enabled.unwrap_or(true);
+    let read_only = read_only.unwrap_or(false);
+    let modifier = modifier.unwrap_or_default();
+    let background_color = if let Some(v) = background_color {
+        Some(v)
+    } else {
+        TextInputProps::default().background_color
+    };
+    let border_width = border_width.unwrap_or(TextInputProps::default().border_width);
+    let border_color = if let Some(v) = border_color {
+        Some(v)
+    } else {
+        TextInputProps::default().border_color
+    };
+    let shape = shape.unwrap_or(TextInputProps::default().shape);
+    let padding = padding.unwrap_or(TextInputProps::default().padding);
+    let focus_border_color = if let Some(v) = focus_border_color {
+        Some(v)
+    } else {
+        TextInputProps::default().focus_border_color
+    };
+    let focus_background_color = if let Some(v) = focus_background_color {
+        Some(v)
+    } else {
+        TextInputProps::default().focus_background_color
+    };
+    let selection_color = if let Some(v) = selection_color {
+        Some(v)
+    } else {
+        TextInputProps::default().selection_color
+    };
+    let text_color = if let Some(v) = text_color {
+        Some(v)
+    } else {
+        TextInputProps::default().text_color
+    };
+    let cursor_color = if let Some(v) = cursor_color {
+        Some(v)
+    } else {
+        TextInputProps::default().cursor_color
+    };
+    let font_size = font_size.unwrap_or(TextInputProps::default().font_size);
+    let single_line = single_line.unwrap_or(false);
     let args = TextInputProps {
         enabled,
         read_only,
@@ -476,7 +517,8 @@ fn text_input_editor(props: TextInputProps) {
 }
 
 #[tessera]
-fn text_input_padded_content(padding: Dp, controller: Option<State<TextInputController>>) {
+fn text_input_padded_content(padding: Option<Dp>, controller: Option<State<TextInputController>>) {
+    let padding = padding.unwrap_or(Dp(0.0));
     let controller = controller.expect("text_input_padded_content requires controller to be set");
     layout()
         .modifier(Modifier::new().padding_all(padding))
@@ -488,7 +530,7 @@ fn text_input_padded_content(padding: Dp, controller: Option<State<TextInputCont
 pub(crate) fn text_input_core(args: &TextInputProps, controller: State<TextInputController>) {
     let mut core_args = args.clone();
     core_args.controller = Some(controller);
-    text_input_editor().props(core_args);
+    text_input_editor(core_args);
 }
 
 fn sync_text_input_controller(controller: &State<TextInputController>, args: &TextInputProps) {

@@ -55,6 +55,7 @@ impl LayoutPolicy for SpacerLayout {
 /// # component();
 /// ```
 #[tessera]
-pub fn spacer(modifier: Modifier) {
+pub fn spacer(modifier: Option<Modifier>) {
+    let modifier = modifier.unwrap_or_default();
     layout().modifier(modifier).layout_policy(SpacerLayout);
 }

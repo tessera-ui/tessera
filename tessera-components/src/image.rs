@@ -285,7 +285,8 @@ impl RenderPolicy for ImageLayout {
 /// # }
 /// ```
 #[tessera]
-pub fn image(#[prop(skip_setter)] painter: Option<Painter>, modifier: Modifier) {
+pub fn image(#[prop(skip_setter)] painter: Option<Painter>, modifier: Option<Modifier>) {
+    let modifier = modifier.unwrap_or_default();
     let painter = painter.unwrap_or_else(|| Painter::Raster(placeholder_image_data()));
     let policy = ImageLayout {
         painter: painter.clone(),
