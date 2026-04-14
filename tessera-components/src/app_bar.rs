@@ -147,19 +147,25 @@ impl TopAppBarBuilder {
     where
         F: Fn() + Send + Sync + 'static,
     {
-        self.props.actions.push(RenderSlot::new(action));
+        self.props
+            .actions
+            .get_or_insert_with(Vec::new)
+            .push(RenderSlot::new(action));
         self
     }
 
     /// Append a trailing action item using a shared callback.
     pub fn action_shared(mut self, action: impl Into<RenderSlot>) -> Self {
-        self.props.actions.push(action.into());
+        self.props
+            .actions
+            .get_or_insert_with(Vec::new)
+            .push(action.into());
         self
     }
 
     /// Replace the trailing actions with shared callbacks.
     pub fn actions_shared(mut self, actions: Vec<RenderSlot>) -> Self {
-        self.props.actions = actions;
+        self.props.actions = Some(actions);
         self
     }
 

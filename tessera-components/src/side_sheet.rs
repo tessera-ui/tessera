@@ -55,7 +55,7 @@ pub enum SideSheetPosition {
 
 impl SideSheetProviderInnerBuilder {
     fn on_close_request_handle(mut self, on_close_request: Callback) -> Self {
-        self.props.on_close_request = on_close_request;
+        self.props.on_close_request = Some(on_close_request);
         self
     }
 

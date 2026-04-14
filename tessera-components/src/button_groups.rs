@@ -71,9 +71,13 @@ impl ButtonGroupsBuilder {
         F: Fn() + Send + Sync + 'static,
         C: Fn(bool) + Send + Sync + 'static,
     {
-        self.props.child_closures.push(RenderSlot::new(child));
+        self.props
+            .child_closures
+            .get_or_insert_with(Vec::new)
+            .push(RenderSlot::new(child));
         self.props
             .on_click_closures
+            .get_or_insert_with(Vec::new)
             .push(CallbackWith::new(on_click));
         self
     }
@@ -84,8 +88,14 @@ impl ButtonGroupsBuilder {
         child: impl Into<RenderSlot>,
         on_click: impl Into<CallbackWith<bool>>,
     ) -> Self {
-        self.props.child_closures.push(child.into());
-        self.props.on_click_closures.push(on_click.into());
+        self.props
+            .child_closures
+            .get_or_insert_with(Vec::new)
+            .push(child.into());
+        self.props
+            .on_click_closures
+            .get_or_insert_with(Vec::new)
+            .push(on_click.into());
         self
     }
 }
