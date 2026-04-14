@@ -16,8 +16,9 @@ use std::hash::{DefaultHasher, Hash, Hasher};
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
-    Block, Expr, FnArg, GenericArgument, Ident, ItemFn, Pat, Path, PathArguments, Token, Type,
-    parse::Parse, parse_macro_input, parse_quote, visit_mut::VisitMut,
+    Block, Expr, FnArg, GenericArgument, GenericParam, Generics, Ident, ItemFn, Pat, Path,
+    PathArguments, Token, Type, parse::Parse, parse_macro_input, parse_quote,
+    visit_mut::VisitMut,
 };
 
 /// Helper: parse crate path from attribute TokenStream
@@ -780,8 +781,155 @@ fn hidden_component_impl_ident(fn_name: &Ident) -> Ident {
     format_ident!("__tessera_{}_impl", fn_name)
 }
 
+fn hidden_const_marker_ident(fn_name: &Ident, const_ident: &Ident) -> Ident {
+    format_ident!(
+        "__Tessera{}ConstMarker{}",
+        pascal_case_ident(fn_name, ""),
+        pascal_case_ident(const_ident, "")
+    )
+}
+
+fn validate_component_generics(generics: &Generics) -> syn::Result<()> {
+    for param in &generics.params {
+        if let GenericParam::Lifetime(param) = param {
+            return Err(syn::Error::new_spanned(
+                param,
+                "#[tessera] components do not support lifetime generics; use owned props instead",
+            ));
+        }
+    }
+    Ok(())
+}
+
+fn component_turbofish_tokens(generics: &Generics) -> proc_macro2::TokenStream {
+    let generic_args: Vec<_> = generics
+        .params
+        .iter()
+        .map(|param| match param {
+            GenericParam::Type(param) => {
+                let ident = &param.ident;
+                quote!(#ident)
+            }
+            GenericParam::Const(param) => {
+                let ident = &param.ident;
+                quote!(#ident)
+            }
+            GenericParam::Lifetime(_) => unreachable!("lifetime generics are rejected earlier"),
+        })
+        .collect();
+    if generic_args.is_empty() {
+        quote!()
+    } else {
+        quote!(::<#(#generic_args),*>)
+    }
+}
+
+fn generic_marker_tokens(
+    fn_name: &Ident,
+    generics: &Generics,
+) -> (Vec<proc_macro2::TokenStream>, Option<proc_macro2::TokenStream>) {
+    let mut const_marker_defs = Vec::new();
+    let mut marker_parts = Vec::new();
+
+    for param in &generics.params {
+        match param {
+            GenericParam::Type(param) => {
+                let ident = &param.ident;
+                marker_parts.push(quote!(#ident));
+            }
+            GenericParam::Const(param) => {
+                let ident = &param.ident;
+                let ty = &param.ty;
+                let marker_ident = hidden_const_marker_ident(fn_name, ident);
+                const_marker_defs.push(quote! {
+                    struct #marker_ident<const #ident: #ty>;
+                });
+                marker_parts.push(quote!(#marker_ident<#ident>));
+            }
+            GenericParam::Lifetime(_) => unreachable!("lifetime generics are rejected earlier"),
+        }
+    }
+
+    if marker_parts.is_empty() {
+        return (const_marker_defs, None);
+    }
+
+    let marker_ty = if marker_parts.len() == 1 {
+        let marker_part = &marker_parts[0];
+        quote!(#marker_part)
+    } else {
+        quote!((#(#marker_parts,)*))
+    };
+
+    (
+        const_marker_defs,
+        Some(quote! {
+            __tessera_generic_marker: ::core::marker::PhantomData<#marker_ty>
+        }),
+    )
+}
+
+fn generate_props_clone_default_impls(
+    type_name: &Ident,
+    generics: &Generics,
+    field_idents: &[Ident],
+    set_flag_idents: &[Ident],
+    has_generic_marker: bool,
+) -> proc_macro2::TokenStream {
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
+    let clone_fields: Vec<_> = field_idents
+        .iter()
+        .map(|ident| quote!(#ident: self.#ident.clone()))
+        .collect();
+    let clone_set_flags: Vec<_> = set_flag_idents
+        .iter()
+        .map(|ident| quote!(#ident: self.#ident.clone()))
+        .collect();
+    let default_fields: Vec<_> = field_idents
+        .iter()
+        .map(|ident| quote!(#ident: ::core::default::Default::default()))
+        .collect();
+    let default_set_flags: Vec<_> = set_flag_idents
+        .iter()
+        .map(|ident| quote!(#ident: ::core::default::Default::default()))
+        .collect();
+    let clone_marker = has_generic_marker.then(|| {
+        quote! {
+            __tessera_generic_marker: ::core::marker::PhantomData,
+        }
+    });
+    let default_marker = has_generic_marker.then(|| {
+        quote! {
+            __tessera_generic_marker: ::core::marker::PhantomData,
+        }
+    });
+
+    quote! {
+        impl #impl_generics ::core::clone::Clone for #type_name #ty_generics #where_clause {
+            fn clone(&self) -> Self {
+                Self {
+                    #(#clone_fields,)*
+                    #(#clone_set_flags,)*
+                    #clone_marker
+                }
+            }
+        }
+
+        impl #impl_generics ::core::default::Default for #type_name #ty_generics #where_clause {
+            fn default() -> Self {
+                Self {
+                    #(#default_fields,)*
+                    #(#default_set_flags,)*
+                    #default_marker
+                }
+            }
+        }
+    }
+}
+
 fn generate_prop_like_impls(
     type_name: &Ident,
+    generics: &Generics,
     fields: &[PropFieldSpec],
     crate_path: &Path,
 ) -> proc_macro2::TokenStream {
@@ -795,15 +943,16 @@ fn generate_prop_like_impls(
     } else {
         quote! { true #(&& #compare_fields)* }
     };
+    let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     quote! {
-        impl ::core::cmp::PartialEq for #type_name {
+        impl #impl_generics ::core::cmp::PartialEq for #type_name #ty_generics #where_clause {
             fn eq(&self, other: &Self) -> bool {
                 #prop_eq_expr
             }
         }
 
-        impl #crate_path::__private::Prop for #type_name {
+        impl #impl_generics #crate_path::__private::Prop for #type_name #ty_generics #where_clause {
             fn prop_eq(&self, other: &Self) -> bool {
                 <Self as ::core::cmp::PartialEq>::eq(self, other)
             }
@@ -840,13 +989,17 @@ fn generate_builder_methods(
 
 /// Helper: tokens to compute a stable component type id based on module path +
 /// function name.
-fn component_type_id_tokens(fn_name: &syn::Ident) -> proc_macro2::TokenStream {
+fn component_type_id_tokens(
+    fn_name: &syn::Ident,
+    prop_type: &syn::Type,
+) -> proc_macro2::TokenStream {
     quote! {
         {
-            use std::hash::{Hash, Hasher};
+            use std::{any::TypeId, hash::{Hash, Hasher}};
             let mut hasher = std::collections::hash_map::DefaultHasher::new();
             module_path!().hash(&mut hasher);
             stringify!(#fn_name).hash(&mut hasher);
+            TypeId::of::<#prop_type>().hash(&mut hasher);
             hasher.finish()
         }
     }
@@ -1021,12 +1174,10 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
         || input_fn.sig.unsafety.is_some()
         || input_fn.sig.abi.is_some()
         || input_fn.sig.variadic.is_some()
-        || !input_fn.sig.generics.params.is_empty()
-        || input_fn.sig.generics.where_clause.is_some()
     {
         return syn::Error::new_spanned(
             &input_fn.sig,
-            "#[tessera] components must be plain, non-generic free functions",
+            "#[tessera] components must be plain free functions",
         )
         .to_compile_error()
         .into();
@@ -1043,6 +1194,9 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let fn_name = &input_fn.sig.ident;
     let fn_vis = &input_fn.vis;
     let fn_attrs = &input_fn.attrs;
+    if let Err(err) = validate_component_generics(&input_fn.sig.generics) {
+        return err.to_compile_error().into();
+    }
     let prop_signature = match strict_prop_signature(&input_fn.sig) {
         Ok(v) => v,
         Err(err) => return err.to_compile_error().into(),
@@ -1058,25 +1212,56 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut instrumenter = ControlFlowInstrumenter::new(seed);
     instrumenter.visit_block_mut(&mut input_fn.block);
     let fn_block = &input_fn.block;
+    let generics = &input_fn.sig.generics;
+    let mut item_generics = generics.clone();
+    item_generics.where_clause = None;
+    let where_clause = &generics.where_clause;
+    let (impl_generics, ty_generics, _) = generics.split_for_impl();
+    let component_turbofish = component_turbofish_tokens(generics);
 
     // Prepare token fragments using helpers to keep function small and readable
     let register_tokens = register_node_tokens(&crate_path, fn_name);
-    let component_type_id_tokens = component_type_id_tokens(fn_name);
     let expanded = match &prop_signature {
         ComponentPropSignature::Unit => {
+            let props_ident = hidden_props_ident(fn_name);
             let fn_sig = &input_fn.sig;
-            let prop_assert_tokens = prop_assert_tokens(&crate_path, &syn::parse_quote!(()));
             let unit_runner_ident = format_ident!("__tessera_{}_unit_runner", fn_name);
+            let (const_marker_defs, marker_field_def) = generic_marker_tokens(fn_name, generics);
+            let has_generic_marker = marker_field_def.is_some();
+            let prop_type: syn::Type = syn::parse_quote!(#props_ident #ty_generics);
+            let component_type_id_tokens = component_type_id_tokens(fn_name, &prop_type);
+            let props_clone_default_impls = generate_props_clone_default_impls(
+                &props_ident,
+                generics,
+                &[],
+                &[],
+                has_generic_marker,
+            );
+            let prop_impl_tokens =
+                generate_prop_like_impls(&props_ident, generics, &[], &crate_path);
+            let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
             let replay_tokens = replay_register_tokens(
                 &crate_path,
                 &unit_runner_ident,
-                &syn::parse_quote!(()),
+                &prop_type,
                 quote!(&__tessera_unit_props),
             );
+            let marker_field_def = marker_field_def
+                .map(|field| quote!(#field,))
+                .unwrap_or_default();
 
             quote! {
-                fn #unit_runner_ident(_props: &()) {
-                    #fn_name();
+                #(#const_marker_defs)*
+
+                struct #props_ident #item_generics #where_clause {
+                    #marker_field_def
+                }
+
+                #props_clone_default_impls
+                #prop_impl_tokens
+
+                fn #unit_runner_ident #item_generics(_props: &#props_ident #ty_generics) #where_clause {
+                    #fn_name #component_turbofish ();
                 }
 
                 #(#fn_attrs)*
@@ -1120,7 +1305,7 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     );
                     #prop_assert_tokens
                     #crate_path::__private::record_current_context_snapshot_for(__tessera_instance_key);
-                    let __tessera_unit_props = ();
+                    let __tessera_unit_props: #prop_type = ::core::default::Default::default();
                     #replay_tokens
                     if __tessera_component_reused {
                         return;
@@ -1133,10 +1318,15 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
             let props_ident = hidden_props_ident(fn_name);
             let builder_ident = builder_ident(fn_name);
             let impl_ident = hidden_component_impl_ident(fn_name);
+            let (const_marker_defs, marker_field_def) = generic_marker_tokens(fn_name, generics);
+            let has_generic_marker = marker_field_def.is_some();
+            let prop_type: syn::Type = syn::parse_quote!(#props_ident #ty_generics);
+            let component_type_id_tokens = component_type_id_tokens(fn_name, &prop_type);
             let set_flag_idents: Vec<_> = fields
                 .iter()
                 .map(|field| format_ident!("__tessera_set_{}", field.ident))
                 .collect();
+            let field_idents: Vec<_> = fields.iter().map(|field| field.ident.clone()).collect();
             let field_defs: Vec<_> = fields
                 .iter()
                 .map(|field| {
@@ -1168,51 +1358,64 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
                     }
                 })
                 .collect();
-            let prop_impl_tokens = generate_prop_like_impls(&props_ident, fields, &crate_path);
+            let prop_impl_tokens =
+                generate_prop_like_impls(&props_ident, generics, fields, &crate_path);
             let builder_methods = match generate_builder_methods(fields, &crate_path) {
                 Ok(methods) => methods,
                 Err(err) => return err.to_compile_error().into(),
             };
-            let prop_assert_tokens =
-                prop_assert_tokens(&crate_path, &syn::parse_quote!(#props_ident));
+            let prop_assert_tokens = prop_assert_tokens(&crate_path, &prop_type);
             let replay_tokens = replay_register_tokens(
                 &crate_path,
                 &impl_ident,
-                &syn::parse_quote!(#props_ident),
+                &prop_type,
                 quote!(__tessera_props),
+            );
+            let marker_field_def = marker_field_def
+                .map(|field| quote!(#field,))
+                .unwrap_or_default();
+            let props_clone_default_impls = generate_props_clone_default_impls(
+                &props_ident,
+                generics,
+                &field_idents,
+                &set_flag_idents,
+                has_generic_marker,
             );
 
             quote! {
-                #[derive(Clone, Default)]
-                struct #props_ident {
+                #(#const_marker_defs)*
+
+                struct #props_ident #item_generics #where_clause {
                     #(#field_defs,)*
                     #(#set_flag_defs,)*
+                    #marker_field_def
                 }
 
+                #props_clone_default_impls
                 #prop_impl_tokens
 
                 #[derive(Default)]
                 #[doc = concat!("Builder returned by [`", stringify!(#fn_name), "`].")]
-                #fn_vis struct #builder_ident {
-                    props: #props_ident,
+                #fn_vis struct #builder_ident #item_generics #where_clause {
+                    props: #props_ident #ty_generics,
                 }
 
-                impl #builder_ident {
+                impl #impl_generics #builder_ident #ty_generics #where_clause {
                     #(#builder_methods)*
                 }
 
-                impl Drop for #builder_ident {
+                impl #impl_generics Drop for #builder_ident #ty_generics #where_clause {
                     fn drop(&mut self) {
                         #impl_ident(&self.props);
                     }
                 }
 
                 #(#fn_attrs)*
-                #fn_vis fn #fn_name() -> #builder_ident {
+                #fn_vis fn #fn_name #item_generics() -> #builder_ident #ty_generics #where_clause {
                     #builder_ident::default()
                 }
 
-                fn #impl_ident(__tessera_props: &#props_ident) {
+                fn #impl_ident #item_generics(__tessera_props: &#props_ident #ty_generics) #where_clause {
                     let __tessera_component_type_id: u64 = #component_type_id_tokens;
                     let __tessera_phase_guard = {
                         use #crate_path::__private::{RuntimePhase, push_phase};

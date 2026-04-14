@@ -3197,6 +3197,49 @@ mod tests {
     use crate::layout::{LayoutPolicy, MeasureScope};
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
     use crate::prop::{Callback, ComponentReplayData, RenderSlot, make_component_runner};
+    use crate::tessera;
+
+    static TYPE_GENERIC_COMPONENT_HITS: AtomicUsize = AtomicUsize::new(0);
+    static UNIT_GENERIC_COMPONENT_HITS: AtomicUsize = AtomicUsize::new(0);
+    static CONST_GENERIC_COMPONENT_HITS: AtomicUsize = AtomicUsize::new(0);
+
+    trait RuntimeGenericTag {
+        const VALUE: usize;
+    }
+
+    struct RuntimeTagAlpha;
+
+    impl RuntimeGenericTag for RuntimeTagAlpha {
+        const VALUE: usize = 3;
+    }
+
+    struct RuntimeTagBeta;
+
+    impl RuntimeGenericTag for RuntimeTagBeta {
+        const VALUE: usize = 5;
+    }
+
+    #[tessera(crate)]
+    fn generic_value_component<T>(value: usize)
+    where
+        T: Clone + Default + Send + Sync + 'static,
+    {
+        let _ = std::any::TypeId::of::<T>();
+        TYPE_GENERIC_COMPONENT_HITS.fetch_add(value, Ordering::SeqCst);
+    }
+
+    #[tessera(crate)]
+    fn generic_unit_component<T>()
+    where
+        T: RuntimeGenericTag + Send + Sync + 'static,
+    {
+        UNIT_GENERIC_COMPONENT_HITS.fetch_add(T::VALUE, Ordering::SeqCst);
+    }
+
+    #[tessera(crate)]
+    fn const_generic_component<const VALUE: usize>() {
+        CONST_GENERIC_COMPONENT_HITS.fetch_add(VALUE, Ordering::SeqCst);
+    }
 
     fn seed_previous_replay_snapshot(instance_key: u64) {
         let replay = ComponentReplayData::new(make_component_runner::<()>(|_| {}), &());
@@ -3575,6 +3618,42 @@ mod tests {
         assert!(first == second);
         first.call();
         assert_eq!(calls.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn tessera_supports_type_generic_components() {
+        TYPE_GENERIC_COMPONENT_HITS.store(0, Ordering::SeqCst);
+
+        with_test_component_scope(11010, || {
+            generic_value_component::<u8>().value(1);
+            generic_value_component::<u16>().value(2);
+        });
+
+        assert_eq!(TYPE_GENERIC_COMPONENT_HITS.load(Ordering::SeqCst), 3);
+    }
+
+    #[test]
+    fn tessera_supports_zero_prop_generic_components() {
+        UNIT_GENERIC_COMPONENT_HITS.store(0, Ordering::SeqCst);
+
+        with_test_component_scope(11011, || {
+            generic_unit_component::<RuntimeTagAlpha>();
+            generic_unit_component::<RuntimeTagBeta>();
+        });
+
+        assert_eq!(UNIT_GENERIC_COMPONENT_HITS.load(Ordering::SeqCst), 8);
+    }
+
+    #[test]
+    fn tessera_supports_const_generic_components() {
+        CONST_GENERIC_COMPONENT_HITS.store(0, Ordering::SeqCst);
+
+        with_test_component_scope(11012, || {
+            const_generic_component::<11>();
+            const_generic_component::<23>();
+        });
+
+        assert_eq!(CONST_GENERIC_COMPONENT_HITS.load(Ordering::SeqCst), 34);
     }
 
     #[test]
