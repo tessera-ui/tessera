@@ -1151,10 +1151,35 @@ Fps: {:.2}
     }
 
     #[cfg(feature = "debug-dirty-overlay")]
+    fn layout_node_overlay_rect(
+        metadatas: &crate::component_tree::ComponentNodeMetaDatas,
+        node_id: crate::NodeId,
+    ) -> Option<PxRect> {
+        let metadata = metadatas.get(&node_id)?;
+        let abs_position = metadata.abs_position?;
+        let computed_data = metadata.computed_data?;
+        if computed_data.width.0 <= 0 || computed_data.height.0 <= 0 {
+            return None;
+        }
+        let node_rect = PxRect::from_position_size(
+            abs_position,
+            PxSize::new(computed_data.width, computed_data.height),
+        );
+        Some(
+            metadata
+                .event_clip_rect
+                .and_then(|clip_rect| clip_rect.intersection(&node_rect))
+                .unwrap_or(node_rect),
+        )
+    }
+
+    #[cfg(feature = "debug-dirty-overlay")]
     fn collect_dirty_overlay_rects(
         screen_size: PxSize,
         build_tree_result: &BuildTreeResult,
     ) -> Vec<PxRect> {
+        use crate::component_tree::{NodeRole, direct_layout_children};
+
         if matches!(build_tree_result.mode(), BuildTreeMode::SkipNoInvalidation) {
             return Vec::new();
         }
@@ -1165,7 +1190,9 @@ Fps: {:.2}
             return Vec::new();
         }
         TesseraRuntime::with(|rt| {
-            let mut rects = Vec::with_capacity(build_tree_result.dirty_replay_roots().len());
+            let tree = rt.component_tree.tree();
+            let metadatas = rt.component_tree.metadatas();
+            let mut rects = Vec::new();
             for instance_key in build_tree_result.dirty_replay_roots() {
                 let Some(node_id) = rt
                     .component_tree
@@ -1173,21 +1200,16 @@ Fps: {:.2}
                 else {
                     continue;
                 };
-                let Some(metadata) = rt.component_tree.metadatas().get(&node_id) else {
-                    continue;
+                let layout_nodes = match tree.get(node_id) {
+                    Some(node_ref) if node_ref.get().role == NodeRole::Layout => vec![node_id],
+                    Some(_) => direct_layout_children(node_id, tree),
+                    None => continue,
                 };
-                let (Some(abs_position), Some(size)) =
-                    (metadata.abs_position, metadata.computed_data)
-                else {
-                    continue;
-                };
-                if size.width.0 <= 0 || size.height.0 <= 0 {
-                    continue;
+                for layout_node_id in layout_nodes {
+                    if let Some(rect) = Self::layout_node_overlay_rect(metadatas, layout_node_id) {
+                        rects.push(rect);
+                    }
                 }
-                rects.push(PxRect::from_position_size(
-                    abs_position,
-                    PxSize::new(size.width, size.height),
-                ));
             }
             rects
         })
