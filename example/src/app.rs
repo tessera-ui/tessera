@@ -6,13 +6,18 @@ use tessera_components::{
     scaffold::scaffold,
     shape_def::{RoundedCorner, Shape},
     side_sheet::{SideSheetController, modal_side_sheet_provider},
+    spacer::spacer,
     surface::surface,
     theme::material_theme,
 };
-use tessera_shard::{RouterController, shard_home};
-use tessera_ui::{Dp, Modifier, remember, tessera};
+use tessera_shard::{RouterController, RouterDestination, shard_home};
+use tessera_ui::{Dp, Modifier, State, remember, tessera};
 
-use crate::pages::home::HomeDestination;
+use crate::pages::{
+    animation::AnimationPageDestination, basic_components::BasicComponentsPageDestination,
+    custom_shader::CustomShaderPageDestination, glass_components::GlassComponentsPageDestination,
+    home::HomePageDestination,
+};
 
 #[tessera]
 pub fn app() {
@@ -73,7 +78,8 @@ pub fn app() {
                 }
             })
             .content(move || {
-                let nav_controller = remember(|| RouterController::with_root(HomeDestination {}));
+                let nav_controller =
+                    remember(|| RouterController::with_root(HomePageDestination {}));
                 surface()
                     .modifier(Modifier::new().fill_max_size())
                     .child(move || {
@@ -86,31 +92,79 @@ pub fn app() {
                                 column()
                                     .modifier(Modifier::new().fill_max_width())
                                     .children(move || {
-                                        list_item()
-                                            .modifier(Modifier::new().fill_max_width())
-                                            .headline("Home")
-                                            .on_click(move || {
-                                                nav_controller
-                                                    .with_mut(|c| c.replace(HomeDestination {}));
-                                                side_sheet_controller.with_mut(|c| {
-                                                    if c.is_open() {
-                                                        c.close();
-                                                    }
-                                                });
-                                            })
-                                            .selected(nav_controller.with(
-                                                RouterController::current_is::<HomeDestination>,
-                                            ))
-                                            .shape(Shape::RoundedRectangle {
-                                                top_left: RoundedCorner::new(Dp(16.0)),
-                                                top_right: RoundedCorner::Capsule,
-                                                bottom_right: RoundedCorner::Capsule,
-                                                bottom_left: RoundedCorner::new(Dp(16.0)),
-                                            })
-                                            .tonal_elevation(Dp(5.0));
+                                        nav_item(
+                                            "Home",
+                                            HomePageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        );
+
+                                        spacer().modifier(Modifier::new().height(Dp(8.0)));
+
+                                        nav_item(
+                                            "Basic Components",
+                                            BasicComponentsPageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        );
+
+                                        spacer().modifier(Modifier::new().height(Dp(8.0)));
+
+                                        nav_item(
+                                            "Glass Components",
+                                            GlassComponentsPageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        );
+
+                                        spacer().modifier(Modifier::new().height(Dp(8.0)));
+
+                                        nav_item(
+                                            "Custom Shader",
+                                            CustomShaderPageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        );
+
+                                        spacer().modifier(Modifier::new().height(Dp(8.0)));
+
+                                        nav_item(
+                                            "Animation",
+                                            AnimationPageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        );
                                     });
                             });
                     });
             });
     });
+}
+
+#[tessera]
+fn nav_item<D: RouterDestination + Clone + PartialEq>(
+    #[prop(into)] headline: String,
+    destination: D,
+    nav_controller: State<RouterController>,
+    side_sheet_controller: State<SideSheetController>,
+) {
+    list_item()
+        .modifier(Modifier::new().fill_max_width())
+        .headline(headline)
+        .on_click(move || {
+            nav_controller.with_mut(|c| c.replace(destination.clone()));
+            side_sheet_controller.with_mut(|c| {
+                if c.is_open() {
+                    c.close();
+                }
+            });
+        })
+        .selected(nav_controller.with(RouterController::current_is::<D>))
+        .shape(Shape::RoundedRectangle {
+            top_left: RoundedCorner::new(Dp(16.0)),
+            top_right: RoundedCorner::Capsule,
+            bottom_right: RoundedCorner::Capsule,
+            bottom_left: RoundedCorner::new(Dp(16.0)),
+        })
+        .tonal_elevation(Dp(5.0));
 }

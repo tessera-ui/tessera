@@ -27,3 +27,6 @@ wasm-bindgen = "0.2.105"
 
 [build-dependencies]
 tessera-build = { path = "../tessera-build" }
+
+[dev-dependencies]
+tessera-ui = { path = "../tessera-ui", features = ["testing"] }
