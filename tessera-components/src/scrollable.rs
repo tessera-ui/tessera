@@ -531,6 +531,7 @@ struct ScrollableInnerLayout {
     vertical: bool,
     horizontal: bool,
     has_override: bool,
+    apply_child_offset: bool,
 }
 
 impl PartialEq for ScrollableInnerLayout {
@@ -538,6 +539,7 @@ impl PartialEq for ScrollableInnerLayout {
         self.vertical == other.vertical
             && self.horizontal == other.horizontal
             && self.has_override == other.has_override
+            && self.apply_child_offset == other.apply_child_offset
     }
 }
 
@@ -565,7 +567,11 @@ impl LayoutPolicy for ScrollableInnerLayout {
             self.controller.with_mut(|c| c.child_size = next_child_size);
         }
 
-        let current_child_position = self.controller.with(|c| c.child_position());
+        let current_child_position = if self.apply_child_offset {
+            self.controller.with(|c| c.child_position())
+        } else {
+            PxPosition::ZERO
+        };
         result.place_child(child, current_child_position);
 
         let width = input
@@ -589,6 +595,7 @@ impl LayoutPolicy for ScrollableInnerLayout {
         self.vertical == other.vertical
             && self.horizontal == other.horizontal
             && self.has_override == other.has_override
+            && self.apply_child_offset == other.apply_child_offset
     }
 
     fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
@@ -596,7 +603,11 @@ impl LayoutPolicy for ScrollableInnerLayout {
         let Some(&child) = input.children().first() else {
             return Some(result.into_placements());
         };
-        let child_position = self.controller.with(|c| c.child_position());
+        let child_position = if self.apply_child_offset {
+            self.controller.with(|c| c.child_position())
+        } else {
+            PxPosition::ZERO
+        };
         result.place_child(child, child_position);
         Some(result.into_placements())
     }
@@ -623,6 +634,8 @@ impl RenderPolicy for ScrollableInnerLayout {
 /// - `vertical` — whether vertical scrolling is enabled.
 /// - `horizontal` — whether horizontal scrolling is enabled.
 /// - `scroll_smoothing` — optional smoothing factor for animated scrolling.
+/// - `apply_child_offset` — whether the viewport shifts its child by the
+///   current scroll position or leaves placement to the child layout.
 /// - `scrollbar_behavior` — scrollbar visibility behavior.
 /// - `scrollbar_track_color` — optional scrollbar track color.
 /// - `scrollbar_thumb_color` — optional scrollbar thumb color.
@@ -659,6 +672,7 @@ pub fn scrollable(
     vertical: Option<bool>,
     horizontal: Option<bool>,
     scroll_smoothing: Option<f32>,
+    apply_child_offset: Option<bool>,
     scrollbar_behavior: Option<ScrollBarBehavior>,
     scrollbar_track_color: Option<Color>,
     scrollbar_thumb_color: Option<Color>,
@@ -670,6 +684,7 @@ pub fn scrollable(
     let vertical = vertical.unwrap_or(false);
     let horizontal = horizontal.unwrap_or(false);
     let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scrollbar_layout = scrollbar_layout.unwrap_or_default();
     let controller = controller.unwrap_or_else(|| remember(ScrollableController::new));
@@ -688,6 +703,7 @@ pub fn scrollable(
                     .vertical(vertical)
                     .horizontal(horizontal)
                     .scroll_smoothing(scroll_smoothing)
+                    .apply_child_offset(apply_child_offset)
                     .scrollbar_behavior(scrollbar_behavior.clone())
                     .scrollbar_track_color(scrollbar_track_color)
                     .scrollbar_thumb_color(scrollbar_thumb_color)
@@ -702,6 +718,7 @@ pub fn scrollable(
                     .vertical(vertical)
                     .horizontal(horizontal)
                     .scroll_smoothing(scroll_smoothing)
+                    .apply_child_offset(apply_child_offset)
                     .scrollbar_behavior(scrollbar_behavior.clone())
                     .scrollbar_track_color(scrollbar_track_color)
                     .scrollbar_thumb_color(scrollbar_thumb_color)
@@ -801,6 +818,7 @@ fn scrollable_with_alongside_scrollbar(
     vertical: Option<bool>,
     horizontal: Option<bool>,
     scroll_smoothing: Option<f32>,
+    apply_child_offset: Option<bool>,
     scrollbar_behavior: Option<ScrollBarBehavior>,
     scrollbar_track_color: Option<Color>,
     scrollbar_thumb_color: Option<Color>,
@@ -810,6 +828,7 @@ fn scrollable_with_alongside_scrollbar(
     let vertical = vertical.unwrap_or(false);
     let horizontal = horizontal.unwrap_or(false);
     let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scrollbar_track_color = scrollbar_track_color.unwrap_or(Color::TRANSPARENT);
     let scrollbar_thumb_color = scrollbar_thumb_color.unwrap_or(Color::TRANSPARENT);
@@ -829,6 +848,7 @@ fn scrollable_with_alongside_scrollbar(
                 .vertical(vertical)
                 .horizontal(horizontal)
                 .scroll_smoothing(scroll_smoothing)
+                .apply_child_offset(apply_child_offset)
                 .scrollbar_behavior(scrollbar_behavior.clone())
                 .controller(controller)
                 .scrollbar_state_v(scrollbar_v_state.clone())
@@ -865,6 +885,7 @@ fn scrollable_with_overlay_scrollbar(
     vertical: Option<bool>,
     horizontal: Option<bool>,
     scroll_smoothing: Option<f32>,
+    apply_child_offset: Option<bool>,
     scrollbar_behavior: Option<ScrollBarBehavior>,
     scrollbar_track_color: Option<Color>,
     scrollbar_thumb_color: Option<Color>,
@@ -874,6 +895,7 @@ fn scrollable_with_overlay_scrollbar(
     let vertical = vertical.unwrap_or(false);
     let horizontal = horizontal.unwrap_or(false);
     let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scrollbar_track_color = scrollbar_track_color.unwrap_or(Color::TRANSPARENT);
     let scrollbar_thumb_color = scrollbar_thumb_color.unwrap_or(Color::TRANSPARENT);
@@ -894,6 +916,7 @@ fn scrollable_with_overlay_scrollbar(
                     .vertical(vertical)
                     .horizontal(horizontal)
                     .scroll_smoothing(scroll_smoothing)
+                    .apply_child_offset(apply_child_offset)
                     .scrollbar_behavior(scrollbar_behavior.clone())
                     .controller(controller)
                     .scrollbar_state_v(scrollbar_v_state.clone())
@@ -1141,6 +1164,7 @@ fn scrollable_viewport(
     vertical: Option<bool>,
     horizontal: Option<bool>,
     scroll_smoothing: Option<f32>,
+    apply_child_offset: Option<bool>,
     scrollbar_behavior: Option<ScrollBarBehavior>,
     controller: Option<State<ScrollableController>>,
     scrollbar_state_v: Option<ScrollBarState>,
@@ -1150,6 +1174,7 @@ fn scrollable_viewport(
     let vertical = vertical.unwrap_or(false);
     let horizontal = horizontal.unwrap_or(false);
     let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let controller = controller.expect("scrollable_viewport requires controller");
     let scrollbar_state_v =
@@ -1198,6 +1223,7 @@ fn scrollable_viewport(
         vertical,
         horizontal,
         has_override,
+        apply_child_offset,
     };
     layout()
         .modifier(modifier)

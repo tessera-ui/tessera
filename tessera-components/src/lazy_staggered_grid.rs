@@ -10,14 +10,12 @@ use std::{
     sync::Arc,
 };
 
-use parking_lot::Mutex;
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
-    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlot, State,
-    key,
-    layout::{LayoutPolicy, MeasureScope, layout},
+    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, State, key,
+    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
     modifier::FocusModifierExt as _,
-    provide_context, remember, tessera, use_context,
+    remember, tessera,
 };
 
 use crate::{
@@ -51,9 +49,6 @@ impl LazyStaggeredGridController {
     }
 }
 
-#[derive(Clone)]
-struct LazyStaggeredGridCollectedSlots(Arc<Mutex<Vec<LazySlot>>>);
-
 fn hash_key<K>(key: K) -> u64
 where
     K: Hash,
@@ -63,162 +58,16 @@ where
     hasher.finish()
 }
 
-fn collect_lazy_staggered_grid_slots(content: RenderSlot) -> Vec<LazySlot> {
-    let collected = LazyStaggeredGridCollectedSlots(Arc::new(Mutex::new(Vec::new())));
-    provide_context(
-        || collected.clone(),
-        move || {
-            content.render();
-        },
-    );
-    collected.0.lock().clone()
+/// Accumulated lazy staggered-grid item declarations carried by the builder.
+#[derive(Clone, Default, PartialEq)]
+pub struct LazyStaggeredGridContent {
+    slots: Vec<LazySlot>,
 }
 
-fn push_lazy_staggered_grid_slot(slot: LazySlot) {
-    let collector = use_context::<LazyStaggeredGridCollectedSlots>()
-        .expect(
-            "lazy staggered grid item declarations must be used inside lazy staggered grid content",
-        )
-        .get();
-    collector.0.lock().push(slot);
-}
-
-/// Adds a single lazily generated staggered-grid item declaration to the
-/// current content slot.
-pub fn lazy_item<F>(builder: F)
-where
-    F: Fn() + Send + Sync + 'static,
-{
-    push_lazy_staggered_grid_slot(LazySlot::items(
-        1,
-        move |_| {
-            builder();
-        },
-        None,
-    ));
-}
-
-/// Adds a single lazily generated staggered-grid item declaration with a
-/// stable key.
-pub fn lazy_item_with_key<K, F>(key: K, builder: F)
-where
-    K: Hash,
-    F: Fn() + Send + Sync + 'static,
-{
-    let key_hash = hash_key(key);
-    push_lazy_staggered_grid_slot(LazySlot::items(
-        1,
-        move |_| {
-            builder();
-        },
-        Some(CallbackWith::new(move |_| key_hash)),
-    ));
-}
-
-/// Adds a batch of lazily generated staggered-grid items to the current
-/// content slot.
-pub fn lazy_items<F>(count: usize, builder: F)
-where
-    F: Fn(usize) + Send + Sync + 'static,
-{
-    push_lazy_staggered_grid_slot(LazySlot::items(count, builder, None));
-}
-
-/// Adds a batch of lazily generated staggered-grid items with a stable key
-/// provider.
-pub fn lazy_items_with_key<K, KF, F>(count: usize, key_provider: KF, builder: F)
-where
-    K: Hash,
-    KF: Fn(usize) -> K + Send + Sync + 'static,
-    F: Fn(usize) + Send + Sync + 'static,
-{
-    let key_provider = CallbackWith::new(move |idx| hash_key(key_provider(idx)));
-    push_lazy_staggered_grid_slot(LazySlot::items(count, builder, Some(key_provider)));
-}
-
-/// Adds lazily generated staggered-grid items from an iterator, providing both
-/// index and element reference.
-pub fn lazy_items_from_iter<I, T, F>(iter: I, builder: F)
-where
-    I: IntoIterator<Item = T>,
-    T: Send + Sync + 'static,
-    F: Fn(usize, &T) + Send + Sync + 'static,
-{
-    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
-    if items.is_empty() {
-        return;
+impl LazyStaggeredGridContent {
+    fn push(&mut self, slot: LazySlot) {
+        self.slots.push(slot);
     }
-    let builder = Arc::new(builder);
-    let count = items.len();
-    push_lazy_staggered_grid_slot(LazySlot::items(
-        count,
-        {
-            let items = items.clone();
-            let builder = builder.clone();
-            move |idx| {
-                if let Some(item) = items.get(idx) {
-                    builder(idx, item);
-                }
-            }
-        },
-        None,
-    ));
-}
-
-/// Adds lazily generated staggered-grid items from an iterator with a stable
-/// key provider.
-pub fn lazy_items_from_iter_with_key<I, T, K, KF, F>(iter: I, key_provider: KF, builder: F)
-where
-    I: IntoIterator<Item = T>,
-    T: Send + Sync + 'static,
-    K: Hash,
-    KF: Fn(usize, &T) -> K + Send + Sync + 'static,
-    F: Fn(usize, &T) + Send + Sync + 'static,
-{
-    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
-    if items.is_empty() {
-        return;
-    }
-    let builder = Arc::new(builder);
-    let key_provider = Arc::new(key_provider);
-    let count = items.len();
-
-    let slot_builder = {
-        let items = items.clone();
-        let builder = builder.clone();
-        move |idx: usize| {
-            if let Some(item) = items.get(idx) {
-                builder(idx, item);
-            }
-        }
-    };
-
-    let slot_key_provider = {
-        let items = items.clone();
-        let key_provider = key_provider.clone();
-        move |idx: usize| -> u64 {
-            items
-                .get(idx)
-                .map(|item| hash_key(key_provider(idx, item)))
-                .unwrap_or(0)
-        }
-    };
-
-    push_lazy_staggered_grid_slot(LazySlot::items(
-        count,
-        slot_builder,
-        Some(CallbackWith::new(slot_key_provider)),
-    ));
-}
-
-/// Convenience helper for iterators when only the element is needed.
-pub fn lazy_items_from_iter_values<I, T, F>(iter: I, builder: F)
-where
-    I: IntoIterator<Item = T>,
-    T: Send + Sync + 'static,
-    F: Fn(&T) + Send + Sync + 'static,
-{
-    lazy_items_from_iter(iter, move |_, item| builder(item));
 }
 
 /// # lazy_vertical_staggered_grid
@@ -254,7 +103,8 @@ where
 /// - `max_viewport_main` - optional maximum viewport length reported back to
 ///   parents.
 /// - `controller` - optional external controller for scroll position and cache.
-/// - `content` - optional slot builder for lazy staggered grid content.
+/// - item declarations are appended through builder methods like `item` and
+///   `items`.
 ///
 /// ## Examples
 ///
@@ -271,11 +121,9 @@ where
 ///     lazy_vertical_staggered_grid()
 ///         .columns(StaggeredGridCells::fixed(2))
 ///         .overscan(0)
-///         .content(move || {
-///             tessera_components::lazy_staggered_grid::lazy_items(4, move |i| {
-///                 rendered.with_mut(|count| *count += 1);
-///                 text().content(format!("Tile {i}"));
-///             });
+///         .items(4, move |i| {
+///             rendered.with_mut(|count| *count += 1);
+///             text().content(format!("Tile {i}"));
 ///         });
 ///     assert_eq!(rendered.get(), 4);
 /// }
@@ -301,9 +149,9 @@ pub fn lazy_vertical_staggered_grid(
     content_padding: Option<Dp>,
     max_viewport_main: Option<Px>,
     controller: Option<State<LazyStaggeredGridController>>,
-    #[prop(skip_setter)] content: Option<RenderSlot>,
+    #[prop(skip_setter)] content: Option<LazyStaggeredGridContent>,
 ) {
-    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(0.0);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scrollbar_layout = scrollbar_layout.unwrap_or_default();
     let columns = columns.unwrap_or_default();
@@ -314,8 +162,7 @@ pub fn lazy_vertical_staggered_grid(
     let overscan = overscan.unwrap_or(0);
     let estimated_item_size = estimated_item_size.unwrap_or(Dp(0.0));
     let content_padding = content_padding.unwrap_or(Dp(0.0));
-    let content = content.unwrap_or_else(RenderSlot::empty);
-    let slots = collect_vertical_staggered_grid_slots(content);
+    let content = content.unwrap_or_default();
     let controller = controller.unwrap_or_else(|| remember(LazyStaggeredGridController::new));
     lazy_vertical_staggered_grid_slots(LazyStaggeredGridSlotsArgs {
         modifier: modifier.unwrap_or_default(),
@@ -335,12 +182,8 @@ pub fn lazy_vertical_staggered_grid(
         content_padding,
         max_viewport_main,
         controller,
-        slots,
+        slots: content.slots,
     });
-}
-
-fn collect_vertical_staggered_grid_slots(content: RenderSlot) -> Vec<LazySlot> {
-    collect_lazy_staggered_grid_slots(content)
 }
 
 #[derive(Clone)]
@@ -376,6 +219,7 @@ fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
         .modifier(args.modifier)
         .vertical(true)
         .horizontal(false)
+        .apply_child_offset(false)
         .scroll_smoothing(args.scroll_smoothing)
         .scrollbar_behavior(args.scrollbar_behavior)
         .scrollbar_layout(args.scrollbar_layout)
@@ -444,7 +288,8 @@ fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
 /// - `max_viewport_main` - optional maximum viewport length reported back to
 ///   parents.
 /// - `controller` - optional external controller for scroll position and cache.
-/// - `content` - optional slot builder for lazy staggered grid content.
+/// - item declarations are appended through builder methods like `item` and
+///   `items`.
 ///
 /// ## Examples
 ///
@@ -461,11 +306,9 @@ fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
 ///     lazy_horizontal_staggered_grid()
 ///         .rows(StaggeredGridCells::fixed(2))
 ///         .overscan(0)
-///         .content(move || {
-///             tessera_components::lazy_staggered_grid::lazy_items(3, move |i| {
-///                 rendered.with_mut(|count| *count += 1);
-///                 text().content(format!("Tile {i}"));
-///             });
+///         .items(3, move |i| {
+///             rendered.with_mut(|count| *count += 1);
+///             text().content(format!("Tile {i}"));
 ///         });
 ///     assert_eq!(rendered.get(), 3);
 /// }
@@ -491,9 +334,9 @@ pub fn lazy_horizontal_staggered_grid(
     content_padding: Option<Dp>,
     max_viewport_main: Option<Px>,
     controller: Option<State<LazyStaggeredGridController>>,
-    #[prop(skip_setter)] content: Option<RenderSlot>,
+    #[prop(skip_setter)] content: Option<LazyStaggeredGridContent>,
 ) {
-    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(0.0);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scrollbar_layout = scrollbar_layout.unwrap_or_default();
     let rows = rows.unwrap_or_default();
@@ -504,8 +347,7 @@ pub fn lazy_horizontal_staggered_grid(
     let overscan = overscan.unwrap_or(0);
     let estimated_item_size = estimated_item_size.unwrap_or(Dp(0.0));
     let content_padding = content_padding.unwrap_or(Dp(0.0));
-    let content = content.unwrap_or_else(RenderSlot::empty);
-    let slots = collect_horizontal_staggered_grid_slots(content);
+    let content = content.unwrap_or_default();
     let controller = controller.unwrap_or_else(|| remember(LazyStaggeredGridController::new));
     lazy_horizontal_staggered_grid_slots(LazyStaggeredGridSlotsArgs {
         modifier: modifier.unwrap_or_default(),
@@ -525,12 +367,8 @@ pub fn lazy_horizontal_staggered_grid(
         content_padding,
         max_viewport_main,
         controller,
-        slots,
+        slots: content.slots,
     });
-}
-
-fn collect_horizontal_staggered_grid_slots(content: RenderSlot) -> Vec<LazySlot> {
-    collect_lazy_staggered_grid_slots(content)
 }
 
 fn lazy_horizontal_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
@@ -544,6 +382,7 @@ fn lazy_horizontal_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
         .modifier(args.modifier)
         .vertical(false)
         .horizontal(true)
+        .apply_child_offset(false)
         .scroll_smoothing(args.scroll_smoothing)
         .scrollbar_behavior(args.scrollbar_behavior)
         .scrollbar_layout(args.scrollbar_layout)
@@ -577,6 +416,217 @@ fn lazy_horizontal_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
         }
         drop(builder);
     });
+}
+
+macro_rules! impl_lazy_staggered_grid_builder {
+    ($builder:ident) => {
+        impl $builder {
+            /// Append a single lazy staggered-grid item.
+            pub fn item<F>(mut self, builder: F) -> Self
+            where
+                F: Fn() + Send + Sync + 'static,
+            {
+                self.push_slot(lazy_staggered_item_slot(builder));
+                self
+            }
+
+            /// Append a single lazy staggered-grid item with a stable key.
+            pub fn item_with_key<K, F>(mut self, key: K, builder: F) -> Self
+            where
+                K: Hash,
+                F: Fn() + Send + Sync + 'static,
+            {
+                self.push_slot(lazy_staggered_item_with_key_slot(key, builder));
+                self
+            }
+
+            /// Append a batch of indexed lazy staggered-grid items.
+            pub fn items<F>(mut self, count: usize, builder: F) -> Self
+            where
+                F: Fn(usize) + Send + Sync + 'static,
+            {
+                self.push_slot(LazySlot::items(count, builder, None));
+                self
+            }
+
+            /// Append a batch of indexed lazy staggered-grid items with stable keys.
+            pub fn items_with_key<K, KF, F>(
+                mut self,
+                count: usize,
+                key_provider: KF,
+                builder: F,
+            ) -> Self
+            where
+                K: Hash,
+                KF: Fn(usize) -> K + Send + Sync + 'static,
+                F: Fn(usize) + Send + Sync + 'static,
+            {
+                let key_provider = CallbackWith::new(move |idx| hash_key(key_provider(idx)));
+                self.push_slot(LazySlot::items(count, builder, Some(key_provider)));
+                self
+            }
+
+            /// Append lazy staggered-grid items from an iterator, exposing index and
+            /// element.
+            pub fn items_from_iter<I, T, F>(mut self, iter: I, builder: F) -> Self
+            where
+                I: IntoIterator<Item = T>,
+                T: Send + Sync + 'static,
+                F: Fn(usize, &T) + Send + Sync + 'static,
+            {
+                if let Some(slot) = lazy_staggered_items_from_iter_slot(iter, builder) {
+                    self.push_slot(slot);
+                }
+                self
+            }
+
+            /// Append lazy staggered-grid items from an iterator with stable keys.
+            pub fn items_from_iter_with_key<I, T, K, KF, F>(
+                mut self,
+                iter: I,
+                key_provider: KF,
+                builder: F,
+            ) -> Self
+            where
+                I: IntoIterator<Item = T>,
+                T: Send + Sync + 'static,
+                K: Hash,
+                KF: Fn(usize, &T) -> K + Send + Sync + 'static,
+                F: Fn(usize, &T) + Send + Sync + 'static,
+            {
+                if let Some(slot) =
+                    lazy_staggered_items_from_iter_with_key_slot(iter, key_provider, builder)
+                {
+                    self.push_slot(slot);
+                }
+                self
+            }
+
+            /// Append lazy staggered-grid items from an iterator when only the element
+            /// is used.
+            pub fn items_from_iter_values<I, T, F>(self, iter: I, builder: F) -> Self
+            where
+                I: IntoIterator<Item = T>,
+                T: Send + Sync + 'static,
+                F: Fn(&T) + Send + Sync + 'static,
+            {
+                self.items_from_iter(iter, move |_, item| builder(item))
+            }
+
+            fn push_slot(&mut self, slot: LazySlot) {
+                self.props
+                    .content
+                    .get_or_insert_with(LazyStaggeredGridContent::default)
+                    .push(slot);
+            }
+        }
+    };
+}
+
+impl_lazy_staggered_grid_builder!(LazyVerticalStaggeredGridBuilder);
+impl_lazy_staggered_grid_builder!(LazyHorizontalStaggeredGridBuilder);
+
+fn lazy_staggered_item_slot<F>(builder: F) -> LazySlot
+where
+    F: Fn() + Send + Sync + 'static,
+{
+    LazySlot::items(
+        1,
+        move |_| {
+            builder();
+        },
+        None,
+    )
+}
+
+fn lazy_staggered_item_with_key_slot<K, F>(key: K, builder: F) -> LazySlot
+where
+    K: Hash,
+    F: Fn() + Send + Sync + 'static,
+{
+    let key_hash = hash_key(key);
+    LazySlot::items(
+        1,
+        move |_| {
+            builder();
+        },
+        Some(CallbackWith::new(move |_| key_hash)),
+    )
+}
+
+fn lazy_staggered_items_from_iter_slot<I, T, F>(iter: I, builder: F) -> Option<LazySlot>
+where
+    I: IntoIterator<Item = T>,
+    T: Send + Sync + 'static,
+    F: Fn(usize, &T) + Send + Sync + 'static,
+{
+    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
+    if items.is_empty() {
+        return None;
+    }
+    let builder = Arc::new(builder);
+    let count = items.len();
+    Some(LazySlot::items(
+        count,
+        {
+            let items = items.clone();
+            let builder = builder.clone();
+            move |idx| {
+                if let Some(item) = items.get(idx) {
+                    builder(idx, item);
+                }
+            }
+        },
+        None,
+    ))
+}
+
+fn lazy_staggered_items_from_iter_with_key_slot<I, T, K, KF, F>(
+    iter: I,
+    key_provider: KF,
+    builder: F,
+) -> Option<LazySlot>
+where
+    I: IntoIterator<Item = T>,
+    T: Send + Sync + 'static,
+    K: Hash,
+    KF: Fn(usize, &T) -> K + Send + Sync + 'static,
+    F: Fn(usize, &T) + Send + Sync + 'static,
+{
+    let items: Arc<Vec<T>> = Arc::new(iter.into_iter().collect());
+    if items.is_empty() {
+        return None;
+    }
+    let builder = Arc::new(builder);
+    let key_provider = Arc::new(key_provider);
+    let count = items.len();
+
+    let slot_builder = {
+        let items = items.clone();
+        let builder = builder.clone();
+        move |idx: usize| {
+            if let Some(item) = items.get(idx) {
+                builder(idx, item);
+            }
+        }
+    };
+
+    let slot_key_provider = {
+        let items = items.clone();
+        let key_provider = key_provider.clone();
+        move |idx: usize| -> u64 {
+            items
+                .get(idx)
+                .map(|item| hash_key(key_provider(idx, item)))
+                .unwrap_or(0)
+        }
+    };
+
+    Some(LazySlot::items(
+        count,
+        slot_builder,
+        Some(CallbackWith::new(slot_key_provider)),
+    ))
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Default)]
@@ -613,6 +663,7 @@ struct LazyStaggeredGridLayout {
     total_count: usize,
     slots: GridSlots,
     visible_items: Vec<VisibleStaggeredLayoutItem>,
+    scroll_offset: Px,
     controller: State<LazyStaggeredGridController>,
     scroll_controller: State<ScrollableController>,
 }
@@ -630,6 +681,7 @@ impl PartialEq for LazyStaggeredGridLayout {
             && self.total_count == other.total_count
             && self.slots == other.slots
             && self.visible_items == other.visible_items
+            && self.scroll_offset == other.scroll_offset
     }
 }
 
@@ -677,9 +729,10 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
                     let cross_offset = self.padding_cross
                         + self.slots.positions.get(lane).copied().unwrap_or(Px::ZERO)
                         + cell_offset;
-                    let position = self
-                        .axis
-                        .position(item_start + self.padding_main, cross_offset);
+                    let position = self.axis.position(
+                        item_start + self.padding_main - self.scroll_offset,
+                        cross_offset,
+                    );
                     placements.push((**child, position));
 
                     visible_iter.next();
@@ -713,6 +766,59 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
         }
 
         Ok(result.with_size(self.axis.pack_size(reported_main, cross_with_padding)))
+    }
+
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.axis == other.axis
+            && self.item_alignment == other.item_alignment
+            && self.estimated_item_main == other.estimated_item_main
+            && self.main_spacing == other.main_spacing
+            && self.max_viewport_main == other.max_viewport_main
+            && self.padding_main == other.padding_main
+            && self.padding_cross == other.padding_cross
+            && self.viewport_limit == other.viewport_limit
+            && self.total_count == other.total_count
+            && self.slots == other.slots
+            && self.visible_items == other.visible_items
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other) && self.scroll_offset == other.scroll_offset
+    }
+
+    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+        let children = input.children();
+        if children.len() != self.visible_items.len() {
+            return None;
+        }
+
+        let mut result = LayoutResult::default();
+        let child_sizes: Vec<_> = children.iter().map(|child| child.size()).collect();
+        let positions = self.controller.with(|c| {
+            compute_staggered_layout_positions(
+                self.axis,
+                self.item_alignment,
+                &c.cache,
+                self.total_count,
+                &self.slots,
+                self.padding_main,
+                self.padding_cross,
+                self.estimated_item_main,
+                self.main_spacing,
+                &self.visible_items,
+                &child_sizes,
+                self.scroll_offset,
+            )
+        });
+        if positions.len() != children.len() {
+            return None;
+        }
+
+        for (child, position) in children.iter().zip(positions) {
+            result.place_child(*child, position);
+        }
+
+        Some(result.into_placements())
     }
 }
 
@@ -843,6 +949,7 @@ fn lazy_staggered_grid_view(
             total_count,
             slots: grid_slots.clone(),
             visible_items: visible_layout_items,
+            scroll_offset,
             controller,
             scroll_controller,
         })
@@ -850,10 +957,29 @@ fn lazy_staggered_grid_view(
             for child in &visible_items {
                 let child = child.clone();
                 key(child.key_hash, || {
-                    child.builder.call(child.local_index);
+                    lazy_staggered_grid_item_host()
+                        .builder_handle_value(child.builder)
+                        .local_index(child.local_index);
                 });
             }
         });
+}
+
+#[tessera]
+fn lazy_staggered_grid_item_host(
+    #[prop(skip_setter)] builder_handle: Option<CallbackWith<usize, ()>>,
+    local_index: Option<usize>,
+) {
+    let builder_handle = builder_handle.unwrap_or_else(CallbackWith::default_value);
+    let local_index = local_index.unwrap_or(0);
+    builder_handle.call(local_index);
+}
+
+impl LazyStaggeredGridItemHostBuilder {
+    fn builder_handle_value(mut self, builder_handle: CallbackWith<usize, ()>) -> Self {
+        self.props.builder_handle = Some(builder_handle);
+        self
+    }
 }
 
 fn resolve_viewport_span(current: Px, estimated: Px, spacing: Px) -> Px {
@@ -1470,24 +1596,75 @@ fn finalize_lane_offsets(lane_offsets: &[Px], spacing: Px) -> Px {
     }
 }
 
+fn compute_staggered_layout_positions(
+    axis: StaggeredGridAxis,
+    item_alignment: CrossAxisAlignment,
+    cache: &StaggeredGridCache,
+    total_count: usize,
+    slots: &GridSlots,
+    padding_main: Px,
+    padding_cross: Px,
+    estimated_item_main: Px,
+    main_spacing: Px,
+    visible_items: &[VisibleStaggeredLayoutItem],
+    child_sizes: &[ComputedData],
+    scroll_offset: Px,
+) -> Vec<PxPosition> {
+    let mut positions = Vec::with_capacity(visible_items.len());
+    let mut visible_iter = visible_items.iter().zip(child_sizes.iter()).peekable();
+    let mut lane_offsets = vec![Px::ZERO; slots.len()];
+
+    for index in 0..total_count {
+        if slots.len() == 0 {
+            break;
+        }
+
+        let lane = find_shortest_lane(&lane_offsets);
+        let lane_cross = slots.sizes.get(lane).copied().unwrap_or(Px::ZERO);
+        let item_start = lane_offsets[lane];
+        let item_main = cache.item_main(index).unwrap_or(estimated_item_main);
+
+        if let Some((visible, child_size)) = visible_iter.peek()
+            && visible.item_index == index
+        {
+            let cell_offset =
+                compute_cell_offset(lane_cross, axis.cross(child_size), item_alignment);
+            let cross_offset = padding_cross
+                + slots.positions.get(lane).copied().unwrap_or(Px::ZERO)
+                + cell_offset;
+            positions.push(axis.position(item_start + padding_main - scroll_offset, cross_offset));
+            visible_iter.next();
+        }
+
+        lane_offsets[lane] = item_start + item_main + main_spacing;
+    }
+
+    positions
+}
+
 #[cfg(test)]
 mod tests {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
     use tessera_ui::{
         ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, NoopRenderPolicy, Px,
         PxPosition,
         layout::{MeasureScope, layout},
-        remember, tessera,
+        receive_frame_nanos, remember, tessera,
     };
 
     use crate::{
         alignment::{CrossAxisAlignment, MainAxisAlignment},
         modifier::{ModifierExt as _, SemanticsArgs},
         scrollable::{ScrollableController, scrollable},
+        theme::{MaterialTheme, material_theme},
     };
 
     use super::{
         GridCells, LazyStaggeredGridController, StaggeredGridAxis, lazy_staggered_grid_view,
     };
+
+    static LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT: AtomicUsize = AtomicUsize::new(0);
 
     #[derive(Clone, PartialEq)]
     struct FixedTestLayout {
@@ -1647,6 +1824,7 @@ mod tests {
         scrollable()
             .vertical(true)
             .horizontal(false)
+            .apply_child_offset(false)
             .controller(scroll_controller)
             .child(move || {
                 lazy_staggered_grid_view()
@@ -1687,6 +1865,61 @@ mod tests {
                                     .width(9)
                                     .height(9);
                             }
+                        },
+                        None,
+                    )])
+                    .controller(controller)
+                    .scroll_controller(scroll_controller);
+            });
+    }
+
+    #[tessera]
+    fn lazy_vertical_staggered_stable_visible_items_case() {
+        let controller = remember(LazyStaggeredGridController::new);
+        let scroll_controller = remember(ScrollableController::default);
+        scroll_controller.with_mut(|c| {
+            c.set_visible_size_for_test(ComputedData {
+                width: Px::new(60),
+                height: Px::new(50),
+            });
+        });
+
+        receive_frame_nanos(move |frame_nanos| {
+            let offset = match frame_nanos {
+                0 => 0,
+                16_666_667 => 1,
+                33_333_334 => 2,
+                _ => 2,
+            };
+            scroll_controller.with_mut(|c| {
+                c.set_scroll_position(PxPosition::new(Px::ZERO, Px::new(-offset)));
+            });
+            tessera_ui::FrameNanosControl::Continue
+        });
+
+        material_theme()
+            .theme(MaterialTheme::default)
+            .child(move || {
+                lazy_staggered_grid_view()
+                    .axis(StaggeredGridAxis::Vertical)
+                    .grid_cells(GridCells::fixed(2))
+                    .main_axis_spacing(Px::new(3))
+                    .cross_axis_spacing(Px::new(3))
+                    .cross_axis_alignment(MainAxisAlignment::Start)
+                    .item_alignment(CrossAxisAlignment::Start)
+                    .estimated_item_main(Px::new(20))
+                    .overscan(0)
+                    .padding_main(Px::new(4))
+                    .padding_cross(Px::new(4))
+                    .slots(vec![super::LazySlot::items(
+                        20,
+                        |index| {
+                            LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT
+                                .fetch_add(1, Ordering::Relaxed);
+                            fixed_test_box()
+                                .tag(format!("lazy_staggered_stable_visible_{index}"))
+                                .width(20)
+                                .height(20);
                         },
                         None,
                     )])
@@ -1741,5 +1974,29 @@ mod tests {
                 node("lazy_staggered_scroll_fourth").position(4, 12).size(9, 9);
             }
         }
+    }
+
+    #[test]
+    fn lazy_vertical_staggered_does_not_rebuild_visible_items_when_scroll_stays_in_same_window() {
+        LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.store(0, Ordering::Relaxed);
+
+        let mut session = tessera_ui::testing::__private::start_layout_test_session(
+            tessera_ui::testing::layout_test(|| {
+                lazy_vertical_staggered_stable_visible_items_case();
+            })
+            .viewport_px(80, 60),
+        );
+
+        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 0);
+        let first_builds = LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
+        assert!(first_builds > 0);
+
+        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 16_666_667);
+        let second_builds = LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
+        assert_eq!(second_builds, first_builds);
+
+        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 33_333_334);
+        let third_builds = LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
+        assert_eq!(third_builds, first_builds);
     }
 }
