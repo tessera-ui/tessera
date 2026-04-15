@@ -795,20 +795,20 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
         let mut result = LayoutResult::default();
         let child_sizes: Vec<_> = children.iter().map(|child| child.size()).collect();
         let positions = self.controller.with(|c| {
-            compute_staggered_layout_positions(
-                self.axis,
-                self.item_alignment,
-                &c.cache,
-                self.total_count,
-                &self.slots,
-                self.padding_main,
-                self.padding_cross,
-                self.estimated_item_main,
-                self.main_spacing,
-                &self.visible_items,
-                &child_sizes,
-                self.scroll_offset,
-            )
+            compute_staggered_layout_positions(ComputeStaggeredLayoutPositionsArgs {
+                axis: self.axis,
+                item_alignment: self.item_alignment,
+                cache: &c.cache,
+                total_count: self.total_count,
+                slots: &self.slots,
+                padding_main: self.padding_main,
+                padding_cross: self.padding_cross,
+                estimated_item_main: self.estimated_item_main,
+                main_spacing: self.main_spacing,
+                visible_items: &self.visible_items,
+                child_sizes: &child_sizes,
+                scroll_offset: self.scroll_offset,
+            })
         });
         if positions.len() != children.len() {
             return None;
@@ -1596,20 +1596,39 @@ fn finalize_lane_offsets(lane_offsets: &[Px], spacing: Px) -> Px {
     }
 }
 
-fn compute_staggered_layout_positions(
+struct ComputeStaggeredLayoutPositionsArgs<'a> {
     axis: StaggeredGridAxis,
     item_alignment: CrossAxisAlignment,
-    cache: &StaggeredGridCache,
+    cache: &'a StaggeredGridCache,
     total_count: usize,
-    slots: &GridSlots,
+    slots: &'a GridSlots,
     padding_main: Px,
     padding_cross: Px,
     estimated_item_main: Px,
     main_spacing: Px,
-    visible_items: &[VisibleStaggeredLayoutItem],
-    child_sizes: &[ComputedData],
+    visible_items: &'a [VisibleStaggeredLayoutItem],
+    child_sizes: &'a [ComputedData],
     scroll_offset: Px,
+}
+
+fn compute_staggered_layout_positions(
+    args: ComputeStaggeredLayoutPositionsArgs<'_>,
 ) -> Vec<PxPosition> {
+    let ComputeStaggeredLayoutPositionsArgs {
+        axis,
+        item_alignment,
+        cache,
+        total_count,
+        slots,
+        padding_main,
+        padding_cross,
+        estimated_item_main,
+        main_spacing,
+        visible_items,
+        child_sizes,
+        scroll_offset,
+    } = args;
+
     let mut positions = Vec::with_capacity(visible_items.len());
     let mut visible_iter = visible_items.iter().zip(child_sizes.iter()).peekable();
     let mut lane_offsets = vec![Px::ZERO; slots.len()];
