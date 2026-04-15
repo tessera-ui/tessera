@@ -4,11 +4,12 @@
 //!
 //! Pass one painter value into image-like and icon-like components.
 use std::{
+    hash::Hash,
     path::{Path, PathBuf},
     sync::Arc,
 };
 
-use tessera_ui::AssetExt;
+use tessera_ui::{AssetExt, State, remember_with_key};
 use thiserror::Error;
 
 use crate::{
@@ -98,6 +99,21 @@ where
         .read()
         .map_err(|source| PainterLoadError::AssetRead { source })?;
     try_decode_bytes(bytes.as_ref())
+}
+
+/// Decodes and remembers a painter from an asset handle during component
+/// builds.
+///
+/// This is the Tessera-aware resource-loading entrypoint for UI code. The
+/// decoded painter state is memoized by asset key, so repeated recomposition
+/// does not re-read or re-decode the same asset at the same callsite.
+pub fn remember_painter_asset<T>(asset: T) -> State<Painter>
+where
+    T: AssetExt + Clone + Hash + Send + Sync + 'static,
+{
+    remember_with_key(asset, move || {
+        try_painter_asset(asset).expect("asset painter should decode successfully")
+    })
 }
 
 impl TryIntoPainter for Painter {

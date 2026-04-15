@@ -14,7 +14,7 @@ use tessera_ui::{
 use crate::{
     image::{ImageLoadError, TryIntoImageData},
     image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
-    painter::{Painter, PainterLoadError, TryIntoPainter, try_painter_asset},
+    painter::{Painter, PainterLoadError, TryIntoPainter},
     pipelines::{
         image::command::{ImageCommand, ImageData},
         image_vector::command::{ImageVectorCommand, ImageVectorData},
@@ -56,15 +56,6 @@ impl IconBuilder {
         T: TryIntoPainter,
     {
         self.props.content = Some(source.try_into_painter()?);
-        Ok(self)
-    }
-
-    /// Decodes icon content from an asset handle.
-    pub fn try_painter_asset<T>(mut self, asset: T) -> Result<Self, PainterLoadError>
-    where
-        T: AssetExt,
-    {
-        self.props.content = Some(try_painter_asset(asset)?);
         Ok(self)
     }
 

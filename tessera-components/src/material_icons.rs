@@ -2,8 +2,8 @@
 //!
 //! ## Usage
 //!
-//! Use style modules (for example [`filled`]) to obtain icon assets, then pass
-//! them to `icon().try_vector_asset(...)` or decode with
+//! Use style modules (for example [`filled`]) to obtain icon assets, then
+//! decode them with `remember_painter_asset(...)` or decode with
 //! [`TryIntoImageVectorData`].
 use std::sync::Arc;
 

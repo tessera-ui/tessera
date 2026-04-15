@@ -18,7 +18,7 @@ use thiserror::Error;
 
 use crate::{
     image_vector::{ImageVectorLoadError, TintMode, TryIntoImageVectorData},
-    painter::{Painter, PainterLoadError, TryIntoPainter, try_painter_asset},
+    painter::{Painter, PainterLoadError, TryIntoPainter},
     pipelines::{
         image::command::ImageCommand,
         image_vector::command::{ImageVectorCommand, ImageVectorData},
@@ -130,15 +130,6 @@ impl ImageBuilder {
         T: TryIntoPainter,
     {
         self.props.painter = Some(source.try_into_painter()?);
-        Ok(self)
-    }
-
-    /// Decodes image content from an asset handle.
-    pub fn try_painter_asset<T>(mut self, asset: T) -> Result<Self, PainterLoadError>
-    where
-        T: AssetExt,
-    {
-        self.props.painter = Some(try_painter_asset(asset)?);
         Ok(self)
     }
 
