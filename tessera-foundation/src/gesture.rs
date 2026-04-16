@@ -9,7 +9,8 @@ use std::time::Duration;
 
 use tessera_ui::{
     CursorEventContent, GestureState, PointerChange, PointerEventPass, PointerId,
-    PressKeyEventType, Px, PxPosition, ScrollEventContent, ScrollEventSource, time::Instant,
+    PressKeyEventType, Px, PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
+    time::Instant,
 };
 
 const DEFAULT_SLOP_PX: f32 = 8.0;
@@ -501,6 +502,8 @@ pub struct ScrollResult {
     pub delta_y: f32,
     /// Source of the first observed scroll event.
     pub source: Option<ScrollEventSource>,
+    /// Delta unit of the first observed scroll event.
+    pub unit: Option<ScrollDeltaUnit>,
 }
 
 impl Default for ScrollResult {
@@ -510,6 +513,7 @@ impl Default for ScrollResult {
             delta_x: 0.0,
             delta_y: 0.0,
             source: None,
+            unit: None,
         }
     }
 }
@@ -566,6 +570,9 @@ impl ScrollRecognizer {
             if result.source.is_none() {
                 result.source = Some(scroll.source);
             }
+            if result.unit.is_none() {
+                result.unit = Some(scroll.unit);
+            }
             result.event_count += 1;
             result.delta_x += scroll.delta_x;
             result.delta_y += scroll.delta_y;
@@ -607,6 +614,9 @@ impl ScrollRecognizer {
             };
             if result.source.is_none() {
                 result.source = Some(scroll.source);
+            }
+            if result.unit.is_none() {
+                result.unit = Some(scroll.unit);
             }
             result.event_count += 1;
             result.delta_x += scroll.delta_x;

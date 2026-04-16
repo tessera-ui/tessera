@@ -9,10 +9,10 @@ use tessera_foundation::gesture::{
 use tessera_ui::{
     AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusProperties, KeyboardInput,
     KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier, PointerInput,
-    PointerInputModifierNode, Px, PxPosition, State, key,
+    PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventSource, State, key,
     layout::{LayoutPolicy, MeasureScope, PlacementScope, RenderInput, RenderPolicy, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    receive_frame_nanos, remember, tessera, winit,
+    normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera, winit,
 };
 
 use crate::{
@@ -64,6 +64,20 @@ struct PagerConfig {
     ///
     /// When this is `None`, the pager creates and owns an internal controller.
     pub controller: Option<State<PagerController>>,
+}
+
+fn normalize_pager_scroll_delta(
+    delta_x: f32,
+    delta_y: f32,
+    unit: Option<ScrollDeltaUnit>,
+    source: Option<ScrollEventSource>,
+) -> (f32, f32) {
+    match (source, unit) {
+        (Some(source), Some(unit)) => {
+            normalize_platform_scroll_delta(delta_x, delta_y, unit, source)
+        }
+        _ => (delta_x, delta_y),
+    }
 }
 
 impl Default for PagerConfig {
@@ -767,9 +781,13 @@ impl PointerInputModifierNode for PagerPointerModifierNode {
         let scroll_result = self.scroll_recognizer.with_mut(|recognizer| {
             recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
         });
-        let scroll_delta = self
-            .axis
-            .scroll_delta(scroll_result.delta_x, scroll_result.delta_y);
+        let (scroll_delta_x, scroll_delta_y) = normalize_pager_scroll_delta(
+            scroll_result.delta_x,
+            scroll_result.delta_y,
+            scroll_result.unit,
+            scroll_result.source,
+        );
+        let scroll_delta = self.axis.scroll_delta(scroll_delta_x, scroll_delta_y);
 
         if scroll_delta.abs() >= 0.01 {
             self.controller.with_mut(|controller| {

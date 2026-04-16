@@ -10,11 +10,11 @@ use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot,
-    ScrollEventSource, State, current_frame_nanos,
+    ScrollDeltaUnit, ScrollEventSource, State, current_frame_nanos,
     focus::FocusRevealRequest,
     layout::{LayoutPolicy, MeasureScope, PlacementScope, RenderInput, RenderPolicy, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    receive_frame_nanos, remember, tessera,
+    normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera,
     time::Instant,
     use_context,
 };
@@ -65,6 +65,16 @@ fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
     }
 
     (vx, vy)
+}
+
+fn normalize_scroll_delta(
+    delta_x: f32,
+    delta_y: f32,
+    unit: ScrollDeltaUnit,
+    source: ScrollEventSource,
+) -> ScrollDelta {
+    let (delta_x, delta_y) = normalize_platform_scroll_delta(delta_x, delta_y, unit, source);
+    ScrollDelta::new(delta_x, delta_y)
 }
 
 /// Defines the behavior of the scrollbar visibility.
@@ -1052,8 +1062,12 @@ impl PointerInputModifierNode for ScrollableViewportPointerModifierNode {
                         if self.controller.with(|c| c.active_inertia.is_some()) {
                             self.controller.with_mut(|c| c.cancel_inertia());
                         }
-                        let available =
-                            ScrollDelta::new(scroll_event.delta_x, scroll_event.delta_y);
+                        let available = normalize_scroll_delta(
+                            scroll_event.delta_x,
+                            scroll_event.delta_y,
+                            scroll_event.unit,
+                            scroll_event.source,
+                        );
                         let parent_pre_consumed = self
                             .nested_scroll_connection
                             .as_ref()

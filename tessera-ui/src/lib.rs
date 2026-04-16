@@ -310,6 +310,7 @@ mod render_pass;
 pub mod render_scene;
 pub mod renderer;
 mod runtime;
+pub mod scroll;
 #[cfg(feature = "testing")]
 pub mod testing;
 mod thread_utils;
@@ -333,7 +334,7 @@ pub use crate::{
     context::{Context, provide_context, use_context},
     cursor::{
         CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PointerId,
-        PressKeyEventType, ScrollEventContent, ScrollEventSource,
+        PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     },
     dp::Dp,
     entry_point::EntryPoint,
@@ -383,6 +384,7 @@ pub use crate::{
         FrameNanosControl, State, current_frame_nanos, current_frame_time, frame_delta, key,
         receive_frame_nanos, remember, remember_with_key, retain, retain_with_key,
     },
+    scroll::{PlatformScrollConfig, normalize_platform_scroll_delta, platform_scroll_config},
 };
 
 use ime_state::ImeState;
