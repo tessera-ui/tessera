@@ -853,6 +853,14 @@ impl<F: Fn()> Renderer<F> {
     const RESIZE_EDGE_THRESHOLD: f64 = 8.0;
     const MAX_FOCUS_BEYOND_BOUNDS_RETRIES: usize = 8;
 
+    const fn supports_native_window_frame_controls() -> bool {
+        !cfg!(any(
+            target_family = "wasm",
+            target_os = "android",
+            target_os = "ios"
+        ))
+    }
+
     #[cfg(target_os = "windows")]
     fn update_native_window_shape(&self, window: &Window) {
         use winit::platform::windows::{CornerPreference, WindowExtWindows};
@@ -1439,9 +1447,14 @@ Fps: {:.2}
         // cursors
         let cursor_position = args.cursor_state.position();
         let window_size = args.app.size();
-        let resize_direction = (!decorations).then(|| {
-            Self::cursor_resize_direction(cursor_position, window_size, Self::RESIZE_EDGE_THRESHOLD)
-        });
+        let resize_direction = (Self::supports_native_window_frame_controls() && !decorations)
+            .then(|| {
+                Self::cursor_resize_direction(
+                    cursor_position,
+                    window_size,
+                    Self::RESIZE_EDGE_THRESHOLD,
+                )
+            });
 
         if let Some(direction) = resize_direction.flatten() {
             let icon = Self::cursor_icon_for_resize(direction);
@@ -1463,7 +1476,8 @@ Fps: {:.2}
             }
         }
 
-        let request_window_drag = window_requests.request_window_drag;
+        let request_window_drag =
+            Self::supports_native_window_frame_controls() && window_requests.request_window_drag;
 
         let ime_bridge_update = args
             .ime_bridge_state
@@ -1669,6 +1683,9 @@ impl<F: Fn()> Renderer<F> {
     }
 
     fn apply_window_drag(&mut self, window: &Window) {
+        if !Self::supports_native_window_frame_controls() {
+            return;
+        }
         if let Err(err) = window.drag_window() {
             warn!("Failed to start window drag: {}", err);
         }
@@ -1793,7 +1810,8 @@ impl<F: Fn()> Renderer<F> {
         if matches!(
             event_content,
             CursorEventContent::Pressed(PressKeyEventType::Left)
-        ) && !self.config.window.decorations
+        ) && Self::supports_native_window_frame_controls()
+            && !self.config.window.decorations
             && let Some(app) = self.app.as_ref()
         {
             let window_size = app.size();

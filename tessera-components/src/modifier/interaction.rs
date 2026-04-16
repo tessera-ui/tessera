@@ -618,10 +618,12 @@ impl SemanticsModifierNode for SelectableSemanticsModifierNode {
     }
 }
 
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 struct WindowDragRegionPointerModifierNode {
     tap_recognizer: State<TapRecognizer>,
 }
 
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 impl PointerInputModifierNode for WindowDragRegionPointerModifierNode {
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
         let within_bounds = input
@@ -862,9 +864,15 @@ pub(crate) fn apply_selectable_modifier(base: Modifier, args: SelectableArgs) ->
         })
 }
 
+#[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
     let tap_recognizer = remember(TapRecognizer::default);
     base.push_pointer_input(WindowDragRegionPointerModifierNode { tap_recognizer })
+}
+
+#[cfg(any(target_family = "wasm", target_os = "android", target_os = "ios"))]
+pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
+    base
 }
 
 pub(crate) fn apply_block_touch_propagation_modifier(base: Modifier) -> Modifier {
