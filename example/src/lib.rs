@@ -8,6 +8,7 @@ use tessera_ui::{
 };
 
 use app::app;
+use pages::custom_shader::CustomShaderPackage;
 
 #[cfg(target_family = "wasm")]
 use tessera_ui::renderer::WebConfig;
@@ -28,6 +29,7 @@ pub fn run() -> EntryPoint {
         })
         .package(tessera_components::ComponentsPackage)
         .package(tessera_platform::PlatformPackage)
+        .package(CustomShaderPackage)
 }
 
 #[cfg(target_family = "wasm")]
