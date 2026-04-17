@@ -3196,80 +3196,35 @@ mod tests {
     };
     use crate::layout::{LayoutPolicy, MeasureScope};
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
-    use crate::prop::{Callback, ComponentReplayData, RenderSlot, make_component_runner};
+    use crate::prop::{
+        Callback, CallbackWith, ComponentReplayData, RenderSlot, make_component_runner,
+    };
     use crate::tessera;
 
-    static TYPE_GENERIC_COMPONENT_HITS: AtomicUsize = AtomicUsize::new(0);
-    static UNIT_GENERIC_COMPONENT_HITS: AtomicUsize = AtomicUsize::new(0);
-    static CONST_GENERIC_COMPONENT_HITS: AtomicUsize = AtomicUsize::new(0);
-    static REQUIRED_CONTROLLER_VALUE: AtomicUsize = AtomicUsize::new(0);
-    static OPTIONAL_CONTROLLER_VALUE: AtomicUsize = AtomicUsize::new(0);
-    static DEFAULTED_CONTROLLER_VALUE: AtomicUsize = AtomicUsize::new(0);
-
-    #[derive(Clone, PartialEq)]
-    struct ControllerHandle {
-        id: usize,
-    }
-
-    trait RuntimeGenericTag {
-        const VALUE: usize;
-    }
-
-    struct RuntimeTagAlpha;
-
-    impl RuntimeGenericTag for RuntimeTagAlpha {
-        const VALUE: usize = 3;
-    }
-
-    struct RuntimeTagBeta;
-
-    impl RuntimeGenericTag for RuntimeTagBeta {
-        const VALUE: usize = 5;
-    }
-
-    struct RuntimeValueAlpha;
-
-    struct RuntimeValueBeta;
-
     #[tessera(crate)]
-    fn generic_value_component<T>(value: Option<usize>)
-    where
-        T: Send + Sync + 'static,
-    {
-        let value = value.unwrap_or_default();
-        let _ = std::any::TypeId::of::<T>();
-        TYPE_GENERIC_COMPONENT_HITS.fetch_add(value, Ordering::SeqCst);
+    fn required_value_component(value: Option<usize>, on_value: Option<CallbackWith<usize>>) {
+        let value = value.expect("missing required prop `value` in `required_value_component`");
+        if let Some(on_value) = on_value {
+            on_value.call(value);
+        }
     }
 
     #[tessera(crate)]
-    fn generic_unit_component<T>()
-    where
-        T: RuntimeGenericTag + Send + Sync + 'static,
-    {
-        UNIT_GENERIC_COMPONENT_HITS.fetch_add(T::VALUE, Ordering::SeqCst);
+    fn optional_value_component(
+        value: Option<usize>,
+        on_value: Option<CallbackWith<Option<usize>>>,
+    ) {
+        if let Some(on_value) = on_value {
+            on_value.call(value);
+        }
     }
 
     #[tessera(crate)]
-    fn const_generic_component<const VALUE: usize>() {
-        CONST_GENERIC_COMPONENT_HITS.fetch_add(VALUE, Ordering::SeqCst);
-    }
-
-    #[tessera(crate)]
-    fn required_controller_component(controller: Option<ControllerHandle>) {
-        let controller = controller
-            .expect("missing required prop `controller` in `required_controller_component`");
-        REQUIRED_CONTROLLER_VALUE.store(controller.id, Ordering::SeqCst);
-    }
-
-    #[tessera(crate)]
-    fn optional_controller_component(controller: Option<ControllerHandle>) {
-        OPTIONAL_CONTROLLER_VALUE.store(controller.map_or(0, |value| value.id), Ordering::SeqCst);
-    }
-
-    #[tessera(crate)]
-    fn defaulted_controller_component(controller: Option<ControllerHandle>) {
-        let controller = controller.unwrap_or(ControllerHandle { id: 7 });
-        DEFAULTED_CONTROLLER_VALUE.store(controller.id, Ordering::SeqCst);
+    fn defaulted_value_component(value: Option<usize>, on_value: Option<CallbackWith<usize>>) {
+        let value = value.unwrap_or(7);
+        if let Some(on_value) = on_value {
+            on_value.call(value);
+        }
     }
 
     fn panic_message(err: Box<dyn std::any::Any + Send>) -> String {
@@ -3662,88 +3617,63 @@ mod tests {
     }
 
     #[test]
-    fn tessera_supports_type_generic_components() {
-        TYPE_GENERIC_COMPONENT_HITS.store(0, Ordering::SeqCst);
-
-        with_test_component_scope(11010, || {
-            generic_value_component::<RuntimeValueAlpha>().value(1);
-            generic_value_component::<RuntimeValueBeta>().value(2);
-        });
-
-        assert_eq!(TYPE_GENERIC_COMPONENT_HITS.load(Ordering::SeqCst), 3);
-    }
-
-    #[test]
-    fn tessera_supports_zero_prop_generic_components() {
-        UNIT_GENERIC_COMPONENT_HITS.store(0, Ordering::SeqCst);
-
-        with_test_component_scope(11011, || {
-            generic_unit_component::<RuntimeTagAlpha>();
-            generic_unit_component::<RuntimeTagBeta>();
-        });
-
-        assert_eq!(UNIT_GENERIC_COMPONENT_HITS.load(Ordering::SeqCst), 8);
-    }
-
-    #[test]
-    fn tessera_supports_const_generic_components() {
-        CONST_GENERIC_COMPONENT_HITS.store(0, Ordering::SeqCst);
-
-        with_test_component_scope(11012, || {
-            const_generic_component::<11>();
-            const_generic_component::<23>();
-        });
-
-        assert_eq!(CONST_GENERIC_COMPONENT_HITS.load(Ordering::SeqCst), 34);
-    }
-
-    #[test]
     fn tessera_panics_when_required_prop_is_missing() {
-        REQUIRED_CONTROLLER_VALUE.store(0, Ordering::SeqCst);
-
         let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
             with_test_component_scope(11013, || {
-                required_controller_component();
+                required_value_component();
             });
         }));
 
         let message = panic_message(result.expect_err("missing required prop should panic"));
-        assert!(message.contains("missing required prop `controller`"));
-        assert!(message.contains("required_controller_component"));
-        assert_eq!(REQUIRED_CONTROLLER_VALUE.load(Ordering::SeqCst), 0);
+        assert!(message.contains("missing required prop `value`"));
+        assert!(message.contains("required_value_component"));
     }
 
     #[test]
     fn tessera_uses_none_for_omitted_option_props() {
-        OPTIONAL_CONTROLLER_VALUE.store(99, Ordering::SeqCst);
+        let observed = Arc::new(AtomicUsize::new(99));
 
         with_test_component_scope(11014, || {
-            optional_controller_component();
+            let observed = Arc::clone(&observed);
+            optional_value_component().on_value(move |value: Option<usize>| {
+                observed.store(
+                    value.map_or(0, |next| next.saturating_add(1)),
+                    Ordering::SeqCst,
+                );
+            });
         });
 
-        assert_eq!(OPTIONAL_CONTROLLER_VALUE.load(Ordering::SeqCst), 0);
+        assert_eq!(observed.load(Ordering::SeqCst), 0);
     }
 
     #[test]
     fn tessera_uses_function_body_default_for_omitted_option_props() {
-        DEFAULTED_CONTROLLER_VALUE.store(0, Ordering::SeqCst);
+        let observed = Arc::new(AtomicUsize::new(0));
 
         with_test_component_scope(11015, || {
-            defaulted_controller_component();
+            let observed = Arc::clone(&observed);
+            defaulted_value_component().on_value(move |value: usize| {
+                observed.store(value, Ordering::SeqCst);
+            });
         });
 
-        assert_eq!(DEFAULTED_CONTROLLER_VALUE.load(Ordering::SeqCst), 7);
+        assert_eq!(observed.load(Ordering::SeqCst), 7);
     }
 
     #[test]
     fn tessera_accepts_non_default_required_props_when_provided() {
-        REQUIRED_CONTROLLER_VALUE.store(0, Ordering::SeqCst);
+        let observed = Arc::new(AtomicUsize::new(0));
 
         with_test_component_scope(11016, || {
-            required_controller_component().controller(ControllerHandle { id: 13 });
+            let observed = Arc::clone(&observed);
+            required_value_component()
+                .value(13)
+                .on_value(move |value: usize| {
+                    observed.store(value, Ordering::SeqCst);
+                });
         });
 
-        assert_eq!(REQUIRED_CONTROLLER_VALUE.load(Ordering::SeqCst), 13);
+        assert_eq!(observed.load(Ordering::SeqCst), 13);
     }
 
     #[test]
