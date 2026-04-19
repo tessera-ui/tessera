@@ -641,11 +641,11 @@ fn generate_helper_setter_methods(
             })
         }
         PropHelperKind::RenderSlotWith => {
-            let Some((arg_ty, ret_ty)) = parse_functor_signature(&value_ty, "RenderSlotWith")
+            let Some((arg_ty, _ret_ty)) = parse_functor_signature(&value_ty, "RenderSlotWith")
             else {
                 return Err(syn::Error::new_spanned(
                     &field.ty,
-                    "`#[prop(render_slot_with)]` requires `RenderSlotWith<T, R>` or `Option<RenderSlotWith<T, R>>`",
+                    "`#[prop(render_slot_with)]` requires `RenderSlotWith<T>` or `Option<RenderSlotWith<T>>`",
                 ));
             };
 
@@ -657,9 +657,9 @@ fn generate_helper_setter_methods(
             let shared_assign = quote! { Some(#ident.into()) };
 
             let callback_bound = if is_unit_type(&arg_ty) {
-                quote! { F: Fn() -> #ret_ty + Send + Sync + 'static }
+                quote! { F: Fn() + Send + Sync + 'static }
             } else {
-                quote! { F: Fn(#arg_ty) -> #ret_ty + Send + Sync + 'static }
+                quote! { F: Fn(#arg_ty) + Send + Sync + 'static }
             };
 
             Ok(quote! {
@@ -675,7 +675,7 @@ fn generate_helper_setter_methods(
                 #[doc = #shared_doc]
                 pub fn #shared_ident(
                     mut self,
-                    #ident: impl Into<#crate_path::RenderSlotWith<#arg_ty, #ret_ty>>,
+                    #ident: impl Into<#crate_path::RenderSlotWith<#arg_ty>>,
                 ) -> Self {
                     self.#field_path = #shared_assign;
                     self
@@ -752,7 +752,7 @@ fn generate_constructor_param_and_assignment(
                 let Some((arg_ty, _)) = parse_functor_signature(&value_ty, "RenderSlotWith") else {
                     return Err(syn::Error::new_spanned(
                         &field.ty,
-                        "`#[prop(render_slot_with)]` requires `RenderSlotWith<T, R>` or `Option<RenderSlotWith<T, R>>`",
+                        "`#[prop(render_slot_with)]` requires `RenderSlotWith<T>` or `Option<RenderSlotWith<T>>`",
                     ));
                 };
 

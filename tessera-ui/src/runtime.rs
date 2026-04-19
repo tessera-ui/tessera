@@ -3187,7 +3187,7 @@ where
 mod tests {
     use std::sync::{
         Arc,
-        atomic::{AtomicUsize, Ordering},
+        atomic::{AtomicU64, AtomicUsize, Ordering},
     };
 
     use super::*;
@@ -3683,15 +3683,23 @@ mod tests {
         reset_render_slot_read_dependencies();
         reset_build_invalidations();
 
-        begin_recompose_slot_epoch();
-        let first = with_test_component_scope(11002, || RenderSlot::new(|| {}));
+        let reader_boundary_key = Arc::new(AtomicU64::new(0));
 
-        let reader_instance_key = with_test_component_scope(11003, || {
-            let instance_key = current_replay_boundary_instance_key_from_scope()
-                .expect("reader must have instance key");
-            first.render();
-            instance_key
+        begin_recompose_slot_epoch();
+        let first = with_test_component_scope(11002, || {
+            let reader_boundary_key = Arc::clone(&reader_boundary_key);
+            RenderSlot::new(move || {
+                let instance_key = current_replay_boundary_instance_key_from_scope()
+                    .expect("slot render must run inside replay boundary");
+                reader_boundary_key.store(instance_key, Ordering::SeqCst);
+            })
         });
+
+        with_test_component_scope(11003, || {
+            first.render();
+        });
+        let reader_instance_key = reader_boundary_key.load(Ordering::SeqCst);
+        assert!(reader_instance_key != 0);
         seed_previous_replay_snapshot(reader_instance_key);
 
         assert!(!has_pending_build_invalidations());
@@ -3716,15 +3724,23 @@ mod tests {
         reset_build_invalidations();
         reset_execution_context();
 
-        begin_recompose_slot_epoch();
-        let first = with_test_component_scope(12002, || RenderSlot::new(|| {}));
+        let reader_boundary_key = Arc::new(AtomicU64::new(0));
 
-        let reader_instance_key = with_test_component_scope(12003, || {
-            let instance_key = current_replay_boundary_instance_key_from_scope()
-                .expect("reader must have instance key");
-            first.render();
-            instance_key
+        begin_recompose_slot_epoch();
+        let first = with_test_component_scope(12002, || {
+            let reader_boundary_key = Arc::clone(&reader_boundary_key);
+            RenderSlot::new(move || {
+                let instance_key = current_replay_boundary_instance_key_from_scope()
+                    .expect("slot render must run inside replay boundary");
+                reader_boundary_key.store(instance_key, Ordering::SeqCst);
+            })
         });
+
+        with_test_component_scope(12003, || {
+            first.render();
+        });
+        let reader_instance_key = reader_boundary_key.load(Ordering::SeqCst);
+        assert!(reader_instance_key != 0);
         seed_previous_replay_snapshot(reader_instance_key);
 
         assert!(!has_pending_build_invalidations());

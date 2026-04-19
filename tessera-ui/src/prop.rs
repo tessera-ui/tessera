@@ -5,13 +5,16 @@
 //! Internal prop comparison and replay support used by generated component
 //! props.
 
-use std::{any::Any, marker::PhantomData, ptr, sync::Arc};
+use std::{any::Any, cell::RefCell, marker::PhantomData, ptr, sync::Arc};
 
-use crate::runtime::{
-    FunctorHandle, invoke_callback_handle, invoke_callback_with_handle, invoke_render_slot_handle,
-    invoke_render_slot_with_handle, remember_callback_handle, remember_callback_with_handle,
-    remember_render_slot_handle, remember_render_slot_with_handle,
-    track_render_slot_read_dependency,
+use crate::{
+    runtime::{
+        FunctorHandle, invoke_callback_handle, invoke_callback_with_handle,
+        invoke_render_slot_handle, invoke_render_slot_with_handle, remember_callback_handle,
+        remember_callback_with_handle, remember_render_slot_handle,
+        remember_render_slot_with_handle, track_render_slot_read_dependency,
+    },
+    tessera,
 };
 
 /// Stable, comparable slot handle for any shared callable trait object.
@@ -286,20 +289,21 @@ impl RenderSlot {
         }
     }
 
-    fn invoke(&self) {
-        match &self.repr {
-            RenderSlotRepr::Empty => {}
-            RenderSlotRepr::Handle(handle) => invoke_render_slot_handle(*handle),
-        }
-    }
-
     /// Execute the render closure.
     pub fn render(&self) {
-        if let RenderSlotRepr::Handle(handle) = self.repr {
-            track_render_slot_read_dependency(handle);
+        match self.repr {
+            RenderSlotRepr::Empty => {}
+            RenderSlotRepr::Handle(handle) => {
+                render_slot_boundary(handle);
+            }
         }
-        self.invoke();
     }
+}
+
+#[tessera(crate)]
+fn render_slot_boundary(handle: FunctorHandle) {
+    track_render_slot_read_dependency(handle);
+    invoke_render_slot_handle(handle);
 }
 
 impl<F> From<F> for RenderSlot
@@ -344,6 +348,11 @@ pub struct RenderSlotWith<T> {
     marker: PhantomData<fn(T)>,
 }
 
+thread_local! {
+    static RENDER_SLOT_WITH_PENDING_VALUE: RefCell<Option<Box<dyn Any>>> =
+        const { RefCell::new(None) };
+}
+
 impl<T> RenderSlotWith<T> {
     /// Create a render slot from a closure.
     ///
@@ -363,11 +372,38 @@ impl<T> RenderSlotWith<T> {
     /// Execute the render closure with an input value.
     pub fn render(&self, value: T)
     where
-        T: 'static,
+        T: Send + Sync + 'static,
     {
-        track_render_slot_read_dependency(self.handle);
-        invoke_render_slot_with_handle(self.handle, value)
+        RENDER_SLOT_WITH_PENDING_VALUE.with(|slot| {
+            let replaced = slot.borrow_mut().replace(Box::new(value));
+            debug_assert!(
+                replaced.is_none(),
+                "render slot with pending value should be empty before render"
+            );
+        });
+        render_slot_with_boundary::<T>(self.handle);
     }
+}
+
+#[tessera(crate)]
+fn render_slot_with_boundary<T>(handle: FunctorHandle)
+where
+    T: Send + Sync + 'static,
+{
+    let value = RENDER_SLOT_WITH_PENDING_VALUE.with(|slot| {
+        slot.borrow_mut()
+            .take()
+            .expect("render_slot_with_boundary requires a pending value")
+            .downcast::<T>()
+            .unwrap_or_else(|_| {
+                panic!(
+                    "render_slot_with_boundary value type mismatch: expected {}",
+                    std::any::type_name::<T>()
+                )
+            })
+    });
+    track_render_slot_read_dependency(handle);
+    invoke_render_slot_with_handle(handle, *value)
 }
 
 impl<T, F> From<F> for RenderSlotWith<T>

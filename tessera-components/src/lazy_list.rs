@@ -11,8 +11,8 @@ use std::{
 };
 
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, ComputedData, Constraint, Dp, FocusDirection,
-    LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, State, key,
+    AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusDirection, LayoutResult,
+    MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlotWith, State, key,
     layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     remember, tessera,
@@ -710,29 +710,10 @@ fn lazy_list_view(
             for child in &children {
                 let child = child.clone();
                 key(child.key_hash, || {
-                    lazy_list_item_host()
-                        .builder_handle_value(child.builder)
-                        .local_index(child.local_index);
+                    child.builder.render(child.local_index);
                 });
             }
         });
-}
-
-#[tessera]
-fn lazy_list_item_host(
-    #[prop(skip_setter)] builder_handle: Option<CallbackWith<usize, ()>>,
-    local_index: Option<usize>,
-) {
-    let builder_handle = builder_handle.unwrap_or_else(CallbackWith::default_value);
-    let local_index = local_index.unwrap_or(0);
-    builder_handle.call(local_index);
-}
-
-impl LazyListItemHostBuilder {
-    fn builder_handle_value(mut self, builder_handle: CallbackWith<usize, ()>) -> Self {
-        self.props.builder_handle = Some(builder_handle);
-        self
-    }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
@@ -1278,7 +1259,7 @@ impl LazySlot {
     {
         Self::Items(LazyItemsSlot {
             count,
-            builder: CallbackWith::new(builder),
+            builder: RenderSlotWith::new(builder),
             key_provider,
         })
     }
@@ -1288,7 +1269,9 @@ impl LazySlot {
         F: Fn() + Send + Sync + 'static,
     {
         Self::Sticky(LazyStickySlot {
-            builder: Callback::new(builder),
+            builder: RenderSlotWith::new(move |_| {
+                builder();
+            }),
             key_hash,
         })
     }
@@ -1304,13 +1287,13 @@ impl LazySlot {
 #[derive(Clone, PartialEq)]
 struct LazyItemsSlot {
     count: usize,
-    builder: CallbackWith<usize, ()>,
+    builder: RenderSlotWith<usize>,
     key_provider: Option<CallbackWith<usize, u64>>,
 }
 
 #[derive(Clone, PartialEq)]
 struct LazyStickySlot {
-    builder: Callback,
+    builder: RenderSlotWith<usize>,
     key_hash: Option<u64>,
 }
 
@@ -1384,17 +1367,7 @@ impl LazySlotPlan {
         };
         let (builder, local_index) = match resolved {
             ResolvedSlot::Items(slot, local_index) => (slot.builder, local_index),
-            ResolvedSlot::Sticky(slot) => {
-                let builder = slot.builder;
-                (
-                    {
-                        CallbackWith::new(move |_| {
-                            builder.call();
-                        })
-                    },
-                    0,
-                )
-            }
+            ResolvedSlot::Sticky(slot) => (slot.builder, 0),
         };
         Some(VisibleChild {
             item_index: index,
@@ -1445,7 +1418,7 @@ struct LazySlotEntry {
 struct VisibleChild {
     item_index: usize,
     local_index: usize,
-    builder: CallbackWith<usize, ()>,
+    builder: RenderSlotWith<usize>,
     key_hash: u64,
 }
 
@@ -1972,7 +1945,7 @@ mod tests {
     }
 
     #[test]
-    fn lazy_column_does_not_rebuild_visible_items_when_scroll_stays_in_same_window() {
+    fn lazy_column_rebuilds_visible_items_when_item_slot_updates() {
         LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.store(0, Ordering::Relaxed);
 
         let mut session = tessera_ui::testing::__private::start_layout_test_session(
@@ -1988,10 +1961,10 @@ mod tests {
 
         let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 16_666_667);
         let second_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
-        assert_eq!(second_builds, first_builds);
+        assert!(second_builds > first_builds);
 
         let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 33_333_334);
         let third_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
-        assert_eq!(third_builds, first_builds);
+        assert!(third_builds > second_builds);
     }
 }
