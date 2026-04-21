@@ -5,7 +5,7 @@
 //! Internal prop comparison and replay support used by generated component
 //! props.
 
-use std::{any::Any, cell::RefCell, marker::PhantomData, ptr, sync::Arc};
+use std::{any::Any, marker::PhantomData, ptr, sync::Arc};
 
 use crate::{
     runtime::{
@@ -348,11 +348,6 @@ pub struct RenderSlotWith<T> {
     marker: PhantomData<fn(T)>,
 }
 
-thread_local! {
-    static RENDER_SLOT_WITH_PENDING_VALUE: RefCell<Option<Box<dyn Any>>> =
-        const { RefCell::new(None) };
-}
-
 impl<T> RenderSlotWith<T> {
     /// Create a render slot from a closure.
     ///
@@ -372,38 +367,19 @@ impl<T> RenderSlotWith<T> {
     /// Execute the render closure with an input value.
     pub fn render(&self, value: T)
     where
-        T: Send + Sync + 'static,
+        T: Clone + PartialEq + Send + Sync + 'static,
     {
-        RENDER_SLOT_WITH_PENDING_VALUE.with(|slot| {
-            let replaced = slot.borrow_mut().replace(Box::new(value));
-            debug_assert!(
-                replaced.is_none(),
-                "render slot with pending value should be empty before render"
-            );
-        });
-        render_slot_with_boundary::<T>(self.handle);
+        render_slot_with_boundary(self.handle, value);
     }
 }
 
 #[tessera(crate)]
-fn render_slot_with_boundary<T>(handle: FunctorHandle)
+fn render_slot_with_boundary<T>(handle: FunctorHandle, value: T)
 where
-    T: Send + Sync + 'static,
+    T: Clone + PartialEq + Send + Sync + 'static,
 {
-    let value = RENDER_SLOT_WITH_PENDING_VALUE.with(|slot| {
-        slot.borrow_mut()
-            .take()
-            .expect("render_slot_with_boundary requires a pending value")
-            .downcast::<T>()
-            .unwrap_or_else(|_| {
-                panic!(
-                    "render_slot_with_boundary value type mismatch: expected {}",
-                    std::any::type_name::<T>()
-                )
-            })
-    });
     track_render_slot_read_dependency(handle);
-    invoke_render_slot_with_handle(handle, *value)
+    invoke_render_slot_with_handle(handle, value)
 }
 
 impl<T, F> From<F> for RenderSlotWith<T>
