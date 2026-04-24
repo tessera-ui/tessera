@@ -105,31 +105,6 @@ impl CheckboxController {
     }
 }
 
-impl CheckboxInnerBuilder {
-    fn on_toggle_option_shared(mut self, on_toggle: Option<CallbackWith<bool, ()>>) -> Self {
-        self.props.on_toggle = on_toggle;
-        self
-    }
-
-    fn accessibility_label_option(mut self, accessibility_label: Option<String>) -> Self {
-        self.props.accessibility_label = accessibility_label;
-        self
-    }
-
-    fn accessibility_description_option(
-        mut self,
-        accessibility_description: Option<String>,
-    ) -> Self {
-        self.props.accessibility_description = accessibility_description;
-        self
-    }
-
-    fn controller_option(mut self, controller: Option<State<CheckboxController>>) -> Self {
-        self.props.controller = controller;
-        self
-    }
-}
-
 // Animation duration for the checkmark stroke (milliseconds)
 const CHECKMARK_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 
@@ -267,9 +242,8 @@ pub fn checkbox(
     let disabled_checkmark_color = disabled_checkmark_color.unwrap_or(scheme.surface);
     let controller = controller.unwrap_or_else(|| remember(|| CheckboxController::new(checked)));
 
-    checkbox_inner()
+    let mut builder = checkbox_inner()
         .modifier(modifier)
-        .on_toggle_option_shared(on_toggle)
         .size(size)
         .color(color)
         .checked_color(checked_color)
@@ -279,9 +253,17 @@ pub fn checkbox(
         .disabled(disabled)
         .disabled_color(disabled_color)
         .disabled_checkmark_color(disabled_checkmark_color)
-        .accessibility_label_option(accessibility_label)
-        .accessibility_description_option(accessibility_description)
-        .controller_option(Some(controller));
+        .controller(controller);
+    if let Some(on_toggle) = on_toggle {
+        builder = builder.on_toggle_shared(on_toggle);
+    }
+    if let Some(accessibility_label) = accessibility_label {
+        builder = builder.accessibility_label(accessibility_label);
+    }
+    if let Some(accessibility_description) = accessibility_description {
+        builder = builder.accessibility_description(accessibility_description);
+    }
+    drop(builder);
 }
 
 #[tessera]
@@ -403,7 +385,7 @@ fn checkbox_inner(
                 .modifier(Modifier::new().size(size, size))
                 .shape(shape)
                 .style(checkbox_style)
-                .with_child(move || {
+                .child(move || {
                     render_checkmark.render();
                 });
         })
@@ -438,7 +420,7 @@ fn checkbox_inner(
                     .ripple_color(state_layer_base)
                     .interaction_state(state);
                 builder.set_ripple_state(ripple_state);
-                builder.with_child(move || {
+                builder.child(move || {
                     render_checkbox_container.render();
                 });
             } else {
@@ -456,7 +438,7 @@ fn checkbox_inner(
                     .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
                     .ripple_color(state_layer_base);
                 builder.set_ripple_state(ripple_state);
-                builder.with_child(move || {
+                builder.child(move || {
                     render_checkbox_container.render();
                 });
             }

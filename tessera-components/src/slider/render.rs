@@ -17,7 +17,7 @@ fn render_surface(
         .modifier(modifier)
         .style(style.into())
         .shape(shape)
-        .with_child(|| {});
+        .child(|| {});
 }
 
 pub(super) fn render_active_segment(layout: SliderLayout, colors: &SliderColors) {

@@ -53,67 +53,6 @@ pub enum SideSheetPosition {
     End,
 }
 
-impl SideSheetProviderInnerBuilder {
-    fn on_close_request_handle(mut self, on_close_request: Callback) -> Self {
-        self.props.on_close_request = Some(on_close_request);
-        self
-    }
-
-    fn controller_state(mut self, controller: Option<State<SideSheetController>>) -> Self {
-        self.props.controller = controller;
-        self
-    }
-
-    fn main_content_slot(mut self, main_content: RenderSlot) -> Self {
-        self.props.main_content = Some(main_content);
-        self
-    }
-
-    fn side_sheet_content_slot(mut self, side_sheet_content: RenderSlot) -> Self {
-        self.props.side_sheet_content = Some(side_sheet_content);
-        self
-    }
-}
-
-impl SideSheetProviderRenderBuilder {
-    fn on_close_request_handle(mut self, on_close_request: Callback) -> Self {
-        self.props.on_close_request = Some(on_close_request);
-        self
-    }
-
-    fn controller_state(mut self, controller: State<SideSheetController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
-    fn main_content_slot(mut self, main_content: RenderSlot) -> Self {
-        self.props.main_content = Some(main_content);
-        self
-    }
-
-    fn side_sheet_content_slot(mut self, side_sheet_content: RenderSlot) -> Self {
-        self.props.side_sheet_content = Some(side_sheet_content);
-        self
-    }
-}
-
-impl SideSheetContentWrapperBuilder {
-    fn controller_state(mut self, controller: State<SideSheetController>) -> Self {
-        self.props.controller = Some(controller);
-        self
-    }
-
-    fn on_close_request_handle(mut self, on_close_request: Callback) -> Self {
-        self.props.on_close_request = Some(on_close_request);
-        self
-    }
-
-    fn content_slot(mut self, content: RenderSlot) -> Self {
-        self.props.content = Some(content);
-        self
-    }
-}
-
 /// Controller for side sheet providers, managing open/closed state.
 ///
 /// This controller can be created by the application and passed to the
@@ -327,7 +266,7 @@ fn render_modal_scrim(on_close_request: Callback, progress: f32, is_open: bool) 
         .on_click_shared(on_close_request)
         .modifier(Modifier::new().fill_max_size())
         .block_input(true)
-        .with_child(|| {});
+        .child(|| {});
 }
 
 /// Render scrim according to configured type.
@@ -343,7 +282,7 @@ fn render_scrim(
             surface()
                 .style(Color::TRANSPARENT.into())
                 .modifier(Modifier::new().fill_max_size())
-                .with_child(|| {});
+                .child(|| {});
         }
     }
 }
@@ -540,14 +479,17 @@ pub fn modal_side_sheet_provider(
 ) {
     let position = position.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
-    side_sheet_provider_inner()
+    let mut builder = side_sheet_provider_inner()
         .sheet_type(SideSheetType::Modal)
-        .on_close_request_handle(on_close_request.unwrap_or_default())
+        .on_close_request_shared(on_close_request.unwrap_or_default())
         .position(position)
         .is_open(is_open)
-        .controller_state(controller)
-        .main_content_slot(main_content.unwrap_or_else(RenderSlot::empty))
-        .side_sheet_content_slot(side_sheet_content.unwrap_or_else(RenderSlot::empty));
+        .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
+        .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty));
+    if let Some(controller) = controller {
+        builder = builder.controller(controller);
+    }
+    drop(builder);
 }
 
 /// # standard_side_sheet_provider
@@ -599,14 +541,17 @@ pub fn standard_side_sheet_provider(
 ) {
     let position = position.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
-    side_sheet_provider_inner()
+    let mut builder = side_sheet_provider_inner()
         .sheet_type(SideSheetType::Standard)
-        .on_close_request_handle(on_close_request.unwrap_or_default())
+        .on_close_request_shared(on_close_request.unwrap_or_default())
         .position(position)
         .is_open(is_open)
-        .controller_state(controller)
-        .main_content_slot(main_content.unwrap_or_else(RenderSlot::empty))
-        .side_sheet_content_slot(side_sheet_content.unwrap_or_else(RenderSlot::empty));
+        .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
+        .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty));
+    if let Some(controller) = controller {
+        builder = builder.controller(controller);
+    }
+    drop(builder);
 }
 
 #[tessera]
@@ -641,11 +586,11 @@ fn side_sheet_provider_inner(
 
     side_sheet_provider_render()
         .sheet_type(sheet_type)
-        .on_close_request_handle(on_close_request)
+        .on_close_request_shared(on_close_request)
         .position(position)
-        .controller_state(controller)
-        .main_content_slot(main_content)
-        .side_sheet_content_slot(side_sheet_content);
+        .controller(controller)
+        .main_content_shared(main_content)
+        .side_sheet_content_shared(side_sheet_content);
 }
 
 #[tessera]
@@ -653,7 +598,7 @@ fn side_sheet_provider_render(
     sheet_type: Option<SideSheetType>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
-    #[prop(skip_setter)] controller: Option<State<SideSheetController>>,
+    controller: Option<State<SideSheetController>>,
     main_content: Option<RenderSlot>,
     side_sheet_content: Option<RenderSlot>,
 ) {
@@ -714,10 +659,10 @@ fn side_sheet_provider_render(
                 side_sheet_content_wrapper()
                     .sheet_type(sheet_type)
                     .position(position)
-                    .controller_state(controller)
-                    .on_close_request_handle(on_close_request)
+                    .controller(controller)
+                    .on_close_request_shared(on_close_request)
                     .just_opened(just_opened)
-                    .content_slot(side_sheet_content);
+                    .content_shared(side_sheet_content);
             }
         });
 }
@@ -726,7 +671,7 @@ fn side_sheet_provider_render(
 fn side_sheet_content_wrapper(
     sheet_type: Option<SideSheetType>,
     position: Option<SideSheetPosition>,
-    #[prop(skip_setter)] controller: Option<State<SideSheetController>>,
+    controller: Option<State<SideSheetController>>,
     on_close_request: Option<Callback>,
     just_opened: Option<bool>,
     content: Option<RenderSlot>,
@@ -771,7 +716,7 @@ fn side_sheet_content_wrapper(
                 .shape(sheet_shape(position))
                 .modifier(Modifier::new().fill_max_height())
                 .block_input(true)
-                .with_child(move || {
+                .child(move || {
                     let content = content;
                     let parent_nested_scroll =
                         use_context::<NestedScrollConnection>().map(|context| context.get());
@@ -799,7 +744,7 @@ fn side_sheet_content_wrapper(
                 .shape(sheet_shape(position))
                 .modifier(Modifier::new().fill_max_height())
                 .block_input(true)
-                .with_child(move || {
+                .child(move || {
                     let content = content;
                     let parent_nested_scroll =
                         use_context::<NestedScrollConnection>().map(|context| context.get());

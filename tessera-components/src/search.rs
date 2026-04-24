@@ -665,7 +665,7 @@ fn render_results_surface(args: &SearchResultsSurfaceArgs) {
         .tonal_elevation(args.tonal_elevation)
         .block_input(true)
         .elevation(args.shadow_elevation)
-        .with_child(move || {
+        .child(move || {
             let content = content;
             column().children(move || {
                 horizontal_divider().color(divider_color);

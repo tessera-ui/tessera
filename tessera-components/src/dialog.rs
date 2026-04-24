@@ -75,35 +75,6 @@ pub enum DialogStyle {
     Material,
 }
 
-impl DialogProviderRenderBuilder {
-    fn on_close_request_handle(mut self, on_close_request: Callback) -> Self {
-        self.props.on_close_request = Some(on_close_request);
-        self
-    }
-
-    fn main_content_slot(mut self, main_content: RenderSlot) -> Self {
-        self.props.main_content = Some(main_content);
-        self
-    }
-
-    fn dialog_content_slot(mut self, dialog_content: RenderSlot) -> Self {
-        self.props.dialog_content = Some(dialog_content);
-        self
-    }
-}
-
-impl DialogContentWrapperBuilder {
-    fn on_close_request_handle(mut self, on_close_request: Callback) -> Self {
-        self.props.on_close_request = Some(on_close_request);
-        self
-    }
-
-    fn content_slot(mut self, content: RenderSlot) -> Self {
-        self.props.content = Some(content);
-        self
-    }
-}
-
 /// Controller for [`dialog_provider`], controlling visibility and animation.
 pub struct DialogController {
     is_open: bool,
@@ -199,7 +170,7 @@ fn render_scrim(style: DialogStyle, on_close_request: Callback, is_open: bool, p
                     bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
                 })
                 .noise_amount(0.0)
-                .with_child(|| {});
+                .child(|| {});
         }
         DialogStyle::Material => {
             let alpha = scrim_alpha_for(progress, is_open);
@@ -213,7 +184,7 @@ fn render_scrim(style: DialogStyle, on_close_request: Callback, is_open: bool, p
                 .on_click_shared(on_close_request)
                 .modifier(Modifier::new().fill_max_size())
                 .block_input(true)
-                .with_child(|| {});
+                .child(|| {});
         }
     }
 }
@@ -292,7 +263,7 @@ fn dialog_content_wrapper(
                                 .constrain(Some(AxisConstraint::NONE), Some(AxisConstraint::NONE))
                                 .padding_all(Dp(24.0)),
                         )
-                        .with_child(move || match style {
+                        .child(move || match style {
                             DialogStyle::Glass => {
                                 let content = content;
                                 fluid_glass()
@@ -306,7 +277,7 @@ fn dialog_content_wrapper(
                                     })
                                     .block_input(true)
                                     .padding(padding)
-                                    .with_child(move || {
+                                    .child(move || {
                                         content.render();
                                     });
                             }
@@ -329,7 +300,7 @@ fn dialog_content_wrapper(
                                         bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
                                     })
                                     .block_input(true)
-                                    .with_child(move || {
+                                    .child(move || {
                                         let content = content;
                                         layout()
                                             .modifier(Modifier::new().padding_all(padding))
@@ -447,12 +418,12 @@ pub fn dialog_provider(
         }
     }
     dialog_provider_render()
-        .on_close_request_handle(on_close_request)
+        .on_close_request_shared(on_close_request)
         .padding(padding)
         .style(style)
         .controller(controller)
-        .main_content_slot(main_content)
-        .dialog_content_slot(dialog_content);
+        .main_content_shared(main_content)
+        .dialog_content_shared(dialog_content);
 }
 
 #[tessera]
@@ -521,8 +492,8 @@ fn dialog_provider_render(
             .alpha(content_alpha)
             .padding(padding)
             .just_opened(just_opened)
-            .on_close_request_handle(on_close_request)
-            .content_slot(dialog_content);
+            .on_close_request_shared(on_close_request)
+            .content_shared(dialog_content);
     }
 }
 

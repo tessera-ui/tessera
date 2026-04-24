@@ -544,7 +544,7 @@ pub fn menu_provider(
                 })
                 .modifier(Modifier::new().fill_max_size())
                 .block_input(true)
-                .with_child(|| {});
+                .child(|| {});
 
             menu_panel()
                 .provider(provider_args.clone())
@@ -641,7 +641,7 @@ fn menu_panel(
             .accessibility_role(Role::Menu)
             .block_input(true)
             .elevation(provider.elevation)
-            .with_child(move || {
+            .child(move || {
                 let menu_content = menu_content;
                 provide_context(
                     || controller,
@@ -1012,7 +1012,7 @@ fn menu_item_surface(
         }
 
         let item_for_child = item.clone();
-        surface_args.with_child(move || {
+        surface_args.child(move || {
             let item_for_row = item_for_child.clone();
             row()
                 .modifier(Modifier::new().fill_max_width().constrain(

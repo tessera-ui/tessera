@@ -571,11 +571,6 @@ pub fn card(
 }
 
 impl CardBuilder {
-    /// Creates props from base args and a content render function.
-    pub fn with_content(self, content: impl Fn() + Send + Sync + 'static) -> Self {
-        self.content(content)
-    }
-
     /// Applies the filled card preset.
     pub fn filled(self) -> Self {
         self.variant(CardVariant::Filled)

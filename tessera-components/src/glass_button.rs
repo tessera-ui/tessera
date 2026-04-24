@@ -32,11 +32,6 @@ struct GlassButtonResolvedArgs {
 }
 
 impl GlassButtonBuilder {
-    /// Sets the child content slot.
-    pub fn with_child(self, child: impl Fn() + Send + Sync + 'static) -> Self {
-        self.child(child)
-    }
-
     /// Applies the primary glass button preset.
     pub fn primary(self) -> Self {
         self.tint_color(Color::new(0.2, 0.5, 0.8, 0.2))
@@ -100,7 +95,7 @@ impl GlassButtonBuilder {
 ///     glass_button()
 ///         .primary()
 ///         .on_click(|| println!("Button clicked!"))
-///         .with_child(|| {
+///         .child(|| {
 ///             text().content("Click Me");
 ///         });
 /// }

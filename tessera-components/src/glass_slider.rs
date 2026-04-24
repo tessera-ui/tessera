@@ -386,7 +386,7 @@ fn glass_slider_progress_fill(
         .tint_color(tint_color)
         .blur_radius(blur_radius)
         .shape(Shape::CAPSULE)
-        .with_child(|| {});
+        .child(|| {});
 
     let clamped = value.clamp(0.0, 1.0);
     layout().layout_policy(GlassSliderFillLayout { value: clamped });
@@ -479,7 +479,7 @@ fn render_glass_slider(args: GlassSliderConfig) {
                 .shape(Shape::CAPSULE)
                 .border(GlassBorder::new(args.track_border_width.into()))
                 .padding(args.track_border_width)
-                .with_child(move || {
+                .child(move || {
                     glass_slider_progress_fill()
                         .value(args.value)
                         .tint_color(args.progress_tint_color)

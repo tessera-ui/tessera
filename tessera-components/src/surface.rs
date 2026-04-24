@@ -126,12 +126,6 @@ impl From<Color> for SurfaceStyle {
 }
 
 impl SurfaceBuilder {
-    /// Creates props from base args and a child render function.
-    pub fn with_child(mut self, child: impl Fn() + Send + Sync + 'static) -> Self {
-        self.props.child = Some(RenderSlot::new(child));
-        self
-    }
-
     pub(crate) fn set_ripple_state(&mut self, state: Option<State<RippleState>>) {
         self.props.ripple_state = state;
     }

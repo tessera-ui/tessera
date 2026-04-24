@@ -694,7 +694,7 @@ fn render_text_field(
         let surface_args = create_surface_args(&editor, &controller)
             .content_color(content_color)
             .block_input(!args.enabled);
-        surface_args.with_child(move || {
+        surface_args.child(move || {
             let leading_icon = leading_icon;
             let prefix = prefix;
             let core_args = core_args.clone();

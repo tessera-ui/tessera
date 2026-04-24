@@ -291,7 +291,7 @@ pub fn pull_refresh_indicator(
         .style(background_color.into())
         .elevation(elevation.unwrap_or(PullRefreshDefaults::INDICATOR_ELEVATION))
         .content_alignment(Alignment::Center)
-        .with_child(move || {
+        .child(move || {
             if !refreshing {
                 circular_progress_indicator()
                     .diameter(content_size)

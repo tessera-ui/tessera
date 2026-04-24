@@ -1129,19 +1129,19 @@ fn render_tabs(args: TabsConfig, controller: State<TabsController>, content: Ren
                 .style(args.container_color.into())
                 .modifier(Modifier::new().fill_max_size())
                 .shape(Shape::RECTANGLE)
-                .with_child(|| {});
+                .child(|| {});
 
             surface()
                 .style(args.divider_color.into())
                 .modifier(Modifier::new().fill_max_size())
                 .shape(Shape::RECTANGLE)
-                .with_child(|| {});
+                .child(|| {});
 
             surface()
                 .style(args.indicator_color.into())
                 .modifier(Modifier::new().fill_max_size())
                 .shape(indicator_shape)
-                .with_child(|| {});
+                .child(|| {});
 
             provide_context(
                 || TabsCompositionContext {
@@ -1212,7 +1212,7 @@ fn tab_trigger(args: TabTriggerArgs) {
                     args.controller
                         .with_mut(|state| state.set_active_tab(args.index));
                 })
-                .with_child(move || {
+                .child(move || {
                     render_tab_title(args.title.clone(), args.tab_padding);
                 });
         }
@@ -1232,7 +1232,7 @@ fn tab_trigger(args: TabTriggerArgs) {
                     args.controller
                         .with_mut(|state| state.set_active_tab(args.index));
                 })
-                .with_child(move || {
+                .child(move || {
                     render_tab_title(args.title.clone(), args.tab_padding);
                 });
         }
@@ -1249,7 +1249,7 @@ fn tab_trigger(args: TabTriggerArgs) {
                 .accessibility_role(tessera_ui::accesskit::Role::Tab)
                 .accessibility_focusable(true)
                 .accessibility_label(label)
-                .with_child(move || {
+                .child(move || {
                     render_tab_title(args.title.clone(), args.tab_padding);
                 });
         }
@@ -1265,7 +1265,7 @@ fn tab_trigger(args: TabTriggerArgs) {
                 .focus_requester(args.focus_requester)
                 .accessibility_role(tessera_ui::accesskit::Role::Tab)
                 .accessibility_focusable(true)
-                .with_child(move || {
+                .child(move || {
                     render_tab_title(args.title.clone(), args.tab_padding);
                 });
         }

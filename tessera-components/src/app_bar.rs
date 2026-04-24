@@ -132,7 +132,7 @@ pub fn app_bar(
                 .fill_max_width()
                 .height(AppBarDefaults::TOP_APP_BAR_HEIGHT),
         )
-        .with_child(move || {
+        .child(move || {
             let content = content;
             row()
                 .modifier(Modifier::new().fill_max_size().padding(content_padding))

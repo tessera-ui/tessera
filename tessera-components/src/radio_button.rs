@@ -465,7 +465,7 @@ fn radio_button_inner(
                 builder = builder.interaction_state(state);
             }
             builder.set_ripple_state(ripple_state);
-            builder.with_child({
+            builder.child({
                 move || {
                     boxed()
                         .alignment(Alignment::Center)
@@ -478,7 +478,7 @@ fn radio_button_inner(
                                     color: ring_color,
                                     width: stroke_width,
                                 })
-                                .with_child({
+                                .child({
                                     move || {
                                         let animated_size =
                                             (dot_size.to_px().0 as f32 * eased_progress).round()
@@ -501,7 +501,7 @@ fn radio_button_inner(
                                                         .style(SurfaceStyle::Filled {
                                                             color: active_dot_color,
                                                         })
-                                                        .with_child(|| {});
+                                                        .child(|| {});
                                                 });
                                         }
                                     }

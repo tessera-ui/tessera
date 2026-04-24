@@ -145,7 +145,7 @@ fn navigation_bar_item_view_content(
                 ))
                 .show_state_layer(false)
                 .show_ripple(false)
-                .with_child(|| {});
+                .child(|| {});
 
             surface()
                 .style(SurfaceStyle::Filled {
@@ -156,7 +156,7 @@ fn navigation_bar_item_view_content(
                 .enabled(true)
                 .interaction_state(interaction_state)
                 .ripple_color(ripple_color)
-                .with_child(move || {
+                .child(move || {
                     surface()
                         .style(SurfaceStyle::Filled {
                             color: Color::TRANSPARENT,
@@ -167,7 +167,7 @@ fn navigation_bar_item_view_content(
                         .ripple_color(ripple_color)
                         .show_state_layer(false)
                         .ripple_state(ripple_state)
-                        .with_child(|| {});
+                        .child(|| {});
                 });
 
             if let Some(draw_icon) = item.icon {
@@ -557,7 +557,7 @@ pub fn navigation_bar(
                 .style(scheme.surface_container.into())
                 .elevation(Dp(3.0))
                 .block_input(true)
-                .with_child(move || {
+                .child(move || {
                     let composition = composition.clone();
                     let separator_color = scheme.outline_variant.with_alpha(0.12);
                     column()
@@ -570,7 +570,7 @@ pub fn navigation_bar(
                                         Modifier::new().fill_max_width().height(DIVIDER_HEIGHT),
                                     )
                                     .style(separator_color.into())
-                                    .with_child(|| {});
+                                    .child(|| {});
                             };
 
                             let content_context = composition.clone();

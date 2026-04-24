@@ -328,7 +328,7 @@ pub fn segmented_button(
         button = button.accessibility_description(description);
     }
 
-    button.with_child(move || {
+    button.child(move || {
         let leading_icon = icon.clone();
         let padding = content_padding;
         let label_outer = label.clone();

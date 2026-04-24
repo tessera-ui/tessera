@@ -165,7 +165,7 @@ fn navigation_rail_item_view_content(
                 ))
                 .show_state_layer(false)
                 .show_ripple(false)
-                .with_child(|| {});
+                .child(|| {});
 
             surface()
                 .style(SurfaceStyle::Filled {
@@ -176,7 +176,7 @@ fn navigation_rail_item_view_content(
                 .enabled(true)
                 .interaction_state(interaction_state)
                 .ripple_color(ripple_color)
-                .with_child(move || {
+                .child(move || {
                     surface()
                         .style(SurfaceStyle::Filled {
                             color: Color::TRANSPARENT,
@@ -187,7 +187,7 @@ fn navigation_rail_item_view_content(
                         .ripple_color(ripple_color)
                         .show_state_layer(false)
                         .ripple_state(ripple_state)
-                        .with_child(|| {});
+                        .child(|| {});
                 });
 
             if let Some(draw_icon) = item.icon {
@@ -656,7 +656,7 @@ pub fn navigation_rail(
                 .modifier(Modifier::new().fill_max_height().width(container_width))
                 .style(scheme.surface.into())
                 .block_input(true)
-                .with_child(move || {
+                .child(move || {
                     let content_context = composition.clone();
                     column()
                         .modifier(Modifier::new().fill_max_size().padding(Padding::new(

@@ -244,7 +244,7 @@ fn render_glass_scrim(on_close_request: Callback, progress: f32, is_open: bool) 
             bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
         })
         .noise_amount(0.0)
-        .with_child(|| {});
+        .child(|| {});
 }
 
 fn render_material_scrim(on_close_request: Callback, progress: f32, is_open: bool) {
@@ -260,7 +260,7 @@ fn render_material_scrim(on_close_request: Callback, progress: f32, is_open: boo
         .on_click_shared(on_close_request)
         .modifier(Modifier::new().fill_max_size())
         .block_input(true)
-        .with_child(|| {});
+        .child(|| {});
 }
 
 /// Render scrim according to configured style.
@@ -437,7 +437,7 @@ fn bottom_sheet_drag_handle(
                     )
                     .shape(Shape::CAPSULE)
                     .modifier(Modifier::new().size(Dp(32.0), Dp(4.0)))
-                    .with_child(|| {});
+                    .child(|| {});
                 spacer().modifier(Modifier::new().height(Dp(22.0)));
             });
     });
@@ -558,7 +558,7 @@ fn bottom_sheet_content_wrapper(
                     .modifier(Modifier::new().fill_max_width())
                     .blur_radius(Dp(5.0))
                     .block_input(true)
-                    .with_child(content_wrapper);
+                    .child(content_wrapper);
             }
             BottomSheetStyle::Material => {
                 surface()
@@ -578,7 +578,7 @@ fn bottom_sheet_content_wrapper(
                     })
                     .modifier(Modifier::new().fill_max_width())
                     .block_input(true)
-                    .with_child(content_wrapper);
+                    .child(content_wrapper);
             }
         }
     });

@@ -718,7 +718,7 @@ pub fn scrollable(
                     .scrollbar_track_color(scrollbar_track_color)
                     .scrollbar_thumb_color(scrollbar_thumb_color)
                     .scrollbar_thumb_hover_color(scrollbar_thumb_hover_color)
-                    .child_slot(child);
+                    .child_shared(child);
             });
         }
         ScrollBarLayout::Overlay => {
@@ -733,30 +733,9 @@ pub fn scrollable(
                     .scrollbar_track_color(scrollbar_track_color)
                     .scrollbar_thumb_color(scrollbar_thumb_color)
                     .scrollbar_thumb_hover_color(scrollbar_thumb_hover_color)
-                    .child_slot(child);
+                    .child_shared(child);
             });
         }
-    }
-}
-
-impl ScrollableWithAlongsideScrollbarBuilder {
-    fn child_slot(mut self, child: RenderSlot) -> Self {
-        self.props.child = Some(child);
-        self
-    }
-}
-
-impl ScrollableWithOverlayScrollbarBuilder {
-    fn child_slot(mut self, child: RenderSlot) -> Self {
-        self.props.child = Some(child);
-        self
-    }
-}
-
-impl ScrollableViewportBuilder {
-    fn child_slot(mut self, child: RenderSlot) -> Self {
-        self.props.child = Some(child);
-        self
     }
 }
 
@@ -863,7 +842,7 @@ fn scrollable_with_alongside_scrollbar(
                 .controller(controller)
                 .scrollbar_state_v(scrollbar_v_state.clone())
                 .scrollbar_state_h(scrollbar_h_state.clone())
-                .child_slot(child);
+                .child_shared(child);
 
             if vertical {
                 scrollbar_v_bound()
@@ -931,7 +910,7 @@ fn scrollable_with_overlay_scrollbar(
                     .controller(controller)
                     .scrollbar_state_v(scrollbar_v_state.clone())
                     .scrollbar_state_h(scrollbar_h_state.clone())
-                    .child_slot(child);
+                    .child_shared(child);
             };
             {
                 let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());

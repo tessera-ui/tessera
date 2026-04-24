@@ -301,7 +301,7 @@ fn render_track_surface_v(width: Px, height: Px, color: Color) {
             bottom_left: RoundedCorner::Capsule,
             bottom_right: RoundedCorner::ZERO,
         })
-        .with_child(|| {});
+        .child(|| {});
 }
 
 /// Render a rounded surface for a vertical thumb (radius based on width).
@@ -318,7 +318,7 @@ fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
             bottom_right: RoundedCorner::ZERO,
         })
         .style(color.into())
-        .with_child(|| {});
+        .child(|| {});
 }
 
 /// Render a rounded surface for a horizontal track (radius based on height).
@@ -335,7 +335,7 @@ fn render_track_surface_h(width: Px, height: Px, color: Color) {
             bottom_left: RoundedCorner::ZERO,
             bottom_right: RoundedCorner::ZERO,
         })
-        .with_child(|| {});
+        .child(|| {});
 }
 
 /// Render a rounded surface for a horizontal thumb (radius based on height).
@@ -352,7 +352,7 @@ fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
             bottom_right: RoundedCorner::ZERO,
         })
         .style(color.into())
-        .with_child(|| {});
+        .child(|| {});
 }
 
 /// Decide whether the scrollbar should be shown according to behavior and

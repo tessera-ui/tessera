@@ -253,9 +253,9 @@ pub fn glass_switch(
                 .shape(Shape::CAPSULE)
                 .blur_radius(Dp(8.0));
             if let Some(border) = track_border {
-                track.border(border).with_child(|| {});
+                track.border(border).child(|| {});
             } else {
-                track.with_child(|| {});
+                track.child(|| {});
             }
 
             let thumb_alpha = thumb_off_alpha + (thumb_on_alpha - thumb_off_alpha) * progress;
@@ -268,9 +268,9 @@ pub fn glass_switch(
                 .tint_color(thumb_color)
                 .shape(Shape::Ellipse);
             if let Some(border) = thumb_border {
-                thumb.border(border).with_child(|| {});
+                thumb.border(border).child(|| {});
             } else {
-                thumb.with_child(|| {});
+                thumb.child(|| {});
             }
         });
 }

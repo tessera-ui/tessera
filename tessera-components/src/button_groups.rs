@@ -257,7 +257,7 @@ pub fn button_groups(
                             });
                         })
                         .shape(item_layout.active_button_shape)
-                        .with_child(move || {
+                        .child(move || {
                             elastic_container()
                                 .state(state)
                                 .index(index)
@@ -296,7 +296,7 @@ pub fn button_groups(
                         })
                         .color(scheme.secondary_container)
                         .shape(shape)
-                        .with_child(move || {
+                        .child(move || {
                             elastic_container()
                                 .state(state)
                                 .index(index)

@@ -316,7 +316,7 @@ pub fn list_item(
         accessibility_label,
         accessibility_description,
     })
-    .with_child(move || {
+    .child(move || {
         let headline = headline.clone();
         let leading = leading;
         let trailing = trailing;

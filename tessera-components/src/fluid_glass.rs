@@ -82,13 +82,6 @@ fn default_glass_border() -> Option<GlassBorder> {
     })
 }
 
-impl FluidGlassBuilder {
-    /// Creates props from base args and a child render function.
-    pub fn with_child(self, child: impl Fn() + Send + Sync + 'static) -> Self {
-        self.child(child)
-    }
-}
-
 // Helper: pointer blocking logic extracted to reduce complexity of
 // `fluid_glass`.
 fn handle_block_input(input: &mut tessera_ui::PointerInput) {

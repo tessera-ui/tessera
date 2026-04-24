@@ -661,7 +661,7 @@ fn render_switch(
                 .shape(Shape::CAPSULE)
                 .show_state_layer(false)
                 .show_ripple(false)
-                .with_child(|| {});
+                .child(|| {});
 
             let state_layer = surface()
                 .modifier(Modifier::new().size(
@@ -682,16 +682,16 @@ fn render_switch(
                     state_layer
                         .interaction_state(interaction_state)
                         .ripple_state(ripple_state)
-                        .with_child(|| {});
+                        .child(|| {});
                 } else {
                     state_layer
                         .interaction_state(interaction_state)
-                        .with_child(|| {});
+                        .child(|| {});
                 }
             } else if let Some(ripple_state) = ripple_state {
-                state_layer.ripple_state(ripple_state).with_child(|| {});
+                state_layer.ripple_state(ripple_state).child(|| {});
             } else {
-                state_layer.with_child(|| {});
+                state_layer.child(|| {});
             }
             layout()
                 .layout_policy(SwitchThumbLayout {
@@ -714,7 +714,7 @@ fn render_switch(
                         })
                         .shape(Shape::Ellipse)
                         .content_color(colors.icon_color)
-                        .with_child(move || {
+                        .child(move || {
                             if let Some(child) = child {
                                 boxed()
                                     .modifier(Modifier::new().fill_max_size())

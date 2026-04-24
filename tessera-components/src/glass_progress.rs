@@ -49,7 +49,7 @@ fn glass_progress_fill(
                 .tint_color(tint_color)
                 .blur_radius(blur_radius)
                 .shape(shape)
-                .with_child(|| {});
+                .child(|| {});
         });
 }
 
@@ -153,7 +153,7 @@ pub fn glass_progress(
                 .shape(capsule_shape_for_height(height))
                 .border(GlassBorder::new(track_border_width.into()))
                 .padding(track_border_width)
-                .with_child(move || {
+                .child(move || {
                     glass_progress_fill()
                         .value(value)
                         .tint_color(progress_tint_color)

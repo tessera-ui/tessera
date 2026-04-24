@@ -958,7 +958,7 @@ fn lazy_staggered_grid_view(
                 let child = child.clone();
                 key(child.key_hash, || {
                     lazy_staggered_grid_item_host()
-                        .builder_handle_value(child.builder)
+                        .builder_handle_shared(child.builder)
                         .local_index(child.local_index);
                 });
             }
@@ -967,19 +967,12 @@ fn lazy_staggered_grid_view(
 
 #[tessera]
 fn lazy_staggered_grid_item_host(
-    #[prop(skip_setter)] builder_handle: Option<CallbackWith<usize, ()>>,
+    builder_handle: Option<CallbackWith<usize, ()>>,
     local_index: Option<usize>,
 ) {
     let builder_handle = builder_handle.unwrap_or_else(CallbackWith::default_value);
     let local_index = local_index.unwrap_or(0);
     builder_handle.call(local_index);
-}
-
-impl LazyStaggeredGridItemHostBuilder {
-    fn builder_handle_value(mut self, builder_handle: CallbackWith<usize, ()>) -> Self {
-        self.props.builder_handle = Some(builder_handle);
-        self
-    }
 }
 
 fn resolve_viewport_span(current: Px, estimated: Px, spacing: Px) -> Px {

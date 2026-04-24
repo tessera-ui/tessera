@@ -615,18 +615,18 @@ pub fn linear_progress_indicator(
                         .style(track_color.into())
                         .shape(segment_shape)
                         .modifier(Modifier::new().fill_max_size())
-                        .with_child(|| {});
+                        .child(|| {});
                     surface()
                         .style(color.into())
                         .shape(segment_shape)
                         .modifier(Modifier::new().fill_max_size())
-                        .with_child(|| {});
+                        .child(|| {});
                     if draw_stop_indicator {
                         surface()
                             .style(color.into())
                             .shape(stop_shape)
                             .modifier(Modifier::new().fill_max_size())
-                            .with_child(|| {});
+                            .child(|| {});
                     }
                 } else {
                     for (color, shape) in [
@@ -640,7 +640,7 @@ pub fn linear_progress_indicator(
                             .style(color.into())
                             .shape(shape)
                             .modifier(Modifier::new().fill_max_size())
-                            .with_child(|| {});
+                            .child(|| {});
                     }
                 }
             });

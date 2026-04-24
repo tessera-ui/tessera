@@ -382,11 +382,6 @@ pub fn floating_action_button(
 }
 
 impl FloatingActionButtonBuilder {
-    /// Creates props from base args and a content render function.
-    pub fn with_content(self, content: impl Fn() + Send + Sync + 'static) -> Self {
-        self.content(content)
-    }
-
     /// Creates a configuration with the required click handler.
     pub fn new(on_click: impl Fn() + Send + Sync + 'static) -> Self {
         Self::default().on_click(on_click)

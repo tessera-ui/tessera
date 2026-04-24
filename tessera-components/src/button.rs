@@ -280,11 +280,6 @@ fn create_surface_builder(args: &ButtonResolvedArgs) -> crate::surface::SurfaceB
 }
 
 impl ButtonBuilder {
-    /// Creates props from base args and a child render function.
-    pub fn with_child(self, child: impl Fn() + Send + Sync + 'static) -> Self {
-        self.child(child)
-    }
-
     /// Applies the standard "Filled" button preset.
     /// Create a standard "Filled" button (High emphasis).
     /// Uses Primary color for container and OnPrimary for content.

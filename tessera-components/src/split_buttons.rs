@@ -762,7 +762,7 @@ fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
         accessibility_label,
         accessibility_description,
     })
-    .with_child(move || {
+    .child(move || {
         let content = content;
         provide_text_style(typography.label_large, move || {
             layout()
