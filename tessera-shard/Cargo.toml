@@ -15,7 +15,7 @@ tessera-macros = { path = "../tessera-macros" }
 tessera-ui = { path = "../tessera-ui" }
 
 [target.'cfg(not(target_family = "wasm"))'.dependencies]
-tokio = { version = "1.49.0", features = ["full"] }
+tokio = { version = "1.51.1", features = ["full"] }
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm-bindgen-futures = "0.4.55"
