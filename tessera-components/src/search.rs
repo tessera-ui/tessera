@@ -393,7 +393,7 @@ fn render_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
     let render_args = build_search_bar_props(args, kind);
     let modifier = render_args.modifier.clone();
     layout().modifier(modifier).child(move || {
-        let mut builder = search_bar_inner()
+        search_bar_inner()
             .kind(render_args.kind)
             .enabled(render_args.enabled)
             .read_only(render_args.read_only)
@@ -408,17 +408,10 @@ fn render_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
             .content_shared(render_args.content)
             .on_query_change_shared(render_args.on_query_change)
             .on_search_shared(render_args.on_search)
-            .on_active_change_shared(render_args.on_active_change);
-        if let Some(placeholder) = render_args.placeholder.clone() {
-            builder = builder.placeholder(placeholder);
-        }
-        if let Some(leading_icon) = render_args.leading_icon {
-            builder = builder.leading_icon_shared(leading_icon);
-        }
-        if let Some(trailing_icon) = render_args.trailing_icon {
-            builder = builder.trailing_icon_shared(trailing_icon);
-        }
-        drop(builder);
+            .on_active_change_shared(render_args.on_active_change)
+            .placeholder_optional(render_args.placeholder.clone())
+            .leading_icon_optional(render_args.leading_icon)
+            .trailing_icon_optional(render_args.trailing_icon);
     });
 }
 
@@ -694,7 +687,7 @@ struct SearchFieldArgs {
 }
 
 fn build_search_field(args: SearchFieldArgs) {
-    let mut builder = TextFieldBuilder::filled()
+    TextFieldBuilder::filled()
         .enabled(args.enabled)
         .read_only(args.read_only)
         .modifier(
@@ -719,21 +712,18 @@ fn build_search_field(args: SearchFieldArgs) {
             args.synced_query.set(next.clone());
             next
         })
-        .controller(args.input_controller);
-    if let Some(placeholder) = args.placeholder {
-        builder = builder.placeholder(placeholder);
-    }
-    if let Some(leading_icon) = args.leading_icon {
-        builder = builder.leading_icon(move || {
-            leading_icon.render();
-        });
-    }
-    if let Some(trailing_icon) = args.trailing_icon {
-        builder = builder.trailing_icon(move || {
-            trailing_icon.render();
-        });
-    }
-    drop(builder);
+        .controller(args.input_controller)
+        .placeholder_optional(args.placeholder)
+        .leading_icon_optional(args.leading_icon.map(|leading_icon| {
+            RenderSlot::new(move || {
+                leading_icon.render();
+            })
+        }))
+        .trailing_icon_optional(args.trailing_icon.map(|trailing_icon| {
+            RenderSlot::new(move || {
+                trailing_icon.render();
+            })
+        }));
 }
 
 fn sync_query(

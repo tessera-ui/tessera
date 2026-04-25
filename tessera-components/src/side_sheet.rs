@@ -479,17 +479,14 @@ pub fn modal_side_sheet_provider(
 ) {
     let position = position.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
-    let mut builder = side_sheet_provider_inner()
+    side_sheet_provider_inner()
         .sheet_type(SideSheetType::Modal)
         .on_close_request_shared(on_close_request.unwrap_or_default())
         .position(position)
         .is_open(is_open)
         .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
-        .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty));
-    if let Some(controller) = controller {
-        builder = builder.controller(controller);
-    }
-    drop(builder);
+        .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty))
+        .controller_optional(controller);
 }
 
 /// # standard_side_sheet_provider
@@ -541,17 +538,14 @@ pub fn standard_side_sheet_provider(
 ) {
     let position = position.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
-    let mut builder = side_sheet_provider_inner()
+    side_sheet_provider_inner()
         .sheet_type(SideSheetType::Standard)
         .on_close_request_shared(on_close_request.unwrap_or_default())
         .position(position)
         .is_open(is_open)
         .main_content_shared(main_content.unwrap_or_else(RenderSlot::empty))
-        .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty));
-    if let Some(controller) = controller {
-        builder = builder.controller(controller);
-    }
-    drop(builder);
+        .side_sheet_content_shared(side_sheet_content.unwrap_or_else(RenderSlot::empty))
+        .controller_optional(controller);
 }
 
 #[tessera]

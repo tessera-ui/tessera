@@ -19,7 +19,7 @@ use crate::{
     modifier::ModifierExt as _,
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
-    surface::surface,
+    surface::{SurfaceStyle, surface},
     text_edit_core::{
         ClickType, ImeEditResult, PlannedImeEvent, RectDef, TextSelection, text_edit_core,
     },
@@ -469,12 +469,17 @@ pub fn text_input(
     );
 
     layout().modifier(modifier).child(move || {
-        let surface_args = editor_args.clone();
-        create_surface_args(&surface_args, &controller).child(move || {
-            text_input_padded_content()
-                .padding(surface_args.padding)
-                .controller(controller);
-        });
+        let text_input_surface = create_surface_args(&editor_args, &controller);
+        surface()
+            .style(text_input_surface.style)
+            .shape(text_input_surface.shape)
+            .block_input(text_input_surface.block_input)
+            .modifier(text_input_surface.modifier)
+            .child(move || {
+                text_input_padded_content()
+                    .padding(editor_args.padding)
+                    .controller(controller);
+            });
     });
 }
 
@@ -1243,21 +1248,28 @@ fn is_editing_action(action: &GlyphonAction) -> bool {
     )
 }
 
+pub(crate) struct TextInputSurfaceArgs {
+    pub(crate) style: SurfaceStyle,
+    pub(crate) shape: Shape,
+    pub(crate) block_input: bool,
+    pub(crate) modifier: Modifier,
+}
+
 /// Create surface arguments based on editor configuration and state
 pub(crate) fn create_surface_args(
     args: &TextInputProps,
     state: &State<TextInputController>,
-) -> crate::surface::SurfaceBuilder {
+) -> TextInputSurfaceArgs {
     let border_width = determine_border_width(args, state);
     let style = if border_width.to_pixels_f32() > 0.0 {
-        crate::surface::SurfaceStyle::FilledOutlined {
+        SurfaceStyle::FilledOutlined {
             fill_color: determine_background_color(args, state),
             border_color: determine_border_color(args, state)
                 .expect("Border color should exist when border width is positive"),
             border_width,
         }
     } else {
-        crate::surface::SurfaceStyle::Filled {
+        SurfaceStyle::Filled {
             color: determine_background_color(args, state),
         }
     };
@@ -1267,11 +1279,12 @@ pub(crate) fn create_surface_args(
         modifier = modifier.size_in(args.min_width, None, args.min_height, None);
     }
 
-    surface()
-        .style(style)
-        .shape(args.shape)
-        .block_input(!args.enabled)
-        .modifier(modifier)
+    TextInputSurfaceArgs {
+        style,
+        shape: args.shape,
+        block_input: !args.enabled,
+        modifier,
+    }
 }
 
 /// Determine background color based on focus state

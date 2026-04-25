@@ -303,100 +303,102 @@ pub fn list_item(
         .or_else(|| supporting_text.clone())
         .or_else(|| overline_text.clone());
     let internal_spacing = ListItemDefaults::INTERNAL_SPACING;
-    list_item_surface(ListItemSurfaceArgs {
-        modifier,
-        container_color,
-        shape,
-        headline_color,
-        enabled,
-        tonal_elevation,
-        shadow_elevation,
-        interaction_state,
-        on_click,
-        accessibility_label,
-        accessibility_description,
-    })
-    .child(move || {
-        let headline = headline.clone();
-        let leading = leading;
-        let trailing = trailing;
-        let overline_text = overline_text.clone();
-        let supporting_text = supporting_text.clone();
-        let row_modifier = Modifier::new()
-            .constrain(
-                None,
-                Some(AxisConstraint::at_least(Px::from(content_min_height))),
-            )
-            .padding(content_padding)
-            .fill_max_width();
+    render_list_item_surface(
+        ListItemSurfaceArgs {
+            modifier,
+            container_color,
+            shape,
+            headline_color,
+            enabled,
+            tonal_elevation,
+            shadow_elevation,
+            interaction_state,
+            on_click,
+            accessibility_label,
+            accessibility_description,
+        },
+        RenderSlot::new(move || {
+            let headline = headline.clone();
+            let leading = leading;
+            let trailing = trailing;
+            let overline_text = overline_text.clone();
+            let supporting_text = supporting_text.clone();
+            let row_modifier = Modifier::new()
+                .constrain(
+                    None,
+                    Some(AxisConstraint::at_least(Px::from(content_min_height))),
+                )
+                .padding(content_padding)
+                .fill_max_width();
 
-        row()
-            .modifier(row_modifier)
-            .main_axis_alignment(MainAxisAlignment::Start)
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(move || {
-                if let Some(leading) = leading {
-                    let color = leading_color;
-                    {
-                        render_slot()
-                            .content_shared(leading)
-                            .color(color)
-                            .min_size(ListItemDefaults::LEADING_MIN_SIZE);
-                    };
-                    {
-                        spacer().modifier(Modifier::new().width(internal_spacing));
-                    };
-                }
+            row()
+                .modifier(row_modifier)
+                .main_axis_alignment(MainAxisAlignment::Start)
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    if let Some(leading) = leading {
+                        let color = leading_color;
+                        {
+                            render_slot()
+                                .content_shared(leading)
+                                .color(color)
+                                .min_size(ListItemDefaults::LEADING_MIN_SIZE);
+                        };
+                        {
+                            spacer().modifier(Modifier::new().width(internal_spacing));
+                        };
+                    }
 
-                let overline_text = overline_text.clone();
-                let supporting_text = supporting_text.clone();
-                let headline_text = headline.clone();
-                column()
-                    .modifier(Modifier::new().fill_max_width().weight(1.0))
-                    .main_axis_alignment(MainAxisAlignment::Start)
-                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                    .children(move || {
-                        if let Some(overline) = overline_text.clone() {
-                            let color = overline_color;
-                            render_text_line()
-                                .text_value(overline.clone())
-                                .style(typography.label_small)
-                                .color(color);
-                        }
+                    let overline_text = overline_text.clone();
+                    let supporting_text = supporting_text.clone();
+                    let headline_text = headline.clone();
+                    column()
+                        .modifier(Modifier::new().fill_max_width().weight(1.0))
+                        .main_axis_alignment(MainAxisAlignment::Start)
+                        .cross_axis_alignment(CrossAxisAlignment::Start)
+                        .children(move || {
+                            if let Some(overline) = overline_text.clone() {
+                                let color = overline_color;
+                                render_text_line()
+                                    .text_value(overline.clone())
+                                    .style(typography.label_small)
+                                    .color(color);
+                            }
 
-                        let color = headline_color;
-                        if headline_text.is_empty() {
-                            spacer().modifier(Modifier::new());
-                        } else {
-                            render_text_line()
-                                .text_value(headline_text.clone())
-                                .style(typography.body_large)
-                                .color(color);
-                        }
+                            let color = headline_color;
+                            if headline_text.is_empty() {
+                                spacer().modifier(Modifier::new());
+                            } else {
+                                render_text_line()
+                                    .text_value(headline_text.clone())
+                                    .style(typography.body_large)
+                                    .color(color);
+                            }
 
-                        if let Some(supporting) = supporting_text.clone() {
-                            let color = supporting_color;
-                            render_text_line()
-                                .text_value(supporting.clone())
-                                .style(typography.body_medium)
-                                .color(color);
-                        }
-                    });
+                            if let Some(supporting) = supporting_text.clone() {
+                                let color = supporting_color;
+                                render_text_line()
+                                    .text_value(supporting.clone())
+                                    .style(typography.body_medium)
+                                    .color(color);
+                            }
+                        });
 
-                if let Some(trailing) = trailing {
-                    {
-                        spacer().modifier(Modifier::new().width(internal_spacing));
-                    };
-                    let color = trailing_color;
-                    {
-                        render_slot()
-                            .content_shared(trailing)
-                            .color(color)
-                            .min_size(ListItemDefaults::TRAILING_MIN_SIZE);
-                    };
-                }
-            });
-    });
+                    if let Some(trailing) = trailing {
+                        {
+                            spacer().modifier(Modifier::new().width(internal_spacing));
+                        };
+                        let color = trailing_color;
+                        {
+                            render_slot()
+                                .content_shared(trailing)
+                                .color(color)
+                                .min_size(ListItemDefaults::TRAILING_MIN_SIZE);
+                        };
+                    }
+                });
+        }),
+    );
 }
 
 #[tessera]
@@ -447,8 +449,11 @@ struct ListItemSurfaceArgs {
     accessibility_description: Option<String>,
 }
 
-fn list_item_surface(args: ListItemSurfaceArgs) -> crate::surface::SurfaceBuilder {
-    let builder = surface()
+fn render_list_item_surface(args: ListItemSurfaceArgs, child: RenderSlot) {
+    let has_on_click = args.on_click.is_some();
+    let elevation = (args.shadow_elevation.0 > 0.0).then_some(args.shadow_elevation);
+
+    surface()
         .modifier(args.modifier)
         .style(SurfaceStyle::Filled {
             color: args.container_color,
@@ -458,34 +463,14 @@ fn list_item_surface(args: ListItemSurfaceArgs) -> crate::surface::SurfaceBuilde
         .enabled(args.enabled)
         .ripple_color(args.headline_color)
         .tonal_elevation(args.tonal_elevation)
-        .accessibility_role(Role::ListItem);
-    let builder = if args.shadow_elevation.0 > 0.0 {
-        builder.elevation(args.shadow_elevation)
-    } else {
-        builder
-    };
-    let builder = if let Some(interaction_state) = args.interaction_state {
-        builder.interaction_state(interaction_state)
-    } else {
-        builder
-    };
-    let builder = if let Some(on_click) = args.on_click {
-        builder
-            .on_click_shared(on_click)
-            .accessibility_focusable(true)
-    } else {
-        builder
-    };
-    let builder = if let Some(accessibility_label) = args.accessibility_label {
-        builder.accessibility_label(accessibility_label)
-    } else {
-        builder
-    };
-    if let Some(accessibility_description) = args.accessibility_description {
-        builder.accessibility_description(accessibility_description)
-    } else {
-        builder
-    }
+        .accessibility_role(Role::ListItem)
+        .elevation_optional(elevation)
+        .interaction_state_optional(args.interaction_state)
+        .on_click_optional(args.on_click)
+        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_label_optional(args.accessibility_label)
+        .accessibility_description_optional(args.accessibility_description)
+        .child_shared(child);
 }
 
 fn content_min_height(min_height: Dp, top_padding: Dp, bottom_padding: Dp) -> Dp {

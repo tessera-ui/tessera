@@ -215,7 +215,7 @@ fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
     let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
     let padding_main = sanitize_spacing(Px::from(args.content_padding));
     let padding_cross = sanitize_spacing(Px::from(args.content_padding));
-    let mut scrollable_builder = scrollable()
+    scrollable()
         .modifier(args.modifier)
         .vertical(true)
         .horizontal(false)
@@ -223,36 +223,27 @@ fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
         .scroll_smoothing(args.scroll_smoothing)
         .scrollbar_behavior(args.scrollbar_behavior)
         .scrollbar_layout(args.scrollbar_layout)
-        .controller(scroll_controller);
-    if let Some(color) = args.scrollbar_track_color {
-        scrollable_builder = scrollable_builder.scrollbar_track_color(color);
-    }
-    if let Some(color) = args.scrollbar_thumb_color {
-        scrollable_builder = scrollable_builder.scrollbar_thumb_color(color);
-    }
-    if let Some(color) = args.scrollbar_thumb_hover_color {
-        scrollable_builder = scrollable_builder.scrollbar_thumb_hover_color(color);
-    }
-    scrollable_builder.child(move || {
-        let mut builder = lazy_staggered_grid_view()
-            .axis(StaggeredGridAxis::Vertical)
-            .grid_cells(args.grid_cells.clone())
-            .main_axis_spacing(main_axis_spacing)
-            .cross_axis_spacing(cross_axis_spacing)
-            .cross_axis_alignment(args.cross_axis_alignment)
-            .item_alignment(args.item_alignment)
-            .estimated_item_main(estimated_item_main)
-            .overscan(args.overscan)
-            .padding_main(padding_main)
-            .padding_cross(padding_cross)
-            .slots(args.slots.clone())
-            .controller(args.controller)
-            .scroll_controller(scroll_controller);
-        if let Some(max_viewport_main) = args.max_viewport_main {
-            builder = builder.max_viewport_main(max_viewport_main);
-        }
-        drop(builder);
-    });
+        .controller(scroll_controller)
+        .scrollbar_track_color_optional(args.scrollbar_track_color)
+        .scrollbar_thumb_color_optional(args.scrollbar_thumb_color)
+        .scrollbar_thumb_hover_color_optional(args.scrollbar_thumb_hover_color)
+        .child(move || {
+            lazy_staggered_grid_view()
+                .axis(StaggeredGridAxis::Vertical)
+                .grid_cells(args.grid_cells.clone())
+                .main_axis_spacing(main_axis_spacing)
+                .cross_axis_spacing(cross_axis_spacing)
+                .cross_axis_alignment(args.cross_axis_alignment)
+                .item_alignment(args.item_alignment)
+                .estimated_item_main(estimated_item_main)
+                .overscan(args.overscan)
+                .padding_main(padding_main)
+                .padding_cross(padding_cross)
+                .slots(args.slots.clone())
+                .controller(args.controller)
+                .scroll_controller(scroll_controller)
+                .max_viewport_main_optional(args.max_viewport_main);
+        });
 }
 
 /// # lazy_horizontal_staggered_grid
@@ -378,7 +369,7 @@ fn lazy_horizontal_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
     let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
     let padding_main = sanitize_spacing(Px::from(args.content_padding));
     let padding_cross = sanitize_spacing(Px::from(args.content_padding));
-    let mut scrollable_builder = scrollable()
+    scrollable()
         .modifier(args.modifier)
         .vertical(false)
         .horizontal(true)
@@ -386,36 +377,27 @@ fn lazy_horizontal_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
         .scroll_smoothing(args.scroll_smoothing)
         .scrollbar_behavior(args.scrollbar_behavior)
         .scrollbar_layout(args.scrollbar_layout)
-        .controller(scroll_controller);
-    if let Some(color) = args.scrollbar_track_color {
-        scrollable_builder = scrollable_builder.scrollbar_track_color(color);
-    }
-    if let Some(color) = args.scrollbar_thumb_color {
-        scrollable_builder = scrollable_builder.scrollbar_thumb_color(color);
-    }
-    if let Some(color) = args.scrollbar_thumb_hover_color {
-        scrollable_builder = scrollable_builder.scrollbar_thumb_hover_color(color);
-    }
-    scrollable_builder.child(move || {
-        let mut builder = lazy_staggered_grid_view()
-            .axis(StaggeredGridAxis::Horizontal)
-            .grid_cells(args.grid_cells.clone())
-            .main_axis_spacing(main_axis_spacing)
-            .cross_axis_spacing(cross_axis_spacing)
-            .cross_axis_alignment(args.cross_axis_alignment)
-            .item_alignment(args.item_alignment)
-            .estimated_item_main(estimated_item_main)
-            .overscan(args.overscan)
-            .padding_main(padding_main)
-            .padding_cross(padding_cross)
-            .slots(args.slots.clone())
-            .controller(args.controller)
-            .scroll_controller(scroll_controller);
-        if let Some(max_viewport_main) = args.max_viewport_main {
-            builder = builder.max_viewport_main(max_viewport_main);
-        }
-        drop(builder);
-    });
+        .controller(scroll_controller)
+        .scrollbar_track_color_optional(args.scrollbar_track_color)
+        .scrollbar_thumb_color_optional(args.scrollbar_thumb_color)
+        .scrollbar_thumb_hover_color_optional(args.scrollbar_thumb_hover_color)
+        .child(move || {
+            lazy_staggered_grid_view()
+                .axis(StaggeredGridAxis::Horizontal)
+                .grid_cells(args.grid_cells.clone())
+                .main_axis_spacing(main_axis_spacing)
+                .cross_axis_spacing(cross_axis_spacing)
+                .cross_axis_alignment(args.cross_axis_alignment)
+                .item_alignment(args.item_alignment)
+                .estimated_item_main(estimated_item_main)
+                .overscan(args.overscan)
+                .padding_main(padding_main)
+                .padding_cross(padding_cross)
+                .slots(args.slots.clone())
+                .controller(args.controller)
+                .scroll_controller(scroll_controller)
+                .max_viewport_main_optional(args.max_viewport_main);
+        });
 }
 
 macro_rules! impl_lazy_staggered_grid_builder {

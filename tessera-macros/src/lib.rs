@@ -522,6 +522,28 @@ fn generate_default_setter_method_for_path(
     Ok(Some(method))
 }
 
+fn generate_optional_setter_method_for_path(
+    field: &PropFieldSpec,
+    field_path: &proc_macro2::TokenStream,
+) -> Option<proc_macro2::TokenStream> {
+    if field.setter.skip {
+        return None;
+    }
+
+    let inner_ty = option_inner_type(&field.ty)?;
+    let ident = &field.ident;
+    let optional_ident = format_ident!("{}_optional", ident);
+    let method_doc = format!("Set `{ident}` from an optional value.");
+
+    Some(quote! {
+        #[doc = #method_doc]
+        pub fn #optional_ident(mut self, #ident: ::core::option::Option<#inner_ty>) -> Self {
+            self.#field_path = #ident;
+            self
+        }
+    })
+}
+
 fn generate_helper_setter_methods(
     field: &PropFieldSpec,
     helper: PropHelperKind,
@@ -1008,6 +1030,9 @@ fn generate_builder_methods(
                 &field_path,
             )?);
         } else if let Some(method) = generate_default_setter_method_for_path(field, &field_path)? {
+            methods.push(method);
+        }
+        if let Some(method) = generate_optional_setter_method_for_path(field, &field_path) {
             methods.push(method);
         }
     }

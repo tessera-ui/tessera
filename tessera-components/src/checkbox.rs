@@ -242,7 +242,7 @@ pub fn checkbox(
     let disabled_checkmark_color = disabled_checkmark_color.unwrap_or(scheme.surface);
     let controller = controller.unwrap_or_else(|| remember(|| CheckboxController::new(checked)));
 
-    let mut builder = checkbox_inner()
+    checkbox_inner()
         .modifier(modifier)
         .size(size)
         .color(color)
@@ -253,17 +253,10 @@ pub fn checkbox(
         .disabled(disabled)
         .disabled_color(disabled_color)
         .disabled_checkmark_color(disabled_checkmark_color)
-        .controller(controller);
-    if let Some(on_toggle) = on_toggle {
-        builder = builder.on_toggle_shared(on_toggle);
-    }
-    if let Some(accessibility_label) = accessibility_label {
-        builder = builder.accessibility_label(accessibility_label);
-    }
-    if let Some(accessibility_description) = accessibility_description {
-        builder = builder.accessibility_description(accessibility_description);
-    }
-    drop(builder);
+        .controller(controller)
+        .on_toggle_optional(on_toggle)
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description);
 }
 
 #[tessera]
@@ -404,44 +397,24 @@ fn checkbox_inner(
 
     let render_state_layer = {
         RenderSlot::new(move || {
-            if let Some(state) = interaction_state {
-                let mut builder = surface()
-                    .modifier(Modifier::new().size(
-                        CheckboxDefaults::STATE_LAYER_SIZE,
-                        CheckboxDefaults::STATE_LAYER_SIZE,
-                    ))
-                    .shape(Shape::Ellipse)
-                    .enabled(enabled)
-                    .style(SurfaceStyle::Filled {
-                        color: Color::TRANSPARENT,
-                    })
-                    .ripple_bounded(false)
-                    .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
-                    .ripple_color(state_layer_base)
-                    .interaction_state(state);
-                builder.set_ripple_state(ripple_state);
-                builder.child(move || {
+            surface()
+                .modifier(Modifier::new().size(
+                    CheckboxDefaults::STATE_LAYER_SIZE,
+                    CheckboxDefaults::STATE_LAYER_SIZE,
+                ))
+                .shape(Shape::Ellipse)
+                .enabled(enabled)
+                .style(SurfaceStyle::Filled {
+                    color: Color::TRANSPARENT,
+                })
+                .ripple_bounded(false)
+                .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
+                .ripple_color(state_layer_base)
+                .interaction_state_optional(interaction_state)
+                .ripple_state_optional(ripple_state)
+                .child(move || {
                     render_checkbox_container.render();
                 });
-            } else {
-                let mut builder = surface()
-                    .modifier(Modifier::new().size(
-                        CheckboxDefaults::STATE_LAYER_SIZE,
-                        CheckboxDefaults::STATE_LAYER_SIZE,
-                    ))
-                    .shape(Shape::Ellipse)
-                    .enabled(enabled)
-                    .style(SurfaceStyle::Filled {
-                        color: Color::TRANSPARENT,
-                    })
-                    .ripple_bounded(false)
-                    .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
-                    .ripple_color(state_layer_base);
-                builder.set_ripple_state(ripple_state);
-                builder.child(move || {
-                    render_checkbox_container.render();
-                });
-            }
         })
     };
 

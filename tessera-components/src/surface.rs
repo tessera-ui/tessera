@@ -125,12 +125,6 @@ impl From<Color> for SurfaceStyle {
     }
 }
 
-impl SurfaceBuilder {
-    pub(crate) fn set_ripple_state(&mut self, state: Option<State<RippleState>>) {
-        self.props.ripple_state = state;
-    }
-}
-
 #[derive(Clone, Default, PartialEq)]
 struct SurfaceResolvedArgs {
     modifier: Modifier,
@@ -934,13 +928,9 @@ pub fn surface(
     }
 
     layout().modifier(modifier).child(move || {
-        let mut builder = surface_content().resolved(resolved.clone());
-        if let Some(interaction_state) = interaction_state {
-            builder = builder.interaction_state(interaction_state);
-        }
-        if let Some(ripple_state) = ripple_state {
-            builder = builder.ripple_state(ripple_state);
-        }
-        drop(builder);
+        surface_content()
+            .resolved(resolved.clone())
+            .interaction_state_optional(interaction_state)
+            .ripple_state_optional(ripple_state);
     });
 }

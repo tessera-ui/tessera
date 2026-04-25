@@ -152,7 +152,7 @@ pub fn glass_button(
     );
 
     layout().modifier(outer_modifier).child(move || {
-        let mut builder = fluid_glass()
+        fluid_glass()
             .modifier(Modifier::new())
             .tint_color(button_args.tint_color)
             .shape(button_args.shape)
@@ -161,27 +161,12 @@ pub fn glass_button(
             .noise_scale(button_args.noise_scale)
             .time(button_args.time)
             .padding(button_args.padding)
+            .contrast_optional(button_args.contrast)
+            .on_click_optional(button_args.on_click)
+            .border_optional(button_args.border)
+            .accessibility_label_optional(button_args.accessibility_label.clone())
+            .accessibility_description_optional(button_args.accessibility_description.clone())
+            .accessibility_focusable_optional(button_args.accessibility_focusable.then_some(true))
             .child_shared(child);
-
-        if let Some(contrast) = button_args.contrast {
-            builder = builder.contrast(contrast);
-        }
-        if let Some(on_click) = button_args.on_click {
-            builder = builder.on_click_shared(on_click);
-        }
-        if let Some(border) = button_args.border {
-            builder = builder.border(border);
-        }
-        if let Some(label) = button_args.accessibility_label.clone() {
-            builder = builder.accessibility_label(label);
-        }
-        if let Some(description) = button_args.accessibility_description.clone() {
-            builder = builder.accessibility_description(description);
-        }
-        if button_args.accessibility_focusable {
-            builder = builder.accessibility_focusable(true);
-        }
-
-        drop(builder);
     });
 }

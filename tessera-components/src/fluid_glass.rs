@@ -263,22 +263,15 @@ pub fn fluid_glass(
     };
 
     layout().modifier(modifier).child(move || {
-        let mut builder = fluid_glass_inner()
+        fluid_glass_inner()
             .render(render.clone())
             .blur_radius(blur_radius)
             .padding(padding)
             .interactive(interactive)
-            .block_input(block_input);
-        if let Some(contrast) = contrast {
-            builder = builder.contrast(contrast);
-        }
-        if let Some(ripple_state) = ripple_state {
-            builder = builder.ripple_state(ripple_state);
-        }
-        if let Some(child) = child {
-            builder = builder.child_shared(child);
-        }
-        drop(builder);
+            .block_input(block_input)
+            .contrast_optional(contrast)
+            .ripple_state_optional(ripple_state)
+            .child_optional(child);
     });
 }
 

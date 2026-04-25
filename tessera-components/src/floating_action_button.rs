@@ -339,7 +339,7 @@ pub fn floating_action_button(
     let shadow_elevation = elevation.shadow_elevation(args.enabled, interaction_state);
     let tonal_elevation = elevation.tonal_elevation();
 
-    let mut surface_args = surface()
+    surface()
         .modifier(args.modifier.size_in(Some(size), None, Some(size), None))
         .style(SurfaceStyle::Filled {
             color: container_color,
@@ -352,33 +352,20 @@ pub fn floating_action_button(
         .elevation(shadow_elevation)
         .tonal_elevation(tonal_elevation)
         .accessibility_role(Role::Button)
-        .accessibility_focusable(true);
-
-    if let Some(state) = interaction_state {
-        surface_args = surface_args.interaction_state(state);
-    }
-
-    if let Some(on_click) = args.on_click {
-        surface_args = surface_args.on_click_shared(on_click);
-    }
-
-    if let Some(label) = args.accessibility_label {
-        surface_args = surface_args.accessibility_label(label);
-    }
-
-    if let Some(description) = args.accessibility_description {
-        surface_args = surface_args.accessibility_description(description);
-    }
-
-    surface_args.child({
-        move || {
-            provide_text_style(typography.label_large, move || {
-                if let Some(content) = content.as_ref() {
-                    content.render();
-                }
-            });
-        }
-    });
+        .accessibility_focusable(true)
+        .interaction_state_optional(interaction_state)
+        .on_click_optional(args.on_click)
+        .accessibility_label_optional(args.accessibility_label)
+        .accessibility_description_optional(args.accessibility_description)
+        .child({
+            move || {
+                provide_text_style(typography.label_large, move || {
+                    if let Some(content) = content.as_ref() {
+                        content.render();
+                    }
+                });
+            }
+        });
 }
 
 impl FloatingActionButtonBuilder {

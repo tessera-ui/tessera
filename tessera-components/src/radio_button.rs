@@ -295,7 +295,7 @@ pub fn radio_button(
         controller.with_mut(|c| c.set_selected(selected));
     }
 
-    let mut builder = radio_button_inner()
+    radio_button_inner()
         .modifier(modifier)
         .on_select_shared(on_select)
         .selected(selected)
@@ -308,14 +308,9 @@ pub fn radio_button(
         .disabled_selected_color(disabled_selected_color)
         .disabled_unselected_color(disabled_unselected_color)
         .enabled(enabled)
-        .controller(controller);
-    if let Some(label) = accessibility_label {
-        builder = builder.accessibility_label(label);
-    }
-    if let Some(description) = accessibility_description {
-        builder = builder.accessibility_description(description);
-    }
-    drop(builder);
+        .controller(controller)
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description);
 }
 
 #[tessera]
@@ -449,9 +444,7 @@ fn radio_button_inner(
         .modifier(modifier)
         .alignment(Alignment::Center)
         .children(move || {
-            let interaction_state = interaction_state;
-            let ripple_state = ripple_state;
-            let mut builder = surface()
+            surface()
                 .modifier(Modifier::new().size(state_layer_size, state_layer_size))
                 .shape(Shape::Ellipse)
                 .enabled(enabled)
@@ -460,54 +453,53 @@ fn radio_button_inner(
                 })
                 .ripple_bounded(false)
                 .ripple_radius(state_layer_radius)
-                .ripple_color(ripple_color);
-            if let Some(state) = interaction_state {
-                builder = builder.interaction_state(state);
-            }
-            builder.set_ripple_state(ripple_state);
-            builder.child({
-                move || {
-                    boxed()
-                        .alignment(Alignment::Center)
-                        .modifier(Modifier::new().fill_max_size())
-                        .children(move || {
-                            surface()
-                                .modifier(Modifier::new().size(size, size))
-                                .shape(Shape::Ellipse)
-                                .style(SurfaceStyle::Outlined {
-                                    color: ring_color,
-                                    width: stroke_width,
-                                })
-                                .child({
-                                    move || {
-                                        let animated_size =
-                                            (dot_size.to_px().0 as f32 * eased_progress).round()
+                .ripple_color(ripple_color)
+                .interaction_state_optional(interaction_state)
+                .ripple_state_optional(ripple_state)
+                .child({
+                    move || {
+                        boxed()
+                            .alignment(Alignment::Center)
+                            .modifier(Modifier::new().fill_max_size())
+                            .children(move || {
+                                surface()
+                                    .modifier(Modifier::new().size(size, size))
+                                    .shape(Shape::Ellipse)
+                                    .style(SurfaceStyle::Outlined {
+                                        color: ring_color,
+                                        width: stroke_width,
+                                    })
+                                    .child({
+                                        move || {
+                                            let animated_size = (dot_size.to_px().0 as f32
+                                                * eased_progress)
+                                                .round()
                                                 as i32;
-                                        if animated_size > 0 {
-                                            boxed()
-                                                .alignment(Alignment::Center)
-                                                .modifier(Modifier::new().size(size, size))
-                                                .children(move || {
-                                                    surface()
-                                                        .modifier(Modifier::new().constrain(
-                                                            Some(AxisConstraint::exact(Px(
-                                                                animated_size,
-                                                            ))),
-                                                            Some(AxisConstraint::exact(Px(
-                                                                animated_size,
-                                                            ))),
-                                                        ))
-                                                        .shape(Shape::Ellipse)
-                                                        .style(SurfaceStyle::Filled {
-                                                            color: active_dot_color,
-                                                        })
-                                                        .child(|| {});
-                                                });
+                                            if animated_size > 0 {
+                                                boxed()
+                                                    .alignment(Alignment::Center)
+                                                    .modifier(Modifier::new().size(size, size))
+                                                    .children(move || {
+                                                        surface()
+                                                            .modifier(Modifier::new().constrain(
+                                                                Some(AxisConstraint::exact(Px(
+                                                                    animated_size,
+                                                                ))),
+                                                                Some(AxisConstraint::exact(Px(
+                                                                    animated_size,
+                                                                ))),
+                                                            ))
+                                                            .shape(Shape::Ellipse)
+                                                            .style(SurfaceStyle::Filled {
+                                                                color: active_dot_color,
+                                                            })
+                                                            .child(|| {});
+                                                    });
+                                            }
                                         }
-                                    }
-                                });
-                        });
-                }
-            });
+                                    });
+                            });
+                    }
+                });
         });
 }

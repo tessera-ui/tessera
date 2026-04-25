@@ -971,7 +971,19 @@ fn menu_item_surface(
     };
 
     layout().modifier(modifier).child(move || {
-        let mut surface_args = surface()
+        let on_click = if has_submenu {
+            let submenu_controller =
+                click_submenu_controller.expect("submenu item requires controller");
+            Some(Callback::new(move || {
+                submenu_controller.with_mut(|controller| controller.open());
+            }))
+        } else {
+            item.on_click
+        };
+        let accessibility_description = item.supporting_text.clone();
+        let item_for_child = item.clone();
+
+        surface()
             .style(SurfaceStyle::Filled {
                 color: Color::TRANSPARENT,
             })
@@ -991,88 +1003,71 @@ fn menu_item_surface(
                     .color_scheme
                     .on_surface
                     .with_alpha(1.0),
-            );
-
-        if let Some(focus_requester) = focus_requester {
-            surface_args = surface_args.focus_requester(focus_requester);
-        }
-
-        if has_submenu {
-            let submenu_controller =
-                click_submenu_controller.expect("submenu item requires controller");
-            surface_args = surface_args.on_click_shared(move || {
-                submenu_controller.with_mut(|controller| controller.open());
-            });
-        } else if let Some(on_click) = item.on_click {
-            surface_args = surface_args.on_click_shared(on_click);
-        }
-
-        if let Some(description) = item.supporting_text.clone() {
-            surface_args = surface_args.accessibility_description(description);
-        }
-
-        let item_for_child = item.clone();
-        surface_args.child(move || {
-            let item_for_row = item_for_child.clone();
-            row()
-                .modifier(Modifier::new().fill_max_width().constrain(
-                    None,
-                    Some(AxisConstraint::at_least(Px::from(item_for_child.height))),
-                ))
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .children(move || {
-                    let item_for_child = item_for_row.clone();
-                    {
-                        spacer().modifier(Modifier::new().constrain(
-                            Some(AxisConstraint::exact(Px::from(MENU_HORIZONTAL_PADDING))),
-                            None,
-                        ));
-                    };
-
-                    let leading_args = item_for_child.clone();
-                    {
-                        render_leading(&leading_args, enabled);
-                    };
-
-                    {
-                        spacer().modifier(Modifier::new().constrain(
-                            Some(AxisConstraint::exact(Px::from(MENU_HORIZONTAL_PADDING))),
-                            None,
-                        ));
-                    };
-
-                    let label_args = item_for_child.clone();
-                    {
-                        render_labels(&label_args, enabled);
-                    };
-
-                    spacer().modifier(Modifier::new().fill_max_width().weight(1.0));
-
-                    if item_for_child.trailing_icon.is_some()
-                        || item_for_child.trailing_text.is_some()
-                        || item_for_child.submenu_content.is_some()
-                    {
-                        let trailing_args = item_for_child.clone();
-                        {
-                            render_trailing(&trailing_args, enabled);
-                        };
-
-                        {
-                            spacer().modifier(Modifier::new().constrain(
-                                Some(AxisConstraint::exact(Px::from(MENU_TRAILING_SPACING))),
-                                None,
-                            ));
-                        };
-                    } else {
+            )
+            .focus_requester_optional(focus_requester)
+            .on_click_optional(on_click)
+            .accessibility_description_optional(accessibility_description)
+            .child(move || {
+                let item_for_row = item_for_child.clone();
+                row()
+                    .modifier(Modifier::new().fill_max_width().constrain(
+                        None,
+                        Some(AxisConstraint::at_least(Px::from(item_for_child.height))),
+                    ))
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        let item_for_child = item_for_row.clone();
                         {
                             spacer().modifier(Modifier::new().constrain(
                                 Some(AxisConstraint::exact(Px::from(MENU_HORIZONTAL_PADDING))),
                                 None,
                             ));
                         };
-                    }
-                });
-        });
+
+                        let leading_args = item_for_child.clone();
+                        {
+                            render_leading(&leading_args, enabled);
+                        };
+
+                        {
+                            spacer().modifier(Modifier::new().constrain(
+                                Some(AxisConstraint::exact(Px::from(MENU_HORIZONTAL_PADDING))),
+                                None,
+                            ));
+                        };
+
+                        let label_args = item_for_child.clone();
+                        {
+                            render_labels(&label_args, enabled);
+                        };
+
+                        spacer().modifier(Modifier::new().fill_max_width().weight(1.0));
+
+                        if item_for_child.trailing_icon.is_some()
+                            || item_for_child.trailing_text.is_some()
+                            || item_for_child.submenu_content.is_some()
+                        {
+                            let trailing_args = item_for_child.clone();
+                            {
+                                render_trailing(&trailing_args, enabled);
+                            };
+
+                            {
+                                spacer().modifier(Modifier::new().constrain(
+                                    Some(AxisConstraint::exact(Px::from(MENU_TRAILING_SPACING))),
+                                    None,
+                                ));
+                            };
+                        } else {
+                            {
+                                spacer().modifier(Modifier::new().constrain(
+                                    Some(AxisConstraint::exact(Px::from(MENU_HORIZONTAL_PADDING))),
+                                    None,
+                                ));
+                            };
+                        }
+                    });
+            });
     });
 }
 

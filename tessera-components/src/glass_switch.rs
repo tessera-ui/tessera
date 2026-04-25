@@ -244,34 +244,28 @@ pub fn glass_switch(
             progress,
         })
         .child(move || {
-            let track = fluid_glass()
+            fluid_glass()
                 .modifier(Modifier::new().constrain(
                     Some(AxisConstraint::exact(width_px)),
                     Some(AxisConstraint::exact(height_px)),
                 ))
                 .tint_color(track_color)
                 .shape(Shape::CAPSULE)
-                .blur_radius(Dp(8.0));
-            if let Some(border) = track_border {
-                track.border(border).child(|| {});
-            } else {
-                track.child(|| {});
-            }
+                .blur_radius(Dp(8.0))
+                .border_optional(track_border)
+                .child(|| {});
 
             let thumb_alpha = thumb_off_alpha + (thumb_on_alpha - thumb_off_alpha) * progress;
             let thumb_color = Color::new(1.0, 1.0, 1.0, thumb_alpha);
-            let thumb = fluid_glass()
+            fluid_glass()
                 .modifier(Modifier::new().constrain(
                     Some(AxisConstraint::exact(thumb_px)),
                     Some(AxisConstraint::exact(thumb_px)),
                 ))
                 .tint_color(thumb_color)
-                .shape(Shape::Ellipse);
-            if let Some(border) = thumb_border {
-                thumb.border(border).child(|| {});
-            } else {
-                thumb.child(|| {});
-            }
+                .shape(Shape::Ellipse)
+                .border_optional(thumb_border)
+                .child(|| {});
         });
 }
 

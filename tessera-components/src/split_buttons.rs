@@ -668,8 +668,10 @@ struct SplitButtonSurfaceArgs {
     accessibility_description: Option<String>,
 }
 
-fn split_button_surface(args: SplitButtonSurfaceArgs) -> crate::surface::SurfaceBuilder {
-    let builder = surface()
+fn render_split_button_surface(args: SplitButtonSurfaceArgs, child: RenderSlot) {
+    let has_on_click = args.on_click.is_some();
+
+    surface()
         .modifier(args.modifier)
         .style(args.style)
         .shape(args.shape)
@@ -677,34 +679,14 @@ fn split_button_surface(args: SplitButtonSurfaceArgs) -> crate::surface::Surface
         .content_color(args.content_color)
         .enabled(args.enabled)
         .ripple_color(args.content_color)
-        .tonal_elevation(args.tonal_elevation);
-
-    let builder = if let Some(elevation) = args.elevation {
-        builder.elevation(elevation)
-    } else {
-        builder
-    };
-
-    let builder = if let Some(on_click) = args.on_click {
-        builder
-            .on_click_shared(on_click)
-            .accessibility_role(Role::Button)
-            .accessibility_focusable(true)
-    } else {
-        builder
-    };
-
-    let builder = if let Some(label) = args.accessibility_label {
-        builder.accessibility_label(label)
-    } else {
-        builder
-    };
-
-    if let Some(description) = args.accessibility_description {
-        builder.accessibility_description(description)
-    } else {
-        builder
-    }
+        .tonal_elevation(args.tonal_elevation)
+        .elevation_optional(args.elevation)
+        .on_click_optional(args.on_click)
+        .accessibility_role_optional(has_on_click.then_some(Role::Button))
+        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_label_optional(args.accessibility_label)
+        .accessibility_description_optional(args.accessibility_description)
+        .child_shared(child);
 }
 
 fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
@@ -750,26 +732,28 @@ fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
         }
     };
 
-    split_button_surface(SplitButtonSurfaceArgs {
-        modifier: modifier.size_in(Some(min_width), None, Some(container_height), None),
-        style,
-        shape,
-        content_color,
-        enabled,
-        tonal_elevation,
-        elevation,
-        on_click,
-        accessibility_label,
-        accessibility_description,
-    })
-    .child(move || {
-        let content = content;
-        provide_text_style(typography.label_large, move || {
-            layout()
-                .modifier(Modifier::new().padding(content_padding))
-                .child(move || {
-                    content.render();
-                });
-        });
-    });
+    render_split_button_surface(
+        SplitButtonSurfaceArgs {
+            modifier: modifier.size_in(Some(min_width), None, Some(container_height), None),
+            style,
+            shape,
+            content_color,
+            enabled,
+            tonal_elevation,
+            elevation,
+            on_click,
+            accessibility_label,
+            accessibility_description,
+        },
+        RenderSlot::new(move || {
+            let content = content;
+            provide_text_style(typography.label_large, move || {
+                layout()
+                    .modifier(Modifier::new().padding(content_padding))
+                    .child(move || {
+                        content.render();
+                    });
+            });
+        }),
+    );
 }

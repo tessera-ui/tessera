@@ -184,24 +184,28 @@ pub fn button(
         child,
     };
     let child = button_args.child;
+    let padding = button_args.padding;
     let typography = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .typography;
 
-    create_surface_builder(&button_args).child(move || {
-        let child = child;
-        let modifier = Modifier::new().padding_all(button_args.padding);
-        layout().modifier(modifier).child(move || {
-            if let Some(child) = child.as_ref() {
-                let child = *child;
-                provide_text_style(typography.label_large, move || child.render());
-            }
-        });
-    });
+    render_button_surface(
+        button_args,
+        RenderSlot::new(move || {
+            let child = child;
+            let modifier = Modifier::new().padding_all(padding);
+            layout().modifier(modifier).child(move || {
+                if let Some(child) = child.as_ref() {
+                    let child = *child;
+                    provide_text_style(typography.label_large, move || child.render());
+                }
+            });
+        }),
+    );
 }
 
-fn create_surface_builder(args: &ButtonResolvedArgs) -> crate::surface::SurfaceBuilder {
+fn render_button_surface(args: ButtonResolvedArgs, child: RenderSlot) {
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -240,28 +244,9 @@ fn create_surface_builder(args: &ButtonResolvedArgs) -> crate::surface::SurfaceB
             color: container_color,
         }
     };
+    let on_click = args.enabled.then_some(args.on_click).flatten();
 
-    let mut builder = surface();
-
-    if let Some(elevation) = args.elevation {
-        builder = builder.elevation(elevation);
-    }
-
-    if args.enabled
-        && let Some(on_click) = args.on_click
-    {
-        builder = builder.on_click_shared(on_click);
-    }
-
-    if let Some(label) = args.accessibility_label.clone() {
-        builder = builder.accessibility_label(label);
-    }
-
-    if let Some(description) = args.accessibility_description.clone() {
-        builder = builder.accessibility_description(description);
-    }
-
-    builder
+    surface()
         .style(style)
         .shape(args.shape)
         .modifier(args.modifier.clone().size_in(
@@ -277,6 +262,11 @@ fn create_surface_builder(args: &ButtonResolvedArgs) -> crate::surface::SurfaceB
         .tonal_elevation(args.tonal_elevation)
         .accessibility_role(Role::Button)
         .accessibility_focusable(true)
+        .elevation_optional(args.elevation)
+        .on_click_optional(on_click)
+        .accessibility_label_optional(args.accessibility_label)
+        .accessibility_description_optional(args.accessibility_description)
+        .child_shared(child);
 }
 
 impl ButtonBuilder {

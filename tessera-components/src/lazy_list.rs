@@ -187,13 +187,6 @@ struct LazyListSlotsArgs {
 }
 
 fn lazy_column_slots(args: LazyListSlotsArgs) {
-    let scrollable_builder = scrollable()
-        .modifier(args.modifier)
-        .vertical(true)
-        .horizontal(false)
-        .apply_child_offset(false)
-        .scroll_smoothing(args.scroll_smoothing);
-
     // Create a proxy scroll controller that syncs with the LazyListController
     let scroll_controller = remember(ScrollableController::default);
 
@@ -210,7 +203,12 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
     let padding_main = sanitize_spacing(Px::from(args.content_padding));
     let padding_cross = sanitize_spacing(Px::from(args.content_padding));
 
-    scrollable_builder
+    scrollable()
+        .modifier(args.modifier)
+        .vertical(true)
+        .horizontal(false)
+        .apply_child_offset(false)
+        .scroll_smoothing(args.scroll_smoothing)
         .controller(scroll_controller)
         .child(move || {
             // Sync scroll position back to controller
@@ -222,7 +220,7 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
                 args.controller
                     .with_mut(|c| c.scroll.set_scroll_position(current_pos));
             }
-            let mut builder = lazy_list_view()
+            lazy_list_view()
                 .axis(LazyListAxis::Vertical)
                 .cross_axis_alignment(args.cross_axis_alignment)
                 .item_spacing(item_spacing)
@@ -232,11 +230,8 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
                 .padding_cross(padding_cross)
                 .slots(args.slots.clone())
                 .controller(args.controller)
-                .scroll_controller(scroll_controller);
-            if let Some(max_viewport_main) = args.max_viewport_main {
-                builder = builder.max_viewport_main(max_viewport_main);
-            }
-            drop(builder);
+                .scroll_controller(scroll_controller)
+                .max_viewport_main_optional(args.max_viewport_main);
         });
 }
 
@@ -538,13 +533,6 @@ where
 }
 
 fn lazy_row_slots(args: LazyListSlotsArgs) {
-    let scrollable_builder = scrollable()
-        .modifier(args.modifier)
-        .vertical(false)
-        .horizontal(true)
-        .apply_child_offset(false)
-        .scroll_smoothing(args.scroll_smoothing);
-
     // Create a proxy scroll controller that syncs with the LazyListController
     let scroll_controller = remember(ScrollableController::default);
 
@@ -561,7 +549,12 @@ fn lazy_row_slots(args: LazyListSlotsArgs) {
     let padding_main = sanitize_spacing(Px::from(args.content_padding));
     let padding_cross = sanitize_spacing(Px::from(args.content_padding));
 
-    scrollable_builder
+    scrollable()
+        .modifier(args.modifier)
+        .vertical(false)
+        .horizontal(true)
+        .apply_child_offset(false)
+        .scroll_smoothing(args.scroll_smoothing)
         .controller(scroll_controller)
         .child(move || {
             // Sync scroll position back to controller
@@ -573,7 +566,7 @@ fn lazy_row_slots(args: LazyListSlotsArgs) {
                 args.controller
                     .with_mut(|c| c.scroll.set_scroll_position(current_pos));
             }
-            let mut builder = lazy_list_view()
+            lazy_list_view()
                 .axis(LazyListAxis::Horizontal)
                 .cross_axis_alignment(args.cross_axis_alignment)
                 .item_spacing(item_spacing)
@@ -583,11 +576,8 @@ fn lazy_row_slots(args: LazyListSlotsArgs) {
                 .padding_cross(padding_cross)
                 .slots(args.slots.clone())
                 .controller(args.controller)
-                .scroll_controller(scroll_controller);
-            if let Some(max_viewport_main) = args.max_viewport_main {
-                builder = builder.max_viewport_main(max_viewport_main);
-            }
-            drop(builder);
+                .scroll_controller(scroll_controller)
+                .max_viewport_main_optional(args.max_viewport_main);
         });
 }
 

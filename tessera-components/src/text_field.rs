@@ -23,6 +23,7 @@ use crate::{
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
+    surface::surface,
     text::text,
     text_edit_core::DisplayTransform,
     text_input::{
@@ -691,135 +692,165 @@ fn render_text_field(
         core_args.border_width = Dp(0.0);
         core_args.focus_border_width = Some(Dp(0.0));
 
-        let surface_args = create_surface_args(&editor, &controller)
+        let surface_args = create_surface_args(&editor, &controller);
+        surface()
+            .style(surface_args.style)
+            .shape(surface_args.shape)
+            .block_input(!args.enabled)
+            .modifier(surface_args.modifier)
             .content_color(content_color)
-            .block_input(!args.enabled);
-        surface_args.child(move || {
-            let leading_icon = leading_icon;
-            let prefix = prefix;
-            let core_args = core_args.clone();
-            let placeholder_text = placeholder_text.clone();
-            let label_text = label_text.clone();
-            let suffix = suffix;
-            let trailing_icon = trailing_icon;
-            boxed().children(move || {
-                {
-                    let leading_icon = leading_icon;
-                    let prefix = prefix;
-                    let core_args = core_args.clone();
-                    let placeholder_text = placeholder_text.clone();
-                    let label_text = label_text.clone();
-                    let suffix = suffix;
-                    let trailing_icon = trailing_icon;
-                    let row_modifier = Modifier::new()
-                        .fill_max_height()
-                        .padding(Padding::all(content_padding));
-                    row()
-                        .modifier(row_modifier)
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(move || {
-                            if let Some(leading_icon) = leading_icon.as_ref() {
-                                let leading_icon = *leading_icon;
-                                {
-                                    provide_context(
-                                        || ContentColor {
-                                            current: content_color,
-                                        },
-                                        || {
-                                            leading_icon.render();
-                                        },
-                                    );
-                                };
-                                let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
-                                {
-                                    spacer().modifier(Modifier::new().width(spacing));
-                                };
-                            }
-
-                            if let Some(prefix) = prefix.as_ref() {
-                                let prefix = *prefix;
-                                {
-                                    provide_context(
-                                        || ContentColor {
-                                            current: content_color,
-                                        },
-                                        || {
-                                            prefix.render();
-                                        },
-                                    );
-                                };
-                                let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
-                                {
-                                    spacer().modifier(Modifier::new().width(spacing));
-                                };
-                            }
-
-                            let core_args_for_box = core_args.clone();
-                            let placeholder_text_for_box = placeholder_text.clone();
-                            let label_text_for_box = label_text.clone();
-                            boxed()
-                                .modifier(Modifier::new().weight(1.0))
-                                .children(move || {
-                                    let core_args = core_args_for_box.clone();
-                                    let placeholder_text = placeholder_text_for_box.clone();
-                                    let label_text = label_text_for_box.clone();
-                                    text_input_core(&core_args.clone(), controller);
-
-                                    if show_placeholder
-                                        && let Some(placeholder_text) = placeholder_text.as_ref()
+            .child(move || {
+                let leading_icon = leading_icon;
+                let prefix = prefix;
+                let core_args = core_args.clone();
+                let placeholder_text = placeholder_text.clone();
+                let label_text = label_text.clone();
+                let suffix = suffix;
+                let trailing_icon = trailing_icon;
+                boxed().children(move || {
+                    {
+                        let leading_icon = leading_icon;
+                        let prefix = prefix;
+                        let core_args = core_args.clone();
+                        let placeholder_text = placeholder_text.clone();
+                        let label_text = label_text.clone();
+                        let suffix = suffix;
+                        let trailing_icon = trailing_icon;
+                        let row_modifier = Modifier::new()
+                            .fill_max_height()
+                            .padding(Padding::all(content_padding));
+                        row()
+                            .modifier(row_modifier)
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move || {
+                                if let Some(leading_icon) = leading_icon.as_ref() {
+                                    let leading_icon = *leading_icon;
                                     {
-                                        let placeholder_text = placeholder_text.clone();
-                                        layout()
-                                            .modifier(Modifier::new().align(Alignment::TopStart))
-                                            .child(move || {
-                                                text()
-                                                    .content(placeholder_text.clone())
-                                                    .color(placeholder_color)
-                                                    .style(placeholder_style);
-                                            });
-                                    }
+                                        provide_context(
+                                            || ContentColor {
+                                                current: content_color,
+                                            },
+                                            || {
+                                                leading_icon.render();
+                                            },
+                                        );
+                                    };
+                                    let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
+                                    {
+                                        spacer().modifier(Modifier::new().width(spacing));
+                                    };
+                                }
 
-                                    if let Some(label_text) = label_text.as_ref() {
-                                        let label_text = label_text.clone();
-                                        if label_should_float {
-                                            if is_outlined {
-                                                let floating_args = OutlinedFloatingLabelArgs {
-                                                    label_text: label_text.clone(),
-                                                    label_color,
-                                                    label_font_size: label_floating_style.font_size,
-                                                    label_line_height: label_floating_style
-                                                        .line_height
-                                                        .unwrap_or(Dp(label_floating_style
-                                                            .font_size
-                                                            .0
-                                                            * 1.2)),
-                                                    label_offset_x: floating_label_offset_x,
-                                                    label_offset_y: floating_label_offset_y,
-                                                    notch_fill_color,
-                                                    notch_padding,
-                                                    notch_vertical_padding,
-                                                };
-                                                layout()
-                                                    .modifier(
-                                                        Modifier::new().align(Alignment::TopStart),
-                                                    )
-                                                    .child(move || {
-                                                        let args = floating_args.clone();
-                                                        outlined_floating_label()
-                                                            .label_text(args.label_text)
-                                                            .label_color(args.label_color)
-                                                            .label_font_size(args.label_font_size)
-                                                            .label_line_height(
-                                                                args.label_line_height,
-                                                            )
-                                                            .label_offset_x(args.label_offset_x)
-                                                            .label_offset_y(args.label_offset_y)
-                                                            .notch_fill_color(args.notch_fill_color)
-                                                            .notch_padding(args.notch_padding)
-                                                            .notch_vertical_padding(
-                                                                args.notch_vertical_padding,
-                                                            );
-                                                    });
+                                if let Some(prefix) = prefix.as_ref() {
+                                    let prefix = *prefix;
+                                    {
+                                        provide_context(
+                                            || ContentColor {
+                                                current: content_color,
+                                            },
+                                            || {
+                                                prefix.render();
+                                            },
+                                        );
+                                    };
+                                    let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
+                                    {
+                                        spacer().modifier(Modifier::new().width(spacing));
+                                    };
+                                }
+
+                                let core_args_for_box = core_args.clone();
+                                let placeholder_text_for_box = placeholder_text.clone();
+                                let label_text_for_box = label_text.clone();
+                                boxed()
+                                    .modifier(Modifier::new().weight(1.0))
+                                    .children(move || {
+                                        let core_args = core_args_for_box.clone();
+                                        let placeholder_text = placeholder_text_for_box.clone();
+                                        let label_text = label_text_for_box.clone();
+                                        text_input_core(&core_args.clone(), controller);
+
+                                        if show_placeholder
+                                            && let Some(placeholder_text) =
+                                                placeholder_text.as_ref()
+                                        {
+                                            let placeholder_text = placeholder_text.clone();
+                                            layout()
+                                                .modifier(
+                                                    Modifier::new().align(Alignment::TopStart),
+                                                )
+                                                .child(move || {
+                                                    text()
+                                                        .content(placeholder_text.clone())
+                                                        .color(placeholder_color)
+                                                        .style(placeholder_style);
+                                                });
+                                        }
+
+                                        if let Some(label_text) = label_text.as_ref() {
+                                            let label_text = label_text.clone();
+                                            if label_should_float {
+                                                if is_outlined {
+                                                    let floating_args = OutlinedFloatingLabelArgs {
+                                                        label_text: label_text.clone(),
+                                                        label_color,
+                                                        label_font_size: label_floating_style
+                                                            .font_size,
+                                                        label_line_height: label_floating_style
+                                                            .line_height
+                                                            .unwrap_or(Dp(label_floating_style
+                                                                .font_size
+                                                                .0
+                                                                * 1.2)),
+                                                        label_offset_x: floating_label_offset_x,
+                                                        label_offset_y: floating_label_offset_y,
+                                                        notch_fill_color,
+                                                        notch_padding,
+                                                        notch_vertical_padding,
+                                                    };
+                                                    layout()
+                                                        .modifier(
+                                                            Modifier::new()
+                                                                .align(Alignment::TopStart),
+                                                        )
+                                                        .child(move || {
+                                                            let args = floating_args.clone();
+                                                            outlined_floating_label()
+                                                                .label_text(args.label_text)
+                                                                .label_color(args.label_color)
+                                                                .label_font_size(
+                                                                    args.label_font_size,
+                                                                )
+                                                                .label_line_height(
+                                                                    args.label_line_height,
+                                                                )
+                                                                .label_offset_x(args.label_offset_x)
+                                                                .label_offset_y(args.label_offset_y)
+                                                                .notch_fill_color(
+                                                                    args.notch_fill_color,
+                                                                )
+                                                                .notch_padding(args.notch_padding)
+                                                                .notch_vertical_padding(
+                                                                    args.notch_vertical_padding,
+                                                                );
+                                                        });
+                                                } else {
+                                                    layout()
+                                                        .modifier(
+                                                            Modifier::new()
+                                                                .align(Alignment::TopStart),
+                                                        )
+                                                        .child(move || {
+                                                            text()
+                                                                .content(label_text.clone())
+                                                                .color(label_color)
+                                                                .style(label_floating_style)
+                                                                .modifier(Modifier::new().offset(
+                                                                    floating_label_offset_x,
+                                                                    floating_label_offset_y,
+                                                                ));
+                                                        });
+                                                }
                                             } else {
                                                 layout()
                                                     .modifier(
@@ -829,77 +860,61 @@ fn render_text_field(
                                                         text()
                                                             .content(label_text.clone())
                                                             .color(label_color)
-                                                            .style(label_floating_style)
-                                                            .modifier(Modifier::new().offset(
-                                                                floating_label_offset_x,
-                                                                floating_label_offset_y,
-                                                            ));
+                                                            .style(label_resting_style);
                                                     });
                                             }
-                                        } else {
-                                            layout()
-                                                .modifier(
-                                                    Modifier::new().align(Alignment::TopStart),
-                                                )
-                                                .child(move || {
-                                                    text()
-                                                        .content(label_text.clone())
-                                                        .color(label_color)
-                                                        .style(label_resting_style);
-                                                });
                                         }
-                                    }
-                                });
+                                    });
 
-                            if let Some(suffix) = suffix.as_ref() {
-                                let suffix = *suffix;
-                                let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
-                                {
-                                    spacer().modifier(Modifier::new().width(spacing));
-                                };
-                                {
-                                    provide_context(
-                                        || ContentColor {
-                                            current: content_color,
-                                        },
-                                        || {
-                                            suffix.render();
-                                        },
-                                    );
-                                };
-                            }
+                                if let Some(suffix) = suffix.as_ref() {
+                                    let suffix = *suffix;
+                                    let spacing = TextFieldDefaults::PREFIX_SUFFIX_PADDING;
+                                    {
+                                        spacer().modifier(Modifier::new().width(spacing));
+                                    };
+                                    {
+                                        provide_context(
+                                            || ContentColor {
+                                                current: content_color,
+                                            },
+                                            || {
+                                                suffix.render();
+                                            },
+                                        );
+                                    };
+                                }
 
-                            if let Some(trailing_icon) = trailing_icon.as_ref() {
-                                let trailing_icon = *trailing_icon;
-                                let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
-                                {
-                                    spacer().modifier(Modifier::new().width(spacing));
-                                };
-                                {
-                                    provide_context(
-                                        || ContentColor {
-                                            current: content_color,
-                                        },
-                                        || {
-                                            trailing_icon.render();
-                                        },
-                                    );
-                                };
-                            }
-                        });
-                };
+                                if let Some(trailing_icon) = trailing_icon.as_ref() {
+                                    let trailing_icon = *trailing_icon;
+                                    let spacing = TextFieldDefaults::ICON_TEXT_PADDING;
+                                    {
+                                        spacer().modifier(Modifier::new().width(spacing));
+                                    };
+                                    {
+                                        provide_context(
+                                            || ContentColor {
+                                                current: content_color,
+                                            },
+                                            || {
+                                                trailing_icon.render();
+                                            },
+                                        );
+                                    };
+                                }
+                            });
+                    };
 
-                if show_indicator {
-                    layout()
-                        .modifier(Modifier::new().align(Alignment::BottomStart))
-                        .child(move || {
-                            horizontal_divider()
-                                .thickness(indicator_thickness)
-                                .color(indicator_color);
-                        });
-                }
+                    if show_indicator {
+                        layout()
+                            .modifier(Modifier::new().align(Alignment::BottomStart))
+                            .child(move || {
+                                horizontal_divider()
+                                    .thickness(indicator_thickness)
+                                    .color(indicator_color);
+                            });
+                    }
+                });
             });
-        });
     };
 
     render_editor();

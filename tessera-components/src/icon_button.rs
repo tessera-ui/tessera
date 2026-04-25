@@ -3,7 +3,7 @@
 //! ## Usage
 //!
 //! Use for compact actions where an icon is sufficient to convey the meaning.
-use tessera_ui::{Callback, Color, Dp, Modifier, tessera, use_context};
+use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, tessera, use_context};
 
 use crate::{
     button::{ButtonDefaults, button},
@@ -140,7 +140,10 @@ pub fn icon_button(
     let content_color = content_color.unwrap_or(default_content_color);
     let ripple_color = content_color;
 
-    let mut builder = button()
+    let child =
+        icon.map(|icon| RenderSlot::new(move || render_icon_content(icon.clone(), content_color)));
+
+    button()
         .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)))
         .padding(Dp(8.0))
         .shape(Shape::rounded_rectangle(Dp(20.0)))
@@ -156,19 +159,10 @@ pub fn icon_button(
         .disabled_content_color(ButtonDefaults::disabled_content_color(&scheme))
         .disabled_border_color(ButtonDefaults::disabled_border_color(&scheme))
         .ripple_color(ripple_color)
-        .border_width(border_width);
-
-    if let Some(border_color) = border_color {
-        builder = builder.border_color(border_color);
-    }
-    if let Some(on_click) = on_click {
-        builder = builder.on_click_shared(on_click);
-    }
-    if let Some(icon) = icon {
-        builder = builder.child(move || render_icon_content(icon.clone(), content_color));
-    }
-
-    drop(builder);
+        .border_width(border_width)
+        .border_color_optional(border_color)
+        .on_click_optional(on_click)
+        .child_optional(child);
 }
 
 /// # glass_icon_button
@@ -238,7 +232,10 @@ pub fn glass_icon_button(
     let content_color = content_color.unwrap_or(scheme.on_surface);
     let modifier = modifier.unwrap_or_default();
 
-    let mut builder = glass_button()
+    let child =
+        icon.map(|icon| RenderSlot::new(move || render_icon_content(icon.clone(), content_color)));
+
+    glass_button()
         .modifier(modifier)
         .padding(padding.unwrap_or(Dp(12.0)))
         .tint_color(tint_color.unwrap_or(Color::new(0.5, 0.5, 0.5, 0.1)))
@@ -246,29 +243,12 @@ pub fn glass_icon_button(
         .blur_radius(blur_radius.unwrap_or(Dp(0.0)))
         .noise_amount(noise_amount.unwrap_or(0.0))
         .noise_scale(noise_scale.unwrap_or(1.0))
-        .time(time.unwrap_or(0.0));
-
-    if let Some(on_click) = on_click {
-        builder = builder.on_click_shared(on_click);
-    }
-    if let Some(contrast) = contrast {
-        builder = builder.contrast(contrast);
-    }
-    if let Some(border) = border {
-        builder = builder.border(border);
-    }
-    if let Some(label) = accessibility_label {
-        builder = builder.accessibility_label(label);
-    }
-    if let Some(description) = accessibility_description {
-        builder = builder.accessibility_description(description);
-    }
-    if accessibility_focusable.unwrap_or(false) {
-        builder = builder.accessibility_focusable(true);
-    }
-    if let Some(icon) = icon {
-        builder = builder.child(move || render_icon_content(icon.clone(), content_color));
-    }
-
-    drop(builder);
+        .time(time.unwrap_or(0.0))
+        .on_click_optional(on_click)
+        .contrast_optional(contrast)
+        .border_optional(border)
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
+        .accessibility_focusable_optional(accessibility_focusable.filter(|value| *value))
+        .child_optional(child);
 }

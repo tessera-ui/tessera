@@ -303,71 +303,63 @@ pub fn segmented_button(
         });
     }
 
-    let mut button = surface()
+    let has_on_click = on_click.is_some();
+    let accessibility_label =
+        accessibility_label.or_else(|| (!label.is_empty()).then(|| label.clone()));
+
+    surface()
         .modifier(modifier)
         .style(surface_style)
         .shape(shape)
         .content_alignment(Alignment::Center)
         .content_color(content_color)
         .enabled(enabled)
-        .ripple_color(content_color);
+        .ripple_color(content_color)
+        .on_click_optional(on_click)
+        .accessibility_role_optional(has_on_click.then_some(Role::Button))
+        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
+        .child(move || {
+            let leading_icon = icon.clone();
+            let padding = content_padding;
+            let label_outer = label.clone();
+            provide_text_style(typography.label_large, move || {
+                let leading_icon = leading_icon.clone();
+                let label_outer = label_outer.clone();
+                layout()
+                    .modifier(Modifier::new().padding(padding))
+                    .child(move || {
+                        let leading_icon = leading_icon.clone();
+                        let label = label_outer.clone();
+                        row()
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move || {
+                                let mut has_content = false;
 
-    if let Some(on_click) = on_click {
-        button = button
-            .on_click_shared(on_click)
-            .accessibility_role(Role::Button)
-            .accessibility_focusable(true);
-    }
+                                if let Some(icon_content) = leading_icon.clone() {
+                                    has_content = true;
+                                    icon_component()
+                                        .painter(icon_content)
+                                        .size(SegmentedButtonDefaults::ICON_SIZE);
+                                }
 
-    let accessibility_label =
-        accessibility_label.or_else(|| (!label.is_empty()).then(|| label.clone()));
-    if let Some(label) = accessibility_label {
-        button = button.accessibility_label(label);
-    }
-    if let Some(description) = accessibility_description {
-        button = button.accessibility_description(description);
-    }
-
-    button.child(move || {
-        let leading_icon = icon.clone();
-        let padding = content_padding;
-        let label_outer = label.clone();
-        provide_text_style(typography.label_large, move || {
-            let leading_icon = leading_icon.clone();
-            let label_outer = label_outer.clone();
-            layout()
-                .modifier(Modifier::new().padding(padding))
-                .child(move || {
-                    let leading_icon = leading_icon.clone();
-                    let label = label_outer.clone();
-                    row()
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(move || {
-                            let mut has_content = false;
-
-                            if let Some(icon_content) = leading_icon.clone() {
-                                has_content = true;
-                                icon_component()
-                                    .painter(icon_content)
-                                    .size(SegmentedButtonDefaults::ICON_SIZE);
-                            }
-
-                            if !label.is_empty() {
-                                if has_content {
+                                if !label.is_empty() {
+                                    if has_content {
+                                        {
+                                            spacer().modifier(
+                                                Modifier::new().width(SEGMENTED_ICON_SPACING),
+                                            );
+                                        };
+                                    }
                                     {
-                                        spacer().modifier(
-                                            Modifier::new().width(SEGMENTED_ICON_SPACING),
-                                        );
+                                        text().content(label.clone());
                                     };
                                 }
-                                {
-                                    text().content(label.clone());
-                                };
-                            }
-                        });
-                });
+                            });
+                    });
+            });
         });
-    });
 }
 
 /// # single_choice_segmented_button_row

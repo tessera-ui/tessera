@@ -775,29 +775,26 @@ fn snackbar_from_data(data: SnackbarData) {
         ..
     } = data;
 
-    let mut builder = snackbar()
-        .message(message)
-        .with_dismiss_action(with_dismiss_action);
-
-    if let Some(action_label) = action_label.clone() {
-        builder = builder.action_label(action_label);
-    }
-
-    if action_label.is_some() {
-        builder = builder.on_action_shared(Callback::new(move || {
+    let on_action = action_label.is_some().then(|| {
+        Callback::new(move || {
             host_state.with_mut(|state| {
                 state.resolve_current(id, SnackbarResult::ActionPerformed);
             });
-        }));
-    }
+        })
+    });
 
-    if with_dismiss_action {
-        builder = builder.on_dismiss_shared(Callback::new(move || {
+    let on_dismiss = with_dismiss_action.then(|| {
+        Callback::new(move || {
             host_state.with_mut(|state| {
                 state.resolve_current(id, SnackbarResult::Dismissed);
             });
-        }));
-    }
+        })
+    });
 
-    drop(builder);
+    snackbar()
+        .message(message)
+        .with_dismiss_action(with_dismiss_action)
+        .action_label_optional(action_label)
+        .on_action_optional(on_action)
+        .on_dismiss_optional(on_dismiss);
 }

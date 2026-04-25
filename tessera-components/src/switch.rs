@@ -663,7 +663,7 @@ fn render_switch(
                 .show_ripple(false)
                 .child(|| {});
 
-            let state_layer = surface()
+            surface()
                 .modifier(Modifier::new().size(
                     SwitchDefaults::STATE_LAYER_SIZE,
                     SwitchDefaults::STATE_LAYER_SIZE,
@@ -676,23 +676,10 @@ fn render_switch(
                 .show_ripple(true)
                 .ripple_bounded(false)
                 .ripple_radius(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0))
-                .ripple_color(inherited_content_color);
-            if let Some(interaction_state) = interaction_state {
-                if let Some(ripple_state) = ripple_state {
-                    state_layer
-                        .interaction_state(interaction_state)
-                        .ripple_state(ripple_state)
-                        .child(|| {});
-                } else {
-                    state_layer
-                        .interaction_state(interaction_state)
-                        .child(|| {});
-                }
-            } else if let Some(ripple_state) = ripple_state {
-                state_layer.ripple_state(ripple_state).child(|| {});
-            } else {
-                state_layer.child(|| {});
-            }
+                .ripple_color(inherited_content_color)
+                .interaction_state_optional(interaction_state)
+                .ripple_state_optional(ripple_state)
+                .child(|| {});
             layout()
                 .layout_policy(SwitchThumbLayout {
                     size: thumb_size_px,

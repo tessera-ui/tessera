@@ -535,15 +535,6 @@ pub fn card(
 
     let container_color = colors.container_color(args.enabled);
     let content_color = colors.content_color(args.enabled);
-
-    let mut surface_args = surface()
-        .shape(shape)
-        .modifier(args.modifier)
-        .content_color(content_color)
-        .elevation(shadow_elevation)
-        .tonal_elevation(shadow_elevation)
-        .enabled(args.enabled);
-
     let style = match border {
         Some(border) => SurfaceStyle::FilledOutlined {
             fill_color: container_color,
@@ -554,20 +545,22 @@ pub fn card(
             color: container_color,
         },
     };
-    surface_args = surface_args.style(style);
 
-    if let Some(state) = interaction_state {
-        surface_args = surface_args.interaction_state(state);
-    }
+    let has_on_click = args.on_click.is_some();
 
-    if let Some(on_click) = args.on_click {
-        surface_args = surface_args
-            .on_click_shared(on_click)
-            .accessibility_role(Role::Button)
-            .accessibility_focusable(true);
-    }
-
-    surface_args.child_shared(content);
+    surface()
+        .shape(shape)
+        .modifier(args.modifier)
+        .content_color(content_color)
+        .elevation(shadow_elevation)
+        .tonal_elevation(shadow_elevation)
+        .enabled(args.enabled)
+        .style(style)
+        .interaction_state_optional(interaction_state)
+        .on_click_optional(args.on_click)
+        .accessibility_role_optional(has_on_click.then_some(Role::Button))
+        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .child_shared(content);
 }
 
 impl CardBuilder {

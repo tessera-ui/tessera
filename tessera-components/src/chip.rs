@@ -593,82 +593,71 @@ pub fn chip(
         });
     }
 
-    let mut surface_builder = surface()
+    let surface_elevation = (!matches!(style, ChipStyle::Elevated))
+        .then_some(elevation)
+        .flatten();
+    let has_on_click = args.on_click.is_some();
+    let leading_icon = args.leading_icon;
+    let trailing_icon = args.trailing_icon;
+    let has_label = !label.is_empty();
+
+    surface()
         .modifier(modifier)
         .style(surface_style)
         .shape(shape)
         .content_alignment(Alignment::Center)
         .content_color(label_color)
         .enabled(args.enabled)
-        .ripple_color(label_color);
+        .ripple_color(label_color)
+        .elevation_optional(surface_elevation)
+        .on_click_optional(args.on_click)
+        .accessibility_role_optional(has_on_click.then_some(Role::Button))
+        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(args.accessibility_description)
+        .child(move || {
+            let leading_icon = leading_icon.clone();
+            let trailing_icon = trailing_icon.clone();
+            let label = label.clone();
+            provide_text_style(typography.label_large, move || {
+                layout()
+                    .modifier(Modifier::new().padding(padding))
+                    .child(move || {
+                        let leading_icon = leading_icon.clone();
+                        let trailing_icon = trailing_icon.clone();
+                        let label = label.clone();
+                        row()
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move || {
+                                let spacing = ChipDefaults::ELEMENT_SPACING;
+                                let mut item_count = 0;
 
-    if !matches!(style, ChipStyle::Elevated)
-        && let Some(elevation) = elevation
-    {
-        surface_builder = surface_builder.elevation(elevation);
-    }
-
-    if let Some(on_click) = args.on_click {
-        surface_builder = surface_builder
-            .on_click_shared(on_click)
-            .accessibility_role(Role::Button)
-            .accessibility_focusable(true);
-    }
-
-    if let Some(label) = accessibility_label {
-        surface_builder = surface_builder.accessibility_label(label);
-    }
-    if let Some(description) = args.accessibility_description {
-        surface_builder = surface_builder.accessibility_description(description);
-    }
-
-    let leading_icon = args.leading_icon;
-    let trailing_icon = args.trailing_icon;
-    let has_label = !label.is_empty();
-
-    surface_builder.child(move || {
-        let leading_icon = leading_icon.clone();
-        let trailing_icon = trailing_icon.clone();
-        let label = label.clone();
-        provide_text_style(typography.label_large, move || {
-            layout()
-                .modifier(Modifier::new().padding(padding))
-                .child(move || {
-                    let leading_icon = leading_icon.clone();
-                    let trailing_icon = trailing_icon.clone();
-                    let label = label.clone();
-                    row()
-                        .cross_axis_alignment(CrossAxisAlignment::Center)
-                        .children(move || {
-                            let spacing = ChipDefaults::ELEMENT_SPACING;
-                            let mut item_count = 0;
-
-                            if let Some(icon_content) = leading_icon.clone() {
-                                if item_count > 0 {
-                                    spacer().modifier(Modifier::new().width(spacing));
+                                if let Some(icon_content) = leading_icon.clone() {
+                                    if item_count > 0 {
+                                        spacer().modifier(Modifier::new().width(spacing));
+                                    }
+                                    item_count += 1;
+                                    render_chip_icon(icon_content.clone(), leading_icon_color);
                                 }
-                                item_count += 1;
-                                render_chip_icon(icon_content.clone(), leading_icon_color);
-                            }
 
-                            if has_label {
-                                if item_count > 0 {
-                                    spacer().modifier(Modifier::new().width(spacing));
+                                if has_label {
+                                    if item_count > 0 {
+                                        spacer().modifier(Modifier::new().width(spacing));
+                                    }
+                                    item_count += 1;
+                                    text().content(label.clone());
                                 }
-                                item_count += 1;
-                                text().content(label.clone());
-                            }
 
-                            if let Some(icon_content) = trailing_icon.clone() {
-                                if item_count > 0 {
-                                    spacer().modifier(Modifier::new().width(spacing));
+                                if let Some(icon_content) = trailing_icon.clone() {
+                                    if item_count > 0 {
+                                        spacer().modifier(Modifier::new().width(spacing));
+                                    }
+                                    render_chip_icon(icon_content.clone(), trailing_icon_color);
                                 }
-                                render_chip_icon(icon_content.clone(), trailing_icon_color);
-                            }
-                        });
-                });
+                            });
+                    });
+            });
         });
-    });
 }
 
 fn chip_padding(variant: ChipVariant, has_leading_icon: bool, has_trailing_icon: bool) -> Padding {
