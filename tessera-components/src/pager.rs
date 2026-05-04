@@ -933,7 +933,36 @@ pub fn horizontal_pager(
     let controller = pager_args
         .controller
         .unwrap_or_else(|| remember(|| PagerController::new(pager_args.initial_page)));
-    pager_render(pager_args, controller, PagerAxis::Horizontal);
+    let drag_recognizer = remember(|| {
+        DragRecognizer::new(DragSettings {
+            axis: Some(DragAxis::Horizontal),
+            ..DragSettings::default()
+        })
+    });
+    let scroll_recognizer = remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
+    let frame_nanos = tessera_ui::current_frame_nanos();
+    if controller.with(|current| current.has_pending_animation_frame(frame_nanos)) {
+        let snap_threshold = pager_args.snap_threshold;
+        let scroll_smoothing = pager_args.scroll_smoothing;
+        receive_frame_nanos(move |frame_nanos| {
+            let has_pending_animation_frame = controller.with_mut(|current| {
+                current.tick(frame_nanos, snap_threshold, scroll_smoothing);
+                current.has_pending_animation_frame(frame_nanos)
+            });
+            if has_pending_animation_frame {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+    pager_render(
+        pager_args,
+        controller,
+        PagerAxis::Horizontal,
+        drag_recognizer,
+        scroll_recognizer,
+    );
 }
 
 /// # vertical_pager
@@ -1020,24 +1049,20 @@ pub fn vertical_pager(
     let controller = pager_args
         .controller
         .unwrap_or_else(|| remember(|| PagerController::new(pager_args.initial_page)));
-    pager_render(pager_args, controller, PagerAxis::Vertical);
-}
-
-fn pager_render(args: PagerConfig, controller: State<PagerController>, axis: PagerAxis) {
-    let page_content = args.page_content;
-    let should_set_page_count = controller.with(|current| {
-        let mut next = current.clone();
-        next.set_page_count(args.page_count);
-        next != *current
+    let drag_recognizer = remember(|| {
+        DragRecognizer::new(DragSettings {
+            axis: Some(DragAxis::Vertical),
+            ..DragSettings::default()
+        })
     });
-    if should_set_page_count {
-        controller.with_mut(|current| current.set_page_count(args.page_count));
-    }
+    let scroll_recognizer = remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
     let frame_nanos = tessera_ui::current_frame_nanos();
     if controller.with(|current| current.has_pending_animation_frame(frame_nanos)) {
+        let snap_threshold = pager_args.snap_threshold;
+        let scroll_smoothing = pager_args.scroll_smoothing;
         receive_frame_nanos(move |frame_nanos| {
             let has_pending_animation_frame = controller.with_mut(|current| {
-                current.tick(frame_nanos, args.snap_threshold, args.scroll_smoothing);
+                current.tick(frame_nanos, snap_threshold, scroll_smoothing);
                 current.has_pending_animation_frame(frame_nanos)
             });
             if has_pending_animation_frame {
@@ -1046,6 +1071,31 @@ fn pager_render(args: PagerConfig, controller: State<PagerController>, axis: Pag
                 tessera_ui::FrameNanosControl::Stop
             }
         });
+    }
+    pager_render(
+        pager_args,
+        controller,
+        PagerAxis::Vertical,
+        drag_recognizer,
+        scroll_recognizer,
+    );
+}
+
+fn pager_render(
+    args: PagerConfig,
+    controller: State<PagerController>,
+    axis: PagerAxis,
+    drag_recognizer: State<DragRecognizer>,
+    scroll_recognizer: State<ScrollRecognizer>,
+) {
+    let page_content = args.page_content;
+    let should_set_page_count = controller.with(|current| {
+        let mut next = current.clone();
+        next.set_page_count(args.page_count);
+        next != *current
+    });
+    if should_set_page_count {
+        controller.with_mut(|current| current.set_page_count(args.page_count));
     }
 
     let current_page = controller.with(|current| current.current_page());
@@ -1062,16 +1112,6 @@ fn pager_render(args: PagerConfig, controller: State<PagerController>, axis: Pag
         return;
     }
 
-    let drag_recognizer = remember(move || {
-        DragRecognizer::new(DragSettings {
-            axis: Some(match axis {
-                PagerAxis::Horizontal => DragAxis::Horizontal,
-                PagerAxis::Vertical => DragAxis::Vertical,
-            }),
-            ..DragSettings::default()
-        })
-    });
-    let scroll_recognizer = remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
     let modifier = apply_pager_input_modifiers(
         args.modifier.clone().focusable().focus_properties(
             FocusProperties::new()

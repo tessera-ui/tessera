@@ -3,8 +3,7 @@
 //! ## Usage
 //!
 //! Use style modules (for example [`filled`]) to obtain icon assets, then
-//! decode them with `remember_painter_asset(...)` or decode with
-//! [`TryIntoImageVectorData`].
+//! decode them with [`TryIntoImageVectorData`] or `try_painter_asset(...)`.
 use std::sync::Arc;
 
 use tessera_ui::AssetExt;

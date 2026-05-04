@@ -428,18 +428,82 @@ pub fn split_leading_button(
     let variant = variant.unwrap_or_default();
     let size = size.unwrap_or_default();
     let content = content.unwrap_or_else(RenderSlot::empty);
-    render_split_button(
-        SplitButtonItemArgs::leading(
-            variant,
-            size,
-            enabled.unwrap_or(true),
-            modifier.unwrap_or_default(),
-            on_click,
-            accessibility_label,
-            accessibility_description,
-        ),
-        content,
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let typography = theme.typography;
+    let SplitButtonItemArgs {
+        enabled,
+        modifier,
+        shape,
+        colors,
+        border_width,
+        content_padding,
+        min_width,
+        container_height,
+        elevation,
+        tonal_elevation,
+        on_click,
+        accessibility_label,
+        accessibility_description,
+    } = SplitButtonItemArgs::leading(
+        variant,
+        size,
+        enabled.unwrap_or(true),
+        modifier.unwrap_or_default(),
+        on_click,
+        accessibility_label,
+        accessibility_description,
     );
+
+    let container_color = colors.container_color(enabled);
+    let content_color = colors.content_color(enabled);
+    let border_color = colors.border_color(enabled);
+    let style = if border_width.to_pixels_f32() > 0.0 {
+        if container_color == Color::TRANSPARENT {
+            SurfaceStyle::Outlined {
+                color: border_color,
+                width: border_width,
+            }
+        } else {
+            SurfaceStyle::FilledOutlined {
+                fill_color: container_color,
+                border_color,
+                border_width,
+            }
+        }
+    } else {
+        SurfaceStyle::Filled {
+            color: container_color,
+        }
+    };
+    let has_on_click = on_click.is_some();
+
+    surface()
+        .modifier(modifier.size_in(Some(min_width), None, Some(container_height), None))
+        .style(style)
+        .shape(shape)
+        .content_alignment(Alignment::Center)
+        .content_color(content_color)
+        .enabled(enabled)
+        .ripple_color(content_color)
+        .tonal_elevation(tonal_elevation)
+        .elevation_optional(elevation)
+        .on_click_optional(on_click)
+        .accessibility_role_optional(has_on_click.then_some(Role::Button))
+        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
+        .child_shared(RenderSlot::new(move || {
+            let content = content;
+            provide_text_style(typography.label_large, move || {
+                layout()
+                    .modifier(Modifier::new().padding(content_padding))
+                    .child(move || {
+                        content.render();
+                    });
+            });
+        }));
 }
 
 /// # split_trailing_button
@@ -500,18 +564,82 @@ pub fn split_trailing_button(
     let variant = variant.unwrap_or_default();
     let size = size.unwrap_or_default();
     let content = content.unwrap_or_else(RenderSlot::empty);
-    render_split_button(
-        SplitButtonItemArgs::trailing(
-            variant,
-            size,
-            enabled.unwrap_or(true),
-            modifier.unwrap_or_default(),
-            on_click,
-            accessibility_label,
-            accessibility_description,
-        ),
-        content,
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let typography = theme.typography;
+    let SplitButtonItemArgs {
+        enabled,
+        modifier,
+        shape,
+        colors,
+        border_width,
+        content_padding,
+        min_width,
+        container_height,
+        elevation,
+        tonal_elevation,
+        on_click,
+        accessibility_label,
+        accessibility_description,
+    } = SplitButtonItemArgs::trailing(
+        variant,
+        size,
+        enabled.unwrap_or(true),
+        modifier.unwrap_or_default(),
+        on_click,
+        accessibility_label,
+        accessibility_description,
     );
+
+    let container_color = colors.container_color(enabled);
+    let content_color = colors.content_color(enabled);
+    let border_color = colors.border_color(enabled);
+    let style = if border_width.to_pixels_f32() > 0.0 {
+        if container_color == Color::TRANSPARENT {
+            SurfaceStyle::Outlined {
+                color: border_color,
+                width: border_width,
+            }
+        } else {
+            SurfaceStyle::FilledOutlined {
+                fill_color: container_color,
+                border_color,
+                border_width,
+            }
+        }
+    } else {
+        SurfaceStyle::Filled {
+            color: container_color,
+        }
+    };
+    let has_on_click = on_click.is_some();
+
+    surface()
+        .modifier(modifier.size_in(Some(min_width), None, Some(container_height), None))
+        .style(style)
+        .shape(shape)
+        .content_alignment(Alignment::Center)
+        .content_color(content_color)
+        .enabled(enabled)
+        .ripple_color(content_color)
+        .tonal_elevation(tonal_elevation)
+        .elevation_optional(elevation)
+        .on_click_optional(on_click)
+        .accessibility_role_optional(has_on_click.then_some(Role::Button))
+        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
+        .child_shared(RenderSlot::new(move || {
+            let content = content;
+            provide_text_style(typography.label_large, move || {
+                layout()
+                    .modifier(Modifier::new().padding(content_padding))
+                    .child(move || {
+                        content.render();
+                    });
+            });
+        }));
 }
 #[derive(Clone)]
 struct SplitButtonItemArgs {
@@ -653,107 +781,4 @@ fn center_offset(child: Px, container: Px) -> Px {
     } else {
         Px::ZERO
     }
-}
-
-struct SplitButtonSurfaceArgs {
-    modifier: Modifier,
-    style: SurfaceStyle,
-    shape: Shape,
-    content_color: Color,
-    enabled: bool,
-    tonal_elevation: Dp,
-    elevation: Option<Dp>,
-    on_click: Option<Callback>,
-    accessibility_label: Option<String>,
-    accessibility_description: Option<String>,
-}
-
-fn render_split_button_surface(args: SplitButtonSurfaceArgs, child: RenderSlot) {
-    let has_on_click = args.on_click.is_some();
-
-    surface()
-        .modifier(args.modifier)
-        .style(args.style)
-        .shape(args.shape)
-        .content_alignment(Alignment::Center)
-        .content_color(args.content_color)
-        .enabled(args.enabled)
-        .ripple_color(args.content_color)
-        .tonal_elevation(args.tonal_elevation)
-        .elevation_optional(args.elevation)
-        .on_click_optional(args.on_click)
-        .accessibility_role_optional(has_on_click.then_some(Role::Button))
-        .accessibility_focusable_optional(has_on_click.then_some(true))
-        .accessibility_label_optional(args.accessibility_label)
-        .accessibility_description_optional(args.accessibility_description)
-        .child_shared(child);
-}
-
-fn render_split_button(args: SplitButtonItemArgs, content: RenderSlot) {
-    let theme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get();
-    let typography = theme.typography;
-    let SplitButtonItemArgs {
-        enabled,
-        modifier,
-        shape,
-        colors,
-        border_width,
-        content_padding,
-        min_width,
-        container_height,
-        elevation,
-        tonal_elevation,
-        on_click,
-        accessibility_label,
-        accessibility_description,
-    } = args;
-
-    let container_color = colors.container_color(enabled);
-    let content_color = colors.content_color(enabled);
-    let border_color = colors.border_color(enabled);
-    let style = if border_width.to_pixels_f32() > 0.0 {
-        if container_color == Color::TRANSPARENT {
-            SurfaceStyle::Outlined {
-                color: border_color,
-                width: border_width,
-            }
-        } else {
-            SurfaceStyle::FilledOutlined {
-                fill_color: container_color,
-                border_color,
-                border_width,
-            }
-        }
-    } else {
-        SurfaceStyle::Filled {
-            color: container_color,
-        }
-    };
-
-    render_split_button_surface(
-        SplitButtonSurfaceArgs {
-            modifier: modifier.size_in(Some(min_width), None, Some(container_height), None),
-            style,
-            shape,
-            content_color,
-            enabled,
-            tonal_elevation,
-            elevation,
-            on_click,
-            accessibility_label,
-            accessibility_description,
-        },
-        RenderSlot::new(move || {
-            let content = content;
-            provide_text_style(typography.label_large, move || {
-                layout()
-                    .modifier(Modifier::new().padding(content_padding))
-                    .child(move || {
-                        content.render();
-                    });
-            });
-        }),
-    );
 }

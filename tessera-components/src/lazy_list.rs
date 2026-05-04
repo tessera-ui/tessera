@@ -158,6 +158,7 @@ pub fn lazy_column(
 ) {
     let content = content.unwrap_or_default();
     let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
+    let scroll_controller = remember(ScrollableController::default);
     lazy_column_slots(LazyListSlotsArgs {
         modifier: modifier.unwrap_or_default(),
         cross_axis_alignment: cross_axis_alignment.unwrap_or_default(),
@@ -168,6 +169,7 @@ pub fn lazy_column(
         max_viewport_main,
         scroll_smoothing: scroll_smoothing.unwrap_or(0.0),
         controller,
+        scroll_controller,
         slots: content.slots,
     });
 }
@@ -183,15 +185,14 @@ struct LazyListSlotsArgs {
     max_viewport_main: Option<Px>,
     scroll_smoothing: f32,
     controller: State<LazyListController>,
+    scroll_controller: State<ScrollableController>,
     slots: Vec<LazySlot>,
 }
 
 fn lazy_column_slots(args: LazyListSlotsArgs) {
-    // Create a proxy scroll controller that syncs with the LazyListController
-    let scroll_controller = remember(ScrollableController::default);
-
     // Restore saved position from controller on first mount.
     let saved_position = args.controller.with(|c| c.scroll.child_position());
+    let scroll_controller = args.scroll_controller;
     let should_restore_position = scroll_controller
         .with(|sc| sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO);
     if should_restore_position {
@@ -291,6 +292,7 @@ pub fn lazy_row(
 ) {
     let content = content.unwrap_or_default();
     let controller = controller.unwrap_or_else(|| remember(LazyListController::new));
+    let scroll_controller = remember(ScrollableController::default);
     lazy_row_slots(LazyListSlotsArgs {
         modifier: modifier.unwrap_or_default(),
         cross_axis_alignment: cross_axis_alignment.unwrap_or_default(),
@@ -301,6 +303,7 @@ pub fn lazy_row(
         max_viewport_main,
         scroll_smoothing: scroll_smoothing.unwrap_or(0.0),
         controller,
+        scroll_controller,
         slots: content.slots,
     });
 }
@@ -533,11 +536,9 @@ where
 }
 
 fn lazy_row_slots(args: LazyListSlotsArgs) {
-    // Create a proxy scroll controller that syncs with the LazyListController
-    let scroll_controller = remember(ScrollableController::default);
-
     // Restore saved position from controller on first mount.
     let saved_position = args.controller.with(|c| c.scroll.child_position());
+    let scroll_controller = args.scroll_controller;
     let should_restore_position = scroll_controller
         .with(|sc| sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO);
     if should_restore_position {

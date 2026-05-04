@@ -164,6 +164,7 @@ pub fn lazy_vertical_staggered_grid(
     let content_padding = content_padding.unwrap_or(Dp(0.0));
     let content = content.unwrap_or_default();
     let controller = controller.unwrap_or_else(|| remember(LazyStaggeredGridController::new));
+    let scroll_controller = remember(ScrollableController::default);
     lazy_vertical_staggered_grid_slots(LazyStaggeredGridSlotsArgs {
         modifier: modifier.unwrap_or_default(),
         scroll_smoothing,
@@ -182,6 +183,7 @@ pub fn lazy_vertical_staggered_grid(
         content_padding,
         max_viewport_main,
         controller,
+        scroll_controller,
         slots: content.slots,
     });
 }
@@ -205,11 +207,12 @@ struct LazyStaggeredGridSlotsArgs {
     content_padding: Dp,
     max_viewport_main: Option<Px>,
     controller: State<LazyStaggeredGridController>,
+    scroll_controller: State<ScrollableController>,
     slots: Vec<LazySlot>,
 }
 
 fn lazy_vertical_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
-    let scroll_controller = remember(ScrollableController::default);
+    let scroll_controller = args.scroll_controller;
     let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
     let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
     let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
@@ -340,6 +343,7 @@ pub fn lazy_horizontal_staggered_grid(
     let content_padding = content_padding.unwrap_or(Dp(0.0));
     let content = content.unwrap_or_default();
     let controller = controller.unwrap_or_else(|| remember(LazyStaggeredGridController::new));
+    let scroll_controller = remember(ScrollableController::default);
     lazy_horizontal_staggered_grid_slots(LazyStaggeredGridSlotsArgs {
         modifier: modifier.unwrap_or_default(),
         scroll_smoothing,
@@ -358,12 +362,13 @@ pub fn lazy_horizontal_staggered_grid(
         content_padding,
         max_viewport_main,
         controller,
+        scroll_controller,
         slots: content.slots,
     });
 }
 
 fn lazy_horizontal_staggered_grid_slots(args: LazyStaggeredGridSlotsArgs) {
-    let scroll_controller = remember(ScrollableController::default);
+    let scroll_controller = args.scroll_controller;
     let main_axis_spacing = sanitize_spacing(Px::from(args.main_axis_spacing));
     let cross_axis_spacing = sanitize_spacing(Px::from(args.cross_axis_spacing));
     let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));

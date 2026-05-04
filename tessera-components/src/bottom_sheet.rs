@@ -7,9 +7,9 @@ use std::time::Duration;
 
 use tessera_foundation::gesture::DragRecognizer;
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, Constraint, Dp, FocusScopeNode,
-    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    State, current_frame_nanos,
+    AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusScopeNode, FocusTraversalPolicy,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
+    current_frame_nanos,
     layout::{LayoutPolicy, MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
@@ -19,7 +19,6 @@ use crate::{
     alignment::CrossAxisAlignment,
     animation,
     column::column,
-    fluid_glass::{GlassBorder, fluid_glass},
     modifier::{ModifierExt, with_keyboard_input, with_pointer_input},
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
@@ -33,21 +32,6 @@ use crate::{
 };
 
 const ANIM_TIME: Duration = Duration::from_millis(300);
-
-/// Defines the visual style of the bottom sheet's scrim.
-///
-/// The scrim is the overlay that appears behind the bottom sheet, covering the
-/// main content.
-#[derive(Default, Clone, PartialEq, Copy)]
-pub enum BottomSheetStyle {
-    /// A translucent glass effect that blurs the content behind it.
-    /// This style is more resource-intensive and may not be suitable for all
-    /// targets.
-    Glass,
-    /// A simple, semi-transparent dark overlay. This is the default style.
-    #[default]
-    Material,
-}
 
 /// Controller for [`bottom_sheet_provider`], managing open/closed state.
 ///
@@ -190,15 +174,6 @@ fn calc_progress_from_timer(animation_start_frame_nanos: Option<u64>) -> f32 {
     animation::easing(raw)
 }
 
-/// Compute blur radius for glass style.
-fn blur_radius_for(progress: f32, is_open: bool, max_blur_radius: f32) -> f32 {
-    if is_open {
-        progress * max_blur_radius
-    } else {
-        max_blur_radius * (1.0 - progress)
-    }
-}
-
 /// Compute scrim alpha for material style.
 fn scrim_alpha_for(progress: f32, is_open: bool) -> f32 {
     if is_open {
@@ -224,53 +199,6 @@ fn compute_bottom_sheet_y(
         parent - child * (1.0 - progress)
     };
     (y + drag_offset) as i32
-}
-
-fn render_glass_scrim(on_close_request: Callback, progress: f32, is_open: bool) {
-    // Glass scrim: compute blur radius and render using fluid_glass.
-    let max_blur_radius = 5.0;
-    let blur_radius = blur_radius_for(progress, is_open, max_blur_radius);
-    fluid_glass()
-        .on_click_shared(on_close_request)
-        .tint_color(Color::TRANSPARENT)
-        .modifier(Modifier::new().fill_max_size())
-        .block_input(true)
-        .blur_radius(Dp(blur_radius as f64))
-        .border(GlassBorder::new(Px(0)))
-        .shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(Dp(0.0), 3.0),
-            top_right: RoundedCorner::manual(Dp(0.0), 3.0),
-            bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-            bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-        })
-        .noise_amount(0.0)
-        .child(|| {});
-}
-
-fn render_material_scrim(on_close_request: Callback, progress: f32, is_open: bool) {
-    // Material scrim: compute alpha and render a simple dark surface.
-    let scrim_alpha = scrim_alpha_for(progress, is_open);
-    let scrim_color = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme
-        .scrim;
-    surface()
-        .style(scrim_color.with_alpha(scrim_alpha).into())
-        .on_click_shared(on_close_request)
-        .modifier(Modifier::new().fill_max_size())
-        .block_input(true)
-        .child(|| {});
-}
-
-/// Render scrim according to configured style.
-/// Delegates actual rendering to small, focused helpers to keep the
-/// main API surface concise and improve readability.
-fn render_scrim(style: BottomSheetStyle, on_close_request: Callback, progress: f32, is_open: bool) {
-    match style {
-        BottomSheetStyle::Glass => render_glass_scrim(on_close_request, progress, is_open),
-        BottomSheetStyle::Material => render_material_scrim(on_close_request, progress, is_open),
-    }
 }
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
@@ -492,13 +420,11 @@ fn build_bottom_sheet_nested_scroll_connection(
 
 #[tessera]
 fn bottom_sheet_content_wrapper(
-    style: Option<BottomSheetStyle>,
     bottom_sheet_content: Option<RenderSlot>,
     controller: Option<State<BottomSheetController>>,
     on_close: Option<Callback>,
     just_opened: Option<bool>,
 ) {
-    let style = style.unwrap_or_default();
     let on_close = on_close.unwrap_or_default();
     let just_opened = just_opened.unwrap_or(false);
     let controller = controller.expect("bottom_sheet_content_wrapper requires controller");
@@ -545,42 +471,24 @@ fn bottom_sheet_content_wrapper(
                     );
                 });
         };
-        match style {
-            BottomSheetStyle::Glass => {
-                fluid_glass()
-                    .shape(Shape::RoundedRectangle {
-                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-                    })
-                    .tint_color(Color::WHITE.with_alpha(0.4))
-                    .modifier(Modifier::new().fill_max_width())
-                    .blur_radius(Dp(5.0))
-                    .block_input(true)
-                    .child(content_wrapper);
-            }
-            BottomSheetStyle::Material => {
-                surface()
-                    .style(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .color_scheme
-                            .surface_container_low
-                            .into(),
-                    )
-                    .shape(Shape::RoundedRectangle {
-                        top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                        top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                        bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
-                        bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
-                    })
-                    .modifier(Modifier::new().fill_max_width())
-                    .block_input(true)
-                    .child(content_wrapper);
-            }
-        }
+        surface()
+            .style(
+                use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
+                    .get()
+                    .color_scheme
+                    .surface_container_low
+                    .into(),
+            )
+            .shape(Shape::RoundedRectangle {
+                top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
+                bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
+            })
+            .modifier(Modifier::new().fill_max_width())
+            .block_input(true)
+            .child(content_wrapper);
     });
 }
 
@@ -597,7 +505,6 @@ fn bottom_sheet_content_wrapper(
 ///
 /// - `on_close_request` — optional callback invoked when the sheet requests
 ///   closing.
-/// - `style` — visual style of the scrim.
 /// - `is_open` — declarative open state.
 /// - `controller` — optional external controller for programmatic open/close.
 /// - `main_content` — optional main content rendered behind the sheet.
@@ -627,14 +534,12 @@ fn bottom_sheet_content_wrapper(
 #[tessera]
 pub fn bottom_sheet_provider(
     on_close_request: Option<Callback>,
-    style: Option<BottomSheetStyle>,
     is_open: Option<bool>,
     controller: Option<State<BottomSheetController>>,
     main_content: Option<RenderSlot>,
     bottom_sheet_content: Option<RenderSlot>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
-    let style = style.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let bottom_sheet_content = bottom_sheet_content.unwrap_or_else(RenderSlot::empty);
@@ -700,10 +605,20 @@ pub fn bottom_sheet_provider(
             let bottom_sheet_content = bottom_sheet_content;
             main_content.render();
 
-            render_scrim(style, on_close_request, progress, is_open);
+            let scrim_alpha = scrim_alpha_for(progress, is_open);
+            let scrim_color = use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .scrim;
+            surface()
+                .style(scrim_color.with_alpha(scrim_alpha).into())
+                .on_click_shared(on_close_request)
+                .modifier(Modifier::new().fill_max_size())
+                .block_input(true)
+                .child(|| {});
 
             bottom_sheet_content_wrapper()
-                .style(style)
                 .bottom_sheet_content_shared(bottom_sheet_content)
                 .controller(controller)
                 .on_close_shared(on_close_request)

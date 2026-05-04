@@ -1,16 +1,18 @@
 use tessera_components::{
     alignment::CrossAxisAlignment, icon::icon, lazy_list::lazy_column, modifier::ModifierExt,
-    painter::remember_painter_asset, spacer::spacer, text::text, theme::MaterialTheme,
+    painter::try_painter_asset, spacer::spacer, text::text, theme::MaterialTheme,
 };
 use tessera_shard::shard;
-use tessera_ui::{Dp, Modifier, use_context};
+use tessera_ui::{Dp, Modifier, remember_with_key, use_context};
 
 use crate::res;
 
 #[shard]
 pub fn home_page() {
     let theme = use_context::<MaterialTheme>().unwrap();
-    let logo_painter = remember_painter_asset(res::LOGO_PNG);
+    let logo_painter = remember_with_key(res::LOGO_PNG, || {
+        try_painter_asset(res::LOGO_PNG).expect("logo painter should decode successfully")
+    });
 
     lazy_column()
         .modifier(Modifier::new().fill_max_size())

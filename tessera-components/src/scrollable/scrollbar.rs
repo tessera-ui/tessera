@@ -287,74 +287,6 @@ fn compute_thumb_color(
     };
     from_color.lerp(&to_color, progress)
 }
-/// Render a rounded surface for a vertical track (radius based on width).
-fn render_track_surface_v(width: Px, height: Px, color: Color) {
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(width)),
-            Some(AxisConstraint::exact(height)),
-        ))
-        .style(color.into())
-        .shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::Capsule,
-            top_right: RoundedCorner::ZERO,
-            bottom_left: RoundedCorner::Capsule,
-            bottom_right: RoundedCorner::ZERO,
-        })
-        .child(|| {});
-}
-
-/// Render a rounded surface for a vertical thumb (radius based on width).
-fn render_thumb_surface_v(width: Px, height: Px, color: Color) {
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(width)),
-            Some(AxisConstraint::exact(height)),
-        ))
-        .shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::Capsule,
-            top_right: RoundedCorner::ZERO,
-            bottom_left: RoundedCorner::Capsule,
-            bottom_right: RoundedCorner::ZERO,
-        })
-        .style(color.into())
-        .child(|| {});
-}
-
-/// Render a rounded surface for a horizontal track (radius based on height).
-fn render_track_surface_h(width: Px, height: Px, color: Color) {
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(width)),
-            Some(AxisConstraint::exact(height)),
-        ))
-        .style(color.into())
-        .shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::Capsule,
-            top_right: RoundedCorner::Capsule,
-            bottom_left: RoundedCorner::ZERO,
-            bottom_right: RoundedCorner::ZERO,
-        })
-        .child(|| {});
-}
-
-/// Render a rounded surface for a horizontal thumb (radius based on height).
-fn render_thumb_surface_h(width: Px, height: Px, color: Color) {
-    surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(width)),
-            Some(AxisConstraint::exact(height)),
-        ))
-        .shape(Shape::RoundedRectangle {
-            top_left: RoundedCorner::Capsule,
-            top_right: RoundedCorner::Capsule,
-            bottom_left: RoundedCorner::ZERO,
-            bottom_right: RoundedCorner::ZERO,
-        })
-        .style(color.into())
-        .child(|| {});
-}
-
 /// Decide whether the scrollbar should be shown according to behavior and
 /// state.
 fn should_show_scrollbar(args: &ScrollBarConfig, state: &ScrollBarState) -> bool {
@@ -836,6 +768,8 @@ pub fn scrollbar_v(
     });
     let frame_tick = remember(|| 0_u64);
     let _ = frame_tick.with(|tick| *tick);
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
     let frame_nanos = current_frame_nanos();
 
     handle_autohide_if_needed(&args, &state, frame_nanos);
@@ -879,8 +813,6 @@ pub fn scrollbar_v(
 
     let handler_args = args.clone();
     let handler_state = state.clone();
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
     let modifier = with_pointer_input(Modifier::new(), move |mut input| {
         let frame_nanos = current_frame_nanos();
         handle_state_v(
@@ -916,8 +848,32 @@ pub fn scrollbar_v(
             thumb_offset: Px::from_f32(thumb_y),
         })
         .child(move || {
-            render_track_surface_v(width, track_height, track_color);
-            render_thumb_surface_v(width, thumb_height, thumb_color);
+            surface()
+                .modifier(Modifier::new().constrain(
+                    Some(AxisConstraint::exact(width)),
+                    Some(AxisConstraint::exact(track_height)),
+                ))
+                .style(track_color.into())
+                .shape(Shape::RoundedRectangle {
+                    top_left: RoundedCorner::Capsule,
+                    top_right: RoundedCorner::ZERO,
+                    bottom_left: RoundedCorner::Capsule,
+                    bottom_right: RoundedCorner::ZERO,
+                })
+                .child(|| {});
+            surface()
+                .modifier(Modifier::new().constrain(
+                    Some(AxisConstraint::exact(width)),
+                    Some(AxisConstraint::exact(thumb_height)),
+                ))
+                .shape(Shape::RoundedRectangle {
+                    top_left: RoundedCorner::Capsule,
+                    top_right: RoundedCorner::ZERO,
+                    bottom_left: RoundedCorner::Capsule,
+                    bottom_right: RoundedCorner::ZERO,
+                })
+                .style(thumb_color.into())
+                .child(|| {});
         });
 }
 
@@ -961,6 +917,8 @@ pub fn scrollbar_h(
     });
     let frame_tick = remember(|| 0_u64);
     let _ = frame_tick.with(|tick| *tick);
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
     let frame_nanos = current_frame_nanos();
 
     handle_autohide_if_needed(&args, &state, frame_nanos);
@@ -1004,8 +962,6 @@ pub fn scrollbar_h(
 
     let handler_args = args.clone();
     let handler_state = state.clone();
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
     let modifier = with_pointer_input(Modifier::new(), move |mut input| {
         let frame_nanos = current_frame_nanos();
         handle_state_h(
@@ -1041,7 +997,31 @@ pub fn scrollbar_h(
             thumb_offset: Px::from_f32(thumb_x),
         })
         .child(move || {
-            render_track_surface_h(track_width, height, track_color);
-            render_thumb_surface_h(thumb_width, height, thumb_color);
+            surface()
+                .modifier(Modifier::new().constrain(
+                    Some(AxisConstraint::exact(track_width)),
+                    Some(AxisConstraint::exact(height)),
+                ))
+                .style(track_color.into())
+                .shape(Shape::RoundedRectangle {
+                    top_left: RoundedCorner::Capsule,
+                    top_right: RoundedCorner::Capsule,
+                    bottom_left: RoundedCorner::ZERO,
+                    bottom_right: RoundedCorner::ZERO,
+                })
+                .child(|| {});
+            surface()
+                .modifier(Modifier::new().constrain(
+                    Some(AxisConstraint::exact(thumb_width)),
+                    Some(AxisConstraint::exact(height)),
+                ))
+                .shape(Shape::RoundedRectangle {
+                    top_left: RoundedCorner::Capsule,
+                    top_right: RoundedCorner::Capsule,
+                    bottom_left: RoundedCorner::ZERO,
+                    bottom_right: RoundedCorner::ZERO,
+                })
+                .style(thumb_color.into())
+                .child(|| {});
         });
 }

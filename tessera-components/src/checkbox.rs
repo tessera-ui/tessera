@@ -5,6 +5,7 @@
 //! Use in forms, settings, or lists to enable boolean selections.
 use std::time::Duration;
 
+use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     CallbackWith, Color, Dp, Modifier, PxSize, RenderSlot, State, accesskit::Role,
     current_frame_nanos, receive_frame_nanos, remember, tessera, use_context,
@@ -287,6 +288,11 @@ fn checkbox_inner(
     let disabled_color = disabled_color.unwrap_or(Color::TRANSPARENT);
     let disabled_checkmark_color = disabled_checkmark_color.unwrap_or(Color::TRANSPARENT);
     let controller = controller.expect("checkbox_inner requires controller to be set");
+    let is_checked = controller.with(|c| c.is_checked());
+    let enabled = !disabled;
+    let interaction_state = enabled.then(|| remember(InteractionState::new));
+    let ripple_state = enabled.then(|| remember(RippleState::new));
+    let tap_recognizer = enabled.then(|| remember(TapRecognizer::default));
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller.with_mut(|controller| {
@@ -301,10 +307,6 @@ fn checkbox_inner(
         });
     }
 
-    let is_checked = controller.with(|c| c.is_checked());
-    let enabled = !disabled;
-    let interaction_state = enabled.then(|| remember(InteractionState::new));
-    let ripple_state = enabled.then(|| remember(RippleState::new));
     let on_value_change = {
         let on_toggle = on_toggle.unwrap_or_else(CallbackWith::default_value);
         CallbackWith::new(move |next_checked| {
@@ -354,7 +356,7 @@ fn checkbox_inner(
     let state_layer_base =
         CheckboxDefaults::state_layer_base_color(is_checked, checked_color, &scheme);
 
-    let render_checkmark = RenderSlot::new(move || {
+    let checkmark_slot = RenderSlot::new(move || {
         let progress = controller.with(|c| c.progress());
         if progress > 0.0 {
             boxed()
@@ -371,7 +373,7 @@ fn checkbox_inner(
         }
     });
 
-    let render_checkbox_surface = {
+    let checkbox_surface_slot = {
         RenderSlot::new(move || {
             let checkbox_style = checkbox_style.clone();
             surface()
@@ -379,23 +381,23 @@ fn checkbox_inner(
                 .shape(shape)
                 .style(checkbox_style)
                 .child(move || {
-                    render_checkmark.render();
+                    checkmark_slot.render();
                 });
         })
     };
 
-    let render_checkbox_container = {
+    let checkbox_container_slot = {
         RenderSlot::new(move || {
             boxed()
                 .alignment(Alignment::Center)
                 .modifier(Modifier::new().fill_max_size())
                 .children(move || {
-                    render_checkbox_surface.render();
+                    checkbox_surface_slot.render();
                 });
         })
     };
 
-    let render_state_layer = {
+    let state_layer_slot = {
         RenderSlot::new(move || {
             surface()
                 .modifier(Modifier::new().size(
@@ -413,7 +415,7 @@ fn checkbox_inner(
                 .interaction_state_optional(interaction_state)
                 .ripple_state_optional(ripple_state)
                 .child(move || {
-                    render_checkbox_container.render();
+                    checkbox_container_slot.render();
                 });
         })
     };
@@ -450,6 +452,7 @@ fn checkbox_inner(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
+            tap_recognizer,
             ..Default::default()
         };
         modifier = modifier.toggleable_with(toggle_args);
@@ -458,7 +461,7 @@ fn checkbox_inner(
         .modifier(modifier)
         .alignment(Alignment::Center)
         .children(move || {
-            render_state_layer.render();
+            state_layer_slot.render();
         });
 }
 

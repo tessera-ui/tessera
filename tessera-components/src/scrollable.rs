@@ -1175,6 +1175,8 @@ fn scrollable_viewport(
     let scrollbar_state_h =
         scrollbar_state_h.unwrap_or_else(|| controller.with(|c| c.scrollbar_state_h()));
     let child = child.unwrap_or_else(RenderSlot::empty);
+    let tap_recognizer = remember(TapRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
     if controller.with(|c| c.has_pending_animation_frame()) {
         let smoothing = scroll_smoothing;
         receive_frame_nanos(move |frame_nanos| {
@@ -1190,8 +1192,6 @@ fn scrollable_viewport(
         });
     }
     let has_override = controller.with(|c| c.override_child_size.is_some());
-    let tap_recognizer = remember(TapRecognizer::default);
-    let scroll_recognizer = remember(ScrollRecognizer::default);
     let nested_scroll_connection =
         use_context::<NestedScrollConnection>().map(|context| context.get());
     let modifier = apply_scrollable_viewport_input_modifier(ScrollableViewportInputArgs {

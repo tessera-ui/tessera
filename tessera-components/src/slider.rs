@@ -30,9 +30,8 @@ use layout::{
     range_slider_layout, resolve_component_width, slider_layout_with_handle_width,
 };
 use render::{
-    render_active_segment, render_centered_stops, render_centered_tracks, render_handle,
-    render_inactive_segment, render_range_stops, render_range_tracks, render_stop_indicator,
-    render_tick,
+    active_segment, centered_stops, centered_tracks, inactive_segment, range_stops, range_tracks,
+    slider_handle, slider_tick, stop_indicator,
 };
 
 pub use interaction::RangeSliderController;
@@ -152,9 +151,12 @@ fn range_slider_thumb(
         accessibility,
     );
 
-    layout()
-        .modifier(modifier)
-        .child(move || render_handle(thumb_layout, handle_width, &colors));
+    layout().modifier(modifier).child(move || {
+        slider_handle()
+            .layout(thumb_layout)
+            .width(handle_width)
+            .colors(colors);
+    });
 }
 
 #[derive(Clone)]
@@ -1138,15 +1140,29 @@ pub fn slider(
     let controller = args
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
     let mut resolved_args = args;
     resolved_args.controller = Some(controller);
-    render_slider(resolved_args);
+    slider_content()
+        .args(resolved_args)
+        .tap_recognizer(tap_recognizer)
+        .drag_recognizer(drag_recognizer);
 }
 
-fn render_slider(args: SliderConfig) {
+#[tessera]
+fn slider_content(
+    args: Option<SliderConfig>,
+    tap_recognizer: Option<State<TapRecognizer>>,
+    drag_recognizer: Option<State<DragRecognizer>>,
+) {
+    let args = args.expect("slider_content requires args to be set");
+    let tap_recognizer = tap_recognizer.expect("slider_content requires tap recognizer to be set");
+    let drag_recognizer =
+        drag_recognizer.expect("slider_content requires drag recognizer to be set");
     let controller = args
         .controller
-        .expect("render_slider requires controller to be set");
+        .expect("slider_content requires controller to be set");
     let initial_width = fallback_component_width(&args);
     let clamped_value = args.value.clamp(0.0, 1.0);
     let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
@@ -1157,8 +1173,6 @@ fn render_slider(args: SliderConfig) {
     } else {
         base_handle_width
     };
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
     let modifier = apply_slider_pointer_modifier(
         args.modifier.clone().then(
             FocusTargetModifier {
@@ -1186,8 +1200,8 @@ fn render_slider(args: SliderConfig) {
             let slider_layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
             let colors = slider_colors(&args);
 
-            render_active_segment(slider_layout, &colors);
-            render_inactive_segment(slider_layout, &colors);
+            active_segment().layout(slider_layout).colors(colors);
+            inactive_segment().layout(slider_layout).colors(colors);
 
             if let Some(icon_size) = slider_layout.icon_size
                 && let Some(inset_icon) = args.inset_icon.as_ref()
@@ -1219,13 +1233,18 @@ fn render_slider(args: SliderConfig) {
                     } else {
                         colors.active_track
                     };
-                    render_tick(slider_layout.stop_indicator_diameter, color);
+                    slider_tick()
+                        .diameter(slider_layout.stop_indicator_diameter)
+                        .color(color);
                 }
             }
             if slider_layout.show_stop_indicator {
-                render_stop_indicator(slider_layout, &colors);
+                stop_indicator().layout(slider_layout).colors(colors);
             }
-            render_handle(slider_layout, handle_width, &colors);
+            slider_handle()
+                .layout(slider_layout)
+                .width(handle_width)
+                .colors(colors);
         });
 }
 
@@ -1466,15 +1485,30 @@ pub fn centered_slider(
     let controller = args
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
     let mut resolved_args = args;
     resolved_args.controller = Some(controller);
-    render_centered_slider(resolved_args);
+    centered_slider_content()
+        .args(resolved_args)
+        .tap_recognizer(tap_recognizer)
+        .drag_recognizer(drag_recognizer);
 }
 
-fn render_centered_slider(args: SliderConfig) {
+#[tessera]
+fn centered_slider_content(
+    args: Option<SliderConfig>,
+    tap_recognizer: Option<State<TapRecognizer>>,
+    drag_recognizer: Option<State<DragRecognizer>>,
+) {
+    let args = args.expect("centered_slider_content requires args to be set");
+    let tap_recognizer =
+        tap_recognizer.expect("centered_slider_content requires tap recognizer to be set");
+    let drag_recognizer =
+        drag_recognizer.expect("centered_slider_content requires drag recognizer to be set");
     let controller = args
         .controller
-        .expect("render_centered_slider requires controller to be set");
+        .expect("centered_slider_content requires controller to be set");
     let initial_width = fallback_component_width(&args);
     let clamped_value = args.value.clamp(0.0, 1.0);
     let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
@@ -1485,8 +1519,6 @@ fn render_centered_slider(args: SliderConfig) {
     } else {
         base_handle_width
     };
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
     let modifier = apply_centered_slider_pointer_modifier(
         args.modifier.clone().then(
             FocusTargetModifier {
@@ -1515,7 +1547,7 @@ fn render_centered_slider(args: SliderConfig) {
             };
             let colors = slider_colors(&args);
 
-            render_centered_tracks(centered_layout, &colors);
+            centered_tracks().layout(centered_layout).colors(colors);
             if args.steps > 0 {
                 let active_start = clamped_value.min(0.5);
                 let active_end = clamped_value.max(0.5);
@@ -1526,13 +1558,18 @@ fn render_centered_slider(args: SliderConfig) {
                     } else {
                         colors.active_track
                     };
-                    render_tick(centered_layout.base.stop_indicator_diameter, color);
+                    slider_tick()
+                        .diameter(centered_layout.base.stop_indicator_diameter)
+                        .color(color);
                 }
             }
             if centered_layout.base.show_stop_indicator {
-                render_centered_stops(centered_layout, &colors);
+                centered_stops().layout(centered_layout).colors(colors);
             }
-            render_handle(centered_layout.base, handle_width, &colors);
+            slider_handle()
+                .layout(centered_layout.base)
+                .width(handle_width)
+                .colors(colors);
         });
 }
 
@@ -1783,15 +1820,30 @@ pub fn range_slider(
     let state = args
         .controller
         .unwrap_or_else(|| remember(RangeSliderController::new));
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
     let mut resolved_args = args;
     resolved_args.controller = Some(state);
-    render_range_slider(resolved_args);
+    range_slider_content()
+        .args(resolved_args)
+        .tap_recognizer(tap_recognizer)
+        .drag_recognizer(drag_recognizer);
 }
 
-fn render_range_slider(args: RangeSliderConfig) {
+#[tessera]
+fn range_slider_content(
+    args: Option<RangeSliderConfig>,
+    tap_recognizer: Option<State<TapRecognizer>>,
+    drag_recognizer: Option<State<DragRecognizer>>,
+) {
+    let args = args.expect("range_slider_content requires args to be set");
+    let tap_recognizer =
+        tap_recognizer.expect("range_slider_content requires tap recognizer to be set");
+    let drag_recognizer =
+        drag_recognizer.expect("range_slider_content requires drag recognizer to be set");
     let state = args
         .controller
-        .expect("render_range_slider requires controller to be set");
+        .expect("range_slider_content requires controller to be set");
     let dummy_slider_args = SliderConfig {
         size: args.size,
         show_stop_indicator: args.show_stop_indicator,
@@ -1823,8 +1875,6 @@ fn render_range_slider(args: RangeSliderConfig) {
         base_handle_width
     };
 
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
     let modifier = apply_range_slider_pointer_modifier(
         args.modifier.clone(),
         state,
@@ -1848,7 +1898,7 @@ fn render_range_slider(args: RangeSliderConfig) {
         .child(move || {
             let colors = range_slider_colors(&args);
 
-            render_range_tracks(range_layout, &colors);
+            range_tracks().layout(range_layout).colors(colors);
             if args.steps > 0 {
                 for fraction in tick_fractions(args.steps) {
                     let is_active = fraction >= start && fraction <= end;
@@ -1857,11 +1907,13 @@ fn render_range_slider(args: RangeSliderConfig) {
                     } else {
                         colors.active_track
                     };
-                    render_tick(range_layout.base.stop_indicator_diameter, color);
+                    slider_tick()
+                        .diameter(range_layout.base.stop_indicator_diameter)
+                        .color(color);
                 }
             }
             if range_layout.base.show_stop_indicator {
-                render_range_stops(range_layout, &colors);
+                range_stops().layout(range_layout).colors(colors);
             }
 
             let start_thumb_args = RangeSliderThumbProps {

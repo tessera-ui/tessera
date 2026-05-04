@@ -828,95 +828,6 @@ pub fn menu_item(
     menu_item_inner().args(args);
 }
 
-fn render_leading(args: &MenuItemConfig, enabled: bool) {
-    if args.selected {
-        checkmark()
-            .color(if enabled {
-                args.label_color
-            } else {
-                args.disabled_color
-            })
-            .size(MENU_LEADING_SIZE)
-            .padding([2.0, 2.0]);
-    } else if let Some(icon) = args.leading_icon.clone() {
-        render_menu_icon(
-            icon,
-            if enabled {
-                args.supporting_color
-            } else {
-                args.disabled_color
-            },
-        );
-    } else {
-        spacer().modifier(Modifier::new().size(MENU_LEADING_SIZE, MENU_LEADING_SIZE));
-    }
-}
-
-fn render_labels(args: &MenuItemConfig, enabled: bool) {
-    let label_color = if enabled {
-        args.label_color
-    } else {
-        args.disabled_color
-    };
-    let supporting_color = if enabled {
-        args.supporting_color
-    } else {
-        args.disabled_color
-    };
-    let label_text = args.label.clone();
-    let supporting_text = args.supporting_text.clone();
-
-    column()
-        .modifier(Modifier::new())
-        .cross_axis_alignment(CrossAxisAlignment::Start)
-        .children(move || {
-            {
-                let text_value = label_text.clone();
-                let color = label_color;
-                text().content(text_value).size(Dp(16.0)).color(color);
-            };
-            if let Some(supporting) = supporting_text.as_ref() {
-                {
-                    let supporting_value = supporting.clone();
-                    let color = supporting_color;
-                    text().content(supporting_value).size(Dp(14.0)).color(color);
-                };
-            }
-        });
-}
-
-fn render_trailing(args: &MenuItemConfig, enabled: bool) {
-    if let Some(trailing_icon) = args.trailing_icon.clone() {
-        render_menu_icon(
-            trailing_icon,
-            if enabled {
-                args.supporting_color
-            } else {
-                args.disabled_color
-            },
-        );
-    } else if let Some(trailing_text) = args.trailing_text.clone() {
-        text()
-            .content(trailing_text)
-            .size(Dp(14.0))
-            .color(if enabled {
-                args.supporting_color
-            } else {
-                args.disabled_color
-            });
-    } else if args.submenu_content.is_some() {
-        text().content(">").size(Dp(14.0)).color(if enabled {
-            args.supporting_color
-        } else {
-            args.disabled_color
-        });
-    }
-}
-
-fn render_menu_icon(content: Painter, tint: Color) {
-    icon().painter(content).size(MENU_LEADING_SIZE).tint(tint);
-}
-
 #[tessera]
 fn menu_item_surface(
     item: Option<MenuItemConfig>,
@@ -1024,10 +935,29 @@ fn menu_item_surface(
                             ));
                         };
 
-                        let leading_args = item_for_child.clone();
-                        {
-                            render_leading(&leading_args, enabled);
-                        };
+                        if item_for_child.selected {
+                            checkmark()
+                                .color(if enabled {
+                                    item_for_child.label_color
+                                } else {
+                                    item_for_child.disabled_color
+                                })
+                                .size(MENU_LEADING_SIZE)
+                                .padding([2.0, 2.0]);
+                        } else if let Some(icon_content) = item_for_child.leading_icon.clone() {
+                            icon()
+                                .painter(icon_content)
+                                .size(MENU_LEADING_SIZE)
+                                .tint(if enabled {
+                                    item_for_child.supporting_color
+                                } else {
+                                    item_for_child.disabled_color
+                                });
+                        } else {
+                            spacer().modifier(
+                                Modifier::new().size(MENU_LEADING_SIZE, MENU_LEADING_SIZE),
+                            );
+                        }
 
                         {
                             spacer().modifier(Modifier::new().constrain(
@@ -1036,10 +966,33 @@ fn menu_item_surface(
                             ));
                         };
 
-                        let label_args = item_for_child.clone();
-                        {
-                            render_labels(&label_args, enabled);
+                        let label_color = if enabled {
+                            item_for_child.label_color
+                        } else {
+                            item_for_child.disabled_color
                         };
+                        let supporting_color = if enabled {
+                            item_for_child.supporting_color
+                        } else {
+                            item_for_child.disabled_color
+                        };
+                        let label_text = item_for_child.label.clone();
+                        let supporting_text = item_for_child.supporting_text.clone();
+                        column()
+                            .modifier(Modifier::new())
+                            .cross_axis_alignment(CrossAxisAlignment::Start)
+                            .children(move || {
+                                text()
+                                    .content(label_text.clone())
+                                    .size(Dp(16.0))
+                                    .color(label_color);
+                                if let Some(supporting) = supporting_text.as_ref() {
+                                    text()
+                                        .content(supporting.clone())
+                                        .size(Dp(14.0))
+                                        .color(supporting_color);
+                                }
+                            });
 
                         spacer().modifier(Modifier::new().fill_max_width().weight(1.0));
 
@@ -1047,10 +1000,31 @@ fn menu_item_surface(
                             || item_for_child.trailing_text.is_some()
                             || item_for_child.submenu_content.is_some()
                         {
-                            let trailing_args = item_for_child.clone();
+                            if let Some(trailing_icon) = item_for_child.trailing_icon.clone() {
+                                icon().painter(trailing_icon).size(MENU_LEADING_SIZE).tint(
+                                    if enabled {
+                                        item_for_child.supporting_color
+                                    } else {
+                                        item_for_child.disabled_color
+                                    },
+                                );
+                            } else if let Some(trailing_text) = item_for_child.trailing_text.clone()
                             {
-                                render_trailing(&trailing_args, enabled);
-                            };
+                                text()
+                                    .content(trailing_text)
+                                    .size(Dp(14.0))
+                                    .color(if enabled {
+                                        item_for_child.supporting_color
+                                    } else {
+                                        item_for_child.disabled_color
+                                    });
+                            } else if item_for_child.submenu_content.is_some() {
+                                text().content(">").size(Dp(14.0)).color(if enabled {
+                                    item_for_child.supporting_color
+                                } else {
+                                    item_for_child.disabled_color
+                                });
+                            }
 
                             {
                                 spacer().modifier(Modifier::new().constrain(

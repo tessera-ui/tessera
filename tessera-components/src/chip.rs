@@ -443,13 +443,6 @@ impl ChipBuilder {
     }
 }
 
-fn render_chip_icon(icon_content: Painter, tint: Color) {
-    icon()
-        .painter(icon_content)
-        .size(ChipDefaults::ICON_SIZE)
-        .tint(tint);
-}
-
 /// # chip
 ///
 /// Renders a compact chip for actions, filters, and input tokens with optional
@@ -637,7 +630,10 @@ pub fn chip(
                                         spacer().modifier(Modifier::new().width(spacing));
                                     }
                                     item_count += 1;
-                                    render_chip_icon(icon_content.clone(), leading_icon_color);
+                                    icon()
+                                        .painter(icon_content.clone())
+                                        .size(ChipDefaults::ICON_SIZE)
+                                        .tint(leading_icon_color);
                                 }
 
                                 if has_label {
@@ -652,7 +648,10 @@ pub fn chip(
                                     if item_count > 0 {
                                         spacer().modifier(Modifier::new().width(spacing));
                                     }
-                                    render_chip_icon(icon_content.clone(), trailing_icon_color);
+                                    icon()
+                                        .painter(icon_content.clone())
+                                        .size(ChipDefaults::ICON_SIZE)
+                                        .tint(trailing_icon_color);
                                 }
                             });
                     });

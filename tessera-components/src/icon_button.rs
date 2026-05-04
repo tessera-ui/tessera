@@ -7,8 +7,6 @@ use tessera_ui::{Callback, Color, Dp, Modifier, RenderSlot, tessera, use_context
 
 use crate::{
     button::{ButtonDefaults, button},
-    glass_button::glass_button,
-    icon::icon,
     modifier::ModifierExt as _,
     painter::Painter,
     shape_def::Shape,
@@ -55,18 +53,6 @@ impl IconButtonBuilder {
     pub fn outlined(self) -> Self {
         self.variant(IconButtonVariant::Outlined)
     }
-}
-
-impl GlassIconButtonBuilder {
-    /// Sets the icon content using any supported icon source.
-    pub fn icon(mut self, icon: impl Into<Painter>) -> Self {
-        self.props.icon = Some(icon.into());
-        self
-    }
-}
-
-fn render_icon_content(content: Painter, tint: Color) {
-    icon().painter(content).size(Dp(24.0)).tint(tint);
 }
 
 /// # icon_button
@@ -140,8 +126,14 @@ pub fn icon_button(
     let content_color = content_color.unwrap_or(default_content_color);
     let ripple_color = content_color;
 
-    let child =
-        icon.map(|icon| RenderSlot::new(move || render_icon_content(icon.clone(), content_color)));
+    let child = icon.map(|icon| {
+        RenderSlot::new(move || {
+            crate::icon::icon()
+                .painter(icon.clone())
+                .size(Dp(24.0))
+                .tint(content_color);
+        })
+    });
 
     button()
         .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)))
@@ -162,93 +154,5 @@ pub fn icon_button(
         .border_width(border_width)
         .border_color_optional(border_color)
         .on_click_optional(on_click)
-        .child_optional(child);
-}
-
-/// # glass_icon_button
-///
-/// Renders a glass button with an icon as its content.
-///
-/// ## Usage
-///
-/// Use for prominent icon-based actions in a layered UI.
-///
-/// ## Parameters
-///
-/// - `icon` — optional icon content shown at the center.
-/// - `modifier` — modifier chain applied to the glass button.
-/// - `on_click` — optional click callback.
-/// - `padding` — optional inner padding.
-/// - `tint_color` — optional glass tint color.
-/// - `shape` — optional shape override.
-/// - `blur_radius` — optional blur radius.
-/// - `noise_amount` — optional noise amount.
-/// - `noise_scale` — optional noise scale.
-/// - `time` — optional animated time input.
-/// - `contrast` — optional contrast override.
-/// - `border` — optional glass border override.
-/// - `accessibility_label` — optional accessibility label.
-/// - `accessibility_description` — optional accessibility description.
-/// - `accessibility_focusable` — optional accessibility focusable flag.
-/// - `content_color` — optional icon tint override.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::{icon_button::glass_icon_button, material_icons::filled};
-/// use tessera_ui::tessera;
-///
-/// #[tessera]
-/// fn component() {
-///     glass_icon_button()
-///         .icon(filled::STAR_SVG)
-///         .on_click(|| {})
-///         .tint_color(tessera_ui::Color::new(0.2, 0.5, 0.8, 0.2));
-/// }
-/// ```
-#[tessera]
-pub fn glass_icon_button(
-    #[prop(skip_setter)] icon: Option<Painter>,
-    modifier: Option<Modifier>,
-    on_click: Option<Callback>,
-    padding: Option<Dp>,
-    tint_color: Option<Color>,
-    shape: Option<Shape>,
-    blur_radius: Option<Dp>,
-    noise_amount: Option<f32>,
-    noise_scale: Option<f32>,
-    time: Option<f32>,
-    contrast: Option<f32>,
-    border: Option<crate::fluid_glass::GlassBorder>,
-    #[prop(into)] accessibility_label: Option<String>,
-    #[prop(into)] accessibility_description: Option<String>,
-    accessibility_focusable: Option<bool>,
-    content_color: Option<Color>,
-) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
-    let content_color = content_color.unwrap_or(scheme.on_surface);
-    let modifier = modifier.unwrap_or_default();
-
-    let child =
-        icon.map(|icon| RenderSlot::new(move || render_icon_content(icon.clone(), content_color)));
-
-    glass_button()
-        .modifier(modifier)
-        .padding(padding.unwrap_or(Dp(12.0)))
-        .tint_color(tint_color.unwrap_or(Color::new(0.5, 0.5, 0.5, 0.1)))
-        .shape(shape.unwrap_or(Shape::rounded_rectangle(Dp(25.0))))
-        .blur_radius(blur_radius.unwrap_or(Dp(0.0)))
-        .noise_amount(noise_amount.unwrap_or(0.0))
-        .noise_scale(noise_scale.unwrap_or(1.0))
-        .time(time.unwrap_or(0.0))
-        .on_click_optional(on_click)
-        .contrast_optional(contrast)
-        .border_optional(border)
-        .accessibility_label_optional(accessibility_label)
-        .accessibility_description_optional(accessibility_description)
-        .accessibility_focusable_optional(accessibility_focusable.filter(|value| *value))
         .child_optional(child);
 }

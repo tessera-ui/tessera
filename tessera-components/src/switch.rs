@@ -5,6 +5,7 @@
 //! Use to control a boolean on/off state.
 use std::time::Duration;
 
+use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
@@ -476,64 +477,12 @@ pub fn switch(
 ) {
     let checked = checked.unwrap_or(false);
     let controller = controller.unwrap_or_else(|| remember(|| SwitchController::new(checked)));
-    render_switch(
-        modifier,
-        on_toggle,
-        enabled,
-        width,
-        height,
-        track_color,
-        track_checked_color,
-        track_outline_color,
-        track_outline_width,
-        thumb_color,
-        thumb_checked_color,
-        thumb_checked_icon_color,
-        thumb_icon_color,
-        accessibility_label,
-        accessibility_description,
-        controller,
-        child,
-    );
-}
-
-#[allow(clippy::too_many_arguments)]
-fn render_switch(
-    modifier: Option<Modifier>,
-    on_toggle: Option<CallbackWith<bool, ()>>,
-    enabled: Option<bool>,
-    width: Option<Dp>,
-    height: Option<Dp>,
-    track_color: Option<Color>,
-    track_checked_color: Option<Color>,
-    track_outline_color: Option<Color>,
-    track_outline_width: Option<Dp>,
-    thumb_color: Option<Color>,
-    thumb_checked_color: Option<Color>,
-    thumb_checked_icon_color: Option<Color>,
-    thumb_icon_color: Option<Color>,
-    accessibility_label: Option<String>,
-    accessibility_description: Option<String>,
-    controller: State<SwitchController>,
-    child: Option<RenderSlot>,
-) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
     let enabled = enabled.unwrap_or(true);
-    let width = width.unwrap_or(SwitchDefaults::WIDTH);
-    let height = height.unwrap_or(SwitchDefaults::HEIGHT);
-    let track_color = track_color.unwrap_or(scheme.surface_container_highest);
-    let track_checked_color = track_checked_color.unwrap_or(scheme.primary);
-    let track_outline_color = track_outline_color.unwrap_or(scheme.outline);
-    let track_outline_width = track_outline_width.unwrap_or(SwitchDefaults::TRACK_OUTLINE_WIDTH);
-    let thumb_color = thumb_color.unwrap_or(scheme.outline);
-    let thumb_checked_color = thumb_checked_color.unwrap_or(scheme.on_primary);
-    let thumb_checked_icon_color = thumb_checked_icon_color.unwrap_or(scheme.on_primary_container);
-    let thumb_icon_color = thumb_icon_color.unwrap_or(scheme.surface_container_highest);
-
-    let mut modifier = modifier.unwrap_or_default();
+    let on_toggle = enabled.then_some(on_toggle).flatten();
+    let interactive = on_toggle.is_some();
+    let interaction_state = interactive.then(|| remember(InteractionState::new));
+    let ripple_state = interactive.then(|| remember(RippleState::new));
+    let tap_recognizer = interactive.then(|| remember(TapRecognizer::default));
 
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
@@ -549,10 +498,73 @@ fn render_switch(
         });
     }
 
-    let on_toggle = enabled.then_some(on_toggle).flatten();
+    switch_content()
+        .modifier_optional(modifier)
+        .on_toggle_optional(on_toggle)
+        .enabled(enabled)
+        .width_optional(width)
+        .height_optional(height)
+        .track_color_optional(track_color)
+        .track_checked_color_optional(track_checked_color)
+        .track_outline_color_optional(track_outline_color)
+        .track_outline_width_optional(track_outline_width)
+        .thumb_color_optional(thumb_color)
+        .thumb_checked_color_optional(thumb_checked_color)
+        .thumb_checked_icon_color_optional(thumb_checked_icon_color)
+        .thumb_icon_color_optional(thumb_icon_color)
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
+        .controller(controller)
+        .interaction_state_optional(interaction_state)
+        .ripple_state_optional(ripple_state)
+        .tap_recognizer_optional(tap_recognizer)
+        .child_optional(child);
+}
+
+#[tessera]
+#[allow(clippy::too_many_arguments)]
+fn switch_content(
+    modifier: Option<Modifier>,
+    on_toggle: Option<CallbackWith<bool, ()>>,
+    enabled: Option<bool>,
+    width: Option<Dp>,
+    height: Option<Dp>,
+    track_color: Option<Color>,
+    track_checked_color: Option<Color>,
+    track_outline_color: Option<Color>,
+    track_outline_width: Option<Dp>,
+    thumb_color: Option<Color>,
+    thumb_checked_color: Option<Color>,
+    thumb_checked_icon_color: Option<Color>,
+    thumb_icon_color: Option<Color>,
+    accessibility_label: Option<String>,
+    accessibility_description: Option<String>,
+    controller: Option<State<SwitchController>>,
+    interaction_state: Option<State<InteractionState>>,
+    ripple_state: Option<State<RippleState>>,
+    tap_recognizer: Option<State<TapRecognizer>>,
+    child: Option<RenderSlot>,
+) {
+    let enabled = enabled.unwrap_or(true);
+    let controller = controller.expect("switch_content requires controller to be set");
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let width = width.unwrap_or(SwitchDefaults::WIDTH);
+    let height = height.unwrap_or(SwitchDefaults::HEIGHT);
+    let track_color = track_color.unwrap_or(scheme.surface_container_highest);
+    let track_checked_color = track_checked_color.unwrap_or(scheme.primary);
+    let track_outline_color = track_outline_color.unwrap_or(scheme.outline);
+    let track_outline_width = track_outline_width.unwrap_or(SwitchDefaults::TRACK_OUTLINE_WIDTH);
+    let thumb_color = thumb_color.unwrap_or(scheme.outline);
+    let thumb_checked_color = thumb_checked_color.unwrap_or(scheme.on_primary);
+    let thumb_checked_icon_color = thumb_checked_icon_color.unwrap_or(scheme.on_primary_container);
+    let thumb_icon_color = thumb_icon_color.unwrap_or(scheme.surface_container_highest);
+
+    let mut modifier = modifier.unwrap_or_default();
+
     let interactive = on_toggle.is_some();
-    let interaction_state = interactive.then(|| remember(InteractionState::new));
-    let ripple_state = interactive.then(|| remember(RippleState::new));
     let checked = controller.with(|c| c.is_checked());
     if interactive {
         modifier = modifier.minimum_interactive_component_size();
@@ -589,6 +601,7 @@ fn render_switch(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
+            tap_recognizer,
             ..Default::default()
         };
         modifier = modifier.toggleable_with(toggle_args);
@@ -727,7 +740,7 @@ mod tests {
     use crate::modifier::{ModifierExt as _, SemanticsArgs};
     use crate::theme::{MaterialTheme, material_theme};
 
-    use super::{ANIMATION_DURATION, SwitchController, THUMB_TEST_TAG, render_switch};
+    use super::{ANIMATION_DURATION, SwitchController, THUMB_TEST_TAG, switch_content};
 
     #[derive(Clone, PartialEq)]
     struct OffsetChildPolicy {
@@ -837,28 +850,24 @@ mod tests {
             started.set(true);
         }
 
+        if controller.with(|c| c.is_animating()) {
+            receive_frame_nanos(move |frame_nanos| {
+                let is_animating = controller.with_mut(|controller| {
+                    controller.update_progress(frame_nanos);
+                    controller.is_animating()
+                });
+                if is_animating {
+                    tessera_ui::FrameNanosControl::Continue
+                } else {
+                    tessera_ui::FrameNanosControl::Stop
+                }
+            });
+        }
+
         material_theme()
             .theme(MaterialTheme::default)
             .child(move || {
-                render_switch(
-                    None,
-                    None,
-                    Some(true),
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    None,
-                    controller,
-                    None,
-                );
+                switch_content().enabled(true).controller(controller);
             });
     }
 

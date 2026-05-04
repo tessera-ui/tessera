@@ -6,6 +6,7 @@
 use std::{sync::Arc, time::Duration};
 
 use parking_lot::Mutex;
+use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
@@ -351,6 +352,7 @@ fn navigation_bar_item_view(
     let animation_progress = animation_progress.unwrap_or(0.0);
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
+    let tap_recognizer = remember(TapRecognizer::default);
 
     let is_selected = index == selected_index;
     let was_selected = index == previous_index && selected_index != previous_index;
@@ -388,6 +390,7 @@ fn navigation_bar_item_view(
         interaction_state: Some(interaction_state),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
+        tap_recognizer: Some(tap_recognizer),
         ..Default::default()
     };
 

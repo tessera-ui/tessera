@@ -458,7 +458,7 @@ pub fn tab(
     };
     let focus_requester = remember(FocusRequester::new).get();
 
-    tab_trigger(TabTriggerArgs {
+    tab_trigger().args(TabTriggerArgs {
         controller: composition.controller,
         title,
         enabled: composition.enabled,
@@ -1042,17 +1042,8 @@ pub fn tabs(
     };
     let controller =
         controller.unwrap_or_else(|| remember(|| TabsController::new(initial_active_tab)));
-    render_tabs(config, controller, content);
-}
-
-fn render_tabs(args: TabsConfig, controller: State<TabsController>, content: RenderSlot) {
-    let indicator_shape = match args.variant {
-        TabsVariant::Primary => Shape::rounded_rectangle(Dp(3.0)),
-        TabsVariant::Secondary => Shape::RECTANGLE,
-    };
-
-    let ripple_color = TabsDefaults::ripple_color(args.active_content_color);
-
+    let tab_row_scroll_recognizer =
+        remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
     if controller.with(|c| c.has_pending_animation_frame()) {
         receive_frame_nanos(move |frame_nanos| {
             let has_pending_animation_frame = controller.with_mut(|controller| {
@@ -1066,12 +1057,36 @@ fn render_tabs(args: TabsConfig, controller: State<TabsController>, content: Ren
             }
         });
     }
+    tabs_content()
+        .args(config)
+        .controller(controller)
+        .content_shared(content)
+        .tab_row_scroll_recognizer(tab_row_scroll_recognizer);
+}
+
+#[tessera]
+fn tabs_content(
+    args: Option<TabsConfig>,
+    controller: Option<State<TabsController>>,
+    content: Option<RenderSlot>,
+    tab_row_scroll_recognizer: Option<State<ScrollRecognizer>>,
+) {
+    let args = args.expect("tabs_content requires args to be set");
+    let controller = controller.expect("tabs_content requires controller to be set");
+    let content = content.expect("tabs_content requires content to be set");
+    let tab_row_scroll_recognizer =
+        tab_row_scroll_recognizer.expect("tabs_content requires scroll recognizer to be set");
+    let indicator_shape = match args.variant {
+        TabsVariant::Primary => Shape::rounded_rectangle(Dp(3.0)),
+        TabsVariant::Secondary => Shape::RECTANGLE,
+    };
+
+    let ripple_color = TabsDefaults::ripple_color(args.active_content_color);
+
     let tab_row_scroll_px = controller.with(|c| c.tab_row_scroll_px());
     let indicator_x_px = controller.with(|c| c.indicator_x_px());
     let indicator_width_px = controller.with(|c| c.indicator_width_px());
 
-    let tab_row_scroll_recognizer =
-        remember(|| ScrollRecognizer::new(ScrollSettings { consume: true }));
     let layout_args = args.clone();
     let modifier = with_pointer_input(
         Modifier::new().semantics(SemanticsArgs {
@@ -1163,6 +1178,7 @@ fn render_tabs(args: TabsConfig, controller: State<TabsController>, content: Ren
         });
 }
 
+#[derive(Clone, PartialEq)]
 struct TabTriggerArgs {
     controller: State<TabsController>,
     title: TabTitle,
@@ -1176,7 +1192,9 @@ struct TabTriggerArgs {
     accessibility_label: Option<String>,
 }
 
-fn tab_trigger(args: TabTriggerArgs) {
+#[tessera]
+fn tab_trigger(args: Option<TabTriggerArgs>) {
+    let args = args.expect("tab_trigger requires args to be set");
     let tab_modifier = Modifier::new()
         .constrain(None, Some(AxisConstraint::exact(args.tab_height.into())))
         .focus_group()
@@ -1213,7 +1231,9 @@ fn tab_trigger(args: TabTriggerArgs) {
                         .with_mut(|state| state.set_active_tab(args.index));
                 })
                 .child(move || {
-                    render_tab_title(args.title.clone(), args.tab_padding);
+                    tab_title_content()
+                        .title(args.title.clone())
+                        .tab_padding(args.tab_padding);
                 });
         }
         (true, None) => {
@@ -1233,7 +1253,9 @@ fn tab_trigger(args: TabTriggerArgs) {
                         .with_mut(|state| state.set_active_tab(args.index));
                 })
                 .child(move || {
-                    render_tab_title(args.title.clone(), args.tab_padding);
+                    tab_title_content()
+                        .title(args.title.clone())
+                        .tab_padding(args.tab_padding);
                 });
         }
         (false, Some(label)) => {
@@ -1250,7 +1272,9 @@ fn tab_trigger(args: TabTriggerArgs) {
                 .accessibility_focusable(true)
                 .accessibility_label(label)
                 .child(move || {
-                    render_tab_title(args.title.clone(), args.tab_padding);
+                    tab_title_content()
+                        .title(args.title.clone())
+                        .tab_padding(args.tab_padding);
                 });
         }
         (false, None) => {
@@ -1266,13 +1290,18 @@ fn tab_trigger(args: TabTriggerArgs) {
                 .accessibility_role(tessera_ui::accesskit::Role::Tab)
                 .accessibility_focusable(true)
                 .child(move || {
-                    render_tab_title(args.title.clone(), args.tab_padding);
+                    tab_title_content()
+                        .title(args.title.clone())
+                        .tab_padding(args.tab_padding);
                 });
         }
     }
 }
 
-fn render_tab_title(title: TabTitle, tab_padding: Dp) {
+#[tessera]
+fn tab_title_content(title: Option<TabTitle>, tab_padding: Option<Dp>) {
+    let title = title.expect("tab_title_content requires title to be set");
+    let tab_padding = tab_padding.unwrap_or(TabsDefaults::TAB_PADDING);
     match title {
         TabTitle::Custom(render) => render.render(),
         TabTitle::Label {

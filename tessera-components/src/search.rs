@@ -275,7 +275,8 @@ pub fn search_bar(
     let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
     let dropdown_gap = dropdown_gap.unwrap_or(SearchBarProps::default().dropdown_gap);
     let content_padding = content_padding.unwrap_or(SearchBarProps::default().content_padding);
-    render_search_bar(
+    let controller = controller.unwrap_or_else(|| remember(|| SearchBarController::new(is_active)));
+    let render_args = build_search_bar_props(
         SearchBarProps {
             modifier,
             enabled,
@@ -294,11 +295,33 @@ pub fn search_bar(
             dropdown_shape,
             dropdown_gap,
             content_padding,
-            controller,
+            controller: Some(controller),
             content,
         },
         SearchBarLayoutKind::FullScreen,
     );
+    let modifier = render_args.modifier.clone();
+    layout().modifier(modifier).child(move || {
+        search_bar_inner()
+            .kind(render_args.kind)
+            .enabled(render_args.enabled)
+            .read_only(render_args.read_only)
+            .shape(render_args.shape)
+            .colors(render_args.colors)
+            .tonal_elevation(render_args.tonal_elevation)
+            .shadow_elevation(render_args.shadow_elevation)
+            .dropdown_shape(render_args.dropdown_shape)
+            .dropdown_gap(render_args.dropdown_gap)
+            .content_padding(render_args.content_padding)
+            .controller(render_args.controller)
+            .content_shared(render_args.content)
+            .on_query_change_shared(render_args.on_query_change)
+            .on_search_shared(render_args.on_search)
+            .on_active_change_shared(render_args.on_active_change)
+            .placeholder_optional(render_args.placeholder.clone())
+            .leading_icon_optional(render_args.leading_icon)
+            .trailing_icon_optional(render_args.trailing_icon);
+    });
 }
 
 /// # docked_search_bar
@@ -363,7 +386,8 @@ pub fn docked_search_bar(
     let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
     let dropdown_gap = dropdown_gap.unwrap_or(SearchBarProps::default().dropdown_gap);
     let content_padding = content_padding.unwrap_or(SearchBarProps::default().content_padding);
-    render_search_bar(
+    let controller = controller.unwrap_or_else(|| remember(|| SearchBarController::new(is_active)));
+    let render_args = build_search_bar_props(
         SearchBarProps {
             modifier,
             enabled,
@@ -382,15 +406,11 @@ pub fn docked_search_bar(
             dropdown_shape,
             dropdown_gap,
             content_padding,
-            controller,
+            controller: Some(controller),
             content,
         },
         SearchBarLayoutKind::Docked,
     );
-}
-
-fn render_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
-    let render_args = build_search_bar_props(args, kind);
     let modifier = render_args.modifier.clone();
     layout().modifier(modifier).child(move || {
         search_bar_inner()
@@ -419,7 +439,7 @@ fn build_search_bar_props(args: SearchBarProps, kind: SearchBarLayoutKind) -> Se
     let content = args.content.unwrap_or_else(RenderSlot::empty);
     let controller = args
         .controller
-        .unwrap_or_else(|| remember(|| SearchBarController::new(args.is_active)));
+        .expect("build_search_bar_props requires controller to be set");
     if args.is_active != controller.with(|c| c.is_active()) {
         if args.is_active {
             controller.with_mut(|c| c.open());
@@ -630,46 +650,44 @@ fn search_bar_inner(
                     spacer().modifier(Modifier::new().height(dropdown_gap));
                 }
 
-                render_results_surface(&results_surface_args);
+                let shape = match results_surface_args.kind {
+                    SearchBarLayoutKind::FullScreen => Shape::RECTANGLE,
+                    SearchBarLayoutKind::Docked => results_surface_args.dropdown_shape,
+                };
+
+                let modifier = match results_surface_args.kind {
+                    SearchBarLayoutKind::FullScreen => {
+                        Modifier::new().fill_max_width().fill_max_height()
+                    }
+                    SearchBarLayoutKind::Docked => Modifier::new().fill_max_width(),
+                };
+
+                let content = results_surface_args.content;
+                let divider_color = results_surface_args.divider_color;
+                let content_padding = results_surface_args.content_padding;
+
+                surface()
+                    .style(results_surface_args.container_color.into())
+                    .shape(shape)
+                    .modifier(modifier)
+                    .tonal_elevation(results_surface_args.tonal_elevation)
+                    .block_input(true)
+                    .elevation(results_surface_args.shadow_elevation)
+                    .child(move || {
+                        let content = content;
+                        column().children(move || {
+                            horizontal_divider().color(divider_color);
+                            let content = content;
+                            layout()
+                                .modifier(Modifier::new().padding_all(content_padding))
+                                .child(move || {
+                                    content.render();
+                                });
+                        });
+                    });
             }
         });
     });
-}
-
-fn render_results_surface(args: &SearchResultsSurfaceArgs) {
-    let shape = match args.kind {
-        SearchBarLayoutKind::FullScreen => Shape::RECTANGLE,
-        SearchBarLayoutKind::Docked => args.dropdown_shape,
-    };
-
-    let modifier = match args.kind {
-        SearchBarLayoutKind::FullScreen => Modifier::new().fill_max_width().fill_max_height(),
-        SearchBarLayoutKind::Docked => Modifier::new().fill_max_width(),
-    };
-
-    let content = args.content;
-    let divider_color = args.divider_color;
-    let content_padding = args.content_padding;
-
-    surface()
-        .style(args.container_color.into())
-        .shape(shape)
-        .modifier(modifier)
-        .tonal_elevation(args.tonal_elevation)
-        .block_input(true)
-        .elevation(args.shadow_elevation)
-        .child(move || {
-            let content = content;
-            column().children(move || {
-                horizontal_divider().color(divider_color);
-                let content = content;
-                layout()
-                    .modifier(Modifier::new().padding_all(content_padding))
-                    .child(move || {
-                        content.render();
-                    });
-            });
-        });
 }
 
 struct SearchFieldArgs {

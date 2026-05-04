@@ -254,39 +254,6 @@ fn compute_side_sheet_x(
     (x + drag_offset) as i32
 }
 
-fn render_modal_scrim(on_close_request: Callback, progress: f32, is_open: bool) {
-    let scrim_alpha = scrim_alpha_for(progress, is_open);
-    let scrim_color = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme
-        .scrim;
-    surface()
-        .style(scrim_color.with_alpha(scrim_alpha).into())
-        .on_click_shared(on_close_request)
-        .modifier(Modifier::new().fill_max_size())
-        .block_input(true)
-        .child(|| {});
-}
-
-/// Render scrim according to configured type.
-fn render_scrim(
-    sheet_type: SideSheetType,
-    on_close_request: Callback,
-    progress: f32,
-    is_open: bool,
-) {
-    match sheet_type {
-        SideSheetType::Modal => render_modal_scrim(on_close_request, progress, is_open),
-        SideSheetType::Standard => {
-            surface()
-                .style(Color::TRANSPARENT.into())
-                .modifier(Modifier::new().fill_max_size())
-                .child(|| {});
-        }
-    }
-}
-
 /// Create the keyboard handler closure used to close the sheet on Escape.
 fn make_keyboard_closure(
     on_close: Callback,
@@ -648,7 +615,28 @@ fn side_sheet_provider_render(
             main_content.render();
 
             if show_side_sheet {
-                render_scrim(sheet_type, on_close_request, progress, is_open);
+                match sheet_type {
+                    SideSheetType::Modal => {
+                        let scrim_alpha = scrim_alpha_for(progress, is_open);
+                        let scrim_color = use_context::<MaterialTheme>()
+                            .expect("MaterialTheme must be provided")
+                            .get()
+                            .color_scheme
+                            .scrim;
+                        surface()
+                            .style(scrim_color.with_alpha(scrim_alpha).into())
+                            .on_click_shared(on_close_request)
+                            .modifier(Modifier::new().fill_max_size())
+                            .block_input(true)
+                            .child(|| {});
+                    }
+                    SideSheetType::Standard => {
+                        surface()
+                            .style(Color::TRANSPARENT.into())
+                            .modifier(Modifier::new().fill_max_size())
+                            .child(|| {});
+                    }
+                }
 
                 side_sheet_content_wrapper()
                     .sheet_type(sheet_type)

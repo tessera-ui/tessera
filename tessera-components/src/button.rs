@@ -189,83 +189,75 @@ pub fn button(
         .expect("MaterialTheme must be provided")
         .get()
         .typography;
-
-    render_button_surface(
-        button_args,
-        RenderSlot::new(move || {
-            let child = child;
-            let modifier = Modifier::new().padding_all(padding);
-            layout().modifier(modifier).child(move || {
-                if let Some(child) = child.as_ref() {
-                    let child = *child;
-                    provide_text_style(typography.label_large, move || child.render());
-                }
-            });
-        }),
-    );
-}
-
-fn render_button_surface(args: ButtonResolvedArgs, child: RenderSlot) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let child = RenderSlot::new(move || {
+        let child = child;
+        let modifier = Modifier::new().padding_all(padding);
+        layout().modifier(modifier).child(move || {
+            if let Some(child) = child.as_ref() {
+                let child = *child;
+                provide_text_style(typography.label_large, move || child.render());
+            }
+        });
+    });
     let inherited_content_color = use_context::<ContentColor>()
         .map(|c| c.get().current)
         .unwrap_or(ContentColor::default().current);
 
-    let container_color = if args.enabled {
-        args.color
+    let container_color = if button_args.enabled {
+        button_args.color
     } else {
-        args.disabled_container_color
+        button_args.disabled_container_color
     };
 
-    let content_color = if args.enabled {
-        args.content_color.unwrap_or_else(|| {
-            content_color_for(args.color, &scheme).unwrap_or(inherited_content_color)
+    let content_color = if button_args.enabled {
+        button_args.content_color.unwrap_or_else(|| {
+            content_color_for(button_args.color, &scheme).unwrap_or(inherited_content_color)
         })
     } else {
-        args.disabled_content_color
+        button_args.disabled_content_color
     };
 
-    let style = if args.border_width.to_pixels_f32() > 0.0 {
-        let border_color = if args.enabled {
-            args.border_color.unwrap_or(container_color)
+    let style = if button_args.border_width.to_pixels_f32() > 0.0 {
+        let border_color = if button_args.enabled {
+            button_args.border_color.unwrap_or(container_color)
         } else {
-            args.disabled_border_color
+            button_args.disabled_border_color
         };
         SurfaceStyle::FilledOutlined {
             fill_color: container_color,
             border_color,
-            border_width: args.border_width,
+            border_width: button_args.border_width,
         }
     } else {
         SurfaceStyle::Filled {
             color: container_color,
         }
     };
-    let on_click = args.enabled.then_some(args.on_click).flatten();
+    let on_click = button_args
+        .enabled
+        .then_some(button_args.on_click)
+        .flatten();
 
     surface()
         .style(style)
-        .shape(args.shape)
-        .modifier(args.modifier.clone().size_in(
+        .shape(button_args.shape)
+        .modifier(button_args.modifier.clone().size_in(
             Some(ButtonDefaults::MIN_WIDTH),
             None,
             Some(ButtonDefaults::MIN_HEIGHT),
             None,
         ))
-        .ripple_color(args.ripple_color)
+        .ripple_color(button_args.ripple_color)
         .content_alignment(Alignment::Center)
         .content_color(content_color)
-        .enabled(args.enabled)
-        .tonal_elevation(args.tonal_elevation)
+        .enabled(button_args.enabled)
+        .tonal_elevation(button_args.tonal_elevation)
         .accessibility_role(Role::Button)
         .accessibility_focusable(true)
-        .elevation_optional(args.elevation)
+        .elevation_optional(button_args.elevation)
         .on_click_optional(on_click)
-        .accessibility_label_optional(args.accessibility_label)
-        .accessibility_description_optional(args.accessibility_description)
+        .accessibility_label_optional(button_args.accessibility_label)
+        .accessibility_description_optional(button_args.accessibility_description)
         .child_shared(child);
 }
 

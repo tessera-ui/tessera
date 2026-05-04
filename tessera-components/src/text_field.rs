@@ -129,7 +129,7 @@ impl Default for TextFieldContextMenu {
 }
 
 /// Arguments for configuring a Material text field.
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct TextFieldProps {
     /// Whether the text field is enabled for user input.
     pub enabled: bool,
@@ -618,11 +618,15 @@ fn outlined_floating_label(
         });
 }
 
-fn render_text_field(
-    args: TextFieldProps,
-    controller: State<TextInputController>,
-    editor: TextInputProps,
+#[tessera]
+fn text_field_content(
+    args: Option<TextFieldProps>,
+    controller: Option<State<TextInputController>>,
+    editor: Option<TextInputProps>,
 ) {
+    let args = args.expect("text_field_content requires args to be set");
+    let controller = controller.expect("text_field_content requires controller to be set");
+    let editor = editor.expect("text_field_content requires editor args to be set");
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -685,7 +689,7 @@ fn render_text_field(
     let notch_padding = TextFieldDefaults::OUTLINED_LABEL_PADDING;
     let notch_vertical_padding = TextFieldDefaults::OUTLINED_NOTCH_VERTICAL_PADDING;
 
-    let render_editor = move || {
+    {
         let mut core_args = editor.clone();
         core_args.modifier = Modifier::new().fill_max_size();
         core_args.padding = Dp(0.0);
@@ -915,9 +919,7 @@ fn render_text_field(
                     }
                 });
             });
-    };
-
-    render_editor();
+    }
 }
 
 fn apply_menu_action(
@@ -959,23 +961,16 @@ fn apply_menu_action(
     }
 }
 
-fn add_menu_item(
-    label: &str,
-    enabled: bool,
-    action_state: State<Option<TextFieldMenuAction>>,
-    action: TextFieldMenuAction,
+#[tessera]
+fn text_field_menu_content(
+    controller: Option<State<TextInputController>>,
+    menu: Option<TextFieldContextMenu>,
+    action_state: Option<State<Option<TextFieldMenuAction>>>,
 ) {
-    let label = label.to_string();
-    menu_item().label(label).enabled(enabled).on_click(move || {
-        action_state.set(Some(action));
-    });
-}
-
-fn configure_text_field_menu(
-    controller: State<TextInputController>,
-    menu: TextFieldContextMenu,
-    action_state: State<Option<TextFieldMenuAction>>,
-) {
+    let controller = controller.expect("text_field_menu_content requires controller to be set");
+    let menu = menu.expect("text_field_menu_content requires menu policy to be set");
+    let action_state =
+        action_state.expect("text_field_menu_content requires action state to be set");
     if !menu.enabled {
         return;
     }
@@ -983,31 +978,33 @@ fn configure_text_field_menu(
     let selection_available = controller.with(|c| c.has_selection());
 
     if menu.allow_cut {
-        add_menu_item(
-            "Cut",
-            selection_available,
-            action_state,
-            TextFieldMenuAction::Cut,
-        );
+        menu_item()
+            .label("Cut")
+            .enabled(selection_available)
+            .on_click(move || {
+                action_state.set(Some(TextFieldMenuAction::Cut));
+            });
     }
     if menu.allow_copy {
-        add_menu_item(
-            "Copy",
-            selection_available,
-            action_state,
-            TextFieldMenuAction::Copy,
-        );
+        menu_item()
+            .label("Copy")
+            .enabled(selection_available)
+            .on_click(move || {
+                action_state.set(Some(TextFieldMenuAction::Copy));
+            });
     }
     if menu.allow_paste {
-        add_menu_item("Paste", true, action_state, TextFieldMenuAction::Paste);
+        menu_item().label("Paste").enabled(true).on_click(move || {
+            action_state.set(Some(TextFieldMenuAction::Paste));
+        });
     }
     if menu.allow_select_all {
-        add_menu_item(
-            "Select All",
-            true,
-            action_state,
-            TextFieldMenuAction::SelectAll,
-        );
+        menu_item()
+            .label("Select All")
+            .enabled(true)
+            .on_click(move || {
+                action_state.set(Some(TextFieldMenuAction::SelectAll));
+            });
     }
 }
 
@@ -1344,13 +1341,22 @@ pub fn text_field(
                 .offset([Dp(0.0), Dp(4.0)])
                 .controller(menu_controller)
                 .main_content(move || {
-                    render_text_field(render_args.clone(), controller, editor_args.clone());
+                    text_field_content()
+                        .args(render_args.clone())
+                        .controller(controller)
+                        .editor(editor_args.clone());
                 })
                 .menu_content(move || {
-                    configure_text_field_menu(controller, menu_policy, action_state);
+                    text_field_menu_content()
+                        .controller(controller)
+                        .menu(menu_policy)
+                        .action_state(action_state);
                 });
         } else {
-            render_text_field(render_args.clone(), controller, editor_args.clone());
+            text_field_content()
+                .args(render_args.clone())
+                .controller(controller)
+                .editor(editor_args.clone());
         }
     });
 }

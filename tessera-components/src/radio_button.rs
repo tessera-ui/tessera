@@ -6,6 +6,7 @@
 
 use std::time::Duration;
 
+use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Color, Dp, FocusState, FocusTraversalPolicy, Modifier,
     Px, PxSize, RenderSlot, State, accesskit::Role, current_frame_nanos, layout::layout,
@@ -345,6 +346,9 @@ fn radio_button_inner(
     let _ = selected;
     let radio_group = use_context::<RadioGroupContext>().map(|context| context.get());
     let controller = controller.expect("radio_button_inner requires controller to be set");
+    let interaction_state = enabled.then(|| remember(InteractionState::new));
+    let ripple_state = enabled.then(|| remember(RippleState::new));
+    let tap_recognizer = enabled.then(|| remember(TapRecognizer::default));
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller.with_mut(|controller| {
@@ -361,8 +365,6 @@ fn radio_button_inner(
     let progress = controller.with(|c| c.animation_progress());
     let eased_progress = animation::easing(progress);
     let is_selected = controller.with(|c| c.is_selected());
-    let interaction_state = enabled.then(|| remember(InteractionState::new));
-    let ripple_state = enabled.then(|| remember(RippleState::new));
     let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
 
     let target_size = Dp(touch_target_size.0.max(size.0));
@@ -435,6 +437,7 @@ fn radio_button_inner(
             interaction_state,
             on_press: press_handler.map(Into::into),
             on_release: release_handler.map(Into::into),
+            tap_recognizer,
             ..Default::default()
         };
         modifier = modifier.selectable_with(selectable_args);

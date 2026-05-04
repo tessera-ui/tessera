@@ -303,21 +303,27 @@ pub fn list_item(
         .or_else(|| supporting_text.clone())
         .or_else(|| overline_text.clone());
     let internal_spacing = ListItemDefaults::INTERNAL_SPACING;
-    render_list_item_surface(
-        ListItemSurfaceArgs {
-            modifier,
-            container_color,
-            shape,
-            headline_color,
-            enabled,
-            tonal_elevation,
-            shadow_elevation,
-            interaction_state,
-            on_click,
-            accessibility_label,
-            accessibility_description,
-        },
-        RenderSlot::new(move || {
+    let has_on_click = on_click.is_some();
+    let elevation = (shadow_elevation.0 > 0.0).then_some(shadow_elevation);
+
+    surface()
+        .modifier(modifier)
+        .style(SurfaceStyle::Filled {
+            color: container_color,
+        })
+        .shape(shape)
+        .content_color(headline_color)
+        .enabled(enabled)
+        .ripple_color(headline_color)
+        .tonal_elevation(tonal_elevation)
+        .accessibility_role(Role::ListItem)
+        .elevation_optional(elevation)
+        .interaction_state_optional(interaction_state)
+        .on_click_optional(on_click)
+        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_description_optional(accessibility_description)
+        .child_shared(RenderSlot::new(move || {
             let headline = headline.clone();
             let leading = leading;
             let trailing = trailing;
@@ -339,7 +345,7 @@ pub fn list_item(
                     if let Some(leading) = leading {
                         let color = leading_color;
                         {
-                            render_slot()
+                            list_item_slot()
                                 .content_shared(leading)
                                 .color(color)
                                 .min_size(ListItemDefaults::LEADING_MIN_SIZE);
@@ -359,7 +365,7 @@ pub fn list_item(
                         .children(move || {
                             if let Some(overline) = overline_text.clone() {
                                 let color = overline_color;
-                                render_text_line()
+                                list_item_text_line()
                                     .text_value(overline.clone())
                                     .style(typography.label_small)
                                     .color(color);
@@ -369,7 +375,7 @@ pub fn list_item(
                             if headline_text.is_empty() {
                                 spacer().modifier(Modifier::new());
                             } else {
-                                render_text_line()
+                                list_item_text_line()
                                     .text_value(headline_text.clone())
                                     .style(typography.body_large)
                                     .color(color);
@@ -377,7 +383,7 @@ pub fn list_item(
 
                             if let Some(supporting) = supporting_text.clone() {
                                 let color = supporting_color;
-                                render_text_line()
+                                list_item_text_line()
                                     .text_value(supporting.clone())
                                     .style(typography.body_medium)
                                     .color(color);
@@ -390,19 +396,18 @@ pub fn list_item(
                         };
                         let color = trailing_color;
                         {
-                            render_slot()
+                            list_item_slot()
                                 .content_shared(trailing)
                                 .color(color)
                                 .min_size(ListItemDefaults::TRAILING_MIN_SIZE);
                         };
                     }
                 });
-        }),
-    );
+        }));
 }
 
 #[tessera]
-fn render_text_line(
+fn list_item_text_line(
     #[prop(into)] text_value: Option<String>,
     style: Option<crate::theme::TextStyle>,
     color: Option<Color>,
@@ -416,7 +421,7 @@ fn render_text_line(
 }
 
 #[tessera]
-fn render_slot(content: Option<RenderSlot>, color: Option<Color>, min_size: Option<Dp>) {
+fn list_item_slot(content: Option<RenderSlot>, color: Option<Color>, min_size: Option<Dp>) {
     let content = content.unwrap_or_else(RenderSlot::empty);
     let color = color.unwrap_or(Color::TRANSPARENT);
     let min_size = min_size.unwrap_or(Dp(0.0));
@@ -433,44 +438,6 @@ fn render_slot(content: Option<RenderSlot>, color: Option<Color>, min_size: Opti
                 });
         },
     );
-}
-
-struct ListItemSurfaceArgs {
-    modifier: Modifier,
-    container_color: Color,
-    shape: Shape,
-    headline_color: Color,
-    enabled: bool,
-    tonal_elevation: Dp,
-    shadow_elevation: Dp,
-    interaction_state: Option<State<InteractionState>>,
-    on_click: Option<Callback>,
-    accessibility_label: Option<String>,
-    accessibility_description: Option<String>,
-}
-
-fn render_list_item_surface(args: ListItemSurfaceArgs, child: RenderSlot) {
-    let has_on_click = args.on_click.is_some();
-    let elevation = (args.shadow_elevation.0 > 0.0).then_some(args.shadow_elevation);
-
-    surface()
-        .modifier(args.modifier)
-        .style(SurfaceStyle::Filled {
-            color: args.container_color,
-        })
-        .shape(args.shape)
-        .content_color(args.headline_color)
-        .enabled(args.enabled)
-        .ripple_color(args.headline_color)
-        .tonal_elevation(args.tonal_elevation)
-        .accessibility_role(Role::ListItem)
-        .elevation_optional(elevation)
-        .interaction_state_optional(args.interaction_state)
-        .on_click_optional(args.on_click)
-        .accessibility_focusable_optional(has_on_click.then_some(true))
-        .accessibility_label_optional(args.accessibility_label)
-        .accessibility_description_optional(args.accessibility_description)
-        .child_shared(child);
 }
 
 fn content_min_height(min_height: Dp, top_padding: Dp, bottom_padding: Dp) -> Dp {

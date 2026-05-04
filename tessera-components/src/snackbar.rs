@@ -550,29 +550,98 @@ pub fn snackbar(
             let message = message.clone();
             let action_label = action_label.clone();
             if action_on_new_line {
-                render_snackbar_column(SnackbarRenderArgs {
-                    message,
-                    message_style: typography.body_medium,
-                    message_color: content_color,
-                    action_label,
-                    action_color,
-                    dismiss_action_color,
-                    on_action,
-                    on_dismiss,
-                    padding: content_padding,
-                });
+                column()
+                    .modifier(Modifier::new().fill_max_width().padding(content_padding))
+                    .cross_axis_alignment(CrossAxisAlignment::Start)
+                    .children(move || {
+                        provide_text_style(typography.body_medium, {
+                            let message = message.clone();
+                            move || {
+                                text().content(message.clone()).color(content_color);
+                            }
+                        });
+
+                        if action_label.is_some() || on_dismiss.is_some() {
+                            spacer().modifier(
+                                Modifier::new().height(SnackbarDefaults::ACTION_VERTICAL_SPACING),
+                            );
+                            let action_label = action_label.clone();
+                            row()
+                                .modifier(Modifier::new().fill_max_width())
+                                .main_axis_alignment(MainAxisAlignment::End)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    if let Some(label) = action_label.clone() {
+                                        let callback = on_action.unwrap_or_default();
+                                        button()
+                                            .text()
+                                            .on_click(move || {
+                                                callback.call();
+                                            })
+                                            .content_color(action_color)
+                                            .ripple_color(action_color)
+                                            .child(move || {
+                                                text().content(label.clone()).color(action_color);
+                                            });
+                                    }
+
+                                    if on_dismiss.is_some() {
+                                        spacer().modifier(
+                                            Modifier::new().width(SnackbarDefaults::ACTION_SPACING),
+                                        );
+                                        icon_button()
+                                            .icon(filled::CLOSE_SVG)
+                                            .variant(IconButtonVariant::Standard)
+                                            .content_color(dismiss_action_color)
+                                            .on_click_shared(on_dismiss.unwrap_or_default());
+                                    }
+                                });
+                        }
+                    });
             } else {
-                render_snackbar_row(SnackbarRenderArgs {
-                    message,
-                    message_style: typography.body_medium,
-                    message_color: content_color,
-                    action_label,
-                    action_color,
-                    dismiss_action_color,
-                    on_action,
-                    on_dismiss,
-                    padding: row_padding,
-                });
+                row()
+                    .modifier(Modifier::new().fill_max_width().padding(row_padding))
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        let message = message.clone();
+                        boxed()
+                            .alignment(Alignment::CenterStart)
+                            .modifier(Modifier::new().weight(1.0))
+                            .children(move || {
+                                provide_text_style(typography.body_medium, {
+                                    let message = message.clone();
+                                    move || {
+                                        text().content(message.clone()).color(content_color);
+                                    }
+                                });
+                            });
+
+                        if let Some(label) = action_label.clone() {
+                            spacer()
+                                .modifier(Modifier::new().width(SnackbarDefaults::ACTION_SPACING));
+                            let callback = on_action.unwrap_or_default();
+                            button()
+                                .text()
+                                .on_click(move || {
+                                    callback.call();
+                                })
+                                .content_color(action_color)
+                                .ripple_color(action_color)
+                                .child(move || {
+                                    text().content(label.clone()).color(action_color);
+                                });
+                        }
+
+                        if on_dismiss.is_some() {
+                            spacer()
+                                .modifier(Modifier::new().width(SnackbarDefaults::ACTION_SPACING));
+                            icon_button()
+                                .icon(filled::CLOSE_SVG)
+                                .variant(IconButtonVariant::Standard)
+                                .content_color(dismiss_action_color)
+                                .on_click_shared(on_dismiss.unwrap_or_default());
+                        }
+                    });
             }
         });
 }
@@ -665,104 +734,6 @@ pub fn snackbar_host(
                 });
         }
     });
-}
-
-#[derive(Clone)]
-struct SnackbarRenderArgs {
-    message: String,
-    message_style: crate::theme::TextStyle,
-    message_color: Color,
-    action_label: Option<String>,
-    action_color: Color,
-    dismiss_action_color: Color,
-    on_action: Option<Callback>,
-    on_dismiss: Option<Callback>,
-    padding: Padding,
-}
-
-fn render_snackbar_row(args: SnackbarRenderArgs) {
-    row()
-        .modifier(Modifier::new().fill_max_width().padding(args.padding))
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .children(move || {
-            let message_text = args.message.clone();
-            boxed()
-                .alignment(Alignment::CenterStart)
-                .modifier(Modifier::new().weight(1.0))
-                .children(move || {
-                    let message_text = message_text.clone();
-                    render_message(message_text.clone(), args.message_style, args.message_color);
-                });
-
-            if let Some(label) = args.action_label.clone() {
-                spacer().modifier(Modifier::new().width(SnackbarDefaults::ACTION_SPACING));
-                render_action_button(label.clone(), args.action_color, args.on_action);
-            }
-
-            if args.on_dismiss.is_some() {
-                spacer().modifier(Modifier::new().width(SnackbarDefaults::ACTION_SPACING));
-                render_dismiss_button(args.dismiss_action_color, args.on_dismiss);
-            }
-        });
-}
-
-fn render_snackbar_column(args: SnackbarRenderArgs) {
-    column()
-        .modifier(Modifier::new().fill_max_width().padding(args.padding))
-        .cross_axis_alignment(CrossAxisAlignment::Start)
-        .children(move || {
-            let message_text = args.message.clone();
-            render_message(message_text.clone(), args.message_style, args.message_color);
-
-            if args.action_label.is_some() || args.on_dismiss.is_some() {
-                spacer()
-                    .modifier(Modifier::new().height(SnackbarDefaults::ACTION_VERTICAL_SPACING));
-                let action_label = args.action_label.clone();
-                row()
-                    .modifier(Modifier::new().fill_max_width())
-                    .main_axis_alignment(MainAxisAlignment::End)
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .children(move || {
-                        if let Some(label) = action_label.clone() {
-                            render_action_button(label.clone(), args.action_color, args.on_action);
-                        }
-
-                        if args.on_dismiss.is_some() {
-                            spacer()
-                                .modifier(Modifier::new().width(SnackbarDefaults::ACTION_SPACING));
-                            render_dismiss_button(args.dismiss_action_color, args.on_dismiss);
-                        }
-                    });
-            }
-        });
-}
-
-fn render_message(message: String, style: crate::theme::TextStyle, color: Color) {
-    provide_text_style(style, move || {
-        text().content(message.clone()).color(color);
-    });
-}
-
-fn render_action_button(label: String, action_color: Color, on_action: Option<Callback>) {
-    let on_action = on_action.unwrap_or_default();
-    button()
-        .text()
-        .on_click(move || {
-            on_action.call();
-        })
-        .content_color(action_color)
-        .ripple_color(action_color)
-        .child(move || {
-            text().content(label.clone()).color(action_color);
-        });
-}
-
-fn render_dismiss_button(dismiss_color: Color, on_dismiss: Option<Callback>) {
-    icon_button()
-        .icon(filled::CLOSE_SVG)
-        .variant(IconButtonVariant::Standard)
-        .content_color(dismiss_color)
-        .on_click_shared(on_dismiss.unwrap_or_default());
 }
 
 fn snackbar_from_data(data: SnackbarData) {

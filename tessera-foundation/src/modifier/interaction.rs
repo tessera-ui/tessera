@@ -5,13 +5,15 @@
 //! Configure clickable, toggleable, selectable, and draggable modifier
 //! behavior.
 
+use std::sync::{Arc, Mutex};
+
 use tessera_ui::{
     Callback, CallbackWith, FocusProperties, FocusRequester, Modifier, PointerInput,
     PointerInputModifierNode, Px, PxPosition, PxSize, State, accesskit,
-    modifier::ModifierCapabilityExt as _, remember,
+    modifier::ModifierCapabilityExt as _,
 };
 
-use crate::gesture::{DragAxis, DragRecognizer, DragSettings};
+use crate::gesture::{DragAxis, DragRecognizer, DragSettings, LongPressRecognizer, TapRecognizer};
 
 /// Context for pointer press/release callbacks.
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -50,6 +52,11 @@ pub struct ClickableArgs {
     pub focus_requester: Option<FocusRequester>,
     /// Optional focus properties applied to the clickable target.
     pub focus_properties: Option<FocusProperties>,
+    /// Optional persistent tap recognizer state for component-owned gestures.
+    pub tap_recognizer: Option<State<TapRecognizer>>,
+    /// Optional persistent long-press recognizer state for component-owned
+    /// gestures.
+    pub long_press_recognizer: Option<State<LongPressRecognizer>>,
 }
 
 impl Default for ClickableArgs {
@@ -66,6 +73,8 @@ impl Default for ClickableArgs {
             interaction_state: None,
             focus_requester: None,
             focus_properties: None,
+            tap_recognizer: None,
+            long_press_recognizer: None,
         }
     }
 }
@@ -93,6 +102,8 @@ pub struct ToggleableArgs {
     pub on_release: Option<PressCallback>,
     /// Optional externally managed focus requester for this toggleable target.
     pub focus_requester: Option<FocusRequester>,
+    /// Optional persistent tap recognizer state for component-owned gestures.
+    pub tap_recognizer: Option<State<TapRecognizer>>,
 }
 
 impl Default for ToggleableArgs {
@@ -108,6 +119,7 @@ impl Default for ToggleableArgs {
             on_press: None,
             on_release: None,
             focus_requester: None,
+            tap_recognizer: None,
         }
     }
 }
@@ -135,6 +147,8 @@ pub struct SelectableArgs {
     pub on_release: Option<PressCallback>,
     /// Optional externally managed focus requester for this selectable target.
     pub focus_requester: Option<FocusRequester>,
+    /// Optional persistent tap recognizer state for component-owned gestures.
+    pub tap_recognizer: Option<State<TapRecognizer>>,
 }
 
 impl Default for SelectableArgs {
@@ -150,6 +164,7 @@ impl Default for SelectableArgs {
             on_press: None,
             on_release: None,
             focus_requester: None,
+            tap_recognizer: None,
         }
     }
 }
@@ -182,6 +197,8 @@ pub struct DraggableArgs {
     pub on_drag_stopped: Option<Callback>,
     /// Optional external interaction state updated with the dragged flag.
     pub interaction_state: Option<State<InteractionState>>,
+    /// Optional persistent drag recognizer state for component-owned gestures.
+    pub drag_recognizer: Option<State<DragRecognizer>>,
 }
 
 impl Default for DraggableArgs {
@@ -195,6 +212,7 @@ impl Default for DraggableArgs {
             on_drag_started: None,
             on_drag_stopped: None,
             interaction_state: None,
+            drag_recognizer: None,
         }
     }
 }
@@ -273,8 +291,29 @@ impl InteractionState {
     }
 }
 
+#[derive(Clone)]
+enum DragRecognizerHandle {
+    State(State<DragRecognizer>),
+    Local(Arc<Mutex<DragRecognizer>>),
+}
+
+impl DragRecognizerHandle {
+    fn with_mut<R>(&self, f: impl FnOnce(&mut DragRecognizer) -> R) -> R {
+        match self {
+            Self::State(state) => state.with_mut(f),
+            Self::Local(recognizer) => match recognizer.lock() {
+                Ok(mut guard) => f(&mut guard),
+                Err(poisoned) => {
+                    let mut guard = poisoned.into_inner();
+                    f(&mut guard)
+                }
+            },
+        }
+    }
+}
+
 struct DraggablePointerModifierNode {
-    drag_recognizer: State<DragRecognizer>,
+    drag_recognizer: DragRecognizerHandle,
     on_drag_delta: DragCallback,
     enabled: bool,
     on_drag_started: Option<Callback>,
@@ -352,6 +391,7 @@ pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> M
         on_drag_started,
         on_drag_stopped,
         interaction_state,
+        drag_recognizer,
     } = args;
 
     if !enabled {
@@ -361,20 +401,19 @@ pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> M
         return base;
     }
 
-    let drag_recognizer = remember(move || {
-        DragRecognizer::new(DragSettings {
-            slop_px,
-            consume_when_dragging,
-            axis,
-        })
-    });
-    drag_recognizer.with_mut(|recognizer| {
-        recognizer.set_settings(DragSettings {
-            slop_px,
-            consume_when_dragging,
-            axis,
+    let settings = DragSettings {
+        slop_px,
+        consume_when_dragging,
+        axis,
+    };
+    let drag_recognizer = if let Some(drag_recognizer) = drag_recognizer {
+        drag_recognizer.with_mut(|recognizer| {
+            recognizer.set_settings(settings);
         });
-    });
+        DragRecognizerHandle::State(drag_recognizer)
+    } else {
+        DragRecognizerHandle::Local(Arc::new(Mutex::new(DragRecognizer::new(settings))))
+    };
 
     base.push_pointer_input(DraggablePointerModifierNode {
         drag_recognizer,

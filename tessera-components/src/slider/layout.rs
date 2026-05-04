@@ -93,7 +93,7 @@ impl SliderLayout {
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(super) struct CenteredSliderLayout {
     pub base: SliderLayout,
 }
@@ -252,7 +252,7 @@ pub(super) fn slider_layout_with_handle_width(
     )
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(super) struct RangeSliderLayout {
     pub base: SliderLayout,
 }

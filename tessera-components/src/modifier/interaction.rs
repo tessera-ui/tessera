@@ -9,6 +9,8 @@
 //! gesture flow. Accessibility is attached through semantics modifier nodes,
 //! and hover cursors use dedicated cursor modifiers.
 
+use std::sync::{Arc, Mutex};
+
 use tessera_foundation::{
     gesture::{LongPressRecognizer, TapRecognizer},
     modifier::{
@@ -21,7 +23,6 @@ use tessera_ui::{
     PointerInputModifierNode, PxPosition, PxSize, SemanticsModifierNode, State,
     accesskit::{self, Action, Toggled},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember,
     winit::window::CursorIcon,
 };
 
@@ -123,9 +124,63 @@ fn reset_disabled_interaction_state(state: State<InteractionState>) {
     }
 }
 
+#[derive(Clone)]
+enum TapRecognizerHandle {
+    State(State<TapRecognizer>),
+    Local(Arc<Mutex<TapRecognizer>>),
+}
+
+impl TapRecognizerHandle {
+    fn new(state: Option<State<TapRecognizer>>) -> Self {
+        state
+            .map(Self::State)
+            .unwrap_or_else(|| Self::Local(Arc::new(Mutex::new(TapRecognizer::default()))))
+    }
+
+    fn with_mut<R>(&self, f: impl FnOnce(&mut TapRecognizer) -> R) -> R {
+        match self {
+            Self::State(state) => state.with_mut(f),
+            Self::Local(recognizer) => match recognizer.lock() {
+                Ok(mut guard) => f(&mut guard),
+                Err(poisoned) => {
+                    let mut guard = poisoned.into_inner();
+                    f(&mut guard)
+                }
+            },
+        }
+    }
+}
+
+#[derive(Clone)]
+enum LongPressRecognizerHandle {
+    State(State<LongPressRecognizer>),
+    Local(Arc<Mutex<LongPressRecognizer>>),
+}
+
+impl LongPressRecognizerHandle {
+    fn new(state: Option<State<LongPressRecognizer>>) -> Self {
+        state
+            .map(Self::State)
+            .unwrap_or_else(|| Self::Local(Arc::new(Mutex::new(LongPressRecognizer::default()))))
+    }
+
+    fn with_mut<R>(&self, f: impl FnOnce(&mut LongPressRecognizer) -> R) -> R {
+        match self {
+            Self::State(state) => state.with_mut(f),
+            Self::Local(recognizer) => match recognizer.lock() {
+                Ok(mut guard) => f(&mut guard),
+                Err(poisoned) => {
+                    let mut guard = poisoned.into_inner();
+                    f(&mut guard)
+                }
+            },
+        }
+    }
+}
+
 struct ClickablePointerModifierNode {
-    tap_recognizer: State<TapRecognizer>,
-    long_press_recognizer: State<LongPressRecognizer>,
+    tap_recognizer: TapRecognizerHandle,
+    long_press_recognizer: LongPressRecognizerHandle,
     on_click: Callback,
     enabled: bool,
     block_input: bool,
@@ -300,7 +355,7 @@ impl SemanticsModifierNode for ClickableSemanticsModifierNode {
 }
 
 struct ToggleablePointerModifierNode {
-    tap_recognizer: State<TapRecognizer>,
+    tap_recognizer: TapRecognizerHandle,
     value: bool,
     on_value_change: CallbackWith<bool, ()>,
     enabled: bool,
@@ -461,7 +516,7 @@ impl SemanticsModifierNode for ToggleableSemanticsModifierNode {
 }
 
 struct SelectablePointerModifierNode {
-    tap_recognizer: State<TapRecognizer>,
+    tap_recognizer: TapRecognizerHandle,
     on_click: Callback,
     enabled: bool,
     interaction_state: Option<State<InteractionState>>,
@@ -620,7 +675,7 @@ impl SemanticsModifierNode for SelectableSemanticsModifierNode {
 
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 struct WindowDragRegionPointerModifierNode {
-    tap_recognizer: State<TapRecognizer>,
+    tap_recognizer: TapRecognizerHandle,
 }
 
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
@@ -693,11 +748,12 @@ pub(crate) fn apply_clickable_modifier(base: Modifier, args: ClickableArgs) -> M
         interaction_state,
         focus_requester,
         focus_properties,
+        tap_recognizer,
+        long_press_recognizer,
     } = args;
-    let focus_requester_state = remember(FocusRequester::new);
-    let tap_recognizer = remember(TapRecognizer::default);
-    let long_press_recognizer = remember(LongPressRecognizer::default);
-    let focus_requester = focus_requester.unwrap_or_else(|| focus_requester_state.get());
+    let tap_recognizer = TapRecognizerHandle::new(tap_recognizer);
+    let long_press_recognizer = LongPressRecognizerHandle::new(long_press_recognizer);
+    let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
     let participates_in_focus =
         enabled && (role.is_some() || label.is_some() || description.is_some());
 
@@ -758,10 +814,10 @@ pub(crate) fn apply_toggleable_modifier(base: Modifier, args: ToggleableArgs) ->
         on_press,
         on_release,
         focus_requester,
+        tap_recognizer,
     } = args;
-    let focus_requester_state = remember(FocusRequester::new);
-    let tap_recognizer = remember(TapRecognizer::default);
-    let focus_requester = focus_requester.unwrap_or_else(|| focus_requester_state.get());
+    let tap_recognizer = TapRecognizerHandle::new(tap_recognizer);
+    let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
 
     let mut modifier = base;
     if enabled {
@@ -818,10 +874,10 @@ pub(crate) fn apply_selectable_modifier(base: Modifier, args: SelectableArgs) ->
         on_press,
         on_release,
         focus_requester,
+        tap_recognizer,
     } = args;
-    let focus_requester_state = remember(FocusRequester::new);
-    let tap_recognizer = remember(TapRecognizer::default);
-    let focus_requester = focus_requester.unwrap_or_else(|| focus_requester_state.get());
+    let tap_recognizer = TapRecognizerHandle::new(tap_recognizer);
+    let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
 
     let mut modifier = base;
     if enabled {
@@ -866,7 +922,7 @@ pub(crate) fn apply_selectable_modifier(base: Modifier, args: SelectableArgs) ->
 
 #[cfg(not(any(target_family = "wasm", target_os = "android", target_os = "ios")))]
 pub(crate) fn apply_window_drag_region_modifier(base: Modifier) -> Modifier {
-    let tap_recognizer = remember(TapRecognizer::default);
+    let tap_recognizer = TapRecognizerHandle::new(None);
     base.push_pointer_input(WindowDragRegionPointerModifierNode { tap_recognizer })
 }
 
