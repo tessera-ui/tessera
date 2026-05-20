@@ -133,7 +133,6 @@ fn load_embedded_android_emoji_font(db: &mut fontdb::Database) -> usize {
     let before = db.len();
     let data = include_bytes_zstd::include_bytes_zstd!("assets/NotoColorEmoji_COLRv0.ttf", 19);
     if data.is_empty() {
-        println!("android fontdb: embedded emoji font data is empty");
         return 0;
     }
     db.load_font_data(data);
@@ -143,11 +142,8 @@ fn load_embedded_android_emoji_font(db: &mut fontdb::Database) -> usize {
 #[cfg(target_os = "android")]
 fn ensure_android_emoji_font(db: &mut fontdb::Database) {
     // Use the bundled COLRv0 emoji font to avoid COLRv1 rendering gaps.
-    let removed = remove_system_emoji_faces(db);
-    let added = load_embedded_android_emoji_font(db);
-    println!(
-        "android fontdb: embedded emoji font loaded faces={added}, removed_system_faces={removed}"
-    );
+    remove_system_emoji_faces(db);
+    load_embedded_android_emoji_font(db);
 }
 
 #[cfg(target_os = "android")]

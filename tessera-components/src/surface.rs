@@ -585,30 +585,6 @@ impl RenderPolicy for SurfaceLayout {
         let size = metadata
             .computed_data()
             .expect("Surface node must have computed size before record");
-        if let SurfaceStyle::FilledOutlined {
-            fill_color,
-            border_color,
-            border_width,
-        } = &effective_style
-            && fill_color.r > 0.85
-            && fill_color.g > 0.85
-            && fill_color.b > 0.85
-        {
-            println!(
-                "[surface_filled_outlined] size={}x{} fill=rgba({:.3},{:.3},{:.3},{:.3}) border=rgba({:.3},{:.3},{:.3},{:.3}) border_width={:.3}",
-                size.width.0,
-                size.height.0,
-                fill_color.r,
-                fill_color.g,
-                fill_color.b,
-                fill_color.a,
-                border_color.r,
-                border_color.g,
-                border_color.b,
-                border_color.a,
-                border_width.0,
-            );
-        }
 
         if let Some(simple) = try_build_simple_rect_command(
             &self.args,
