@@ -368,7 +368,7 @@ impl Default for TesseraConfig {
 /// ## Performance Monitoring
 ///
 /// The renderer includes built-in performance monitoring that logs frame
-/// statistics when performance drops below 60 FPS.
+/// statistics when performance drops below 30 FPS.
 pub struct Renderer<F: Fn()> {
     /// The WGPU application context, initialized after window creation
     app: Option<RenderCore>,
@@ -1002,7 +1002,7 @@ impl<F: Fn()> Renderer<F> {
     /// ## Performance Monitoring
     ///
     /// This method includes built-in performance monitoring that logs detailed
-    /// timing information when frame rates drop below 60 FPS, helping
+    /// timing information when frame rates drop below 30 FPS, helping
     /// identify performance bottlenecks.
     ///
     /// ## Parameters
@@ -1035,7 +1035,7 @@ impl<F: Fn()> Renderer<F> {
     ) {
         let total = build_tree_cost + draw_cost + render_cost;
         let fps = 1.0 / total.as_secs_f32();
-        if fps < 60.0 {
+        if fps < 30.0 {
             if let Some(breakdown) = render_breakdown {
                 warn!(
                     "Jank detected! Frame statistics:
