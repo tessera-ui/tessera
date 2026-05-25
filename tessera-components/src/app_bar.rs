@@ -15,7 +15,7 @@ use crate::{
     spacer::spacer,
     surface::surface,
     text::text,
-    theme::{ContentColor, MaterialColorScheme, MaterialTheme, provide_text_style},
+    theme::{ContentColor, MaterialColorScheme, MaterialTheme},
 };
 
 /// Default tokens for app bars.
@@ -321,9 +321,12 @@ pub fn top_app_bar(
                                 spacer().modifier(Modifier::new().fill_max_width());
                             } else {
                                 let text_value = title_text.clone();
-                                provide_text_style(title_style, move || {
-                                    text().content(text_value.clone());
-                                });
+                                provide_context(
+                                    || title_style,
+                                    move || {
+                                        text().content(text_value.clone());
+                                    },
+                                );
                             }
                         });
 

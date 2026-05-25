@@ -110,12 +110,8 @@ pub enum SurfaceStyle {
 
 impl Default for SurfaceStyle {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
         SurfaceStyle::Filled {
-            color: scheme.surface,
+            color: Color::new(0.0, 0.0, 0.0, 0.0),
         }
     }
 }
@@ -819,7 +815,9 @@ pub fn surface(
         .color_scheme;
     let resolved = SurfaceResolvedArgs {
         modifier: modifier.unwrap_or_default(),
-        style: style.unwrap_or_default(),
+        style: style.unwrap_or(SurfaceStyle::Filled {
+            color: scheme.surface,
+        }),
         shape: shape.unwrap_or_default(),
         elevation,
         tonal_elevation: tonal_elevation.unwrap_or(Dp(0.0)),

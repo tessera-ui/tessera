@@ -219,39 +219,16 @@ impl TextFieldBuilder {
 
     /// Creates outlined text field defaults.
     pub fn outlined() -> Self {
-        let theme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get();
-        let scheme = theme.color_scheme;
-        let selection_colors = TextSelectionColors::from_scheme(&scheme);
-        if let Some(line_height) = theme.typography.body_large.line_height {
-            text_field()
-                .background_color(Color::TRANSPARENT)
-                .border_width(TextFieldDefaults::OUTLINED_BORDER_WIDTH)
-                .border_color(scheme.outline)
-                .shape(theme.shapes.extra_small)
-                .focus_border_color(scheme.primary)
-                .focus_border_width(TextFieldDefaults::OUTLINED_FOCUS_BORDER_WIDTH)
-                .focus_background_color(Color::TRANSPARENT)
-                .selection_color(selection_colors.background)
-                .text_color(scheme.on_surface)
-                .cursor_color(scheme.primary)
-                .font_size(theme.typography.body_large.font_size)
-                .line_height(line_height)
-        } else {
-            text_field()
-                .background_color(Color::TRANSPARENT)
-                .border_width(TextFieldDefaults::OUTLINED_BORDER_WIDTH)
-                .border_color(scheme.outline)
-                .shape(theme.shapes.extra_small)
-                .focus_border_color(scheme.primary)
-                .focus_border_width(TextFieldDefaults::OUTLINED_FOCUS_BORDER_WIDTH)
-                .focus_background_color(Color::TRANSPARENT)
-                .selection_color(selection_colors.background)
-                .text_color(scheme.on_surface)
-                .cursor_color(scheme.primary)
-                .font_size(theme.typography.body_large.font_size)
-        }
+        text_field()
+            .background_color(Color::TRANSPARENT)
+            .border_width(TextFieldDefaults::OUTLINED_BORDER_WIDTH)
+            .border_color(Color::new(0.5, 0.5, 0.5, 1.0))
+            .focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0))
+            .focus_border_width(TextFieldDefaults::OUTLINED_FOCUS_BORDER_WIDTH)
+            .focus_background_color(Color::TRANSPARENT)
+            .selection_color(Color::new(0.7, 0.85, 1.0, 0.4))
+            .text_color(Color::new(0.1, 0.1, 0.1, 1.0))
+            .cursor_color(Color::new(0.0, 0.5, 1.0, 1.0))
     }
 
     /// Creates secure text field defaults.
@@ -273,12 +250,7 @@ impl TextFieldBuilder {
 
 impl Default for TextFieldProps {
     fn default() -> Self {
-        let theme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get();
-        let shape = filled_container_shape(&theme);
-        let scheme = theme.color_scheme;
-        let selection_colors = TextSelectionColors::from_scheme(&scheme);
+        let shape = filled_container_shape(&MaterialTheme::default());
         Self {
             enabled: true,
             read_only: false,
@@ -287,22 +259,22 @@ impl Default for TextFieldProps {
             on_submit: Callback::noop(),
             min_width: Some(TextFieldDefaults::MIN_WIDTH),
             min_height: Some(TextFieldDefaults::MIN_HEIGHT),
-            background_color: Some(scheme.surface_container_highest),
+            background_color: None,
             border_width: Dp(0.0),
             border_color: None,
             shape,
             padding: TextFieldDefaults::CONTENT_PADDING,
-            focus_border_color: Some(scheme.primary),
+            focus_border_color: None,
             focus_border_width: None,
-            focus_background_color: Some(scheme.surface_container_highest),
-            selection_color: Some(selection_colors.background),
-            text_color: Some(scheme.on_surface),
-            cursor_color: Some(scheme.primary),
+            focus_background_color: None,
+            selection_color: None,
+            text_color: None,
+            cursor_color: None,
             accessibility_label: None,
             accessibility_description: None,
             initial_text: None,
-            font_size: theme.typography.body_large.font_size,
-            line_height: theme.typography.body_large.line_height,
+            font_size: Dp(16.0),
+            line_height: Some(Dp(24.0)),
             label: None,
             placeholder: None,
             leading_icon: None,
@@ -1114,63 +1086,28 @@ pub fn text_field(
     #[prop(skip_setter)] display_transform: Option<DisplayTransform>,
     controller: Option<State<TextInputController>>,
 ) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    let selection_colors = TextSelectionColors::from_scheme(&scheme);
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
     let modifier = modifier.unwrap_or_default();
-    let min_width = if let Some(v) = min_width {
-        Some(v)
-    } else {
-        TextFieldProps::default().min_width
-    };
-    let min_height = if let Some(v) = min_height {
-        Some(v)
-    } else {
-        TextFieldProps::default().min_height
-    };
-    let background_color = if let Some(v) = background_color {
-        Some(v)
-    } else {
-        TextFieldProps::default().background_color
-    };
+    let min_width = min_width.or(Some(TextFieldDefaults::MIN_WIDTH));
+    let min_height = min_height.or(Some(TextFieldDefaults::MIN_HEIGHT));
+    let background_color = background_color.or(Some(scheme.surface_container_highest));
     let border_width = border_width.unwrap_or(TextFieldProps::default().border_width);
-    let border_color = if let Some(v) = border_color {
-        Some(v)
-    } else {
-        TextFieldProps::default().border_color
-    };
+    let border_color = border_color;
     let shape = shape.unwrap_or(TextFieldProps::default().shape);
     let padding = padding.unwrap_or(TextFieldProps::default().padding);
-    let focus_border_color = if let Some(v) = focus_border_color {
-        Some(v)
-    } else {
-        TextFieldProps::default().focus_border_color
-    };
-    let focus_background_color = if let Some(v) = focus_background_color {
-        Some(v)
-    } else {
-        TextFieldProps::default().focus_background_color
-    };
-    let selection_color = if let Some(v) = selection_color {
-        Some(v)
-    } else {
-        TextFieldProps::default().selection_color
-    };
-    let text_color = if let Some(v) = text_color {
-        Some(v)
-    } else {
-        TextFieldProps::default().text_color
-    };
-    let cursor_color = if let Some(v) = cursor_color {
-        Some(v)
-    } else {
-        TextFieldProps::default().cursor_color
-    };
+    let focus_border_color = focus_border_color.or(Some(scheme.primary));
+    let focus_background_color = focus_background_color.or(Some(scheme.surface_container_highest));
+    let selection_color = selection_color.or(Some(selection_colors.background));
+    let text_color = text_color.or(Some(scheme.on_surface));
+    let cursor_color = cursor_color.or(Some(scheme.primary));
     let font_size = font_size.unwrap_or(TextFieldProps::default().font_size);
-    let line_height = if let Some(v) = line_height {
-        Some(v)
-    } else {
-        TextFieldProps::default().line_height
-    };
+    let line_height = line_height.or(TextFieldProps::default().line_height);
     let show_indicator = show_indicator.unwrap_or(true);
     let line_limit = line_limit.unwrap_or(TextFieldProps::default().line_limit);
     let context_menu = context_menu.unwrap_or(TextFieldProps::default().context_menu);

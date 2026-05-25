@@ -39,7 +39,7 @@ use tessera_build::{
 };
 
 use crate::{
-    output,
+    color_check, output,
     template::{write_template_dir, write_template_file},
 };
 
@@ -590,6 +590,12 @@ fn register_helpers(handlebars: &mut Handlebars<'static>) {
 }
 
 pub fn build(opts: BuildOptions) -> Result<()> {
+    let package = opts.package.as_deref();
+    color_check::run(color_check::CheckOptions {
+        package,
+        target: Some("android"),
+    })?;
+
     let ctx = AndroidContext::from_build_opts(opts)?;
     apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {
@@ -654,6 +660,12 @@ pub fn build(opts: BuildOptions) -> Result<()> {
 }
 
 pub fn dev(opts: DevOptions) -> Result<()> {
+    let package = opts.package.as_deref();
+    color_check::run(color_check::CheckOptions {
+        package,
+        target: Some("android"),
+    })?;
+
     let ctx = AndroidContext::from_dev_opts(opts)?;
     apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {
@@ -800,6 +812,12 @@ pub fn dev(opts: DevOptions) -> Result<()> {
 
 pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
     let target_name = opts.target.clone();
+    let package = opts.package.as_deref();
+    color_check::run(color_check::CheckOptions {
+        package,
+        target: Some(&target_name),
+    })?;
+
     let ctx = AndroidContext::from_rust_build_opts(opts)?;
     apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {

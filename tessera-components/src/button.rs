@@ -3,6 +3,7 @@
 //! ## Usage
 //!
 //! Trigger actions, submit forms, or navigate.
+use tessera_ui::context::provide_context;
 use tessera_ui::{
     Callback, Color, Dp, Modifier, RenderSlot, accesskit::Role, layout::layout, tessera,
     use_context,
@@ -13,10 +14,7 @@ use crate::{
     modifier::ModifierExt,
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
-    theme::{
-        ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for,
-        provide_text_style,
-    },
+    theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
 };
 
 /// Material Design 3 defaults for [`button`].
@@ -195,7 +193,7 @@ pub fn button(
         layout().modifier(modifier).child(move || {
             if let Some(child) = child.as_ref() {
                 let child = *child;
-                provide_text_style(typography.label_large, move || child.render());
+                provide_context(|| typography.label_large, move || child.render());
             }
         });
     });
@@ -266,47 +264,23 @@ impl ButtonBuilder {
     /// Create a standard "Filled" button (High emphasis).
     /// Uses Primary color for container and OnPrimary for content.
     pub fn filled(self) -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        self.color(scheme.primary)
-            .content_color(scheme.on_primary)
-            .ripple_color(scheme.on_primary)
-            .disabled_container_color(
-                scheme
-                    .on_surface
-                    .with_alpha(ButtonDefaults::FILLED_DISABLED_CONTAINER_ALPHA),
-            )
-            .disabled_content_color(
-                scheme
-                    .on_surface_variant
-                    .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
-            )
+        self.color(Color::new(0.0, 0.5, 1.0, 1.0))
+            .content_color(Color::new(1.0, 1.0, 1.0, 1.0))
+            .ripple_color(Color::new(1.0, 1.0, 1.0, 1.0))
+            .disabled_container_color(Color::new(0.5, 0.5, 0.5, 0.12))
+            .disabled_content_color(Color::new(0.5, 0.5, 0.5, 0.38))
     }
 
     /// Applies the "Elevated" button preset.
     /// Create an "Elevated" button (Medium emphasis).
     /// Uses Surface color (or SurfaceContainerLow if available) with a shadow.
     pub fn elevated(self) -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        self.color(scheme.surface_container_low)
-            .content_color(scheme.primary)
-            .ripple_color(scheme.primary)
+        self.color(Color::new(0.95, 0.95, 0.95, 1.0))
+            .content_color(Color::new(0.0, 0.5, 1.0, 1.0))
+            .ripple_color(Color::new(0.0, 0.5, 1.0, 1.0))
             .elevation(Dp(1.0))
-            .disabled_container_color(
-                scheme
-                    .on_surface
-                    .with_alpha(ButtonDefaults::FILLED_DISABLED_CONTAINER_ALPHA),
-            )
-            .disabled_content_color(
-                scheme
-                    .on_surface_variant
-                    .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
-            )
+            .disabled_container_color(Color::new(0.5, 0.5, 0.5, 0.12))
+            .disabled_content_color(Color::new(0.5, 0.5, 0.5, 0.38))
     }
 
     /// Applies the "Tonal" button preset.
@@ -314,67 +288,34 @@ impl ButtonBuilder {
     /// Uses SecondaryContainer color for container and OnSecondaryContainer for
     /// content.
     pub fn tonal(self) -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
-        self.color(scheme.secondary_container)
-            .content_color(scheme.on_secondary_container)
-            .ripple_color(scheme.on_secondary_container)
-            .disabled_container_color(
-                scheme
-                    .on_surface
-                    .with_alpha(ButtonDefaults::DISABLED_CONTAINER_ALPHA),
-            )
-            .disabled_content_color(
-                scheme
-                    .on_surface
-                    .with_alpha(ButtonDefaults::DISABLED_CONTENT_ALPHA),
-            )
+        self.color(Color::new(0.85, 0.9, 0.95, 1.0))
+            .content_color(Color::new(0.2, 0.3, 0.4, 1.0))
+            .ripple_color(Color::new(0.2, 0.3, 0.4, 1.0))
+            .disabled_container_color(Color::new(0.5, 0.5, 0.5, 0.12))
+            .disabled_content_color(Color::new(0.5, 0.5, 0.5, 0.38))
     }
 
     /// Applies the "Outlined" button preset.
     /// Create an "Outlined" button (Medium emphasis).
     /// Transparent container with an Outline border.
     pub fn outlined(self) -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
         self.color(Color::TRANSPARENT)
-            .content_color(scheme.on_surface_variant)
+            .content_color(Color::new(0.4, 0.4, 0.4, 1.0))
             .disabled_container_color(Color::TRANSPARENT)
-            .ripple_color(scheme.on_surface_variant)
+            .ripple_color(Color::new(0.4, 0.4, 0.4, 1.0))
             .border_width(Dp(1.0))
-            .border_color(scheme.outline_variant)
-            .disabled_border_color(
-                scheme
-                    .outline_variant
-                    .with_alpha(ButtonDefaults::FILLED_DISABLED_CONTAINER_ALPHA),
-            )
-            .disabled_content_color(
-                scheme
-                    .on_surface_variant
-                    .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
-            )
+            .border_color(Color::new(0.7, 0.7, 0.7, 1.0))
+            .disabled_border_color(Color::new(0.7, 0.7, 0.7, 0.12))
     }
 
     /// Applies the "Text" button preset.
     /// Create a "Text" button (Low emphasis).
     /// Transparent container and no border.
     pub fn text(self) -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
         self.color(Color::TRANSPARENT)
-            .content_color(scheme.primary)
+            .content_color(Color::new(0.0, 0.5, 1.0, 1.0))
             .disabled_container_color(Color::TRANSPARENT)
-            .ripple_color(scheme.primary)
-            .disabled_content_color(
-                scheme
-                    .on_surface_variant
-                    .with_alpha(ButtonDefaults::DISABLED_LABEL_ALPHA),
-            )
+            .ripple_color(Color::new(0.0, 0.5, 1.0, 1.0))
+            .disabled_content_color(Color::new(0.5, 0.5, 0.5, 0.38))
     }
 }

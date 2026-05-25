@@ -27,7 +27,7 @@ use crate::{
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{ContentColor, MaterialTheme, provide_text_style},
+    theme::{ContentColor, MaterialTheme},
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
@@ -184,9 +184,12 @@ fn navigation_bar_item_view_content(
 
             if has_label {
                 let label = item.label.clone();
-                provide_text_style(typography.label_medium, move || {
-                    text().content(label.clone()).color(label_color);
-                });
+                provide_context(
+                    || typography.label_medium,
+                    move || {
+                        text().content(label.clone()).color(label_color);
+                    },
+                );
             }
         });
 }

@@ -257,10 +257,7 @@ impl ModifierExt for Modifier {
     }
 
     fn minimum_interactive_component_size(self) -> Modifier {
-        if !use_context::<MinimumInteractiveComponentEnforcement>()
-            .map(|e| e.get().enabled)
-            .unwrap_or_else(|| MinimumInteractiveComponentEnforcement::default().enabled)
-        {
+        if !MinimumInteractiveComponentEnforcement::default().enabled {
             return self;
         }
 

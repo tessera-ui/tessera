@@ -3,7 +3,7 @@ use std::{path::Path, process::Command};
 use anyhow::{Context, Result, bail};
 use tessera_build::AssetBackend;
 
-use crate::output;
+use crate::{color_check, output};
 
 pub fn execute(
     release: bool,
@@ -13,6 +13,8 @@ pub fn execute(
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
+    color_check::run(color_check::CheckOptions { package, target })?;
+
     if profiling_output.is_some() && target_is_android(target) {
         bail!("--profiling-output is not supported for Android targets");
     }

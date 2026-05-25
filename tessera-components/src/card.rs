@@ -229,30 +229,18 @@ impl CardDefaults {
     pub const DISABLED_OUTLINE_ALPHA: f32 = 0.12;
 
     /// Default filled card shape.
-    pub fn shape() -> Shape {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .shapes
-            .medium
+    pub fn shape(theme: &MaterialTheme) -> Shape {
+        theme.shapes.medium
     }
 
     /// Default elevated card shape.
-    pub fn elevated_shape() -> Shape {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .shapes
-            .medium
+    pub fn elevated_shape(theme: &MaterialTheme) -> Shape {
+        theme.shapes.medium
     }
 
     /// Default outlined card shape.
-    pub fn outlined_shape() -> Shape {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .shapes
-            .medium
+    pub fn outlined_shape(theme: &MaterialTheme) -> Shape {
+        theme.shapes.medium
     }
 
     /// Default elevation values for filled cards.
@@ -292,16 +280,10 @@ impl CardDefaults {
     }
 
     /// Default colors for filled cards.
-    pub fn card_colors() -> CardColors {
-        let theme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get();
-        let scheme = theme.color_scheme;
-        let inherited_content = use_context::<ContentColor>()
-            .map(|c| c.get().current)
-            .unwrap_or(ContentColor::default().current);
+    pub fn card_colors(theme: &MaterialTheme, content_color: Color) -> CardColors {
+        let scheme = &theme.color_scheme;
         let container = scheme.surface_container_highest;
-        let content = content_color_for(container, &scheme).unwrap_or(inherited_content);
+        let content = content_color_for(container, &scheme).unwrap_or(content_color);
         let disabled_overlay = scheme
             .surface_variant
             .with_alpha(Self::DISABLED_CONTAINER_OPACITY);
@@ -315,16 +297,10 @@ impl CardDefaults {
     }
 
     /// Default colors for elevated cards.
-    pub fn elevated_card_colors() -> CardColors {
-        let theme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get();
-        let scheme = theme.color_scheme;
-        let inherited_content = use_context::<ContentColor>()
-            .map(|c| c.get().current)
-            .unwrap_or(ContentColor::default().current);
+    pub fn elevated_card_colors(theme: &MaterialTheme, content_color: Color) -> CardColors {
+        let scheme = &theme.color_scheme;
         let container = scheme.surface_container_low;
-        let content = content_color_for(container, &scheme).unwrap_or(inherited_content);
+        let content = content_color_for(container, &scheme).unwrap_or(content_color);
         CardColors {
             container_color: container,
             content_color: content,
@@ -334,16 +310,10 @@ impl CardDefaults {
     }
 
     /// Default colors for outlined cards.
-    pub fn outlined_card_colors() -> CardColors {
-        let theme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get();
-        let scheme = theme.color_scheme;
-        let inherited_content = use_context::<ContentColor>()
-            .map(|c| c.get().current)
-            .unwrap_or(ContentColor::default().current);
+    pub fn outlined_card_colors(theme: &MaterialTheme, content_color: Color) -> CardColors {
+        let scheme = &theme.color_scheme;
         let container = scheme.surface;
-        let content = content_color_for(container, &scheme).unwrap_or(inherited_content);
+        let content = content_color_for(container, &scheme).unwrap_or(content_color);
         CardColors {
             container_color: container,
             content_color: content,
@@ -353,11 +323,8 @@ impl CardDefaults {
     }
 
     /// Default border stroke for outlined cards.
-    pub fn outlined_card_border(enabled: bool) -> CardBorder {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
+    pub fn outlined_card_border(theme: &MaterialTheme, enabled: bool) -> CardBorder {
+        let scheme = &theme.color_scheme;
         let color = if enabled {
             scheme.outline_variant
         } else {
@@ -454,16 +421,23 @@ pub fn card(
     };
     let content = args.content.unwrap_or_else(RenderSlot::empty);
 
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let content_color = use_context::<ContentColor>()
+        .map(|c| c.get().current)
+        .unwrap_or(ContentColor::default().current);
+
     let shape = args.shape.unwrap_or_else(|| match args.variant {
-        CardVariant::Filled => CardDefaults::shape(),
-        CardVariant::Elevated => CardDefaults::elevated_shape(),
-        CardVariant::Outlined => CardDefaults::outlined_shape(),
+        CardVariant::Filled => CardDefaults::shape(&theme),
+        CardVariant::Elevated => CardDefaults::elevated_shape(&theme),
+        CardVariant::Outlined => CardDefaults::outlined_shape(&theme),
     });
 
     let colors = args.colors.unwrap_or_else(|| match args.variant {
-        CardVariant::Filled => CardDefaults::card_colors(),
-        CardVariant::Elevated => CardDefaults::elevated_card_colors(),
-        CardVariant::Outlined => CardDefaults::outlined_card_colors(),
+        CardVariant::Filled => CardDefaults::card_colors(&theme, content_color),
+        CardVariant::Elevated => CardDefaults::elevated_card_colors(&theme, content_color),
+        CardVariant::Outlined => CardDefaults::outlined_card_colors(&theme, content_color),
     });
 
     let elevation = args.elevation.unwrap_or_else(|| match args.variant {
@@ -475,7 +449,7 @@ pub fn card(
     let border = match args.border {
         Some(border) => Some(border),
         None if matches!(args.variant, CardVariant::Outlined) => {
-            Some(CardDefaults::outlined_card_border(args.enabled))
+            Some(CardDefaults::outlined_card_border(&theme, args.enabled))
         }
         None => None,
     };
@@ -577,6 +551,5 @@ impl CardBuilder {
     /// Applies the outlined card preset.
     pub fn outlined(self) -> Self {
         self.variant(CardVariant::Outlined)
-            .border(CardDefaults::outlined_card_border(true))
     }
 }

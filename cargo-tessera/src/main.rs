@@ -9,6 +9,7 @@ use commands::{
     plugin, web,
 };
 
+mod color_check;
 mod commands;
 mod output;
 mod template;
@@ -88,6 +89,60 @@ enum TesseraCommands {
         /// Override asset backend
         #[arg(long, value_enum)]
         asset_backend: Option<AssetBackendArg>,
+    },
+    /// Check the project for compilation errors and Tessera color violations
+    Check {
+        /// Specify package to check
+        #[arg(short, long)]
+        package: Option<String>,
+        /// Target triple (passed to cargo check)
+        #[arg(short, long)]
+        target: Option<String>,
+        /// Check in release mode
+        #[arg(short, long)]
+        release: bool,
+        /// Check only this package's library
+        #[arg(long)]
+        lib: bool,
+        /// Check all binaries
+        #[arg(long)]
+        bins: bool,
+        /// Check all examples
+        #[arg(long)]
+        examples: bool,
+        /// Check all tests
+        #[arg(long)]
+        tests: bool,
+        /// Check all benches
+        #[arg(long)]
+        benches: bool,
+        /// Check all targets
+        #[arg(long)]
+        all_targets: bool,
+        /// Features to activate
+        #[arg(short = 'F', long)]
+        features: Vec<String>,
+        /// Activate all available features
+        #[arg(long)]
+        all_features: bool,
+        /// Do not activate the `default` feature
+        #[arg(long)]
+        no_default_features: bool,
+        /// Number of parallel jobs
+        #[arg(short, long)]
+        jobs: Option<String>,
+        /// Check all packages in the workspace
+        #[arg(long)]
+        workspace: bool,
+        /// Error format
+        #[arg(long)]
+        message_format: Option<String>,
+        /// Use verbose output
+        #[arg(short, long)]
+        verbose: bool,
+        /// Do not print cargo log messages
+        #[arg(short, long)]
+        quiet: bool,
     },
     /// Profiling utilities
     Profiling {
@@ -381,6 +436,45 @@ fn run() -> Result<()> {
                     profiling_output.as_deref(),
                     debug_dirty_overlay,
                     asset_backend.map(AssetBackendArg::to_backend),
+                )?;
+            }
+            TesseraCommands::Check {
+                package,
+                target,
+                release,
+                lib,
+                bins,
+                examples,
+                tests,
+                benches,
+                all_targets,
+                features,
+                all_features,
+                no_default_features,
+                jobs,
+                workspace,
+                message_format,
+                verbose,
+                quiet,
+            } => {
+                commands::check::execute(
+                    package.as_deref(),
+                    target.as_deref(),
+                    release,
+                    lib,
+                    bins,
+                    examples,
+                    tests,
+                    benches,
+                    all_targets,
+                    &features,
+                    all_features,
+                    no_default_features,
+                    jobs.as_deref(),
+                    workspace,
+                    message_format.as_deref(),
+                    verbose,
+                    quiet,
                 )?;
             }
             TesseraCommands::Profiling { command } => match command {

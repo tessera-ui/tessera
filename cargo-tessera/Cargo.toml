@@ -15,8 +15,8 @@ name = "cargo-tessera"
 path = "src/main.rs"
 
 [dependencies]
-anyhow = "1.0"
 aho-corasick = "1.1"
+anyhow = "1.0"
 cargo_mobile2 = { package = "tessera-mobile", path = "../tessera-mobile", default-features = false, features = [
     "native-tls",
 ] }
@@ -35,6 +35,14 @@ inquire = { version = "0.9.3", default-features = false, features = [
 ] }
 notify = "8.2.0"
 owo-colors = "4.3"
+ra_ap_hir = "=0.0.333"
+ra_ap_ide = "=0.0.333"
+ra_ap_base_db = "=0.0.333"
+ra_ap_load-cargo = "=0.0.333"
+ra_ap_project_model = "=0.0.333"
+ra_ap_span = "=0.0.333"
+ra_ap_syntax = "=0.0.333"
+ra_ap_vfs = "=0.0.333"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = { version = "1", features = ["unbounded_depth"] }
 tessera-build = { path = "../tessera-build" }

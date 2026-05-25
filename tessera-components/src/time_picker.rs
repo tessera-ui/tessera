@@ -285,9 +285,7 @@ fn time_picker_inner(args: TimePickerConfig) {
         .state
         .expect("time_picker_inner requires state to be set");
     let snapshot = state.with(|s| s.snapshot());
-    let theme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get();
+    let theme = MaterialTheme::default();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
@@ -433,10 +431,7 @@ pub fn time_picker_dialog(
     let picker_hour_step = picker_hour_step.unwrap_or(1);
     let picker_minute_step = picker_minute_step.unwrap_or(1);
     let state = state.unwrap_or_else(|| remember(TimePickerState::default));
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let has_confirm = confirm_button.is_some();
     let has_dismiss = dismiss_button.is_some();
 
@@ -460,14 +455,7 @@ pub fn time_picker_dialog(
                             let title_text = title.as_deref().unwrap_or("Select time");
                             text()
                                 .content(title_text)
-                                .size(
-                                    use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .typography
-                                        .title_medium
-                                        .font_size,
-                                )
+                                .size(MaterialTheme::default().typography.title_medium.font_size)
                                 .color(scheme.on_surface);
                         };
                         if show_mode_toggle {
@@ -538,9 +526,7 @@ fn time_stepper_column(
     on_increment: Callback,
     on_decrement: Callback,
 ) {
-    let theme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get();
+    let theme = MaterialTheme::default();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
@@ -581,10 +567,7 @@ fn time_stepper_column(
 }
 
 fn time_value_cell(value: String) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     surface()
         .modifier(
             Modifier::new()
@@ -599,23 +582,13 @@ fn time_value_cell(value: String) {
         .child(move || {
             text()
                 .content(value.clone())
-                .size(
-                    use_context::<MaterialTheme>()
-                        .expect("MaterialTheme must be provided")
-                        .get()
-                        .typography
-                        .headline_small
-                        .font_size,
-                )
+                .size(MaterialTheme::default().typography.headline_small.font_size)
                 .color(scheme.on_surface);
         });
 }
 
 fn step_button(label: &'static str, on_click: Callback) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     surface()
         .modifier(Modifier::new().size(TIME_STEP_BUTTON_SIZE, TIME_STEP_BUTTON_SIZE))
         .style(SurfaceStyle::Filled {
@@ -627,14 +600,7 @@ fn step_button(label: &'static str, on_click: Callback) {
         .child(move || {
             text()
                 .content(label)
-                .size(
-                    use_context::<MaterialTheme>()
-                        .expect("MaterialTheme must be provided")
-                        .get()
-                        .typography
-                        .body_medium
-                        .font_size,
-                )
+                .size(MaterialTheme::default().typography.body_medium.font_size)
                 .color(scheme.on_surface);
         });
 }
@@ -662,10 +628,7 @@ fn period_button(
     period: DayPeriod,
     state: State<TimePickerState>,
 ) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let text_color = if selected {
         scheme.on_primary
     } else {
@@ -695,23 +658,13 @@ fn period_button(
         .child(move || {
             text()
                 .content(label)
-                .size(
-                    use_context::<MaterialTheme>()
-                        .expect("MaterialTheme must be provided")
-                        .get()
-                        .typography
-                        .label_medium
-                        .font_size,
-                )
+                .size(MaterialTheme::default().typography.label_medium.font_size)
                 .color(text_color);
         });
 }
 
 fn time_display_mode_toggle(state: State<TimePickerState>) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let label = state.with(|s| match s.display_mode() {
         TimePickerDisplayMode::Picker => "Input",
         TimePickerDisplayMode::Input => "Picker",
@@ -729,14 +682,7 @@ fn time_display_mode_toggle(state: State<TimePickerState>) {
         .child(move || {
             text()
                 .content(label)
-                .size(
-                    use_context::<MaterialTheme>()
-                        .expect("MaterialTheme must be provided")
-                        .get()
-                        .typography
-                        .label_small
-                        .font_size,
-                )
+                .size(MaterialTheme::default().typography.label_small.font_size)
                 .color(scheme.primary);
         });
 }

@@ -4,7 +4,8 @@
 //!
 //! Present compact actions, filters, or input tokens in dense UIs.
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, accesskit::Role, layout::layout, tessera, use_context,
+    Callback, Color, Dp, Modifier, accesskit::Role, layout::layout, provide_context, tessera,
+    use_context,
 };
 
 use crate::{
@@ -13,11 +14,11 @@ use crate::{
     modifier::{ModifierExt as _, Padding, ShadowArgs},
     painter::Painter,
     row::row,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{MaterialAlpha, MaterialTheme, provide_text_style},
+    theme::{MaterialAlpha, MaterialTheme},
 };
 
 /// Visual variants supported by [`chip`].
@@ -204,19 +205,17 @@ impl ChipDefaults {
 
     /// Default shape for chip containers.
     pub fn shape() -> Shape {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .shapes
-            .small
+        Shape::RoundedRectangle {
+            top_left: RoundedCorner::manual(Dp(8.0), 3.0),
+            top_right: RoundedCorner::manual(Dp(8.0), 3.0),
+            bottom_right: RoundedCorner::manual(Dp(8.0), 3.0),
+            bottom_left: RoundedCorner::manual(Dp(8.0), 3.0),
+        }
     }
 
     /// Default colors for chips by variant and style.
     pub fn colors(variant: ChipVariant, style: ChipStyle) -> ChipColors {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
+        let scheme = MaterialTheme::default().color_scheme;
         let disabled_content = scheme
             .on_surface
             .with_alpha(MaterialAlpha::DISABLED_CONTENT);
@@ -343,10 +342,7 @@ impl ChipDefaults {
             return None;
         }
 
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
+        let scheme = MaterialTheme::default().color_scheme;
         let outline = scheme.outline_variant;
         let disabled_outline = scheme
             .on_surface
@@ -542,7 +538,7 @@ pub fn chip(
         .unwrap_or_else(|| ChipDefaults::colors(variant, style));
     let border = args.border.or_else(|| ChipDefaults::border(variant, style));
     let elevation = args.elevation.or_else(|| ChipDefaults::elevation(style));
-    let shape = args.shape.unwrap_or_else(ChipDefaults::shape);
+    let shape = args.shape.unwrap_or(theme.shapes.small);
     let padding = chip_padding(
         variant,
         args.leading_icon.is_some(),
@@ -612,50 +608,53 @@ pub fn chip(
             let leading_icon = leading_icon.clone();
             let trailing_icon = trailing_icon.clone();
             let label = label.clone();
-            provide_text_style(typography.label_large, move || {
-                layout()
-                    .modifier(Modifier::new().padding(padding))
-                    .child(move || {
-                        let leading_icon = leading_icon.clone();
-                        let trailing_icon = trailing_icon.clone();
-                        let label = label.clone();
-                        row()
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children(move || {
-                                let spacing = ChipDefaults::ELEMENT_SPACING;
-                                let mut item_count = 0;
+            provide_context(
+                || typography.label_large,
+                move || {
+                    layout()
+                        .modifier(Modifier::new().padding(padding))
+                        .child(move || {
+                            let leading_icon = leading_icon.clone();
+                            let trailing_icon = trailing_icon.clone();
+                            let label = label.clone();
+                            row()
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    let spacing = ChipDefaults::ELEMENT_SPACING;
+                                    let mut item_count = 0;
 
-                                if let Some(icon_content) = leading_icon.clone() {
-                                    if item_count > 0 {
-                                        spacer().modifier(Modifier::new().width(spacing));
+                                    if let Some(icon_content) = leading_icon.clone() {
+                                        if item_count > 0 {
+                                            spacer().modifier(Modifier::new().width(spacing));
+                                        }
+                                        item_count += 1;
+                                        icon()
+                                            .painter(icon_content.clone())
+                                            .size(ChipDefaults::ICON_SIZE)
+                                            .tint(leading_icon_color);
                                     }
-                                    item_count += 1;
-                                    icon()
-                                        .painter(icon_content.clone())
-                                        .size(ChipDefaults::ICON_SIZE)
-                                        .tint(leading_icon_color);
-                                }
 
-                                if has_label {
-                                    if item_count > 0 {
-                                        spacer().modifier(Modifier::new().width(spacing));
+                                    if has_label {
+                                        if item_count > 0 {
+                                            spacer().modifier(Modifier::new().width(spacing));
+                                        }
+                                        item_count += 1;
+                                        text().content(label.clone());
                                     }
-                                    item_count += 1;
-                                    text().content(label.clone());
-                                }
 
-                                if let Some(icon_content) = trailing_icon.clone() {
-                                    if item_count > 0 {
-                                        spacer().modifier(Modifier::new().width(spacing));
+                                    if let Some(icon_content) = trailing_icon.clone() {
+                                        if item_count > 0 {
+                                            spacer().modifier(Modifier::new().width(spacing));
+                                        }
+                                        icon()
+                                            .painter(icon_content.clone())
+                                            .size(ChipDefaults::ICON_SIZE)
+                                            .tint(trailing_icon_color);
                                     }
-                                    icon()
-                                        .painter(icon_content.clone())
-                                        .size(ChipDefaults::ICON_SIZE)
-                                        .tint(trailing_icon_color);
-                                }
-                            });
-                    });
-            });
+                                });
+                        });
+                },
+            );
         });
 }
 

@@ -33,11 +33,7 @@ impl DividerDefaults {
 
     /// Default divider color.
     pub fn color() -> Color {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .outline_variant
+        Color::new(0.0, 0.0, 0.0, 0.0)
     }
 }
 
@@ -120,7 +116,13 @@ impl RenderPolicy for DividerLayout {
 #[tessera]
 pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
     let thickness_px = resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS));
-    let color = color.unwrap_or_else(DividerDefaults::color);
+    let color = color.unwrap_or_else(|| {
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme
+            .outline_variant
+    });
 
     let policy = DividerLayout {
         thickness: thickness_px,
@@ -154,7 +156,13 @@ pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
 #[tessera]
 pub fn vertical_divider(thickness: Option<Dp>, color: Option<Color>) {
     let thickness_px = resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS));
-    let color = color.unwrap_or_else(DividerDefaults::color);
+    let color = color.unwrap_or_else(|| {
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme
+            .outline_variant
+    });
 
     let policy = DividerLayout {
         thickness: thickness_px,

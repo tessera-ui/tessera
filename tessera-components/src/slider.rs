@@ -671,19 +671,15 @@ struct SliderConfig {
 
 impl Default for SliderConfig {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
         Self {
             modifier: Modifier::new(),
             value: 0.0,
             on_change: CallbackWith::default_value(),
             size: SliderSize::default(),
-            active_track_color: scheme.primary,
-            inactive_track_color: scheme.secondary_container,
+            active_track_color: Color::new(0.0, 0.5, 1.0, 1.0),
+            inactive_track_color: Color::new(0.85, 0.9, 0.95, 1.0),
             thumb_diameter: Dp(4.0),
-            thumb_color: scheme.primary,
+            thumb_color: Color::new(0.0, 0.5, 1.0, 1.0),
             disabled: false,
             accessibility_label: None,
             accessibility_description: None,
@@ -743,19 +739,15 @@ struct RangeSliderConfig {
 
 impl Default for RangeSliderConfig {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
         Self {
             modifier: Modifier::new(),
             value: (0.0, 1.0),
             on_change: CallbackWith::default_value(),
             size: SliderSize::default(),
-            active_track_color: scheme.primary,
-            inactive_track_color: scheme.secondary_container,
+            active_track_color: Color::new(0.0, 0.5, 1.0, 1.0),
+            inactive_track_color: Color::new(0.85, 0.9, 0.95, 1.0),
             thumb_diameter: Dp(4.0),
-            thumb_color: scheme.primary,
+            thumb_color: Color::new(0.0, 0.5, 1.0, 1.0),
             disabled: false,
             accessibility_label: None,
             accessibility_description: None,
@@ -1005,10 +997,7 @@ struct SliderColors {
 
 fn slider_colors(args: &SliderConfig) -> SliderColors {
     if args.disabled {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
+        let scheme = MaterialTheme::default().color_scheme;
         let disabled_thumb = scheme
             .surface
             .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
@@ -1032,10 +1021,7 @@ fn slider_colors(args: &SliderConfig) -> SliderColors {
 
 fn range_slider_colors(args: &RangeSliderConfig) -> SliderColors {
     if args.disabled {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
+        let scheme = MaterialTheme::default().color_scheme;
         let disabled_thumb = scheme
             .surface
             .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);

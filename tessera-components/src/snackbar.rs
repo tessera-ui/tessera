@@ -8,7 +8,7 @@ use std::{collections::VecDeque, time::Duration};
 
 use tessera_ui::{
     Callback, CallbackWith, Color, Dp, Modifier, State, current_frame_nanos, layout::layout,
-    receive_frame_nanos, remember, tessera, use_context,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -24,7 +24,7 @@ use crate::{
     spacer::spacer,
     surface::surface,
     text::text,
-    theme::{MaterialTheme, provide_text_style},
+    theme::MaterialTheme,
 };
 
 const SHORT_SNACKBAR_DURATION: Duration = Duration::from_millis(4_000);
@@ -370,47 +370,32 @@ impl SnackbarDefaults {
 
     /// Default snackbar shape.
     pub fn shape() -> crate::shape_def::Shape {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .shapes
-            .extra_small
+        crate::shape_def::Shape::RoundedRectangle {
+            top_left: crate::shape_def::RoundedCorner::manual(Dp(4.0), 3.0),
+            top_right: crate::shape_def::RoundedCorner::manual(Dp(4.0), 3.0),
+            bottom_right: crate::shape_def::RoundedCorner::manual(Dp(4.0), 3.0),
+            bottom_left: crate::shape_def::RoundedCorner::manual(Dp(4.0), 3.0),
+        }
     }
 
     /// Default container color derived from the current theme.
     pub fn container_color() -> Color {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .inverse_surface
+        Color::new(0.1, 0.1, 0.1, 1.0)
     }
 
     /// Default content color derived from the current theme.
     pub fn content_color() -> Color {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .inverse_on_surface
+        Color::new(0.95, 0.95, 0.95, 1.0)
     }
 
     /// Default action label color derived from the current theme.
     pub fn action_color() -> Color {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .inverse_primary
+        Color::new(0.7, 0.8, 1.0, 1.0)
     }
 
     /// Default dismiss action color derived from the current theme.
     pub fn dismiss_action_color() -> Color {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .inverse_on_surface
+        Color::new(0.95, 0.95, 0.95, 1.0)
     }
 
     /// Computes the minimum container height based on content.
@@ -495,12 +480,12 @@ pub fn snackbar(
         .expect("MaterialTheme must be provided")
         .get();
     let typography = theme.typography;
-    let shape = shape.unwrap_or_else(SnackbarDefaults::shape);
-    let container_color = container_color.unwrap_or_else(SnackbarDefaults::container_color);
-    let content_color = content_color.unwrap_or_else(SnackbarDefaults::content_color);
-    let action_color = action_color.unwrap_or_else(SnackbarDefaults::action_color);
-    let dismiss_action_color =
-        dismiss_action_color.unwrap_or_else(SnackbarDefaults::dismiss_action_color);
+    let scheme = theme.color_scheme;
+    let shape = shape.unwrap_or(theme.shapes.extra_small);
+    let container_color = container_color.unwrap_or(scheme.inverse_surface);
+    let content_color = content_color.unwrap_or(scheme.inverse_on_surface);
+    let action_color = action_color.unwrap_or(scheme.inverse_primary);
+    let dismiss_action_color = dismiss_action_color.unwrap_or(scheme.inverse_on_surface);
     let content_padding = content_padding.unwrap_or(SnackbarDefaults::CONTENT_PADDING);
     let action_label = action_label.filter(|label| !label.is_empty());
     let has_action = action_label.is_some();
@@ -554,7 +539,7 @@ pub fn snackbar(
                     .modifier(Modifier::new().fill_max_width().padding(content_padding))
                     .cross_axis_alignment(CrossAxisAlignment::Start)
                     .children(move || {
-                        provide_text_style(typography.body_medium, {
+                        provide_context(|| typography.body_medium, {
                             let message = message.clone();
                             move || {
                                 text().content(message.clone()).color(content_color);
@@ -608,7 +593,7 @@ pub fn snackbar(
                             .alignment(Alignment::CenterStart)
                             .modifier(Modifier::new().weight(1.0))
                             .children(move || {
-                                provide_text_style(typography.body_medium, {
+                                provide_context(|| typography.body_medium, {
                                     let message = message.clone();
                                     move || {
                                         text().content(message.clone()).color(content_color);
