@@ -1,6 +1,6 @@
 use tessera_ui::{
     Color, Dp, DrawModifierContent, DrawModifierContext, DrawModifierNode, Modifier, PxSize,
-    modifier::ModifierCapabilityExt as _, use_context,
+    modifier::ModifierCapabilityExt as _,
 };
 
 use crate::{
@@ -67,10 +67,7 @@ impl DrawModifierNode for ShadowModifierNode {
 }
 
 pub(super) fn apply_shadow_modifier(base: Modifier, args: ShadowArgs) -> Modifier {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let mut layers = SurfaceDefaults::synthesize_shadow_layers(args.elevation, &scheme);
 
     if let Some(ambient) = args.ambient_color

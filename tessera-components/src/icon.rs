@@ -35,14 +35,6 @@ fn placeholder_raster_data() -> Arc<ImageData> {
         .clone()
 }
 
-fn default_tint_color() -> Color {
-    let theme = use_context::<MaterialTheme>();
-    use_context::<ContentColor>()
-        .map(|c| c.get().current)
-        .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
-        .unwrap_or_else(|| ContentColor::default().current)
-}
-
 impl IconBuilder {
     /// Sets icon content using a shared painter value.
     pub fn painter(mut self, painter: impl Into<Painter>) -> Self {
@@ -224,7 +216,13 @@ pub fn icon(
 ) {
     let content = content.unwrap_or_else(|| Painter::Raster(placeholder_raster_data()));
     let size = size.unwrap_or(Dp(24.0));
-    let tint = tint.unwrap_or_else(default_tint_color);
+    let tint = tint.unwrap_or_else(|| {
+        let theme = use_context::<MaterialTheme>();
+        use_context::<ContentColor>()
+            .map(|c| c.get().current)
+            .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
+            .unwrap_or_else(|| ContentColor::default().current)
+    });
     let tint_mode = tint_mode.unwrap_or_default();
     let rotation = rotation.unwrap_or(0.0);
     let policy = IconLayout {

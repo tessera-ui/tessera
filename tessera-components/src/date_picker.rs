@@ -11,7 +11,7 @@ use std::{
 
 use tessera_ui::{
     AxisConstraint, Callback, Color, Dp, Modifier, RenderSlot, State, provide_context, remember,
-    tessera, use_context,
+    tessera,
 };
 
 use crate::{
@@ -500,9 +500,7 @@ fn date_picker_inner(args: DatePickerConfig) {
         .state
         .expect("date_picker_inner requires state to be set");
     let snapshot = state.with(|s| s.snapshot());
-    let theme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get();
+    let theme = MaterialTheme::default();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
@@ -649,10 +647,7 @@ pub fn date_picker_dialog(
     let picker_first_day_of_week = picker_first_day_of_week.unwrap_or_default();
     let picker_show_weekday_labels = picker_show_weekday_labels.unwrap_or(true);
     let picker_show_mode_toggle = picker_show_mode_toggle.unwrap_or(true);
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let has_confirm = confirm_button.is_some();
     let has_dismiss = dismiss_button.is_some();
 
@@ -670,14 +665,7 @@ pub fn date_picker_dialog(
                 {
                     text()
                         .content(title.clone())
-                        .size(
-                            use_context::<MaterialTheme>()
-                                .expect("MaterialTheme must be provided")
-                                .get()
-                                .typography
-                                .title_medium
-                                .font_size,
-                        )
+                        .size(MaterialTheme::default().typography.title_medium.font_size)
                         .color(scheme.on_surface);
                 };
                 {
@@ -762,10 +750,7 @@ fn calendar_view(
 }
 
 fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let can_prev = can_navigate_prev(snapshot.displayed_month, &snapshot.year_range);
     let can_next = can_navigate_next(snapshot.displayed_month, &snapshot.year_range);
     let month_label = format_month_year(snapshot.displayed_month);
@@ -788,14 +773,7 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
             {
                 text()
                     .content(month_label.clone())
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .title_medium
-                            .font_size,
-                    )
+                    .size(MaterialTheme::default().typography.title_medium.font_size)
                     .color(scheme.on_surface);
             };
 
@@ -806,10 +784,7 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
 }
 
 fn weekday_labels_row(first_day_of_week: Weekday) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let labels = weekday_sequence(first_day_of_week);
 
     flow_row()
@@ -826,14 +801,7 @@ fn weekday_labels_row(first_day_of_week: Weekday) {
                         .child(move || {
                             text()
                                 .content(label)
-                                .size(
-                                    use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .typography
-                                        .label_small
-                                        .font_size,
-                                )
+                                .size(MaterialTheme::default().typography.label_small.font_size)
                                 .color(scheme.on_surface_variant);
                         });
                 };
@@ -846,10 +814,7 @@ fn date_grid(
     first_day_of_week: Weekday,
     state: State<DatePickerState>,
 ) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let today = CalendarDate::today();
     let grid = build_month_grid(snapshot.displayed_month, first_day_of_week);
 
@@ -911,14 +876,7 @@ fn date_grid(
                             .child(move || {
                                 text()
                                     .content(format!("{}", date.day()))
-                                    .size(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .typography
-                                            .body_medium
-                                            .font_size,
-                                    )
+                                    .size(MaterialTheme::default().typography.body_medium.font_size)
                                     .color(text_color);
                             });
                     } else {
@@ -931,14 +889,7 @@ fn date_grid(
                             .child(move || {
                                 text()
                                     .content(format!("{}", date.day()))
-                                    .size(
-                                        use_context::<MaterialTheme>()
-                                            .expect("MaterialTheme must be provided")
-                                            .get()
-                                            .typography
-                                            .body_medium
-                                            .font_size,
-                                    )
+                                    .size(MaterialTheme::default().typography.body_medium.font_size)
                                     .color(text_color);
                             });
                     }
@@ -950,10 +901,7 @@ fn date_grid(
 }
 
 fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let current_date = snapshot
         .selected_date
         .or_else(|| snapshot.displayed_month.to_date(1))
@@ -1025,24 +973,14 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                 };
                 text()
                     .content(description)
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .body_small
-                            .font_size,
-                    )
+                    .size(MaterialTheme::default().typography.body_small.font_size)
                     .color(scheme.on_surface_variant);
             };
         });
 }
 
 fn input_row(label: &'static str, value: String, on_decrement: Callback, on_increment: Callback) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     row()
         .modifier(Modifier::new().fill_max_width())
         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
@@ -1051,14 +989,7 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
             {
                 text()
                     .content(label)
-                    .size(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .typography
-                            .body_medium
-                            .font_size,
-                    )
+                    .size(MaterialTheme::default().typography.body_medium.font_size)
                     .color(scheme.on_surface_variant);
             };
             {
@@ -1076,14 +1007,7 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
                         {
                             text()
                                 .content(value.clone())
-                                .size(
-                                    use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .typography
-                                        .body_large
-                                        .font_size,
-                                )
+                                .size(MaterialTheme::default().typography.body_large.font_size)
                                 .color(scheme.on_surface);
                         };
                         {
@@ -1098,10 +1022,7 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
 }
 
 fn display_mode_toggle(state: State<DatePickerState>) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let label = state.with(|s| match s.display_mode() {
         DatePickerDisplayMode::Picker => "Input",
         DatePickerDisplayMode::Input => "Calendar",
@@ -1119,23 +1040,13 @@ fn display_mode_toggle(state: State<DatePickerState>) {
         .child(move || {
             text()
                 .content(label)
-                .size(
-                    use_context::<MaterialTheme>()
-                        .expect("MaterialTheme must be provided")
-                        .get()
-                        .typography
-                        .label_small
-                        .font_size,
-                )
+                .size(MaterialTheme::default().typography.label_small.font_size)
                 .color(scheme.primary);
         });
 }
 
 fn nav_button(label: &'static str, enabled: bool, on_click: Callback) {
-    let scheme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+    let scheme = MaterialTheme::default().color_scheme;
     let text_color = if enabled {
         scheme.on_surface
     } else {
@@ -1159,14 +1070,7 @@ fn nav_button(label: &'static str, enabled: bool, on_click: Callback) {
         .child(move || {
             text()
                 .content(label)
-                .size(
-                    use_context::<MaterialTheme>()
-                        .expect("MaterialTheme must be provided")
-                        .get()
-                        .typography
-                        .body_medium
-                        .font_size,
-                )
+                .size(MaterialTheme::default().typography.body_medium.font_size)
                 .color(text_color);
         });
 }

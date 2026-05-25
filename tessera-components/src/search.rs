@@ -36,7 +36,10 @@ pub struct SearchBarColors {
 
 impl Default for SearchBarColors {
     fn default() -> Self {
-        SearchBarDefaults::colors()
+        SearchBarColors {
+            container_color: Color::new(0.9, 0.9, 0.9, 1.0),
+            divider_color: Color::new(0.5, 0.5, 0.5, 1.0),
+        }
     }
 }
 
@@ -62,11 +65,7 @@ impl SearchBarDefaults {
 
     /// Default shape for a docked search bar container.
     pub fn docked_shape() -> Shape {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .shapes
-            .extra_large
+        Shape::rounded_rectangle(Dp(28.0))
     }
 
     /// Default shape for a docked results surface.
@@ -76,13 +75,9 @@ impl SearchBarDefaults {
 
     /// Default colors for search bars.
     pub fn colors() -> SearchBarColors {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
         SearchBarColors {
-            container_color: scheme.surface_container_high,
-            divider_color: scheme.outline,
+            container_color: Color::new(0.9, 0.9, 0.9, 1.0),
+            divider_color: Color::new(0.5, 0.5, 0.5, 1.0),
         }
     }
 }
@@ -268,8 +263,14 @@ pub fn search_bar(
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
     let is_active = is_active.unwrap_or(false);
-    let shape = shape.unwrap_or(SearchBarProps::default().shape);
-    let colors = colors.unwrap_or(SearchBarProps::default().colors);
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
+    let colors = colors.unwrap_or_else(|| SearchBarColors {
+        container_color: theme.color_scheme.surface_container_high,
+        divider_color: theme.color_scheme.outline,
+    });
     let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
     let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
     let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
@@ -379,8 +380,14 @@ pub fn docked_search_bar(
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
     let is_active = is_active.unwrap_or(false);
-    let shape = shape.unwrap_or(SearchBarProps::default().shape);
-    let colors = colors.unwrap_or(SearchBarProps::default().colors);
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
+    let colors = colors.unwrap_or_else(|| SearchBarColors {
+        container_color: theme.color_scheme.surface_container_high,
+        divider_color: theme.color_scheme.outline,
+    });
     let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
     let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
     let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
@@ -532,8 +539,14 @@ fn search_bar_inner(
     let kind = kind.unwrap_or_default();
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
-    let shape = shape.unwrap_or(SearchBarProps::default().shape);
-    let colors = colors.unwrap_or(SearchBarProps::default().colors);
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
+    let colors = colors.unwrap_or_else(|| SearchBarColors {
+        container_color: theme.color_scheme.surface_container_high,
+        divider_color: theme.color_scheme.outline,
+    });
     let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
     let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
     let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);

@@ -1,60 +1,53 @@
 use std::sync::Arc;
 
-use tessera_ui::{
-    __private::{
-        RuntimePhase, context_from_previous_snapshot_for_instance, current_phase,
-        current_replay_boundary_instance_key_from_scope,
-    },
-    State, provide_context, remember, tessera, use_context,
-};
+use tessera_ui::{State, provide_context, remember, tessera};
 
 use crate::{
     router::{RouterContext, RouterController, RouterDestination},
     state::{ShardState, ShardStateLifeCycle},
 };
 
-fn resolve_router_controller_state() -> State<RouterController> {
-    match current_phase() {
-        Some(RuntimePhase::Build) => {
-            let context = use_context::<RouterContext>()
-                .expect("Router is missing in build scope. Mount UI inside shard_home.");
-            context.get().controller
+/// Resolve the current router controller from the Tessera runtime context.
+#[macro_export]
+macro_rules! __resolve_router_controller {
+    () => {
+        {
+            match ::tessera_ui::__private::current_phase() {
+                Some(::tessera_ui::__private::RuntimePhase::Build) => {
+                    ::tessera_ui::use_context::<$crate::router::RouterContext>()
+                        .expect("Router is missing in build scope. Mount UI inside shard_home.")
+                        .get()
+                        .controller()
+                }
+                Some(::tessera_ui::__private::RuntimePhase::Input) => {
+                    let instance_key = ::tessera_ui::__private::current_replay_boundary_instance_key_from_scope()
+                        .expect("Router command requires an active component scope during input handling");
+                    ::tessera_ui::__private::context_from_previous_snapshot_for_instance::<$crate::router::RouterContext>(
+                        instance_key,
+                    )
+                    .expect("Router is missing in input scope. Ensure callbacks run inside shard_home.")
+                    .get()
+                    .controller()
+                }
+                _ => {
+                    panic!("Router access must happen during build or input phase");
+                }
+            }
         }
-        Some(RuntimePhase::Input) => {
-            let instance_key = current_replay_boundary_instance_key_from_scope()
-                .expect("Router command requires an active component scope during input handling");
-            let context = context_from_previous_snapshot_for_instance::<RouterContext>(
-                instance_key,
-            )
-            .expect("Router is missing in input scope. Ensure callbacks run inside shard_home.");
-            context.get().controller
-        }
-        _ => {
-            panic!("Router access must happen during build or input phase");
-        }
-    }
-}
-
-pub(crate) fn current_router_controller() -> State<RouterController> {
-    resolve_router_controller_state()
+    };
 }
 
 pub(crate) fn with_current_router_shard_state<T, F, R>(
     shard_id: &str,
     life_cycle: ShardStateLifeCycle,
+    controller: State<RouterController>,
     f: F,
 ) -> R
 where
     T: Default + Send + Sync + 'static,
     F: FnOnce(ShardState<T>) -> R,
 {
-    let controller = current_router_controller();
     controller.with(|router| router.init_or_get_with_lifecycle(shard_id, life_cycle, f))
-}
-
-fn router_outlet() {
-    let executed = current_router_controller().with(RouterController::exec_current);
-    assert!(executed, "Router stack should not be empty");
 }
 
 /// # shard_home
@@ -109,7 +102,17 @@ pub fn shard_home(
         panic!("shard_home requires `root` when `controller` is not provided");
     }
 
-    provide_context(|| RouterContext { controller }, router_outlet);
+    // Ensure the compiler sees field reads (actual reads happen in
+    // macro-generated code in downstream crates).
+    let _ = RouterContext::new(controller).controller();
+
+    provide_context(
+        || RouterContext::new(controller),
+        || {
+            let executed = controller.with(RouterController::exec_current);
+            assert!(executed, "Router stack should not be empty");
+        },
+    );
 }
 
 impl ShardHomeBuilder {

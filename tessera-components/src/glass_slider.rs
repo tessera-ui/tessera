@@ -370,7 +370,9 @@ pub fn glass_slider(
         .controller
         .unwrap_or_else(|| remember(GlassSliderController::new));
     slider_args.controller = Some(controller);
-    render_glass_slider(slider_args);
+    let tap_recognizer = remember(TapRecognizer::default);
+    let drag_recognizer = remember(DragRecognizer::default);
+    render_glass_slider(slider_args, tap_recognizer, drag_recognizer);
 }
 
 #[tessera]
@@ -429,7 +431,11 @@ impl LayoutPolicy for GlassSliderFillLayout {
     }
 }
 
-fn render_glass_slider(args: GlassSliderConfig) {
+fn render_glass_slider(
+    args: GlassSliderConfig,
+    tap_recognizer: State<TapRecognizer>,
+    drag_recognizer: State<DragRecognizer>,
+) {
     let controller = args
         .controller
         .expect("render_glass_slider requires controller to be set");
@@ -446,8 +452,6 @@ fn render_glass_slider(args: GlassSliderConfig) {
         ..Default::default()
     };
     modifier = modifier.semantics(semantics);
-    let tap_recognizer = remember(TapRecognizer::default);
-    let drag_recognizer = remember(DragRecognizer::default);
     let modifier = apply_glass_slider_pointer_modifier(
         modifier.then(
             Modifier::new()

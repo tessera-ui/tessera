@@ -24,7 +24,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{MaterialAlpha, MaterialTheme, provide_text_style},
+    theme::{MaterialAlpha, MaterialTheme},
 };
 
 const SEGMENTED_ICON_SPACING: Dp = Dp(8.0);
@@ -155,10 +155,7 @@ impl SegmentedButtonDefaults {
 
     /// Default colors derived from the current theme.
     pub fn colors() -> SegmentedButtonColors {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
+        let scheme = MaterialTheme::default().color_scheme;
         let disabled_content = scheme
             .on_surface
             .with_alpha(MaterialAlpha::DISABLED_CONTENT);
@@ -211,7 +208,7 @@ impl SegmentedButtonDefaults {
 ///     SegmentedButtonDefaults, segmented_button, single_choice_segmented_button_row,
 /// };
 /// use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_ui::{LayoutResult, remember, tessera};
+/// use tessera_ui::{LayoutResult, provide_context, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -324,41 +321,44 @@ pub fn segmented_button(
             let leading_icon = icon.clone();
             let padding = content_padding;
             let label_outer = label.clone();
-            provide_text_style(typography.label_large, move || {
-                let leading_icon = leading_icon.clone();
-                let label_outer = label_outer.clone();
-                layout()
-                    .modifier(Modifier::new().padding(padding))
-                    .child(move || {
-                        let leading_icon = leading_icon.clone();
-                        let label = label_outer.clone();
-                        row()
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children(move || {
-                                let mut has_content = false;
+            provide_context(
+                || typography.label_large,
+                move || {
+                    let leading_icon = leading_icon.clone();
+                    let label_outer = label_outer.clone();
+                    layout()
+                        .modifier(Modifier::new().padding(padding))
+                        .child(move || {
+                            let leading_icon = leading_icon.clone();
+                            let label = label_outer.clone();
+                            row()
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    let mut has_content = false;
 
-                                if let Some(icon_content) = leading_icon.clone() {
-                                    has_content = true;
-                                    icon_component()
-                                        .painter(icon_content)
-                                        .size(SegmentedButtonDefaults::ICON_SIZE);
-                                }
+                                    if let Some(icon_content) = leading_icon.clone() {
+                                        has_content = true;
+                                        icon_component()
+                                            .painter(icon_content)
+                                            .size(SegmentedButtonDefaults::ICON_SIZE);
+                                    }
 
-                                if !label.is_empty() {
-                                    if has_content {
+                                    if !label.is_empty() {
+                                        if has_content {
+                                            {
+                                                spacer().modifier(
+                                                    Modifier::new().width(SEGMENTED_ICON_SPACING),
+                                                );
+                                            };
+                                        }
                                         {
-                                            spacer().modifier(
-                                                Modifier::new().width(SEGMENTED_ICON_SPACING),
-                                            );
+                                            text().content(label.clone());
                                         };
                                     }
-                                    {
-                                        text().content(label.clone());
-                                    };
-                                }
-                            });
-                    });
-            });
+                                });
+                        });
+                },
+            );
         });
 }
 

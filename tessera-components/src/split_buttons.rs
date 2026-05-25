@@ -9,7 +9,7 @@ use tessera_ui::{
     MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     accesskit::Role,
     layout::{MeasureScope, layout},
-    tessera, use_context,
+    provide_context, tessera, use_context,
 };
 
 use crate::{
@@ -18,7 +18,7 @@ use crate::{
     modifier::{ModifierExt as _, Padding},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
-    theme::{MaterialTheme, provide_text_style},
+    theme::MaterialTheme,
 };
 
 const CORNER_G2_VALUE: f32 = 3.0;
@@ -188,10 +188,7 @@ impl SplitButtonDefaults {
 
     /// Returns default colors for the requested variant.
     pub fn colors(variant: SplitButtonVariant) -> SplitButtonColors {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
+        let scheme = MaterialTheme::default().color_scheme;
 
         match variant {
             SplitButtonVariant::Filled => SplitButtonColors {
@@ -496,13 +493,16 @@ pub fn split_leading_button(
         .accessibility_description_optional(accessibility_description)
         .child_shared(RenderSlot::new(move || {
             let content = content;
-            provide_text_style(typography.label_large, move || {
-                layout()
-                    .modifier(Modifier::new().padding(content_padding))
-                    .child(move || {
-                        content.render();
-                    });
-            });
+            provide_context(
+                || typography.label_large,
+                move || {
+                    layout()
+                        .modifier(Modifier::new().padding(content_padding))
+                        .child(move || {
+                            content.render();
+                        });
+                },
+            );
         }));
 }
 
@@ -632,13 +632,16 @@ pub fn split_trailing_button(
         .accessibility_description_optional(accessibility_description)
         .child_shared(RenderSlot::new(move || {
             let content = content;
-            provide_text_style(typography.label_large, move || {
-                layout()
-                    .modifier(Modifier::new().padding(content_padding))
-                    .child(move || {
-                        content.render();
-                    });
-            });
+            provide_context(
+                || typography.label_large,
+                move || {
+                    layout()
+                        .modifier(Modifier::new().padding(content_padding))
+                        .child(move || {
+                            content.render();
+                        });
+                },
+            );
         }));
 }
 #[derive(Clone)]

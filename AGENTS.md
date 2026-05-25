@@ -58,6 +58,26 @@ This document defines how You should assist in the Tessera project to ensure cod
 - If callback behavior depends on changing values, capture `State<T>` (or other stable handles) and read latest values at call time.
 - Do not add runtime callback/slot helper wrappers (`callback`, `callback_with`, `render_slot`, `render_slot_with`); construct handles directly via `Callback::new`, `CallbackWith::new`, `RenderSlot::new`, and `RenderSlotWith::new`.
 
+### Tessera Color Checking Design
+
+- Tessera color checking belongs in `cargo-tessera`, not in `tessera-macros` or per-crate `build.rs` scripts.
+- `tessera-macros` must remain a local lowering layer only: props/builders, component wrappers, control-flow group guard instrumentation, and runtime call structure generation. It must not read or write color metadata, build global call graphs, or decide whether a call is color-valid.
+- `tessera-build` remains a build-time utility crate for assets and related generated bindings. It must not be used as the global color-checking frontend.
+- `cargo-tessera` should run color checking before invoking the real `cargo build`, `cargo check`, `cargo run`, `cargo tessera dev`, or platform-specific build command. It should use the resolved Cargo package graph for the selected package, target, features, and profile, not just workspace crates.
+- Tessera color is an execution-context color, not a general UI-code marker. The only colored contexts are:
+  - free functions annotated with `#[tessera]`, or a project-approved alias that lowers to a Tessera component free function such as `#[shard]`;
+  - closures carried directly by `RenderSlot`, `RenderSlotWith`, or generated render-slot setters for parameters declared as `RenderSlot`, `Option<RenderSlot>`, or with `#[prop(render_slot)]`.
+- All other executable contexts are uncolored by default: ordinary free functions, impl methods, trait methods/default methods, local functions, callbacks, event handlers, async tasks, iterator closures, `Option`/`Result` combinator closures, and arbitrary higher-order function closures.
+- Color does not propagate through helpers. A helper called by a Tessera-colored component remains uncolored unless the helper itself is a Tessera-colored free function. A helper that calls a Tessera component or Tessera-only API is invalid; it is not implicitly promoted to Tessera.
+- The core rule is one-way: Tessera-colored contexts may call uncolored functions, but uncolored contexts must not call Tessera-colored free functions or Tessera-only APIs.
+- Tessera-only APIs such as `remember`, `remember_with_key`, `retain`, `retain_with_key`, `provide_context`, `use_context`, `receive_frame_nanos`, `key`, `RenderSlot::new`, `RenderSlotWith::new`, and internal current-instance/group/slot APIs require a Tessera-colored context. They do not color the ordinary function that calls them; calling them from an uncolored function or closure is invalid.
+- Closures do not inherit Tessera color merely because they are written inside a Tessera-colored function. Only a closure passed directly to a recognized Tessera carrier, such as `RenderSlot::new` or a generated render-slot setter, is checked as a Tessera closure.
+- `RenderSlot` and `RenderSlotWith` are Tessera functors: their carried closures are delayed Tessera fragments and may only be executed by the Tessera runtime at controlled build/replay boundaries.
+- Do not introduce custom closure carriers that can execute Tessera code unless the carrier is explicitly added to the color-checker specification. Unknown higher-order functions must be treated as uncolored boundaries.
+- A color-check diagnostic is a false positive only when the reported expression is actually inside a Tessera-colored free-function body or a recognized Tessera carrier closure. Reports for helper functions, ordinary closures, callbacks, iterator combinators, `unwrap_or_else`, `then`, or event handlers are not false positives merely because those constructs appear syntactically inside a component.
+- The checker must use the `rust-analyzer` analysis crates as its semantic frontend and must run them as library crates from `cargo-tessera`; it must not depend on an LSP server process, `syn`, heuristic fallback parsing, `rustc_private`, or macro/build-script generated color metadata.
+- The checker must fail closed when rust-analyzer cannot resolve semantic information that is needed to classify a Tessera-sensitive call. Diagnostics should report the specific invalid uncolored boundary and call target, for example a Tessera component or `remember` call inside an ordinary closure, rather than saying only that metadata is missing.
+
 ### Component Tree & Node Metadata
 
 - The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.

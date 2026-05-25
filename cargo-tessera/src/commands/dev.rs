@@ -9,7 +9,7 @@ use anyhow::{Result, anyhow};
 use notify::{Event, EventKind, RecursiveMode, Watcher};
 use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_assets_dir};
 
-use crate::output;
+use crate::{color_check, output};
 
 use super::find_package_dir;
 
@@ -21,6 +21,11 @@ pub fn execute(
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
+    color_check::run(color_check::CheckOptions {
+        package,
+        target: None,
+    })?;
+
     output::status("Starting", "dev server (auto rebuild/restart)");
     if let Some(pkg) = package {
         output::status("Package", format!("`{}`", pkg));

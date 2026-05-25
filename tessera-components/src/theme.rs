@@ -95,11 +95,6 @@ impl Default for TextStyle {
     }
 }
 
-/// Provides a text style to descendants for the duration of `child`.
-pub fn provide_text_style(style: TextStyle, child: impl FnOnce()) {
-    provide_context(|| style, child);
-}
-
 /// Material typography scale used by components to resolve default text styles.
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub struct MaterialTypography {

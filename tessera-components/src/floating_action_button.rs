@@ -4,8 +4,8 @@
 //!
 //! Emphasize a primary action with a prominent floating button.
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, remember, tessera,
-    use_context,
+    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, provide_context, remember,
+    tessera, use_context,
 };
 
 use crate::{
@@ -13,10 +13,7 @@ use crate::{
     modifier::{InteractionState, ModifierExt as _},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
-    theme::{
-        ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for,
-        provide_text_style,
-    },
+    theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
 };
 
 /// Sizes supported by [`floating_action_button`].
@@ -142,10 +139,7 @@ impl FloatingActionButtonDefaults {
 
     /// Returns the default shape for the provided FAB size.
     pub fn shape(size: FloatingActionButtonSize) -> Shape {
-        let theme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get();
-        shape_from_size(size, &theme)
+        shape_from_size(size, &MaterialTheme::default())
     }
 
     /// Default container color for floating action buttons.
@@ -359,11 +353,14 @@ pub fn floating_action_button(
         .accessibility_description_optional(args.accessibility_description)
         .child({
             move || {
-                provide_text_style(typography.label_large, move || {
-                    if let Some(content) = content.as_ref() {
-                        content.render();
-                    }
-                });
+                provide_context(
+                    || typography.label_large,
+                    move || {
+                        if let Some(content) = content.as_ref() {
+                            content.render();
+                        }
+                    },
+                );
             }
         });
 }

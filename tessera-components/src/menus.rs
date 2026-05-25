@@ -58,11 +58,7 @@ fn default_menu_shape() -> Shape {
 }
 
 fn default_menu_color() -> Color {
-    use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme
-        .surface
+    Color::new(1.0, 1.0, 1.0, 1.0)
 }
 
 fn default_scrim_color() -> Color {
@@ -438,6 +434,10 @@ pub fn menu_provider(
     menu_content: Option<RenderSlot>,
 ) {
     let is_open = is_open.unwrap_or(false);
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let provider_args = MenuProviderConfig {
         placement: placement.unwrap_or_default(),
         offset: offset.unwrap_or([Dp(0.0), MENU_VERTICAL_GAP]),
@@ -445,7 +445,7 @@ pub fn menu_provider(
         max_height: max_height.or_else(default_max_height),
         shape: shape.unwrap_or_else(default_menu_shape),
         elevation: elevation.unwrap_or(Dp(3.0)),
-        container_color: container_color.unwrap_or_else(default_menu_color),
+        container_color: container_color.unwrap_or(scheme.surface),
         scrim_color: scrim_color.unwrap_or_else(default_scrim_color),
         close_on_background: close_on_background.unwrap_or(true),
         close_on_escape: close_on_escape.unwrap_or(true),
@@ -679,10 +679,6 @@ struct MenuItemConfig {
 
 impl MenuItemConfig {
     pub fn new(label: impl Into<String>) -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
         Self {
             label: label.into(),
             supporting_text: None,
@@ -695,10 +691,9 @@ impl MenuItemConfig {
             enabled: true,
             close_on_click: true,
             height: MENU_ITEM_HEIGHT,
-            label_color: scheme.on_surface,
-            supporting_color: scheme.on_surface_variant,
-            disabled_color: scheme
-                .on_surface
+            label_color: Color::new(0.1, 0.1, 0.1, 1.0),
+            supporting_color: Color::new(0.4, 0.4, 0.4, 1.0),
+            disabled_color: Color::new(0.1, 0.1, 0.1, 1.0)
                 .with_alpha(MaterialAlpha::DISABLED_CONTENT),
             on_click: None,
         }

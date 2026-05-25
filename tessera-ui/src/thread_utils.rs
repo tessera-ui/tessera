@@ -36,7 +36,7 @@ fn set_thread_name_unix(name: &str) {
     use std::ffi::CString;
 
     // Convert to C string, panicking if null bytes are present
-    let cname = CString::new(name).unwrap();
+    let cname = CString::new(name).expect("thread name contains null bytes");
 
     unsafe {
         // Set the name for the current thread

@@ -1729,16 +1729,20 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
 
     let func_attrs = &func.attrs;
     let func_vis = &func.vis;
-    let router_binding = router_params.first().map_or_else(
-        proc_macro2::TokenStream::new,
-        |param| {
-            let router_ident = &param.ident;
-            quote! {
-                let #router_ident = #router_ident
-                    .unwrap_or_else(|| #shard_crate_path::__private::current_router_controller());
-            }
-        },
-    );
+    let router_controller_resolution = quote! {
+        #shard_crate_path::__private::current_router_controller!()
+    };
+
+    let router_binding =
+        router_params
+            .first()
+            .map_or_else(proc_macro2::TokenStream::new, |param| {
+                let router_ident = &param.ident;
+                quote! {
+                    let #router_ident = #router_ident
+                        .unwrap_or_else(|| #router_controller_resolution);
+                }
+            });
     let mut func_sig_modified = func.sig.clone();
     for input in &mut func_sig_modified.inputs {
         let FnArg::Typed(pat_type) = input else {
@@ -1819,10 +1823,12 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                 #[#ui_crate_path::tessera(#ui_crate_path)]
                 #func_vis #func_sig_modified {
                     const SHARD_ID: &str = concat!(module_path!(), "::", #func_name_str);
+                    let __router_controller = #router_controller_resolution;
                     #router_binding
                     #shard_crate_path::__private::with_current_router_shard_state::<#state_type, _, _>(
                         SHARD_ID,
                         #state_lifecycle_tokens,
+                        __router_controller,
                         |state| {
                             #func_body
                         },

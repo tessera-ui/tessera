@@ -17,7 +17,7 @@ use serde_json::json;
 use tessera_build::{AssetBackend, load_tessera_config_from_dir, resolve_assets_dir};
 use wasm_bindgen_cli_support::Bindgen;
 
-use crate::output;
+use crate::{color_check, output};
 
 use super::find_package_dir;
 
@@ -202,6 +202,11 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
 }
 
 fn build_project(project_dir: &Path, metadata: &ProjectMetadata, release: bool) -> Result<()> {
+    color_check::run(color_check::CheckOptions {
+        package: Some(&metadata.package_name),
+        target: Some(WASM_TARGET),
+    })?;
+
     let mut cmd = Command::new("cargo");
     cmd.arg("build")
         .arg("--manifest-path")

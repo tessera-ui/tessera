@@ -27,7 +27,7 @@ use crate::{
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{ContentColor, MaterialTheme, provide_text_style},
+    theme::{ContentColor, MaterialTheme},
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
@@ -208,9 +208,12 @@ fn navigation_rail_item_view_content(
                     NavigationRailIconPosition::Top => typography.label_medium,
                     NavigationRailIconPosition::Start => typography.label_large,
                 };
-                provide_text_style(label_style, move || {
-                    text().content(label.clone()).color(label_color);
-                });
+                provide_context(
+                    || label_style,
+                    move || {
+                        text().content(label.clone()).color(label_color);
+                    },
+                );
             }
         });
 }
@@ -576,7 +579,7 @@ impl NavigationRailValue {
 /// use tessera_components::navigation_rail::{
 ///     NavigationRailController, NavigationRailValue, navigation_rail, navigation_rail_item,
 /// };
-/// use tessera_ui::{LayoutResult, remember, tessera};
+/// use tessera_ui::{LayoutResult, provide_context, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {

@@ -189,10 +189,6 @@ pub(crate) struct TextInputProps {
 
 impl Default for TextInputProps {
     fn default() -> Self {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
         Self {
             enabled: true,
             read_only: false,
@@ -201,9 +197,9 @@ impl Default for TextInputProps {
             on_submit: Callback::noop(),
             min_width: None,
             min_height: None,
-            background_color: Some(scheme.surface_variant),
+            background_color: None,
             border_width: Dp(1.0),
-            border_color: Some(scheme.outline_variant),
+            border_color: None,
             shape: Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(4.0), 3.0),
                 top_right: RoundedCorner::manual(Dp(4.0), 3.0),
@@ -211,12 +207,12 @@ impl Default for TextInputProps {
                 bottom_left: RoundedCorner::manual(Dp(4.0), 3.0),
             },
             padding: Dp(5.0),
-            focus_border_color: Some(scheme.primary),
+            focus_border_color: None,
             focus_border_width: None,
-            focus_background_color: Some(scheme.surface),
-            selection_color: Some(TextSelectionColors::from_scheme(&scheme).background),
-            text_color: Some(scheme.on_surface),
-            cursor_color: Some(scheme.primary),
+            focus_background_color: None,
+            selection_color: None,
+            text_color: None,
+            cursor_color: None,
             accessibility_label: None,
             accessibility_description: None,
             initial_text: None,
@@ -362,47 +358,24 @@ pub fn text_input(
     display_transform: Option<DisplayTransform>,
     controller: Option<State<TextInputController>>,
 ) {
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
     let modifier = modifier.unwrap_or_default();
-    let background_color = if let Some(v) = background_color {
-        Some(v)
-    } else {
-        TextInputProps::default().background_color
-    };
+    let background_color = background_color.or(Some(scheme.surface_variant));
     let border_width = border_width.unwrap_or(TextInputProps::default().border_width);
-    let border_color = if let Some(v) = border_color {
-        Some(v)
-    } else {
-        TextInputProps::default().border_color
-    };
+    let border_color = border_color.or(Some(scheme.outline_variant));
     let shape = shape.unwrap_or(TextInputProps::default().shape);
     let padding = padding.unwrap_or(TextInputProps::default().padding);
-    let focus_border_color = if let Some(v) = focus_border_color {
-        Some(v)
-    } else {
-        TextInputProps::default().focus_border_color
-    };
-    let focus_background_color = if let Some(v) = focus_background_color {
-        Some(v)
-    } else {
-        TextInputProps::default().focus_background_color
-    };
-    let selection_color = if let Some(v) = selection_color {
-        Some(v)
-    } else {
-        TextInputProps::default().selection_color
-    };
-    let text_color = if let Some(v) = text_color {
-        Some(v)
-    } else {
-        TextInputProps::default().text_color
-    };
-    let cursor_color = if let Some(v) = cursor_color {
-        Some(v)
-    } else {
-        TextInputProps::default().cursor_color
-    };
+    let focus_border_color = focus_border_color.or(Some(scheme.primary));
+    let focus_background_color = focus_background_color.or(Some(scheme.surface));
+    let selection_color =
+        selection_color.or(Some(TextSelectionColors::from_scheme(&scheme).background));
+    let text_color = text_color.or(Some(scheme.on_surface));
+    let cursor_color = cursor_color.or(Some(scheme.primary));
     let font_size = font_size.unwrap_or(TextInputProps::default().font_size);
     let single_line = single_line.unwrap_or(false);
     let args = TextInputProps {
@@ -1292,21 +1265,10 @@ fn determine_background_color(args: &TextInputProps, state: &State<TextInputCont
     if state.with(|c| c.focus_handler().is_focused()) {
         args.focus_background_color
             .or(args.background_color)
-            .unwrap_or(
-                use_context::<MaterialTheme>()
-                    .expect("MaterialTheme must be provided")
-                    .get()
-                    .color_scheme
-                    .surface,
-            )
+            .unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0))
     } else {
-        args.background_color.unwrap_or(
-            use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get()
-                .color_scheme
-                .surface_variant,
-        )
+        args.background_color
+            .unwrap_or(Color::new(0.9, 0.9, 0.9, 1.0))
     }
 }
 
@@ -1316,21 +1278,11 @@ fn determine_border_color(
     state: &State<TextInputController>,
 ) -> Option<Color> {
     if state.with(|c| c.focus_handler().is_focused()) {
-        args.focus_border_color.or(args.border_color).or(Some(
-            use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get()
-                .color_scheme
-                .primary,
-        ))
+        args.focus_border_color
+            .or(args.border_color)
+            .or(Some(Color::new(0.0, 0.0, 1.0, 1.0)))
     } else {
-        args.border_color.or(Some(
-            use_context::<MaterialTheme>()
-                .expect("MaterialTheme must be provided")
-                .get()
-                .color_scheme
-                .outline_variant,
-        ))
+        args.border_color.or(Some(Color::new(0.5, 0.5, 0.5, 1.0)))
     }
 }
 
@@ -1369,21 +1321,9 @@ impl TextInputBuilder {
     pub fn simple() -> Self {
         text_input()
             .min_width(Dp(120.0))
-            .background_color(
-                use_context::<MaterialTheme>()
-                    .expect("MaterialTheme must be provided")
-                    .get()
-                    .color_scheme
-                    .surface_variant,
-            )
+            .background_color(Color::new(0.9, 0.9, 0.9, 1.0))
             .border_width(Dp(1.0))
-            .border_color(
-                use_context::<MaterialTheme>()
-                    .expect("MaterialTheme must be provided")
-                    .get()
-                    .color_scheme
-                    .outline_variant,
-            )
+            .border_color(Color::new(0.7, 0.7, 0.7, 1.0))
             .shape(Shape::RoundedRectangle {
                 top_left: RoundedCorner::manual(Dp(0.0), 3.0),
                 top_right: RoundedCorner::manual(Dp(0.0), 3.0),

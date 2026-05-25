@@ -8,7 +8,17 @@ static NEXT_ROUTE_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone)]
 pub(crate) struct RouterContext {
-    pub(crate) controller: State<RouterController>,
+    controller: State<RouterController>,
+}
+
+impl RouterContext {
+    pub(crate) fn new(controller: State<RouterController>) -> Self {
+        Self { controller }
+    }
+
+    pub(crate) fn controller(&self) -> State<RouterController> {
+        self.controller
+    }
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]

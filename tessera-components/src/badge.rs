@@ -16,7 +16,7 @@ use crate::{
     pipelines::shape::command::ShapeCommand,
     row::row,
     shape_def::{ResolvedShape, Shape},
-    theme::{ContentColor, MaterialTheme, content_color_for, provide_text_style},
+    theme::{ContentColor, MaterialTheme, content_color_for},
 };
 
 fn resolve_dimension(axis: AxisConstraint, measure: Px) -> Px {
@@ -242,11 +242,7 @@ impl BadgeDefaults {
 
     /// Default container color for a badge.
     pub fn container_color() -> Color {
-        use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .error
+        Color::new(0.0, 0.0, 0.0, 0.0)
     }
 }
 
@@ -312,7 +308,13 @@ pub fn badged_box(badge: Option<RenderSlot>, content: Option<RenderSlot>) {
 #[tessera]
 pub fn badge(container_color: Option<Color>, content_color: Option<Color>) {
     let _ = content_color;
-    let container_color = container_color.unwrap_or_else(BadgeDefaults::container_color);
+    let container_color = container_color.unwrap_or_else(|| {
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme
+            .error
+    });
     let policy = BadgeLayout { container_color };
     layout().layout_policy(policy).render_policy(policy);
 }
@@ -364,7 +366,13 @@ pub fn badge_with_content(
     let scheme = theme.color_scheme;
     let typography = theme.typography;
 
-    let container_color = container_color.unwrap_or_else(BadgeDefaults::container_color);
+    let container_color = container_color.unwrap_or_else(|| {
+        use_context::<MaterialTheme>()
+            .expect("MaterialTheme must be provided")
+            .get()
+            .color_scheme
+            .error
+    });
     let content_color = content_color.unwrap_or_else(|| {
         content_color_for(container_color, &scheme).unwrap_or(
             use_context::<ContentColor>()
@@ -387,12 +395,15 @@ pub fn badge_with_content(
                     current: content_color,
                 },
                 || {
-                    provide_text_style(typography.label_small, move || {
-                        row()
-                            .main_axis_alignment(MainAxisAlignment::Center)
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children_shared(content);
-                    });
+                    provide_context(
+                        || typography.label_small,
+                        move || {
+                            row()
+                                .main_axis_alignment(MainAxisAlignment::Center)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children_shared(content);
+                        },
+                    );
                 },
             );
         });

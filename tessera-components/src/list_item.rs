@@ -19,7 +19,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{ContentColor, MaterialAlpha, MaterialTheme, provide_text_style},
+    theme::{ContentColor, MaterialAlpha, MaterialTheme},
 };
 
 /// Colors used by list items in different states.
@@ -155,10 +155,7 @@ impl ListItemDefaults {
 
     /// Default colors for list items derived from the current theme.
     pub fn colors() -> ListItemColors {
-        let scheme = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme;
+        let scheme = MaterialTheme::default().color_scheme;
         let disabled = scheme
             .on_surface
             .with_alpha(MaterialAlpha::DISABLED_CONTENT);
@@ -415,9 +412,12 @@ fn list_item_text_line(
     let text_value = text_value.unwrap_or_default();
     let style = style.unwrap_or_default();
     let color = color.unwrap_or(Color::TRANSPARENT);
-    provide_text_style(style, move || {
-        text().content(text_value.clone()).color(color);
-    });
+    provide_context(
+        || style,
+        move || {
+            text().content(text_value.clone()).color(color);
+        },
+    );
 }
 
 #[tessera]
