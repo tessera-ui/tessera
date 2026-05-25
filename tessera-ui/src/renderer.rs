@@ -897,8 +897,8 @@ impl<F: Fn()> Renderer<F> {
 
         // SAFETY: The pointer comes from winit's window handle and is valid for
         // the lifetime of this call on the main thread.
-        let Some(ns_view) = (unsafe { Retained::<NSView>::retain(appkit.ns_view.as_ptr().cast()) })
-        else {
+        let create_retained = Retained::<NSView>::retain;
+        let Some(ns_view) = (unsafe { create_retained(appkit.ns_view.as_ptr().cast()) }) else {
             warn!("Failed to retain NSView from raw window handle");
             return;
         };
