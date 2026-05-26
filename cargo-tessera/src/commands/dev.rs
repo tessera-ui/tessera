@@ -21,10 +21,7 @@ pub fn execute(
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
-    color_check::run(color_check::CheckOptions {
-        package,
-        target: None,
-    })?;
+    run_color_check(package)?;
 
     output::status("Starting", "dev server (auto rebuild/restart)");
     if let Some(pkg) = package {
@@ -92,6 +89,7 @@ pub fn execute(
     let mut child: Option<Child> = None;
     let mut build_child: Option<Child> = None;
     let mut pending_change = true;
+    let mut color_check_current = true;
     let mut last_change = Instant::now() - Duration::from_secs(1);
     let debounce_window = Duration::from_millis(300);
 
@@ -100,6 +98,7 @@ pub fn execute(
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(_) => {
                 pending_change = true;
+                color_check_current = false;
                 last_change = Instant::now();
 
                 // Cancel an in-flight build so we only build once per stable tree.
@@ -115,6 +114,20 @@ pub fn execute(
 
         // Kick off a build once the tree is quiet and no build is currently running.
         if pending_change && build_child.is_none() && last_change.elapsed() >= debounce_window {
+            if !color_check_current {
+                match run_color_check(package) {
+                    Ok(()) => {
+                        color_check_current = true;
+                    }
+                    Err(err) => {
+                        output::error(format!("color check failed: {err}"));
+                        output::warn("waiting for changes");
+                        pending_change = false;
+                        continue;
+                    }
+                }
+            }
+
             // Kill previous process
             if let Some(mut c) = child.take() {
                 let _ = c.kill();
@@ -249,6 +262,13 @@ fn configure_tessera_ui_features(
     if let Some(output_path) = profiling_output {
         cmd.env("TESSERA_PROFILING_OUTPUT", output_path);
     }
+}
+
+fn run_color_check(package: Option<&str>) -> Result<()> {
+    color_check::run(color_check::CheckOptions {
+        package,
+        target: None,
+    })
 }
 
 fn resolve_asset_backend(asset_backend_override: Option<AssetBackend>) -> Result<AssetBackend> {
