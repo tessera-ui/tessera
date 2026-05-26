@@ -72,11 +72,20 @@ impl<'db> ColorAnalyzer<'db> {
             let is_tessera_workspace_source = relevant_crates
                 .iter()
                 .any(|krate| tessera_crates.contains(krate));
+            let matches_selected_package = selected_package.as_deref().is_none_or(|package| {
+                relevant_crates.iter().any(|krate| {
+                    (*krate)
+                        .extra_data(db)
+                        .display_name
+                        .as_ref()
+                        .is_some_and(|name| name.canonical_name().as_str() == package)
+                })
+            });
             if !source_root.is_library || is_tessera_workspace_source {
                 metadata_files.insert(file_id);
             }
 
-            if !source_root.is_library {
+            if !source_root.is_library && matches_selected_package {
                 local_files.insert(file_id);
             }
         }
@@ -96,6 +105,8 @@ impl<'db> ColorAnalyzer<'db> {
             metadata_files,
             selected_package,
             tessera_function_names: HashSet::new(),
+            tessera_function_paths: HashSet::new(),
+            render_slot_setter_indexes_by_component_name: HashMap::new(),
             render_slot_setter_indexes_by_type_path: HashMap::new(),
             diagnostics: Vec::new(),
         })
@@ -143,11 +154,13 @@ impl<'db> ColorAnalyzer<'db> {
 
     fn collect_tessera_function_names_from_item(&mut self, item: &ast::Item) {
         match item {
-            ast::Item::Fn(function) => {
-                if self.is_tessera_function(function)
-                    && let Some(name) = function.name()
-                {
+            ast::Item::Fn(function) if self.is_tessera_function(function) => {
+                if let Some(name) = function.name() {
                     self.tessera_function_names.insert(name.text().to_string());
+                }
+                if let Some(def) = self.sema.to_fn_def(function) {
+                    let path = self.function_path(def);
+                    self.tessera_function_paths.insert(path);
                 }
             }
             ast::Item::Module(module) => {
@@ -211,9 +224,10 @@ impl<'db> ColorAnalyzer<'db> {
         if !self.is_tessera_function(function) {
             return;
         }
-        let Some(type_path) = self.generated_builder_type_path(function) else {
+        let Some(function_name) = function.name().map(|name| name.text().to_string()) else {
             return;
         };
+        let type_path = self.generated_builder_type_path(function);
         let Some(param_list) = function.param_list() else {
             return;
         };
@@ -234,6 +248,16 @@ impl<'db> ColorAnalyzer<'db> {
 
             let mut indexes = HashSet::new();
             indexes.insert(0);
+            let component_setters = self
+                .render_slot_setter_indexes_by_component_name
+                .entry(function_name.clone())
+                .or_default();
+            component_setters.insert(name.clone(), indexes.clone());
+            component_setters.insert(format!("{name}_shared"), indexes.clone());
+
+            let Some(type_path) = &type_path else {
+                continue;
+            };
             let setters = self
                 .render_slot_setter_indexes_by_type_path
                 .entry(type_path.clone())
@@ -338,12 +362,14 @@ impl<'db> ColorAnalyzer<'db> {
         self.sema
             .resolve_type(&ty)
             .is_some_and(|ty| self.semantic_type_is_render_slot_handle(&ty))
+            || Self::type_syntax_is_render_slot_handle(&ty)
     }
 
     fn type_is_optional_render_slot_handle(&self, ty: ast::Type) -> bool {
         self.sema
             .resolve_type(&ty)
             .is_some_and(|ty| self.semantic_type_is_option_of_render_slot_handle(&ty))
+            || Self::type_syntax_is_option_of_render_slot_handle(&ty)
     }
 
     fn type_is_impl_into_render_slot_handle(&self, ty: ast::Type) -> bool {
@@ -402,6 +428,44 @@ impl<'db> ColorAnalyzer<'db> {
         self.sema
             .resolve_type(&ty)
             .is_some_and(|ty| self.semantic_type_is_direct_render_slot_handle(&ty))
+            || Self::type_syntax_is_render_slot_handle(&ty)
+    }
+
+    fn type_syntax_is_render_slot_handle(ty: &ast::Type) -> bool {
+        let text = ty
+            .syntax()
+            .text()
+            .to_string()
+            .replace(char::is_whitespace, "");
+        Self::type_text_is_render_slot_handle(&text)
+    }
+
+    fn type_syntax_is_option_of_render_slot_handle(ty: &ast::Type) -> bool {
+        let text = ty
+            .syntax()
+            .text()
+            .to_string()
+            .replace(char::is_whitespace, "");
+        let Some(inner) = Self::option_type_inner_text(&text) else {
+            return false;
+        };
+        Self::type_text_is_render_slot_handle(inner)
+    }
+
+    fn option_type_inner_text(text: &str) -> Option<&str> {
+        let (base, inner) = text.split_once('<')?;
+        if base.rsplit("::").next()? != "Option" || !inner.ends_with('>') {
+            return None;
+        }
+        Some(&inner[..inner.len() - 1])
+    }
+
+    fn type_text_is_render_slot_handle(text: &str) -> bool {
+        let base = text.split_once('<').map_or(text, |(base, _)| base);
+        matches!(
+            base.rsplit("::").next(),
+            Some("RenderSlot" | "RenderSlotWith")
+        )
     }
 
     fn analyze_assoc_item(&mut self, item: ast::AssocItem) {
@@ -414,74 +478,78 @@ impl<'db> ColorAnalyzer<'db> {
         let Some(body) = function.body() else {
             return;
         };
+        let allow_entry_point_new = self.is_entry_function(&function) || allow_runtime_body;
         let color = if self.is_colored_function(&function) || allow_runtime_body {
             ContextColor::Tessera
         } else {
             ContextColor::Plain
         };
-        self.walk_node(body.syntax(), color);
+        self.walk_node(body.syntax(), color, allow_entry_point_new);
     }
 
-    fn analyze_closure(&mut self, closure: ast::ClosureExpr, parent_color: ContextColor) {
+    fn analyze_closure(&mut self, closure: ast::ClosureExpr) {
         let Some(body) = closure.body() else {
             return;
         };
         let color = if self.is_tessera_carrier_closure(&closure) {
             ContextColor::Tessera
         } else {
-            parent_color
+            ContextColor::Plain
         };
-        self.walk_node(body.syntax(), color);
+        if let Some(call) = ast::CallExpr::cast(body.syntax().clone()) {
+            self.analyze_call(call, color, false);
+        } else if let Some(call) = ast::MethodCallExpr::cast(body.syntax().clone()) {
+            self.analyze_method_call(call, color);
+        }
+        self.walk_node(body.syntax(), color, false);
     }
 
-    fn walk_node(&mut self, node: &SyntaxNode, color: ContextColor) {
+    fn walk_node(&mut self, node: &SyntaxNode, color: ContextColor, allow_entry_point_new: bool) {
         for child in node.children() {
             if let Some(function) = ast::Fn::cast(child.clone()) {
                 self.analyze_function(function, false);
                 continue;
             }
             if let Some(closure) = ast::ClosureExpr::cast(child.clone()) {
-                self.analyze_closure(closure, color);
+                self.analyze_closure(closure);
                 continue;
             }
             if let Some(call) = ast::CallExpr::cast(child.clone()) {
-                self.analyze_call(call, color);
-                self.walk_node(&child, color);
+                self.analyze_call(call, color, allow_entry_point_new);
+                self.walk_node(&child, color, allow_entry_point_new);
                 continue;
             }
             if let Some(call) = ast::MethodCallExpr::cast(child.clone()) {
                 self.analyze_method_call(call, color);
-                self.walk_node(&child, color);
+                self.walk_node(&child, color, allow_entry_point_new);
                 continue;
             }
-            self.walk_node(&child, color);
+            self.walk_node(&child, color, allow_entry_point_new);
         }
     }
 
-    fn analyze_call(&mut self, call: ast::CallExpr, color: ContextColor) {
+    fn analyze_call(
+        &mut self,
+        call: ast::CallExpr,
+        color: ContextColor,
+        allow_entry_point_new: bool,
+    ) {
         let Some(target) = self.resolve_call_target(&call) else {
             return;
         };
-        let is_carrier = matches!(
-            &target,
-            CallTarget::Resolved {
-                kind: CallKind::RuntimeApi(
-                    TesseraRuntimeApi::EntryPointNew
-                        | TesseraRuntimeApi::RenderSlotNew
-                        | TesseraRuntimeApi::RenderSlotWithNew
-                ),
-                ..
-            }
-        );
 
         match target {
             CallTarget::Resolved { path, kind } => {
-                if color == ContextColor::Plain && !is_carrier {
+                let is_allowed_entry_point_new = allow_entry_point_new
+                    && matches!(kind, CallKind::RuntimeApi(TesseraRuntimeApi::EntryPointNew));
+                if color == ContextColor::Plain && !is_allowed_entry_point_new {
                     self.push_forbidden_call(call.syntax(), &path, kind);
                 }
             }
             CallTarget::Unresolved { path } => {
-                if color == ContextColor::Plain {
+                let is_allowed_entry_point_new =
+                    allow_entry_point_new && Self::is_entry_point_constructor_path(&path);
+                if color == ContextColor::Plain && !is_allowed_entry_point_new {
                     self.push_unresolved_call(call.syntax(), &path);
                 }
             }
@@ -550,6 +618,12 @@ impl<'db> ColorAnalyzer<'db> {
             if let Some(resolution) = self.sema.resolve_path(&path) {
                 if let Some(target) = self.call_target_for_path_resolution(resolution) {
                     return Some(target);
+                }
+                let path = path_text(&path);
+                if Self::is_render_slot_constructor_path(&path)
+                    || Self::is_entry_point_constructor_path(&path)
+                {
+                    return Some(CallTarget::Unresolved { path });
                 }
                 return None;
             }
@@ -620,9 +694,26 @@ impl<'db> ColorAnalyzer<'db> {
             || self.is_test_function(function)
     }
 
+    fn is_entry_function(&self, function: &ast::Fn) -> bool {
+        self.is_free_function(function)
+            && function.attrs().any(|attr| self.is_entry_attribute(&attr))
+    }
+
     fn is_tessera_function_def(&self, function: Function) -> bool {
         if function.as_assoc_item(self.db).is_some() {
             return false;
+        }
+
+        let path = self.function_path(function);
+        if self.tessera_function_paths.contains(&path) {
+            return true;
+        }
+        if self.package_matches(function)
+            && self
+                .tessera_function_names
+                .contains(function.name(self.db).as_str())
+        {
+            return true;
         }
 
         let Some(source) = self.sema.source(function) else {
@@ -704,6 +795,22 @@ impl<'db> ColorAnalyzer<'db> {
 
         if let Some(PathResolution::Def(ModuleDef::Macro(mac))) = self.sema.resolve_path(&path) {
             return matches!(mac.name(self.db).as_str(), "tessera" | "shard")
+                && self.is_tessera_crate(mac.module(self.db).krate(self.db).into());
+        }
+
+        false
+    }
+
+    fn is_entry_attribute(&self, attr: &ast::Attr) -> bool {
+        let Some(path) = attr.path() else {
+            return false;
+        };
+        if path_last_segment(&path).is_some_and(|name| name == "entry") {
+            return true;
+        }
+
+        if let Some(PathResolution::Def(ModuleDef::Macro(mac))) = self.sema.resolve_path(&path) {
+            return mac.name(self.db).as_str() == "entry"
                 && self.is_tessera_crate(mac.module(self.db).krate(self.db).into());
         }
 
@@ -867,34 +974,37 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn is_direct_tessera_carrier_closure(&self, closure: &ast::ClosureExpr) -> bool {
-        let Some((arg_list, index)) = self.closure_arg_list_and_index(closure) else {
-            return false;
-        };
-        let Some(call_node) = arg_list.syntax().parent() else {
-            return false;
-        };
-
-        if let Some(call) = ast::CallExpr::cast(call_node.clone()) {
-            return self.call_takes_tessera_carrier_closure_at(&call, index);
-        }
-
-        if let Some(call) = ast::MethodCallExpr::cast(call_node) {
-            return self.method_call_takes_render_slot_setter_at(&call, index)
-                || self.method_call_takes_render_slot_closure_at(&call, index);
+        let closure_range = closure.syntax().text_range();
+        let mut current = closure.syntax().parent();
+        while let Some(node) = current {
+            if ast::ClosureExpr::can_cast(node.kind()) || ast::BlockExpr::can_cast(node.kind()) {
+                return false;
+            }
+            if let Some(call) = ast::CallExpr::cast(node.clone()) {
+                let Some(index) = call.arg_list().and_then(|arg_list| {
+                    arg_list
+                        .args()
+                        .position(|arg| arg.syntax().text_range().contains_range(closure_range))
+                }) else {
+                    return false;
+                };
+                return self.call_takes_tessera_carrier_closure_at(&call, index);
+            }
+            if let Some(call) = ast::MethodCallExpr::cast(node.clone()) {
+                let Some(index) = call.arg_list().and_then(|arg_list| {
+                    arg_list
+                        .args()
+                        .position(|arg| arg.syntax().text_range().contains_range(closure_range))
+                }) else {
+                    return false;
+                };
+                return self.method_call_takes_render_slot_setter_at(&call, index)
+                    || self.method_call_takes_render_slot_closure_at(&call, index);
+            }
+            current = node.parent();
         }
 
         false
-    }
-    fn closure_arg_list_and_index(
-        &self,
-        closure: &ast::ClosureExpr,
-    ) -> Option<(ast::ArgList, usize)> {
-        let parent = closure.syntax().parent()?;
-        let arg_list = ast::ArgList::cast(parent)?;
-        let index = arg_list
-            .args()
-            .position(|arg| arg.syntax() == closure.syntax())?;
-        Some((arg_list, index))
     }
 
     fn call_takes_tessera_carrier_closure_at(&self, call: &ast::CallExpr, index: usize) -> bool {
@@ -906,13 +1016,17 @@ impl<'db> ColorAnalyzer<'db> {
             self.resolve_call_target(call),
             Some(CallTarget::Resolved {
                 kind: CallKind::RuntimeApi(
-                    TesseraRuntimeApi::EntryPointNew
-                        | TesseraRuntimeApi::RenderSlotNew
-                        | TesseraRuntimeApi::RenderSlotWithNew
+                    TesseraRuntimeApi::RenderSlotNew | TesseraRuntimeApi::RenderSlotWithNew
                 ),
                 ..
             })
-        )
+        ) || self.call_syntax_is_render_slot_constructor(call)
+    }
+
+    fn call_syntax_is_render_slot_constructor(&self, call: &ast::CallExpr) -> bool {
+        call.expr()
+            .and_then(|expr| expr_path(&expr))
+            .is_some_and(|path| Self::is_render_slot_constructor_path(&path_text(&path)))
     }
 
     fn method_call_takes_render_slot_closure_at(
@@ -921,7 +1035,6 @@ impl<'db> ColorAnalyzer<'db> {
         index: usize,
     ) -> bool {
         self.method_source_param_is_render_slot_carrier(call, index)
-            || self.method_body_passes_param_to_render_slot(call, index)
     }
 
     fn method_source_param_is_render_slot_carrier(
@@ -964,6 +1077,16 @@ impl<'db> ColorAnalyzer<'db> {
             return true;
         }
 
+        if call
+            .receiver()
+            .and_then(|receiver| self.receiver_generated_builder_root_name(&receiver))
+            .is_some_and(|function_name| {
+                self.component_name_setter_accepts_render_slot(&function_name, name.as_str(), index)
+            })
+        {
+            return true;
+        }
+
         let Some(receiver_type_path) = call
             .receiver()
             .and_then(|receiver| self.receiver_type_key(&receiver))
@@ -983,6 +1106,18 @@ impl<'db> ColorAnalyzer<'db> {
     ) -> bool {
         self.render_slot_setter_indexes_by_type_path
             .get(receiver_type_path)
+            .and_then(|setters| setters.get(name))
+            .is_some_and(|indexes| indexes.contains(&index))
+    }
+
+    fn component_name_setter_accepts_render_slot(
+        &self,
+        function_name: &str,
+        name: &str,
+        index: usize,
+    ) -> bool {
+        self.render_slot_setter_indexes_by_component_name
+            .get(function_name)
             .and_then(|setters| setters.get(name))
             .is_some_and(|indexes| indexes.contains(&index))
     }
@@ -1008,6 +1143,29 @@ impl<'db> ColorAnalyzer<'db> {
             return None;
         };
         Some(function)
+    }
+
+    fn receiver_generated_builder_root_name(&self, receiver: &ast::Expr) -> Option<String> {
+        if let Some(call) = ast::CallExpr::cast(receiver.syntax().clone()) {
+            return self.call_generated_builder_root_name(&call);
+        }
+
+        if let Some(call) = ast::MethodCallExpr::cast(receiver.syntax().clone()) {
+            return call
+                .receiver()
+                .and_then(|receiver| self.receiver_generated_builder_root_name(&receiver));
+        }
+
+        None
+    }
+
+    fn call_generated_builder_root_name(&self, call: &ast::CallExpr) -> Option<String> {
+        let expr = call.expr()?;
+        let path = expr_path(&expr)?;
+        path.segments()
+            .last()
+            .and_then(|segment| segment.name_ref())
+            .map(|name| name.text().to_string())
     }
 
     fn component_generated_setter_accepts_render_slot(
@@ -1044,67 +1202,6 @@ impl<'db> ColorAnalyzer<'db> {
             };
             self.type_is_optional_render_slot_handle(ty)
         })
-    }
-
-    fn method_body_passes_param_to_render_slot(
-        &self,
-        call: &ast::MethodCallExpr,
-        index: usize,
-    ) -> bool {
-        let resolved = self.sema.resolve_method_call(call);
-        let Some(function) = resolved.and_then(|f| self.sema.source(f)) else {
-            return false;
-        };
-
-        let Some(param_list) = function.value.param_list() else {
-            return false;
-        };
-        let params: Vec<_> = param_list.params().collect();
-        // HIR callable params skip self, AST params() also skips self.
-        // So the HIR index maps directly to params().
-        let Some(target_param) = params.get(index) else {
-            return false;
-        };
-        let Some(param_name) = param_name(target_param) else {
-            return false;
-        };
-
-        let Some(body) = function.value.body() else {
-            return false;
-        };
-
-        self.param_flows_to_render_slot_in_body(&param_name, &body)
-    }
-
-    fn param_flows_to_render_slot_in_body(&self, param_name: &str, body: &ast::BlockExpr) -> bool {
-        for node in body.syntax().descendants() {
-            let Some(call) = ast::CallExpr::cast(node) else {
-                continue;
-            };
-            let Some(CallTarget::Resolved {
-                kind:
-                    CallKind::RuntimeApi(
-                        TesseraRuntimeApi::RenderSlotNew | TesseraRuntimeApi::RenderSlotWithNew,
-                    ),
-                ..
-            }) = self.resolve_call_target(&call)
-            else {
-                continue;
-            };
-            let Some(args) = call.arg_list() else {
-                continue;
-            };
-            if args.args().any(|arg| {
-                expr_path(&arg).is_some_and(|path| {
-                    path.segment().is_some_and(|seg| {
-                        seg.name_ref().is_some_and(|name| name.text() == param_name)
-                    })
-                })
-            }) {
-                return true;
-            }
-        }
-        false
     }
 
     fn receiver_type_key(&self, receiver: &ast::Expr) -> Option<String> {
@@ -1149,11 +1246,16 @@ impl<'db> ColorAnalyzer<'db> {
                 | RENDER_SLOT_WITH_NEW_PATH
                 | PUBLIC_RENDER_SLOT_NEW_PATH
                 | PUBLIC_RENDER_SLOT_WITH_NEW_PATH
+                | "RenderSlot::new"
+                | "RenderSlotWith::new"
         )
     }
 
     fn is_entry_point_constructor_path(path: &str) -> bool {
-        matches!(path, ENTRY_POINT_NEW_PATH | PUBLIC_ENTRY_POINT_NEW_PATH)
+        matches!(
+            path,
+            ENTRY_POINT_NEW_PATH | PUBLIC_ENTRY_POINT_NEW_PATH | "EntryPoint::new"
+        )
     }
 
     fn function_path(&self, function: Function) -> String {
@@ -1271,5 +1373,211 @@ impl<'db> ColorAnalyzer<'db> {
             }
         }
         format!("{line}:{column}")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        env, fs,
+        path::{Path, PathBuf},
+        sync::{
+            Mutex, OnceLock,
+            atomic::{AtomicU64, Ordering},
+        },
+    };
+
+    use super::super::{CheckOptions, types::ColorAnalyzer, workspace};
+
+    static CURRENT_DIR_LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn direct_slot_carriers_remain_colored() {
+        let diagnostics = diagnostics_for(
+            r#"
+use tessera_ui::{EntryPoint, RenderSlot, RenderSlotWith, remember};
+
+#[tessera_ui::tessera]
+fn child() {}
+
+#[tessera_ui::tessera]
+pub fn host(slot: Option<RenderSlot>) {
+    if let Some(slot) = slot {
+        slot.render();
+    }
+}
+
+#[tessera_ui::tessera]
+pub fn root() {
+    let _slot = RenderSlot::new(|| {
+        child();
+        let _state = remember(|| 1usize);
+    });
+    let _slot_with = RenderSlotWith::<u32>::new(|_| child());
+    host().slot(|| child());
+}
+
+#[tessera_ui::entry]
+pub fn run() -> EntryPoint {
+    EntryPoint::new(root)
+}
+"#,
+        );
+
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics:\n{}",
+            diagnostics.join("\n")
+        );
+    }
+
+    #[test]
+    fn ordinary_closures_and_indirect_wrappers_stay_plain() {
+        let diagnostics = diagnostics_for(
+            r#"
+use tessera_ui::{EntryPoint, RenderSlot, remember};
+
+#[tessera_ui::tessera]
+fn child() {}
+
+fn wrapper(render: impl Fn() + Send + Sync + 'static) {
+    let _slot = RenderSlot::new(render);
+}
+
+#[tessera_ui::tessera]
+pub fn root() {
+    let ordinary = || {
+        child();
+        let _state = remember(|| 1usize);
+    };
+    ordinary();
+    Some(()).map(|_| child());
+    wrapper(|| child());
+}
+
+pub fn plain_entry() -> EntryPoint {
+    EntryPoint::new(root)
+}
+"#,
+        );
+
+        assert_contains(&diagnostics, "RenderSlot::new");
+        assert_contains(&diagnostics, "EntryPoint::new");
+        assert_contains(&diagnostics, "remember");
+        assert!(
+            count_containing(&diagnostics, "Tessera component") >= 3,
+            "expected ordinary closures to report Tessera component calls:\n{}",
+            diagnostics.join("\n")
+        );
+    }
+
+    fn diagnostics_for(source: &str) -> Vec<String> {
+        let _lock = CURRENT_DIR_LOCK
+            .get_or_init(|| Mutex::new(()))
+            .lock()
+            .expect("current directory lock poisoned");
+        let project = FixtureProject::new(source);
+        let _current_dir = CurrentDirGuard::push(project.root());
+        let workspace = workspace::load_workspace(&CheckOptions {
+            package: Some("fixture"),
+            target: None,
+        })
+        .expect("fixture workspace should load");
+        let db = workspace.host.raw_database();
+
+        ra_ap_hir::attach_db(db, || {
+            let mut analyzer = ColorAnalyzer::new(db, &workspace.vfs, Some("fixture".to_string()))
+                .expect("fixture analyzer should initialize");
+            analyzer.analyze().expect("fixture should analyze");
+            analyzer
+                .diagnostics
+                .into_iter()
+                .map(|diagnostic| diagnostic.message)
+                .collect()
+        })
+    }
+
+    fn assert_contains(diagnostics: &[String], needle: &str) {
+        assert!(
+            diagnostics.iter().any(|message| message.contains(needle)),
+            "missing diagnostic containing `{needle}`:\n{}",
+            diagnostics.join("\n")
+        );
+    }
+
+    fn count_containing(diagnostics: &[String], needle: &str) -> usize {
+        diagnostics
+            .iter()
+            .filter(|message| message.contains(needle))
+            .count()
+    }
+
+    struct FixtureProject {
+        root: PathBuf,
+    }
+
+    impl FixtureProject {
+        fn new(source: &str) -> Self {
+            let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+            let root = env::temp_dir().join(format!(
+                "tessera-color-check-fixture-{}-{id}",
+                std::process::id()
+            ));
+            let _ = fs::remove_dir_all(&root);
+            fs::create_dir_all(root.join("src")).expect("fixture src directory should be created");
+
+            let tessera_ui_path = workspace_root().join("tessera-ui");
+            fs::write(
+                root.join("Cargo.toml"),
+                format!(
+                    "[package]\nname = \"fixture\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n[dependencies]\ntessera-ui = {{ path = \"{}\" }}\n",
+                    toml_path(&tessera_ui_path)
+                ),
+            )
+            .expect("fixture manifest should be written");
+            fs::write(root.join("src/lib.rs"), source).expect("fixture source should be written");
+
+            Self { root }
+        }
+
+        fn root(&self) -> &Path {
+            &self.root
+        }
+    }
+
+    impl Drop for FixtureProject {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
+
+    struct CurrentDirGuard {
+        previous: PathBuf,
+    }
+
+    impl CurrentDirGuard {
+        fn push(path: &Path) -> Self {
+            let previous = env::current_dir().expect("current directory should resolve");
+            env::set_current_dir(path).expect("current directory should switch to fixture");
+            Self { previous }
+        }
+    }
+
+    impl Drop for CurrentDirGuard {
+        fn drop(&mut self) {
+            let _ = env::set_current_dir(&self.previous);
+        }
+    }
+
+    fn workspace_root() -> PathBuf {
+        Path::new(env!("CARGO_MANIFEST_DIR"))
+            .parent()
+            .expect("cargo-tessera should live in the workspace root")
+            .to_path_buf()
+    }
+
+    fn toml_path(path: &Path) -> String {
+        path.display().to_string().replace('\\', "\\\\")
     }
 }
