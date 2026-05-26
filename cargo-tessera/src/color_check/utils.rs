@@ -13,15 +13,6 @@ pub(crate) fn param_name(param: &ast::Param) -> Option<String> {
     pat.name().map(|name| name.text().to_string())
 }
 
-pub(crate) fn last_type_segment_name(ty: &str) -> String {
-    ty.split(['<', ' ', '&'])
-        .next()
-        .unwrap_or(ty)
-        .rsplit("::")
-        .next()
-        .unwrap_or(ty)
-        .to_string()
-}
 pub(crate) fn expr_path(expr: &ast::Expr) -> Option<ast::Path> {
     match expr {
         ast::Expr::PathExpr(path_expr) => path_expr.path(),
@@ -63,6 +54,7 @@ pub(crate) fn is_internal_runtime_name(name: &str) -> bool {
 
 pub(crate) fn runtime_api_label(api: TesseraRuntimeApi) -> &'static str {
     match api {
+        TesseraRuntimeApi::EntryPointNew => "EntryPoint::new",
         TesseraRuntimeApi::Remember => "remember",
         TesseraRuntimeApi::RememberWithKey => "remember_with_key",
         TesseraRuntimeApi::Retain => "retain",

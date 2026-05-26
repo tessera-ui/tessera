@@ -5,10 +5,10 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use ra_ap_base_db::{Crate, SourceDatabase};
+use ra_ap_base_db::{Crate, SourceDatabase, relevant_crates};
 use ra_ap_hir::{
-    AsAssocItem, CallableKind, DisplayTarget, EditionedFileId, Function, HirDisplay, ModuleDef,
-    PathResolution, Semantics,
+    AsAssocItem, CallableKind, EditionedFileId, Function, ModuleDef, PathResolution, Semantics,
+    Trait, Type,
 };
 use ra_ap_ide::{FileId, RootDatabase};
 use ra_ap_syntax::{
@@ -23,10 +23,27 @@ use super::{
         TesseraRuntimeApi,
     },
     utils::{
-        expr_path, is_internal_runtime_name, last_type_segment_name, param_name, path_last_segment,
-        path_text, runtime_api_label, tessera_crates,
+        expr_path, is_internal_runtime_name, param_name, path_last_segment, path_text,
+        runtime_api_label, tessera_crates,
     },
 };
+
+const RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::prop::RenderSlot";
+const RENDER_SLOT_WITH_TYPE_PATH: &str = "tessera_ui::prop::RenderSlotWith";
+const PUBLIC_RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::RenderSlot";
+const PUBLIC_RENDER_SLOT_WITH_TYPE_PATH: &str = "tessera_ui::RenderSlotWith";
+const ENTRY_POINT_TYPE_PATH: &str = "tessera_ui::entry_point::EntryPoint";
+const PUBLIC_ENTRY_POINT_TYPE_PATH: &str = "tessera_ui::EntryPoint";
+const RENDER_SLOT_NEW_PATH: &str = "tessera_ui::prop::RenderSlot::new";
+const RENDER_SLOT_WITH_NEW_PATH: &str = "tessera_ui::prop::RenderSlotWith::new";
+const PUBLIC_RENDER_SLOT_NEW_PATH: &str = "tessera_ui::RenderSlot::new";
+const PUBLIC_RENDER_SLOT_WITH_NEW_PATH: &str = "tessera_ui::RenderSlotWith::new";
+const ENTRY_POINT_NEW_PATH: &str = "tessera_ui::entry_point::EntryPoint::new";
+const PUBLIC_ENTRY_POINT_NEW_PATH: &str = "tessera_ui::EntryPoint::new";
+const CORE_OPTION_TYPE_PATH: &str = "core::option::Option";
+const STD_OPTION_TYPE_PATH: &str = "std::option::Option";
+const CORE_INTO_TRAIT_PATH: &str = "core::convert::Into";
+const STD_INTO_TRAIT_PATH: &str = "std::convert::Into";
 
 impl<'db> ColorAnalyzer<'db> {
     pub(crate) fn new(
@@ -36,23 +53,33 @@ impl<'db> ColorAnalyzer<'db> {
     ) -> Result<ColorAnalyzer<'db>> {
         let sema = Semantics::new(db);
         let tessera_crates = tessera_crates(db);
-        let local_files = vfs
-            .iter()
-            .filter_map(|(file_id, path)| {
-                let path = path.as_path()?;
-                let std_path: &std::path::Path = path.as_ref();
-                if std_path.extension().is_some_and(|ext| ext == "rs")
-                    && !db
-                        .source_root(db.file_source_root(file_id).source_root_id(db))
-                        .source_root(db)
-                        .is_library
-                {
-                    Some(file_id)
-                } else {
-                    None
-                }
-            })
-            .collect::<HashSet<_>>();
+        let mut local_files = HashSet::new();
+        let mut metadata_files = HashSet::new();
+
+        for (file_id, path) in vfs.iter() {
+            let Some(path) = path.as_path() else {
+                continue;
+            };
+            let std_path: &std::path::Path = path.as_ref();
+            if !std_path.extension().is_some_and(|ext| ext == "rs") {
+                continue;
+            }
+
+            let source_root_id = db.file_source_root(file_id).source_root_id(db);
+            let source_root = db.source_root(source_root_id);
+            let source_root = source_root.source_root(db);
+            let relevant_crates = relevant_crates(db, file_id);
+            let is_tessera_workspace_source = relevant_crates
+                .iter()
+                .any(|krate| tessera_crates.contains(krate));
+            if !source_root.is_library || is_tessera_workspace_source {
+                metadata_files.insert(file_id);
+            }
+
+            if !source_root.is_library {
+                local_files.insert(file_id);
+            }
+        }
 
         if local_files.is_empty() {
             return Err(anyhow!(
@@ -66,15 +93,16 @@ impl<'db> ColorAnalyzer<'db> {
             tessera_crates,
             vfs,
             local_files,
+            metadata_files,
             selected_package,
             tessera_function_names: HashSet::new(),
-            explicit_slot_setter_indexes: HashMap::new(),
+            render_slot_setter_indexes_by_type_path: HashMap::new(),
             diagnostics: Vec::new(),
         })
     }
 
     pub(crate) fn analyze(&mut self) -> Result<()> {
-        let files = self.local_files.iter().copied().collect::<Vec<_>>();
+        let files = self.metadata_files.iter().copied().collect::<Vec<_>>();
         for file_id in files {
             self.collect_file_metadata(file_id)?;
         }
@@ -162,6 +190,9 @@ impl<'db> ColorAnalyzer<'db> {
     }
     fn collect_render_slot_carriers_from_item(&mut self, item: &ast::Item) {
         match item {
+            ast::Item::Fn(function) => {
+                self.collect_generated_slot_setters_from_function(function);
+            }
             ast::Item::Impl(item_impl) => {
                 self.collect_explicit_slot_setters_from_impl(item_impl);
             }
@@ -176,11 +207,47 @@ impl<'db> ColorAnalyzer<'db> {
         }
     }
 
+    fn collect_generated_slot_setters_from_function(&mut self, function: &ast::Fn) {
+        if !self.is_tessera_function(function) {
+            return;
+        }
+        let Some(type_path) = self.generated_builder_type_path(function) else {
+            return;
+        };
+        let Some(param_list) = function.param_list() else {
+            return;
+        };
+
+        for param in param_list.params() {
+            if self.param_skips_setter(&param) {
+                continue;
+            }
+            let Some(name) = param_name(&param) else {
+                continue;
+            };
+            let Some(ty) = param.ty() else {
+                continue;
+            };
+            if !self.type_is_optional_render_slot_handle(ty) {
+                continue;
+            }
+
+            let mut indexes = HashSet::new();
+            indexes.insert(0);
+            let setters = self
+                .render_slot_setter_indexes_by_type_path
+                .entry(type_path.clone())
+                .or_default();
+            setters.insert(name.clone(), indexes.clone());
+            setters.insert(format!("{name}_shared"), indexes);
+        }
+    }
+
     fn collect_explicit_slot_setters_from_impl(&mut self, item_impl: &ast::Impl) {
         let Some(self_ty) = item_impl.self_ty() else {
             return;
         };
-        let Some(type_name) = self.type_last_segment_name(&self_ty) else {
+        let Some(type_path) = self.impl_self_type_key(&self_ty) else {
             return;
         };
         let Some(items) = item_impl.assoc_item_list() else {
@@ -196,22 +263,58 @@ impl<'db> ColorAnalyzer<'db> {
             };
             let slot_indexes = self.render_slot_carrier_param_indexes(&function);
             if !slot_indexes.is_empty() {
-                self.explicit_slot_setter_indexes
-                    .entry(type_name.clone())
+                self.render_slot_setter_indexes_by_type_path
+                    .entry(type_path.clone())
                     .or_default()
                     .insert(name.text().to_string(), slot_indexes);
             }
         }
     }
-    fn type_last_segment_name(&self, ty: &ast::Type) -> Option<String> {
-        let ast::Type::PathType(path_ty) = ty else {
-            return None;
-        };
-        path_ty
-            .path()
-            .and_then(|path| path_last_segment(&path))
-            .map(|name| name.to_string())
+
+    fn impl_self_type_key(&self, ty: &ast::Type) -> Option<String> {
+        let ty = self.sema.resolve_type(ty)?;
+        self.type_adt_canonical_path(&ty)
     }
+
+    fn generated_builder_type_path(&self, function: &ast::Fn) -> Option<String> {
+        let function = self.sema.to_fn_def(function)?;
+        self.generated_builder_type_path_for_function(function)
+    }
+
+    fn generated_builder_type_path_for_function(&self, function: Function) -> Option<String> {
+        let function_path = self.function_path(function);
+        let (module_path, function_name) = function_path.rsplit_once("::")?;
+        Some(format!(
+            "{module_path}::{}",
+            Self::generated_builder_type_name(function_name)
+        ))
+    }
+
+    fn generated_builder_type_name(function_name: &str) -> String {
+        let mut output = String::new();
+        for segment in function_name
+            .split('_')
+            .filter(|segment| !segment.is_empty())
+        {
+            let mut chars = segment.chars();
+            if let Some(first) = chars.next() {
+                output.extend(first.to_uppercase());
+                output.push_str(chars.as_str());
+            }
+        }
+        output.push_str("Builder");
+        output
+    }
+
+    fn param_skips_setter(&self, param: &ast::Param) -> bool {
+        param.attrs().any(|attr| {
+            attr.path()
+                .and_then(|path| path_last_segment(&path))
+                .is_some_and(|name| name == "prop")
+                && attr.syntax().text().to_string().contains("skip_setter")
+        })
+    }
+
     fn render_slot_carrier_param_indexes(&self, function: &ast::Fn) -> HashSet<usize> {
         let Some(param_list) = function.param_list() else {
             return HashSet::new();
@@ -219,43 +322,86 @@ impl<'db> ColorAnalyzer<'db> {
         param_list
             .params()
             .enumerate()
-            .filter(|(_, param)| self.type_is_render_slot_handle(param.ty()))
+            .filter(|(_, param)| self.param_is_render_slot_carrier(param))
             .map(|(index, _)| index)
             .collect()
     }
 
-    fn type_is_render_slot_handle(&self, ty: Option<ast::Type>) -> bool {
-        let Some(ty) = ty else {
+    fn param_is_render_slot_carrier(&self, param: &ast::Param) -> bool {
+        let Some(ty) = param.ty() else {
             return false;
         };
+        self.type_is_render_slot_handle(ty.clone()) || self.type_is_impl_into_render_slot_handle(ty)
+    }
+
+    fn type_is_render_slot_handle(&self, ty: ast::Type) -> bool {
+        self.sema
+            .resolve_type(&ty)
+            .is_some_and(|ty| self.semantic_type_is_render_slot_handle(&ty))
+    }
+
+    fn type_is_optional_render_slot_handle(&self, ty: ast::Type) -> bool {
+        self.sema
+            .resolve_type(&ty)
+            .is_some_and(|ty| self.semantic_type_is_option_of_render_slot_handle(&ty))
+    }
+
+    fn type_is_impl_into_render_slot_handle(&self, ty: ast::Type) -> bool {
         match ty {
-            ast::Type::PathType(path_ty) => path_ty
-                .path()
-                .is_some_and(|path| self.path_is_render_slot_handle(&path)),
-            ast::Type::ParenType(ty) => self.type_is_render_slot_handle(ty.ty()),
+            ast::Type::ImplTraitType(ty) => ty.type_bound_list().is_some_and(|bounds| {
+                bounds
+                    .bounds()
+                    .any(|bound| self.bound_is_into_render_slot_handle(&bound))
+            }),
+            ast::Type::ParenType(ty) => ty
+                .ty()
+                .is_some_and(|ty| self.type_is_impl_into_render_slot_handle(ty)),
             _ => false,
         }
     }
 
-    fn path_is_render_slot_handle(&self, path: &ast::Path) -> bool {
+    fn bound_is_into_render_slot_handle(&self, bound: &ast::TypeBound) -> bool {
+        let Some(ast::TypeBoundKind::PathType(_, path_ty)) = bound.kind() else {
+            return false;
+        };
+        let Some(path) = path_ty.path() else {
+            return false;
+        };
+        self.path_is_into_trait_with_render_slot_arg(&path)
+    }
+
+    fn path_is_into_trait_with_render_slot_arg(&self, path: &ast::Path) -> bool {
+        let Some(PathResolution::Def(ModuleDef::Trait(trait_))) = self.sema.resolve_path(path)
+        else {
+            return false;
+        };
+        let Some(trait_path) = self.trait_canonical_path(trait_) else {
+            return false;
+        };
+        if !matches!(
+            trait_path.as_str(),
+            CORE_INTO_TRAIT_PATH | STD_INTO_TRAIT_PATH
+        ) {
+            return false;
+        }
         let Some(segment) = path.segment() else {
             return false;
         };
-        let Some(name) = segment.name_ref() else {
-            return false;
-        };
-        match name.text().as_str() {
-            "RenderSlot" | "RenderSlotWith" => true,
-            "Option" => segment.generic_arg_list().is_some_and(|args| {
-                args.generic_args().any(|arg| {
-                    let ast::GenericArg::TypeArg(arg) = arg else {
-                        return false;
-                    };
-                    self.type_is_render_slot_handle(arg.ty())
-                })
-            }),
-            _ => false,
-        }
+        segment.generic_arg_list().is_some_and(|args| {
+            args.generic_args().any(|arg| {
+                let ast::GenericArg::TypeArg(arg) = arg else {
+                    return false;
+                };
+                arg.ty()
+                    .is_some_and(|ty| self.type_is_direct_render_slot_handle(ty))
+            })
+        })
+    }
+
+    fn type_is_direct_render_slot_handle(&self, ty: ast::Type) -> bool {
+        self.sema
+            .resolve_type(&ty)
+            .is_some_and(|ty| self.semantic_type_is_direct_render_slot_handle(&ty))
     }
 
     fn analyze_assoc_item(&mut self, item: ast::AssocItem) {
@@ -280,7 +426,7 @@ impl<'db> ColorAnalyzer<'db> {
         let Some(body) = closure.body() else {
             return;
         };
-        let color = if self.is_render_slot_carrier_closure(&closure) {
+        let color = if self.is_tessera_carrier_closure(&closure) {
             ContextColor::Tessera
         } else {
             parent_color
@@ -320,7 +466,9 @@ impl<'db> ColorAnalyzer<'db> {
             &target,
             CallTarget::Resolved {
                 kind: CallKind::RuntimeApi(
-                    TesseraRuntimeApi::RenderSlotNew | TesseraRuntimeApi::RenderSlotWithNew
+                    TesseraRuntimeApi::EntryPointNew
+                        | TesseraRuntimeApi::RenderSlotNew
+                        | TesseraRuntimeApi::RenderSlotWithNew
                 ),
                 ..
             }
@@ -346,7 +494,7 @@ impl<'db> ColorAnalyzer<'db> {
                 if color == ContextColor::Plain {
                     self.push_forbidden_call(
                         call.syntax(),
-                        "tessera_ui::renderer::RenderSlot::new",
+                        RENDER_SLOT_NEW_PATH,
                         CallKind::RuntimeApi(TesseraRuntimeApi::RenderSlotNew),
                     );
                 }
@@ -355,7 +503,7 @@ impl<'db> ColorAnalyzer<'db> {
                 if color == ContextColor::Plain {
                     self.push_forbidden_call(
                         call.syntax(),
-                        "tessera_ui::renderer::RenderSlotWith::new",
+                        RENDER_SLOT_WITH_NEW_PATH,
                         CallKind::RuntimeApi(TesseraRuntimeApi::RenderSlotWithNew),
                     );
                 }
@@ -520,8 +668,8 @@ impl<'db> ColorAnalyzer<'db> {
             "use_context" if path.ends_with("::use_context") => true,
             "receive_frame_nanos" if path.ends_with("::receive_frame_nanos") => true,
             "key" if path.ends_with("::key") => true,
-            "new" if self.is_render_slot_method(def, "RenderSlot") => true,
-            "new" if self.is_render_slot_method(def, "RenderSlotWith") => true,
+            "new" if self.is_render_slot_method(def, RENDER_SLOT_TYPE_PATH) => true,
+            "new" if self.is_render_slot_method(def, RENDER_SLOT_WITH_TYPE_PATH) => true,
             name => is_internal_runtime_name(name),
         }
     }
@@ -597,10 +745,17 @@ impl<'db> ColorAnalyzer<'db> {
                 Some(TesseraRuntimeApi::ReceiveFrameNanos)
             }
             "key" if canonical_path.ends_with("::key") => Some(TesseraRuntimeApi::Key),
-            "new" if self.is_render_slot_method(function, "RenderSlot") => {
+            "new" if self.is_entry_point_method(function) => Some(TesseraRuntimeApi::EntryPointNew),
+            "new" if self.is_render_slot_method(function, RENDER_SLOT_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotNew)
             }
-            "new" if self.is_render_slot_method(function, "RenderSlotWith") => {
+            "new" if self.is_render_slot_method(function, PUBLIC_RENDER_SLOT_TYPE_PATH) => {
+                Some(TesseraRuntimeApi::RenderSlotNew)
+            }
+            "new" if self.is_render_slot_method(function, RENDER_SLOT_WITH_TYPE_PATH) => {
+                Some(TesseraRuntimeApi::RenderSlotWithNew)
+            }
+            "new" if self.is_render_slot_method(function, PUBLIC_RENDER_SLOT_WITH_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotWithNew)
             }
             name if is_internal_runtime_name(name) => Some(TesseraRuntimeApi::InternalRuntime),
@@ -621,28 +776,97 @@ impl<'db> ColorAnalyzer<'db> {
             .contains_range(source.value.syntax().text_range())
     }
 
-    fn is_render_slot_method(&self, function: Function, type_name: &str) -> bool {
+    fn is_render_slot_method(&self, function: Function, expected_type_path: &str) -> bool {
         let Some(assoc_item) = function.as_assoc_item(self.db) else {
             return false;
         };
-        assoc_item.implementing_ty(self.db).is_some_and(|ty| {
-            let display_target =
-                DisplayTarget::from_crate(self.db, function.module(self.db).krate(self.db).into());
-            ty.display(self.db, display_target)
-                .to_string()
-                .starts_with(type_name)
-        })
+        assoc_item
+            .implementing_ty(self.db)
+            .and_then(|ty| self.type_adt_canonical_path(&ty))
+            .is_some_and(|type_path| type_path == expected_type_path)
+    }
+
+    fn is_entry_point_method(&self, function: Function) -> bool {
+        let Some(assoc_item) = function.as_assoc_item(self.db) else {
+            return false;
+        };
+        assoc_item
+            .implementing_ty(self.db)
+            .and_then(|ty| self.type_adt_canonical_path(&ty))
+            .is_some_and(|type_path| {
+                matches!(
+                    type_path.as_str(),
+                    ENTRY_POINT_TYPE_PATH | PUBLIC_ENTRY_POINT_TYPE_PATH
+                )
+            })
     }
 
     fn is_tessera_crate(&self, krate: Crate) -> bool {
         self.tessera_crates.contains(&krate)
     }
 
-    fn is_render_slot_carrier_closure(&self, closure: &ast::ClosureExpr) -> bool {
-        self.is_direct_render_slot_carrier_closure(closure)
+    fn type_adt_canonical_path(&self, ty: &Type<'db>) -> Option<String> {
+        let mut ty = ty.clone();
+        while let Some((inner, _)) = ty.as_reference() {
+            ty = inner;
+        }
+
+        let adt = ty.as_adt()?;
+        self.module_def_canonical_path(ModuleDef::from(adt))
     }
 
-    fn is_direct_render_slot_carrier_closure(&self, closure: &ast::ClosureExpr) -> bool {
+    fn semantic_type_is_render_slot_handle(&self, ty: &Type<'db>) -> bool {
+        self.semantic_type_is_direct_render_slot_handle(ty)
+            || self.semantic_type_is_option_of_render_slot_handle(ty)
+    }
+
+    fn semantic_type_is_direct_render_slot_handle(&self, ty: &Type<'db>) -> bool {
+        self.type_adt_canonical_path(ty).is_some_and(|type_path| {
+            matches!(
+                type_path.as_str(),
+                RENDER_SLOT_TYPE_PATH
+                    | RENDER_SLOT_WITH_TYPE_PATH
+                    | PUBLIC_RENDER_SLOT_TYPE_PATH
+                    | PUBLIC_RENDER_SLOT_WITH_TYPE_PATH
+            )
+        })
+    }
+
+    fn semantic_type_is_option_of_render_slot_handle(&self, ty: &Type<'db>) -> bool {
+        let mut ty = ty.clone();
+        while let Some((inner, _)) = ty.as_reference() {
+            ty = inner;
+        }
+
+        let Some((adt, args)) = ty.as_adt_with_args() else {
+            return false;
+        };
+        let module = adt.module(self.db);
+        let Some(type_path) =
+            ModuleDef::from(adt).canonical_path(self.db, module.krate(self.db).edition(self.db))
+        else {
+            return false;
+        };
+        if !matches!(
+            type_path.as_str(),
+            CORE_OPTION_TYPE_PATH | STD_OPTION_TYPE_PATH
+        ) {
+            return false;
+        }
+        args.into_iter()
+            .flatten()
+            .any(|arg| self.semantic_type_is_direct_render_slot_handle(&arg))
+    }
+
+    fn trait_canonical_path(&self, trait_: Trait) -> Option<String> {
+        self.module_def_canonical_path(ModuleDef::from(trait_))
+    }
+
+    fn is_tessera_carrier_closure(&self, closure: &ast::ClosureExpr) -> bool {
+        self.is_direct_tessera_carrier_closure(closure)
+    }
+
+    fn is_direct_tessera_carrier_closure(&self, closure: &ast::ClosureExpr) -> bool {
         let Some((arg_list, index)) = self.closure_arg_list_and_index(closure) else {
             return false;
         };
@@ -651,7 +875,7 @@ impl<'db> ColorAnalyzer<'db> {
         };
 
         if let Some(call) = ast::CallExpr::cast(call_node.clone()) {
-            return self.call_is_render_slot_carrier(&call);
+            return self.call_takes_tessera_carrier_closure_at(&call, index);
         }
 
         if let Some(call) = ast::MethodCallExpr::cast(call_node) {
@@ -673,12 +897,18 @@ impl<'db> ColorAnalyzer<'db> {
         Some((arg_list, index))
     }
 
-    fn call_is_render_slot_carrier(&self, call: &ast::CallExpr) -> bool {
+    fn call_takes_tessera_carrier_closure_at(&self, call: &ast::CallExpr, index: usize) -> bool {
+        if index != 0 {
+            return false;
+        }
+
         matches!(
             self.resolve_call_target(call),
             Some(CallTarget::Resolved {
                 kind: CallKind::RuntimeApi(
-                    TesseraRuntimeApi::RenderSlotNew | TesseraRuntimeApi::RenderSlotWithNew
+                    TesseraRuntimeApi::EntryPointNew
+                        | TesseraRuntimeApi::RenderSlotNew
+                        | TesseraRuntimeApi::RenderSlotWithNew
                 ),
                 ..
             })
@@ -690,52 +920,28 @@ impl<'db> ColorAnalyzer<'db> {
         call: &ast::MethodCallExpr,
         index: usize,
     ) -> bool {
-        let Some(callable) = self.sema.resolve_method_call_as_callable(call) else {
+        self.method_source_param_is_render_slot_carrier(call, index)
+            || self.method_body_passes_param_to_render_slot(call, index)
+    }
+
+    fn method_source_param_is_render_slot_carrier(
+        &self,
+        call: &ast::MethodCallExpr,
+        index: usize,
+    ) -> bool {
+        let Some(function) = self.sema.resolve_method_call(call) else {
             return false;
         };
-        if callable.params().get(index).is_some_and(|param| {
-            self.type_is_render_slot_closure_param(param.ty())
-                || self.type_is_into_render_slot_param(param.ty())
-        }) {
-            return true;
-        }
-
-        // For builder setters with \`impl Fn()\` parameters, resolve the method
-        // definition and check whether the parameter flows into RenderSlot::new
-        // or RenderSlotWith::new by analyzing the function body.
-        self.method_body_passes_param_to_render_slot(call, index)
-    }
-
-    fn type_is_render_slot_closure_param(&self, ty: &ra_ap_hir::Type<'db>) -> bool {
-        let Some(callable) = ty.as_callable(self.db) else {
+        let Some(source) = self.sema.source(function) else {
             return false;
         };
-        matches!(callable.kind(), CallableKind::FnImpl(_))
-            && callable.n_params() == 0
-            && self.type_is_unit_return(&callable.return_type())
-            && self.type_display_mentions_render_slot(ty)
-    }
-
-    fn type_display_mentions_render_slot(&self, ty: &ra_ap_hir::Type<'db>) -> bool {
-        let display_target = DisplayTarget::from_crate(self.db, self.default_display_crate());
-        let ty = ty.display(self.db, display_target).to_string();
-        ty.contains("RenderSlot") || ty.contains("RenderSlotWith")
-    }
-
-    fn type_is_unit_return(&self, ty: &ra_ap_hir::Type<'db>) -> bool {
-        let display_target = DisplayTarget::from_crate(self.db, self.default_display_crate());
-        matches!(
-            ty.display(self.db, display_target).to_string().as_str(),
-            "()"
-        )
-    }
-
-    fn type_is_into_render_slot_param(&self, ty: &ra_ap_hir::Type<'db>) -> bool {
-        let display_target = DisplayTarget::from_crate(self.db, self.default_display_crate());
-        let ty_str = ty.display(self.db, display_target).to_string();
-        ty_str.contains("Into<RenderSlot>")
-            || ty_str.contains("Into<RenderSlotWith")
-            || self.type_display_mentions_render_slot(ty)
+        let Some(param_list) = source.value.param_list() else {
+            return false;
+        };
+        param_list
+            .params()
+            .nth(index)
+            .is_some_and(|param| self.param_is_render_slot_carrier(&param))
     }
 
     fn method_call_takes_render_slot_setter_at(
@@ -743,20 +949,101 @@ impl<'db> ColorAnalyzer<'db> {
         call: &ast::MethodCallExpr,
         index: usize,
     ) -> bool {
-        let Some(receiver) = call.receiver() else {
-            return false;
-        };
-        let Some(receiver_type) = self.receiver_type_name(&receiver, call.syntax()) else {
-            return false;
-        };
         let Some(name) = call.name_ref() else {
             return false;
         };
         let name = name.text();
-        self.explicit_slot_setter_indexes
-            .get(receiver_type.as_str())
-            .and_then(|setters| setters.get(name.as_str()))
+
+        if call
+            .receiver()
+            .and_then(|receiver| self.receiver_generated_builder_root_function(&receiver))
+            .is_some_and(|function| {
+                self.component_generated_setter_accepts_render_slot(function, name.as_str(), index)
+            })
+        {
+            return true;
+        }
+
+        let Some(receiver_type_path) = call
+            .receiver()
+            .and_then(|receiver| self.receiver_type_key(&receiver))
+            .or_else(|| self.method_call_implementing_type_key(call))
+        else {
+            return false;
+        };
+
+        self.setter_accepts_render_slot_at(&receiver_type_path, name.as_str(), index)
+    }
+
+    fn setter_accepts_render_slot_at(
+        &self,
+        receiver_type_path: &str,
+        name: &str,
+        index: usize,
+    ) -> bool {
+        self.render_slot_setter_indexes_by_type_path
+            .get(receiver_type_path)
+            .and_then(|setters| setters.get(name))
             .is_some_and(|indexes| indexes.contains(&index))
+    }
+
+    fn receiver_generated_builder_root_function(&self, receiver: &ast::Expr) -> Option<Function> {
+        if let Some(call) = ast::CallExpr::cast(receiver.syntax().clone()) {
+            return self.call_generated_builder_root_function(&call);
+        }
+
+        if let Some(call) = ast::MethodCallExpr::cast(receiver.syntax().clone()) {
+            return call
+                .receiver()
+                .and_then(|receiver| self.receiver_generated_builder_root_function(&receiver));
+        }
+
+        None
+    }
+
+    fn call_generated_builder_root_function(&self, call: &ast::CallExpr) -> Option<Function> {
+        let expr = call.expr()?;
+        let callable = self.sema.resolve_expr_as_callable(&expr)?;
+        let CallableKind::Function(function) = callable.kind() else {
+            return None;
+        };
+        Some(function)
+    }
+
+    fn component_generated_setter_accepts_render_slot(
+        &self,
+        function: Function,
+        method_name: &str,
+        index: usize,
+    ) -> bool {
+        if index != 0 {
+            return false;
+        }
+        let Some(source) = self.sema.source(function) else {
+            return false;
+        };
+        if !self.is_tessera_function(&source.value) {
+            return false;
+        }
+        let Some(param_list) = source.value.param_list() else {
+            return false;
+        };
+
+        param_list.params().any(|param| {
+            if self.param_skips_setter(&param) {
+                return false;
+            }
+            let Some(name) = param_name(&param) else {
+                return false;
+            };
+            if method_name != name && method_name != format!("{name}_shared") {
+                return false;
+            }
+            let Some(ty) = param.ty() else {
+                return false;
+            };
+            self.type_is_optional_render_slot_handle(ty)
+        })
     }
 
     fn method_body_passes_param_to_render_slot(
@@ -791,88 +1078,46 @@ impl<'db> ColorAnalyzer<'db> {
 
     fn param_flows_to_render_slot_in_body(&self, param_name: &str, body: &ast::BlockExpr) -> bool {
         for node in body.syntax().descendants() {
-            if let Some(call) = ast::CallExpr::cast(node.clone()) {
-                let target = self.resolve_call_target(&call);
-                if let Some(CallTarget::Resolved {
-                    kind: CallKind::RuntimeApi(api),
-                    ..
-                }) = target
-                    && matches!(
-                        api,
-                        TesseraRuntimeApi::RenderSlotNew | TesseraRuntimeApi::RenderSlotWithNew
-                    )
-                {}
-                let Some(CallTarget::Resolved { kind, .. }) = target else {
-                    continue;
-                };
-                let CallKind::RuntimeApi(api) = kind else {
-                    continue;
-                };
-                if !matches!(
-                    api,
-                    TesseraRuntimeApi::RenderSlotNew | TesseraRuntimeApi::RenderSlotWithNew
-                ) {
-                    continue;
-                }
-                let Some(args) = call.arg_list() else {
-                    continue;
-                };
-                for arg in args.args() {
-                    if let Some(path) = expr_path(&arg)
-                        && path.segment().is_some_and(|seg| {
-                            seg.name_ref().is_some_and(|n| n.text() == param_name)
-                        })
-                    {
-                        return true;
-                    }
-                }
-            }
-            if let Some(mc) = ast::MethodCallExpr::cast(node) {
-                let Some(name_ref) = mc.name_ref() else {
-                    continue;
-                };
-                if name_ref.text() != "into" {
-                    continue;
-                }
-                let Some(receiver) = mc.receiver() else {
-                    continue;
-                };
-                if let Some(path) = expr_path(&receiver)
-                    && path
-                        .segment()
-                        .is_some_and(|seg| seg.name_ref().is_some_and(|n| n.text() == param_name))
-                {
-                    return true;
-                }
+            let Some(call) = ast::CallExpr::cast(node) else {
+                continue;
+            };
+            let Some(CallTarget::Resolved {
+                kind:
+                    CallKind::RuntimeApi(
+                        TesseraRuntimeApi::RenderSlotNew | TesseraRuntimeApi::RenderSlotWithNew,
+                    ),
+                ..
+            }) = self.resolve_call_target(&call)
+            else {
+                continue;
+            };
+            let Some(args) = call.arg_list() else {
+                continue;
+            };
+            if args.args().any(|arg| {
+                expr_path(&arg).is_some_and(|path| {
+                    path.segment().is_some_and(|seg| {
+                        seg.name_ref().is_some_and(|name| name.text() == param_name)
+                    })
+                })
+            }) {
+                return true;
             }
         }
         false
     }
 
-    fn receiver_type_name(&self, receiver: &ast::Expr, syntax: &SyntaxNode) -> Option<String> {
+    fn receiver_type_key(&self, receiver: &ast::Expr) -> Option<String> {
         let receiver_type = self.sema.type_of_expr(receiver).map(|ty| ty.adjusted())?;
-        let display_target = DisplayTarget::from_crate(self.db, self.current_crate(syntax));
-        Some(last_type_segment_name(
-            receiver_type
-                .display(self.db, display_target)
-                .to_string()
-                .as_str(),
-        ))
+        self.type_adt_canonical_path(&receiver_type)
     }
 
-    fn current_crate(&self, syntax: &SyntaxNode) -> Crate {
-        self.sema
-            .scope(syntax)
-            .map(|scope| scope.module().krate(self.db).into())
-            .or_else(|| self.tessera_crates.iter().copied().next())
-            .expect("rust-analyzer workspace should contain at least one Tessera crate")
-    }
-    fn default_display_crate(&self) -> Crate {
-        self.tessera_crates
-            .iter()
-            .copied()
-            .next()
-            .expect("rust-analyzer workspace should contain at least one Tessera crate")
+    fn method_call_implementing_type_key(&self, call: &ast::MethodCallExpr) -> Option<String> {
+        let function = self.sema.resolve_method_call(call)?;
+        let assoc_item = function.as_assoc_item(self.db)?;
+        assoc_item
+            .implementing_ty(self.db)
+            .and_then(|ty| self.type_adt_canonical_path(&ty))
     }
 
     fn is_semantically_relevant_unresolved_path(&self, path: &str) -> bool {
@@ -888,20 +1133,42 @@ impl<'db> ColorAnalyzer<'db> {
                 | "receive_frame_nanos"
                 | "key"
         ) || self.tessera_function_names.contains(last)
-            || path.contains("RenderSlot::new")
-            || path.contains("RenderSlotWith::new")
+            || Self::is_render_slot_constructor_path(path)
+            || Self::is_entry_point_constructor_path(path)
             || is_internal_runtime_name(last)
     }
 
     fn is_semantically_relevant_unresolved_method(&self, path: &str) -> bool {
-        path.ends_with("RenderSlot::new") || path.ends_with("RenderSlotWith::new")
+        Self::is_render_slot_constructor_path(path) || Self::is_entry_point_constructor_path(path)
+    }
+
+    fn is_render_slot_constructor_path(path: &str) -> bool {
+        matches!(
+            path,
+            RENDER_SLOT_NEW_PATH
+                | RENDER_SLOT_WITH_NEW_PATH
+                | PUBLIC_RENDER_SLOT_NEW_PATH
+                | PUBLIC_RENDER_SLOT_WITH_NEW_PATH
+        )
+    }
+
+    fn is_entry_point_constructor_path(path: &str) -> bool {
+        matches!(path, ENTRY_POINT_NEW_PATH | PUBLIC_ENTRY_POINT_NEW_PATH)
     }
 
     fn function_path(&self, function: Function) -> String {
         let edition = function.module(self.db).krate(self.db).edition(self.db);
-        ModuleDef::from(function)
-            .canonical_path(self.db, edition)
+        self.module_def_canonical_path(ModuleDef::from(function))
             .unwrap_or_else(|| function.name(self.db).display(self.db, edition).to_string())
+    }
+
+    fn module_def_canonical_path(&self, def: ModuleDef) -> Option<String> {
+        let module = def.module(self.db)?;
+        let krate = module.krate(self.db);
+        let edition = krate.edition(self.db);
+        let crate_name = krate.display_name(self.db)?.to_string();
+        let relative_path = def.canonical_path(self.db, edition)?;
+        Some(format!("{crate_name}::{relative_path}"))
     }
 
     fn method_call_path(&self, call: &ast::MethodCallExpr) -> String {

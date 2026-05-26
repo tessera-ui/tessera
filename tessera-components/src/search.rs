@@ -267,7 +267,7 @@ pub fn search_bar(
         .expect("MaterialTheme must be provided")
         .get();
     let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
-    let colors = colors.unwrap_or_else(|| SearchBarColors {
+    let colors = colors.unwrap_or(SearchBarColors {
         container_color: theme.color_scheme.surface_container_high,
         divider_color: theme.color_scheme.outline,
     });
@@ -384,7 +384,7 @@ pub fn docked_search_bar(
         .expect("MaterialTheme must be provided")
         .get();
     let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
-    let colors = colors.unwrap_or_else(|| SearchBarColors {
+    let colors = colors.unwrap_or(SearchBarColors {
         container_color: theme.color_scheme.surface_container_high,
         divider_color: theme.color_scheme.outline,
     });
@@ -543,7 +543,7 @@ fn search_bar_inner(
         .expect("MaterialTheme must be provided")
         .get();
     let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
-    let colors = colors.unwrap_or_else(|| SearchBarColors {
+    let colors = colors.unwrap_or(SearchBarColors {
         container_color: theme.color_scheme.surface_container_high,
         divider_color: theme.color_scheme.outline,
     });

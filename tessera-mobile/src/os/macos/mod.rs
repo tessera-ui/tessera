@@ -103,26 +103,26 @@ pub fn open_file_with(
 ) -> Result<(), OpenFileError> {
     let mut application = application.as_ref().to_os_string();
 
-    if application == "Xcode" {
-        if let Ok(xcode_developer_dir) = xcode_developer_dir() {
-            // xcode_developer_dir is /Applications/Xcode.app/Contents/Developer
-            // we want to open the app in /Applications/Xcode.app
-            let xcode_app_dir = xcode_developer_dir
-                .parent()
-                .and_then(|p| p.parent())
-                .unwrap_or(&xcode_developer_dir);
-            if xcode_app_dir.extension().unwrap_or_default() == "app" {
-                application = xcode_app_dir.to_path_buf().into_os_string();
-                log::debug!(
-                    "Using Xcode app directory from `xcode-select -p`: {}",
-                    application.to_string_lossy()
-                );
-            } else {
-                log::debug!(
-                    "Xcode directory {} from `xcode-select -p` is not a valid Xcode app path",
-                    xcode_developer_dir.display()
-                );
-            }
+    if application == "Xcode"
+        && let Ok(xcode_developer_dir) = xcode_developer_dir()
+    {
+        // xcode_developer_dir is /Applications/Xcode.app/Contents/Developer
+        // we want to open the app in /Applications/Xcode.app
+        let xcode_app_dir = xcode_developer_dir
+            .parent()
+            .and_then(|p| p.parent())
+            .unwrap_or(&xcode_developer_dir);
+        if xcode_app_dir.extension().unwrap_or_default() == "app" {
+            application = xcode_app_dir.to_path_buf().into_os_string();
+            log::debug!(
+                "Using Xcode app directory from `xcode-select -p`: {}",
+                application.to_string_lossy()
+            );
+        } else {
+            log::debug!(
+                "Xcode directory {} from `xcode-select -p` is not a valid Xcode app path",
+                xcode_developer_dir.display()
+            );
         }
     }
 

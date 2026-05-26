@@ -23,9 +23,11 @@ pub(crate) struct ColorAnalyzer<'db> {
     pub(crate) tessera_crates: HashSet<Crate>,
     pub(crate) vfs: &'db Vfs,
     pub(crate) local_files: HashSet<FileId>,
+    pub(crate) metadata_files: HashSet<FileId>,
     pub(crate) selected_package: Option<String>,
     pub(crate) tessera_function_names: HashSet<String>,
-    pub(crate) explicit_slot_setter_indexes: HashMap<String, HashMap<String, HashSet<usize>>>,
+    pub(crate) render_slot_setter_indexes_by_type_path:
+        HashMap<String, HashMap<String, HashSet<usize>>>,
     pub(crate) diagnostics: Vec<Diagnostic>,
 }
 
@@ -37,6 +39,7 @@ pub(crate) enum ContextColor {
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum TesseraRuntimeApi {
+    EntryPointNew,
     Remember,
     RememberWithKey,
     Retain,

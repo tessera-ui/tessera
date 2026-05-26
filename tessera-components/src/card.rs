@@ -283,7 +283,7 @@ impl CardDefaults {
     pub fn card_colors(theme: &MaterialTheme, content_color: Color) -> CardColors {
         let scheme = &theme.color_scheme;
         let container = scheme.surface_container_highest;
-        let content = content_color_for(container, &scheme).unwrap_or(content_color);
+        let content = content_color_for(container, scheme).unwrap_or(content_color);
         let disabled_overlay = scheme
             .surface_variant
             .with_alpha(Self::DISABLED_CONTAINER_OPACITY);
@@ -300,7 +300,7 @@ impl CardDefaults {
     pub fn elevated_card_colors(theme: &MaterialTheme, content_color: Color) -> CardColors {
         let scheme = &theme.color_scheme;
         let container = scheme.surface_container_low;
-        let content = content_color_for(container, &scheme).unwrap_or(content_color);
+        let content = content_color_for(container, scheme).unwrap_or(content_color);
         CardColors {
             container_color: container,
             content_color: content,
@@ -313,7 +313,7 @@ impl CardDefaults {
     pub fn outlined_card_colors(theme: &MaterialTheme, content_color: Color) -> CardColors {
         let scheme = &theme.color_scheme;
         let container = scheme.surface;
-        let content = content_color_for(container, &scheme).unwrap_or(content_color);
+        let content = content_color_for(container, scheme).unwrap_or(content_color);
         CardColors {
             container_color: container,
             content_color: content,

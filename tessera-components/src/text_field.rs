@@ -1098,7 +1098,6 @@ pub fn text_field(
     let min_height = min_height.or(Some(TextFieldDefaults::MIN_HEIGHT));
     let background_color = background_color.or(Some(scheme.surface_container_highest));
     let border_width = border_width.unwrap_or(TextFieldProps::default().border_width);
-    let border_color = border_color;
     let shape = shape.unwrap_or(TextFieldProps::default().shape);
     let padding = padding.unwrap_or(TextFieldProps::default().padding);
     let focus_border_color = focus_border_color.or(Some(scheme.primary));
