@@ -24,7 +24,23 @@ pub fn execute(
     verbose: bool,
     quiet: bool,
 ) -> Result<()> {
-    color_check::run(color_check::CheckOptions { package, target })?;
+    color_check::run(color_check::CheckOptions {
+        package,
+        target,
+        target_selection: color_check::TargetSelection {
+            lib,
+            bins,
+            examples,
+            tests,
+            benches,
+            all_targets,
+        },
+        features: color_check::FeatureSelection::from_cargo_args(
+            features,
+            all_features,
+            no_default_features,
+        ),
+    })?;
 
     let mut details = Vec::new();
     if release {

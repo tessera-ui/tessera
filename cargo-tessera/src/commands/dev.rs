@@ -21,7 +21,8 @@ pub fn execute(
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
-    run_color_check(package)?;
+    let feature_overrides = build_tessera_ui_features(profiling_output, debug_dirty_overlay);
+    run_color_check(package, &feature_overrides)?;
 
     output::status("Starting", "dev server (auto rebuild/restart)");
     if let Some(pkg) = package {
@@ -115,7 +116,7 @@ pub fn execute(
         // Kick off a build once the tree is quiet and no build is currently running.
         if pending_change && build_child.is_none() && last_change.elapsed() >= debounce_window {
             if !color_check_current {
-                match run_color_check(package) {
+                match run_color_check(package, &feature_overrides) {
                     Ok(()) => {
                         color_check_current = true;
                     }
@@ -147,7 +148,7 @@ pub fn execute(
             if let Some(pkg) = package {
                 build_cmd.arg("-p").arg(pkg);
             }
-            configure_tessera_ui_features(&mut build_cmd, profiling_output, debug_dirty_overlay);
+            configure_tessera_ui_features(&mut build_cmd, &feature_overrides, profiling_output);
             build_cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
 
             match build_cmd.spawn() {
@@ -180,8 +181,8 @@ pub fn execute(
                         }
                         configure_tessera_ui_features(
                             &mut run_cmd,
+                            &feature_overrides,
                             profiling_output,
-                            debug_dirty_overlay,
                         );
                         run_cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
 
@@ -244,18 +245,25 @@ pub fn execute(
     Ok(())
 }
 
-fn configure_tessera_ui_features(
-    cmd: &mut Command,
+fn build_tessera_ui_features(
     profiling_output: Option<&Path>,
     debug_dirty_overlay: bool,
-) {
+) -> Vec<String> {
     let mut features = Vec::new();
     if profiling_output.is_some() {
-        features.push("tessera-ui/profiling");
+        features.push("tessera-ui/profiling".to_string());
     }
     if debug_dirty_overlay {
-        features.push("tessera-ui/debug-dirty-overlay");
+        features.push("tessera-ui/debug-dirty-overlay".to_string());
     }
+    features
+}
+
+fn configure_tessera_ui_features(
+    cmd: &mut Command,
+    features: &[String],
+    profiling_output: Option<&Path>,
+) {
     if !features.is_empty() {
         cmd.arg("--features").arg(features.join(","));
     }
@@ -264,10 +272,15 @@ fn configure_tessera_ui_features(
     }
 }
 
-fn run_color_check(package: Option<&str>) -> Result<()> {
+fn run_color_check(package: Option<&str>, features: &[String]) -> Result<()> {
     color_check::run(color_check::CheckOptions {
         package,
         target: None,
+        target_selection: color_check::TargetSelection::default(),
+        features: color_check::FeatureSelection::Selected {
+            features,
+            no_default_features: false,
+        },
     })
 }
 

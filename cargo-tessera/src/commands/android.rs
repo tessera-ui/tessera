@@ -379,6 +379,27 @@ impl AndroidContext {
     }
 }
 
+fn run_android_color_check(ctx: &AndroidContext, target: Option<&str>) -> Result<()> {
+    let target = if let Some(target) = target {
+        ctx.target_by_name_or_triple(target)?.triple
+    } else {
+        ctx.targets()?
+            .first()
+            .ok_or_else(|| anyhow!("No Android Rust targets are available"))?
+            .triple
+    };
+    let features = ctx.metadata.features().unwrap_or_default();
+    color_check::run(color_check::CheckOptions {
+        package: Some(&ctx.package_name),
+        target: Some(target),
+        target_selection: color_check::TargetSelection::lib_only(),
+        features: color_check::FeatureSelection::Selected {
+            features,
+            no_default_features: ctx.metadata.no_default_features(),
+        },
+    })
+}
+
 fn default_identifier(package_name: &str) -> String {
     let sanitized = package_name
         .chars()
@@ -590,13 +611,8 @@ fn register_helpers(handlebars: &mut Handlebars<'static>) {
 }
 
 pub fn build(opts: BuildOptions) -> Result<()> {
-    let package = opts.package.as_deref();
-    color_check::run(color_check::CheckOptions {
-        package,
-        target: Some("android"),
-    })?;
-
     let ctx = AndroidContext::from_build_opts(opts)?;
+    run_android_color_check(&ctx, None)?;
     apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
@@ -660,13 +676,8 @@ pub fn build(opts: BuildOptions) -> Result<()> {
 }
 
 pub fn dev(opts: DevOptions) -> Result<()> {
-    let package = opts.package.as_deref();
-    color_check::run(color_check::CheckOptions {
-        package,
-        target: Some("android"),
-    })?;
-
     let ctx = AndroidContext::from_dev_opts(opts)?;
+    run_android_color_check(&ctx, None)?;
     apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(
@@ -812,13 +823,8 @@ pub fn dev(opts: DevOptions) -> Result<()> {
 
 pub fn rust_build(opts: RustBuildOptions) -> Result<()> {
     let target_name = opts.target.clone();
-    let package = opts.package.as_deref();
-    color_check::run(color_check::CheckOptions {
-        package,
-        target: Some(&target_name),
-    })?;
-
     let ctx = AndroidContext::from_rust_build_opts(opts)?;
+    run_android_color_check(&ctx, Some(&target_name))?;
     apply_android_runtime_env(&ctx);
     if !ctx.config.project_dir_exists() {
         return Err(anyhow!(

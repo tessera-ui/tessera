@@ -13,7 +13,16 @@ pub fn execute(
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
 ) -> Result<()> {
-    color_check::run(color_check::CheckOptions { package, target })?;
+    let feature_overrides = build_tessera_ui_features(profiling_output, debug_dirty_overlay);
+    color_check::run(color_check::CheckOptions {
+        package,
+        target,
+        target_selection: color_check::TargetSelection::default(),
+        features: color_check::FeatureSelection::Selected {
+            features: &feature_overrides,
+            no_default_features: false,
+        },
+    })?;
 
     if profiling_output.is_some() && target_is_android(target) {
         bail!("--profiling-output is not supported for Android targets");
@@ -58,7 +67,7 @@ pub fn execute(
     if let Some(package) = package {
         cmd.arg("-p").arg(package);
     }
-    configure_tessera_ui_features(&mut cmd, profiling_output, debug_dirty_overlay);
+    configure_tessera_ui_features(&mut cmd, &feature_overrides, profiling_output);
     cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
 
     let status = cmd.status().context("Failed to run cargo build")?;
@@ -79,18 +88,25 @@ pub fn execute(
     Ok(())
 }
 
-fn configure_tessera_ui_features(
-    cmd: &mut Command,
+fn build_tessera_ui_features(
     profiling_output: Option<&Path>,
     debug_dirty_overlay: bool,
-) {
+) -> Vec<String> {
     let mut features = Vec::new();
     if profiling_output.is_some() {
-        features.push("tessera-ui/profiling");
+        features.push("tessera-ui/profiling".to_string());
     }
     if debug_dirty_overlay {
-        features.push("tessera-ui/debug-dirty-overlay");
+        features.push("tessera-ui/debug-dirty-overlay".to_string());
     }
+    features
+}
+
+fn configure_tessera_ui_features(
+    cmd: &mut Command,
+    features: &[String],
+    profiling_output: Option<&Path>,
+) {
     if !features.is_empty() {
         cmd.arg("--features").arg(features.join(","));
     }

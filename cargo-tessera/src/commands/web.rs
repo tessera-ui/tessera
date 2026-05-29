@@ -202,10 +202,10 @@ pub fn dev(release: bool, package: Option<&str>, port: u16) -> Result<()> {
 }
 
 fn build_project(project_dir: &Path, metadata: &ProjectMetadata, release: bool) -> Result<()> {
-    color_check::run(color_check::CheckOptions {
-        package: Some(&metadata.package_name),
-        target: Some(WASM_TARGET),
-    })?;
+    color_check::run(color_check::CheckOptions::new(
+        Some(&metadata.package_name),
+        Some(WASM_TARGET),
+    ))?;
 
     let mut cmd = Command::new("cargo");
     cmd.arg("build")

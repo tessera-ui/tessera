@@ -5,7 +5,7 @@ use std::{
 };
 
 use anyhow::{Result, anyhow};
-use ra_ap_base_db::{Crate, SourceDatabase, relevant_crates};
+use ra_ap_base_db::{Crate, SourceDatabase};
 use ra_ap_hir::{
     AsAssocItem, CallableKind, EditionedFileId, Function, ModuleDef, PathResolution, Semantics,
     Trait, Type,
@@ -50,10 +50,10 @@ impl<'db> ColorAnalyzer<'db> {
         db: &'db RootDatabase,
         vfs: &'db Vfs,
         selected_package: Option<String>,
+        local_files: HashSet<FileId>,
     ) -> Result<ColorAnalyzer<'db>> {
         let sema = Semantics::new(db);
         let tessera_crates = tessera_crates(db);
-        let mut local_files = HashSet::new();
         let mut metadata_files = HashSet::new();
 
         for (file_id, path) in vfs.iter() {
@@ -68,25 +68,12 @@ impl<'db> ColorAnalyzer<'db> {
             let source_root_id = db.file_source_root(file_id).source_root_id(db);
             let source_root = db.source_root(source_root_id);
             let source_root = source_root.source_root(db);
-            let relevant_crates = relevant_crates(db, file_id);
+            let relevant_crates = ra_ap_base_db::relevant_crates(db, file_id);
             let is_tessera_workspace_source = relevant_crates
                 .iter()
                 .any(|krate| tessera_crates.contains(krate));
-            let matches_selected_package = selected_package.as_deref().is_none_or(|package| {
-                relevant_crates.iter().any(|krate| {
-                    (*krate)
-                        .extra_data(db)
-                        .display_name
-                        .as_ref()
-                        .is_some_and(|name| name.canonical_name().as_str() == package)
-                })
-            });
             if !source_root.is_library || is_tessera_workspace_source {
                 metadata_files.insert(file_id);
-            }
-
-            if !source_root.is_library && matches_selected_package {
-                local_files.insert(file_id);
             }
         }
 
@@ -1479,16 +1466,16 @@ pub fn plain_entry() -> EntryPoint {
             .expect("current directory lock poisoned");
         let project = FixtureProject::new(source);
         let _current_dir = CurrentDirGuard::push(project.root());
-        let workspace = workspace::load_workspace(&CheckOptions {
-            package: Some("fixture"),
-            target: None,
-        })
-        .expect("fixture workspace should load");
+        let options = CheckOptions::new(Some("fixture"), None);
+        let workspace = workspace::load_workspace(&options).expect("fixture workspace should load");
         let db = workspace.host.raw_database();
 
         ra_ap_hir::attach_db(db, || {
-            let mut analyzer = ColorAnalyzer::new(db, &workspace.vfs, Some("fixture".to_string()))
-                .expect("fixture analyzer should initialize");
+            let local_files = workspace::selected_local_files(db, &workspace.vfs, &options)
+                .expect("fixture files should be selected");
+            let mut analyzer =
+                ColorAnalyzer::new(db, &workspace.vfs, Some("fixture".to_string()), local_files)
+                    .expect("fixture analyzer should initialize");
             analyzer.analyze().expect("fixture should analyze");
             analyzer
                 .diagnostics
