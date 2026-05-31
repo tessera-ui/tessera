@@ -3,8 +3,7 @@ use std::{collections::HashSet, env, path::Path};
 use anyhow::{Context, Result, anyhow};
 use cargo_metadata::{MetadataCommand, Target, TargetKind};
 use ra_ap_base_db::{Crate, all_crates};
-use ra_ap_ide::AnalysisHost;
-use ra_ap_ide::RootDatabase;
+use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
 use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
 use ra_ap_vfs::{FileId, Vfs, VfsPath};
@@ -168,9 +167,28 @@ fn selected_target_roots(
                 manifest_path.display()
             )
         })?;
+    let canonical_manifest_path = manifest_path.canonicalize().with_context(|| {
+        format!(
+            "Failed to canonicalize package manifest {}",
+            manifest_path.display()
+        )
+    })?;
     let package = metadata
-        .root_package()
-        .ok_or_else(|| anyhow!("Unable to determine Cargo package for color checking"))?;
+        .packages
+        .iter()
+        .find(|candidate| {
+            let candidate_manifest_path: &Path = candidate.manifest_path.as_ref();
+            candidate_manifest_path
+                .canonicalize()
+                .map(|path| path == canonical_manifest_path)
+                .unwrap_or(false)
+        })
+        .ok_or_else(|| {
+            anyhow!(
+                "Unable to find Cargo package manifest at {} for color checking",
+                manifest_path.display()
+            )
+        })?;
     let mut roots = HashSet::new();
     for target in &package.targets {
         if target_is_selected(target, target_selection) {
@@ -233,4 +251,79 @@ fn crate_matches(
         return true;
     }
     target_root_files.contains(&krate.root_file_id(db).file_id(db))
+}
+
+#[cfg(test)]
+mod tests {
+    use std::{
+        fs,
+        path::{Path, PathBuf},
+        sync::atomic::{AtomicU64, Ordering},
+    };
+
+    use super::*;
+
+    static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn selected_target_roots_finds_workspace_member_manifest() {
+        let fixture = FixtureWorkspace::new();
+        let roots = selected_target_roots(fixture.member_dir(), &TargetSelection::default())
+            .expect("workspace member target roots should be selected");
+        let expected = fixture
+            .member_dir()
+            .join("src/lib.rs")
+            .canonicalize()
+            .expect("fixture source should canonicalize");
+        let contains_expected = roots.iter().any(|root| {
+            root.canonicalize()
+                .map(|root| root == expected)
+                .unwrap_or(false)
+        });
+
+        assert!(contains_expected, "selected roots: {roots:?}");
+    }
+
+    struct FixtureWorkspace {
+        root: PathBuf,
+        member_dir: PathBuf,
+    }
+
+    impl FixtureWorkspace {
+        fn new() -> Self {
+            let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+            let root = std::env::temp_dir().join(format!(
+                "tessera-color-check-workspace-fixture-{}-{id}",
+                std::process::id()
+            ));
+            let member_dir = root.join("member");
+            let _ = fs::remove_dir_all(&root);
+            fs::create_dir_all(member_dir.join("src"))
+                .expect("fixture member src directory should be created");
+            fs::write(
+                root.join("Cargo.toml"),
+                "[workspace]\nmembers = [\"member\"]\nresolver = \"3\"\n",
+            )
+            .expect("fixture workspace manifest should be written");
+            fs::write(
+                member_dir.join("Cargo.toml"),
+                "[package]\nname = \"member\"\nversion = \"0.0.0\"\nedition = \"2024\"\n",
+            )
+            .expect("fixture package manifest should be written");
+            fs::write(member_dir.join("src/lib.rs"), "")
+                .expect("fixture package source should be written");
+
+            Self { root, member_dir }
+        }
+
+        fn member_dir(&self) -> &Path {
+            &self.member_dir
+        }
+    }
+
+    impl Drop for FixtureWorkspace {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.root);
+        }
+    }
 }
