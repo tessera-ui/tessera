@@ -73,35 +73,27 @@ pub(crate) fn tessera_crates(db: &RootDatabase) -> HashSet<Crate> {
     all_crates(db)
         .iter()
         .copied()
-        .filter(|krate| crate_is_tessera_crate(db, *krate))
+        .filter(|krate| crate_has_tessera_name(db, *krate))
         .collect()
 }
 
-pub(crate) fn crate_is_tessera_crate(db: &RootDatabase, krate: Crate) -> bool {
-    if crate_has_tessera_name(db, krate) {
-        return true;
-    }
-
-    krate
-        .data(db)
-        .dependencies
-        .iter()
-        .any(|dep| dep.name.symbol().as_str().starts_with("tessera_"))
-}
-
 pub(crate) fn crate_has_tessera_name(db: &RootDatabase, krate: Crate) -> bool {
-    all_crates(db).iter().copied().any(|candidate| {
-        candidate == krate
-            && candidate
-                .extra_data(db)
-                .display_name
-                .as_ref()
-                .is_some_and(|name| {
-                    let canonical = name.canonical_name().as_str();
-                    canonical == "tessera-ui"
-                        || canonical == "tessera-components"
-                        || canonical == "tessera-shard"
-                        || canonical.starts_with("tessera-")
-                })
-    })
+    krate
+        .extra_data(db)
+        .display_name
+        .as_ref()
+        .is_some_and(|name| {
+            matches!(
+                name.canonical_name().as_str(),
+                "tessera-build"
+                    | "tessera-components"
+                    | "tessera-foundation"
+                    | "tessera-glyphon"
+                    | "tessera-macros"
+                    | "tessera-mobile"
+                    | "tessera-platform"
+                    | "tessera-shard"
+                    | "tessera-ui"
+            )
+        })
 }

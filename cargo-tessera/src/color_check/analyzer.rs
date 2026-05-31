@@ -34,6 +34,24 @@ const PUBLIC_RENDER_SLOT_TYPE_PATH: &str = "tessera_ui::RenderSlot";
 const PUBLIC_RENDER_SLOT_WITH_TYPE_PATH: &str = "tessera_ui::RenderSlotWith";
 const ENTRY_POINT_TYPE_PATH: &str = "tessera_ui::entry_point::EntryPoint";
 const PUBLIC_ENTRY_POINT_TYPE_PATH: &str = "tessera_ui::EntryPoint";
+const REMEMBER_PATH: &str = "tessera_ui::runtime::remember";
+const PUBLIC_REMEMBER_PATH: &str = "tessera_ui::remember";
+const REMEMBER_WITH_KEY_PATH: &str = "tessera_ui::runtime::remember_with_key";
+const PUBLIC_REMEMBER_WITH_KEY_PATH: &str = "tessera_ui::remember_with_key";
+const RETAIN_PATH: &str = "tessera_ui::runtime::retain";
+const PUBLIC_RETAIN_PATH: &str = "tessera_ui::retain";
+const RETAIN_WITH_KEY_PATH: &str = "tessera_ui::runtime::retain_with_key";
+const PUBLIC_RETAIN_WITH_KEY_PATH: &str = "tessera_ui::retain_with_key";
+const PROVIDE_CONTEXT_PATH: &str = "tessera_ui::context::provide_context";
+const PUBLIC_PROVIDE_CONTEXT_PATH: &str = "tessera_ui::provide_context";
+const USE_CONTEXT_PATH: &str = "tessera_ui::context::use_context";
+const PUBLIC_USE_CONTEXT_PATH: &str = "tessera_ui::use_context";
+const RECEIVE_FRAME_NANOS_PATH: &str = "tessera_ui::runtime::receive_frame_nanos";
+const PUBLIC_RECEIVE_FRAME_NANOS_PATH: &str = "tessera_ui::receive_frame_nanos";
+const KEY_PATH: &str = "tessera_ui::runtime::key";
+const PUBLIC_KEY_PATH: &str = "tessera_ui::key";
+const RUNTIME_MODULE_PATH_PREFIX: &str = "tessera_ui::runtime::";
+const PRIVATE_MODULE_PATH_PREFIX: &str = "tessera_ui::__private::";
 const RENDER_SLOT_NEW_PATH: &str = "tessera_ui::prop::RenderSlot::new";
 const RENDER_SLOT_WITH_NEW_PATH: &str = "tessera_ui::prop::RenderSlotWith::new";
 const PUBLIC_RENDER_SLOT_NEW_PATH: &str = "tessera_ui::RenderSlot::new";
@@ -731,24 +749,19 @@ impl<'db> ColorAnalyzer<'db> {
             return false;
         };
 
-        if !self.is_tessera_crate(def.module(self.db).krate(self.db).into()) {
-            return false;
+        let path = self.function_path(def);
+        if Self::runtime_api_for_canonical_path(&path).is_some() {
+            return true;
         }
 
-        let path = self.function_path(def);
         let name = def.name(self.db).as_str().to_string();
         match name.as_str() {
-            "remember" if path.ends_with("::remember") => true,
-            "remember_with_key" if path.ends_with("::remember_with_key") => true,
-            "retain" if path.ends_with("::retain") => true,
-            "retain_with_key" if path.ends_with("::retain_with_key") => true,
-            "provide_context" if path.ends_with("::provide_context") => true,
-            "use_context" if path.ends_with("::use_context") => true,
-            "receive_frame_nanos" if path.ends_with("::receive_frame_nanos") => true,
-            "key" if path.ends_with("::key") => true,
+            "new" if self.is_entry_point_method(def) => true,
             "new" if self.is_render_slot_method(def, RENDER_SLOT_TYPE_PATH) => true,
+            "new" if self.is_render_slot_method(def, PUBLIC_RENDER_SLOT_TYPE_PATH) => true,
             "new" if self.is_render_slot_method(def, RENDER_SLOT_WITH_TYPE_PATH) => true,
-            name => is_internal_runtime_name(name),
+            "new" if self.is_render_slot_method(def, PUBLIC_RENDER_SLOT_WITH_TYPE_PATH) => true,
+            _ => false,
         }
     }
 
@@ -804,6 +817,38 @@ impl<'db> ColorAnalyzer<'db> {
         false
     }
 
+    fn runtime_api_for_canonical_path(canonical_path: &str) -> Option<TesseraRuntimeApi> {
+        match canonical_path {
+            REMEMBER_PATH | PUBLIC_REMEMBER_PATH => Some(TesseraRuntimeApi::Remember),
+            REMEMBER_WITH_KEY_PATH | PUBLIC_REMEMBER_WITH_KEY_PATH => {
+                Some(TesseraRuntimeApi::RememberWithKey)
+            }
+            RETAIN_PATH | PUBLIC_RETAIN_PATH => Some(TesseraRuntimeApi::Retain),
+            RETAIN_WITH_KEY_PATH | PUBLIC_RETAIN_WITH_KEY_PATH => {
+                Some(TesseraRuntimeApi::RetainWithKey)
+            }
+            PROVIDE_CONTEXT_PATH | PUBLIC_PROVIDE_CONTEXT_PATH => {
+                Some(TesseraRuntimeApi::ProvideContext)
+            }
+            USE_CONTEXT_PATH | PUBLIC_USE_CONTEXT_PATH => Some(TesseraRuntimeApi::UseContext),
+            RECEIVE_FRAME_NANOS_PATH | PUBLIC_RECEIVE_FRAME_NANOS_PATH => {
+                Some(TesseraRuntimeApi::ReceiveFrameNanos)
+            }
+            KEY_PATH | PUBLIC_KEY_PATH => Some(TesseraRuntimeApi::Key),
+            path => {
+                let name = path.rsplit("::").next().unwrap_or(path);
+                if (path.starts_with(RUNTIME_MODULE_PATH_PREFIX)
+                    || path.starts_with(PRIVATE_MODULE_PATH_PREFIX))
+                    && is_internal_runtime_name(name)
+                {
+                    Some(TesseraRuntimeApi::InternalRuntime)
+                } else {
+                    None
+                }
+            }
+        }
+    }
+
     fn runtime_api_for_function(
         &self,
         function: Function,
@@ -813,32 +858,12 @@ impl<'db> ColorAnalyzer<'db> {
             return None;
         }
 
-        if !self.is_tessera_crate(function.module(self.db).krate(self.db).into()) {
-            return None;
+        if let Some(api) = Self::runtime_api_for_canonical_path(canonical_path) {
+            return Some(api);
         }
 
         let name = function.name(self.db).as_str().to_string();
         match name.as_str() {
-            "remember" if canonical_path.ends_with("::remember") => {
-                Some(TesseraRuntimeApi::Remember)
-            }
-            "remember_with_key" if canonical_path.ends_with("::remember_with_key") => {
-                Some(TesseraRuntimeApi::RememberWithKey)
-            }
-            "retain" if canonical_path.ends_with("::retain") => Some(TesseraRuntimeApi::Retain),
-            "retain_with_key" if canonical_path.ends_with("::retain_with_key") => {
-                Some(TesseraRuntimeApi::RetainWithKey)
-            }
-            "provide_context" if canonical_path.ends_with("::provide_context") => {
-                Some(TesseraRuntimeApi::ProvideContext)
-            }
-            "use_context" if canonical_path.ends_with("::use_context") => {
-                Some(TesseraRuntimeApi::UseContext)
-            }
-            "receive_frame_nanos" if canonical_path.ends_with("::receive_frame_nanos") => {
-                Some(TesseraRuntimeApi::ReceiveFrameNanos)
-            }
-            "key" if canonical_path.ends_with("::key") => Some(TesseraRuntimeApi::Key),
             "new" if self.is_entry_point_method(function) => Some(TesseraRuntimeApi::EntryPointNew),
             "new" if self.is_render_slot_method(function, RENDER_SLOT_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotNew)
@@ -852,7 +877,6 @@ impl<'db> ColorAnalyzer<'db> {
             "new" if self.is_render_slot_method(function, PUBLIC_RENDER_SLOT_WITH_TYPE_PATH) => {
                 Some(TesseraRuntimeApi::RenderSlotWithNew)
             }
-            name if is_internal_runtime_name(name) => Some(TesseraRuntimeApi::InternalRuntime),
             _ => None,
         }
     }
@@ -1455,6 +1479,41 @@ pub fn plain_entry() -> EntryPoint {
         assert!(
             count_containing(&diagnostics, "Tessera component") >= 3,
             "expected ordinary closures to report Tessera component calls:\n{}",
+            diagnostics.join("\n")
+        );
+    }
+
+    #[test]
+    fn user_functions_named_like_runtime_apis_remain_plain() {
+        let diagnostics = diagnostics_for(
+            r#"
+fn remember() {}
+fn remember_with_key() {}
+fn retain() {}
+fn retain_with_key() {}
+fn provide_context() {}
+fn use_context() {}
+fn receive_frame_nanos() {}
+fn key() {}
+fn current_instance() {}
+
+pub fn helper() {
+    remember();
+    remember_with_key();
+    retain();
+    retain_with_key();
+    provide_context();
+    use_context();
+    receive_frame_nanos();
+    key();
+    current_instance();
+}
+"#,
+        );
+
+        assert!(
+            diagnostics.is_empty(),
+            "unexpected diagnostics for user-owned function names:\n{}",
             diagnostics.join("\n")
         );
     }
