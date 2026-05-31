@@ -241,16 +241,18 @@ fn crate_matches(
     selected_package: Option<&str>,
     target_root_files: &HashSet<FileId>,
 ) -> bool {
+    if !target_root_files.is_empty() {
+        return target_root_files.contains(&krate.root_file_id(db).file_id(db));
+    }
+
     let Some(display_name) = krate.extra_data(db).display_name.as_ref() else {
         return false;
     };
-    if selected_package.is_some_and(|package| display_name.canonical_name().as_str() != package) {
-        return false;
+    if let Some(package) = selected_package {
+        return display_name.canonical_name().as_str() == package;
     }
-    if target_root_files.is_empty() {
-        return true;
-    }
-    target_root_files.contains(&krate.root_file_id(db).file_id(db))
+
+    true
 }
 
 #[cfg(test)]
