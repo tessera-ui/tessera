@@ -22,6 +22,7 @@ pub fn execute(
             features: &feature_overrides,
             no_default_features: false,
         },
+        message_format: color_check::MessageFormat::Human,
     })?;
 
     if profiling_output.is_some() && target_is_android(target) {

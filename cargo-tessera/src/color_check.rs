@@ -4,11 +4,14 @@ use anyhow::{Context, Result, bail};
 
 use crate::output;
 
+pub use types::MessageFormat;
+
 pub struct CheckOptions<'a> {
     pub package: Option<&'a str>,
     pub target: Option<&'a str>,
     pub target_selection: TargetSelection,
     pub features: FeatureSelection<'a>,
+    pub message_format: MessageFormat,
 }
 
 impl<'a> CheckOptions<'a> {
@@ -18,6 +21,7 @@ impl<'a> CheckOptions<'a> {
             target,
             target_selection: TargetSelection::default(),
             features: FeatureSelection::default(),
+            message_format: MessageFormat::default(),
         }
     }
 }
@@ -81,7 +85,9 @@ impl<'a> FeatureSelection<'a> {
 }
 
 pub fn run(options: CheckOptions<'_>) -> Result<()> {
-    output::status("ColorCheck", "checking Tessera call colors");
+    if !options.message_format.is_json() {
+        output::status("ColorCheck", "checking Tessera call colors");
+    }
 
     let workspace = workspace::load_workspace(&options)?;
     let db = workspace.host.raw_database();
@@ -107,22 +113,29 @@ pub fn run(options: CheckOptions<'_>) -> Result<()> {
         Ok(Ok(analyzer)) => analyzer,
         Ok(Err(e)) => return Err(e),
         Err(_) => {
-            output::warn(
-                "ColorCheck: internal rust-analyzer panic during color check; skipping. Consider running  separately to verify compilation.",
-            );
+            if !options.message_format.is_json() {
+                output::warn(
+                    "ColorCheck: internal rust-analyzer panic during color check; skipping. Consider running `cargo check` separately to verify compilation.",
+                );
+            }
             return Ok(());
         }
     };
 
     if analyzer.diagnostics.is_empty() {
-        output::status("ColorCheck", "passed");
+        if !options.message_format.is_json() {
+            output::status("ColorCheck", "passed");
+        }
         return Ok(());
     }
     for diagnostic in &analyzer.diagnostics {
-        analyzer.emit_diagnostic(diagnostic);
+        analyzer.emit_diagnostic(diagnostic, options.message_format);
     }
 
-    bail!("Tessera color check failed")
+    bail!(
+        "Tessera color check failed with {} diagnostic(s)",
+        analyzer.diagnostics.len()
+    )
 }
 
 mod analyzer;

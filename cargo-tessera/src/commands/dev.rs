@@ -281,6 +281,7 @@ fn run_color_check(package: Option<&str>, features: &[String]) -> Result<()> {
             features,
             no_default_features: false,
         },
+        message_format: color_check::MessageFormat::Human,
     })
 }
 

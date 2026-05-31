@@ -397,6 +397,7 @@ fn run_android_color_check(ctx: &AndroidContext, target: Option<&str>) -> Result
             features,
             no_default_features: ctx.metadata.no_default_features(),
         },
+        message_format: color_check::MessageFormat::Human,
     })
 }
 

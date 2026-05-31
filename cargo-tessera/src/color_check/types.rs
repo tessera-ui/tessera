@@ -10,6 +10,36 @@ pub(crate) struct Diagnostic {
     pub(crate) file_id: FileId,
     pub(crate) range: TextRange,
     pub(crate) message: String,
+    pub(crate) label: String,
+    pub(crate) help: Vec<String>,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MessageFormat {
+    #[default]
+    Human,
+    Short,
+    Json,
+}
+
+impl MessageFormat {
+    pub fn from_cargo_arg(value: Option<&str>) -> Self {
+        let Some(value) = value else {
+            return Self::Human;
+        };
+
+        if value.split(',').any(|part| part.starts_with("json")) {
+            Self::Json
+        } else if value == "short" {
+            Self::Short
+        } else {
+            Self::Human
+        }
+    }
+
+    pub fn is_json(self) -> bool {
+        matches!(self, Self::Json)
+    }
 }
 
 pub(crate) struct LoadedWorkspace {

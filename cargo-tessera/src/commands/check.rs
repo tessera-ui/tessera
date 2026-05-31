@@ -24,7 +24,8 @@ pub fn execute(
     verbose: bool,
     quiet: bool,
 ) -> Result<()> {
-    color_check::run(color_check::CheckOptions {
+    let color_message_format = color_check::MessageFormat::from_cargo_arg(message_format);
+    if let Err(err) = color_check::run(color_check::CheckOptions {
         package,
         target,
         target_selection: color_check::TargetSelection {
@@ -40,7 +41,13 @@ pub fn execute(
             all_features,
             no_default_features,
         ),
-    })?;
+        message_format: color_message_format,
+    }) {
+        if color_message_format.is_json() {
+            std::process::exit(1);
+        }
+        return Err(err);
+    }
 
     let mut details = Vec::new();
     if release {
@@ -57,7 +64,9 @@ pub fn execute(
     } else {
         format!("project ({})", details.join(", "))
     };
-    output::status("Checking", message);
+    if !color_message_format.is_json() {
+        output::status("Checking", message);
+    }
 
     let mut cmd = Command::new("cargo");
     cmd.arg("check");

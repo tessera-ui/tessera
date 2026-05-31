@@ -1,10 +1,12 @@
 use std::{
     collections::{HashMap, HashSet},
     env,
+    fmt::Write,
     path::PathBuf,
 };
 
 use anyhow::{Result, anyhow};
+use console::style;
 use ra_ap_base_db::{Crate, SourceDatabase};
 use ra_ap_hir::{
     AsAssocItem, CallableKind, EditionedFileId, Function, ModuleDef, PathResolution, Semantics,
@@ -12,15 +14,15 @@ use ra_ap_hir::{
 };
 use ra_ap_ide::{FileId, RootDatabase};
 use ra_ap_syntax::{
-    AstNode, SyntaxNode, TextSize,
+    AstNode, SyntaxNode,
     ast::{self, HasArgList, HasAttrs, HasGenericArgs, HasModuleItem, HasName},
 };
 use ra_ap_vfs::Vfs;
 
 use super::{
     types::{
-        CallKind, CallTarget, ColorAnalyzer, ContextColor, Diagnostic, ResolvedMethod,
-        TesseraRuntimeApi,
+        CallKind, CallTarget, ColorAnalyzer, ContextColor, Diagnostic, MessageFormat,
+        ResolvedMethod, TesseraRuntimeApi,
     },
     utils::{
         expr_path, is_internal_runtime_name, param_name, path_last_segment, path_text,
@@ -1302,18 +1304,48 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn push_forbidden_call(&mut self, syntax: &SyntaxNode, target: &str, kind: CallKind) {
-        let message = match kind {
-            CallKind::TesseraFunction => {
-                format!("uncolored context calls Tessera component `{target}`")
-            }
-            CallKind::RuntimeApi(api) => {
+        let (message, label, help) = match kind {
+            CallKind::TesseraFunction => (
+                format!("uncolored context calls Tessera component `{target}`"),
+                "Tessera component call requires a #[tessera] context".to_string(),
+                vec![
+                    "mark the enclosing free function with #[tessera] if it is a component"
+                        .to_string(),
+                    "move this call out of ordinary helpers, callbacks, and iterator closures"
+                        .to_string(),
+                ],
+            ),
+            CallKind::RuntimeApi(TesseraRuntimeApi::RenderSlotNew)
+            | CallKind::RuntimeApi(TesseraRuntimeApi::RenderSlotWithNew) => (
+                format!(
+                    "uncolored context calls Tessera-only API `{target}` ({})",
+                    match kind {
+                        CallKind::RuntimeApi(api) => runtime_api_label(api),
+                        CallKind::TesseraFunction => unreachable!(),
+                    }
+                ),
+                "RenderSlot construction creates a delayed Tessera fragment".to_string(),
+                vec![
+                    "construct render slots directly in a #[tessera] component or another Tessera-colored closure"
+                        .to_string(),
+                    "when passing child UI to a component, prefer a render-slot setter or RenderSlot::new at the colored boundary"
+                        .to_string(),
+                ],
+            ),
+            CallKind::RuntimeApi(api) => (
                 format!(
                     "uncolored context calls Tessera-only API `{target}` ({})",
                     runtime_api_label(api)
-                )
-            }
+                ),
+                "Tessera runtime API requires a #[tessera] context".to_string(),
+                vec![
+                    "mark the enclosing free function with #[tessera] if it builds UI".to_string(),
+                    "otherwise move this API call into a component or a RenderSlot::new closure"
+                        .to_string(),
+                ],
+            ),
         };
-        self.push_diagnostic(syntax, message);
+        self.push_diagnostic(syntax, message, label, help);
     }
 
     fn push_unresolved_call(&mut self, syntax: &SyntaxNode, target: &str) {
@@ -1322,10 +1354,23 @@ impl<'db> ColorAnalyzer<'db> {
             format!(
                 "uncolored context contains semantically unresolved Tessera-sensitive call `{target}`"
             ),
+            "this call looks like a Tessera-sensitive API but rust-analyzer could not resolve it"
+                .to_string(),
+            vec![
+                "ensure the call target is imported and visible to rust-analyzer".to_string(),
+                "if this is intentional Tessera UI, keep the call inside #[tessera] or RenderSlot::new"
+                    .to_string(),
+            ],
         );
     }
 
-    fn push_diagnostic(&mut self, syntax: &SyntaxNode, message: String) {
+    fn push_diagnostic(
+        &mut self,
+        syntax: &SyntaxNode,
+        message: String,
+        label: String,
+        help: Vec<String>,
+    ) {
         let file_range = self.sema.original_range(syntax);
         let file_id = file_range.file_id.file_id(self.db);
         if !self.local_files.contains(&file_id) {
@@ -1335,13 +1380,201 @@ impl<'db> ColorAnalyzer<'db> {
             file_id,
             range: file_range.range,
             message,
+            label,
+            help,
         });
     }
 
-    pub(crate) fn emit_diagnostic(&self, diagnostic: &Diagnostic) {
+    pub(crate) fn emit_diagnostic(&self, diagnostic: &Diagnostic, format: MessageFormat) {
+        let rendered = self.render_diagnostic(diagnostic);
+        match format {
+            MessageFormat::Human => eprint!("{rendered}"),
+            MessageFormat::Short => self.emit_short_diagnostic(diagnostic),
+            MessageFormat::Json => self.emit_json_diagnostic(diagnostic, rendered),
+        }
+    }
+
+    pub(crate) fn render_diagnostic(&self, diagnostic: &Diagnostic) -> String {
         let path = self.display_path(diagnostic.file_id);
-        let location = self.location(diagnostic.file_id, diagnostic.range.start());
-        eprintln!("  {path}:{location}: {}", diagnostic.message);
+        let span = self.diagnostic_span(diagnostic);
+        let mut rendered = String::new();
+        let _ = writeln!(
+            rendered,
+            "{}{} {}",
+            style("error").red().bold(),
+            style("[E9001]").red().bold(),
+            style(&diagnostic.message).bold()
+        );
+        let _ = writeln!(
+            rendered,
+            "{} {}:{}:{}",
+            style(" -->").blue().bold(),
+            path,
+            span.line_start,
+            span.column_start
+        );
+        let gutter_width = span.line_end.to_string().len().max(1);
+        let _ = writeln!(
+            rendered,
+            "{}{}",
+            " ".repeat(gutter_width),
+            style(" |").blue().bold()
+        );
+        let _ = writeln!(
+            rendered,
+            "{} {} {}",
+            style(format!("{:>gutter_width$}", span.line_start))
+                .blue()
+                .bold(),
+            style("|").blue().bold(),
+            span.line_text
+        );
+        let underline_len = span
+            .highlight_end
+            .saturating_sub(span.highlight_start)
+            .max(1);
+        let _ = writeln!(
+            rendered,
+            "{} {} {}{} {}",
+            " ".repeat(gutter_width),
+            style("|").blue().bold(),
+            " ".repeat(span.highlight_start.saturating_sub(1)),
+            style("^".repeat(underline_len)).red().bold(),
+            style(&diagnostic.label).red().bold()
+        );
+        for help in &diagnostic.help {
+            let _ = writeln!(rendered, "{}: {help}", style("help").cyan().bold());
+        }
+        rendered
+    }
+
+    fn emit_short_diagnostic(&self, diagnostic: &Diagnostic) {
+        let path = self.display_path(diagnostic.file_id);
+        let span = self.diagnostic_span(diagnostic);
+        eprintln!(
+            "{path}:{}:{}: error[E9001]: {}",
+            span.line_start, span.column_start, diagnostic.message
+        );
+    }
+
+    fn emit_json_diagnostic(&self, diagnostic: &Diagnostic, rendered: String) {
+        let message = self.json_diagnostic(diagnostic, rendered);
+        eprintln!("{message}");
+    }
+
+    pub(crate) fn json_diagnostic(
+        &self,
+        diagnostic: &Diagnostic,
+        rendered: String,
+    ) -> serde_json::Value {
+        let span = self.diagnostic_span(diagnostic);
+        let children = diagnostic
+            .help
+            .iter()
+            .map(|help| {
+                serde_json::json!({
+                    "message": help,
+                    "code": null,
+                    "level": "help",
+                    "spans": [],
+                    "children": [],
+                    "rendered": null
+                })
+            })
+            .collect::<Vec<_>>();
+
+        serde_json::json!({
+            "reason": "compiler-message",
+            "package_id": "cargo-tessera color-check",
+            "target": {
+                "kind": ["custom-build"],
+                "crate_types": ["bin"],
+                "name": "tessera-color-check",
+                "src_path": self.absolute_path(diagnostic.file_id),
+                "edition": "2024",
+                "doctest": false,
+                "test": false,
+                "doc": false
+            },
+            "message": {
+                "message": diagnostic.message,
+                "code": {
+                    "code": "E9001",
+                    "explanation": "Tessera-only components and runtime APIs must be called from Tessera-colored contexts."
+                },
+                "level": "error",
+                "spans": [{
+                    "file_name": span.file_name,
+                    "byte_start": span.byte_start,
+                    "byte_end": span.byte_end,
+                    "line_start": span.line_start,
+                    "line_end": span.line_end,
+                    "column_start": span.column_start,
+                    "column_end": span.column_end,
+                    "is_primary": true,
+                    "text": [{
+                        "text": span.line_text,
+                        "highlight_start": span.highlight_start,
+                        "highlight_end": span.highlight_end
+                    }],
+                    "label": diagnostic.label,
+                    "suggested_replacement": null,
+                    "suggestion_applicability": null,
+                    "expansion": null
+                }],
+                "children": children,
+                "rendered": rendered
+            }
+        })
+    }
+
+    fn diagnostic_span(&self, diagnostic: &Diagnostic) -> DiagnosticSpan {
+        let path = self.display_path(diagnostic.file_id);
+        let source = self.source_text(diagnostic.file_id).unwrap_or_default();
+        let start = u32::from(diagnostic.range.start()) as usize;
+        let end = u32::from(diagnostic.range.end()) as usize;
+        let start_location = SourceLocation::from_offset(&source, start);
+        let end_location = SourceLocation::from_offset(&source, end.max(start + 1));
+        let line_text = source
+            .lines()
+            .nth(start_location.line.saturating_sub(1))
+            .unwrap_or("")
+            .to_string();
+        let highlight_end = if start_location.line == end_location.line {
+            end_location.column.max(start_location.column + 1)
+        } else {
+            line_text.chars().count() + 1
+        };
+
+        DiagnosticSpan {
+            file_name: path,
+            byte_start: start as u32,
+            byte_end: end.max(start + 1) as u32,
+            line_start: start_location.line,
+            line_end: start_location.line,
+            column_start: start_location.column,
+            column_end: highlight_end,
+            line_text,
+            highlight_start: start_location.column,
+            highlight_end,
+        }
+    }
+
+    fn source_text(&self, file_id: FileId) -> Option<String> {
+        let path = self.vfs.file_path(file_id).as_path()?;
+        let std_path: &std::path::Path = path.as_ref();
+        std::fs::read_to_string(std_path).ok()
+    }
+
+    fn absolute_path(&self, file_id: FileId) -> String {
+        self.vfs
+            .file_path(file_id)
+            .as_path()
+            .map(|path| {
+                let std_path: &std::path::Path = path.as_ref();
+                std_path.display().to_string()
+            })
+            .unwrap_or_else(|| self.vfs.file_path(file_id).to_string())
     }
 
     fn display_path(&self, file_id: FileId) -> String {
@@ -1360,30 +1593,42 @@ impl<'db> ColorAnalyzer<'db> {
             })
             .unwrap_or_else(|| self.vfs.file_path(file_id).to_string())
     }
+}
 
-    fn location(&self, file_id: FileId, offset: TextSize) -> String {
-        let Some(path) = self.vfs.file_path(file_id).as_path() else {
-            return "?:?".to_string();
-        };
-        let std_path: &std::path::Path = path.as_ref();
-        let Ok(text) = std::fs::read_to_string(std_path) else {
-            return "?:?".to_string();
-        };
+struct DiagnosticSpan {
+    file_name: String,
+    byte_start: u32,
+    byte_end: u32,
+    line_start: usize,
+    line_end: usize,
+    column_start: usize,
+    column_end: usize,
+    line_text: String,
+    highlight_start: usize,
+    highlight_end: usize,
+}
+
+struct SourceLocation {
+    line: usize,
+    column: usize,
+}
+
+impl SourceLocation {
+    fn from_offset(source: &str, offset: usize) -> Self {
         let mut line = 1usize;
         let mut column = 1usize;
-        let target = u32::from(offset) as usize;
-        for (index, byte) in text.as_bytes().iter().enumerate() {
-            if index >= target {
+        for (index, character) in source.char_indices() {
+            if index >= offset {
                 break;
             }
-            if *byte == b'\n' {
+            if character == '\n' {
                 line += 1;
                 column = 1;
             } else {
                 column += 1;
             }
         }
-        format!("{line}:{column}")
+        Self { line, column }
     }
 }
 
@@ -1518,7 +1763,86 @@ pub fn helper() {
         );
     }
 
+    #[test]
+    fn diagnostics_render_rustc_like_human_output() {
+        let rendered = with_analyzer(
+            r#"
+use tessera_ui::remember;
+
+pub fn helper() {
+    let _state = remember(|| 1usize);
+}
+"#,
+            |analyzer| {
+                let diagnostic = analyzer
+                    .diagnostics
+                    .first()
+                    .expect("fixture should report a color diagnostic");
+                analyzer.render_diagnostic(diagnostic)
+            },
+        );
+
+        assert!(rendered.contains("error[E9001]"), "{rendered}");
+        assert!(rendered.contains("--> src/lib.rs:"), "{rendered}");
+        assert!(
+            rendered.contains("let _state = remember(|| 1usize);"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("^"), "{rendered}");
+        assert!(
+            rendered.contains("mark the enclosing free function with #[tessera]"),
+            "{rendered}"
+        );
+        assert!(rendered.contains("RenderSlot::new closure"), "{rendered}");
+    }
+
+    #[test]
+    fn diagnostics_export_cargo_json_messages() {
+        let json = with_analyzer(
+            r#"
+use tessera_ui::remember;
+
+pub fn helper() {
+    let _state = remember(|| 1usize);
+}
+"#,
+            |analyzer| {
+                let diagnostic = analyzer
+                    .diagnostics
+                    .first()
+                    .expect("fixture should report a color diagnostic");
+                analyzer.json_diagnostic(diagnostic, analyzer.render_diagnostic(diagnostic))
+            },
+        );
+
+        assert_eq!(json["reason"], "compiler-message");
+        assert_eq!(json["message"]["level"], "error");
+        assert_eq!(json["message"]["code"]["code"], "E9001");
+        assert_eq!(json["message"]["spans"][0]["is_primary"], true);
+        assert_eq!(
+            json["message"]["spans"][0]["label"],
+            "Tessera runtime API requires a #[tessera] context"
+        );
+        assert_eq!(json["message"]["children"][0]["level"], "help");
+        assert!(
+            json["message"]["rendered"]
+                .as_str()
+                .is_some_and(|rendered| rendered.contains("error[E9001]")),
+            "{json}"
+        );
+    }
+
     fn diagnostics_for(source: &str) -> Vec<String> {
+        with_analyzer(source, |analyzer| {
+            analyzer
+                .diagnostics
+                .iter()
+                .map(|diagnostic| diagnostic.message.clone())
+                .collect()
+        })
+    }
+
+    fn with_analyzer<T>(source: &str, inspect: impl FnOnce(&ColorAnalyzer<'_>) -> T) -> T {
         let _lock = CURRENT_DIR_LOCK
             .get_or_init(|| Mutex::new(()))
             .lock()
@@ -1536,11 +1860,7 @@ pub fn helper() {
                 ColorAnalyzer::new(db, &workspace.vfs, Some("fixture".to_string()), local_files)
                     .expect("fixture analyzer should initialize");
             analyzer.analyze().expect("fixture should analyze");
-            analyzer
-                .diagnostics
-                .into_iter()
-                .map(|diagnostic| diagnostic.message)
-                .collect()
+            inspect(&analyzer)
         })
     }
 
