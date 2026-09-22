@@ -493,7 +493,11 @@ struct SurfaceLayout {
 
 impl PartialEq for SurfaceLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.args.content_alignment == other.args.content_alignment
+        self.args == other.args
+            && self.interaction_state == other.interaction_state
+            && self.ripple_state == other.ripple_state
+            && self.scheme == other.scheme
+            && self.absolute_tonal_elevation == other.absolute_tonal_elevation
     }
 }
 
@@ -936,4 +940,45 @@ pub fn surface(
             .interaction_state_optional(interaction_state)
             .ripple_state_optional(ripple_state);
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{Color, Dp};
+
+    use crate::theme::MaterialColorScheme;
+
+    use super::{SurfaceLayout, SurfaceResolvedArgs, SurfaceStyle};
+
+    fn layout_with_style(style: SurfaceStyle) -> SurfaceLayout {
+        SurfaceLayout {
+            args: SurfaceResolvedArgs {
+                style,
+                ..SurfaceResolvedArgs::default()
+            },
+            interaction_state: None,
+            ripple_state: None,
+            scheme: MaterialColorScheme::default(),
+            absolute_tonal_elevation: Dp(0.0),
+        }
+    }
+
+    fn outlined_track() -> SurfaceStyle {
+        SurfaceStyle::FilledOutlined {
+            fill_color: Color::new(0.1, 0.2, 0.3, 1.0),
+            border_color: Color::new(0.4, 0.5, 0.6, 1.0),
+            border_width: Dp(1.0),
+        }
+    }
+
+    #[test]
+    fn surface_layout_equality_tracks_style_changes() {
+        let outlined = layout_with_style(outlined_track());
+        let filled = layout_with_style(SurfaceStyle::Filled {
+            color: Color::new(0.9, 0.1, 0.1, 1.0),
+        });
+
+        assert!(outlined != filled);
+        assert!(outlined == layout_with_style(outlined_track()));
+    }
 }
