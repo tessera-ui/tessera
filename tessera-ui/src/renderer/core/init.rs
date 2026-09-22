@@ -70,7 +70,8 @@ impl RenderCore {
         }
     }
 
-    /// Requests an adapter for offscreen rendering without a compatible surface.
+    /// Requests an adapter for offscreen rendering without a compatible
+    /// surface.
     async fn request_adapter_offscreen(instance: &wgpu::Instance) -> wgpu::Adapter {
         match instance
             .request_adapter(&wgpu::RequestAdapterOptions {
@@ -191,9 +192,9 @@ impl RenderCore {
     /// window or swapchain surface.
     ///
     /// The core renders into an internal offscreen texture; call
-    /// [`RenderCore::read_offscreen_rgba`] after a render to read the last frame
-    /// back as tightly packed RGBA8 pixels.
-    #[cfg(feature = "headless")]
+    /// [`RenderCore::read_offscreen_rgba`] after a render to read the last
+    /// frame back as tightly packed RGBA8 pixels.
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
     pub(crate) async fn new_offscreen(
         size: winit::dpi::PhysicalSize<u32>,
         format: TextureFormat,
@@ -253,10 +254,12 @@ impl RenderCore {
                 let caps = surface.get_capabilities(&adapter);
                 // Choose the present mode
                 let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
-                    // Fifo is the fallback, it is the most compatible and stable
+                    // Fifo is the fallback, it is the most compatible and
+                    // stable
                     wgpu::PresentMode::Fifo
                 } else {
-                    // Immediate is the least preferred, it can cause tearing and is not recommended
+                    // Immediate is the least preferred, it can cause tearing
+                    // and is not recommended
                     wgpu::PresentMode::Immediate
                 };
                 let alpha_mode = Self::pick_alpha_mode(&caps, window_transparent);
