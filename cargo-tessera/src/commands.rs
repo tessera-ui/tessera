@@ -2,6 +2,7 @@ pub mod android;
 pub mod build;
 pub mod check;
 pub mod dev;
+pub mod headless;
 pub mod new;
 pub mod plugin;
 pub mod profiling;

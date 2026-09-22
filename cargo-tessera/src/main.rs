@@ -68,6 +68,8 @@ enum TesseraCommands {
         #[arg(long, value_enum)]
         asset_backend: Option<AssetBackendArg>,
     },
+    /// Run a non-interactive, session-based headless debug server over JSONL stdio
+    Headless(HeadlessArgs),
     /// Build the project for release (native targets)
     Build {
         /// Build in release mode
@@ -297,6 +299,25 @@ impl AssetBackendArg {
 }
 
 #[derive(Args)]
+struct HeadlessArgs {
+    /// Package to run as headless workers (defaults to the workspace root package)
+    #[arg(long, short)]
+    package: Option<String>,
+    /// Build workers in release mode
+    #[arg(long, short)]
+    release: bool,
+    /// Default offscreen width in physical pixels for new sessions
+    #[arg(long, default_value_t = 800)]
+    width: u32,
+    /// Default offscreen height in physical pixels for new sessions
+    #[arg(long, default_value_t = 600)]
+    height: u32,
+    /// Virtual frame step in milliseconds for new sessions
+    #[arg(long, default_value_t = 16)]
+    frame_time_ms: u32,
+}
+
+#[derive(Args)]
 struct AndroidBuildArgs {
     /// Build in release mode
     #[arg(long, short)]
@@ -419,6 +440,15 @@ fn run() -> Result<()> {
                     profiling_output.as_deref(),
                     debug_dirty_overlay,
                     asset_backend.map(AssetBackendArg::to_backend),
+                )?;
+            }
+            TesseraCommands::Headless(args) => {
+                commands::headless::execute(
+                    args.package.as_deref(),
+                    args.release,
+                    args.width,
+                    args.height,
+                    args.frame_time_ms,
                 )?;
             }
             TesseraCommands::Build {
