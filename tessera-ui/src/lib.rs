@@ -388,6 +388,7 @@ pub use crate::{
         receive_frame_nanos, remember, remember_with_key, retain, retain_with_key,
     },
     scroll::{PlatformScrollConfig, normalize_platform_scroll_delta, platform_scroll_config},
+    thread_utils::SendSync,
 };
 
 use ime_state::ImeState;

@@ -83,7 +83,7 @@
 
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{PxPosition, PxRect, PxSize, compute::resource::ComputeResourceManager};
+use crate::{PxPosition, PxRect, PxSize, SendSync, compute::resource::ComputeResourceManager};
 
 use super::command::ComputeCommand;
 
@@ -199,7 +199,7 @@ pub(crate) struct ErasedDispatchContext<'a, 'b> {
 /// 2. **Between Passes**: Transform data between different rendering stages
 /// 3. **Before Rendering**: Prepare data or textures for subsequent render
 ///    operations
-pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
+pub trait ComputablePipeline<C: ComputeCommand>: SendSync {
     /// Dispatches the compute command within an active compute pass.
     ///
     /// This method receives one or more compute commands of the same type.
@@ -266,7 +266,7 @@ pub trait ComputablePipeline<C: ComputeCommand>: Send + Sync + 'static {
 ///
 /// This trait is automatically implemented for any type that implements
 /// [`ComputablePipeline<C>`] through the [`ComputablePipelineImpl`] wrapper.
-pub(crate) trait ErasedComputablePipeline: Send + Sync {
+pub(crate) trait ErasedComputablePipeline: SendSync {
     /// Dispatches a type-erased compute command.
     fn dispatch_erased(
         &mut self,

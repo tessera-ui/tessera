@@ -7,7 +7,7 @@
 use std::{any::TypeId, collections::HashMap};
 
 use crate::{
-    Command, CompositeCommand, PxPosition, PxSize,
+    Command, CompositeCommand, PxPosition, PxSize, SendSync,
     render_graph::{
         ExternalTextureDesc, RenderGraph, RenderGraphOp, RenderGraphParts, RenderResource,
         RenderResourceId,
@@ -104,7 +104,7 @@ impl CompositeOutput {
 }
 
 /// Trait for pipelines that expand composite commands into graph ops.
-pub trait CompositePipeline<C: CompositeCommand>: Send + Sync + 'static {
+pub trait CompositePipeline<C: CompositeCommand>: SendSync {
     /// Expands composite commands into draw/compute ops.
     fn compile(
         &mut self,
@@ -114,7 +114,7 @@ pub trait CompositePipeline<C: CompositeCommand>: Send + Sync + 'static {
 }
 
 /// Type-erased composite pipeline used by the registry.
-pub(crate) trait ErasedCompositePipeline: Send + Sync {
+pub(crate) trait ErasedCompositePipeline: SendSync {
     fn compile_erased(
         &mut self,
         context: &CompositeContext<'_>,

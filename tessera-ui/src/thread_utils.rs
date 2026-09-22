@@ -1,5 +1,22 @@
 //! # Thread Utilities
 
+/// Thread-safety bound for abstractions that own GPU resources.
+///
+/// Native targets require `Send + Sync + 'static`. On wasm, `wgpu`'s backend
+/// keeps its handles in `Rc`, so they are neither `Send` nor `Sync`; the bound
+/// degrades to `'static` there, where the runtime is single-threaded anyway.
+#[cfg(not(target_family = "wasm"))]
+pub trait SendSync: Send + Sync + 'static {}
+#[cfg(not(target_family = "wasm"))]
+impl<T: Send + Sync + 'static> SendSync for T {}
+
+/// Thread-safety bound for abstractions that own GPU resources.
+///
+/// See the native definition for details.
+#[cfg(target_family = "wasm")]
+pub trait SendSync: 'static {}
+#[cfg(target_family = "wasm")]
+impl<T: 'static> SendSync for T {}
 /// Sets the name of the current thread for debugging and profiling purposes.
 ///
 /// This function provides a cross-platform way to set thread names, which is
