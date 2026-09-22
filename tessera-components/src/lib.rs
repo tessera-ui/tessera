@@ -60,6 +60,10 @@
     rustdoc::invalid_rust_codeblocks,
     rustdoc::invalid_html_tags
 )]
+// Resolving `Sync`/`Send` for GPU handle types recurses deep enough to trip the
+// compiler's recursion-depth lint on some backends. The recursion happens inside
+// `wgpu`, so there is nothing for this crate to restructure.
+#![allow(recursion_depth_exceeding_limit)]
 
 mod animation;
 pub mod app_bar;
