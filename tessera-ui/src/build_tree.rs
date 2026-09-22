@@ -486,7 +486,7 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
         BuildTreeResult::root_recompose(build_tree_cost)
     };
 
-    let tree_is_empty = TesseraRuntime::with(|rt| rt.component_tree.tree().count() == 0);
+    let tree_is_empty = TesseraRuntime::with(|rt| rt.component_tree.tree().len() == 0);
     let invalidations = take_build_invalidations();
     #[cfg(feature = "debug-dirty-overlay")]
     let had_invalidations = !invalidations.dirty_instance_keys.is_empty();

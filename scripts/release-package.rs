@@ -59,7 +59,6 @@ const GITHUB_REPO: &str = "tessera";
 const PUBLISHABLE_PACKAGES: &[&str] = &[
     "tessera-ui",
     "tessera-foundation",
-    "tessera-glyphon",
     "tessera-components",
     "tessera-macros",
     "tessera-shard",

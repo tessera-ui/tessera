@@ -297,15 +297,13 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         let mut font_system = write_font_system();
         self.renderer
             .prepare(
-                glyphon::PrepareContext::new(
-                    context.device,
-                    context.queue,
-                    &mut font_system,
-                    &mut self.atlas,
-                    &self.viewport,
-                    &mut self.swash_cache,
-                ),
+                context.device,
+                context.queue,
+                &mut font_system,
+                &mut self.atlas,
+                &self.viewport,
                 text_areas,
+                &mut self.swash_cache,
             )
             .expect("glyphon prepare failed");
 
@@ -553,14 +551,9 @@ impl TextData {
             glyphon::Metrics::new(size, line_height),
         );
         let color = color_to_glyphon(color);
-        text_buffer.set_wrap(&mut write_font_system(), glyphon::Wrap::Glyph);
-        text_buffer.set_size(
-            &mut write_font_system(),
-            constraint.max_width,
-            constraint.max_height,
-        );
+        text_buffer.set_wrap(glyphon::Wrap::Glyph);
+        text_buffer.set_size(constraint.max_width, constraint.max_height);
         text_buffer.set_text(
-            &mut write_font_system(),
             text,
             &glyphon::Attrs::new()
                 .family(fontdb::Family::SansSerif)

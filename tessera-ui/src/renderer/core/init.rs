@@ -59,6 +59,7 @@ impl RenderCore {
                 power_preference: wgpu::PowerPreference::default(),
                 compatible_surface: Some(surface),
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await
         {
@@ -78,6 +79,7 @@ impl RenderCore {
                 power_preference: wgpu::PowerPreference::HighPerformance,
                 compatible_surface: None,
                 force_fallback_adapter: false,
+                apply_limit_buckets: false,
             })
             .await
         {
@@ -267,6 +269,7 @@ impl RenderCore {
                 let config = wgpu::SurfaceConfiguration {
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                     format: caps.formats[0],
+                    color_space: wgpu::SurfaceColorSpace::Auto,
                     width: size.width,
                     height: size.height,
                     present_mode,
@@ -280,6 +283,7 @@ impl RenderCore {
             None => wgpu::SurfaceConfiguration {
                 usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                 format: offscreen_format.unwrap_or(TextureFormat::Rgba8UnormSrgb),
+                color_space: wgpu::SurfaceColorSpace::Auto,
                 width: size.width.max(1),
                 height: size.height.max(1),
                 present_mode: wgpu::PresentMode::Fifo,

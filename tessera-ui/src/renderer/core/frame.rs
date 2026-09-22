@@ -441,7 +441,7 @@ impl RenderCore {
         );
 
         let present_start = Instant::now();
-        output_frame.present();
+        self.queue.present(output_frame);
         if reconfigure_after_present {
             self.resize_surface();
         }
@@ -690,7 +690,9 @@ impl RenderCore {
 
         let mut pixels = Vec::with_capacity((unpadded_bytes_per_row * height) as usize);
         {
-            let mapped = slice.get_mapped_range();
+            let mapped = slice
+                .get_mapped_range()
+                .map_err(|err| OffscreenReadbackError::Map(err.to_string()))?;
             for row in 0..height {
                 let start = (row * padded_bytes_per_row) as usize;
                 let end = start + unpadded_bytes_per_row as usize;

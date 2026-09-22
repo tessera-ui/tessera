@@ -88,7 +88,6 @@ pub(crate) fn crate_has_tessera_name(db: &RootDatabase, krate: Crate) -> bool {
                 "tessera-build"
                     | "tessera-components"
                     | "tessera-foundation"
-                    | "tessera-glyphon"
                     | "tessera-macros"
                     | "tessera-mobile"
                     | "tessera-platform"

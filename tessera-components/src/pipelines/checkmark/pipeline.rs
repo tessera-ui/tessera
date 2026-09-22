@@ -196,7 +196,7 @@ impl CheckmarkPipeline {
             vertex: wgpu::VertexState {
                 module: shader,
                 entry_point: Some("vs_main"),
-                buffers: &[CheckmarkVertex::desc()],
+                buffers: &[Some(CheckmarkVertex::desc())],
                 compilation_options: wgpu::PipelineCompilationOptions::default(),
             },
             fragment: Some(wgpu::FragmentState {

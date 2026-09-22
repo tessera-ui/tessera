@@ -696,7 +696,7 @@ impl TextEditState {
 
     fn set_wrap(&mut self, wrap: glyphon::Wrap) {
         self.editor.with_buffer_mut(|buffer| {
-            buffer.set_wrap(&mut write_font_system(), wrap);
+            buffer.set_wrap(wrap);
         });
     }
 
@@ -708,11 +708,7 @@ impl TextEditState {
 
     fn sync_size_and_shape_until_scroll(&mut self, constraint: &TextConstraint) {
         self.editor.with_buffer_mut(|buffer| {
-            buffer.set_size(
-                &mut write_font_system(),
-                constraint.max_width,
-                constraint.max_height,
-            );
+            buffer.set_size(constraint.max_width, constraint.max_height);
             buffer.shape_until_scroll(&mut write_font_system(), false);
         });
     }
@@ -777,7 +773,6 @@ impl TextEditState {
                 (self.text_color.a * 255.0) as u8,
             );
             buffer.set_text(
-                &mut write_font_system(),
                 text,
                 &glyphon::Attrs::new()
                     .family(glyphon::fontdb::Family::SansSerif)
@@ -1927,7 +1922,7 @@ impl TextEditorController {
             &mut write_font_system(),
             glyphon::Metrics::new(size.to_pixels_f32(), line_height_px.to_f32()),
         );
-        buffer.set_wrap(&mut write_font_system(), glyphon::Wrap::Glyph);
+        buffer.set_wrap(glyphon::Wrap::Glyph);
         let scroll_state = TextScrollControllerState::new(buffer.scroll());
         let editor = glyphon::Editor::new(buffer);
         let text_color = Color::BLACK;
@@ -3027,7 +3022,7 @@ fn compute_range_rects(
         let line_top = Px(run.line_top as i32);
         let line_height = Px(run.line_height as i32);
 
-        if let Some((x, w)) = run.highlight(range_start, range_end) {
+        for (x, w) in run.highlight(range_start, range_end) {
             rects.push(RectDef {
                 x: Px(x as i32),
                 y: line_top,
@@ -3179,14 +3174,9 @@ fn build_display_buffer(
         &mut write_font_system(),
         glyphon::Metrics::new(font_size, line_height),
     );
-    buffer.set_wrap(&mut write_font_system(), wrap);
-    buffer.set_size(
-        &mut write_font_system(),
-        constraint.max_width,
-        constraint.max_height,
-    );
+    buffer.set_wrap(wrap);
+    buffer.set_size(constraint.max_width, constraint.max_height);
     buffer.set_text(
-        &mut write_font_system(),
         text,
         &glyphon::Attrs::new()
             .family(glyphon::fontdb::Family::SansSerif)
@@ -3474,7 +3464,7 @@ mod tests {
     use super::{
         ClickType, RectDef, TextEditorController, TextLayoutCacheKey, TextSelection,
         TransformedText, active_ime_rect, build_display_buffer, build_display_editor,
-        compute_transformed_composition_rects, text_offset_to_cursor_in_buffer, write_font_system,
+        compute_transformed_composition_rects, text_offset_to_cursor_in_buffer,
     };
     use crate::pipelines::text::command::TextConstraint;
     use glyphon::{Action as GlyphonAction, Edit as _, cosmic_text::Motion};
@@ -4076,9 +4066,7 @@ mod tests {
         let text = "hello world hello world";
         let mut controller = controller_with_text(text);
         controller.with_editor_mut(|editor| {
-            editor.with_buffer_mut(|buffer| {
-                buffer.set_size(&mut write_font_system(), Some(40.0), Some(20.0))
-            })
+            editor.with_buffer_mut(|buffer| buffer.set_size(Some(40.0), Some(20.0)))
         });
         controller.set_single_line(true);
         controller.set_text_and_selection(text, TextSelection::collapsed(text.len()));

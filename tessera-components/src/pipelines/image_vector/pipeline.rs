@@ -177,7 +177,7 @@ impl ImageVectorPipeline {
                 },
             ],
         };
-        let vertex_layouts = [vertex_layout];
+        let vertex_layouts = [Some(vertex_layout)];
 
         let raster_sample_count = desired_raster_sample_count(sample_count);
 
