@@ -5,12 +5,10 @@
 //! Configure clickable, toggleable, selectable, and draggable modifier
 //! behavior.
 
-use std::sync::{Arc, Mutex};
-
 use tessera_ui::{
     Callback, CallbackWith, FocusProperties, FocusRequester, Modifier, PointerInput,
     PointerInputModifierNode, Px, PxPosition, PxSize, State, accesskit,
-    modifier::ModifierCapabilityExt as _,
+    modifier::ModifierCapabilityExt as _, remember,
 };
 
 use crate::gesture::{DragAxis, DragRecognizer, DragSettings, LongPressRecognizer, TapRecognizer};
@@ -294,20 +292,12 @@ impl InteractionState {
 #[derive(Clone)]
 enum DragRecognizerHandle {
     State(State<DragRecognizer>),
-    Local(Arc<Mutex<DragRecognizer>>),
 }
 
 impl DragRecognizerHandle {
     fn with_mut<R>(&self, f: impl FnOnce(&mut DragRecognizer) -> R) -> R {
         match self {
             Self::State(state) => state.with_mut(f),
-            Self::Local(recognizer) => match recognizer.lock() {
-                Ok(mut guard) => f(&mut guard),
-                Err(poisoned) => {
-                    let mut guard = poisoned.into_inner();
-                    f(&mut guard)
-                }
-            },
         }
     }
 }
@@ -412,7 +402,15 @@ pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> M
         });
         DragRecognizerHandle::State(drag_recognizer)
     } else {
-        DragRecognizerHandle::Local(Arc::new(Mutex::new(DragRecognizer::new(settings))))
+        // Persist the recognizer across rebuilds. A drag updates component
+        // state which triggers a rebuild, and a freshly created
+        // recognizer would lose its active pointer and last position,
+        // making the drag let go mid-gesture.
+        let recognizer = remember(|| DragRecognizer::new(settings));
+        recognizer.with_mut(|recognizer| {
+            recognizer.set_settings(settings);
+        });
+        DragRecognizerHandle::State(recognizer)
     };
 
     base.push_pointer_input(DraggablePointerModifierNode {
