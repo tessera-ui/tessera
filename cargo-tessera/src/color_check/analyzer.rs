@@ -1783,7 +1783,8 @@ pub fn helper() {
         );
 
         assert!(rendered.contains("error[E9001]"), "{rendered}");
-        assert!(rendered.contains("--> src/lib.rs:"), "{rendered}");
+        let expected_location = format!("--> {}", Path::new("src").join("lib.rs").display());
+        assert!(rendered.contains(&expected_location), "{rendered}");
         assert!(
             rendered.contains("let _state = remember(|| 1usize);"),
             "{rendered}"

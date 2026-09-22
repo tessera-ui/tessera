@@ -1,8 +1,13 @@
-use std::{collections::HashSet, env, path::Path};
+use std::{
+    collections::HashSet,
+    env,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{Context, Result, anyhow};
 use cargo_metadata::{MetadataCommand, Target, TargetKind};
 use ra_ap_base_db::{Crate, all_crates};
+use ra_ap_hir::crate_def_map;
 use ra_ap_ide::{AnalysisHost, RootDatabase};
 use ra_ap_load_cargo::{LoadCargoConfig, ProcMacroServerChoice, load_workspace_at};
 use ra_ap_project_model::{CargoConfig, CargoFeatures, RustLibSource};
@@ -62,25 +67,26 @@ pub(crate) fn selected_local_files(
         .filter(|krate| crate_matches(db, *krate, package_name.as_deref(), &target_root_files))
         .collect::<HashSet<_>>();
 
-    let mut local_files = HashSet::new();
-    for (file_id, path) in vfs.iter() {
-        let Some(path) = path.as_path() else {
-            continue;
-        };
-        let std_path: &Path = path.as_ref();
-        if !std_path.extension().is_some_and(|ext| ext == "rs") {
-            continue;
-        }
-        if !std_path.starts_with(&manifest_dir) {
-            continue;
-        }
-        let relevant_crates = ra_ap_base_db::relevant_crates(db, file_id);
-        if relevant_crates
-            .iter()
-            .any(|krate| allowed_crates.contains(krate))
-        {
-            local_files.insert(file_id);
-        }
+    // Only analyze source files that belong to the selected crates' module
+    // trees. Files that live in the VFS but are not declared as modules (for
+    // example a stray `src/pages/foo.rs` without a matching `mod` declaration)
+    // are not part of the build, so rust-analyzer cannot resolve anything in
+    // them and they would otherwise produce spurious diagnostics.
+    let local_files = allowed_crates
+        .iter()
+        .flat_map(|krate| {
+            crate_def_map(db, *krate)
+                .modules()
+                .map(|(_, module)| module.definition_source_file_id())
+        })
+        .filter_map(|file_id| file_id.file_id())
+        .map(|file_id| file_id.file_id(db))
+        .collect::<HashSet<_>>();
+
+    if local_files.is_empty() {
+        return Err(anyhow!(
+            "rust-analyzer did not load any local Rust source files for Tessera color checking"
+        ));
     }
 
     Ok(local_files)
@@ -109,16 +115,14 @@ fn selected_package_name(options: &CheckOptions<'_>) -> Result<Option<String>> {
         .exec()
         .context("Failed to read Cargo metadata for Tessera color checking")?;
     let current_dir = env::current_dir().context("Failed to resolve current directory")?;
-    let current_dir = current_dir
-        .canonicalize()
-        .context("Failed to canonicalize current directory")?;
+    let current_dir = normalize_path(&current_dir);
     let mut current_package = None;
     for package in &metadata.packages {
         let manifest_dir = package
             .manifest_path
             .parent()
             .ok_or_else(|| anyhow!("Package manifest has no parent directory"))?;
-        if current_dir.starts_with(manifest_dir) {
+        if current_dir.starts_with(normalize_path(manifest_dir.as_std_path())) {
             current_package = Some(package.name.to_string());
             break;
         }
@@ -147,9 +151,7 @@ fn selected_package_manifest_dir(package: Option<&str>) -> Result<std::path::Pat
         .manifest_path
         .parent()
         .ok_or_else(|| anyhow!("Package manifest has no parent directory"))?;
-    manifest_dir
-        .canonicalize()
-        .with_context(|| format!("Failed to canonicalize package directory `{manifest_dir}`"))
+    Ok(normalize_path(manifest_dir.as_std_path()))
 }
 
 fn selected_target_roots(
@@ -167,21 +169,13 @@ fn selected_target_roots(
                 manifest_path.display()
             )
         })?;
-    let canonical_manifest_path = manifest_path.canonicalize().with_context(|| {
-        format!(
-            "Failed to canonicalize package manifest {}",
-            manifest_path.display()
-        )
-    })?;
+    let normalized_manifest_path = normalize_path(&manifest_path);
     let package = metadata
         .packages
         .iter()
         .find(|candidate| {
             let candidate_manifest_path: &Path = candidate.manifest_path.as_ref();
-            candidate_manifest_path
-                .canonicalize()
-                .map(|path| path == canonical_manifest_path)
-                .unwrap_or(false)
+            normalize_path(candidate_manifest_path) == normalized_manifest_path
         })
         .ok_or_else(|| {
             anyhow!(
@@ -192,7 +186,7 @@ fn selected_target_roots(
     let mut roots = HashSet::new();
     for target in &package.targets {
         if target_is_selected(target, target_selection) {
-            roots.insert(target.src_path.clone().into_std_path_buf());
+            roots.insert(normalize_path(target.src_path.as_std_path()));
         }
     }
 
@@ -230,7 +224,7 @@ fn target_is_lib(target: &Target) -> bool {
 }
 
 fn file_id_for_path(vfs: &Vfs, path: &Path) -> Option<FileId> {
-    let path = path.canonicalize().ok()?;
+    let path = normalize_path(path);
     let vfs_path = VfsPath::new_real_path(path.display().to_string());
     vfs.file_id(&vfs_path).map(|(file_id, _)| file_id)
 }
@@ -255,6 +249,24 @@ fn crate_matches(
     true
 }
 
+/// Normalizes a path so it can be compared against rust-analyzer VFS paths.
+///
+/// rust-analyzer deliberately never canonicalizes paths; it mirrors the paths
+/// reported by Cargo. We therefore must not call `std::fs::canonicalize` here:
+/// on Windows that prepends a verbatim prefix such as `\\?\C:` which never
+/// matches the VFS representation and makes every path comparison fail. This
+/// defensively strips an existing verbatim prefix while otherwise keeping the
+/// path untouched.
+fn normalize_path(path: &Path) -> PathBuf {
+    let text = path.to_string_lossy();
+    if let Some(rest) = text.strip_prefix(r"\\?\UNC\") {
+        return PathBuf::from(format!(r"\\{rest}"));
+    }
+    if let Some(rest) = text.strip_prefix(r"\\?\") {
+        return PathBuf::from(rest.to_string());
+    }
+    path.to_path_buf()
+}
 #[cfg(test)]
 mod tests {
     use std::{
@@ -284,6 +296,22 @@ mod tests {
         });
 
         assert!(contains_expected, "selected roots: {roots:?}");
+    }
+
+    #[test]
+    fn normalize_path_strips_verbatim_prefix() {
+        assert_eq!(
+            normalize_path(Path::new(r"\\?\C:\workspace\example")),
+            PathBuf::from(r"C:\workspace\example")
+        );
+        assert_eq!(
+            normalize_path(Path::new(r"\\?\UNC\server\share\example")),
+            PathBuf::from(r"\\server\share\example")
+        );
+        assert_eq!(
+            normalize_path(Path::new(r"C:\workspace\example")),
+            PathBuf::from(r"C:\workspace\example")
+        );
     }
 
     struct FixtureWorkspace {
