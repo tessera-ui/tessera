@@ -16,6 +16,24 @@ use crate::{
     theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
 };
 
+/// Visual variants of the Material Design 3 [`button`].
+///
+/// Each variant resolves its container, content, and border colors from the
+/// active [`MaterialColorScheme`] unless explicitly overridden.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ButtonVariant {
+    /// Filled button using the primary container color. High emphasis.
+    #[default]
+    Filled,
+    /// Filled button on a low surface container with a shadow.
+    Elevated,
+    /// Filled button using the secondary container color. Medium emphasis.
+    Tonal,
+    /// Transparent button with an outline border. Medium emphasis.
+    Outlined,
+    /// Transparent button without a border. Low emphasis.
+    Text,
+}
 /// Material Design 3 defaults for [`button`].
 pub struct ButtonDefaults;
 
@@ -93,6 +111,7 @@ struct ButtonResolvedArgs {
 ///
 /// ## Parameters
 ///
+/// - `variant` — optional visual variant (`filled`/`elevated`/`tonal`/`outlined`/`text`).
 /// - `enabled` — optional enabled flag.
 /// - `modifier` — modifier chain applied to the button subtree.
 /// - `color` — optional container color override.
@@ -134,6 +153,7 @@ struct ButtonResolvedArgs {
 /// Renders a Material button.
 #[tessera]
 pub fn button(
+    variant: Option<ButtonVariant>,
     enabled: Option<bool>,
     modifier: Option<Modifier>,
     color: Option<Color>,
@@ -157,25 +177,89 @@ pub fn button(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
+    let variant = variant.unwrap_or_default();
+    let (
+        default_container_color,
+        default_content_color,
+        default_ripple_color,
+        default_border_width,
+        default_border_color,
+        default_elevation,
+        default_disabled_container_color,
+        default_disabled_border_color,
+    ) = match variant {
+        ButtonVariant::Filled => (
+            scheme.primary,
+            scheme.on_primary,
+            scheme.on_primary,
+            Dp(0.0),
+            None,
+            None,
+            ButtonDefaults::disabled_container_color(&scheme),
+            ButtonDefaults::disabled_border_color(&scheme),
+        ),
+        ButtonVariant::Elevated => (
+            scheme.surface_container_low,
+            scheme.primary,
+            scheme.primary,
+            Dp(0.0),
+            None,
+            Some(Dp(1.0)),
+            ButtonDefaults::disabled_container_color(&scheme),
+            ButtonDefaults::disabled_border_color(&scheme),
+        ),
+        ButtonVariant::Tonal => (
+            scheme.secondary_container,
+            scheme.on_secondary_container,
+            scheme.on_secondary_container,
+            Dp(0.0),
+            None,
+            None,
+            ButtonDefaults::disabled_container_color(&scheme),
+            ButtonDefaults::disabled_border_color(&scheme),
+        ),
+        ButtonVariant::Outlined => (
+            Color::TRANSPARENT,
+            scheme.primary,
+            scheme.primary,
+            Dp(1.0),
+            Some(scheme.outline),
+            None,
+            Color::TRANSPARENT,
+            ButtonDefaults::disabled_border_color(&scheme),
+        ),
+        ButtonVariant::Text => (
+            Color::TRANSPARENT,
+            scheme.primary,
+            scheme.primary,
+            Dp(0.0),
+            None,
+            None,
+            Color::TRANSPARENT,
+            ButtonDefaults::disabled_border_color(&scheme),
+        ),
+    };
+    let container_color = color.unwrap_or(default_container_color);
+    let content_color = content_color.unwrap_or_else(|| {
+        content_color_for(container_color, &scheme).unwrap_or(default_content_color)
+    });
     let button_args = ButtonResolvedArgs {
         enabled: enabled.unwrap_or(true),
         modifier: modifier.unwrap_or_default(),
-        color: color.unwrap_or(scheme.primary),
-        content_color,
+        color: container_color,
+        content_color: Some(content_color),
         shape: shape.unwrap_or(Shape::CAPSULE),
         padding: padding.unwrap_or(ButtonDefaults::CONTENT_VERTICAL_PADDING),
         on_click,
-        ripple_color: ripple_color.unwrap_or(scheme.on_primary),
-        border_width: border_width.unwrap_or(Dp(0.0)),
-        border_color,
-        elevation,
+        ripple_color: ripple_color.unwrap_or(default_ripple_color),
+        border_width: border_width.unwrap_or(default_border_width),
+        border_color: border_color.or(default_border_color),
+        elevation: elevation.or(default_elevation),
         tonal_elevation: tonal_elevation.unwrap_or(Dp(0.0)),
-        disabled_container_color: disabled_container_color
-            .unwrap_or_else(|| ButtonDefaults::disabled_container_color(&scheme)),
+        disabled_container_color: disabled_container_color.unwrap_or(default_disabled_container_color),
         disabled_content_color: disabled_content_color
             .unwrap_or_else(|| ButtonDefaults::disabled_content_color(&scheme)),
-        disabled_border_color: disabled_border_color
-            .unwrap_or_else(|| ButtonDefaults::disabled_border_color(&scheme)),
+        disabled_border_color: disabled_border_color.unwrap_or(default_disabled_border_color),
         accessibility_label,
         accessibility_description,
         child,
@@ -259,62 +343,39 @@ pub fn button(
 }
 
 impl ButtonBuilder {
-    /// Applies the standard "Filled" button preset.
-    /// Create a standard "Filled" button (High emphasis).
-    /// Uses Primary color for container and OnPrimary for content.
+    /// Applies the standard "Filled" button preset (High emphasis).
+    ///
+    /// Uses the theme Primary container with OnPrimary content.
     pub fn filled(self) -> Self {
-        self.color(Color::new(0.0, 0.5, 1.0, 1.0))
-            .content_color(Color::new(1.0, 1.0, 1.0, 1.0))
-            .ripple_color(Color::new(1.0, 1.0, 1.0, 1.0))
-            .disabled_container_color(Color::new(0.5, 0.5, 0.5, 0.12))
-            .disabled_content_color(Color::new(0.5, 0.5, 0.5, 0.38))
+        self.variant(ButtonVariant::Filled)
     }
 
-    /// Applies the "Elevated" button preset.
-    /// Create an "Elevated" button (Medium emphasis).
-    /// Uses Surface color (or SurfaceContainerLow if available) with a shadow.
+    /// Applies the "Elevated" button preset (Medium emphasis).
+    ///
+    /// Uses the theme SurfaceContainerLow container with a shadow.
     pub fn elevated(self) -> Self {
-        self.color(Color::new(0.95, 0.95, 0.95, 1.0))
-            .content_color(Color::new(0.0, 0.5, 1.0, 1.0))
-            .ripple_color(Color::new(0.0, 0.5, 1.0, 1.0))
-            .elevation(Dp(1.0))
-            .disabled_container_color(Color::new(0.5, 0.5, 0.5, 0.12))
-            .disabled_content_color(Color::new(0.5, 0.5, 0.5, 0.38))
+        self.variant(ButtonVariant::Elevated)
     }
 
-    /// Applies the "Tonal" button preset.
-    /// Create a "Tonal" button (Medium emphasis).
-    /// Uses SecondaryContainer color for container and OnSecondaryContainer for
+    /// Applies the "Tonal" button preset (Medium emphasis).
+    ///
+    /// Uses the theme SecondaryContainer container with OnSecondaryContainer
     /// content.
     pub fn tonal(self) -> Self {
-        self.color(Color::new(0.85, 0.9, 0.95, 1.0))
-            .content_color(Color::new(0.2, 0.3, 0.4, 1.0))
-            .ripple_color(Color::new(0.2, 0.3, 0.4, 1.0))
-            .disabled_container_color(Color::new(0.5, 0.5, 0.5, 0.12))
-            .disabled_content_color(Color::new(0.5, 0.5, 0.5, 0.38))
+        self.variant(ButtonVariant::Tonal)
     }
 
-    /// Applies the "Outlined" button preset.
-    /// Create an "Outlined" button (Medium emphasis).
-    /// Transparent container with an Outline border.
+    /// Applies the "Outlined" button preset (Medium emphasis).
+    ///
+    /// Uses a transparent container with an Outline border.
     pub fn outlined(self) -> Self {
-        self.color(Color::TRANSPARENT)
-            .content_color(Color::new(0.4, 0.4, 0.4, 1.0))
-            .disabled_container_color(Color::TRANSPARENT)
-            .ripple_color(Color::new(0.4, 0.4, 0.4, 1.0))
-            .border_width(Dp(1.0))
-            .border_color(Color::new(0.7, 0.7, 0.7, 1.0))
-            .disabled_border_color(Color::new(0.7, 0.7, 0.7, 0.12))
+        self.variant(ButtonVariant::Outlined)
     }
 
-    /// Applies the "Text" button preset.
-    /// Create a "Text" button (Low emphasis).
-    /// Transparent container and no border.
+    /// Applies the "Text" button preset (Low emphasis).
+    ///
+    /// Uses a transparent container and no border.
     pub fn text(self) -> Self {
-        self.color(Color::TRANSPARENT)
-            .content_color(Color::new(0.0, 0.5, 1.0, 1.0))
-            .disabled_container_color(Color::TRANSPARENT)
-            .ripple_color(Color::new(0.0, 0.5, 1.0, 1.0))
-            .disabled_content_color(Color::new(0.5, 0.5, 0.5, 0.38))
+        self.variant(ButtonVariant::Text)
     }
 }
