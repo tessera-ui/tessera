@@ -18,7 +18,7 @@ use crate::{
     icon::icon,
     image_vector::TintMode,
     painter::Painter,
-    theme::{MaterialAlpha, MaterialTheme},
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
 use interaction::{
@@ -779,21 +779,47 @@ struct SliderParams {
     controller: Option<State<SliderController>>,
 }
 
-fn slider_config_from_params(params: SliderParams) -> SliderConfig {
+/// Returns the active [`MaterialColorScheme`].
+///
+/// Falls back to the default Material theme when no theme is provided in the
+/// current context, mirroring the behavior of other themed components.
+fn current_color_scheme() -> MaterialColorScheme {
+    use_context::<MaterialTheme>()
+        .map(|theme| theme.get().color_scheme)
+        .unwrap_or_else(|| MaterialTheme::default().color_scheme)
+}
+
+/// Slider colors derived from the active Material color scheme.
+#[derive(Clone, Copy)]
+struct SliderThemeColors {
+    active_track: Color,
+    inactive_track: Color,
+    thumb: Color,
+}
+
+/// Resolves the default slider colors from the active Material theme.
+fn slider_theme_colors() -> SliderThemeColors {
+    let scheme = current_color_scheme();
+    SliderThemeColors {
+        active_track: scheme.primary,
+        inactive_track: scheme.surface_variant,
+        thumb: scheme.primary,
+    }
+}
+
+fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> SliderConfig {
     let defaults = SliderConfig::default();
     SliderConfig {
         modifier: params.modifier.unwrap_or(defaults.modifier),
         value: params.value,
         on_change: params.on_change.unwrap_or_else(CallbackWith::default_value),
         size: params.size,
-        active_track_color: params
-            .active_track_color
-            .unwrap_or(defaults.active_track_color),
+        active_track_color: params.active_track_color.unwrap_or(theme.active_track),
         inactive_track_color: params
             .inactive_track_color
-            .unwrap_or(defaults.inactive_track_color),
+            .unwrap_or(theme.inactive_track),
         thumb_diameter: params.thumb_diameter.unwrap_or(defaults.thumb_diameter),
-        thumb_color: params.thumb_color.unwrap_or(defaults.thumb_color),
+        thumb_color: params.thumb_color.unwrap_or(theme.thumb),
         disabled: params.disabled,
         accessibility_label: params.accessibility_label,
         accessibility_description: params.accessibility_description,
@@ -823,21 +849,22 @@ struct RangeSliderParams {
     controller: Option<State<RangeSliderController>>,
 }
 
-fn range_slider_config_from_params(params: RangeSliderParams) -> RangeSliderConfig {
+fn range_slider_config_from_params(
+    params: RangeSliderParams,
+    theme: SliderThemeColors,
+) -> RangeSliderConfig {
     let defaults = RangeSliderConfig::default();
     RangeSliderConfig {
         modifier: params.modifier.unwrap_or(defaults.modifier),
         value: params.value,
         on_change: params.on_change.unwrap_or_else(CallbackWith::default_value),
         size: params.size,
-        active_track_color: params
-            .active_track_color
-            .unwrap_or(defaults.active_track_color),
+        active_track_color: params.active_track_color.unwrap_or(theme.active_track),
         inactive_track_color: params
             .inactive_track_color
-            .unwrap_or(defaults.inactive_track_color),
+            .unwrap_or(theme.inactive_track),
         thumb_diameter: params.thumb_diameter.unwrap_or(defaults.thumb_diameter),
-        thumb_color: params.thumb_color.unwrap_or(defaults.thumb_color),
+        thumb_color: params.thumb_color.unwrap_or(theme.thumb),
         disabled: params.disabled,
         accessibility_label: params.accessibility_label,
         accessibility_description: params.accessibility_description,
@@ -997,7 +1024,7 @@ struct SliderColors {
 
 fn slider_colors(args: &SliderConfig) -> SliderColors {
     if args.disabled {
-        let scheme = MaterialTheme::default().color_scheme;
+        let scheme = current_color_scheme();
         let disabled_thumb = scheme
             .surface
             .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
@@ -1021,7 +1048,7 @@ fn slider_colors(args: &SliderConfig) -> SliderColors {
 
 fn range_slider_colors(args: &RangeSliderConfig) -> SliderColors {
     if args.disabled {
-        let scheme = MaterialTheme::default().color_scheme;
+        let scheme = current_color_scheme();
         let disabled_thumb = scheme
             .surface
             .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
@@ -1122,7 +1149,7 @@ pub fn slider(
         steps,
         inset_icon,
         controller,
-    });
+    }, slider_theme_colors());
     let controller = args
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
@@ -1467,7 +1494,7 @@ pub fn centered_slider(
         steps,
         inset_icon,
         controller,
-    });
+    }, slider_theme_colors());
     let controller = args
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
@@ -1802,7 +1829,7 @@ pub fn range_slider(
         show_stop_indicator,
         steps,
         controller,
-    });
+    }, slider_theme_colors());
     let state = args
         .controller
         .unwrap_or_else(|| remember(RangeSliderController::new));
