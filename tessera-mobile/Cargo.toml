@@ -10,7 +10,6 @@ authors = [
 edition.workspace = true
 description = "Rust on mobile made easy."
 repository = "https://github.com/tessera-ui/tessera"
-readme = "README.md"
 keywords = ["mobile", "ios", "android", "tessera"]
 categories = ["development-tools"]
 license = "Apache-2.0 OR MIT"

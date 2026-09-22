@@ -9,7 +9,6 @@ license.workspace = true
 repository.workspace = true
 homepage.workspace = true
 description = "Macros of tessera-ui."
-readme = "README.md"
 
 [features]
 default = ["shard"]
