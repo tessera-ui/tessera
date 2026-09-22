@@ -319,10 +319,22 @@ fn collect_rs_files(paths: &[PathBuf]) -> Vec<PathBuf> {
                 .filter_map(Result::ok)
                 .filter(|e| e.file_type().map_or(false, |ft| ft.is_file()))
                 .filter(|e| e.path().extension().map_or(false, |ext| ext == "rs"))
+                .filter(|e| !is_in_nested_repo(e.path(), path))
                 .map(|e| e.into_path())
                 .collect::<Vec<_>>()
         })
         .collect()
+}
+
+/// Returns `true` when `file` lives inside a repository nested under `root`
+/// (e.g. a git submodule). Those repositories are owned by other projects, so
+/// this check must not lint or rewrite their files.
+fn is_in_nested_repo(file: &Path, root: &Path) -> bool {
+    file.parent()
+        .into_iter()
+        .flat_map(Path::ancestors)
+        .take_while(|dir| *dir != root)
+        .any(|dir| dir.join(".git").exists())
 }
 
 /// Build a normalized imports string for `ast`, identify the original line
@@ -441,7 +453,8 @@ fn fix_file(path: &Path) -> Result<bool> {
 ///  - `format_without_attrs` handles the common case: grouping by (category,
 ///    is_pub) then merging root paths into `{}` groups via `merge_path_groups`.
 fn format_imports_from_collected(imports: Vec<Import>) -> String {
-    // Helper for imports that have attributes (keeps each as its own `use` line).
+    // Helper for imports that have attributes (keeps each as its own `use`
+    // line).
     fn format_with_attrs(attrs: &str, imports: &[Import]) -> String {
         imports
             .iter()
@@ -456,7 +469,8 @@ fn format_imports_from_collected(imports: Vec<Import>) -> String {
             .join("\n")
     }
 
-    // Merge a group of imports that share the same root into `root::{...}` forms.
+    // Merge a group of imports that share the same root into `root::{...}`
+    // forms.
     fn merge_path_groups(group: impl IntoIterator<Item = Import>, visibility: &str) -> String {
         let mut path_groups: BTreeMap<String, UseNode> = BTreeMap::new();
         for import in group {
@@ -483,7 +497,8 @@ fn format_imports_from_collected(imports: Vec<Import>) -> String {
             .join("\n")
     }
 
-    // Format the imports that don't have attributes by grouping and merging roots.
+    // Format the imports that don't have attributes by grouping and merging
+    // roots.
     fn format_without_attrs(imports: Vec<Import>) -> String {
         imports
             .into_iter()
@@ -757,7 +772,8 @@ fn collect_use_paths(tree: &UseTree) -> Vec<Vec<&syn::Ident>> {
 fn collect_use_item_lines(use_items: &[&syn::ItemUse]) -> HashSet<usize> {
     // Collect all line numbers occupied by `use` items and their attributes.
     // This ensures that when we replace the imports block we remove the entire
-    // original `use` statements including any preceding attributes (e.g. cfg/doc).
+    // original `use` statements including any preceding attributes (e.g.
+    // cfg/doc).
     let mut lines = HashSet::new();
     for item in use_items {
         // Include attribute lines attached to the use item.
