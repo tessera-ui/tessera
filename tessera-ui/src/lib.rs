@@ -293,6 +293,8 @@ pub mod entry_point;
 pub mod entry_registry;
 mod execution_context;
 pub mod focus;
+#[cfg(all(feature = "headless", not(target_family = "wasm")))]
+pub mod headless;
 mod ime_state;
 mod keyboard_state;
 pub mod layout;
@@ -368,6 +370,7 @@ pub use crate::{
     render_module::RenderModule,
     render_scene::{Command, CompositeCommand, DrawRegion, PaddingRect, SampleRegion},
     renderer::{
+        core::OffscreenReadbackError,
         Renderer,
         composite::{
             self, CompositeBatchItem, CompositeContext, CompositeOutput, CompositePipeline,
@@ -388,6 +391,13 @@ pub use crate::{
 };
 
 use ime_state::ImeState;
+
+#[cfg(all(feature = "headless", not(target_family = "wasm")))]
+pub use crate::headless::{
+    HEADLESS_ENV, HEADLESS_FRAME_TIME_MS_ENV, HEADLESS_HEIGHT_ENV, HEADLESS_WIDTH_ENV,
+    HeadlessConfig, HeadlessError, HeadlessRenderer, encode_png_rgba, headless_mode_requested,
+    run_headless, write_png_file,
+};
 
 #[cfg(target_os = "android")]
 pub use {jni, ndk_context, ndk_sys};

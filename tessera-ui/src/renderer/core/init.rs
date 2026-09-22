@@ -70,6 +70,24 @@ impl RenderCore {
         }
     }
 
+    /// Requests an adapter for offscreen rendering without a compatible surface.
+    async fn request_adapter_offscreen(instance: &wgpu::Instance) -> wgpu::Adapter {
+        match instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::HighPerformance,
+                compatible_surface: None,
+                force_fallback_adapter: false,
+            })
+            .await
+        {
+            Ok(adapter) => adapter,
+            Err(e) => {
+                error!("Failed to find an offscreen adapter: {e:?}");
+                panic!("Failed to find an offscreen adapter: {e:?}");
+            }
+        }
+    }
+
     async fn request_device_and_queue_for_adapter(
         adapter: &wgpu::Adapter,
     ) -> (wgpu::Device, wgpu::Queue) {
@@ -156,6 +174,42 @@ impl RenderCore {
         sample_count: u32,
         window_transparent: bool,
     ) -> Self {
+        let size = window.inner_size();
+        let scale_factor = window.scale_factor();
+        Self::new_inner(
+            Some(window),
+            size,
+            scale_factor,
+            None,
+            sample_count,
+            window_transparent,
+        )
+        .await
+    }
+
+    /// Create a render core that renders into an offscreen target without a
+    /// window or swapchain surface.
+    ///
+    /// The core renders into an internal offscreen texture; call
+    /// [`RenderCore::read_offscreen_rgba`] after a render to read the last frame
+    /// back as tightly packed RGBA8 pixels.
+    #[cfg(feature = "headless")]
+    pub(crate) async fn new_offscreen(
+        size: winit::dpi::PhysicalSize<u32>,
+        format: TextureFormat,
+        sample_count: u32,
+    ) -> Self {
+        Self::new_inner(None, size, 1.0, Some(format), sample_count, false).await
+    }
+
+    async fn new_inner(
+        window: Option<Arc<Window>>,
+        size: winit::dpi::PhysicalSize<u32>,
+        scale_factor: f64,
+        offscreen_format: Option<TextureFormat>,
+        sample_count: u32,
+        window_transparent: bool,
+    ) -> Self {
         // Looking for adapters
         let mut instance_desc = wgpu::InstanceDescriptor::new_without_display_handle();
         #[cfg(not(target_os = "windows"))]
@@ -165,49 +219,72 @@ impl RenderCore {
         #[cfg(target_os = "windows")]
         {
             instance_desc.backends = wgpu::Backends::DX12;
-            instance_desc.backend_options.dx12.presentation_system =
-                wgpu::Dx12SwapchainKind::DxgiFromVisual;
+            if window.is_some() {
+                instance_desc.backend_options.dx12.presentation_system =
+                    wgpu::Dx12SwapchainKind::DxgiFromVisual;
+            }
         }
         info!("Using WGPU instance config: {instance_desc:#?}");
         let instance: wgpu::Instance = wgpu::Instance::new(instance_desc);
-        // Create a surface
-        let surface = match instance.create_surface(window.clone()) {
-            Ok(surface) => surface,
-            Err(e) => {
-                error!("Failed to create surface: {e:?}");
-                panic!("Failed to create surface: {e:?}");
-            }
+        // Create a surface when rendering to a window.
+        let surface = match &window {
+            Some(window) => match instance.create_surface(window.clone()) {
+                Ok(surface) => Some(surface),
+                Err(e) => {
+                    error!("Failed to create surface: {e:?}");
+                    panic!("Failed to create surface: {e:?}");
+                }
+            },
+            None => None,
         };
         // Looking for a compatible adapter
-        let adapter = Self::request_adapter_for_surface(&instance, &surface).await;
+        let adapter = match &surface {
+            Some(surface) => Self::request_adapter_for_surface(&instance, surface).await,
+            None => Self::request_adapter_offscreen(&instance).await,
+        };
         let adapter_info = adapter.get_info();
         info!("Using WGPU adapter: {adapter_info:#?}");
         // Create a device and queue
         let (device, queue) = Self::request_device_and_queue_for_adapter(&adapter).await;
-        // Create surface configuration
-        let size = window.inner_size();
-        let caps = surface.get_capabilities(&adapter);
-        // Choose the present mode
-        let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
-            // Fifo is the fallback, it is the most compatible and stable
-            wgpu::PresentMode::Fifo
-        } else {
-            // Immediate is the least preferred, it can cause tearing and is not recommended
-            wgpu::PresentMode::Immediate
+        // Create the render configuration. Offscreen cores build the surface
+        // configuration by hand because there is no surface to query.
+        let config = match &surface {
+            Some(surface) => {
+                let caps = surface.get_capabilities(&adapter);
+                // Choose the present mode
+                let present_mode = if caps.present_modes.contains(&wgpu::PresentMode::Fifo) {
+                    // Fifo is the fallback, it is the most compatible and stable
+                    wgpu::PresentMode::Fifo
+                } else {
+                    // Immediate is the least preferred, it can cause tearing and is not recommended
+                    wgpu::PresentMode::Immediate
+                };
+                let alpha_mode = Self::pick_alpha_mode(&caps, window_transparent);
+                info!("Using present mode: {present_mode:?}");
+                let config = wgpu::SurfaceConfiguration {
+                    usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                    format: caps.formats[0],
+                    width: size.width,
+                    height: size.height,
+                    present_mode,
+                    alpha_mode,
+                    view_formats: vec![],
+                    desired_maximum_frame_latency: 2,
+                };
+                surface.configure(&device, &config);
+                config
+            }
+            None => wgpu::SurfaceConfiguration {
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                format: offscreen_format.unwrap_or(TextureFormat::Rgba8UnormSrgb),
+                width: size.width.max(1),
+                height: size.height.max(1),
+                present_mode: wgpu::PresentMode::Fifo,
+                alpha_mode: wgpu::CompositeAlphaMode::Opaque,
+                view_formats: vec![],
+                desired_maximum_frame_latency: 2,
+            },
         };
-        let alpha_mode = Self::pick_alpha_mode(&caps, window_transparent);
-        info!("Using present mode: {present_mode:?}");
-        let config = wgpu::SurfaceConfiguration {
-            usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
-            format: caps.formats[0],
-            width: size.width,
-            height: size.height,
-            present_mode,
-            alpha_mode,
-            view_formats: vec![],
-            desired_maximum_frame_latency: 2,
-        };
-        surface.configure(&device, &config);
 
         // Create pipeline cache if supported
         let pipeline_cache = initialize_cache(&device, &adapter_info);
@@ -234,8 +311,7 @@ impl RenderCore {
         let drawer = Drawer::new();
 
         // Set scale factor for dp conversion
-        let scale_factor = window.scale_factor();
-        info!("Window scale factor: {scale_factor}");
+        info!("Render core scale factor: {scale_factor}");
         let _ = SCALE_FACTOR.set(RwLock::new(scale_factor));
 
         // Create blit pipeline resources
@@ -484,28 +560,40 @@ impl RenderCore {
         self.size
     }
 
+    /// Applies the pending surface/target resize.
+    ///
+    /// When a swapchain surface is present it is reconfigured; offscreen cores
+    /// only rebuild their render targets.
     pub(crate) fn resize_surface(&mut self) {
         if self.size.width > 0 && self.size.height > 0 {
             self.config.width = self.size.width;
             self.config.height = self.size.height;
-            self.surface.configure(&self.device, &self.config);
+            if let Some(surface) = &self.surface {
+                surface.configure(&self.device, &self.config);
+            }
             self.rebuild_pass_targets();
         }
     }
 
     pub(crate) fn recreate_surface(&mut self) {
-        let surface = match self.instance.create_surface(self.window.clone()) {
+        let Some(window) = self.window.clone() else {
+            // Offscreen cores have no surface to recreate.
+            return;
+        };
+        let surface = match self.instance.create_surface(window) {
             Ok(surface) => surface,
             Err(err) => {
                 error!("Failed to recreate surface: {err:?}");
                 return;
             }
         };
-        self.surface = surface;
+        self.surface = Some(surface);
         if self.size.width > 0 && self.size.height > 0 {
             self.config.width = self.size.width;
             self.config.height = self.size.height;
-            self.surface.configure(&self.device, &self.config);
+            if let Some(surface) = &self.surface {
+                surface.configure(&self.device, &self.config);
+            }
             self.rebuild_pass_targets();
         }
     }

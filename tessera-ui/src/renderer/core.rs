@@ -55,6 +55,29 @@ pub(crate) struct RenderTimingBreakdown {
     pub total: Duration,
 }
 
+/// Error returned when reading back an offscreen frame fails.
+#[derive(Clone, Debug)]
+pub enum OffscreenReadbackError {
+    /// The offscreen target has a zero width or height.
+    EmptyTarget,
+    /// The GPU device poll failed while waiting for the readback buffer.
+    Poll(String),
+    /// Mapping the readback buffer failed.
+    Map(String),
+}
+
+impl std::fmt::Display for OffscreenReadbackError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::EmptyTarget => write!(f, "offscreen render target has zero size"),
+            Self::Poll(err) => write!(f, "device poll failed during offscreen readback: {err}"),
+            Self::Map(err) => write!(f, "failed to map offscreen readback buffer: {err}"),
+        }
+    }
+}
+
+impl std::error::Error for OffscreenReadbackError {}
+
 struct ComputeState {
     target_a: wgpu::TextureView,
     target_b: wgpu::TextureView,
@@ -253,15 +276,15 @@ fn create_msaa_view(
 
 /// Render core holding device, surface, pipelines, and frame resources.
 pub struct RenderCore {
-    /// Avoiding release the window
+    /// Window handle when rendering to a surface; `None` for offscreen cores.
     #[allow(unused)]
-    window: Arc<Window>,
+    window: Option<Arc<Window>>,
     /// WGPU instance used to recreate surfaces when the swapchain is lost.
     instance: wgpu::Instance,
     /// WGPU device
     device: wgpu::Device,
-    /// WGPU surface
-    surface: wgpu::Surface<'static>,
+    /// WGPU surface; `None` for offscreen cores that render without a window.
+    surface: Option<wgpu::Surface<'static>>,
     /// WGPU queue
     queue: wgpu::Queue,
     /// WGPU surface configuration
@@ -321,13 +344,29 @@ impl RenderCore {
     }
 
     /// Returns the current window handle.
+    ///
+    /// Panics if this core was created for offscreen rendering; check
+    /// [`RenderCore::has_surface`] first.
     pub fn window(&self) -> &Window {
-        &self.window
+        self.window
+            .as_deref()
+            .expect("RenderCore has no window in offscreen mode")
     }
 
     /// Returns a cloned window handle for external storage.
+    ///
+    /// Panics if this core was created for offscreen rendering.
     pub fn window_arc(&self) -> Arc<Window> {
-        self.window.clone()
+        self.window
+            .clone()
+            .expect("RenderCore has no window in offscreen mode")
+    }
+
+    /// Returns whether this core renders into a window surface.
+    ///
+    /// Offscreen cores created with [`RenderCore::new_offscreen`] return `false`.
+    pub fn has_surface(&self) -> bool {
+        self.surface.is_some()
     }
 
     /// Returns the WGPU device.

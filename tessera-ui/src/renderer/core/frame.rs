@@ -379,40 +379,113 @@ impl RenderCore {
         execution: RenderGraphExecution,
         #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
     ) {
+        if self.surface.is_none() {
+            self.render_offscreen(
+                execution,
+                #[cfg(feature = "debug-dirty-overlay")]
+                dirty_overlay_rects,
+            );
+            return;
+        }
+
         let render_start = Instant::now();
-        let current_frame = self.frame_index;
         self.last_render_breakdown = None;
         let acquire_start = Instant::now();
-        let (output_frame, reconfigure_after_present) = match self.surface.get_current_texture() {
-            wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
-            wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
-                debug!("Surface suboptimal, rendering frame before reconfiguring...");
-                (frame, true)
-            }
-            wgpu::CurrentSurfaceTexture::Timeout => {
-                warn!("Surface timeout. Frame will be dropped.");
-                return;
-            }
-            wgpu::CurrentSurfaceTexture::Occluded => {
-                warn!("Surface occluded. Frame will be dropped.");
-                return;
-            }
-            wgpu::CurrentSurfaceTexture::Outdated => {
-                debug!("Surface outdated, reconfiguring...");
-                self.resize_surface();
-                return;
-            }
-            wgpu::CurrentSurfaceTexture::Lost => {
-                warn!("Surface lost, recreating surface...");
-                self.recreate_surface();
-                return;
-            }
-            wgpu::CurrentSurfaceTexture::Validation => {
-                error!("Surface validation error. Frame will be dropped.");
-                return;
+        let (output_frame, reconfigure_after_present) = {
+            let surface = self
+                .surface
+                .as_ref()
+                .expect("surface presence checked above");
+            match surface.get_current_texture() {
+                wgpu::CurrentSurfaceTexture::Success(frame) => (frame, false),
+                wgpu::CurrentSurfaceTexture::Suboptimal(frame) => {
+                    debug!("Surface suboptimal, rendering frame before reconfiguring...");
+                    (frame, true)
+                }
+                wgpu::CurrentSurfaceTexture::Timeout => {
+                    warn!("Surface timeout. Frame will be dropped.");
+                    return;
+                }
+                wgpu::CurrentSurfaceTexture::Occluded => {
+                    warn!("Surface occluded. Frame will be dropped.");
+                    return;
+                }
+                wgpu::CurrentSurfaceTexture::Outdated => {
+                    debug!("Surface outdated, reconfiguring...");
+                    self.resize_surface();
+                    return;
+                }
+                wgpu::CurrentSurfaceTexture::Lost => {
+                    warn!("Surface lost, recreating surface...");
+                    self.recreate_surface();
+                    return;
+                }
+                wgpu::CurrentSurfaceTexture::Validation => {
+                    error!("Surface validation error. Frame will be dropped.");
+                    return;
+                }
             }
         };
         let acquire = acquire_start.elapsed();
+        let output_view = output_frame
+            .texture
+            .create_view(&wgpu::TextureViewDescriptor::default());
+
+        self.render_into_view(
+            execution,
+            &output_view,
+            #[cfg(feature = "debug-dirty-overlay")]
+            dirty_overlay_rects,
+            render_start,
+            acquire,
+        );
+
+        let present_start = Instant::now();
+        output_frame.present();
+        if reconfigure_after_present {
+            self.resize_surface();
+        }
+        if let Some(breakdown) = self.last_render_breakdown.as_mut() {
+            breakdown.present = present_start.elapsed();
+        }
+    }
+
+    /// Renders the frame into the internal offscreen target.
+    ///
+    /// Used by offscreen cores that have no swapchain surface. After this call
+    /// the rendered pixels can be read back with
+    /// [`RenderCore::read_offscreen_rgba`].
+    fn render_offscreen(
+        &mut self,
+        execution: RenderGraphExecution,
+        #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
+    ) {
+        let render_start = Instant::now();
+        let output_view = self.targets.offscreen_copy.clone();
+        self.render_into_view(
+            execution,
+            &output_view,
+            #[cfg(feature = "debug-dirty-overlay")]
+            dirty_overlay_rects,
+            render_start,
+            std::time::Duration::ZERO,
+        );
+    }
+
+    /// Executes the render graph into `output_view`.
+    ///
+    /// Shared render body for both the window-surface path and the offscreen
+    /// path; only texture acquisition and presentation differ between them.
+    fn render_into_view(
+        &mut self,
+        execution: RenderGraphExecution,
+        output_view: &wgpu::TextureView,
+        #[cfg(feature = "debug-dirty-overlay")] dirty_overlay_rects: &[PxRect],
+        render_start: Instant,
+        acquire: std::time::Duration,
+    ) {
+        let current_frame = self.frame_index;
+        self.last_render_breakdown = None;
 
         let texture_size = wgpu::Extent3d {
             width: self.config.width,
@@ -473,9 +546,6 @@ impl RenderCore {
             external: self.external_textures.clone(),
         });
 
-        let output_view = output_frame
-            .texture
-            .create_view(&wgpu::TextureViewDescriptor::default());
 
         let mut clear_state = RenderPassClearState::new(resources.len(), &external_resources);
 
@@ -510,7 +580,7 @@ impl RenderCore {
             encoder: &mut encoder,
             device,
             source: &scene_texture_view,
-            target: &output_view,
+            target: output_view,
             bind_group_layout: &blit.bind_group_layout,
             sampler: &blit.sampler,
             pipeline: &blit.pipeline,
@@ -520,7 +590,7 @@ impl RenderCore {
         #[cfg(feature = "debug-dirty-overlay")]
         Self::render_dirty_overlay(
             &mut encoder,
-            &output_view,
+            output_view,
             &blit.dirty_overlay_pipeline,
             target_size,
             dirty_overlay_rects,
@@ -538,12 +608,7 @@ impl RenderCore {
         queue.submit(Some(encoder.finish()));
         let submit = submit_start.elapsed();
 
-        let present_start = Instant::now();
-        output_frame.present();
-        if reconfigure_after_present {
-            self.resize_surface();
-        }
-        let present = present_start.elapsed();
+        let present = std::time::Duration::ZERO;
         self.external_textures.collect_garbage(current_frame, 2);
         self.frame_index = self.frame_index.wrapping_add(1);
         self.last_render_breakdown = Some(RenderTimingBreakdown {
@@ -554,6 +619,87 @@ impl RenderCore {
             present,
             total: render_start.elapsed(),
         });
+    }
+
+    /// Reads the last offscreen-rendered frame back as tightly packed RGBA8
+    /// pixels in row-major order with a top-left origin.
+    ///
+    /// The returned buffer has `width * height * 4` bytes and no row padding.
+    /// The offscreen target uses an sRGB format, so the bytes are sRGB-encoded,
+    /// matching what PNG and most image consumers expect.
+    pub fn read_offscreen_rgba(&self) -> Result<Vec<u8>, OffscreenReadbackError> {
+        let texture = self.targets.offscreen_copy.texture();
+        let width = self.config.width;
+        let height = self.config.height;
+        if width == 0 || height == 0 {
+            return Err(OffscreenReadbackError::EmptyTarget);
+        }
+
+        let unpadded_bytes_per_row = width * 4;
+        let align = wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let padded_bytes_per_row = unpadded_bytes_per_row.div_ceil(align) * align;
+        let buffer_size = (padded_bytes_per_row as u64) * (height as u64);
+
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("Offscreen Readback Buffer"),
+            size: buffer_size,
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor {
+                label: Some("Offscreen Readback Encoder"),
+            });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(padded_bytes_per_row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit(Some(encoder.finish()));
+
+        let slice = buffer.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |result| {
+            let _ = tx.send(result);
+        });
+        self.device
+            .poll(wgpu::PollType::wait_indefinitely())
+            .map_err(|err| OffscreenReadbackError::Poll(err.to_string()))?;
+        match rx.recv() {
+            Ok(Ok(())) => {}
+            Ok(Err(err)) => return Err(OffscreenReadbackError::Map(err.to_string())),
+            Err(err) => return Err(OffscreenReadbackError::Map(err.to_string())),
+        }
+
+        let mut pixels = Vec::with_capacity((unpadded_bytes_per_row * height) as usize);
+        {
+            let mapped = slice.get_mapped_range();
+            for row in 0..height {
+                let start = (row * padded_bytes_per_row) as usize;
+                let end = start + unpadded_bytes_per_row as usize;
+                pixels.extend_from_slice(&mapped[start..end]);
+            }
+        }
+        buffer.unmap();
+        Ok(pixels)
     }
 
     fn execute_render_pass(

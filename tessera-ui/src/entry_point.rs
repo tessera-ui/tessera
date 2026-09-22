@@ -70,6 +70,19 @@ impl EntryPoint {
     /// Runs the entry point on desktop platforms.
     #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
     pub fn run_desktop(self) -> Result<(), winit::error::EventLoopError> {
+        #[cfg(feature = "headless")]
+        if crate::headless::headless_mode_requested() {
+            // Headless mode owns stdout for its JSONL protocol, so tracing is
+            // configured there and the window/event-loop path is skipped.
+            if let Err(err) =
+                crate::headless::run_headless(self.entry, self.registry.finish(), self.config)
+            {
+                eprintln!("headless session failed: {err}");
+                std::process::exit(1);
+            }
+            return Ok(());
+        }
+
         init_tracing();
         init_deadlock_detection();
         Renderer::run_with_config(self.entry, self.registry.finish(), self.config)
