@@ -70,7 +70,8 @@ fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
 
         let combined_weight = w1 + w2;
         if combined_weight > 1e-6 {
-            // Optimal offset for bilinear sampling to combine w1 at i and w2 at i+1
+            // Optimal offset for bilinear sampling to combine w1 at i and w2 at
+            // i+1
             let offset = if w2 > 1e-6 {
                 (i as f32 * w1 + (i + 1) as f32 * w2) / combined_weight
             } else {
@@ -88,8 +89,8 @@ fn compute_optimized_blur_params(radius: f32) -> WeightCacheEntry {
     }
 
     // Normalize weights so that center + 2 * sum(side_weights) = 1.0
-    // (factor of 2 because shader samples both +offset and -offset for each side
-    // weight)
+    // (factor of 2 because shader samples both +offset and -offset for each
+    // side weight)
     let total_weight: f32 = weights[0] + 2.0 * weights[1..].iter().sum::<f32>();
     for w in &mut weights {
         *w /= total_weight;
@@ -592,7 +593,8 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                     &blur_uniforms,
                 );
 
-                // Create weights and offsets buffer (padded to vec4 for alignment)
+                // Create weights and offsets buffer (padded to vec4 for
+                // alignment)
                 let weights_and_offsets = WeightsAndOffsets {
                     weights: std::array::from_fn(|i| {
                         glam::Vec4::new(weight_entry.weights[i], 0.0, 0.0, 0.0)

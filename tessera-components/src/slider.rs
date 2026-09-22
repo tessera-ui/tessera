@@ -815,9 +815,7 @@ fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> 
         on_change: params.on_change.unwrap_or_else(CallbackWith::default_value),
         size: params.size,
         active_track_color: params.active_track_color.unwrap_or(theme.active_track),
-        inactive_track_color: params
-            .inactive_track_color
-            .unwrap_or(theme.inactive_track),
+        inactive_track_color: params.inactive_track_color.unwrap_or(theme.inactive_track),
         thumb_diameter: params.thumb_diameter.unwrap_or(defaults.thumb_diameter),
         thumb_color: params.thumb_color.unwrap_or(theme.thumb),
         disabled: params.disabled,
@@ -860,9 +858,7 @@ fn range_slider_config_from_params(
         on_change: params.on_change.unwrap_or_else(CallbackWith::default_value),
         size: params.size,
         active_track_color: params.active_track_color.unwrap_or(theme.active_track),
-        inactive_track_color: params
-            .inactive_track_color
-            .unwrap_or(theme.inactive_track),
+        inactive_track_color: params.inactive_track_color.unwrap_or(theme.inactive_track),
         thumb_diameter: params.thumb_diameter.unwrap_or(defaults.thumb_diameter),
         thumb_color: params.thumb_color.unwrap_or(theme.thumb),
         disabled: params.disabled,
@@ -979,8 +975,8 @@ fn measure_slider(
         );
         let icon_measured = icon_id.measure(&icon_constraint)?;
 
-        // Icon placement: 8dp padding from left edge, vertically centered within the
-        // track
+        // Icon placement: 8dp padding from left edge, vertically centered
+        // within the track
         let icon_padding = Dp(8.0).to_px();
         let icon_y = layout.track_y + Px((layout.track_height.0 - icon_measured.height.0) / 2);
         result.place_child(icon_id, PxPosition::new(icon_padding, icon_y));
@@ -1133,23 +1129,26 @@ pub fn slider(
     let size = size.unwrap_or(defaults.size);
     let disabled = disabled.unwrap_or(defaults.disabled);
     let steps = steps.unwrap_or(defaults.steps);
-    let args = slider_config_from_params(SliderParams {
-        modifier,
-        value,
-        on_change,
-        size,
-        active_track_color,
-        inactive_track_color,
-        thumb_diameter,
-        thumb_color,
-        disabled,
-        accessibility_label,
-        accessibility_description,
-        show_stop_indicator,
-        steps,
-        inset_icon,
-        controller,
-    }, slider_theme_colors());
+    let args = slider_config_from_params(
+        SliderParams {
+            modifier,
+            value,
+            on_change,
+            size,
+            active_track_color,
+            inactive_track_color,
+            thumb_diameter,
+            thumb_color,
+            disabled,
+            accessibility_label,
+            accessibility_description,
+            show_stop_indicator,
+            steps,
+            inset_icon,
+            controller,
+        },
+        slider_theme_colors(),
+    );
     let controller = args
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
@@ -1478,23 +1477,26 @@ pub fn centered_slider(
     let size = size.unwrap_or(defaults.size);
     let disabled = disabled.unwrap_or(defaults.disabled);
     let steps = steps.unwrap_or(defaults.steps);
-    let args = slider_config_from_params(SliderParams {
-        modifier,
-        value,
-        on_change,
-        size,
-        active_track_color,
-        inactive_track_color,
-        thumb_diameter,
-        thumb_color,
-        disabled,
-        accessibility_label,
-        accessibility_description,
-        show_stop_indicator,
-        steps,
-        inset_icon,
-        controller,
-    }, slider_theme_colors());
+    let args = slider_config_from_params(
+        SliderParams {
+            modifier,
+            value,
+            on_change,
+            size,
+            active_track_color,
+            inactive_track_color,
+            thumb_diameter,
+            thumb_color,
+            disabled,
+            accessibility_label,
+            accessibility_description,
+            show_stop_indicator,
+            steps,
+            inset_icon,
+            controller,
+        },
+        slider_theme_colors(),
+    );
     let controller = args
         .controller
         .unwrap_or_else(|| remember(SliderController::new));
@@ -1814,22 +1816,25 @@ pub fn range_slider(
     let size = size.unwrap_or(defaults.size);
     let disabled = disabled.unwrap_or(defaults.disabled);
     let steps = steps.unwrap_or(defaults.steps);
-    let args = range_slider_config_from_params(RangeSliderParams {
-        modifier,
-        value,
-        on_change,
-        size,
-        active_track_color,
-        inactive_track_color,
-        thumb_diameter,
-        thumb_color,
-        disabled,
-        accessibility_label,
-        accessibility_description,
-        show_stop_indicator,
-        steps,
-        controller,
-    }, slider_theme_colors());
+    let args = range_slider_config_from_params(
+        RangeSliderParams {
+            modifier,
+            value,
+            on_change,
+            size,
+            active_track_color,
+            inactive_track_color,
+            thumb_diameter,
+            thumb_color,
+            disabled,
+            accessibility_label,
+            accessibility_description,
+            show_stop_indicator,
+            steps,
+            controller,
+        },
+        slider_theme_colors(),
+    );
     let state = args
         .controller
         .unwrap_or_else(|| remember(RangeSliderController::new));

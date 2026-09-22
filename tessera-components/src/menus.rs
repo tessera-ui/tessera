@@ -499,7 +499,8 @@ pub fn menu_provider(
                 && input.has_unconsumed_release()
                 && is_click_outside_menu(cursor_position, menu_bounds);
 
-            // Prevent underlying content from receiving input while menu is open.
+            // Prevent underlying content from receiving input while menu is
+            // open.
             input.block_all();
 
             if should_close_click {

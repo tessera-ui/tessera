@@ -2503,7 +2503,8 @@ impl TextEditorController {
                 if self.move_cursor_with_motion(cosmic_text::Motion::Up) {
                     return None;
                 }
-                // if we are on the first line, we move the cursor to the beginning of the line
+                // if we are on the first line, we move the cursor to the
+                // beginning of the line
                 if self.edit_state.cursor_line() == 0 {
                     self.edit_state
                         .set_cursor_and_selection(self.edit_state.first_line_start_cursor(), None);
@@ -2537,7 +2538,8 @@ impl TextEditorController {
                 }
                 let last_line_index = self.edit_state.last_line_index();
 
-                // if we are on the last line, we move the cursor to the end of the line
+                // if we are on the last line, we move the cursor to the end of
+                // the line
                 if self.edit_state.cursor_line() >= last_line_index {
                     self.edit_state
                         .set_cursor_and_selection(self.edit_state.last_line_end_cursor(), None);

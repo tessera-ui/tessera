@@ -87,7 +87,8 @@ pub(super) fn apply_shadow_modifier(base: Modifier, args: ShadowArgs) -> Modifie
     });
 
     if args.clip {
-        // Very basic clipping support (rect only for now as per existing modifier)
+        // Very basic clipping support (rect only for now as per existing
+        // modifier)
         modifier = modifier.clip_to_bounds();
     }
 

@@ -92,8 +92,9 @@ pub fn run_and_debug(
         let cmd = duct::cmd("idevicesyslog", ["--process", &app_name])
             .before_spawn(move |cmd| {
                 if !noise_level.pedantic() {
-                    // when not in pedantic log mode, filter out logs that are not from the actual
-                    // app e.g. `App Name(UIKitCore)[processID]: message` vs
+                    // when not in pedantic log mode, filter out logs that are
+                    // not from the actual app e.g. `App
+                    // Name(UIKitCore)[processID]: message` vs
                     // `App Name[processID]: message`
                     cmd.arg("--match").arg(format!("{app_name}["));
                 }

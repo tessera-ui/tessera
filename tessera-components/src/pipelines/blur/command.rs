@@ -63,9 +63,10 @@ impl DualBlurCommand {
 
 impl ComputeCommand for DualBlurCommand {
     fn barrier(&self) -> SampleRegion {
-        // Calculate maximum radius from both passes to determine required padding
-        // The barrier padding must be at least as large as the blur radius to ensure
-        // all pixels needed for the blur are available in the captured background
+        // Calculate maximum radius from both passes to determine required
+        // padding The barrier padding must be at least as large as the
+        // blur radius to ensure all pixels needed for the blur are
+        // available in the captured background
         let max_radius = self
             .passes
             .iter()
@@ -73,14 +74,15 @@ impl ComputeCommand for DualBlurCommand {
             .fold(0.0f32, f32::max);
 
         let downscale = downscale_factor_for_radius(max_radius) as f32;
-        // When downsampling, each texel covers a larger source region, so extend
-        // the barrier padding proportionally to the chosen downscale factor.
+        // When downsampling, each texel covers a larger source region, so
+        // extend the barrier padding proportionally to the chosen
+        // downscale factor.
         let sampling_padding = (max_radius * downscale).ceil() as i32;
 
-        // The sampling padding is the actual padding needed for the blur effect.
-        // The renderer still relies on the component bounds for dependency checks,
-        // so orthogonal blur components can batch even if their sampling regions
-        // overlap.
+        // The sampling padding is the actual padding needed for the blur
+        // effect. The renderer still relies on the component bounds for
+        // dependency checks, so orthogonal blur components can batch
+        // even if their sampling regions overlap.
         SampleRegion::uniform_padding_local(Px(sampling_padding))
     }
 }

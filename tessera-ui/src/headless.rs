@@ -9,7 +9,8 @@
 //!
 //! [`HeadlessRenderer`] is the library entry point; [`run_headless`] implements
 //! the worker side of the `cargo tessera headless` protocol and is invoked by
-//! [`crate::entry_point::EntryPoint::run_desktop`] when `TESSERA_HEADLESS` is set.
+//! [`crate::entry_point::EntryPoint::run_desktop`] when `TESSERA_HEADLESS` is
+//! set.
 
 use std::{
     io::{BufRead, BufReader, Write},
@@ -38,7 +39,9 @@ use crate::{
     keyboard_state::KeyboardState,
     pipeline_context::PipelineContext,
     render_module::RenderModule,
-    renderer::{RenderCore, TesseraConfig, composite::expand_composites, core::OffscreenReadbackError},
+    renderer::{
+        RenderCore, TesseraConfig, composite::expand_composites, core::OffscreenReadbackError,
+    },
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
         reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
@@ -159,7 +162,8 @@ pub struct HeadlessRenderer {
 }
 
 impl HeadlessRenderer {
-    /// Creates a headless renderer for the given entry point and render modules.
+    /// Creates a headless renderer for the given entry point and render
+    /// modules.
     pub fn new(
         entry: Box<dyn Fn()>,
         modules: Vec<Box<dyn RenderModule>>,
@@ -306,7 +310,8 @@ impl HeadlessRenderer {
 
     /// Commits `text` as IME input for the next frame.
     pub fn inject_text(&mut self, text: &str) {
-        self.ime.push_event(winit::event::Ime::Commit(text.to_string()));
+        self.ime
+            .push_event(winit::event::Ime::Commit(text.to_string()));
     }
 
     /// Advances the virtual clock by one frame and renders it.
@@ -335,9 +340,8 @@ impl HeadlessRenderer {
         let core = &mut self.core;
         let graph = TesseraRuntime::with_mut(|runtime| {
             let (gpu, compute_resource_manager) = core.record_resources();
-            let (graph, _requests, _diagnostics, _record_cost, _move, _reveal) = runtime
-                .component_tree
-                .compute(
+            let (graph, _requests, _diagnostics, _record_cost, _move, _reveal) =
+                runtime.component_tree.compute(
                     ComputeParams {
                         screen_size,
                         cursor_position,
@@ -603,7 +607,8 @@ fn handle_request(
             button,
         } => {
             let pointer_id = pointer_id.unwrap_or(MOUSE_POINTER_ID);
-            let position = PxPosition::new(Px(x.unwrap_or(0.0) as i32), Px(y.unwrap_or(0.0) as i32));
+            let position =
+                PxPosition::new(Px(x.unwrap_or(0.0) as i32), Px(y.unwrap_or(0.0) as i32));
             let button = button.unwrap_or_default().to_press_key();
             match kind {
                 InputKind::Press => renderer.pointer_press(pointer_id, position, button),

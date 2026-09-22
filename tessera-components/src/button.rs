@@ -111,7 +111,8 @@ struct ButtonResolvedArgs {
 ///
 /// ## Parameters
 ///
-/// - `variant` — optional visual variant (`filled`/`elevated`/`tonal`/`outlined`/`text`).
+/// - `variant` — optional visual variant
+///   (`filled`/`elevated`/`tonal`/`outlined`/`text`).
 /// - `enabled` — optional enabled flag.
 /// - `modifier` — modifier chain applied to the button subtree.
 /// - `color` — optional container color override.
@@ -256,7 +257,8 @@ pub fn button(
         border_color: border_color.or(default_border_color),
         elevation: elevation.or(default_elevation),
         tonal_elevation: tonal_elevation.unwrap_or(Dp(0.0)),
-        disabled_container_color: disabled_container_color.unwrap_or(default_disabled_container_color),
+        disabled_container_color: disabled_container_color
+            .unwrap_or(default_disabled_container_color),
         disabled_content_color: disabled_content_color
             .unwrap_or_else(|| ButtonDefaults::disabled_content_color(&scheme)),
         disabled_border_color: disabled_border_color.unwrap_or(default_disabled_border_color),

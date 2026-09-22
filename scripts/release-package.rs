@@ -703,7 +703,8 @@ fn replace_paths_in_doc(
     let mut changed = false;
     for section in ["dependencies", "dev-dependencies", "build-dependencies"] {
         if let Some(table) = doc.get_mut(section).and_then(|t| t.as_table_like_mut()) {
-            // Collect keys up-front to avoid borrowing issues while mutating the table.
+            // Collect keys up-front to avoid borrowing issues while mutating
+            // the table.
             let keys: Vec<_> = table.iter().map(|(k, _)| k.to_string()).collect();
             for dep in keys {
                 let Some(item) = table.get(&dep) else {

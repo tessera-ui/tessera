@@ -8,9 +8,9 @@
 //!
 //! One JSON object per line on stdin, one response object per line on stdout.
 //! Requests: `spawn`, `list`, `input`, `text`, `render`, `snapshot`, `resize`,
-//! `kill`, `rebuild` and `shutdown`. Worker lifecycle commands are handled here;
-//! `input`/`text`/`render`/`snapshot`/`resize` are forwarded to the selected
-//! worker session.
+//! `kill`, `rebuild` and `shutdown`. Worker lifecycle commands are handled
+//! here; `input`/`text`/`render`/`snapshot`/`resize` are forwarded to the
+//! selected worker session.
 
 use std::{
     collections::HashMap,
@@ -115,9 +115,11 @@ pub fn execute(
                 }
                 worker.send(payload)
             }),
-            Request::Text { session, text, .. } => with_session(&mut sessions, &session, |worker| {
-                worker.send(json!({"cmd": "text", "text": text}))
-            }),
+            Request::Text { session, text, .. } => {
+                with_session(&mut sessions, &session, |worker| {
+                    worker.send(json!({"cmd": "text", "text": text}))
+                })
+            }
             Request::Render {
                 session,
                 frames,
@@ -129,7 +131,11 @@ pub fn execute(
                 if let Some(map) = payload.as_object_mut() {
                     insert_if_some(map, "frames", frames.map(Value::from));
                     insert_if_some(map, "duration_ms", duration_ms.map(Value::from));
-                    insert_if_some(map, "out", out.as_deref().map(resolve_out_path).map(Value::from));
+                    insert_if_some(
+                        map,
+                        "out",
+                        out.as_deref().map(resolve_out_path).map(Value::from),
+                    );
                 }
                 worker.send(payload)
             }),
@@ -153,15 +159,13 @@ pub fn execute(
                 }
                 result
             }
-            Request::Kill { session, .. } => {
-                match sessions.remove(&session) {
-                    Some(mut worker) => {
-                        worker.terminate();
-                        Ok(json!({"ok": true, "session": session, "killed": true}))
-                    }
-                    None => Err(anyhow!("unknown session `{session}`")),
+            Request::Kill { session, .. } => match sessions.remove(&session) {
+                Some(mut worker) => {
+                    worker.terminate();
+                    Ok(json!({"ok": true, "session": session, "killed": true}))
                 }
-            }
+                None => Err(anyhow!("unknown session `{session}`")),
+            },
             Request::Rebuild { session, .. } => rebuild_session(&mut sessions, &session),
             Request::Shutdown { .. } => {
                 for (_, mut worker) in sessions.drain() {
@@ -271,17 +275,26 @@ fn spawn_session(
         bail!("session `{name}` already exists");
     }
 
-    let package = package.or_else(|| defaults.package.clone()).ok_or_else(|| {
-        anyhow!(
-            "no package selected; pass `--package <name>` to `cargo tessera headless` \
+    let package = package
+        .or_else(|| defaults.package.clone())
+        .ok_or_else(|| {
+            anyhow!(
+                "no package selected; pass `--package <name>` to `cargo tessera headless` \
              or a `package` field to `spawn`"
-        )
-    })?;
+            )
+        })?;
     let release = release.unwrap_or(defaults.release);
     let width = width.unwrap_or(defaults.width).max(1);
     let height = height.unwrap_or(defaults.height).max(1);
 
-    let worker = launch_worker(&name, &package, release, width, height, defaults.frame_time_ms)?;
+    let worker = launch_worker(
+        &name,
+        &package,
+        release,
+        width,
+        height,
+        defaults.frame_time_ms,
+    )?;
     let description = worker.describe();
     sessions.insert(name, worker);
 
@@ -314,11 +327,7 @@ fn rebuild_session(sessions: &mut HashMap<String, Session>, name: &str) -> Resul
     Ok(json!({"ok": true, "session": description, "rebuilt": true}))
 }
 
-fn with_session<F>(
-    sessions: &mut HashMap<String, Session>,
-    name: &str,
-    action: F,
-) -> Result<Value>
+fn with_session<F>(sessions: &mut HashMap<String, Session>, name: &str, action: F) -> Result<Value>
 where
     F: FnOnce(&mut Session) -> Result<Value>,
 {
@@ -412,7 +421,12 @@ fn resolve_binary(package: &str, release: bool) -> Result<PathBuf> {
     let binary = pkg
         .targets
         .iter()
-        .filter(|target| target.kind.iter().any(|kind| matches!(kind, TargetKind::Bin)))
+        .filter(|target| {
+            target
+                .kind
+                .iter()
+                .any(|kind| matches!(kind, TargetKind::Bin))
+        })
         .min_by_key(|target| usize::from(target.name.as_str() != package))
         .ok_or_else(|| anyhow!("package `{package}` has no binary target"))?;
 
@@ -420,7 +434,10 @@ fn resolve_binary(package: &str, release: bool) -> Result<PathBuf> {
     let file_name = format!("{}{}", binary.name, std::env::consts::EXE_SUFFIX);
     let path = metadata.target_directory.join(profile).join(file_name);
     if !path.exists() {
-        bail!("expected worker binary at `{}`, but it does not exist", path);
+        bail!(
+            "expected worker binary at `{}`, but it does not exist",
+            path
+        );
     }
     Ok(path.into_std_path_buf())
 }

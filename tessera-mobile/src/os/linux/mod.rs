@@ -54,8 +54,8 @@ pub struct Application {
 
 impl Application {
     pub fn detect_editor() -> Result<Self, DetectEditorError> {
-        // Try a rust code editor, then a plain text editor. If neither are available,
-        // then return an error.
+        // Try a rust code editor, then a plain text editor. If neither are
+        // available, then return an error.
         let entry = xdg::query_mime_entry("text/rust")
             .or_else(|| xdg::query_mime_entry("text/plain"))
             .ok_or(DetectEditorError::NoDefaultEditorSet)?;
@@ -72,7 +72,8 @@ impl Application {
                     // as of today)
                     .ok()? // This returns None on error, continuing the search (skiping this dir)
                     .map(|entry_filepath| {
-                        // If something was found, we have to try parsing it, which may fail as well
+                        // If something was found, we have to try parsing it,
+                        // which may fail as well
                         xdg::parse(&entry_filepath)
                             .map_err(DetectEditorError::FreeDesktopEntryParseError)
                             .and_then(|parsed_entry| {
@@ -112,9 +113,10 @@ impl Application {
         );
 
         if !command_parts.is_empty() {
-            // If command_parts has at least one element this works. If it has a single
-            // element, &command_parts[1..] should be an empty slice (&[]) and duct
-            // does not add any argument on that case
+            // If command_parts has at least one element this works. If it has a
+            // single element, &command_parts[1..] should be an
+            // empty slice (&[]) and duct does not add any argument
+            // on that case
             let cmd = duct::cmd(&command_parts[0], &command_parts[1..]);
             cmd.run_and_detach()
                 .map_err(|error| OpenFileError::CommandFailed {
@@ -147,7 +149,8 @@ pub fn open_file_with(
             let icon = section.attr("Icon").first().map(|value| OsStr::new(value));
             let command_parts =
                 xdg::parse_command(&osstring_entry, path_str, icon, Some(&entry_path));
-            // This could go outside, but we'd better have a proper error for it then
+            // This could go outside, but we'd better have a proper error for it
+            // then
             if !command_parts.is_empty() {
                 Some(command_parts) // This guarantees that command_parts has at least one element
             } else {

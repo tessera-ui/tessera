@@ -364,7 +364,8 @@ impl RenderCore {
 
     /// Returns whether this core renders into a window surface.
     ///
-    /// Offscreen cores created with [`RenderCore::new_offscreen`] return `false`.
+    /// Offscreen cores created with [`RenderCore::new_offscreen`] return
+    /// `false`.
     pub fn has_surface(&self) -> bool {
         self.surface.is_some()
     }

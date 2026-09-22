@@ -218,10 +218,10 @@ impl LayoutContext<'_> {
 
     #[inline]
     pub(crate) fn inc_measure_node_calls(&self) {
-        // SAFETY: Layout diagnostics are owned by the single-threaded compute pass.
-        // The pointer is created from a unique mutable borrow for the duration of
-        // that pass and is only accessed on the same thread during recursive
-        // layout measurement.
+        // SAFETY: Layout diagnostics are owned by the single-threaded compute
+        // pass. The pointer is created from a unique mutable borrow for
+        // the duration of that pass and is only accessed on the same
+        // thread during recursive layout measurement.
         unsafe {
             (*self.diagnostics).measure_node_calls += 1;
         }

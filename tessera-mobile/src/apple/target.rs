@@ -551,7 +551,8 @@ impl<'a> Target<'a> {
                         .iter()
                         .filter(|d| d.platform == Some("iOS Simulator".to_string()))
                         .max_by_key(|d| d.os.as_deref().unwrap_or(""));
-                    // on Intel we must force the ARCHS and destination when targeting the simulator
+                    // on Intel we must force the ARCHS and destination when
+                    // targeting the simulator
                     // otherwise xcodebuild tries to build arm64
                     Some(format!(
                         "platform=iOS Simulator,name={}",
@@ -580,8 +581,9 @@ impl<'a> Target<'a> {
                 }
 
                 if cfg!(target_arch = "x86_64") && sdk == "iphonesimulator" {
-                    // on Intel we must force the ARCHS when targeting the simulator
-                    // otherwise xcodebuild tries to build arm64
+                    // on Intel we must force the ARCHS when targeting the
+                    // simulator otherwise xcodebuild tries
+                    // to build arm64
                     cmd.arg("ARCHS=x86_64");
                 }
 
@@ -660,7 +662,8 @@ impl<'a> Target<'a> {
                         .iter()
                         .filter(|d| d.platform == Some("iOS Simulator".to_string()))
                         .max_by_key(|d| d.os.as_deref().unwrap_or(""));
-                    // on Intel we must force the ARCHS and destination when targeting the simulator
+                    // on Intel we must force the ARCHS and destination when
+                    // targeting the simulator
                     // otherwise xcodebuild tries to build arm64
                     cmd.args([
                         "-destination",

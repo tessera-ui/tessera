@@ -182,8 +182,8 @@ fn replace_on_pattern(
     let text = text.as_ref();
     let replace_by = replace_by.as_ref();
 
-    // Vec<u8> is easier to deal with than OsString, and on unix they're pretty much
-    // the same thing (OsStringExt).
+    // Vec<u8> is easier to deal with than OsString, and on unix they're pretty
+    // much the same thing (OsStringExt).
     let mut result_text = Vec::new();
     let mut last_index_read = 0;
 
@@ -191,15 +191,15 @@ fn replace_on_pattern(
         let start = mat.start();
         let end = mat.end();
 
-        // We put the values from the last index we read, to the start of the matching
-        // regex
+        // We put the values from the last index we read, to the start of the
+        // matching regex
         result_text.extend_from_slice(&text.as_bytes()[last_index_read..start]);
 
         // We put the part we want to replace the match with
         result_text.extend_from_slice(replace_by.as_bytes());
 
-        // Then we jump the last index to the end of the regex, ignoring the part we
-        // matched
+        // Then we jump the last index to the end of the regex, ignoring the
+        // part we matched
         last_index_read = end;
     }
     // At the end of the loop, put the rest of the string
@@ -223,8 +223,9 @@ fn parse_quoted_text(
             result.push(c);
             escaping = false;
         } else {
-            // If not escaping, check for whether c is escape ('\'), going into escaping
-            // mode if yes (dropping c). Otherwise just pass the c char.
+            // If not escaping, check for whether c is escape ('\'), going into
+            // escaping mode if yes (dropping c). Otherwise just
+            // pass the c char.
             if c == b'\\' {
                 escaping = true;
             } else {
@@ -257,8 +258,9 @@ fn parse_unquoted_text(
     let desktop_entry_replace = desktop_entry_path.unwrap_or_else(|| "".as_ref());
     let result = replace_on_pattern(result, desktop_entry_replace, byte_regex!("%k"));
 
-    // The other % flags are deprecated so we clear them, except double percentage
-    // The spec from freedesktop does not even list what they should mean
+    // The other % flags are deprecated so we clear them, except double
+    // percentage The spec from freedesktop does not even list what they
+    // should mean
     let result = replace_on_pattern(result, "", byte_regex!(r"%[^%]"));
 
     // Of course, the double percentage maps to percentage
@@ -290,16 +292,17 @@ pub fn parse_command(
     let mut parsed_command_parts = Vec::new();
     let mut text_atom = Vec::new();
 
-    // I think doing it like this, although a bit big, is the clearest way to follow
-    // the scheme described on the specification:
+    // I think doing it like this, although a bit big, is the clearest way to
+    // follow the scheme described on the specification:
     // https://specifications.freedesktop.org/desktop-entry-spec/desktop-entry-spec-latest.html#exec-variables
     // We even need to escape backslash TWICE when we're inside quotes, as it is
     // written: "Likewise, a literal dollar sign in a quoted argument in a
     // desktop entry file is unambiguously represented with ("\\$")."
     //
-    // The idea is to separate and unquote the arguments first, then do some regex
-    // replacements on the arguments individually. The spec itself says
-    // "Implementations must undo quoting before expanding field codes..."
+    // The idea is to separate and unquote the arguments first, then do some
+    // regex replacements on the arguments individually. The spec itself
+    // says "Implementations must undo quoting before expanding field
+    // codes..."
     for &c in command.as_bytes() {
         // If we are escaping something we will just let it pass
         if escape_char {
@@ -307,8 +310,9 @@ pub fn parse_command(
             escape_char = false;
         // Otherwise, we have to pay special attention to backslash
         } else if c == b'\\' {
-            // If we see a backslash and are not escaping anything we will not "read" the
-            // backslash, and instead escape the next char.
+            // If we see a backslash and are not escaping anything we will not
+            // "read" the backslash, and instead escape the next
+            // char.
             escape_char = true;
         // If we're reading a quoted argument ("like this")
         } else if reading_quoted {
@@ -375,11 +379,11 @@ pub fn parse_command(
         }
     } // End of iteration over the command's bytes
 
-    // At the end of the loop we flush whatever was being accumulated to the command
-    // parts
+    // At the end of the loop we flush whatever was being accumulated to the
+    // command parts
     if !text_atom.is_empty() {
-        // If the value was well formed, quoted strings end on a quote character, and
-        // not on EOF, so this should be unquoted.
+        // If the value was well formed, quoted strings end on a quote
+        // character, and not on EOF, so this should be unquoted.
         let text_atom_string = parse_unquoted_text(
             OsStr::from_bytes(&text_atom),
             argument,

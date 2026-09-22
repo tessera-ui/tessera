@@ -456,7 +456,8 @@ impl TextData {
             return cached;
         }
 
-        // Cache miss (possibly evicted by LRU), recompute using bounds as constraint
+        // Cache miss (possibly evicted by LRU), recompute using bounds as
+        // constraint
         let constraint = TextConstraint {
             max_width: Some(bounds[0] as f32),
             max_height: Some(bounds[1] as f32),

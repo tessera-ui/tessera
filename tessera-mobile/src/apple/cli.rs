@@ -477,7 +477,8 @@ impl Exec for Input {
                 let simulator = platform.contains(&"Simulator".to_string())
                     || arches.contains(&"Simulator".to_string());
                 let arches = if simulator {
-                    // when compiling for the simulator, we don't need to build other targets
+                    // when compiling for the simulator, we don't need to build
+                    // other targets
                     vec![
                         if cfg!(target_arch = "aarch64") {
                             "arm64"
@@ -506,8 +507,8 @@ impl Exec for Input {
                     target_env.insert(objc_include_path.as_ref(), include_dir.as_ref());
 
                     let target = if macos_from_platform(platform.as_str()) {
-                        // Prevents linker errors in build scripts and proc macros:
-                        // https://github.com/signalapp/libsignal-client/commit/02899cac643a14b2ced7c058cc15a836a2165b6d
+                        // Prevents linker errors in build scripts and proc
+                        // macros: https://github.com/signalapp/libsignal-client/commit/02899cac643a14b2ced7c058cc15a836a2165b6d
                         target_env.insert("LIBRARY_PATH", library_path.as_ref());
                         &macos_target
                     } else {

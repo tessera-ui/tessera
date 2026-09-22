@@ -204,8 +204,8 @@ impl<'a> Target<'a> {
         config: &Config,
         env: &Env,
     ) -> Result<DotCargoTarget, ndk::MissingToolError> {
-        // Using clang as the linker seems to be the only way to get the right library
-        // search paths...
+        // Using clang as the linker seems to be the only way to get the right
+        // library search paths...
         let linker = env
             .ndk
             .compiler_path(

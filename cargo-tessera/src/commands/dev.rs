@@ -102,7 +102,8 @@ pub fn execute(
                 color_check_current = false;
                 last_change = Instant::now();
 
-                // Cancel an in-flight build so we only build once per stable tree.
+                // Cancel an in-flight build so we only build once per stable
+                // tree.
                 if let Some(mut active_build) = build_child.take() {
                     output::status("Canceling", "in-progress build due to changes");
                     let _ = active_build.kill();
@@ -113,7 +114,8 @@ pub fn execute(
             Err(_) => break,
         }
 
-        // Kick off a build once the tree is quiet and no build is currently running.
+        // Kick off a build once the tree is quiet and no build is currently
+        // running.
         if pending_change && build_child.is_none() && last_change.elapsed() >= debounce_window {
             if !color_check_current {
                 match run_color_check(package, &feature_overrides) {

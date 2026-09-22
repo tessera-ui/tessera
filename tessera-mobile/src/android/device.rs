@@ -301,13 +301,14 @@ impl<'a> Device<'a> {
 
     fn build_apks_from_aab(&self, config: &Config, profile: Profile) -> Result<(), ApksBuildError> {
         let flavor = self.target.arch;
-        // In the case that profile is `Release`, it is safe to pick the first one
-        // which should have the suffix `release` instead of `release-unsigned`.
-        // This is fine since we determine the resulting name before-hand unlike other
-        // situations where gradle is the one to determine it.
+        // In the case that profile is `Release`, it is safe to pick the first
+        // one which should have the suffix `release` instead of
+        // `release-unsigned`. This is fine since we determine the
+        // resulting name before-hand unlike other situations where
+        // gradle is the one to determine it.
         //
-        // and in the case that profile is `Debug` there will be only one path that has
-        // the suffix `debug`
+        // and in the case that profile is `Debug` there will be only one path
+        // that has the suffix `debug`
         let all_apks_path = Self::all_apks_paths(config, profile, flavor)[0].clone();
         let aab_path = aab::aab_path(config, profile, flavor);
         bundletool::command()

@@ -29,8 +29,8 @@ pub fn pixel_to_ndc(pos: PxPosition, screen_size: [u32; 2]) -> [f32; 2] {
     let width = (screen_size[0].max(1)) as f32;
     let height = (screen_size[1].max(1)) as f32;
 
-    // Convert pixel coordinates to floats once for clarity and to avoid repeated
-    // casts.
+    // Convert pixel coordinates to floats once for clarity and to avoid
+    // repeated casts.
     let px_x = pos.x.to_f32();
     let px_y = pos.y.to_f32();
 

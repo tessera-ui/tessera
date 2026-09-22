@@ -243,7 +243,8 @@ pub fn init(config: Option<&Config>) -> Bicycle {
             helpers.insert("escape-kotlin-keyword", Box::new(escape_kotlin_keyword));
             helpers.insert("dot-to-slash", Box::new(dot_to_slash));
             if config.is_some() {
-                // don't mix these up or very bad things will happen to all of us
+                // don't mix these up or very bad things will happen to all of
+                // us
                 helpers.insert("prefix-path", Box::new(prefix_path));
                 helpers.insert("unprefix-path", Box::new(unprefix_path));
             }

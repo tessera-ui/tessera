@@ -210,8 +210,8 @@ fn calculate_target_pos_v(
     visible: Px,
     fallback: PxPosition,
 ) -> PxPosition {
-    // If the thumb cannot move, return the provided fallback (avoids locking inside
-    // this helper).
+    // If the thumb cannot move, return the provided fallback (avoids locking
+    // inside this helper).
     let thumb_scrollable_range = track_height - thumb_height;
     if thumb_scrollable_range <= Px::ZERO {
         return fallback;
@@ -242,8 +242,8 @@ fn calculate_target_pos_h(
     visible: Px,
     fallback: PxPosition,
 ) -> PxPosition {
-    // If the thumb cannot move, return the provided fallback (avoids locking inside
-    // this helper).
+    // If the thumb cannot move, return the provided fallback (avoids locking
+    // inside this helper).
     let thumb_scrollable_range = track_width - thumb_width;
     if thumb_scrollable_range <= Px::ZERO {
         return fallback;
@@ -381,8 +381,8 @@ fn compute_thumb_size(visible: Px, total: Px) -> Px {
     let total_len = total.to_f32().abs().max(1.0);
     let thumb = (visible_len * visible_len) / total_len;
 
-    // Clamp the thumb size to ensure it's always visible and provides a reasonable
-    // drag target.
+    // Clamp the thumb size to ensure it's always visible and provides a
+    // reasonable drag target.
     let min_thumb = (visible_len * 0.05).clamp(8.0, 32.0);
     Px::saturating_from_f32(thumb.max(min_thumb))
 }
@@ -556,8 +556,8 @@ fn handle_state_v(
     // Handle AutoHide behavior - hide scrollbar after inactivity
     handle_autohide_if_needed(args, state, frame_nanos);
 
-    // Capture current target position once to avoid locking inside helper on every
-    // call.
+    // Capture current target position once to avoid locking inside helper on
+    // every call.
     let fallback_pos = args.state.with(|c| c.target_position());
     let calculate_target_pos = |cursor_y: Px| -> PxPosition {
         calculate_target_pos_v(
@@ -658,8 +658,8 @@ fn handle_state_h(
     // Handle AutoHide behavior - hide scrollbar after inactivity
     handle_autohide_if_needed(args, state, frame_nanos);
 
-    // Capture current target position once to avoid locking inside helper on every
-    // call.
+    // Capture current target position once to avoid locking inside helper on
+    // every call.
     let fallback_pos = args.state.with(|c| c.target_position());
     let calculate_target_pos = |cursor_x: Px| -> PxPosition {
         calculate_target_pos_h(

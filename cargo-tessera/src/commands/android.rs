@@ -448,7 +448,8 @@ fn apply_android_runtime_env(ctx: &AndroidContext) {
             std::env::set_var("TESSERA_PROFILING_OUTPUT", path);
         }
     } else {
-        // SAFETY: Same reasoning as above; remove stale value for non-profiling runs.
+        // SAFETY: Same reasoning as above; remove stale value for non-profiling
+        // runs.
         unsafe {
             std::env::remove_var("TESSERA_PROFILING_OUTPUT");
         }

@@ -691,7 +691,8 @@ fn sample_region_rect(region: SampleRegion, position: PxPosition, size: PxSize) 
     match region {
         SampleRegion::Global => PxRect::new(Px::ZERO, Px::ZERO, Px::MAX, Px::MAX),
         SampleRegion::PaddedLocal(_) => {
-            // Use component bounds to avoid padded sampling regions forcing dependencies.
+            // Use component bounds to avoid padded sampling regions forcing
+            // dependencies.
             PxRect::from_position_size(position, size)
         }
         SampleRegion::Absolute(rect) => rect,

@@ -101,7 +101,8 @@ impl ShadowAtlasPipeline {
                 last_seen_frame: frame_index.wrapping_sub(1),
             });
         if entry.last_seen_frame != frame_index {
-            // Avoid promoting mid-frame when the same key appears multiple times.
+            // Avoid promoting mid-frame when the same key appears multiple
+            // times.
             entry.count = entry.count.saturating_add(1);
             entry.last_seen_frame = frame_index;
         }

@@ -144,11 +144,12 @@ fn measure_weighted_row(
 ) -> Result<LayoutResult, MeasurementError> {
     let children = input.children();
     // Prepare buffers and metadata for measurement:
-    // - `children_sizes` stores each child's measurement result (width, height).
-    // - `max_child_height` tracks the maximum height among children to compute the
-    //   row's final height.
-    // - `available_width_for_children` is the total width available to allocate to
-    //   children under the current constraint (present only for
+    // - `children_sizes` stores each child's measurement result (width,
+    //   height).
+    // - `max_child_height` tracks the maximum height among children to compute
+    //   the row's final height.
+    // - `available_width_for_children` is the total width available to allocate
+    //   to children under the current constraint (present only for
     //   Fill/Fixed/Wrap(max)).
     let mut children_sizes = vec![None; child_weights.len()];
     let mut max_child_height = Px(0);
@@ -157,7 +158,8 @@ fn measure_weighted_row(
         .resolve_max()
         .expect("Row width Fill expected with finite max constraint");
 
-    // Classify children into weighted and unweighted and compute the total weight.
+    // Classify children into weighted and unweighted and compute the total
+    // weight.
     let (weighted_indices, unweighted_indices, total_weight) = classify_children(child_weights);
 
     let total_width_of_unweighted_children = measure_unweighted_children(
@@ -258,8 +260,8 @@ fn measure_unweighted_row(
 }
 
 fn classify_children(child_weights: &[f32]) -> (Vec<usize>, Vec<usize>, f32) {
-    // Split children into weighted and unweighted categories and compute the total
-    // weight of weighted children. Returns: (weighted_indices,
+    // Split children into weighted and unweighted categories and compute the
+    // total weight of weighted children. Returns: (weighted_indices,
     // unweighted_indices, total_weight)
     let mut weighted_indices = Vec::new();
     let mut unweighted_indices = Vec::new();
@@ -352,10 +354,10 @@ fn calculate_final_row_height(row_parent_constraint: &Constraint, max_child_heig
 }
 
 fn place_children_with_alignment(args: &PlaceChildrenArgs, result: &mut LayoutResult) {
-    // Compute the initial x and spacing between children according to the main axis
-    // (horizontal), then iterate measured children:
-    // - use calculate_cross_axis_offset to compute each child's offset on the cross
-    //   axis (vertical)
+    // Compute the initial x and spacing between children according to the main
+    // axis (horizontal), then iterate measured children:
+    // - use calculate_cross_axis_offset to compute each child's offset on the
+    //   cross axis (vertical)
     // - place each child with place_node at the computed coordinates
     let (mut current_x, spacing) = calculate_main_axis_layout(args);
 
@@ -430,8 +432,8 @@ fn calculate_cross_axis_offset(
     // - Start: align to top (0)
     // - Center: center (remaining_height / 2)
     // - End: align to bottom (remaining_height)
-    // - Stretch: no offset (the child will be stretched to fill height; stretching
-    //   handled in measurement)
+    // - Stretch: no offset (the child will be stretched to fill height;
+    //   stretching handled in measurement)
     match cross_axis_alignment {
         CrossAxisAlignment::Start => Px(0),
         CrossAxisAlignment::Center => (final_row_height - child_actual_size.height).max(Px(0)) / 2,

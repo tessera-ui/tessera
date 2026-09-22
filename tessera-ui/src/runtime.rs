@@ -2165,10 +2165,10 @@ pub fn push_current_node(
     // control-flow group path, and the call index local to that group. This
     // ensures:
     // 1. foo(1) and foo(2) get different logic_ids (via parent_call_index)
-    // 2. Components in different control-flow groups get different logic_ids even
-    //    when each group starts its local call index from zero
-    // 3. Components in different container instances get different logic_ids (via
-    //    parent_instance_logic_id)
+    // 2. Components in different control-flow groups get different logic_ids
+    //    even when each group starts its local call index from zero
+    // 3. Components in different container instances get different logic_ids
+    //    (via parent_instance_logic_id)
     let instance_salt = if let Some(key_hash) = current_instance_key_override() {
         hash_components(&[&key_hash, &group_path_hash, &parent_call_index])
     } else if has_group_path {
@@ -2463,10 +2463,10 @@ fn compute_slot_key<K: Hash>(key: &K) -> (u64, u64) {
     let group_path_hash = current_group_path_hash();
     let key_hash = hash_components(&[key]);
 
-    // Get the call counter to distinguish multiple remember calls within the same
-    // component Note: instance_logic_id already distinguishes different component
-    // instances (foo(1) vs foo(2)) and group_path_hash handles nested control
-    // flow (if/loop)
+    // Get the call counter to distinguish multiple remember calls within the
+    // same component Note: instance_logic_id already distinguishes
+    // different component instances (foo(1) vs foo(2)) and group_path_hash
+    // handles nested control flow (if/loop)
     let call_counter = next_order_counter(
         OrderCounterKind::Remember,
         "ORDER_FRAME_STACK is empty; remember must be called inside a component",

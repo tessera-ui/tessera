@@ -909,7 +909,8 @@ pub(crate) fn measure_node(
                                 Some(placements) => placements,
                                 None => {
                                     layout_ctx.inc_cache_miss_dirty_self();
-                                    // This node can reuse measurement but not placements; fall back
+                                    // This node can reuse measurement but not
+                                    // placements; fall back
                                     // to a full measure+place pass below.
                                     Vec::new()
                                 }

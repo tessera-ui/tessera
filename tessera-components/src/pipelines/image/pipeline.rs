@@ -138,8 +138,8 @@ impl ImagePipeline {
         config: &wgpu::SurfaceConfiguration,
         opacity: f32,
     ) -> ImageUniforms {
-        // Convert pixel positions/sizes into normalized device coordinates and size
-        // ratios.
+        // Convert pixel positions/sizes into normalized device coordinates and
+        // size ratios.
         let rect = [
             (start_pos.x.0 as f32 / target_size.width.to_f32()) * 2.0 - 1.0
                 + (size.width.0 as f32 / target_size.width.to_f32()),
@@ -261,8 +261,8 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
                 &command.data,
             );
 
-            // Use the extracted uniforms computation helper (dereference borrowed tuple
-            // elements).
+            // Use the extracted uniforms computation helper (dereference
+            // borrowed tuple elements).
             let uniforms = Self::compute_uniforms(
                 *start_pos,
                 *size,

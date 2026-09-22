@@ -1293,8 +1293,8 @@ Fps: {:.2}
         // consumed by the current recomposition pass.
         tick_frame_nanos_receivers();
         // notify the windowing system before rendering
-        // this will help winit to properly schedule and make assumptions about its
-        // internal state
+        // this will help winit to properly schedule and make assumptions about
+        // its internal state
         args.app.window().pre_present_notify();
         // and tell runtime the new size
         TesseraRuntime::with_mut(|rt: &mut TesseraRuntime| rt.window_size = args.app.size().into());
@@ -1431,8 +1431,8 @@ Fps: {:.2}
             });
         }
 
-        // Prepare accessibility tree update before clearing the component tree if
-        // needed
+        // Prepare accessibility tree update before clearing the component tree
+        // if needed
         let accessibility_update = if accessibility_enabled {
             Self::build_accessibility_update(window_label)
         } else {
@@ -1443,8 +1443,8 @@ Fps: {:.2}
         profiler_end_frame();
 
         // Handle the window requests (cursor / IME)
-        // Only set cursor when not at window edges to let window manager handle resize
-        // cursors
+        // Only set cursor when not at window edges to let window manager handle
+        // resize cursors
         let cursor_position = args.cursor_state.position();
         let window_size = args.app.size();
         let resize_direction = (Self::supports_native_window_frame_controls() && !decorations)
@@ -1711,8 +1711,8 @@ impl<F: Fn()> Renderer<F> {
     }
 
     fn handle_resized(&mut self, size: winit::dpi::PhysicalSize<u32>) {
-        // Obtain the app inside the method to avoid holding a mutable borrow across
-        // other borrows of `self`.
+        // Obtain the app inside the method to avoid holding a mutable borrow
+        // across other borrows of `self`.
         let app = match self.app.as_mut() {
             Some(app) => app,
             None => return,
@@ -1876,7 +1876,8 @@ impl<F: Fn()> Renderer<F> {
                 // Use new touch move handling method, may generate scroll event
                 if let Some(scroll_event) = self.cursor_state.handle_touch_move(touch_event.id, pos)
                 {
-                    // Scroll event is already added to event queue in handle_touch_move
+                    // Scroll event is already added to event queue in
+                    // handle_touch_move
                     self.cursor_state.push_event(scroll_event);
                 }
             }
@@ -2584,8 +2585,8 @@ pub fn show_soft_input(show_implicit: bool, android_app: &AndroidApp) {
             },
         ],
     );
-    // showSoftInput can trigger exceptions if the keyboard is currently animating
-    // open/closed
+    // showSoftInput can trigger exceptions if the keyboard is currently
+    // animating open/closed
     if env.exception_check().unwrap() {
         let _ = env.exception_clear();
     }

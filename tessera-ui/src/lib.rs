@@ -370,7 +370,6 @@ pub use crate::{
     render_module::RenderModule,
     render_scene::{Command, CompositeCommand, DrawRegion, PaddingRect, SampleRegion},
     renderer::{
-        core::OffscreenReadbackError,
         Renderer,
         composite::{
             self, CompositeBatchItem, CompositeContext, CompositeOutput, CompositePipeline,
@@ -380,6 +379,7 @@ pub use crate::{
             self, ComputablePipeline, ComputeCommand, ComputePipelineRegistry, ComputeResource,
             ComputeResourceManager, ComputeResourceRef,
         },
+        core::OffscreenReadbackError,
         drawer::{self, DrawCommand, DrawablePipeline, PipelineRegistry, command},
         external::{ExternalTextureHandle, ExternalTextureRegistry},
     },

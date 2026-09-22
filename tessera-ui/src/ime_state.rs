@@ -53,7 +53,8 @@ impl ImeState {
         // Add the event to the back of the deque
         self.events.push_back(event);
 
-        // Maintain the queue size limit by removing the oldest event if necessary
+        // Maintain the queue size limit by removing the oldest event if
+        // necessary
         if self.events.len() > KEEP_EVENTS_COUNT {
             self.events.pop_front();
         }

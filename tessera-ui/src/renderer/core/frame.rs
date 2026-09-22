@@ -546,7 +546,6 @@ impl RenderCore {
             external: self.external_textures.clone(),
         });
 
-
         let mut clear_state = RenderPassClearState::new(resources.len(), &external_resources);
 
         let mut frame_state = RenderCoreFrameState {
@@ -1244,7 +1243,8 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     for cmd in mem::take(commands_in_pass).into_iter() {
         let cmd = match cmd {
             DrawOrClip::Clip(clip_ops) => {
-                // Must flush any existing buffered commands before changing clip state
+                // Must flush any existing buffered commands before changing
+                // clip state
                 if !buffer.is_empty() {
                     let scene_view = resolve_scene_view(
                         current_batch_read,
@@ -1290,7 +1290,8 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
             DrawOrClip::Draw(cmd) => cmd, // Proceed with draw commands
         };
 
-        // If the incoming command cannot be merged into the current batch, flush first.
+        // If the incoming command cannot be merged into the current batch,
+        // flush first.
         let read_resource = cmd.read_resource;
         if (!can_merge_into_batch(&last_command_type_id, cmd.type_id)
             || current_batch_read != read_resource)
@@ -1324,8 +1325,8 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
             );
         }
 
-        // Add the command to the buffer and update the current batch rect (extracted
-        // merge helper).
+        // Add the command to the buffer and update the current batch rect
+        // (extracted merge helper).
         buffer.push((cmd.command, cmd.size, cmd.start_pos));
         last_command_type_id = Some(cmd.type_id);
         current_batch_read = read_resource;

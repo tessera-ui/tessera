@@ -59,7 +59,8 @@ impl CheckmarkPipeline {
         config: &wgpu::SurfaceConfiguration,
         sample_count: u32,
     ) -> Self {
-        // Keep the constructor concise by delegating creation details to small helpers.
+        // Keep the constructor concise by delegating creation details to small
+        // helpers.
         let shader = Self::create_shader_module(gpu);
         let uniform_buffer = Self::create_uniform_buffer(gpu);
         let bind_group_layout = Self::create_bind_group_layout(gpu);

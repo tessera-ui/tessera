@@ -1084,11 +1084,12 @@ impl ControlFlowInstrumenter {
     /// After transform: { let _group_guard =
     /// ::tessera_ui::__private::GroupGuard::new(#id); expr }
     fn wrap_expr_in_group(&mut self, expr: &mut Expr) {
-        // Recursively visit sub-expressions (depth-first) to ensure nested structures
-        // are wrapped
+        // Recursively visit sub-expressions (depth-first) to ensure nested
+        // structures are wrapped
         self.visit_expr_mut(expr);
         let group_id = self.next_group_id();
-        // Use fully-qualified path ::tessera_ui to avoid relying on a crate alias
+        // Use fully-qualified path ::tessera_ui to avoid relying on a crate
+        // alias
         let original_expr = &expr;
         let new_expr: Expr = parse_quote! {
             {
@@ -1769,7 +1770,8 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
         &format!("{}Destination", func_name_str.to_upper_camel_case()),
         func_name.span(),
     );
-    // Generate fields for the new struct that will implement `RouterDestination`
+    // Generate fields for the new struct that will implement
+    // `RouterDestination`
     let dest_fields = shard_params
         .iter()
         .filter(|param| !param.is_router)

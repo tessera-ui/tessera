@@ -464,7 +464,8 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         // Advance frame counter and cleanup old SDF heat tracking data
         self.current_frame = self.current_frame.wrapping_add(1);
         self.sdf_heat_tracker.retain(|_, tracker| {
-            // Remove entries not seen in the last SDF_HEAT_TRACKING_WINDOW frames
+            // Remove entries not seen in the last SDF_HEAT_TRACKING_WINDOW
+            // frames
             self.current_frame.saturating_sub(tracker.last_seen_frame) < SDF_HEAT_TRACKING_WINDOW
         });
 
@@ -693,8 +694,8 @@ impl FluidGlassPipeline {
         queue: &wgpu::Queue,
         instances: &[GlassUniforms],
     ) -> Result<wgpu::Buffer, ()> {
-        // Serialize uniforms first so we can determine exact buffer size (avoids magic
-        // numbers).
+        // Serialize uniforms first so we can determine exact buffer size
+        // (avoids magic numbers).
         let uniforms = GlassInstances {
             instances: instances.to_vec(),
         };

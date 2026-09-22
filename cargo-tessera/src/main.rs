@@ -68,7 +68,8 @@ enum TesseraCommands {
         #[arg(long, value_enum)]
         asset_backend: Option<AssetBackendArg>,
     },
-    /// Run a non-interactive, session-based headless debug server over JSONL stdio
+    /// Run a non-interactive, session-based headless debug server over JSONL
+    /// stdio
     Headless(HeadlessArgs),
     /// Build the project for release (native targets)
     Build {
@@ -300,7 +301,8 @@ impl AssetBackendArg {
 
 #[derive(Args)]
 struct HeadlessArgs {
-    /// Package to run as headless workers (defaults to the workspace root package)
+    /// Package to run as headless workers (defaults to the workspace root
+    /// package)
     #[arg(long, short)]
     package: Option<String>,
     /// Build workers in release mode

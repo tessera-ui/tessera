@@ -99,7 +99,8 @@ pub mod __private {
         session.current_frame_nanos = frame_nanos;
         let frame_time = session.frame_origin + Duration::from_nanos(frame_nanos);
         begin_frame_clock(frame_time);
-        // Match renderer frame order so frame callbacks update state before build.
+        // Match renderer frame order so frame callbacks update state before
+        // build.
         tick_frame_nanos_receivers();
         let _ = build_component_tree(&session.content);
         let layout_dirty_nodes = take_layout_dirty_nodes();

@@ -92,7 +92,8 @@ fn handle_block_input(input: &mut tessera_ui::PointerInput) {
         .unwrap_or(false);
 
     if is_cursor_in {
-        // Consume all input events to prevent interaction with underlying components
+        // Consume all input events to prevent interaction with underlying
+        // components
         input.block_all();
     }
 }
