@@ -49,9 +49,16 @@ This document defines how You should assist in the Tessera project to ensure cod
 - For optional external controllers, use `Option<State<...>>`; when `None`, create internal state with `remember`.
 - Callback parameters should use `Callback` / `CallbackWith<...>`.
 - Slot parameters should use `RenderSlot` / slot wrappers as needed by signature.
+- The parameter type is the single source of truth for the generated builder surface; there is no per-prop helper attribute:
+  - `Callback` / `CallbackWith<...>` parameters get a closure setter plus a `<name>_shared(impl Into<...>)` setter.
+  - `RenderSlot` / `RenderSlotWith<...>` parameters get a closure setter plus a `<name>_shared(impl Into<...>)` setter.
+  - every other parameter gets a plain value setter.
+- `#[prop(...)]` accepts only these orthogonal options:
+  - `into` — declare the setter (and the required constructor parameter) as `impl Into<T>`.
+  - `skip_setter` — do not generate a builder setter for this field.
+  - `skip_eq` — exclude this field from the generated props `PartialEq`.
 - Do not add `#[prop(skip_setter)]` to `Option<T>` just to keep builder setters "clean". The macro already generates setters that accept `T` and store `Some(T)`.
 - Prefer `#[prop(into)]` for public `Option<T>` fields whose inner type has a useful conversion surface.
-- Prefer `#[prop(render_slot)]` for public `RenderSlot` / `Option<RenderSlot>` parameters so the generated builder supports closure-style slot setters directly.
 - Reserve `#[prop(skip_setter)]` for true internal plumbing fields that must not appear in the public builder surface. Do not use it on public authoring parameters that should already be expressible through the macro-generated setters.
 - Exception: when a public builder needs a deliberately custom semantic surface (for example, mutually exclusive modes such as `title(...)` vs `label(...)`), use hidden backing fields with `#[prop(skip_setter)]` and expose explicit hand-written semantic setters instead of leaking mechanical field setters.
 - `Callback`/`RenderSlot` are immutable handles in practice; do not rely on closure hot-swap semantics.
@@ -66,7 +73,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - `cargo-tessera` should run color checking before invoking the real `cargo build`, `cargo check`, `cargo run`, `cargo tessera dev`, or platform-specific build command. It should use the resolved Cargo package graph for the selected package, target, features, and profile, not just workspace crates.
 - Tessera color is an execution-context color, not a general UI-code marker. The only colored contexts are:
   - free functions annotated with `#[tessera]`, or a project-approved alias that lowers to a Tessera component free function such as `#[shard]`;
-  - closures carried directly by `RenderSlot`, `RenderSlotWith`, or generated render-slot setters for parameters declared as `RenderSlot`, `Option<RenderSlot>`, or with `#[prop(render_slot)]`.
+  - closures carried directly by `RenderSlot`, `RenderSlotWith`, or generated builder setters for parameters declared as `RenderSlot` / `Option<RenderSlot>` / `RenderSlotWith<...>` (including `impl Into<RenderSlot>` / `impl Into<RenderSlotWith<...>>`).
 - All other executable contexts are uncolored by default: ordinary free functions, impl methods, trait methods/default methods, local functions, callbacks, event handlers, async tasks, iterator closures, `Option`/`Result` combinator closures, and arbitrary higher-order function closures.
 - Color does not propagate through helpers. A helper called by a Tessera-colored component remains uncolored unless the helper itself is a Tessera-colored free function. A helper that calls a Tessera component or Tessera-only API is invalid; it is not implicitly promoted to Tessera.
 - The core rule is one-way: Tessera-colored contexts may call uncolored functions, but uncolored contexts must not call Tessera-colored free functions or Tessera-only APIs.

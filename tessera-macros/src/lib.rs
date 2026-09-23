@@ -35,90 +35,79 @@ fn parse_crate_path(attr: proc_macro::TokenStream) -> syn::Result<syn::Path> {
 }
 
 #[derive(Clone, Copy, Debug, Default)]
-struct SetterAttrConfig {
-    skip: bool,
+struct PropAttrConfig {
     into: bool,
-}
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-enum PropHelperKind {
-    Callback,
-    CallbackWith,
-    RenderSlot,
-    RenderSlotWith,
-}
-
-#[derive(Clone, Copy, Debug, Default)]
-struct PropFieldAttrConfig {
+    skip_setter: bool,
     skip_eq: bool,
 }
+/// The builder-helper shape a component parameter gets from its declared type.
+///
+/// The parameter type is the single source of truth: functor parameters carry
+/// their parsed functor signature so the generated setters never have to
+/// re-inspect the type.
+#[derive(Clone, Debug)]
+enum PropHelperKind {
+    Callback,
+    CallbackWith { arg: Type, ret: Type },
+    RenderSlot,
+    RenderSlotWith { arg: Type },
+}
 
-fn parse_setter_attr(attrs: &[syn::Attribute]) -> syn::Result<SetterAttrConfig> {
-    let mut config = SetterAttrConfig::default();
+fn parse_prop_attr(attrs: &[syn::Attribute]) -> syn::Result<PropAttrConfig> {
+    let mut config = PropAttrConfig::default();
     for attr in attrs {
         if !attr.path().is_ident("prop") {
             continue;
         }
 
         match &attr.meta {
-            syn::Meta::Path(_) => {}
+            syn::Meta::Path(_) => {
+                return Err(syn::Error::new_spanned(
+                    attr,
+                    "expected `#[prop(...)]`; supported options are `into`, `skip_setter`, and `skip_eq`",
+                ));
+            }
             syn::Meta::List(_) => {
                 attr.parse_nested_meta(|meta| {
-                    if meta.path.is_ident("skip") {
-                        return Err(meta.error("unsupported setter option `skip`"));
-                    }
-                    if meta.path.is_ident("skip_setter") {
-                        config.skip = true;
-                        return Ok(());
-                    }
                     if meta.path.is_ident("into") {
+                        if config.into {
+                            return Err(meta.error("duplicate `into` in #[prop(...)]"));
+                        }
                         config.into = true;
                         return Ok(());
                     }
-                    Ok(())
+                    if meta.path.is_ident("skip_setter") {
+                        if config.skip_setter {
+                            return Err(meta.error("duplicate `skip_setter` in #[prop(...)]"));
+                        }
+                        config.skip_setter = true;
+                        return Ok(());
+                    }
+                    if meta.path.is_ident("skip_eq") {
+                        if config.skip_eq {
+                            return Err(meta.error("duplicate `skip_eq` in #[prop(...)]"));
+                        }
+                        config.skip_eq = true;
+                        return Ok(());
+                    }
+                    if meta.path.is_ident("crate_path") {
+                        return Err(meta.error(
+                            "`crate_path` is only valid on the `#[tessera]` attribute, not on component parameters",
+                        ));
+                    }
+
+                    Err(meta.error(
+                        "unsupported #[prop(...)] option; supported options are `into`, `skip_setter`, and `skip_eq`",
+                    ))
                 })?;
             }
             syn::Meta::NameValue(_) => {
                 return Err(syn::Error::new_spanned(
                     attr,
-                    "unsupported #[prop = ...] form; expected #[prop(...)]",
+                    "unsupported `#[prop = ...]` form; use `#[prop(...)]`",
                 ));
             }
         }
-    }
-    Ok(config)
-}
-
-fn parse_prop_field_attr(attrs: &[syn::Attribute]) -> syn::Result<PropFieldAttrConfig> {
-    let mut config = PropFieldAttrConfig::default();
-    for attr in attrs {
-        if !attr.path().is_ident("prop") {
-            continue;
-        }
-        attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("skip_eq") {
-                if config.skip_eq {
-                    return Err(meta.error("duplicate `skip_eq` in #[prop(...)]"));
-                }
-                config.skip_eq = true;
-                return Ok(());
-            }
-            if meta.path.is_ident("skip") {
-                return Err(meta.error("unsupported field option `skip`"));
-            }
-            if meta.path.is_ident("skip_setter") || meta.path.is_ident("into") {
-                return Ok(());
-            }
-            if meta.path.is_ident("crate_path") {
-                return Err(meta.error(
-                    "container option in field #[prop(...)]; `crate_path` is only valid on structs",
-                ));
-            }
-
-            Err(meta.error(
-                "unsupported field #[prop(...)] option; expected setter options (`skip_setter`/`into`) or compare option (`skip_eq`)",
-            ))
-        })?;
     }
     Ok(config)
 }
@@ -178,13 +167,15 @@ fn infer_prop_helper_kind(ty: &Type) -> Option<PropHelperKind> {
         return Some(PropHelperKind::Callback);
     }
     if ident == "CallbackWith" {
-        return Some(PropHelperKind::CallbackWith);
+        let (arg, ret) = parse_functor_signature(&value_ty, "CallbackWith")?;
+        return Some(PropHelperKind::CallbackWith { arg, ret });
     }
     if ident == "RenderSlot" {
         return Some(PropHelperKind::RenderSlot);
     }
     if ident == "RenderSlotWith" {
-        return Some(PropHelperKind::RenderSlotWith);
+        let (arg, _ret) = parse_functor_signature(&value_ty, "RenderSlotWith")?;
+        return Some(PropHelperKind::RenderSlotWith { arg });
     }
     None
 }
@@ -409,14 +400,11 @@ fn strict_prop_signature(sig: &syn::Signature) -> Result<ComponentPropSignature,
             ));
         }
 
-        let field_setter_attr = parse_setter_attr(&arg.attrs)?;
-        let prop_attr = parse_prop_field_attr(&arg.attrs)?;
         fields.push(PropFieldSpec {
             ident: pat_ident.ident.clone(),
             ty: (*arg.ty).clone(),
-            setter: field_setter_attr,
+            attrs: parse_prop_attr(&arg.attrs)?,
             helper: infer_prop_helper_kind(arg.ty.as_ref()),
-            skip_eq: prop_attr.skip_eq,
         });
     }
 
@@ -452,9 +440,8 @@ fn prop_assert_tokens(crate_path: &syn::Path, prop_type: &syn::Type) -> proc_mac
 struct PropFieldSpec {
     ident: Ident,
     ty: Type,
-    setter: SetterAttrConfig,
+    attrs: PropAttrConfig,
     helper: Option<PropHelperKind>,
-    skip_eq: bool,
 }
 
 fn is_required_component_field(field: &PropFieldSpec) -> bool {
@@ -474,7 +461,7 @@ fn generate_default_setter_method_for_path(
     field: &PropFieldSpec,
     field_path: &proc_macro2::TokenStream,
 ) -> syn::Result<Option<proc_macro2::TokenStream>> {
-    if field.setter.skip {
+    if field.attrs.skip_setter {
         return Ok(None);
     }
 
@@ -482,7 +469,7 @@ fn generate_default_setter_method_for_path(
     let method_doc = format!("Set `{ident}`.");
     let field_ty = &field.ty;
     if let Some(inner_ty) = option_inner_type(field_ty) {
-        let method = if field.setter.into {
+        let method = if field.attrs.into {
             quote! {
                 #[doc = #method_doc]
                 pub fn #ident(mut self, #ident: impl Into<#inner_ty>) -> Self {
@@ -502,7 +489,7 @@ fn generate_default_setter_method_for_path(
         return Ok(Some(method));
     }
 
-    let method = if field.setter.into {
+    let method = if field.attrs.into {
         quote! {
             #[doc = #method_doc]
             pub fn #ident(mut self, #ident: impl Into<#field_ty>) -> Self {
@@ -526,7 +513,7 @@ fn generate_optional_setter_method_for_path(
     field: &PropFieldSpec,
     field_path: &proc_macro2::TokenStream,
 ) -> Option<proc_macro2::TokenStream> {
-    if field.setter.skip {
+    if field.attrs.skip_setter {
         return None;
     }
 
@@ -549,30 +536,18 @@ fn generate_helper_setter_methods(
     helper: PropHelperKind,
     crate_path: &Path,
     field_path: &proc_macro2::TokenStream,
-) -> syn::Result<proc_macro2::TokenStream> {
+) -> proc_macro2::TokenStream {
     let ident = &field.ident;
     let shared_ident = format_ident!("{}_shared", ident);
     let helper_doc = format!("Set `{ident}` from a closure.");
     let shared_doc = format!("Set `{ident}` from a shared handle.");
-    let value_ty = stored_value_ty(&field.ty);
 
     match helper {
         PropHelperKind::Callback => {
-            let matches_type = matches!(
-                &value_ty,
-                Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Callback")
-            );
-            if !matches_type {
-                return Err(syn::Error::new_spanned(
-                    &field.ty,
-                    "`#[prop(callback)]` requires `Callback` or `Option<Callback>`",
-                ));
-            }
-
             let closure_assign = quote! { Some(#crate_path::Callback::new(#ident)) };
             let shared_assign = quote! { Some(#ident.into()) };
 
-            Ok(quote! {
+            quote! {
                 #[doc = #helper_doc]
                 pub fn #ident<F>(mut self, #ident: F) -> Self
                 where
@@ -587,30 +562,23 @@ fn generate_helper_setter_methods(
                     self.#field_path = #shared_assign;
                     self
                 }
-            })
+            }
         }
-        PropHelperKind::CallbackWith => {
-            let Some((arg_ty, ret_ty)) = parse_functor_signature(&value_ty, "CallbackWith") else {
-                return Err(syn::Error::new_spanned(
-                    &field.ty,
-                    "`#[prop(callback_with)]` requires `CallbackWith<T, R>` or `Option<CallbackWith<T, R>>`",
-                ));
-            };
-
-            let closure_assign = if is_unit_type(&arg_ty) {
+        PropHelperKind::CallbackWith { arg, ret } => {
+            let closure_assign = if is_unit_type(&arg) {
                 quote! { Some(#crate_path::CallbackWith::new(move |()| #ident())) }
             } else {
                 quote! { Some(#crate_path::CallbackWith::new(#ident)) }
             };
             let shared_assign = quote! { Some(#ident.into()) };
 
-            let callback_bound = if is_unit_type(&arg_ty) {
-                quote! { F: Fn() -> #ret_ty + Send + Sync + 'static }
+            let callback_bound = if is_unit_type(&arg) {
+                quote! { F: Fn() -> #ret + Send + Sync + 'static }
             } else {
-                quote! { F: Fn(#arg_ty) -> #ret_ty + Send + Sync + 'static }
+                quote! { F: Fn(#arg) -> #ret + Send + Sync + 'static }
             };
 
-            Ok(quote! {
+            quote! {
                 #[doc = #helper_doc]
                 pub fn #ident<F>(mut self, #ident: F) -> Self
                 where
@@ -623,29 +591,18 @@ fn generate_helper_setter_methods(
                 #[doc = #shared_doc]
                 pub fn #shared_ident(
                     mut self,
-                    #ident: impl Into<#crate_path::CallbackWith<#arg_ty, #ret_ty>>,
+                    #ident: impl Into<#crate_path::CallbackWith<#arg, #ret>>,
                 ) -> Self {
                     self.#field_path = #shared_assign;
                     self
                 }
-            })
+            }
         }
         PropHelperKind::RenderSlot => {
-            let matches_type = matches!(
-                &value_ty,
-                Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "RenderSlot")
-            );
-            if !matches_type {
-                return Err(syn::Error::new_spanned(
-                    &field.ty,
-                    "`#[prop(render_slot)]` requires `RenderSlot` or `Option<RenderSlot>`",
-                ));
-            }
-
             let closure_assign = quote! { Some(#crate_path::RenderSlot::new(#ident)) };
             let shared_assign = quote! { Some(#ident.into()) };
 
-            Ok(quote! {
+            quote! {
                 #[doc = #helper_doc]
                 pub fn #ident<F>(mut self, #ident: F) -> Self
                 where
@@ -660,31 +617,23 @@ fn generate_helper_setter_methods(
                     self.#field_path = #shared_assign;
                     self
                 }
-            })
+            }
         }
-        PropHelperKind::RenderSlotWith => {
-            let Some((arg_ty, _ret_ty)) = parse_functor_signature(&value_ty, "RenderSlotWith")
-            else {
-                return Err(syn::Error::new_spanned(
-                    &field.ty,
-                    "`#[prop(render_slot_with)]` requires `RenderSlotWith<T>` or `Option<RenderSlotWith<T>>`",
-                ));
-            };
-
-            let closure_assign = if is_unit_type(&arg_ty) {
+        PropHelperKind::RenderSlotWith { arg } => {
+            let closure_assign = if is_unit_type(&arg) {
                 quote! { Some(#crate_path::RenderSlotWith::new(move |()| #ident())) }
             } else {
                 quote! { Some(#crate_path::RenderSlotWith::new(#ident)) }
             };
             let shared_assign = quote! { Some(#ident.into()) };
 
-            let callback_bound = if is_unit_type(&arg_ty) {
+            let callback_bound = if is_unit_type(&arg) {
                 quote! { F: Fn() + Send + Sync + 'static }
             } else {
-                quote! { F: Fn(#arg_ty) + Send + Sync + 'static }
+                quote! { F: Fn(#arg) + Send + Sync + 'static }
             };
 
-            Ok(quote! {
+            quote! {
                 #[doc = #helper_doc]
                 pub fn #ident<F>(mut self, #ident: F) -> Self
                 where
@@ -697,12 +646,12 @@ fn generate_helper_setter_methods(
                 #[doc = #shared_doc]
                 pub fn #shared_ident(
                     mut self,
-                    #ident: impl Into<#crate_path::RenderSlotWith<#arg_ty>>,
+                    #ident: impl Into<#crate_path::RenderSlotWith<#arg>>,
                 ) -> Self {
                     self.#field_path = #shared_assign;
                     self
                 }
-            })
+            }
         }
     }
 }
@@ -713,91 +662,43 @@ fn generate_constructor_param_and_assignment(
 ) -> syn::Result<(proc_macro2::TokenStream, proc_macro2::TokenStream)> {
     let ident = &field.ident;
     let field_ty = &field.ty;
-    let value_ty = stored_value_ty(field_ty);
-    let helper_uses_into = matches!(
-        field.helper,
-        Some(
-            PropHelperKind::Callback
-                | PropHelperKind::CallbackWith
-                | PropHelperKind::RenderSlot
-                | PropHelperKind::RenderSlotWith
-        )
-    );
+    let helper_uses_into = field.helper.is_some();
 
-    if let Some(helper) = field.helper {
+    if let Some(helper) = &field.helper {
         match helper {
-            PropHelperKind::Callback => {
-                let matches_type = matches!(
-                    &value_ty,
-                    Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "Callback")
-                );
-                if !matches_type {
-                    return Err(syn::Error::new_spanned(
-                        &field.ty,
-                        "`#[prop(callback)]` requires `Callback` or `Option<Callback>`",
-                    ));
-                }
-            }
-            PropHelperKind::CallbackWith => {
-                let Some((arg_ty, ret_ty)) = parse_functor_signature(&value_ty, "CallbackWith")
-                else {
-                    return Err(syn::Error::new_spanned(
-                        &field.ty,
-                        "`#[prop(callback_with)]` requires `CallbackWith<T, R>` or `Option<CallbackWith<T, R>>`",
-                    ));
+            PropHelperKind::CallbackWith { arg, ret } if is_unit_type(arg) => {
+                let param = quote! {
+                    #ident: impl Fn() -> #ret + Send + Sync + 'static
                 };
-
-                if is_unit_type(&arg_ty) {
-                    let param = quote! {
-                        #ident: impl Fn() -> #ret_ty + Send + Sync + 'static
-                    };
-                    let assignment = quote! {
-                        __tessera_builder.props.#ident =
-                            Some(#crate_path::CallbackWith::new(move |()| #ident()));
-                    };
-                    return Ok((param, assignment));
-                }
-            }
-            PropHelperKind::RenderSlot => {
-                let matches_type = matches!(
-                    &value_ty,
-                    Type::Path(path) if path.path.segments.last().is_some_and(|segment| segment.ident == "RenderSlot")
-                );
-                if !matches_type {
-                    return Err(syn::Error::new_spanned(
-                        &field.ty,
-                        "`#[prop(render_slot)]` requires `RenderSlot` or `Option<RenderSlot>`",
-                    ));
-                }
-            }
-            PropHelperKind::RenderSlotWith => {
-                let Some((arg_ty, _)) = parse_functor_signature(&value_ty, "RenderSlotWith") else {
-                    return Err(syn::Error::new_spanned(
-                        &field.ty,
-                        "`#[prop(render_slot_with)]` requires `RenderSlotWith<T>` or `Option<RenderSlotWith<T>>`",
-                    ));
+                let assignment = quote! {
+                    __tessera_builder.props.#ident =
+                        Some(#crate_path::CallbackWith::new(move |()| #ident()));
                 };
-
-                if is_unit_type(&arg_ty) {
-                    let param = quote! {
-                        #ident: impl Fn() + Send + Sync + 'static
-                    };
-                    let assignment = quote! {
-                        __tessera_builder.props.#ident =
-                            Some(#crate_path::RenderSlotWith::new(move |()| #ident()));
-                    };
-                    return Ok((param, assignment));
-                }
+                return Ok((param, assignment));
             }
+            PropHelperKind::RenderSlotWith { arg } if is_unit_type(arg) => {
+                let param = quote! {
+                    #ident: impl Fn() + Send + Sync + 'static
+                };
+                let assignment = quote! {
+                    __tessera_builder.props.#ident =
+                        Some(#crate_path::RenderSlotWith::new(move |()| #ident()));
+                };
+                return Ok((param, assignment));
+            }
+            PropHelperKind::Callback
+            | PropHelperKind::CallbackWith { .. }
+            | PropHelperKind::RenderSlot
+            | PropHelperKind::RenderSlotWith { .. } => {}
         }
     }
 
-    let constructor_param = if field.setter.into || helper_uses_into {
+    let constructor_param = if field.attrs.into || helper_uses_into {
         quote!(#ident: impl Into<#field_ty>)
     } else {
         quote!(#ident: #field_ty)
     };
-    let constructor_assignment = if field.setter.into || helper_uses_into {
+    let constructor_assignment = if field.attrs.into || helper_uses_into {
         quote! {
             __tessera_builder.props.#ident = Some(#ident.into());
         }
@@ -986,7 +887,7 @@ fn generate_prop_like_impls(
 ) -> proc_macro2::TokenStream {
     let compare_fields: Vec<_> = fields
         .iter()
-        .filter(|field| !field.skip_eq)
+        .filter(|field| !field.attrs.skip_eq)
         .map(|field| field_compare_expr(&field.ident, &stored_field_ty(&field.ty)))
         .collect();
     let prop_eq_expr = if compare_fields.is_empty() {
@@ -1022,13 +923,13 @@ fn generate_builder_methods(
         }
         let ident = &field.ident;
         let field_path = quote!(props.#ident);
-        if let Some(helper) = field.helper {
+        if let Some(helper) = field.helper.clone() {
             methods.push(generate_helper_setter_methods(
                 field,
                 helper,
                 crate_path,
                 &field_path,
-            )?);
+            ));
         } else if let Some(method) = generate_default_setter_method_for_path(field, &field_path)? {
             methods.push(method);
         }
