@@ -9,15 +9,48 @@ use tessera_ui::{
     current_frame_nanos,
     layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
     modifier::ModifierCapabilityExt as _,
-    receive_frame_nanos, remember, tessera,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
     modifier::{ModifierExt as _, with_pointer_input},
     scrollable::{ScrollBarBehavior, ScrollableController},
-    shape_def::{RoundedCorner, Shape},
+    shape_def::Shape,
     surface::surface,
+    theme::{MaterialColorScheme, MaterialTheme},
 };
+
+/// Material Design 3 defaults for the scrollbar components.
+///
+/// A Material 3 scrollbar is a rounded thumb over the content; it has no
+/// persistent track. The thumb uses the `on-surface` hue at a low opacity so
+/// it stays legible on both light and dark surfaces.
+///
+/// The opacities are tuned for the renderer's linear-space compositing so the
+/// resting thumb keeps a comparable weight to a Material scrollbar on a light
+/// surface.
+pub struct ScrollbarDefaults;
+
+impl ScrollbarDefaults {
+    /// Default scrollbar thickness.
+    pub const THICKNESS: Dp = Dp(8.0);
+
+    /// Default thumb opacity over the surface.
+    pub const THUMB_ALPHA: f32 = 0.5;
+
+    /// Thumb opacity while the pointer hovers or drags the thumb.
+    pub const THUMB_HOVER_ALPHA: f32 = 0.7;
+
+    /// Returns the default thumb color for the provided scheme.
+    pub fn thumb_color(scheme: &MaterialColorScheme) -> Color {
+        scheme.on_surface.with_alpha(Self::THUMB_ALPHA)
+    }
+
+    /// Returns the thumb color used while hovering or dragging.
+    pub fn thumb_hover_color(scheme: &MaterialColorScheme) -> Color {
+        scheme.on_surface.with_alpha(Self::THUMB_HOVER_ALPHA)
+    }
+}
 
 #[derive(Clone, PartialEq, Copy)]
 enum ScrollOrientation {
@@ -265,27 +298,29 @@ fn calculate_target_pos_h(
 }
 
 /// Compute the thumb color with hover interpolation.
+///
 /// Extracted to reduce duplication between vertical and horizontal scrollbar
 /// implementations.
 fn compute_thumb_color(
     state_lock: &ScrollBarState,
-    args: &ScrollBarConfig,
+    thumb_color: Color,
+    thumb_hover_color: Color,
     frame_nanos: u64,
 ) -> Color {
     let state = state_lock.read();
-    let (from_color, to_color) = if state.is_hovered {
-        (args.thumb_color, args.thumb_hover_color)
-    } else {
-        (args.thumb_hover_color, args.thumb_color)
+    // Before the first hover there is no previous color to fade from, so the
+    // thumb starts at its resting color.
+    let Some(hover_start_frame_nanos) = state.hover_start_frame_nanos else {
+        return thumb_color;
     };
-    let progress = if let Some(hover_start_frame_nanos) = state.hover_start_frame_nanos {
-        (elapsed_secs_from_frame_nanos(frame_nanos, hover_start_frame_nanos)
-            / HOVER_FADE_DURATION_SECS)
-            .min(1.0)
+    let progress = (elapsed_secs_from_frame_nanos(frame_nanos, hover_start_frame_nanos)
+        / HOVER_FADE_DURATION_SECS)
+        .min(1.0);
+    if state.is_hovered {
+        thumb_color.lerp(&thumb_hover_color, progress)
     } else {
-        0.0
-    };
-    from_color.lerp(&to_color, progress)
+        thumb_hover_color.lerp(&thumb_color, progress)
+    }
 }
 /// Decide whether the scrollbar should be shown according to behavior and
 /// state.
@@ -744,11 +779,15 @@ pub fn scrollbar_v(
     let total = total.unwrap_or(Px::ZERO);
     let visible = visible.unwrap_or(Px::ZERO);
     let offset = offset.unwrap_or(Px::ZERO);
-    let thickness = thickness.unwrap_or(Dp(0.0));
+    let thickness = thickness.unwrap_or(ScrollbarDefaults::THICKNESS);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let scheme = use_context::<MaterialTheme>()
+        .map(|theme| theme.get().color_scheme)
+        .unwrap_or_default();
     let track_color = track_color.unwrap_or(Color::TRANSPARENT);
-    let thumb_color = thumb_color.unwrap_or(Color::TRANSPARENT);
-    let thumb_hover_color = thumb_hover_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_color = thumb_color.unwrap_or_else(|| ScrollbarDefaults::thumb_color(&scheme));
+    let thumb_hover_color =
+        thumb_hover_color.unwrap_or_else(|| ScrollbarDefaults::thumb_hover_color(&scheme));
     let state = state.expect("scrollbar_v requires state");
     let args = ScrollBarConfig {
         total,
@@ -835,7 +874,12 @@ pub fn scrollbar_v(
     });
 
     let thumb_color = if has_vertical_overflow {
-        compute_thumb_color(&state, &args, frame_nanos)
+        compute_thumb_color(
+            &state,
+            args.thumb_color,
+            args.thumb_hover_color,
+            frame_nanos,
+        )
     } else {
         args.thumb_color.with_alpha(0.0)
     };
@@ -854,24 +898,14 @@ pub fn scrollbar_v(
                     Some(AxisConstraint::exact(track_height)),
                 ))
                 .style(track_color.into())
-                .shape(Shape::RoundedRectangle {
-                    top_left: RoundedCorner::Capsule,
-                    top_right: RoundedCorner::ZERO,
-                    bottom_left: RoundedCorner::Capsule,
-                    bottom_right: RoundedCorner::ZERO,
-                })
+                .shape(Shape::CAPSULE)
                 .child(|| {});
             surface()
                 .modifier(Modifier::new().constrain(
                     Some(AxisConstraint::exact(width)),
                     Some(AxisConstraint::exact(thumb_height)),
                 ))
-                .shape(Shape::RoundedRectangle {
-                    top_left: RoundedCorner::Capsule,
-                    top_right: RoundedCorner::ZERO,
-                    bottom_left: RoundedCorner::Capsule,
-                    bottom_right: RoundedCorner::ZERO,
-                })
+                .shape(Shape::CAPSULE)
                 .style(thumb_color.into())
                 .child(|| {});
         });
@@ -893,11 +927,15 @@ pub fn scrollbar_h(
     let total = total.unwrap_or(Px::ZERO);
     let visible = visible.unwrap_or(Px::ZERO);
     let offset = offset.unwrap_or(Px::ZERO);
-    let thickness = thickness.unwrap_or(Dp(0.0));
+    let thickness = thickness.unwrap_or(ScrollbarDefaults::THICKNESS);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
+    let scheme = use_context::<MaterialTheme>()
+        .map(|theme| theme.get().color_scheme)
+        .unwrap_or_default();
     let track_color = track_color.unwrap_or(Color::TRANSPARENT);
-    let thumb_color = thumb_color.unwrap_or(Color::TRANSPARENT);
-    let thumb_hover_color = thumb_hover_color.unwrap_or(Color::TRANSPARENT);
+    let thumb_color = thumb_color.unwrap_or_else(|| ScrollbarDefaults::thumb_color(&scheme));
+    let thumb_hover_color =
+        thumb_hover_color.unwrap_or_else(|| ScrollbarDefaults::thumb_hover_color(&scheme));
     let state = state.expect("scrollbar_h requires state");
     let args = ScrollBarConfig {
         total,
@@ -984,7 +1022,12 @@ pub fn scrollbar_h(
     });
 
     let thumb_color = if has_horizontal_overflow {
-        compute_thumb_color(&state, &args, frame_nanos)
+        compute_thumb_color(
+            &state,
+            args.thumb_color,
+            args.thumb_hover_color,
+            frame_nanos,
+        )
     } else {
         args.thumb_color.with_alpha(0.0)
     };
@@ -1003,25 +1046,60 @@ pub fn scrollbar_h(
                     Some(AxisConstraint::exact(height)),
                 ))
                 .style(track_color.into())
-                .shape(Shape::RoundedRectangle {
-                    top_left: RoundedCorner::Capsule,
-                    top_right: RoundedCorner::Capsule,
-                    bottom_left: RoundedCorner::ZERO,
-                    bottom_right: RoundedCorner::ZERO,
-                })
+                .shape(Shape::CAPSULE)
                 .child(|| {});
             surface()
                 .modifier(Modifier::new().constrain(
                     Some(AxisConstraint::exact(thumb_width)),
                     Some(AxisConstraint::exact(height)),
                 ))
-                .shape(Shape::RoundedRectangle {
-                    top_left: RoundedCorner::Capsule,
-                    top_right: RoundedCorner::Capsule,
-                    bottom_left: RoundedCorner::ZERO,
-                    bottom_right: RoundedCorner::ZERO,
-                })
+                .shape(Shape::CAPSULE)
                 .style(thumb_color.into())
                 .child(|| {});
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::Color;
+
+    use crate::theme::MaterialColorScheme;
+
+    use super::{HOVER_FADE_DURATION_SECS, ScrollBarState, ScrollbarDefaults, compute_thumb_color};
+
+    #[test]
+    fn default_thumb_colors_follow_the_scheme() {
+        let scheme = MaterialColorScheme::default();
+        let thumb = ScrollbarDefaults::thumb_color(&scheme);
+        let hovered = ScrollbarDefaults::thumb_hover_color(&scheme);
+
+        assert_eq!(thumb.r, scheme.on_surface.r);
+        assert_eq!(thumb.g, scheme.on_surface.g);
+        assert_eq!(thumb.b, scheme.on_surface.b);
+        assert_eq!(thumb.a, ScrollbarDefaults::THUMB_ALPHA);
+        assert_eq!(hovered.a, ScrollbarDefaults::THUMB_HOVER_ALPHA);
+        assert!(hovered.a > thumb.a);
+    }
+
+    #[test]
+    fn thumb_color_interpolates_towards_the_hover_color() {
+        let thumb = Color::new(1.0, 0.0, 0.0, 0.4);
+        let hovered = Color::new(1.0, 0.0, 0.0, 0.6);
+        let state = ScrollBarState::new();
+
+        assert_eq!(compute_thumb_color(&state, thumb, hovered, 0), thumb);
+
+        {
+            let mut state_guard = state.write();
+            state_guard.is_hovered = true;
+            state_guard.hover_start_frame_nanos = Some(0);
+        }
+        let fade_nanos = (HOVER_FADE_DURATION_SECS * 1_000_000_000.0) as u64;
+
+        assert_eq!(compute_thumb_color(&state, thumb, hovered, 0), thumb);
+
+        let faded = compute_thumb_color(&state, thumb, hovered, fade_nanos);
+        assert!((faded.a - hovered.a).abs() < 1e-5);
+        assert!((faded.a - thumb.a).abs() > 1e-3);
+    }
 }

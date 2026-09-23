@@ -25,7 +25,7 @@ use crate::{
     modifier::ModifierExt,
     nested_scroll::{NestedScrollConnection, ScrollDelta, ScrollVelocity},
     pos_misc::is_position_inside_bounds,
-    scrollable::scrollbar::{ScrollBarState, scrollbar_h, scrollbar_v},
+    scrollable::scrollbar::{ScrollBarState, ScrollbarDefaults, scrollbar_h, scrollbar_v},
 };
 
 const SCROLL_INERTIA_DECAY_CONSTANT: f32 = 5.0;
@@ -647,8 +647,10 @@ impl RenderPolicy for ScrollableInnerLayout {
 /// - `apply_child_offset` — whether the viewport shifts its child by the
 ///   current scroll position or leaves placement to the child layout.
 /// - `scrollbar_behavior` — scrollbar visibility behavior.
-/// - `scrollbar_track_color` — optional scrollbar track color.
-/// - `scrollbar_thumb_color` — optional scrollbar thumb color.
+/// - `scrollbar_track_color` — optional scrollbar track color; transparent by
+///   default.
+/// - `scrollbar_thumb_color` — optional scrollbar thumb color; defaults to the
+///   Material `on-surface` color at the resting scrollbar opacity.
 /// - `scrollbar_thumb_hover_color` — optional scrollbar thumb hover color.
 /// - `scrollbar_layout` — layout of the scrollbar relative to content.
 /// - `controller` — optional external scroll controller.
@@ -700,10 +702,6 @@ pub fn scrollable(
     let controller = controller.unwrap_or_else(|| remember(ScrollableController::new));
     let child = child.unwrap_or_else(RenderSlot::empty);
     let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_size());
-    let scrollbar_track_color = scrollbar_track_color.unwrap_or(Color::new(0.0, 0.0, 0.0, 0.1));
-    let scrollbar_thumb_color = scrollbar_thumb_color.unwrap_or(Color::new(0.0, 0.0, 0.0, 0.3));
-    let scrollbar_thumb_hover_color =
-        scrollbar_thumb_hover_color.unwrap_or(Color::new(0.0, 0.0, 0.0, 0.5));
 
     match scrollbar_layout {
         ScrollBarLayout::Alongside => {
@@ -715,9 +713,9 @@ pub fn scrollable(
                     .scroll_smoothing(scroll_smoothing)
                     .apply_child_offset(apply_child_offset)
                     .scrollbar_behavior(scrollbar_behavior.clone())
-                    .scrollbar_track_color(scrollbar_track_color)
-                    .scrollbar_thumb_color(scrollbar_thumb_color)
-                    .scrollbar_thumb_hover_color(scrollbar_thumb_hover_color)
+                    .scrollbar_track_color_optional(scrollbar_track_color)
+                    .scrollbar_thumb_color_optional(scrollbar_thumb_color)
+                    .scrollbar_thumb_hover_color_optional(scrollbar_thumb_hover_color)
                     .child_shared(child);
             });
         }
@@ -730,9 +728,9 @@ pub fn scrollable(
                     .scroll_smoothing(scroll_smoothing)
                     .apply_child_offset(apply_child_offset)
                     .scrollbar_behavior(scrollbar_behavior.clone())
-                    .scrollbar_track_color(scrollbar_track_color)
-                    .scrollbar_thumb_color(scrollbar_thumb_color)
-                    .scrollbar_thumb_hover_color(scrollbar_thumb_hover_color)
+                    .scrollbar_track_color_optional(scrollbar_track_color)
+                    .scrollbar_thumb_color_optional(scrollbar_thumb_color)
+                    .scrollbar_thumb_hover_color_optional(scrollbar_thumb_hover_color)
                     .child_shared(child);
             });
         }
@@ -750,21 +748,17 @@ fn scrollbar_v_bound(
     scrollbar_state: Option<ScrollBarState>,
 ) {
     let controller = controller.expect("scrollbar_v_bound requires controller");
-    let thickness = thickness.unwrap_or(Dp(0.0));
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
-    let track_color = track_color.unwrap_or(Color::TRANSPARENT);
-    let thumb_color = thumb_color.unwrap_or(Color::TRANSPARENT);
-    let thumb_hover_color = thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     scrollbar_v()
         .total(controller.with(|c| c.child_size().height))
         .visible(controller.with(|c| c.visible_size().height))
         .offset(controller.with(|c| c.child_position().y))
-        .thickness(thickness)
+        .thickness_optional(thickness)
         .state(controller)
         .scrollbar_behavior(scrollbar_behavior)
-        .track_color(track_color)
-        .thumb_color(thumb_color)
-        .thumb_hover_color(thumb_hover_color)
+        .track_color_optional(track_color)
+        .thumb_color_optional(thumb_color)
+        .thumb_hover_color_optional(thumb_hover_color)
         .scrollbar_state(
             scrollbar_state.unwrap_or_else(|| controller.with(|c| c.scrollbar_state_v())),
         );
@@ -781,21 +775,17 @@ fn scrollbar_h_bound(
     scrollbar_state: Option<ScrollBarState>,
 ) {
     let controller = controller.expect("scrollbar_h_bound requires controller");
-    let thickness = thickness.unwrap_or(Dp(0.0));
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
-    let track_color = track_color.unwrap_or(Color::TRANSPARENT);
-    let thumb_color = thumb_color.unwrap_or(Color::TRANSPARENT);
-    let thumb_hover_color = thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     scrollbar_h()
         .total(controller.with(|c| c.child_size().width))
         .visible(controller.with(|c| c.visible_size().width))
         .offset(controller.with(|c| c.child_position().x))
-        .thickness(thickness)
+        .thickness_optional(thickness)
         .state(controller)
         .scrollbar_behavior(scrollbar_behavior)
-        .track_color(track_color)
-        .thumb_color(thumb_color)
-        .thumb_hover_color(thumb_hover_color)
+        .track_color_optional(track_color)
+        .thumb_color_optional(thumb_color)
+        .thumb_hover_color_optional(thumb_hover_color)
         .scrollbar_state(
             scrollbar_state.unwrap_or_else(|| controller.with(|c| c.scrollbar_state_h())),
         );
@@ -819,9 +809,6 @@ fn scrollable_with_alongside_scrollbar(
     let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
     let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
-    let scrollbar_track_color = scrollbar_track_color.unwrap_or(Color::TRANSPARENT);
-    let scrollbar_thumb_color = scrollbar_thumb_color.unwrap_or(Color::TRANSPARENT);
-    let scrollbar_thumb_hover_color = scrollbar_thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     let controller = controller.expect("scrollable_with_alongside_scrollbar requires controller");
     let child = child.unwrap_or_else(RenderSlot::empty);
     let scrollbar_v_state = controller.with(|c| c.scrollbar_state_v());
@@ -848,10 +835,10 @@ fn scrollable_with_alongside_scrollbar(
                 scrollbar_v_bound()
                     .controller(controller)
                     .scrollbar_behavior(scrollbar_behavior.clone())
-                    .thickness(Dp(8.0))
-                    .track_color(scrollbar_track_color)
-                    .thumb_color(scrollbar_thumb_color)
-                    .thumb_hover_color(scrollbar_thumb_hover_color)
+                    .thickness(ScrollbarDefaults::THICKNESS)
+                    .track_color_optional(scrollbar_track_color)
+                    .thumb_color_optional(scrollbar_thumb_color)
+                    .thumb_hover_color_optional(scrollbar_thumb_hover_color)
                     .scrollbar_state(scrollbar_v_state.clone());
             }
 
@@ -859,10 +846,10 @@ fn scrollable_with_alongside_scrollbar(
                 scrollbar_h_bound()
                     .controller(controller)
                     .scrollbar_behavior(scrollbar_behavior.clone())
-                    .thickness(Dp(8.0))
-                    .track_color(scrollbar_track_color)
-                    .thumb_color(scrollbar_thumb_color)
-                    .thumb_hover_color(scrollbar_thumb_hover_color)
+                    .thickness(ScrollbarDefaults::THICKNESS)
+                    .track_color_optional(scrollbar_track_color)
+                    .thumb_color_optional(scrollbar_thumb_color)
+                    .thumb_hover_color_optional(scrollbar_thumb_hover_color)
                     .scrollbar_state(scrollbar_h_state.clone());
             }
         });
@@ -886,9 +873,6 @@ fn scrollable_with_overlay_scrollbar(
     let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
     let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
-    let scrollbar_track_color = scrollbar_track_color.unwrap_or(Color::TRANSPARENT);
-    let scrollbar_thumb_color = scrollbar_thumb_color.unwrap_or(Color::TRANSPARENT);
-    let scrollbar_thumb_hover_color = scrollbar_thumb_hover_color.unwrap_or(Color::TRANSPARENT);
     let controller = controller.expect("scrollable_with_overlay_scrollbar requires controller");
     let child = child.unwrap_or_else(RenderSlot::empty);
 
@@ -919,10 +903,10 @@ fn scrollable_with_overlay_scrollbar(
                     scrollbar_v_bound()
                         .controller(controller)
                         .scrollbar_behavior(scrollbar_behavior.clone())
-                        .thickness(Dp(8.0))
-                        .track_color(scrollbar_track_color)
-                        .thumb_color(scrollbar_thumb_color)
-                        .thumb_hover_color(scrollbar_thumb_hover_color)
+                        .thickness(ScrollbarDefaults::THICKNESS)
+                        .track_color_optional(scrollbar_track_color)
+                        .thumb_color_optional(scrollbar_thumb_color)
+                        .thumb_hover_color_optional(scrollbar_thumb_hover_color)
                         .scrollbar_state(scrollbar_v_state.clone());
                 }
             };
@@ -933,10 +917,10 @@ fn scrollable_with_overlay_scrollbar(
                     scrollbar_h_bound()
                         .controller(controller)
                         .scrollbar_behavior(scrollbar_behavior.clone())
-                        .thickness(Dp(8.0))
-                        .track_color(scrollbar_track_color)
-                        .thumb_color(scrollbar_thumb_color)
-                        .thumb_hover_color(scrollbar_thumb_hover_color)
+                        .thickness(ScrollbarDefaults::THICKNESS)
+                        .track_color_optional(scrollbar_track_color)
+                        .thumb_color_optional(scrollbar_thumb_color)
+                        .thumb_hover_color_optional(scrollbar_thumb_hover_color)
                         .scrollbar_state(scrollbar_h_state.clone());
                 }
             };
