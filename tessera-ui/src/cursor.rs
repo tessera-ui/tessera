@@ -14,9 +14,9 @@ pub type PointerId = u64;
 /// Pointer identifier reserved for mouse input.
 pub const MOUSE_POINTER_ID: PointerId = 0;
 
-/// Maximum number of events to keep in the queue to prevent memory issues
-/// during UI jank.
-const KEEP_EVENTS_COUNT: usize = 10;
+/// Soft queue limit for compacting redundant motion samples during UI jank.
+/// Gesture boundaries and scroll deltas are never evicted to meet this limit.
+const KEEP_EVENTS_COUNT: usize = 128;
 
 /// Tracks the state of a single touch point for gesture recognition and
 /// scroll tracking.
@@ -27,6 +27,8 @@ const KEEP_EVENTS_COUNT: usize = 10;
 struct TouchPointState {
     /// The last recorded position of this touch point.
     last_position: PxPosition,
+    /// Initial position used for cumulative touch slop.
+    start_position: PxPosition,
     /// Timestamp of the last position update.
     last_update_time: Instant,
     /// Tracks whether this touch gesture generated a scroll event.
@@ -91,19 +93,31 @@ impl CursorState {
 
     /// Adds a pointer change to the processing queue.
     ///
-    /// Events are stored in a bounded queue to prevent memory issues during UI
-    /// performance problems. If the queue exceeds [`KEEP_EVENTS_COUNT`],
-    /// the oldest events are discarded.
+    /// Motion samples are compacted above a soft queue limit. Scroll deltas
+    /// and gesture boundaries are retained even during a long frame.
     ///
     /// # Arguments
     ///
     /// * `event` - The pointer change to add to the queue
     pub fn push_event(&mut self, event: PointerChange) {
         self.events.push_back(event);
-
-        // Maintain bounded queue size to prevent memory issues during UI jank
-        if self.events.len() > KEEP_EVENTS_COUNT {
-            self.events.pop_front();
+        while self.events.len() > KEEP_EVENTS_COUNT {
+            let redundant = self.events.iter().enumerate().find_map(|(index, queued)| {
+                if !matches!(queued.content, CursorEventContent::Moved(_)) {
+                    return None;
+                }
+                self.events
+                    .iter()
+                    .skip(index + 1)
+                    .find(|next| next.pointer_id == queued.pointer_id)
+                    .filter(|next| matches!(next.content, CursorEventContent::Moved(_)))
+                    .map(|_| index)
+            });
+            if let Some(index) = redundant {
+                self.events.remove(index);
+            } else {
+                break;
+            }
         }
     }
 
@@ -182,6 +196,7 @@ impl CursorState {
             touch_id,
             TouchPointState {
                 last_position: position,
+                start_position: position,
                 last_update_time: now,
                 generated_scroll_event: false,
             },
@@ -218,80 +233,84 @@ impl CursorState {
         current_position: PxPosition,
     ) -> Option<PointerChange> {
         let now = Instant::now();
+        let touch_state = self.touch_points.get_mut(&touch_id)?;
+        let mut delta_x = (current_position.x - touch_state.last_position.x).to_f32();
+        let mut delta_y = (current_position.y - touch_state.last_position.y).to_f32();
+        let cumulative_x = (current_position.x - touch_state.start_position.x).to_f32();
+        let cumulative_y = (current_position.y - touch_state.start_position.y).to_f32();
+        let distance = cumulative_x.hypot(cumulative_y);
+        if self.touch_scroll_config.enabled
+            && !touch_state.generated_scroll_event
+            && distance >= self.touch_scroll_config.min_move_threshold
+        {
+            touch_state.generated_scroll_event = true;
+            let beyond_slop = (distance - self.touch_scroll_config.min_move_threshold) / distance;
+            delta_x = cumulative_x * beyond_slop;
+            delta_y = cumulative_y * beyond_slop;
+        }
+        touch_state.last_position = current_position;
+        touch_state.last_update_time = now;
+        let dragging = touch_state.generated_scroll_event;
+        let gesture_state = if dragging {
+            GestureState::Dragged
+        } else {
+            GestureState::TapCandidate
+        };
         self.update_position(current_position);
-
         self.push_event(PointerChange {
             timestamp: now,
             pointer_id: touch_id,
             content: CursorEventContent::Moved(current_position),
-            gesture_state: GestureState::TapCandidate,
+            gesture_state,
             consumed: false,
         });
-
-        if !self.touch_scroll_config.enabled {
-            return None;
-        }
-
-        if let Some(touch_state) = self.touch_points.get_mut(&touch_id) {
-            let delta_x = (current_position.x - touch_state.last_position.x).to_f32();
-            let delta_y = (current_position.y - touch_state.last_position.y).to_f32();
-            let move_distance = (delta_x * delta_x + delta_y * delta_y).sqrt();
-            touch_state.last_position = current_position;
-            touch_state.last_update_time = now;
-
-            if move_distance >= self.touch_scroll_config.min_move_threshold {
-                touch_state.generated_scroll_event = true;
-
-                // Return a scroll event for immediate feedback.
-                return Some(PointerChange {
-                    timestamp: now,
-                    pointer_id: touch_id,
-                    content: CursorEventContent::Scroll(ScrollEventContent {
-                        delta_x, // Direct scroll delta for touch move
-                        delta_y,
-                        unit: ScrollDeltaUnit::Pixel,
-                        source: ScrollEventSource::Touch,
-                    }),
-                    gesture_state: GestureState::Dragged,
-                    consumed: false,
-                });
-            }
-        }
-        None
-    }
-
-    /// Handles the end of a touch gesture and emits a release event.
-    ///
-    /// This method processes the end of a touch interaction by:
-    /// - Determining whether the gesture was a drag
-    /// - Generating a release event
-    /// - Cleaning up touch point tracking
-    ///
-    /// # Arguments
-    ///
-    /// * `touch_id` - Unique identifier for the touch point that ended
-    pub fn handle_touch_end(&mut self, touch_id: u64) {
-        let now = Instant::now();
-        let mut was_drag = false;
-
-        if let Some(touch_state) = self.touch_points.get_mut(&touch_id) {
-            was_drag |= touch_state.generated_scroll_event;
-        }
-
-        self.touch_points.remove(&touch_id);
-        let release_event = PointerChange {
+        (self.touch_scroll_config.enabled && dragging).then_some(PointerChange {
             timestamp: now,
             pointer_id: touch_id,
-            content: CursorEventContent::Released(PressKeyEventType::Left),
-            gesture_state: if was_drag {
+            content: CursorEventContent::Scroll(ScrollEventContent {
+                delta_x,
+                delta_y,
+                unit: ScrollDeltaUnit::Pixel,
+                source: ScrollEventSource::Touch,
+            }),
+            gesture_state,
+            consumed: false,
+        })
+    }
+
+    /// Ends a touch as a completed gesture and emits a release event.
+    pub fn handle_touch_end(&mut self, touch_id: u64) {
+        self.finish_touch(touch_id, false);
+    }
+
+    /// Cancels a touch gesture. Cancellation never produces a tap or fling.
+    pub fn handle_touch_cancel(&mut self, touch_id: u64) {
+        self.finish_touch(touch_id, true);
+    }
+
+    fn finish_touch(&mut self, touch_id: u64, cancelled: bool) {
+        let now = Instant::now();
+        let touch_state = match self.touch_points.remove(&touch_id) {
+            Some(state) => state,
+            None => return,
+        };
+        let was_drag = touch_state.generated_scroll_event;
+        self.update_position(touch_state.last_position);
+        self.push_event(PointerChange {
+            timestamp: now,
+            pointer_id: touch_id,
+            content: if cancelled {
+                CursorEventContent::Cancelled(PressKeyEventType::Left)
+            } else {
+                CursorEventContent::Released(PressKeyEventType::Left)
+            },
+            gesture_state: if cancelled || was_drag {
                 GestureState::Dragged
             } else {
                 GestureState::TapCandidate
             },
             consumed: false,
-        };
-        self.push_event(release_event);
-
+        });
         if self.touch_points.is_empty() {
             self.clear_position_on_next_frame = true;
         }
@@ -322,6 +341,21 @@ pub struct PointerChange {
 }
 
 impl PointerChange {
+    /// Creates an unconsumed pointer sample with an explicit event timestamp.
+    pub fn new(
+        timestamp: Instant,
+        pointer_id: PointerId,
+        content: CursorEventContent,
+        gesture_state: GestureState,
+    ) -> Self {
+        Self {
+            timestamp,
+            pointer_id,
+            content,
+            gesture_state,
+            consumed: false,
+        }
+    }
     /// Marks this change as consumed.
     pub fn consume(&mut self) {
         self.consumed = true;
@@ -363,6 +397,8 @@ pub enum CursorEventContent {
     Pressed(PressKeyEventType),
     /// A cursor button or touch point was released.
     Released(PressKeyEventType),
+    /// A touch point was cancelled by the platform.
+    Cancelled(PressKeyEventType),
     /// A scroll action occurred (mouse wheel or touch drag).
     Scroll(ScrollEventContent),
 }
@@ -469,4 +505,79 @@ pub enum ScrollDeltaUnit {
     Line,
     /// Delta is expressed in pixels.
     Pixel,
+}
+
+#[cfg(test)]
+mod queue_tests {
+    use super::*;
+    use crate::Px;
+    #[test]
+    fn long_frame_preserves_touch_boundaries_and_displacement() {
+        let mut cursor = CursorState::default();
+        cursor.handle_touch_start(1, PxPosition::ZERO);
+        for x in 1..=300 {
+            if let Some(scroll) = cursor.handle_touch_move(1, PxPosition::new(Px(x), Px(0))) {
+                cursor.push_event(scroll);
+            }
+        }
+        cursor.handle_touch_end(1);
+        let events = cursor.take_events();
+        assert!(matches!(events[0].content, CursorEventContent::Pressed(_)));
+        assert!(matches!(
+            events.last().unwrap().content,
+            CursorEventContent::Released(_)
+        ));
+        let distance: f32 = events
+            .iter()
+            .filter_map(|event| match &event.content {
+                CursorEventContent::Scroll(scroll) => Some(scroll.delta_x),
+                _ => None,
+            })
+            .sum();
+        assert!((distance - 295.0).abs() < 0.001);
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::{CursorEventContent, CursorState, GestureState, PxPosition};
+    use crate::Px;
+
+    fn position(x: i32) -> PxPosition {
+        PxPosition::new(Px::new(x), Px::ZERO)
+    }
+
+    #[test]
+    fn touch_slop_is_cumulative_and_follow_up_micro_moves_scroll() {
+        let mut cursor = CursorState::default();
+        cursor.handle_touch_start(1, position(0));
+        assert!(cursor.handle_touch_move(1, position(2)).is_none());
+        assert!(cursor.handle_touch_move(1, position(4)).is_none());
+        let first = cursor
+            .handle_touch_move(1, position(6))
+            .expect("slop crossed");
+        assert_eq!(first.gesture_state, GestureState::Dragged);
+        let second = cursor
+            .handle_touch_move(1, position(7))
+            .expect("drag remains active");
+        assert_eq!(second.gesture_state, GestureState::Dragged);
+        assert!(
+            matches!(second.content, CursorEventContent::Scroll(scroll) if scroll.delta_x == 1.0)
+        );
+    }
+
+    #[test]
+    fn cancelled_touch_is_not_a_tap_boundary() {
+        let mut cursor = CursorState::default();
+        cursor.handle_touch_start(1, position(0));
+        cursor.handle_touch_cancel(1);
+        let events = cursor.take_events();
+        assert!(matches!(
+            events.last().map(|event| &event.content),
+            Some(CursorEventContent::Cancelled(_))
+        ));
+        assert_eq!(
+            events.last().map(|event| event.gesture_state),
+            Some(GestureState::Dragged)
+        );
+    }
 }

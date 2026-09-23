@@ -27,8 +27,8 @@ use crate::{
     text::text,
     text_edit_core::DisplayTransform,
     text_input::{
-        DisplayTransformText, TextInputController, TextInputProps, create_surface_args,
-        text_input_core,
+        DISABLED_CONTENT_ALPHA, DISABLED_FILL_ALPHA, DisplayTransformText, TextInputController,
+        TextInputProps, create_surface_args, text_input_core,
     },
     theme::{ContentColor, MaterialColorScheme, MaterialTheme, TextSelectionColors, TextStyle},
 };
@@ -135,6 +135,8 @@ struct TextFieldProps {
     pub enabled: bool,
     /// Whether the text field is read-only.
     pub read_only: bool,
+    /// Whether the field is displaying an error state.
+    pub is_error: bool,
     /// Optional modifier chain applied to the field container.
     pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
@@ -254,6 +256,7 @@ impl Default for TextFieldProps {
         Self {
             enabled: true,
             read_only: false,
+            is_error: false,
             modifier: Modifier::new(),
             on_change: CallbackWith::identity(),
             on_submit: Callback::noop(),
@@ -355,6 +358,7 @@ fn build_editor_args(
     TextInputProps {
         enabled: args.enabled,
         read_only: args.read_only,
+        is_error: args.is_error,
         modifier: args.modifier.clone(),
         on_change: args.on_change,
         on_submit: args.on_submit,
@@ -399,7 +403,18 @@ fn placeholder_text_style(theme: &MaterialTheme) -> TextStyle {
     theme.typography.body_large
 }
 
-fn resolve_label_color(scheme: &MaterialColorScheme, focused: bool) -> Color {
+fn resolve_label_color(
+    scheme: &MaterialColorScheme,
+    focused: bool,
+    is_error: bool,
+    enabled: bool,
+) -> Color {
+    if !enabled {
+        return scheme.on_surface.with_alpha(DISABLED_CONTENT_ALPHA);
+    }
+    if is_error {
+        return scheme.error;
+    }
     if focused {
         scheme.primary
     } else {
@@ -407,11 +422,33 @@ fn resolve_label_color(scheme: &MaterialColorScheme, focused: bool) -> Color {
     }
 }
 
-fn resolve_placeholder_color(scheme: &MaterialColorScheme) -> Color {
+fn resolve_placeholder_color(scheme: &MaterialColorScheme, enabled: bool) -> Color {
+    if !enabled {
+        return scheme.on_surface.with_alpha(DISABLED_CONTENT_ALPHA);
+    }
     scheme.on_surface_variant.with_alpha(0.7)
 }
 
-fn resolve_indicator_style(scheme: &MaterialColorScheme, focused: bool) -> (Color, Dp) {
+fn resolve_indicator_style(
+    scheme: &MaterialColorScheme,
+    focused: bool,
+    is_error: bool,
+    enabled: bool,
+) -> (Color, Dp) {
+    if !enabled {
+        return (
+            scheme.on_surface.with_alpha(DISABLED_CONTENT_ALPHA),
+            TextFieldDefaults::INDICATOR_THICKNESS,
+        );
+    }
+    if is_error {
+        let thickness = if focused {
+            TextFieldDefaults::INDICATOR_FOCUSED_THICKNESS
+        } else {
+            TextFieldDefaults::INDICATOR_THICKNESS
+        };
+        return (scheme.error, thickness);
+    }
     if focused {
         (
             scheme.primary,
@@ -430,6 +467,9 @@ fn resolve_container_color(
     scheme: &MaterialColorScheme,
     focused: bool,
 ) -> Color {
+    if !args.enabled {
+        return scheme.on_surface.with_alpha(DISABLED_FILL_ALPHA);
+    }
     if focused {
         args.focus_background_color
             .or(args.background_color)
@@ -634,10 +674,15 @@ fn text_field_content(
     };
     let placeholder_style = placeholder_text_style(&theme);
     let scheme = theme.color_scheme;
-    let label_color = resolve_label_color(&scheme, focused);
-    let placeholder_color = resolve_placeholder_color(&scheme);
-    let (indicator_color, indicator_thickness) = resolve_indicator_style(&scheme, focused);
-    let content_color = args.text_color.unwrap_or(scheme.on_surface);
+    let label_color = resolve_label_color(&scheme, focused, args.is_error, args.enabled);
+    let placeholder_color = resolve_placeholder_color(&scheme, args.enabled);
+    let (indicator_color, indicator_thickness) =
+        resolve_indicator_style(&scheme, focused, args.is_error, args.enabled);
+    let content_color = args.text_color.unwrap_or(if args.enabled {
+        scheme.on_surface
+    } else {
+        scheme.on_surface.with_alpha(DISABLED_CONTENT_ALPHA)
+    });
     let container_color = resolve_container_color(&args, &scheme, focused);
     let is_outlined = border_width.0 > 0.0;
     let notch_fill_color = if container_color.a <= 0.0 {
@@ -668,7 +713,7 @@ fn text_field_content(
         core_args.border_width = Dp(0.0);
         core_args.focus_border_width = Some(Dp(0.0));
 
-        let surface_args = create_surface_args(&editor, &controller);
+        let surface_args = create_surface_args(&editor, &controller, &scheme);
         surface()
             .style(surface_args.style)
             .shape(surface_args.shape)
@@ -993,6 +1038,7 @@ fn text_field_menu_content(
 ///
 /// - `enabled` — whether the field accepts user input.
 /// - `read_only` — whether the field is read-only.
+/// - `is_error` — whether the field is displaying an error state.
 /// - `modifier` — optional modifier chain applied to the field container.
 /// - `on_change` — optional text change callback.
 /// - `on_submit` — optional submit callback for single-line fields.
@@ -1051,6 +1097,7 @@ fn text_field_menu_content(
 pub fn text_field(
     enabled: Option<bool>,
     read_only: Option<bool>,
+    is_error: Option<bool>,
     modifier: Option<Modifier>,
     on_change: Option<CallbackWith<String, String>>,
     on_submit: Option<Callback>,
@@ -1093,6 +1140,7 @@ pub fn text_field(
     let selection_colors = TextSelectionColors::from_scheme(&scheme);
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
+    let is_error = is_error.unwrap_or(false);
     let modifier = modifier.unwrap_or_default();
     let min_width = min_width.or(Some(TextFieldDefaults::MIN_WIDTH));
     let min_height = min_height.or(Some(TextFieldDefaults::MIN_HEIGHT));
@@ -1113,6 +1161,7 @@ pub fn text_field(
     let args = TextFieldProps {
         enabled,
         read_only,
+        is_error,
         modifier,
         on_change: on_change.unwrap_or_else(CallbackWith::identity),
         on_submit: on_submit.unwrap_or_else(Callback::noop),
@@ -1176,7 +1225,6 @@ pub fn text_field(
     let menu_policy = resolve_text_field_menu_policy(args.context_menu, enabled, read_only);
     let on_change = args.on_change;
     let render_args = args.clone();
-
     let focus_tap_recognizer = remember(TapRecognizer::default);
     let context_menu_tap_recognizer = remember(|| {
         TapRecognizer::new(TapSettings {
@@ -1295,4 +1343,90 @@ pub fn text_field(
                 .editor(editor_args.clone());
         }
     });
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::theme::MaterialColorScheme;
+
+    use super::{
+        TextFieldDefaults, resolve_indicator_style, resolve_label_color, resolve_placeholder_color,
+    };
+
+    fn scheme() -> MaterialColorScheme {
+        MaterialColorScheme::default()
+    }
+
+    #[test]
+    fn label_color_follows_the_material_states() {
+        let scheme = scheme();
+
+        assert_eq!(
+            resolve_label_color(&scheme, false, false, true),
+            scheme.on_surface_variant
+        );
+        assert_eq!(
+            resolve_label_color(&scheme, true, false, true),
+            scheme.primary
+        );
+        assert_eq!(
+            resolve_label_color(&scheme, false, true, true),
+            scheme.error
+        );
+        assert_eq!(
+            resolve_label_color(&scheme, false, false, false),
+            scheme
+                .on_surface
+                .with_alpha(crate::text_input::DISABLED_CONTENT_ALPHA)
+        );
+    }
+
+    #[test]
+    fn placeholder_color_dims_when_disabled() {
+        let scheme = scheme();
+
+        assert_eq!(
+            resolve_placeholder_color(&scheme, true),
+            scheme.on_surface_variant.with_alpha(0.7)
+        );
+        assert_eq!(
+            resolve_placeholder_color(&scheme, false),
+            scheme
+                .on_surface
+                .with_alpha(crate::text_input::DISABLED_CONTENT_ALPHA)
+        );
+    }
+
+    #[test]
+    fn indicator_style_follows_the_material_states() {
+        let scheme = scheme();
+
+        assert_eq!(
+            resolve_indicator_style(&scheme, false, false, true),
+            (
+                scheme.on_surface_variant,
+                TextFieldDefaults::INDICATOR_THICKNESS
+            )
+        );
+        assert_eq!(
+            resolve_indicator_style(&scheme, true, false, true),
+            (
+                scheme.primary,
+                TextFieldDefaults::INDICATOR_FOCUSED_THICKNESS
+            )
+        );
+        assert_eq!(
+            resolve_indicator_style(&scheme, true, true, true),
+            (scheme.error, TextFieldDefaults::INDICATOR_FOCUSED_THICKNESS)
+        );
+        assert_eq!(
+            resolve_indicator_style(&scheme, true, false, false),
+            (
+                scheme
+                    .on_surface
+                    .with_alpha(crate::text_input::DISABLED_CONTENT_ALPHA),
+                TextFieldDefaults::INDICATOR_THICKNESS
+            )
+        );
+    }
 }

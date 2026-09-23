@@ -4,9 +4,12 @@
 //!
 //! Use to display content that might overflow the available space.
 pub(crate) mod scrollbar;
-use std::{collections::VecDeque, time::Duration};
+use std::time::Duration;
 
-use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer};
+use tessera_foundation::{
+    gesture::{ScrollRecognizer, TapRecognizer},
+    scroll_physics::{ExponentialInertia, ScrollVelocityTracker as FoundationVelocityTracker},
+};
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot,
@@ -35,36 +38,29 @@ const SCROLL_INERTIA_MAX_VELOCITY: f32 = 6000.0;
 const SCROLL_VELOCITY_SAMPLE_WINDOW: Duration = Duration::from_millis(90);
 const SCROLL_VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
 
-#[derive(Clone, PartialEq)]
-struct ScrollVelocityTracker {
-    samples: VecDeque<(Instant, f32, f32)>,
-    last_sample_time: Instant,
-}
-
-#[derive(Clone, PartialEq)]
-struct ActiveInertia {
-    velocity_x: f32,
-    velocity_y: f32,
-    last_tick_time: Instant,
-}
-
 fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
-    if !vx.is_finite() || !vy.is_finite() {
+    let magnitude = (vx * vx + vy * vy).sqrt();
+    if !magnitude.is_finite() {
         return (0.0, 0.0);
     }
-
-    let magnitude_sq = vx * vx + vy * vy;
-    if !magnitude_sq.is_finite() {
-        return (0.0, 0.0);
-    }
-
-    let magnitude = magnitude_sq.sqrt();
-    if magnitude > SCROLL_INERTIA_MAX_VELOCITY && SCROLL_INERTIA_MAX_VELOCITY > 0.0 {
+    if magnitude > SCROLL_INERTIA_MAX_VELOCITY {
         let scale = SCROLL_INERTIA_MAX_VELOCITY / magnitude;
-        return (vx * scale, vy * scale);
+        (vx * scale, vy * scale)
+    } else {
+        (vx, vy)
     }
+}
 
-    (vx, vy)
+fn clamp_scroll_coordinate(value: f32, boundary: f32, enabled: bool) -> f32 {
+    if !enabled {
+        0.0
+    } else if value < boundary {
+        boundary
+    } else if value > 0.0 {
+        0.0
+    } else {
+        value
+    }
 }
 
 fn normalize_scroll_delta(
@@ -114,6 +110,11 @@ pub struct ScrollableController {
     child_position: PxPosition,
     /// The target position of the child component (scrolling destination)
     target_position: PxPosition,
+    /// Floating-point target retained between rendered pixel positions.
+    target_position_f32: (f32, f32),
+    /// Floating-point current position retained between rendered pixel
+    /// positions.
+    child_position_f32: (f32, f32),
     /// The child component size
     child_size: ComputedData,
     /// The visible area size
@@ -127,9 +128,10 @@ pub struct ScrollableController {
     /// The state for horizontal scrollbar
     scrollbar_state_h: ScrollBarState,
     /// Velocity tracking for touch-driven inertia.
-    velocity_tracker: Option<ScrollVelocityTracker>,
+    velocity_tracker: Option<FoundationVelocityTracker>,
     /// Active inertia state after a touch release.
-    active_inertia: Option<ActiveInertia>,
+    active_inertia: Option<ExponentialInertia>,
+    inertia_last_tick: Option<Instant>,
 }
 
 impl Default for ScrollableController {
@@ -144,6 +146,8 @@ impl ScrollableController {
         Self {
             child_position: PxPosition::ZERO,
             target_position: PxPosition::ZERO,
+            target_position_f32: (0.0, 0.0),
+            child_position_f32: (0.0, 0.0),
             child_size: ComputedData::ZERO,
             visible_size: ComputedData::ZERO,
             override_child_size: None,
@@ -152,6 +156,7 @@ impl ScrollableController {
             scrollbar_state_h: ScrollBarState::default(),
             velocity_tracker: None,
             active_inertia: None,
+            inertia_last_tick: None,
         }
     }
 
@@ -189,7 +194,10 @@ impl ScrollableController {
     }
 
     pub(crate) fn set_target_position(&mut self, target: PxPosition) {
+        self.cancel_inertia();
+        self.velocity_tracker = None;
         self.target_position = target;
+        self.target_position_f32 = (target.x.to_f32(), target.y.to_f32());
     }
 
     /// Instantly sets the scroll position without animation.
@@ -197,65 +205,91 @@ impl ScrollableController {
     /// This is useful for restoring a saved scroll position when remounting
     /// a component.
     pub fn set_scroll_position(&mut self, position: PxPosition) {
+        self.cancel_inertia();
+        self.velocity_tracker = None;
+        self.last_frame_nanos = None;
         self.child_position = position;
         self.target_position = position;
+        self.child_position_f32 = (position.x.to_f32(), position.y.to_f32());
+        self.target_position_f32 = (position.x.to_f32(), position.y.to_f32());
     }
 
     /// Updates the scroll position based on time-based interpolation
     /// Returns true if the position changed (needs redraw)
     pub(crate) fn update_scroll_position(&mut self, frame_nanos: u64, smoothing: f32) -> bool {
-        // Calculate delta time
-        let delta_time = if let Some(last_frame_nanos) = self.last_frame_nanos {
-            frame_nanos.saturating_sub(last_frame_nanos) as f32 / 1_000_000_000.0
-        } else {
-            0.016 // Assume 60fps for first frame
-        };
-
+        let delta_time = self
+            .last_frame_nanos
+            .map(|last| frame_nanos.saturating_sub(last) as f32 / 1_000_000_000.0)
+            .unwrap_or(1.0 / 60.0)
+            .clamp(0.0, 0.25);
         self.last_frame_nanos = Some(frame_nanos);
-
-        // Calculate the difference between target and current position
-        let diff_x = self.target_position.x.to_f32() - self.child_position.x.to_f32();
-        let diff_y = self.target_position.y.to_f32() - self.child_position.y.to_f32();
-
-        // If we're close enough to target, snap to it
-        if diff_x.abs() <= 1.0 && diff_y.abs() <= 1.0 {
-            if self.child_position != self.target_position {
-                self.child_position = self.target_position;
-                return true;
-            }
-            return false;
-        }
-
-        // Use simple velocity-based movement for consistent behavior
-        // Higher smoothing = slower movement
-        let mut movement_factor = (1.0 - smoothing) * delta_time * 60.0;
-
-        // CRITICAL FIX: Clamp the movement factor to a maximum of 1.0.
-        if movement_factor > 1.0 {
-            movement_factor = 1.0;
-        }
-        let old_position = self.child_position;
-
-        self.child_position = PxPosition {
-            x: Px::saturating_from_f32(self.child_position.x.to_f32() + diff_x * movement_factor),
-            y: Px::saturating_from_f32(self.child_position.y.to_f32() + diff_y * movement_factor),
+        let old = self.child_position;
+        let (target_x, target_y) = self.target_position_f32;
+        let (current_x, current_y) = self.child_position_f32;
+        let smoothing = smoothing.clamp(0.0, 0.9999);
+        let response = if smoothing == 0.0 {
+            f32::INFINITY
+        } else {
+            -(smoothing).ln() * 60.0
         };
-
-        // If interpolation rounds back to the same pixel, snap to target to
-        // avoid an endless pending-animation loop.
-        if old_position == self.child_position && self.child_position != self.target_position {
-            self.child_position = self.target_position;
-            return true;
+        let factor = if response.is_infinite() {
+            1.0
+        } else {
+            1.0 - (-response * delta_time).exp()
+        };
+        self.child_position_f32 = (
+            current_x + (target_x - current_x) * factor,
+            current_y + (target_y - current_y) * factor,
+        );
+        if (target_x - self.child_position_f32.0).abs() < 0.01 {
+            self.child_position_f32.0 = target_x;
         }
-
-        // Return true if position changed significantly
-        old_position != self.child_position
+        if (target_y - self.child_position_f32.1).abs() < 0.01 {
+            self.child_position_f32.1 = target_y;
+        }
+        self.child_position = PxPosition {
+            x: Px::saturating_from_f32(self.child_position_f32.0),
+            y: Px::saturating_from_f32(self.child_position_f32.1),
+        };
+        if !self.has_pending_animation_frame() {
+            self.last_frame_nanos = None;
+        }
+        old != self.child_position
     }
 
     fn cancel_inertia(&mut self) {
         self.active_inertia = None;
+        self.inertia_last_tick = None;
     }
 
+    // Direct-manipulation input starts at the displayed floating-point
+    // position, discarding any pending line-wheel animation rather than
+    // jumping to it.
+    fn apply_input_delta(
+        &mut self,
+        delta: ScrollDelta,
+        source: ScrollEventSource,
+        unit: ScrollDeltaUnit,
+        container_size: &ComputedData,
+        vertical: bool,
+        horizontal: bool,
+    ) -> ScrollDelta {
+        self.cancel_inertia();
+        if source != ScrollEventSource::Touch {
+            self.velocity_tracker = None;
+        }
+        let immediate = source == ScrollEventSource::Touch || unit == ScrollDeltaUnit::Pixel;
+        if immediate {
+            self.target_position_f32 = self.child_position_f32;
+            self.target_position = self.child_position;
+        }
+        let consumed = self.apply_scroll_delta(delta, container_size, vertical, horizontal);
+        if immediate {
+            self.child_position_f32 = self.target_position_f32;
+            self.child_position = self.target_position;
+        }
+        consumed
+    }
     fn apply_scroll_delta(
         &mut self,
         delta: ScrollDelta,
@@ -263,30 +297,37 @@ impl ScrollableController {
         vertical_scrollable: bool,
         horizontal_scrollable: bool,
     ) -> ScrollDelta {
-        let current_target = self.target_position;
-        let new_target = current_target.saturating_offset(
-            Px::saturating_from_f32(delta.x),
-            Px::saturating_from_f32(delta.y),
-        );
+        let current_target = self.target_position_f32;
+        let proposed = (current_target.0 + delta.x, current_target.1 + delta.y);
         let constrained_target = constrain_position(
-            new_target,
+            PxPosition::new(Px::new(i32::MIN), Px::new(i32::MIN)),
             &self.child_size,
             container_size,
             vertical_scrollable,
             horizontal_scrollable,
         );
-        self.target_position = constrained_target;
-        ScrollDelta::new(
-            constrained_target.x.to_f32() - current_target.x.to_f32(),
-            constrained_target.y.to_f32() - current_target.y.to_f32(),
-        )
+        let constrained = (constrained_target.x.to_f32(), constrained_target.y.to_f32());
+        let next = (
+            clamp_scroll_coordinate(proposed.0, constrained.0, horizontal_scrollable),
+            clamp_scroll_coordinate(proposed.1, constrained.1, vertical_scrollable),
+        );
+        self.target_position_f32 = next;
+        self.target_position = PxPosition::new(
+            Px::saturating_from_f32(next.0),
+            Px::saturating_from_f32(next.1),
+        );
+        ScrollDelta::new(next.0 - current_target.0, next.1 - current_target.1)
     }
 
     fn push_touch_delta(&mut self, now: Instant, dx: f32, dy: f32) {
         self.cancel_inertia();
-        let tracker = self
-            .velocity_tracker
-            .get_or_insert_with(|| ScrollVelocityTracker::new(now));
+        let tracker = self.velocity_tracker.get_or_insert_with(|| {
+            FoundationVelocityTracker::new(
+                now,
+                SCROLL_VELOCITY_SAMPLE_WINDOW,
+                SCROLL_VELOCITY_IDLE_CUTOFF,
+            )
+        });
         tracker.push_delta(now, dx, dy);
     }
 
@@ -294,10 +335,10 @@ impl ScrollableController {
         let Some(mut tracker) = self.velocity_tracker.take() else {
             return ScrollVelocity::ZERO;
         };
-        if let Some((avg_vx, avg_vy)) = tracker.resolve(now) {
-            let velocity_magnitude = (avg_vx * avg_vx + avg_vy * avg_vy).sqrt();
+        if let Some(velocity) = tracker.resolve(now) {
+            let velocity_magnitude = (velocity.x * velocity.x + velocity.y * velocity.y).sqrt();
             if velocity_magnitude > SCROLL_INERTIA_START_THRESHOLD {
-                let (vx, vy) = clamp_inertia_velocity(avg_vx, avg_vy);
+                let (vx, vy) = clamp_inertia_velocity(velocity.x, velocity.y);
                 return ScrollVelocity::new(vx, vy);
             }
         }
@@ -308,19 +349,13 @@ impl ScrollableController {
         if velocity.is_zero() {
             return;
         }
-        self.active_inertia = Some(ActiveInertia {
-            velocity_x: velocity.x,
-            velocity_y: velocity.y,
-            last_tick_time: now,
-        });
-    }
-
-    fn should_trigger_idle_inertia(&self, now: Instant) -> bool {
-        self.active_inertia.is_none()
-            && self
-                .velocity_tracker
-                .as_ref()
-                .is_some_and(|tracker| tracker.is_idle(now))
+        self.inertia_last_tick = Some(now);
+        self.active_inertia = Some(ExponentialInertia::new(
+            self.target_position_f32.0,
+            self.target_position_f32.1,
+            tessera_foundation::scroll_physics::ScrollVelocity::new(velocity.x, velocity.y),
+            SCROLL_INERTIA_DECAY_CONSTANT,
+        ));
     }
 
     fn advance_inertia(
@@ -333,53 +368,46 @@ impl ScrollableController {
         let Some(mut inertia) = self.active_inertia.take() else {
             return;
         };
-        let delta_time = now.duration_since(inertia.last_tick_time).as_secs_f32();
-        if delta_time <= 0.0 {
-            self.active_inertia = Some(inertia);
-            return;
+        let last_tick = self.inertia_last_tick.replace(now).unwrap_or(now);
+        let displacement = inertia.advance(now.duration_since(last_tick));
+        let proposed = (
+            self.target_position_f32.0 + displacement.x,
+            self.target_position_f32.1 + displacement.y,
+        );
+        let constrained = constrain_position(
+            PxPosition::new(Px::new(i32::MIN), Px::new(i32::MIN)),
+            &self.child_size,
+            container_size,
+            vertical_scrollable,
+            horizontal_scrollable,
+        );
+        let next = (
+            clamp_scroll_coordinate(proposed.0, constrained.x.to_f32(), horizontal_scrollable),
+            clamp_scroll_coordinate(proposed.1, constrained.y.to_f32(), vertical_scrollable),
+        );
+        self.target_position_f32 = next;
+        self.target_position = PxPosition::new(
+            Px::saturating_from_f32(next.0),
+            Px::saturating_from_f32(next.1),
+        );
+        self.child_position_f32 = next;
+        self.child_position = self.target_position;
+        if (next.0 - proposed.0).abs() > f32::EPSILON {
+            inertia.velocity_x = 0.0;
         }
-
-        let delta_x = inertia.velocity_x * delta_time;
-        let delta_y = inertia.velocity_y * delta_time;
-        if delta_x.abs() > 0.01 || delta_y.abs() > 0.01 {
-            let new_target = self.target_position.saturating_offset(
-                Px::saturating_from_f32(delta_x),
-                Px::saturating_from_f32(delta_y),
-            );
-            let constrained_target = constrain_position(
-                new_target,
-                &self.child_size,
-                container_size,
-                vertical_scrollable,
-                horizontal_scrollable,
-            );
-            let consumed_x = constrained_target.x.to_f32() - self.target_position.x.to_f32();
-            let consumed_y = constrained_target.y.to_f32() - self.target_position.y.to_f32();
-            self.target_position = constrained_target;
-            if consumed_x.abs() <= f32::EPSILON {
-                inertia.velocity_x = 0.0;
-            }
-            if consumed_y.abs() <= f32::EPSILON {
-                inertia.velocity_y = 0.0;
-            }
+        if (next.1 - proposed.1).abs() > f32::EPSILON {
+            inertia.velocity_y = 0.0;
         }
-
-        let decay = (-SCROLL_INERTIA_DECAY_CONSTANT * delta_time).exp();
-        inertia.velocity_x *= decay;
-        inertia.velocity_y *= decay;
-        inertia.last_tick_time = now;
-
-        if inertia.velocity_x.abs() >= SCROLL_INERTIA_MIN_VELOCITY
-            || inertia.velocity_y.abs() >= SCROLL_INERTIA_MIN_VELOCITY
+        if inertia.velocity().x.abs() >= SCROLL_INERTIA_MIN_VELOCITY
+            || inertia.velocity().y.abs() >= SCROLL_INERTIA_MIN_VELOCITY
         {
             self.active_inertia = Some(inertia);
+        } else {
+            self.inertia_last_tick = None;
         }
     }
-
     fn has_pending_animation_frame(&self) -> bool {
-        self.child_position != self.target_position
-            || self.active_inertia.is_some()
-            || self.velocity_tracker.is_some()
+        self.child_position_f32 != self.target_position_f32 || self.active_inertia.is_some()
     }
 
     pub(crate) fn scrollbar_state_v(&self) -> ScrollBarState {
@@ -388,87 +416,6 @@ impl ScrollableController {
 
     pub(crate) fn scrollbar_state_h(&self) -> ScrollBarState {
         self.scrollbar_state_h.clone()
-    }
-}
-
-impl ScrollVelocityTracker {
-    fn new(now: Instant) -> Self {
-        Self {
-            samples: VecDeque::new(),
-            last_sample_time: now,
-        }
-    }
-
-    fn push_delta(&mut self, now: Instant, dx: f32, dy: f32) {
-        let delta_time = now.duration_since(self.last_sample_time).as_secs_f32();
-        self.last_sample_time = now;
-        if delta_time <= 0.0 {
-            return;
-        }
-
-        let vx = dx / delta_time;
-        let vy = dy / delta_time;
-        let (vx, vy) = clamp_inertia_velocity(vx, vy);
-        self.samples.push_back((now, vx, vy));
-        self.prune(now);
-    }
-
-    fn resolve(&mut self, now: Instant) -> Option<(f32, f32)> {
-        self.prune(now);
-
-        if self.samples.is_empty() {
-            return None;
-        }
-
-        let idle_time = now.duration_since(self.last_sample_time);
-
-        let mut weighted_sum_x = 0.0f32;
-        let mut weighted_sum_y = 0.0f32;
-        let mut total_weight = 0.0f32;
-        let window_secs = SCROLL_VELOCITY_SAMPLE_WINDOW
-            .as_secs_f32()
-            .max(f32::EPSILON);
-
-        for &(timestamp, vx, vy) in &self.samples {
-            let age_secs = now
-                .duration_since(timestamp)
-                .as_secs_f32()
-                .clamp(0.0, window_secs);
-            let weight = (window_secs - age_secs).max(0.0);
-            if weight > 0.0 {
-                weighted_sum_x += vx * weight;
-                weighted_sum_y += vy * weight;
-                total_weight += weight;
-            }
-        }
-
-        if total_weight <= f32::EPSILON {
-            self.samples.clear();
-            return None;
-        }
-
-        let avg_x = weighted_sum_x / total_weight;
-        let avg_y = weighted_sum_y / total_weight;
-
-        let damping = 1.0 - idle_time.as_secs_f32() / SCROLL_VELOCITY_IDLE_CUTOFF.as_secs_f32();
-        let damping = damping.clamp(0.0, 1.0);
-        let (avg_x, avg_y) = clamp_inertia_velocity(avg_x * damping, avg_y * damping);
-
-        Some((avg_x, avg_y))
-    }
-
-    fn is_idle(&self, now: Instant) -> bool {
-        now.duration_since(self.last_sample_time) >= SCROLL_VELOCITY_IDLE_CUTOFF
-    }
-
-    fn prune(&mut self, now: Instant) {
-        while let Some(&(timestamp, _, _)) = self.samples.front() {
-            if now.duration_since(timestamp) > SCROLL_VELOCITY_SAMPLE_WINDOW {
-                self.samples.pop_front();
-            } else {
-                break;
-            }
-        }
     }
 }
 
@@ -980,48 +927,63 @@ fn apply_scrollable_viewport_input_modifier(args: ScrollableViewportInputArgs) -
 
 impl PointerInputModifierNode for ScrollableViewportPointerModifierNode {
     fn on_pointer_input(&self, input: PointerInput<'_>) {
-        let is_cursor_in_component = input
-            .cursor_position_rel
-            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+        self.handle_changes(
+            input.pass,
+            input.pointer_changes.as_mut_slice(),
+            input.cursor_position_rel,
+            input.computed_data,
+            Instant::now(),
+            current_frame_nanos(),
+        );
+    }
+}
+
+impl ScrollableViewportPointerModifierNode {
+    fn handle_changes(
+        &self,
+        pass: tessera_ui::PointerEventPass,
+        changes: &mut [tessera_ui::PointerChange],
+        cursor_position_rel: Option<PxPosition>,
+        computed_data: ComputedData,
+        now: Instant,
+        frame_nanos: u64,
+    ) {
+        if pass != tessera_ui::PointerEventPass::Main {
+            return;
+        }
+        let is_cursor_in_component = cursor_position_rel
+            .map(|pos| is_position_inside_bounds(computed_data, pos))
             .unwrap_or(false);
-        let now = Instant::now();
-        let frame_nanos = current_frame_nanos();
-        let should_handle_scroll = is_cursor_in_component;
-        let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
-                is_cursor_in_component,
-            )
-        });
+        for change in changes {
+            let changes = std::slice::from_mut(change);
+            let should_handle_scroll = is_cursor_in_component
+                || matches!(
+                    changes[0].content,
+                    tessera_ui::CursorEventContent::Scroll(ref scroll)
+                        if scroll.source == ScrollEventSource::Touch
+                );
+            let tap_result = self.tap_recognizer.with_mut(|recognizer| {
+                recognizer.update(pass, changes, cursor_position_rel, is_cursor_in_component)
+            });
 
-        if tap_result.pressed && self.controller.with(|c| c.active_inertia.is_some()) {
-            self.controller.with_mut(|c| c.cancel_inertia());
-        }
-
-        if let Some(release_timestamp) = tap_result.release_timestamp {
-            let available_velocity = self
-                .controller
-                .with_mut(|c| c.resolve_touch_velocity(release_timestamp));
-            if !available_velocity.is_zero() {
-                let consumed_velocity = self
-                    .nested_scroll_connection
-                    .as_ref()
-                    .map(|connection| connection.pre_fling(available_velocity))
-                    .unwrap_or(ScrollVelocity::ZERO);
-                let remaining_velocity = available_velocity - consumed_velocity;
-                self.controller
-                    .with_mut(|c| c.start_inertia(release_timestamp, remaining_velocity));
+            if tap_result.pressed {
+                self.controller.with_mut(|c| {
+                    c.cancel_inertia();
+                    c.target_position_f32 = c.child_position_f32;
+                    c.target_position = c.child_position;
+                    c.velocity_tracker = Some(FoundationVelocityTracker::new(
+                        tap_result.press_timestamp.unwrap_or(now),
+                        SCROLL_VELOCITY_SAMPLE_WINDOW,
+                        SCROLL_VELOCITY_IDLE_CUTOFF,
+                    ));
+                });
             }
-        }
 
-        if should_handle_scroll {
-            self.scroll_recognizer.with_mut(|recognizer| {
-                recognizer.for_each(
-                    input.pass,
-                    input.pointer_changes.as_mut_slice(),
-                    |context, scroll_event| {
+            // Release is intentionally handled after all scroll samples in this
+            // frame.
+            if should_handle_scroll {
+                self.scroll_recognizer.with_mut(|recognizer| {
+                    recognizer.for_each(pass, changes, |context, scroll_event| {
                         if self.controller.with(|c| c.active_inertia.is_some()) {
                             self.controller.with_mut(|c| c.cancel_inertia());
                         }
@@ -1038,9 +1000,11 @@ impl PointerInputModifierNode for ScrollableViewportPointerModifierNode {
                             .unwrap_or(ScrollDelta::ZERO);
                         let available_after_pre = available - parent_pre_consumed;
                         let child_consumed = self.controller.with_mut(|c| {
-                            c.apply_scroll_delta(
+                            c.apply_input_delta(
                                 available_after_pre,
-                                &input.computed_data,
+                                scroll_event.source,
+                                scroll_event.unit,
+                                &computed_data,
                                 self.vertical,
                                 self.horizontal,
                             )
@@ -1090,47 +1054,54 @@ impl PointerInputModifierNode for ScrollableViewportPointerModifierNode {
 
                         scroll_event.delta_x = remaining.x;
                         scroll_event.delta_y = remaining.y;
-                    },
+                        scroll_event.unit = ScrollDeltaUnit::Pixel;
+                    });
+                });
+
+                let target = self.controller.with(|c| c.target_position());
+                let child_size = self.controller.with(|c| c.child_size());
+                let constrained_position = constrain_position(
+                    target,
+                    &child_size,
+                    &computed_data,
+                    self.vertical,
+                    self.horizontal,
                 );
-            });
-
-            let target = self.controller.with(|c| c.target_position());
-            let child_size = self.controller.with(|c| c.child_size());
-            let constrained_position = constrain_position(
-                target,
-                &child_size,
-                &input.computed_data,
-                self.vertical,
-                self.horizontal,
-            );
-            if target != constrained_position {
-                self.controller
-                    .with_mut(|c| c.set_target_position(constrained_position));
+                if target != constrained_position {
+                    self.controller
+                        .with_mut(|c| c.set_target_position(constrained_position));
+                }
             }
-        }
-
-        if !is_cursor_in_component {
-            let should_trigger_idle_inertia =
-                self.controller.with(|c| c.should_trigger_idle_inertia(now));
-            if should_trigger_idle_inertia {
-                let available_velocity =
-                    self.controller.with_mut(|c| c.resolve_touch_velocity(now));
+            // A captured gesture can end outside the viewport. Resolve only
+            // after the last scroll sample, independently of the
+            // current hit-test result.
+            let cancelled = changes.iter().any(|change| {
+                matches!(change.content, tessera_ui::CursorEventContent::Cancelled(_))
+            });
+            if cancelled {
+                self.controller.with_mut(|c| {
+                    c.velocity_tracker = None;
+                    c.cancel_inertia();
+                });
+            } else if let Some(release_timestamp) = tap_result.release_timestamp {
+                let available_velocity = self
+                    .controller
+                    .with_mut(|c| c.resolve_touch_velocity(release_timestamp));
                 if !available_velocity.is_zero() {
                     let consumed_velocity = self
                         .nested_scroll_connection
                         .as_ref()
                         .map(|connection| connection.pre_fling(available_velocity))
                         .unwrap_or(ScrollVelocity::ZERO);
-                    let remaining_velocity = available_velocity - consumed_velocity;
-                    self.controller
-                        .with_mut(|c| c.start_inertia(now, remaining_velocity));
+                    self.controller.with_mut(|c| {
+                        c.start_inertia(release_timestamp, available_velocity - consumed_velocity)
+                    });
                 }
             }
         }
-
         if self.controller.with(|c| c.active_inertia.is_some()) {
             self.controller.with_mut(|c| {
-                c.advance_inertia(now, &input.computed_data, self.vertical, self.horizontal);
+                c.advance_inertia(now, &computed_data, self.vertical, self.horizontal);
             });
         }
     }
@@ -1314,4 +1285,84 @@ fn constrain_position(
     };
 
     PxPosition { x, y }
+}
+
+#[cfg(test)]
+mod scroll_tests {
+    use super::*;
+    fn controller() -> ScrollableController {
+        let mut controller = ScrollableController::new();
+        controller.child_size = ComputedData {
+            width: Px(100),
+            height: Px(2000),
+        };
+        controller.visible_size = ComputedData {
+            width: Px(100),
+            height: Px(100),
+        };
+        controller
+    }
+    #[test]
+    fn pixel_input_accumulates_subpixels_without_smoothing() {
+        let mut controller = controller();
+        let viewport = controller.visible_size;
+        for _ in 0..20 {
+            controller.apply_input_delta(
+                ScrollDelta::new(0.0, -0.1),
+                ScrollEventSource::Wheel,
+                ScrollDeltaUnit::Pixel,
+                &viewport,
+                true,
+                false,
+            );
+        }
+        assert!((controller.child_position_f32.1 + 2.0).abs() < 0.0001);
+        assert!(!controller.has_pending_animation_frame());
+    }
+    #[test]
+    fn smoothing_does_not_snap_when_one_frame_rounds_to_same_pixel() {
+        let mut controller = controller();
+        controller.set_target_position(PxPosition::new(Px(0), Px(-100)));
+        controller.last_frame_nanos = Some(0);
+        controller.update_scroll_position(1_000_000, 0.99);
+        assert!(controller.child_position_f32.1 > -1.0);
+        assert!(controller.has_pending_animation_frame());
+        for frame in 1..2000 {
+            controller.update_scroll_position(frame * 16_666_667, 0.99);
+        }
+        assert!(!controller.has_pending_animation_frame());
+        assert_eq!(controller.child_position.y, Px(-100));
+    }
+    #[test]
+    fn touch_and_programmatic_position_interrupt_inertia() {
+        let mut controller = controller();
+        let viewport = controller.visible_size;
+        let now = Instant::now();
+        controller.start_inertia(now, ScrollVelocity::new(0.0, -1000.0));
+        controller.apply_input_delta(
+            ScrollDelta::new(0.0, -2.0),
+            ScrollEventSource::Touch,
+            ScrollDeltaUnit::Pixel,
+            &viewport,
+            true,
+            false,
+        );
+        assert!(controller.active_inertia.is_none());
+        controller.start_inertia(now, ScrollVelocity::new(0.0, -1000.0));
+        controller.set_scroll_position(PxPosition::ZERO);
+        assert!(!controller.has_pending_animation_frame());
+    }
+    #[test]
+    fn holding_still_does_not_start_inertia_and_release_has_no_velocity() {
+        let mut controller = controller();
+        let now = Instant::now();
+        controller.push_touch_delta(now, 0.0, -10.0);
+        controller.push_touch_delta(now + Duration::from_millis(10), 0.0, -10.0);
+        assert!(controller.active_inertia.is_none());
+        assert!(
+            controller
+                .resolve_touch_velocity(now + Duration::from_millis(100))
+                .is_zero()
+        );
+    }
 }

@@ -1,8 +1,8 @@
-//! Core text input component without Material decoration.
+//! Editable text input with Material outlined styling.
 //!
 //! ## Usage
 //!
-//! Embed as a bare text input surface when you need to build custom styling.
+//! Collect short-form input when the full text field decoration is not needed.
 use glyphon::Action as GlyphonAction;
 use tessera_foundation::gesture::{ScrollRecognizer, ScrollResult, TapRecognizer};
 use tessera_ui::{
@@ -23,11 +23,20 @@ use crate::{
     text_edit_core::{
         ClickType, ImeEditResult, PlannedImeEvent, RectDef, TextSelection, text_edit_core,
     },
-    theme::{MaterialTheme, TextSelectionColors},
+    theme::{MaterialColorScheme, MaterialTheme, TextSelectionColors},
 };
 
 #[cfg(test)]
 use glyphon::Edit;
+
+/// Material 3 opacity applied to disabled field text and labels.
+pub(crate) const DISABLED_CONTENT_ALPHA: f32 = 0.38;
+
+/// Material 3 opacity applied to the outline of a disabled field.
+pub(crate) const DISABLED_OUTLINE_ALPHA: f32 = 0.12;
+
+/// Material 3 opacity applied to the container of a disabled filled field.
+pub(crate) const DISABLED_FILL_ALPHA: f32 = 0.04;
 
 /// State structure for the text input, managing text content, cursor,
 /// selection, and editing logic.
@@ -125,6 +134,8 @@ pub(crate) struct TextInputProps {
     pub enabled: bool,
     /// Whether the editor is read-only.
     pub read_only: bool,
+    /// Whether the field is displaying an error state.
+    pub is_error: bool,
     /// Optional modifier chain applied to the editor container.
     pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
@@ -192,23 +203,19 @@ impl Default for TextInputProps {
         Self {
             enabled: true,
             read_only: false,
+            is_error: false,
             modifier: Modifier::new(),
             on_change: CallbackWith::default_value(),
             on_submit: Callback::noop(),
-            min_width: None,
-            min_height: None,
+            min_width: Some(Dp(280.0)),
+            min_height: Some(Dp(56.0)),
             background_color: None,
             border_width: Dp(1.0),
             border_color: None,
-            shape: Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(Dp(4.0), 3.0),
-                top_right: RoundedCorner::manual(Dp(4.0), 3.0),
-                bottom_right: RoundedCorner::manual(Dp(4.0), 3.0),
-                bottom_left: RoundedCorner::manual(Dp(4.0), 3.0),
-            },
-            padding: Dp(5.0),
+            shape: MaterialTheme::default().shapes.extra_small,
+            padding: Dp(16.0),
             focus_border_color: None,
-            focus_border_width: None,
+            focus_border_width: Some(Dp(2.0)),
             focus_background_color: None,
             selection_color: None,
             text_color: None,
@@ -216,8 +223,8 @@ impl Default for TextInputProps {
             accessibility_label: None,
             accessibility_description: None,
             initial_text: None,
-            font_size: Dp(14.0),
-            line_height: None,
+            font_size: Dp(16.0),
+            line_height: Some(Dp(24.0)),
             single_line: false,
             input_transform: None,
             display_transform: None,
@@ -228,7 +235,8 @@ impl Default for TextInputProps {
 
 /// # text_input
 ///
-/// Renders a multi-line, editable text field.
+/// Renders an editable text field with Material outlined styling and colors
+/// resolved from the active theme.
 ///
 /// ## Usage
 ///
@@ -272,7 +280,8 @@ impl TextInputBuilder {
 
 /// # text_input
 ///
-/// Renders a multi-line, editable text field.
+/// Renders an editable text field with Material outlined styling and colors
+/// resolved from the active theme.
 ///
 /// ## Usage
 ///
@@ -283,6 +292,7 @@ impl TextInputBuilder {
 ///
 /// - `enabled` — whether the editor is enabled for user input.
 /// - `read_only` — whether the editor is read-only.
+/// - `is_error` — whether the field is displaying an error state.
 /// - `modifier` — optional modifier chain applied to the editor container.
 /// - `on_change` — called when text changes.
 /// - `on_submit` — called when the user submits a single-line field.
@@ -332,6 +342,7 @@ impl TextInputBuilder {
 pub fn text_input(
     enabled: Option<bool>,
     read_only: Option<bool>,
+    is_error: Option<bool>,
     modifier: Option<Modifier>,
     on_change: Option<CallbackWith<String, String>>,
     on_submit: Option<Callback>,
@@ -358,29 +369,44 @@ pub fn text_input(
     display_transform: Option<DisplayTransform>,
     controller: Option<State<TextInputController>>,
 ) {
-    let scheme = use_context::<MaterialTheme>()
+    let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+        .get();
+    let scheme = theme.color_scheme;
+    let props_default = TextInputProps::default();
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
+    let is_error = is_error.unwrap_or(false);
     let modifier = modifier.unwrap_or_default();
-    let background_color = background_color.or(Some(scheme.surface_variant));
-    let border_width = border_width.unwrap_or(TextInputProps::default().border_width);
-    let border_color = border_color.or(Some(scheme.outline_variant));
-    let shape = shape.unwrap_or(TextInputProps::default().shape);
-    let padding = padding.unwrap_or(TextInputProps::default().padding);
+    let min_width = min_width.or(props_default.min_width);
+    let min_height = min_height.or(props_default.min_height);
+    let background_color = background_color.or(Some(Color::TRANSPARENT));
+    let border_width = border_width.unwrap_or(props_default.border_width);
+    let border_color = border_color.or(Some(scheme.outline));
+    let shape = shape.unwrap_or(theme.shapes.extra_small);
+    let padding = padding.unwrap_or(props_default.padding);
     let focus_border_color = focus_border_color.or(Some(scheme.primary));
-    let focus_background_color = focus_background_color.or(Some(scheme.surface));
+    let focus_border_width = focus_border_width.or(props_default.focus_border_width);
+    let focus_background_color = focus_background_color.or(Some(Color::TRANSPARENT));
     let selection_color =
         selection_color.or(Some(TextSelectionColors::from_scheme(&scheme).background));
-    let text_color = text_color.or(Some(scheme.on_surface));
-    let cursor_color = cursor_color.or(Some(scheme.primary));
-    let font_size = font_size.unwrap_or(TextInputProps::default().font_size);
+    let text_color = text_color.or(Some(if enabled {
+        scheme.on_surface
+    } else {
+        scheme.on_surface.with_alpha(DISABLED_CONTENT_ALPHA)
+    }));
+    let cursor_color = cursor_color.or(Some(if is_error {
+        scheme.error
+    } else {
+        scheme.primary
+    }));
+    let font_size = font_size.unwrap_or(props_default.font_size);
+    let line_height = line_height.or(props_default.line_height);
     let single_line = single_line.unwrap_or(false);
     let args = TextInputProps {
         enabled,
         read_only,
+        is_error,
         modifier,
         on_change: on_change.unwrap_or_else(CallbackWith::default_value),
         on_submit: on_submit.unwrap_or_else(Callback::noop),
@@ -442,7 +468,7 @@ pub fn text_input(
     );
 
     layout().modifier(modifier).child(move || {
-        let text_input_surface = create_surface_args(&editor_args, &controller);
+        let text_input_surface = create_surface_args(&editor_args, &controller, &scheme);
         surface()
             .style(text_input_surface.style)
             .shape(text_input_surface.shape)
@@ -1232,18 +1258,20 @@ pub(crate) struct TextInputSurfaceArgs {
 pub(crate) fn create_surface_args(
     args: &TextInputProps,
     state: &State<TextInputController>,
+    scheme: &MaterialColorScheme,
 ) -> TextInputSurfaceArgs {
-    let border_width = determine_border_width(args, state);
-    let style = if border_width.to_pixels_f32() > 0.0 {
+    let focused = state.with(|c| c.focus_handler().is_focused());
+    let border_width = determine_border_width(args, focused);
+    let is_outlined = border_width.to_pixels_f32() > 0.0;
+    let style = if is_outlined {
         SurfaceStyle::FilledOutlined {
-            fill_color: determine_background_color(args, state),
-            border_color: determine_border_color(args, state)
-                .expect("Border color should exist when border width is positive"),
+            fill_color: determine_background_color(args, focused, is_outlined, scheme),
+            border_color: determine_border_color(args, focused, scheme),
             border_width,
         }
     } else {
         SurfaceStyle::Filled {
-            color: determine_background_color(args, state),
+            color: determine_background_color(args, focused, is_outlined, scheme),
         }
     };
 
@@ -1260,38 +1288,121 @@ pub(crate) fn create_surface_args(
     }
 }
 
-/// Determine background color based on focus state
-fn determine_background_color(args: &TextInputProps, state: &State<TextInputController>) -> Color {
-    if state.with(|c| c.focus_handler().is_focused()) {
-        args.focus_background_color
-            .or(args.background_color)
-            .unwrap_or(Color::new(1.0, 1.0, 1.0, 1.0))
+/// Interaction state that selects the Material 3 field colors.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct FieldVisualState {
+    focused: bool,
+    enabled: bool,
+    is_error: bool,
+    outlined: bool,
+}
+
+/// Material 3 default container fill for the given state.
+///
+/// Outlined containers stay transparent, including when disabled; a disabled
+/// filled container uses the on-surface color at 4%.
+fn default_fill_color(scheme: &MaterialColorScheme, state: FieldVisualState) -> Color {
+    if !state.enabled && !state.outlined {
+        return scheme.on_surface.with_alpha(DISABLED_FILL_ALPHA);
+    }
+    Color::TRANSPARENT
+}
+
+/// Material 3 default outline color for the given state.
+///
+/// The outline uses `outline` at rest, `primary` while focused, `error` while
+/// invalid, and the on-surface color at 12% when disabled.
+fn default_outline_color(scheme: &MaterialColorScheme, state: FieldVisualState) -> Color {
+    if !state.enabled {
+        return scheme.on_surface.with_alpha(DISABLED_OUTLINE_ALPHA);
+    }
+    if state.is_error {
+        return scheme.error;
+    }
+    if state.focused {
+        scheme.primary
+    } else {
+        scheme.outline
+    }
+}
+
+/// Resolves the container fill, letting explicit colors win over the Material
+/// defaults except while the field is disabled.
+fn determine_background_color(
+    args: &TextInputProps,
+    focused: bool,
+    is_outlined: bool,
+    scheme: &MaterialColorScheme,
+) -> Color {
+    let state = FieldVisualState {
+        focused,
+        enabled: args.enabled,
+        is_error: args.is_error,
+        outlined: is_outlined,
+    };
+    if !args.enabled {
+        return default_fill_color(scheme, state);
+    }
+    let explicit = if focused {
+        args.focus_background_color.or(args.background_color)
     } else {
         args.background_color
-            .unwrap_or(Color::new(0.9, 0.9, 0.9, 1.0))
-    }
+    };
+    explicit.unwrap_or_else(|| default_fill_color(scheme, state))
 }
 
-/// Determine border color based on focus state
+/// Resolves the outline color, letting explicit colors win over the Material
+/// defaults except while the field is disabled or invalid.
 fn determine_border_color(
     args: &TextInputProps,
-    state: &State<TextInputController>,
-) -> Option<Color> {
-    if state.with(|c| c.focus_handler().is_focused()) {
+    focused: bool,
+    scheme: &MaterialColorScheme,
+) -> Color {
+    let state = FieldVisualState {
+        focused,
+        enabled: args.enabled,
+        is_error: args.is_error,
+        outlined: true,
+    };
+    if !args.enabled || args.is_error {
+        return default_outline_color(scheme, state);
+    }
+    if focused {
         args.focus_border_color
             .or(args.border_color)
-            .or(Some(Color::new(0.0, 0.0, 1.0, 1.0)))
+            .unwrap_or_else(|| default_outline_color(scheme, state))
     } else {
-        args.border_color.or(Some(Color::new(0.5, 0.5, 0.5, 1.0)))
+        args.border_color
+            .unwrap_or_else(|| default_outline_color(scheme, state))
     }
 }
 
-fn determine_border_width(args: &TextInputProps, state: &State<TextInputController>) -> Dp {
-    if state.with(|c| c.focus_handler().is_focused()) {
-        args.focus_border_width.unwrap_or(args.border_width)
-    } else {
-        args.border_width
+/// Resolves the outline width for the current interaction state.
+///
+/// Disabled fields keep their resting width instead of the focused one.
+fn resolve_border_width(
+    border_width: Dp,
+    focus_border_width: Option<Dp>,
+    enabled: bool,
+    focused: bool,
+) -> Dp {
+    if !enabled {
+        return border_width;
     }
+    if focused {
+        focus_border_width.unwrap_or(border_width)
+    } else {
+        border_width
+    }
+}
+
+fn determine_border_width(args: &TextInputProps, focused: bool) -> Dp {
+    resolve_border_width(
+        args.border_width,
+        args.focus_border_width,
+        args.enabled,
+        focused,
+    )
 }
 
 /// Convenience constructors for common use cases
@@ -1456,7 +1567,9 @@ mod tests {
     use std::time::Duration;
 
     use glyphon::{Action as GlyphonAction, Edit as _};
-    use tessera_ui::{ComputedData, Px, PxPosition, PxSize, accesskit::Role, time::Instant, winit};
+    use tessera_ui::{
+        Color, ComputedData, Dp, Px, PxPosition, PxSize, accesskit::Role, time::Instant, winit,
+    };
 
     use crate::text_edit_core::{
         ClickType, ImeComposition, PlannedImeEdit, PlannedImeEvent, RectDef, TextEditorController,
@@ -1464,10 +1577,12 @@ mod tests {
     };
 
     use super::{
-        ClipboardShortcutBehavior, DragSelectionPointerPosition, SingleLineKeyBehavior,
-        build_ime_request, clipboard_shortcut_for_key, deletion_motion_for_key,
-        drag_selection_pointer_position_with_scroll, editor_selection, rebase_offset, rebase_range,
-        rebase_selection, should_expose_submit_accessibility_action, single_line_key_behavior,
+        ClipboardShortcutBehavior, DISABLED_FILL_ALPHA, DISABLED_OUTLINE_ALPHA,
+        DragSelectionPointerPosition, FieldVisualState, SingleLineKeyBehavior, build_ime_request,
+        clipboard_shortcut_for_key, default_fill_color, default_outline_color,
+        deletion_motion_for_key, drag_selection_pointer_position_with_scroll, editor_selection,
+        rebase_offset, rebase_range, rebase_selection, resolve_border_width,
+        should_expose_submit_accessibility_action, single_line_key_behavior,
         text_content_origin_from_values, text_input_accessibility_role,
         text_viewport_size_from_origin,
     };
@@ -3029,6 +3144,96 @@ mod tests {
         assert_eq!(ime_request.local_position, PxPosition::ZERO);
         assert_eq!(ime_request.size, PxSize::new(Px(120), Px(40)));
         assert_eq!(ime_request.selection_range, Some(2..6));
+        assert_eq!(ime_request.selection_range, Some(2..6));
         assert_eq!(ime_request.composition_range, None);
+    }
+
+    fn scheme() -> crate::theme::MaterialColorScheme {
+        crate::theme::MaterialColorScheme::default()
+    }
+
+    fn resting_state() -> FieldVisualState {
+        FieldVisualState {
+            focused: false,
+            enabled: true,
+            is_error: false,
+            outlined: true,
+        }
+    }
+
+    #[test]
+    fn outline_color_follows_the_material_states() {
+        let scheme = scheme();
+        let resting = resting_state();
+
+        assert_eq!(default_outline_color(&scheme, resting), scheme.outline);
+        assert_eq!(
+            default_outline_color(
+                &scheme,
+                FieldVisualState {
+                    focused: true,
+                    ..resting
+                }
+            ),
+            scheme.primary
+        );
+        assert_eq!(
+            default_outline_color(
+                &scheme,
+                FieldVisualState {
+                    is_error: true,
+                    ..resting
+                }
+            ),
+            scheme.error
+        );
+        assert_eq!(
+            default_outline_color(
+                &scheme,
+                FieldVisualState {
+                    enabled: false,
+                    focused: true,
+                    ..resting
+                }
+            ),
+            scheme.on_surface.with_alpha(DISABLED_OUTLINE_ALPHA)
+        );
+    }
+
+    #[test]
+    fn disabled_fill_depends_on_the_variant() {
+        let scheme = scheme();
+        let disabled = FieldVisualState {
+            enabled: false,
+            ..resting_state()
+        };
+
+        assert_eq!(
+            default_fill_color(
+                &scheme,
+                FieldVisualState {
+                    outlined: false,
+                    ..disabled
+                }
+            ),
+            scheme.on_surface.with_alpha(DISABLED_FILL_ALPHA)
+        );
+        assert_eq!(default_fill_color(&scheme, disabled), Color::TRANSPARENT);
+        assert_eq!(
+            default_fill_color(&scheme, resting_state()),
+            Color::TRANSPARENT
+        );
+    }
+
+    #[test]
+    fn disabled_field_keeps_the_resting_outline_width() {
+        assert_eq!(
+            resolve_border_width(Dp(1.0), Some(Dp(2.0)), true, true),
+            Dp(2.0)
+        );
+        assert_eq!(
+            resolve_border_width(Dp(1.0), Some(Dp(2.0)), false, true),
+            Dp(1.0)
+        );
     }
 }

@@ -119,6 +119,12 @@ impl TapRecognizer {
                 CursorEventContent::Scroll(_) if Some(change.pointer_id) == self.active_pointer => {
                     self.canceled = true;
                 }
+                CursorEventContent::Cancelled(button) if button == self.settings.button => {
+                    if Some(change.pointer_id) == self.active_pointer {
+                        result.released = true;
+                        self.reset();
+                    }
+                }
                 CursorEventContent::Released(button) if button == self.settings.button => {
                     if Some(change.pointer_id) != self.active_pointer {
                         continue;
@@ -296,6 +302,11 @@ impl DragRecognizer {
                         }
                     }
                 }
+                CursorEventContent::Cancelled(PressKeyEventType::Left) => {
+                    if Some(change.pointer_id) == self.active_pointer {
+                        self.reset();
+                    }
+                }
                 CursorEventContent::Released(PressKeyEventType::Left) => {
                     if Some(change.pointer_id) != self.active_pointer {
                         continue;
@@ -432,6 +443,11 @@ impl LongPressRecognizer {
                 }
                 CursorEventContent::Scroll(_) if Some(change.pointer_id) == self.active_pointer => {
                     self.canceled = true;
+                }
+                CursorEventContent::Cancelled(PressKeyEventType::Left) => {
+                    if Some(change.pointer_id) == self.active_pointer {
+                        self.reset();
+                    }
                 }
                 CursorEventContent::Released(PressKeyEventType::Left) => {
                     if Some(change.pointer_id) != self.active_pointer {
@@ -629,6 +645,48 @@ impl ScrollRecognizer {
     }
 }
 
+#[cfg(test)]
+mod cancellation_tests {
+    use super::*;
+    #[test]
+    fn cancelled_touch_clears_tap_drag_and_long_press_without_completion() {
+        let mut tap = TapRecognizer::default();
+        let mut drag = DragRecognizer::default();
+        let mut long_press = LongPressRecognizer::default();
+        let now = Instant::now();
+        for content in [
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            CursorEventContent::Cancelled(PressKeyEventType::Left),
+        ] {
+            let change = PointerChange::new(now, 1, content, GestureState::TapCandidate);
+            let tapped = tap.update(
+                PointerEventPass::Main,
+                &mut [change.clone()],
+                Some(PxPosition::ZERO),
+                true,
+            );
+            let dragged = drag.update(
+                PointerEventPass::Main,
+                &mut [change.clone()],
+                Some(PxPosition::ZERO),
+                true,
+            );
+            let pressed = long_press.update(
+                PointerEventPass::Main,
+                &mut [change],
+                Some(PxPosition::ZERO),
+                true,
+            );
+            assert!(!tapped.tapped);
+            assert!(tapped.release_timestamp.is_none());
+            assert!(!dragged.ended);
+            assert!(!pressed.triggered);
+        }
+        assert!(tap.active_pointer.is_none());
+        assert!(drag.active_pointer.is_none());
+        assert!(long_press.active_pointer.is_none());
+    }
+}
 impl Default for ScrollRecognizer {
     fn default() -> Self {
         Self::new(ScrollSettings::default())

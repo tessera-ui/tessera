@@ -1495,7 +1495,7 @@ fn build_pointer_change_paths(
                 .unwrap_or_else(|| {
                     hit_path_instance_keys(root_node, tree, metadatas, Some(*position))
                 }),
-            CursorEventContent::Released(_) => {
+            CursorEventContent::Released(_) | CursorEventContent::Cancelled(_) => {
                 let computed = active_pointer_paths
                     .get(&change.pointer_id)
                     .cloned()

@@ -478,6 +478,7 @@ pub fn menu_provider(
         just_opened = !*was_open && is_open;
         *was_open = is_open;
     });
+    main_content.render();
     if !is_open {
         return;
     }
@@ -526,9 +527,8 @@ pub fn menu_provider(
         });
     }
 
-    // Measurement: place main content, background, and menu based on anchor.
+    // Measure and place the menu overlay only while it is open.
     layout()
-        .modifier(modifier)
         .layout_policy(MenuLayout {
             placement: provider_args.placement,
             offset: provider_args.offset,
@@ -537,8 +537,6 @@ pub fn menu_provider(
         })
         .child(move || {
             let menu_content = menu_content;
-            main_content.render();
-
             surface()
                 .style(SurfaceStyle::Filled {
                     color: provider_args.scrim_color,

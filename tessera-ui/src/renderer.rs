@@ -1881,9 +1881,11 @@ impl<F: Fn()> Renderer<F> {
                     self.cursor_state.push_event(scroll_event);
                 }
             }
-            winit::event::TouchPhase::Ended | winit::event::TouchPhase::Cancelled => {
-                // Use new touch end handling method
+            winit::event::TouchPhase::Ended => {
                 self.cursor_state.handle_touch_end(touch_event.id);
+            }
+            winit::event::TouchPhase::Cancelled => {
+                self.cursor_state.handle_touch_cancel(touch_event.id);
             }
         }
     }
