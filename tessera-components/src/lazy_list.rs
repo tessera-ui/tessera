@@ -190,11 +190,15 @@ struct LazyListSlotsArgs {
 }
 
 fn lazy_column_slots(args: LazyListSlotsArgs) {
-    // Restore saved position from controller on first mount.
+    // Restore the retained position the first time this viewport is set up. A
+    // viewport that sits at the top also reports a zero offset, so ask the
+    // controller whether it has been positioned at all instead of comparing the
+    // offset against zero; otherwise scrolling back to the top would restore
+    // the previous offset and the last stretch of the gesture would be undone.
     let saved_position = args.controller.with(|c| c.scroll.child_position());
     let scroll_controller = args.scroll_controller;
-    let should_restore_position = scroll_controller
-        .with(|sc| sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO);
+    let should_restore_position =
+        saved_position != PxPosition::ZERO && !scroll_controller.with(|sc| sc.is_positioned());
     if should_restore_position {
         scroll_controller.with_mut(|sc| sc.set_scroll_position(saved_position));
     }
@@ -536,11 +540,15 @@ where
 }
 
 fn lazy_row_slots(args: LazyListSlotsArgs) {
-    // Restore saved position from controller on first mount.
+    // Restore the retained position the first time this viewport is set up. A
+    // viewport that sits at the start also reports a zero offset, so ask the
+    // controller whether it has been positioned at all instead of comparing the
+    // offset against zero; otherwise scrolling back to the start would restore
+    // the previous offset and the last stretch of the gesture would be undone.
     let saved_position = args.controller.with(|c| c.scroll.child_position());
     let scroll_controller = args.scroll_controller;
-    let should_restore_position = scroll_controller
-        .with(|sc| sc.child_position() == PxPosition::ZERO && saved_position != PxPosition::ZERO);
+    let should_restore_position =
+        saved_position != PxPosition::ZERO && !scroll_controller.with(|sc| sc.is_positioned());
     if should_restore_position {
         scroll_controller.with_mut(|sc| sc.set_scroll_position(saved_position));
     }

@@ -132,6 +132,13 @@ pub struct ScrollableController {
     /// Active inertia state after a touch release.
     active_inertia: Option<ExponentialInertia>,
     inertia_last_tick: Option<Instant>,
+    /// Whether anything other than construction has positioned this viewport.
+    ///
+    /// Virtualized containers need to tell "this viewport has not been set up
+    /// yet" apart from "the viewport sits at the top", because a fresh
+    /// viewport and a viewport scrolled back to the top both report a zero
+    /// offset.
+    positioned: bool,
 }
 
 impl Default for ScrollableController {
@@ -157,6 +164,7 @@ impl ScrollableController {
             velocity_tracker: None,
             active_inertia: None,
             inertia_last_tick: None,
+            positioned: false,
         }
     }
 
@@ -168,6 +176,16 @@ impl ScrollableController {
     /// can safely derive their offset from the returned position.
     pub fn child_position(&self) -> PxPosition {
         self.child_position
+    }
+
+    /// Returns whether this viewport has been positioned by scrolling yet.
+    ///
+    /// A freshly created controller reports `false`. Any scroll input,
+    /// programmatic position or animation marks it as positioned, so
+    /// consumers can distinguish an untouched viewport from one that
+    /// currently sits at the top.
+    pub fn is_positioned(&self) -> bool {
+        self.positioned
     }
 
     /// Returns the currently visible viewport size of the scrollable container.
@@ -196,6 +214,7 @@ impl ScrollableController {
     pub(crate) fn set_target_position(&mut self, target: PxPosition) {
         self.cancel_inertia();
         self.velocity_tracker = None;
+        self.positioned = true;
         self.target_position = target;
         self.target_position_f32 = (target.x.to_f32(), target.y.to_f32());
     }
@@ -208,6 +227,7 @@ impl ScrollableController {
         self.cancel_inertia();
         self.velocity_tracker = None;
         self.last_frame_nanos = None;
+        self.positioned = true;
         self.child_position = position;
         self.target_position = position;
         self.child_position_f32 = (position.x.to_f32(), position.y.to_f32());
@@ -254,6 +274,9 @@ impl ScrollableController {
         if !self.has_pending_animation_frame() {
             self.last_frame_nanos = None;
         }
+        if old != self.child_position {
+            self.positioned = true;
+        }
         old != self.child_position
     }
 
@@ -297,6 +320,7 @@ impl ScrollableController {
         vertical_scrollable: bool,
         horizontal_scrollable: bool,
     ) -> ScrollDelta {
+        self.positioned = true;
         let current_target = self.target_position_f32;
         let proposed = (current_target.0 + delta.x, current_target.1 + delta.y);
         let constrained_target = constrain_position(
@@ -965,7 +989,6 @@ impl ScrollableViewportPointerModifierNode {
             let tap_result = self.tap_recognizer.with_mut(|recognizer| {
                 recognizer.update(pass, changes, cursor_position_rel, is_cursor_in_component)
             });
-
             if tap_result.pressed {
                 self.controller.with_mut(|c| {
                     c.cancel_inertia();
@@ -1363,6 +1386,94 @@ mod scroll_tests {
             controller
                 .resolve_touch_velocity(now + Duration::from_millis(100))
                 .is_zero()
+        );
+    }
+
+    #[test]
+    fn line_wheel_steps_reach_the_top_from_the_bottom() {
+        let mut controller = controller();
+        let viewport = controller.visible_size;
+        controller.set_scroll_position(PxPosition::new(Px(0), Px(-1900)));
+        let mut frame = 0u64;
+        let mut steps = 0;
+        while controller.child_position.y != Px(0) && steps < 200 {
+            controller.apply_input_delta(
+                ScrollDelta::new(0.0, 40.0),
+                ScrollEventSource::Wheel,
+                ScrollDeltaUnit::Line,
+                &viewport,
+                true,
+                false,
+            );
+            steps += 1;
+            for _ in 0..30 {
+                frame += 1;
+                controller.update_scroll_position(frame * 16_666_667, 0.12);
+            }
+        }
+        assert_eq!(
+            controller.child_position.y,
+            Px(0),
+            "steps={steps} current={:?} target={:?} target_f32={:?} pending={}",
+            controller.child_position,
+            controller.target_position,
+            controller.target_position_f32,
+            controller.has_pending_animation_frame()
+        );
+    }
+
+    #[test]
+    fn pixel_overshoot_reaches_the_top_from_the_bottom() {
+        let mut controller = controller();
+        let viewport = controller.visible_size;
+        controller.set_scroll_position(PxPosition::new(Px(0), Px(-1900)));
+        controller.apply_input_delta(
+            ScrollDelta::new(0.0, 1900.5),
+            ScrollEventSource::Wheel,
+            ScrollDeltaUnit::Pixel,
+            &viewport,
+            true,
+            false,
+        );
+        assert_eq!(
+            controller.child_position.y,
+            Px(0),
+            "current={:?}",
+            controller.child_position
+        );
+    }
+
+    #[test]
+    fn fresh_viewport_is_not_positioned_until_it_scrolls() {
+        let controller = controller();
+        assert!(!controller.is_positioned());
+    }
+
+    #[test]
+    fn viewport_stays_positioned_after_scrolling_back_to_the_top() {
+        let mut controller = controller();
+        let viewport = controller.visible_size;
+        controller.apply_input_delta(
+            ScrollDelta::new(0.0, -500.0),
+            ScrollEventSource::Wheel,
+            ScrollDeltaUnit::Pixel,
+            &viewport,
+            true,
+            false,
+        );
+        assert!(controller.is_positioned());
+        controller.apply_input_delta(
+            ScrollDelta::new(0.0, 500.0),
+            ScrollEventSource::Wheel,
+            ScrollDeltaUnit::Pixel,
+            &viewport,
+            true,
+            false,
+        );
+        assert_eq!(controller.child_position(), PxPosition::ZERO);
+        assert!(
+            controller.is_positioned(),
+            "a viewport at the top must not look like a fresh one"
         );
     }
 }
