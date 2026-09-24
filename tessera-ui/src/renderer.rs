@@ -406,6 +406,12 @@ pub struct Renderer<F: Fn()> {
     /// While active, cursor input is withheld from the component tree to avoid
     /// accidental UI interaction during system resize.
     resize_in_progress: bool,
+    /// Most recent window size observed before the render core existed.
+    ///
+    /// Resize events can arrive while the core is still being created - notably
+    /// on the web, where core creation is asynchronous. Remembering the size
+    /// lets the surface be reconfigured as soon as the core is installed.
+    pending_window_size: Option<winit::dpi::PhysicalSize<u32>>,
     #[cfg(target_family = "wasm")]
     /// Render cores that completed asynchronous initialization on the web
     /// event loop thread and are waiting to be installed into the renderer.
@@ -558,6 +564,7 @@ impl<F: Fn()> Renderer<F> {
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
             resize_in_progress: false,
+            pending_window_size: None,
             #[cfg(target_family = "wasm")]
             pending_web_inits: Rc::new(RefCell::new(Vec::new())),
             #[cfg(target_family = "wasm")]
@@ -620,6 +627,7 @@ impl<F: Fn()> Renderer<F> {
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
             resize_in_progress: false,
+            pending_window_size: None,
             pending_web_inits: Rc::new(RefCell::new(Vec::new())),
             web_init_epoch: 0,
             web_init_in_progress: false,
@@ -757,6 +765,7 @@ impl<F: Fn()> Renderer<F> {
             redraw_request_pending: Arc::new(AtomicBool::new(false)),
             pending_close_requested: false,
             resize_in_progress: false,
+            pending_window_size: None,
             #[cfg(feature = "profiling")]
             pending_redraw_reasons: BTreeSet::new(),
         };
@@ -1631,6 +1640,7 @@ impl<F: Fn()> Renderer<F> {
 
         self.app = Some(render_core);
         self.web_init_in_progress = false;
+        self.apply_pending_window_size();
         self.install_runtime_redraw_waker();
         #[cfg(feature = "profiling")]
         self.request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
@@ -1710,12 +1720,33 @@ impl<F: Fn()> Renderer<F> {
         self.update_native_window_shape(window);
     }
 
+    /// Applies the most recent window size observed before the render core was
+    /// installed so the surface matches the real canvas size on the first
+    /// frame.
+    fn apply_pending_window_size(&mut self) {
+        let live_size = self.app.as_ref().map(|app| app.window().inner_size());
+        let size = resolve_startup_window_size(self.pending_window_size.take(), live_size);
+        let Some(size) = size else {
+            return;
+        };
+        if let Some(app) = self.app.as_mut() {
+            app.resize(size);
+        }
+    }
+
     fn handle_resized(&mut self, size: winit::dpi::PhysicalSize<u32>) {
         // Obtain the app inside the method to avoid holding a mutable borrow
         // across other borrows of `self`.
         let app = match self.app.as_mut() {
             Some(app) => app,
-            None => return,
+            None => {
+                // The render core may still be initializing (asynchronously on
+                // the web). Keep the size so it is applied once the core is
+                // installed instead of leaving the surface stale until the next
+                // resize.
+                self.pending_window_size = Some(size);
+                return;
+            }
         };
         let window = app.window_arc();
 
@@ -1980,6 +2011,26 @@ impl<F: Fn()> Renderer<F> {
 /// including window creation, suspension/resumption, and various window events.
 /// It bridges the gap between winit's event system and Tessera's
 /// component-based UI framework.
+/// Picks the window size to apply once the render core is installed.
+///
+/// Resize events can arrive while the core is still being created, because the
+/// web event loop builds it asynchronously. The size recorded during that
+/// window is preferred unless it is empty, in which case the live window size
+/// wins.
+fn resolve_startup_window_size(
+    pending: Option<winit::dpi::PhysicalSize<u32>>,
+    live: Option<winit::dpi::PhysicalSize<u32>>,
+) -> Option<winit::dpi::PhysicalSize<u32>> {
+    fn usable(size: &winit::dpi::PhysicalSize<u32>) -> bool {
+        size.width > 0 && size.height > 0
+    }
+
+    match pending {
+        Some(size) if usable(&size) => Some(size),
+        _ => live.filter(usable),
+    }
+}
+
 impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
     /// Called when the application is resumed or started.
     ///
@@ -2087,6 +2138,7 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
             }
 
             self.app = Some(render_core);
+            self.apply_pending_window_size();
             self.install_runtime_redraw_waker();
             #[cfg(feature = "profiling")]
             self.request_redraw_with_reasons(WakeSource::Lifecycle, vec![RedrawReason::Startup]);
@@ -2363,7 +2415,50 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RendererImeBridgeState, RendererImeBridgeUpdate};
+    use super::{RendererImeBridgeState, RendererImeBridgeUpdate, resolve_startup_window_size};
+    use winit::dpi::PhysicalSize;
+
+    #[test]
+    fn startup_window_size_prefers_recorded_size_over_live_size() {
+        let recorded = PhysicalSize::new(800, 600);
+        let live = PhysicalSize::new(1024, 768);
+        assert_eq!(
+            resolve_startup_window_size(Some(recorded), Some(live)),
+            Some(recorded)
+        );
+    }
+
+    #[test]
+    fn startup_window_size_falls_back_to_live_size_for_empty_recordings() {
+        let live = PhysicalSize::new(1024, 768);
+        assert_eq!(
+            resolve_startup_window_size(Some(PhysicalSize::new(0, 0)), Some(live)),
+            Some(live)
+        );
+        assert_eq!(
+            resolve_startup_window_size(Some(PhysicalSize::new(0, 600)), Some(live)),
+            Some(live)
+        );
+    }
+
+    #[test]
+    fn startup_window_size_uses_live_size_without_recorded_events() {
+        let live = PhysicalSize::new(1024, 768);
+        assert_eq!(resolve_startup_window_size(None, Some(live)), Some(live));
+    }
+
+    #[test]
+    fn startup_window_size_is_none_when_every_reading_is_empty() {
+        assert_eq!(
+            resolve_startup_window_size(Some(PhysicalSize::new(0, 0)), None),
+            None
+        );
+        assert_eq!(
+            resolve_startup_window_size(None, Some(PhysicalSize::new(0, 0))),
+            None
+        );
+    }
+
     use crate::{ImeRequest, Px, PxPosition, px::PxSize};
 
     fn positioned_request(
