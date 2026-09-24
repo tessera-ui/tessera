@@ -38,6 +38,24 @@ const SCROLL_INERTIA_MAX_VELOCITY: f32 = 6000.0;
 const SCROLL_VELOCITY_SAMPLE_WINDOW: Duration = Duration::from_millis(90);
 const SCROLL_VELOCITY_IDLE_CUTOFF: Duration = Duration::from_millis(65);
 
+/// Fraction of the remaining distance an animated scroll keeps after one 60Hz
+/// frame.
+///
+/// `1 - DEFAULT_SCROLL_SMOOTHING` of the remaining distance is covered per
+/// frame, so `0.75` reaches 95% of a step in roughly 175ms and 99% in roughly
+/// 270ms. That reads as an eased movement instead of a jump while staying
+/// responsive to rapid wheel input.
+pub(crate) const DEFAULT_SCROLL_SMOOTHING: f32 = 0.75;
+
+/// Pixel magnitude at which wheel input counts as a discrete notch.
+///
+/// Mouse wheels deliver stepwise input while trackpads deliver a continuous
+/// stream, and browsers report both as pixel deltas (Chrome normalises a mouse
+/// wheel notch to roughly 100px). Deltas at or above this value are animated
+/// like a notch; smaller ones are applied directly so touchpads keep tracking
+/// the finger 1:1.
+const DISCRETE_WHEEL_STEP_PX: f32 = 40.0;
+
 fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
     let magnitude = (vx * vx + vy * vy).sqrt();
     if !magnitude.is_finite() {
@@ -48,6 +66,14 @@ fn clamp_inertia_velocity(vx: f32, vy: f32) -> (f32, f32) {
         (vx * scale, vy * scale)
     } else {
         (vx, vy)
+    }
+}
+/// Returns whether a wheel delta represents a discrete notch instead of a
+/// continuous stream of pointer movement.
+fn is_discrete_wheel_step(unit: ScrollDeltaUnit, delta_x: f32, delta_y: f32) -> bool {
+    match unit {
+        ScrollDeltaUnit::Line => true,
+        ScrollDeltaUnit::Pixel => delta_x.abs().max(delta_y.abs()) >= DISCRETE_WHEEL_STEP_PX,
     }
 }
 
@@ -301,7 +327,8 @@ impl ScrollableController {
         if source != ScrollEventSource::Touch {
             self.velocity_tracker = None;
         }
-        let immediate = source == ScrollEventSource::Touch || unit == ScrollDeltaUnit::Pixel;
+        let immediate =
+            source == ScrollEventSource::Touch || !is_discrete_wheel_step(unit, delta.x, delta.y);
         if immediate {
             self.target_position_f32 = self.child_position_f32;
             self.target_position = self.child_position;
@@ -614,7 +641,10 @@ impl RenderPolicy for ScrollableInnerLayout {
 /// - `modifier` — optional modifier chain applied to the scrollable subtree.
 /// - `vertical` — whether vertical scrolling is enabled.
 /// - `horizontal` — whether horizontal scrolling is enabled.
-/// - `scroll_smoothing` — optional smoothing factor for animated scrolling.
+/// - `scroll_smoothing` — fraction of the remaining distance kept per 60Hz
+///   frame while animating a scroll step. `0.0` jumps straight to the target,
+///   larger values ease in over more frames; defaults to 0.75 (about 175ms to
+///   cover 95% of a step).
 /// - `apply_child_offset` — whether the viewport shifts its child by the
 ///   current scroll position or leaves placement to the child layout.
 /// - `scrollbar_behavior` — scrollbar visibility behavior.
@@ -666,7 +696,7 @@ pub fn scrollable(
 ) {
     let vertical = vertical.unwrap_or(false);
     let horizontal = horizontal.unwrap_or(false);
-    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(DEFAULT_SCROLL_SMOOTHING);
     let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scrollbar_layout = scrollbar_layout.unwrap_or_default();
@@ -777,7 +807,7 @@ fn scrollable_with_alongside_scrollbar(
 ) {
     let vertical = vertical.unwrap_or(false);
     let horizontal = horizontal.unwrap_or(false);
-    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(DEFAULT_SCROLL_SMOOTHING);
     let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let controller = controller.expect("scrollable_with_alongside_scrollbar requires controller");
@@ -841,7 +871,7 @@ fn scrollable_with_overlay_scrollbar(
 ) {
     let vertical = vertical.unwrap_or(false);
     let horizontal = horizontal.unwrap_or(false);
-    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(DEFAULT_SCROLL_SMOOTHING);
     let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let controller = controller.expect("scrollable_with_overlay_scrollbar requires controller");
@@ -1144,7 +1174,7 @@ fn scrollable_viewport(
 ) {
     let vertical = vertical.unwrap_or(false);
     let horizontal = horizontal.unwrap_or(false);
-    let scroll_smoothing = scroll_smoothing.unwrap_or(0.12);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(DEFAULT_SCROLL_SMOOTHING);
     let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let controller = controller.expect("scrollable_viewport requires controller");
@@ -1408,7 +1438,7 @@ mod scroll_tests {
             steps += 1;
             for _ in 0..30 {
                 frame += 1;
-                controller.update_scroll_position(frame * 16_666_667, 0.12);
+                controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
             }
         }
         assert_eq!(
@@ -1435,12 +1465,71 @@ mod scroll_tests {
             true,
             false,
         );
+        for frame in 1..=60u64 {
+            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+        }
         assert_eq!(
             controller.child_position.y,
             Px(0),
             "current={:?}",
             controller.child_position
         );
+        assert!(!controller.has_pending_animation_frame());
+    }
+
+    #[test]
+    fn discrete_wheel_notch_eases_towards_its_target() {
+        let mut controller = controller();
+        let viewport = controller.visible_size;
+        controller.apply_input_delta(
+            ScrollDelta::new(0.0, -120.0),
+            ScrollEventSource::Wheel,
+            ScrollDeltaUnit::Pixel,
+            &viewport,
+            true,
+            false,
+        );
+        // A notch must not teleport: the position only moves once frames run.
+        assert_eq!(controller.child_position.y, Px(0));
+        assert!(controller.has_pending_animation_frame());
+
+        let mut travelled = Vec::new();
+        for frame in 1..=4u64 {
+            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+            travelled.push(controller.child_position.y.0);
+        }
+        // Each frame covers less than the whole step and moves forwards.
+        assert!(travelled[0] < 0 && travelled[0] > -120, "{travelled:?}");
+        assert!(
+            travelled.windows(2).all(|pair| pair[1] <= pair[0]),
+            "scroll must stay monotonic: {travelled:?}"
+        );
+        assert!(
+            travelled[3] < travelled[0],
+            "later frames must keep easing: {travelled:?}"
+        );
+
+        for frame in 5..=60u64 {
+            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+        }
+        assert_eq!(controller.child_position.y, Px(-120));
+        assert!(!controller.has_pending_animation_frame());
+    }
+
+    #[test]
+    fn continuous_trackpad_delta_keeps_tracking_directly() {
+        let mut controller = controller();
+        let viewport = controller.visible_size;
+        controller.apply_input_delta(
+            ScrollDelta::new(0.0, -8.0),
+            ScrollEventSource::Wheel,
+            ScrollDeltaUnit::Pixel,
+            &viewport,
+            true,
+            false,
+        );
+        assert_eq!(controller.child_position.y, Px(-8));
+        assert!(!controller.has_pending_animation_frame());
     }
 
     #[test]
@@ -1461,7 +1550,13 @@ mod scroll_tests {
             true,
             false,
         );
+        let mut frame = 0u64;
+        for _ in 0..40 {
+            frame += 1;
+            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+        }
         assert!(controller.is_positioned());
+        assert_eq!(controller.child_position.y, Px(-500));
         controller.apply_input_delta(
             ScrollDelta::new(0.0, 500.0),
             ScrollEventSource::Wheel,
@@ -1470,6 +1565,10 @@ mod scroll_tests {
             true,
             false,
         );
+        for _ in 0..40 {
+            frame += 1;
+            controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
+        }
         assert_eq!(controller.child_position(), PxPosition::ZERO);
         assert!(
             controller.is_positioned(),

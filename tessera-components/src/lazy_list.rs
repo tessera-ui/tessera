@@ -124,7 +124,8 @@ impl LazyListContent {
 /// - `content_padding` — symmetric padding around the lazy list content.
 /// - `max_viewport_main` — optional maximum viewport length reported back to
 ///   parents.
-/// - `scroll_smoothing` — interpolation factor used when animating scroll.
+/// - `scroll_smoothing` — fraction of the remaining distance kept per 60Hz
+///   frame while animating a scroll step; defaults to the scrollable default.
 /// - `controller` — optional external controller for scroll position and cache.
 /// - item declarations are appended through builder methods like `item`,
 ///   `items`, and `sticky_header`.
@@ -167,7 +168,7 @@ pub fn lazy_column(
         estimated_item_size: estimated_item_size.unwrap_or(Dp(0.0)),
         content_padding: content_padding.unwrap_or(Dp(0.0)),
         max_viewport_main,
-        scroll_smoothing: scroll_smoothing.unwrap_or(0.0),
+        scroll_smoothing: scroll_smoothing.unwrap_or(crate::scrollable::DEFAULT_SCROLL_SMOOTHING),
         controller,
         scroll_controller,
         slots: content.slots,
@@ -262,7 +263,8 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
 /// - `content_padding` — symmetric padding around the lazy list content.
 /// - `max_viewport_main` — optional maximum viewport length reported back to
 ///   parents.
-/// - `scroll_smoothing` — interpolation factor used when animating scroll.
+/// - `scroll_smoothing` — fraction of the remaining distance kept per 60Hz
+///   frame while animating a scroll step; defaults to the scrollable default.
 /// - `controller` — optional external controller for scroll position and cache.
 /// - item declarations are appended through builder methods like `item`,
 ///   `items`, and `sticky_header`.
@@ -305,7 +307,7 @@ pub fn lazy_row(
         estimated_item_size: estimated_item_size.unwrap_or(Dp(0.0)),
         content_padding: content_padding.unwrap_or(Dp(0.0)),
         max_viewport_main,
-        scroll_smoothing: scroll_smoothing.unwrap_or(0.0),
+        scroll_smoothing: scroll_smoothing.unwrap_or(crate::scrollable::DEFAULT_SCROLL_SMOOTHING),
         controller,
         scroll_controller,
         slots: content.slots,

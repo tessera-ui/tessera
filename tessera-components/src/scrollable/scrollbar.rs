@@ -551,8 +551,10 @@ fn update_drag_vertical(
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(cursor_pos.y);
+        // Dragging the thumb is direct manipulation: the content has to follow
+        // the pointer without the eased follow used for wheel notches.
         args.state
-            .with_mut(|c| c.set_target_position(new_target_pos));
+            .with_mut(|c| c.set_scroll_position(new_target_pos));
         mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
     } else {
         // Cursor left window: stop dragging.
@@ -672,8 +674,10 @@ fn update_drag_horizontal(
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
         let new_target_pos = calculate_target(cursor_pos.x);
+        // Dragging the thumb is direct manipulation: the content has to follow
+        // the pointer without the eased follow used for wheel notches.
         args.state
-            .with_mut(|c| c.set_target_position(new_target_pos));
+            .with_mut(|c| c.set_scroll_position(new_target_pos));
         mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
     } else {
         // Cursor left window: stop dragging.

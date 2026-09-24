@@ -363,8 +363,8 @@ impl LayoutPolicy for LazyGridLayout {
 /// ## Parameters
 ///
 /// - `modifier` - optional modifier for the scroll container.
-/// - `scroll_smoothing` - interpolation factor used when animating scroll
-///   position.
+/// - `scroll_smoothing` - fraction of the remaining distance kept per 60Hz
+///   frame while animating a scroll step; defaults to the scrollable default.
 /// - `scrollbar_behavior` - visibility behavior of the scrollbars.
 /// - `scrollbar_track_color` - optional scrollbar track color override.
 /// - `scrollbar_thumb_color` - optional scrollbar thumb color override.
@@ -433,7 +433,7 @@ pub fn lazy_vertical_grid(
     controller: Option<State<LazyGridController>>,
     #[prop(skip_setter)] content: Option<LazyGridContent>,
 ) {
-    let scroll_smoothing = scroll_smoothing.unwrap_or(0.0);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(crate::scrollable::DEFAULT_SCROLL_SMOOTHING);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scrollbar_layout = scrollbar_layout.unwrap_or_default();
     let columns = columns.unwrap_or_default();
@@ -542,8 +542,8 @@ fn lazy_vertical_grid_slots(args: LazyGridSlotsArgs) {
 /// ## Parameters
 ///
 /// - `modifier` - optional modifier for the scroll container.
-/// - `scroll_smoothing` - interpolation factor used when animating scroll
-///   position.
+/// - `scroll_smoothing` - fraction of the remaining distance kept per 60Hz
+///   frame while animating a scroll step; defaults to the scrollable default.
 /// - `scrollbar_behavior` - visibility behavior of the scrollbars.
 /// - `scrollbar_track_color` - optional scrollbar track color override.
 /// - `scrollbar_thumb_color` - optional scrollbar thumb color override.
@@ -612,7 +612,7 @@ pub fn lazy_horizontal_grid(
     controller: Option<State<LazyGridController>>,
     #[prop(skip_setter)] content: Option<LazyGridContent>,
 ) {
-    let scroll_smoothing = scroll_smoothing.unwrap_or(0.0);
+    let scroll_smoothing = scroll_smoothing.unwrap_or(crate::scrollable::DEFAULT_SCROLL_SMOOTHING);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scrollbar_layout = scrollbar_layout.unwrap_or_default();
     let rows = rows.unwrap_or_default();
