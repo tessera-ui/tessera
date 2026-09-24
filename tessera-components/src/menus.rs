@@ -529,6 +529,7 @@ pub fn menu_provider(
 
     // Measure and place the menu overlay only while it is open.
     layout()
+        .modifier(modifier)
         .layout_policy(MenuLayout {
             placement: provider_args.placement,
             offset: provider_args.offset,
