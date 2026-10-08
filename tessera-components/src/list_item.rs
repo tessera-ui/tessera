@@ -19,7 +19,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{ContentColor, MaterialAlpha, MaterialTheme},
+    theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
 /// Colors used by list items in different states.
@@ -154,8 +154,8 @@ impl ListItemDefaults {
     }
 
     /// Default colors for list items derived from the current theme.
-    pub fn colors() -> ListItemColors {
-        let scheme = MaterialTheme::default().color_scheme;
+    pub fn colors(scheme: &MaterialColorScheme) -> ListItemColors {
+        let scheme = scheme.clone();
         let disabled = scheme
             .on_surface
             .with_alpha(MaterialAlpha::DISABLED_CONTENT);
@@ -272,7 +272,7 @@ pub fn list_item(
     let enabled = enabled.unwrap_or(true);
     let selected = selected.unwrap_or(false);
     let headline = headline.unwrap_or_default();
-    let colors = colors.unwrap_or_else(ListItemDefaults::colors);
+    let colors = colors.unwrap_or_else(|| ListItemDefaults::colors(&theme.color_scheme));
     let shape = shape.unwrap_or_else(ListItemDefaults::shape);
     let content_padding = content_padding.unwrap_or(ListItemDefaults::CONTENT_PADDING);
     let tonal_elevation = tonal_elevation.unwrap_or(ListItemDefaults::TONAL_ELEVATION);
@@ -430,7 +430,7 @@ fn list_item_slot(content: Option<RenderSlot>, color: Option<Color>, min_size: O
         move || {
             boxed()
                 .alignment(Alignment::Center)
-                .modifier(Modifier::new().size_in(Some(min_size), None, Some(min_size), None))
+                .modifier(Modifier::new().default_min_size(min_size, min_size))
                 .children(move || {
                     {
                         content.render();

@@ -627,7 +627,13 @@ impl RenderCore {
     /// The offscreen target uses an sRGB format, so the bytes are sRGB-encoded,
     /// matching what PNG and most image consumers expect.
     pub fn read_offscreen_rgba(&self) -> Result<Vec<u8>, OffscreenReadbackError> {
-        let texture = self.targets.offscreen_copy.texture();
+        self.read_texture_rgba(self.targets.offscreen_copy.texture())
+    }
+
+    fn read_texture_rgba(
+        &self,
+        texture: &wgpu::Texture,
+    ) -> Result<Vec<u8>, OffscreenReadbackError> {
         let width = self.config.width;
         let height = self.config.height;
         if width == 0 || height == 0 {
@@ -907,12 +913,12 @@ impl RenderCore {
                     && write_resource == RenderResourceId::SceneColor
                     && matches!(*scene_source, SceneSource::Offscreen)
                 {
-                    let copy_view = state.targets.offscreen_copy.clone();
+                    let sample_view = state.targets.scene_sample.clone();
                     Self::blit_to_view(BlitParams {
                         encoder,
                         device: state.device,
                         source: scene_texture_view,
-                        target: &copy_view,
+                        target: &sample_view,
                         bind_group_layout: &state.blit.bind_group_layout,
                         sampler: &state.blit.sampler,
                         pipeline: &state.blit.pipeline,
@@ -922,7 +928,7 @@ impl RenderCore {
                         ),
                         scissor_rect: None,
                     });
-                    scene_view = copy_view;
+                    scene_view = sample_view;
                 }
                 let clear_target = clear_state.should_clear(write_resource);
 
@@ -985,7 +991,9 @@ impl RenderCore {
                 resolve_target: None,
                 depth_slice: None,
                 ops: wgpu::Operations {
-                    load: wgpu::LoadOp::Load,
+                    // Replace the destination. Blending against an undefined
+                    // or stale target turns opaque scene colors black.
+                    load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
                     store: wgpu::StoreOp::Store,
                 },
             })],

@@ -73,6 +73,9 @@ where
 /// # struct DemoDestination;
 /// # impl tessera_shard::router::RouterDestination for DemoDestination {
 /// #     fn exec_component(&self) {}
+/// #     fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {
+/// #         std::sync::Arc::new(|| {})
+/// #     }
 /// #     fn destination_id() -> &'static str { "demo" }
 /// # }
 /// # #[tessera_ui::tessera]
@@ -109,7 +112,13 @@ pub fn shard_home(
     provide_context(
         || RouterContext::new(controller),
         || {
-            let executed = controller.with(RouterController::exec_current);
+            let destination = controller.with(RouterController::current_destination);
+            let executed = destination
+                .map(|destination| {
+                    destination();
+                    true
+                })
+                .unwrap_or(false);
             assert!(executed, "Router stack should not be empty");
         },
     );

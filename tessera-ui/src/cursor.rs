@@ -234,10 +234,10 @@ impl CursorState {
     ) -> Option<PointerChange> {
         let now = Instant::now();
         let touch_state = self.touch_points.get_mut(&touch_id)?;
-        let mut delta_x = (current_position.x - touch_state.last_position.x).to_f32();
-        let mut delta_y = (current_position.y - touch_state.last_position.y).to_f32();
-        let cumulative_x = (current_position.x - touch_state.start_position.x).to_f32();
-        let cumulative_y = (current_position.y - touch_state.start_position.y).to_f32();
+        let mut delta_x = current_position.x - touch_state.last_position.x;
+        let mut delta_y = current_position.y - touch_state.last_position.y;
+        let cumulative_x = current_position.x - touch_state.start_position.x;
+        let cumulative_y = current_position.y - touch_state.start_position.y;
         let distance = cumulative_x.hypot(cumulative_y);
         if self.touch_scroll_config.enabled
             && !touch_state.generated_scroll_event
@@ -356,6 +356,7 @@ impl PointerChange {
             consumed: false,
         }
     }
+
     /// Marks this change as consumed.
     pub fn consume(&mut self) {
         self.consumed = true;
@@ -524,7 +525,10 @@ mod queue_tests {
         let events = cursor.take_events();
         assert!(matches!(events[0].content, CursorEventContent::Pressed(_)));
         assert!(matches!(
-            events.last().unwrap().content,
+            events
+                .last()
+                .expect("touch end must enqueue a release")
+                .content,
             CursorEventContent::Released(_)
         ));
         let distance: f32 = events

@@ -10,7 +10,7 @@ use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Dp, FocusScopeNode, FocusTraversalPolicy,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -188,8 +188,8 @@ fn dialog_content_wrapper(
     let policy = DialogContentLayout { alpha };
     layout()
         .modifier(modifier)
-        .layout_policy(policy.clone())
-        .render_policy(policy)
+        .policy(policy.clone())
+        .draw(policy)
         .child(move || {
             let content = content;
             boxed()
@@ -241,8 +241,8 @@ struct DialogContentLayout {
     alpha: f32,
 }
 
-impl LayoutPolicy for DialogContentLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for DialogContentLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let Some(child) = input.children().first().copied() else {
             return Ok(result.with_size(ComputedData {
@@ -251,15 +251,21 @@ impl LayoutPolicy for DialogContentLayout {
             }));
         };
         let child_constraint = input.parent_constraint().without_min();
-        let computed = child.measure(&child_constraint)?;
+        let computed = child.measure(input, &child_constraint)?;
         result.place_child(child, PxPosition::ZERO);
         Ok(result.with_size(computed.size()))
     }
 }
 
-impl RenderPolicy for DialogContentLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for DialogContentLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         input.metadata_mut().multiply_opacity(self.alpha);
+        content.draw(input);
     }
 }
 

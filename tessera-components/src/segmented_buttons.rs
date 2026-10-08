@@ -6,8 +6,7 @@
 
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusState,
-    FocusTraversalPolicy, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     accesskit::Role,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
@@ -24,7 +23,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{MaterialAlpha, MaterialTheme},
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
 const SEGMENTED_ICON_SPACING: Dp = Dp(8.0);
@@ -154,8 +153,8 @@ impl SegmentedButtonDefaults {
     }
 
     /// Default colors derived from the current theme.
-    pub fn colors() -> SegmentedButtonColors {
-        let scheme = MaterialTheme::default().color_scheme;
+    pub fn colors(scheme: &MaterialColorScheme) -> SegmentedButtonColors {
+        let scheme = scheme.clone();
         let disabled_content = scheme
             .on_surface
             .with_alpha(MaterialAlpha::DISABLED_CONTENT);
@@ -268,7 +267,7 @@ pub fn segmented_button(
         .expect("MaterialTheme must be provided")
         .get();
     let typography = theme.typography;
-    let colors = colors.unwrap_or_else(SegmentedButtonDefaults::colors);
+    let colors = colors.unwrap_or_else(|| SegmentedButtonDefaults::colors(&theme.color_scheme));
     let container_color = colors.container_color(enabled, selected);
     let content_color = colors.content_color(enabled, selected);
     let border_color = colors.border_color(enabled, selected);
@@ -440,19 +439,17 @@ pub fn single_choice_segmented_button_row(
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout().modifier(modifier).child(move || {
         let content = content;
-        layout()
-            .layout_policy(layout_policy.clone())
-            .child(move || {
-                let content = content;
-                provide_context(
-                    || SegmentedButtonRowContext {
-                        select_on_focus: true,
-                    },
-                    move || {
-                        content.render();
-                    },
-                );
-            });
+        layout().policy(layout_policy.clone()).child(move || {
+            let content = content;
+            provide_context(
+                || SegmentedButtonRowContext {
+                    select_on_focus: true,
+                },
+                move || {
+                    content.render();
+                },
+            );
+        });
     });
 }
 
@@ -534,19 +531,17 @@ pub fn multi_choice_segmented_button_row(
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout().modifier(modifier).child(move || {
         let content = content;
-        layout()
-            .layout_policy(layout_policy.clone())
-            .child(move || {
-                let content = content;
-                provide_context(
-                    || SegmentedButtonRowContext {
-                        select_on_focus: false,
-                    },
-                    move || {
-                        content.render();
-                    },
-                );
-            });
+        layout().policy(layout_policy.clone()).child(move || {
+            let content = content;
+            provide_context(
+                || SegmentedButtonRowContext {
+                    select_on_focus: false,
+                },
+                move || {
+                    content.render();
+                },
+            );
+        });
     });
 }
 
@@ -578,8 +573,8 @@ struct SegmentedButtonRowLayout {
     equal_width: bool,
 }
 
-impl LayoutPolicy for SegmentedButtonRowLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for SegmentedButtonRowLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.is_empty() {
@@ -597,7 +592,7 @@ impl LayoutPolicy for SegmentedButtonRowLayout {
         let mut max_width = Px::ZERO;
         let mut max_height = Px::ZERO;
         for (index, &child) in children.iter().enumerate() {
-            let child_result = child.measure(&child_constraint)?;
+            let child_result = child.measure(input, &child_constraint)?;
             children_sizes[index] = Some(child_result.size());
             total_width += child_result.width;
             max_width = max_width.max(child_result.width);
@@ -610,7 +605,7 @@ impl LayoutPolicy for SegmentedButtonRowLayout {
             max_height = Px::ZERO;
 
             for (index, &child) in children.iter().enumerate() {
-                let child_result = child.measure(&equal_constraint)?;
+                let child_result = child.measure(input, &equal_constraint)?;
                 children_sizes[index] = Some(child_result.size());
                 total_width += child_result.width;
                 max_height = max_height.max(child_result.height);
@@ -645,7 +640,7 @@ impl LayoutPolicy for SegmentedButtonRowLayout {
                     final_height,
                     self.cross_axis_alignment,
                 );
-                result.place_child(child, PxPosition::new(current_x, y_offset));
+                result.place_child(child, PxPosition::from_f32_xy(current_x.0 as f32, y_offset));
                 current_x += child_size.width;
                 if index < children.len() - 1 {
                     current_x -= overlap;
@@ -677,13 +672,13 @@ fn calculate_cross_axis_offset(
     child_actual_size: &ComputedData,
     final_row_height: Px,
     cross_axis_alignment: CrossAxisAlignment,
-) -> Px {
+) -> f32 {
     match cross_axis_alignment {
-        CrossAxisAlignment::Start => Px::ZERO,
+        CrossAxisAlignment::Start => 0.0,
         CrossAxisAlignment::Center => {
-            (final_row_height - child_actual_size.height).max(Px::ZERO) / 2
+            (final_row_height.0 - child_actual_size.height.0).max(0) as f32 / 2.0
         }
-        CrossAxisAlignment::End => (final_row_height - child_actual_size.height).max(Px::ZERO),
-        CrossAxisAlignment::Stretch => Px::ZERO,
+        CrossAxisAlignment::End => (final_row_height.0 - child_actual_size.height.0).max(0) as f32,
+        CrossAxisAlignment::Stretch => 0.0,
     }
 }

@@ -11,8 +11,9 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::{
     Px, PxPosition, PxSize,
     build_tree::build_component_tree,
-    component_tree::{ComputeMode, ComputeParams, clear_layout_snapshots},
+    component_tree::{ComputeMode, ComputeParams, LayoutFrameDiagnostics, clear_layout_snapshots},
     context::{reset_component_context_tracking, reset_context_read_dependencies},
+    cursor::PointerChange,
     focus::flush_pending_focus_callbacks,
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
@@ -23,6 +24,18 @@ use crate::{
     },
     time::Instant,
 };
+
+thread_local! {
+    /// Layout diagnostics produced by the most recent `pump_layout_test_session`
+    /// call, used by cache-reuse regression tests.
+    static LAST_LAYOUT_FRAME_DIAGNOSTICS: std::cell::Cell<Option<LayoutFrameDiagnostics>> =
+        const { std::cell::Cell::new(None) };
+}
+
+/// Returns the layout diagnostics captured by the most recent pumped frame.
+pub(crate) fn last_layout_frame_diagnostics() -> Option<LayoutFrameDiagnostics> {
+    LAST_LAYOUT_FRAME_DIAGNOSTICS.with(|cell| cell.get())
+}
 
 /// Create a headless layout test harness for the provided component content.
 pub fn layout_test<F>(content: F) -> LayoutTestHarness<F>
@@ -56,65 +69,84 @@ where
 
     /// Execute build and layout, then capture a snapshot for assertions.
     pub fn run(self) -> LayoutSnapshot {
-        let mut session = __private::start_layout_test_session(self);
-        __private::pump_layout_test_session(&mut session, 0)
+        let mut session = start_layout_test_session(self);
+        pump_layout_test_session(&mut session, 0)
     }
 }
 
-#[doc(hidden)]
-pub mod __private {
-    use super::*;
+/// A headless Tessera layout test session that can be advanced frame by frame.
+///
+/// Build the harness with [`layout_test`], open a session with
+/// [`start_layout_test_session`], then step frames with
+/// [`pump_layout_test_session`] to assert snapshots or observe side effects
+/// between frames.
+pub struct LayoutTestSession<F>
+where
+    F: Fn(),
+{
+    content: F,
+    viewport: (u32, u32),
+    frame_origin: Instant,
+    current_frame_nanos: u64,
+}
 
-    /// Runs a headless Tessera test across multiple animation frames.
-    pub struct LayoutTestSession<F>
-    where
-        F: Fn(),
-    {
-        content: F,
-        viewport: (u32, u32),
-        frame_origin: Instant,
-        current_frame_nanos: u64,
+/// Starts a headless layout test session for `harness`.
+pub fn start_layout_test_session<F>(harness: LayoutTestHarness<F>) -> LayoutTestSession<F>
+where
+    F: Fn(),
+{
+    reset_runtime_for_layout_test(harness.viewport);
+    LayoutTestSession {
+        content: harness.content,
+        viewport: harness.viewport,
+        frame_origin: Instant::now(),
+        current_frame_nanos: 0,
     }
+}
 
-    pub fn start_layout_test_session<F>(harness: LayoutTestHarness<F>) -> LayoutTestSession<F>
-    where
-        F: Fn(),
-    {
-        reset_runtime_for_layout_test(harness.viewport);
-        LayoutTestSession {
-            content: harness.content,
-            viewport: harness.viewport,
-            frame_origin: Instant::now(),
-            current_frame_nanos: 0,
-        }
-    }
+/// Builds and lays out one frame at `frame_nanos`, returning a snapshot.
+pub fn pump_layout_test_session<F>(
+    session: &mut LayoutTestSession<F>,
+    frame_nanos: u64,
+) -> LayoutSnapshot
+where
+    F: Fn(),
+{
+    pump_layout_test_session_with_input(session, frame_nanos, Vec::new(), None)
+}
 
-    pub fn pump_layout_test_session<F>(
-        session: &mut LayoutTestSession<F>,
-        frame_nanos: u64,
-    ) -> LayoutSnapshot
-    where
-        F: Fn(),
-    {
-        session.current_frame_nanos = frame_nanos;
-        let frame_time = session.frame_origin + Duration::from_nanos(frame_nanos);
-        begin_frame_clock(frame_time);
-        // Match renderer frame order so frame callbacks update state before
-        // build.
-        tick_frame_nanos_receivers();
-        let _ = build_component_tree(&session.content);
-        let layout_dirty_nodes = take_layout_dirty_nodes();
-        let screen_size = PxSize::new(
-            Px::new(session.viewport.0 as i32),
-            Px::new(session.viewport.1 as i32),
-        );
+/// Builds and lays out one frame while delivering pointer input to the tree.
+///
+/// `pointer_changes` and `cursor_position` are forwarded to the component tree
+/// before layout, mirroring one renderer frame with injected input.
+pub fn pump_layout_test_session_with_input<F>(
+    session: &mut LayoutTestSession<F>,
+    frame_nanos: u64,
+    pointer_changes: Vec<PointerChange>,
+    cursor_position: Option<PxPosition>,
+) -> LayoutSnapshot
+where
+    F: Fn(),
+{
+    session.current_frame_nanos = frame_nanos;
+    let frame_time = session.frame_origin + Duration::from_nanos(frame_nanos);
+    begin_frame_clock(frame_time);
+    // Match renderer frame order so frame callbacks update state before build.
+    tick_frame_nanos_receivers();
+    let _ = build_component_tree(&session.content);
+    let layout_dirty_nodes = take_layout_dirty_nodes();
+    let screen_size = PxSize::new(
+        Px::new(session.viewport.0 as i32),
+        Px::new(session.viewport.1 as i32),
+    );
 
-        TesseraRuntime::with_mut(|runtime| {
-            let _ = runtime.component_tree.compute(
+    let diagnostics = TesseraRuntime::with_mut(|runtime| {
+        let (_graph, _requests, diagnostics, _record_cost, _move, _reveal) =
+            runtime.component_tree.compute(
                 ComputeParams {
                     screen_size,
-                    cursor_position: None,
-                    pointer_changes: Vec::new(),
+                    cursor_position,
+                    pointer_changes,
                     keyboard_events: Vec::new(),
                     ime_events: Vec::new(),
                     retry_focus_move: None,
@@ -124,31 +156,34 @@ pub mod __private {
                 },
                 ComputeMode::LayoutOnly,
             );
-        });
-        flush_pending_focus_callbacks();
+        diagnostics
+    });
+    LAST_LAYOUT_FRAME_DIAGNOSTICS.with(|cell| cell.set(Some(diagnostics)));
+    flush_pending_focus_callbacks();
 
-        LayoutSnapshot::capture()
-    }
+    LayoutSnapshot::capture()
+}
 
-    pub fn advance_layout_test_session_by_nanos<F>(
-        session: &mut LayoutTestSession<F>,
-        delta_nanos: u64,
-    ) -> LayoutSnapshot
-    where
-        F: Fn(),
-    {
-        pump_layout_test_session(
-            session,
-            session.current_frame_nanos.saturating_add(delta_nanos),
-        )
-    }
+/// Advances the session by `delta_nanos` and lays out the resulting frame.
+pub fn advance_layout_test_session_by_nanos<F>(
+    session: &mut LayoutTestSession<F>,
+    delta_nanos: u64,
+) -> LayoutSnapshot
+where
+    F: Fn(),
+{
+    pump_layout_test_session(
+        session,
+        session.current_frame_nanos.saturating_add(delta_nanos),
+    )
+}
 
-    pub fn current_layout_test_frame_nanos<F>(session: &LayoutTestSession<F>) -> u64
-    where
-        F: Fn(),
-    {
-        session.current_frame_nanos
-    }
+/// Returns the `frame_nanos` of the session's most recent frame.
+pub fn current_layout_test_frame_nanos<F>(session: &LayoutTestSession<F>) -> u64
+where
+    F: Fn(),
+{
+    session.current_frame_nanos
 }
 
 /// Captured layout information for a single headless test run.
@@ -269,11 +304,11 @@ struct LayoutNodeSnapshot {
 
 impl LayoutNodeSnapshot {
     fn x(&self) -> i32 {
-        self.position.x.raw()
+        self.position.x_px().raw()
     }
 
     fn y(&self) -> i32 {
-        self.position.y.raw()
+        self.position.y_px().raw()
     }
 
     fn width(&self) -> i32 {
@@ -566,6 +601,8 @@ macro_rules! __assert_layout_expect {
 }
 
 /// Assert layout relationships across multiple animation frames.
+///
+/// Frames are listed as `frame_nanos => { assertions }`, separated by commas.
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __assert_layout_frames {
@@ -573,11 +610,11 @@ macro_rules! __assert_layout_frames {
     ($session:ident,) => {};
     (
         $session:ident,
-        $frame_nanos:expr => { $($expect:tt)* }
+        $frame_nanos:tt => { $($expect:tt)* }
         $(, $($rest:tt)*)?
     ) => {{
         let __tessera_layout_snapshot =
-            $crate::testing::__private::pump_layout_test_session(&mut $session, $frame_nanos);
+            $crate::testing::pump_layout_test_session(&mut $session, $frame_nanos);
         $crate::__assert_layout_expect!(__tessera_layout_snapshot, $($expect)*);
         $crate::__assert_layout_frames!($session $(, $($rest)*)?);
     }};
@@ -590,17 +627,15 @@ macro_rules! assert_layout {
         viewport: ($width:expr, $height:expr),
         content: $content:block,
         expect: {
-            $first_frame_nanos:expr => { $($first_expect:tt)* }
-            $(, $frame_nanos:expr => { $($frame_expect:tt)* })* $(,)?
+            $($frame_nanos:tt => { $($frame_expect:tt)* }),+ $(,)?
         }
     ) => {{
-        let mut __tessera_layout_session = $crate::testing::__private::start_layout_test_session(
+        let mut __tessera_layout_session = $crate::testing::start_layout_test_session(
             $crate::testing::layout_test(|| $content).viewport_px($width, $height)
         );
         $crate::__assert_layout_frames!(
             __tessera_layout_session,
-            $first_frame_nanos => { $($first_expect)* }
-            $(, $frame_nanos => { $($frame_expect)* })*
+            $($frame_nanos => { $($frame_expect)* }),+
         );
     }};
     (
@@ -619,13 +654,16 @@ macro_rules! assert_layout {
 mod tests {
     use std::num::NonZero;
 
-    use super::reset_runtime_for_layout_test;
+    use super::{
+        last_layout_frame_diagnostics, layout_test, pump_layout_test_session,
+        reset_runtime_for_layout_test, start_layout_test_session,
+    };
 
     use crate::{
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
         FrameNanosControl, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
-        LayoutPolicy, LayoutResult, Modifier, NoopRenderPolicy, PlacementModifierNode, Px,
-        PxPosition, RenderSlot, SemanticsModifierNode,
+        LayoutResult, Modifier, NoopDrawModifier, PlacementModifierNode, Px, PxPosition,
+        RenderSlot, SemanticsModifierNode,
         component_tree::{NodeRole, direct_layout_children},
         layout::MeasureScope,
         receive_frame_nanos, remember,
@@ -638,16 +676,17 @@ mod tests {
         height: i32,
     }
 
-    impl LayoutPolicy for FixedSizePolicy {
+    impl crate::modifier::LayoutModifierNode for FixedSizePolicy {
         fn measure(
             &self,
-            input: &MeasureScope<'_>,
+            input: &mut MeasureScope<'_>,
         ) -> Result<LayoutResult, crate::MeasurementError> {
             let mut result = LayoutResult::default();
             let child_constraint = input.parent_constraint().without_min();
-            for child in input.children() {
-                let _ = child.measure(&child_constraint)?;
-                result.place_child(child, PxPosition::ZERO);
+            let child_count = input.children().len();
+            for index in 0..child_count {
+                let measured = input.children()[index].measure(input, &child_constraint)?;
+                result.place_child(measured, PxPosition::ZERO);
             }
 
             Ok(result.with_size(ComputedData {
@@ -660,19 +699,20 @@ mod tests {
     #[derive(Clone, Default, PartialEq)]
     struct VerticalStackPolicy;
 
-    impl LayoutPolicy for VerticalStackPolicy {
+    impl crate::modifier::LayoutModifierNode for VerticalStackPolicy {
         fn measure(
             &self,
-            input: &MeasureScope<'_>,
+            input: &mut MeasureScope<'_>,
         ) -> Result<LayoutResult, crate::MeasurementError> {
             let mut result = LayoutResult::default();
             let mut current_y = Px::ZERO;
             let mut max_width = Px::ZERO;
             let child_constraint = input.parent_constraint().without_min();
 
-            for child in input.children() {
-                let child_size = child.measure(&child_constraint)?;
-                result.place_child(child, PxPosition::new(Px::ZERO, current_y));
+            let child_count = input.children().len();
+            for index in 0..child_count {
+                let child_size = input.children()[index].measure(input, &child_constraint)?;
+                result.place_child(child_size, PxPosition::new(Px::ZERO, current_y));
                 current_y += child_size.height;
                 max_width = max_width.max(child_size.width);
             }
@@ -689,20 +729,20 @@ mod tests {
         x: i32,
     }
 
-    impl LayoutPolicy for OffsetChildPolicy {
+    impl crate::modifier::LayoutModifierNode for OffsetChildPolicy {
         fn measure(
             &self,
-            input: &MeasureScope<'_>,
+            input: &mut MeasureScope<'_>,
         ) -> Result<LayoutResult, crate::MeasurementError> {
             let mut result = LayoutResult::default();
             let child_constraint = input.parent_constraint().without_min();
-            let child = input
+            let child_size = input
                 .children()
                 .first()
                 .copied()
-                .expect("offset child policy requires a child");
-            let child_size = child.measure(&child_constraint)?;
-            result.place_child(child, PxPosition::new(Px::new(self.x), Px::ZERO));
+                .expect("offset child policy requires a child")
+                .measure(input, &child_constraint)?;
+            result.place_child(child_size, PxPosition::new(Px::new(self.x), Px::ZERO));
 
             Ok(result.with_size(ComputedData {
                 width: Px::new(self.x + child_size.width.raw()),
@@ -732,17 +772,17 @@ mod tests {
     }
 
     impl LayoutModifierNode for AnimatedWidthModifierNode {
-        fn measure(
+        fn measure_content(
             &self,
             _input: &LayoutModifierInput<'_>,
             child: &mut dyn LayoutModifierChild,
-        ) -> Result<crate::LayoutModifierOutput, crate::MeasurementError> {
+        ) -> Result<crate::LayoutResult, crate::MeasurementError> {
             let child_size = child.measure(&Constraint::exact(
                 Px::new(self.width),
                 Px::new(self.height),
             ))?;
             child.place(PxPosition::ZERO);
-            Ok(crate::LayoutModifierOutput { size: child_size })
+            Ok(crate::LayoutResult::new(child_size))
         }
     }
 
@@ -764,11 +804,11 @@ mod tests {
     }
 
     impl LayoutModifierNode for TestPaddingModifierNode {
-        fn measure(
+        fn measure_content(
             &self,
             input: &LayoutModifierInput<'_>,
             child: &mut dyn LayoutModifierChild,
-        ) -> Result<crate::LayoutModifierOutput, crate::MeasurementError> {
+        ) -> Result<crate::LayoutResult, crate::MeasurementError> {
             let padding = Px::new(self.padding);
             let parent = input.layout_input.parent_constraint();
             let constraint = Constraint::new(
@@ -789,12 +829,10 @@ mod tests {
             );
             let child_size = child.measure(&constraint)?;
             child.place(PxPosition::new(padding, padding));
-            Ok(crate::LayoutModifierOutput {
-                size: ComputedData {
-                    width: child_size.width + padding + padding,
-                    height: child_size.height + padding + padding,
-                },
-            })
+            Ok(crate::LayoutResult::new(ComputedData {
+                width: child_size.width + padding + padding,
+                height: child_size.height + padding + padding,
+            }))
         }
     }
 
@@ -804,8 +842,8 @@ mod tests {
         let width = width.unwrap_or_default();
         let height = height.unwrap_or_default();
         crate::layout::layout()
-            .layout_policy(FixedSizePolicy { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedSizePolicy { width, height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
     }
 
@@ -813,16 +851,16 @@ mod tests {
     fn responsive_box(tag: Option<String>) {
         let tag = tag.unwrap_or_default();
         crate::layout::layout()
-            .layout_policy(crate::layout::DefaultLayoutPolicy)
-            .render_policy(NoopRenderPolicy)
+            .policy(crate::layout::DefaultLayoutNode)
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier { tag }));
     }
 
     #[tessera(crate)]
     fn stack_content() {
         crate::layout::layout()
-            .layout_policy(VerticalStackPolicy)
-            .render_policy(NoopRenderPolicy)
+            .policy(VerticalStackPolicy)
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(|| {
                 title_box();
@@ -833,11 +871,11 @@ mod tests {
     #[tessera(crate)]
     fn sample_layout() {
         crate::layout::layout()
-            .layout_policy(FixedSizePolicy {
+            .policy(FixedSizePolicy {
                 width: 800,
                 height: 600,
             })
-            .render_policy(NoopRenderPolicy)
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(|| {
                 stack_content();
@@ -875,8 +913,8 @@ mod tests {
         });
 
         crate::layout::layout()
-            .layout_policy(OffsetChildPolicy { x: offset.get() })
-            .render_policy(NoopRenderPolicy)
+            .policy(OffsetChildPolicy { x: offset.get() })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(|| {
                 tagged_box().tag("moving".to_string()).width(20).height(20);
@@ -904,8 +942,8 @@ mod tests {
         });
 
         crate::layout::layout()
-            .layout_policy(crate::layout::DefaultLayoutPolicy)
-            .render_policy(NoopRenderPolicy)
+            .policy(crate::layout::DefaultLayoutNode)
+            .draw(NoopDrawModifier)
             .modifier(
                 Modifier::new()
                     .push_semantics(TestTagSemanticsModifier {
@@ -942,11 +980,11 @@ mod tests {
         });
 
         crate::layout::layout()
-            .layout_policy(FixedSizePolicy {
+            .policy(FixedSizePolicy {
                 width: 20,
                 height: 20,
             })
-            .render_policy(NoopRenderPolicy)
+            .draw(NoopDrawModifier)
             .modifier(
                 Modifier::new()
                     .push_semantics(TestTagSemanticsModifier {
@@ -960,8 +998,8 @@ mod tests {
     fn slot_host(slot: Option<RenderSlot>) {
         let slot = slot.unwrap_or_default();
         crate::layout::layout()
-            .layout_policy(VerticalStackPolicy)
-            .render_policy(NoopRenderPolicy)
+            .policy(VerticalStackPolicy)
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(move || {
                 slot.render();
@@ -989,11 +1027,11 @@ mod tests {
         });
 
         crate::layout::layout()
-            .layout_policy(FixedSizePolicy {
+            .policy(FixedSizePolicy {
                 width: 200,
                 height: 100,
             })
-            .render_policy(NoopRenderPolicy)
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(move || {
                 slot_host().slot(move || {
@@ -1010,8 +1048,8 @@ mod tests {
     #[tessera(crate)]
     fn ordered_layout_modifier_sample() {
         crate::layout::layout()
-            .layout_policy(crate::layout::DefaultLayoutPolicy)
-            .render_policy(NoopRenderPolicy)
+            .policy(crate::layout::DefaultLayoutNode)
+            .draw(NoopDrawModifier)
             .modifier(
                 Modifier::new()
                     .push_semantics(TestTagSemanticsModifier {
@@ -1030,7 +1068,7 @@ mod tests {
 
     #[tessera(crate)]
     fn explicit_layout_boundary_sample() {
-        crate::layout::layout().layout_policy(FixedSizePolicy {
+        crate::layout::layout().policy(FixedSizePolicy {
             width: 24,
             height: 12,
         });
@@ -1074,29 +1112,23 @@ mod tests {
 
     #[test]
     fn layout_test_session_pumps_animation_frames() {
-        let mut session = crate::testing::__private::start_layout_test_session(
+        let mut session = crate::testing::start_layout_test_session(
             crate::testing::layout_test(|| {
                 animated_layout_sample();
             })
             .viewport_px(200, 100),
         );
 
-        let first = crate::testing::__private::pump_layout_test_session(&mut session, 0);
+        let first = crate::testing::pump_layout_test_session(&mut session, 0);
         first.node("moving").position(0, 0).size(20, 20);
 
-        let mid = crate::testing::__private::advance_layout_test_session_by_nanos(
-            &mut session,
-            100_000_000,
-        );
+        let mid = crate::testing::advance_layout_test_session_by_nanos(&mut session, 100_000_000);
         mid.node("moving").position(50, 0).size(20, 20);
 
-        let end = crate::testing::__private::advance_layout_test_session_by_nanos(
-            &mut session,
-            100_000_000,
-        );
+        let end = crate::testing::advance_layout_test_session_by_nanos(&mut session, 100_000_000);
         end.node("moving").position(100, 0).size(20, 20);
         assert_eq!(
-            crate::testing::__private::current_layout_test_frame_nanos(&session),
+            crate::testing::current_layout_test_frame_nanos(&session),
             200_000_000
         );
     }
@@ -1243,5 +1275,34 @@ mod tests {
                 "direct layout children must resolve to the emitted layout node"
             );
         });
+    }
+
+    #[tessera(crate)]
+    fn inner_layout_cache_sample() {
+        crate::layout::layout();
+    }
+
+    #[tessera(crate)]
+    fn nested_composition_layout_sample() {
+        crate::layout::layout().child(|| inner_layout_cache_sample());
+    }
+
+    #[test]
+    fn stable_frame_reuses_layout_cache_across_composition_boundaries() {
+        let mut session = start_layout_test_session(
+            layout_test(|| nested_composition_layout_sample()).viewport_px(120, 80),
+        );
+        let _ = pump_layout_test_session(&mut session, 0);
+        let _ = pump_layout_test_session(&mut session, 16_666_667);
+
+        let diagnostics = last_layout_frame_diagnostics().expect("layout diagnostics");
+        assert_eq!(
+            diagnostics.cache_miss_no_entry, 0,
+            "composition boundaries must not force descendant layout nodes to miss the cache"
+        );
+        assert_eq!(
+            diagnostics.measure_node_calls, 1,
+            "a stable frame must resolve from the root layout cache without re-measuring"
+        );
     }
 }

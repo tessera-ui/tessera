@@ -12,29 +12,15 @@ struct Uniforms {
 var<uniform> uniforms: Uniforms;
 
 @vertex
-fn vs_main(@builtin(vertex_index) in_vertex_index: u32) -> VertexOutput {
-    let vertices = array<vec2<f32>, 6>(
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>(1.0, -1.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(-1.0, -1.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(-1.0, 1.0),
-    );
-
-    let tex_coords = array<vec2<f32>, 6>(
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(1.0, 1.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(0.0, 1.0),
-        vec2<f32>(1.0, 0.0),
-        vec2<f32>(0.0, 0.0),
-    );
+fn vs_main(@location(0) position: vec2<f32>) -> VertexOutput {
+    // Shared unit quad is (0,0)-(1,1); map it into the target rect so a single
+    // indexed draw covers the image bounds.
+    let centered = position * 2.0 - 1.0;
+    let clip = uniforms.rect.xy + centered * uniforms.rect.zw;
 
     var out: VertexOutput;
-    let pos = vertices[in_vertex_index] * uniforms.rect.zw + uniforms.rect.xy;
-    out.clip_position = vec4<f32>(pos, 0.0, 1.0);
-    out.tex_coords = tex_coords[in_vertex_index];
+    out.clip_position = vec4<f32>(clip, 0.0, 1.0);
+    out.tex_coords = vec2<f32>(position.x, 1.0 - position.y);
     return out;
 }
 

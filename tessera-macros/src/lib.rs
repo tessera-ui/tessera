@@ -11,8 +11,6 @@
     rustdoc::invalid_html_tags
 )]
 
-use std::hash::{DefaultHasher, Hash, Hasher};
-
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
 use syn::{
@@ -959,24 +957,21 @@ fn component_type_id_tokens(
 }
 
 struct ControlFlowInstrumenter {
-    /// counter to generate unique IDs in current function
-    counter: usize,
-    /// seed to prevent ID collisions across functions
-    seed: u64,
+    /// counter to generate unique IDs in the current function
+    counter: u64,
 }
 
 impl ControlFlowInstrumenter {
-    fn new(seed: u64) -> Self {
-        Self { counter: 0, seed }
+    fn new() -> Self {
+        Self { counter: 1 }
     }
 
-    /// Generate the next unique group ID
+    /// Next compile-time group id. Each function counts independently, starting
+    /// at 1.
     fn next_group_id(&mut self) -> u64 {
-        let mut hasher = DefaultHasher::new();
-        self.seed.hash(&mut hasher);
-        self.counter.hash(&mut hasher);
+        let id = self.counter;
         self.counter += 1;
-        hasher.finish()
+        id
     }
 
     /// Wrap an expression in a GroupGuard block
@@ -1156,14 +1151,8 @@ pub fn tessera(attr: TokenStream, item: TokenStream) -> TokenStream {
         Err(err) => return err.to_compile_error().into(),
     };
 
-    // Generate a stable hash seed based on function name in order to avoid ID
-    // collisions
-    let mut hasher = DefaultHasher::new();
-    input_fn.sig.ident.to_string().hash(&mut hasher);
-    let seed = hasher.finish();
-
-    // Modify the function body to instrument control flow with GroupGuard
-    let mut instrumenter = ControlFlowInstrumenter::new(seed);
+    // Instrument control flow with per-function constant group ids.
+    let mut instrumenter = ControlFlowInstrumenter::new();
     instrumenter.visit_block_mut(&mut input_fn.block);
     let fn_block = &input_fn.block;
     let generics = &input_fn.sig.generics;
@@ -1717,6 +1706,11 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                         drop(__tessera_builder);
                     }
 
+                    fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {
+                        let destination = self.clone();
+                        std::sync::Arc::new(move || destination.exec_component())
+                    }
+
                     fn destination_id() -> &'static str {
                         concat!(module_path!(), "::", #func_name_str)
                     }
@@ -1750,6 +1744,11 @@ pub fn shard(attr: TokenStream, input: TokenStream) -> TokenStream {
                         let mut __tessera_builder = #func_name();
                         #(#destination_builder_setters)*
                         drop(__tessera_builder);
+                    }
+
+                    fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {
+                        let destination = self.clone();
+                        std::sync::Arc::new(move || destination.exec_component())
                     }
 
                     fn destination_id() -> &'static str {

@@ -3,16 +3,15 @@
 //! ## Usage
 //!
 //! Use for primary destinations on wide layouts with a collapsible side rail.
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
-use parking_lot::Mutex;
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, layout},
+    layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -71,24 +70,17 @@ enum NavigationRailIconPosition {
 
 #[derive(Clone)]
 struct NavigationRailCompositionContext {
-    controller: State<NavigationRailController>,
-    selected_index: usize,
-    previous_index: usize,
-    selection_progress: f32,
     icon_position: NavigationRailIconPosition,
     indicator_start_width: Dp,
     item_min_height: Dp,
     item_spacing: Dp,
-    next_index: Arc<Mutex<usize>>,
 }
 
 #[tessera]
 fn navigation_rail_item_view_content(
     item: Option<NavigationRailItemDefinition>,
     icon_position: Option<NavigationRailIconPosition>,
-    is_selected: Option<bool>,
-    was_selected: Option<bool>,
-    selection_progress: Option<f32>,
+    selection_fraction: Option<f32>,
     indicator_start_width: Option<Dp>,
     item_min_height: Option<Dp>,
     interaction_state: Option<State<InteractionState>>,
@@ -96,9 +88,7 @@ fn navigation_rail_item_view_content(
 ) {
     let item = item.unwrap_or_default();
     let icon_position = icon_position.unwrap_or_default();
-    let is_selected = is_selected.unwrap_or(false);
-    let was_selected = was_selected.unwrap_or(false);
-    let selection_progress = selection_progress.unwrap_or(0.0);
+    let selection_fraction = selection_fraction.unwrap_or(0.0);
     let indicator_start_width = indicator_start_width.unwrap_or(Dp(0.0));
     let item_min_height = item_min_height.unwrap_or(Dp(0.0));
     let interaction_state = interaction_state.expect("interaction_state must be set");
@@ -108,14 +98,6 @@ fn navigation_rail_item_view_content(
         .get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
-
-    let selection_fraction = if is_selected {
-        selection_progress
-    } else if was_selected {
-        1.0 - selection_progress
-    } else {
-        0.0
-    };
 
     let has_label = !item.label.is_empty();
     let has_icon = item.icon.is_some();
@@ -148,7 +130,7 @@ fn navigation_rail_item_view_content(
     .max(0.0) as i32);
 
     layout()
-        .layout_policy(NavigationRailItemLayout {
+        .policy(NavigationRailItemLayout {
             icon_position,
             has_label,
             has_icon,
@@ -226,8 +208,8 @@ struct NavigationRailItemLayout {
     item_min_height: Dp,
 }
 
-impl LayoutPolicy for NavigationRailItemLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for NavigationRailItemLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let parent_width = input
@@ -258,15 +240,17 @@ impl LayoutPolicy for NavigationRailItemLayout {
         };
 
         let child_constraint = Constraint::NONE;
-        let indicator_size = indicator_background.measure(&child_constraint)?.size();
-        let indicator_ripple_size = indicator_ripple.measure(&child_constraint)?.size();
+        let indicator_size = indicator_background
+            .measure(input, &child_constraint)?
+            .size();
+        let indicator_ripple_size = indicator_ripple.measure(input, &child_constraint)?.size();
         let icon_size = icon_id
-            .map(|id| id.measure(&child_constraint))
+            .map(|id| id.measure(input, &child_constraint))
             .transpose()?
             .map(|size| size.size())
             .unwrap_or(ComputedData::ZERO);
         let label_size = label_id
-            .map(|id| id.measure(&child_constraint))
+            .map(|id| id.measure(input, &child_constraint))
             .transpose()?
             .map(|size| size.size())
             .unwrap_or(ComputedData::ZERO);
@@ -373,22 +357,16 @@ impl LayoutPolicy for NavigationRailItemLayout {
 
 #[tessera]
 fn navigation_rail_item_view(
-    controller: Option<State<NavigationRailController>>,
-    index: Option<usize>,
     item: Option<NavigationRailItemDefinition>,
-    selected_index: Option<usize>,
-    previous_index: Option<usize>,
-    selection_progress: Option<f32>,
+    selected: Option<bool>,
+    selection_fraction: Option<f32>,
     icon_position: Option<NavigationRailIconPosition>,
     indicator_start_width: Option<Dp>,
     item_min_height: Option<Dp>,
 ) {
-    let controller = controller.expect("controller must be set");
-    let index = index.unwrap_or(0);
     let item = item.unwrap_or_default();
-    let selected_index = selected_index.unwrap_or(0);
-    let previous_index = previous_index.unwrap_or(0);
-    let selection_progress = selection_progress.unwrap_or(0.0);
+    let selected = selected.unwrap_or(false);
+    let selection_fraction = selection_fraction.unwrap_or(0.0);
     let icon_position = icon_position.unwrap_or_default();
     let indicator_start_width = indicator_start_width.unwrap_or(Dp(0.0));
     let item_min_height = item_min_height.unwrap_or(Dp(0.0));
@@ -396,9 +374,8 @@ fn navigation_rail_item_view(
     let ripple_state = remember(RippleState::new);
     let tap_recognizer = remember(TapRecognizer::default);
 
-    let is_selected = index == selected_index;
-    let was_selected = index == previous_index && selected_index != previous_index;
     let label = item.label.clone();
+    let on_click = item.on_click;
     let ripple_size = match icon_position {
         NavigationRailIconPosition::Top => {
             PxSize::new(INDICATOR_TOP_WIDTH.to_px(), INDICATOR_TOP_HEIGHT.to_px())
@@ -426,17 +403,9 @@ fn navigation_rail_item_view(
         }
     };
 
-    let on_click_item = item.on_click;
-    let on_click = {
-        move || {
-            controller.with_mut(|c| c.set_selected(index));
-            on_click_item.call();
-        }
-    };
-
     let selectable_args = SelectableArgs {
-        selected: is_selected,
-        on_click: on_click.into(),
+        selected,
+        on_click,
         enabled: true,
         role: Some(Role::Tab),
         label: Some(label),
@@ -454,9 +423,7 @@ fn navigation_rail_item_view(
             navigation_rail_item_view_content()
                 .item(item.clone())
                 .icon_position(icon_position)
-                .is_selected(is_selected)
-                .was_selected(was_selected)
-                .selection_progress(selection_progress)
+                .selection_fraction(selection_fraction)
                 .indicator_start_width(indicator_start_width)
                 .item_min_height(item_min_height)
                 .interaction_state(interaction_state)
@@ -484,18 +451,23 @@ struct NavigationRailItemDefinition {
 ///
 /// - `label` — text label shown next to or below the icon.
 /// - `icon` — optional icon rendered for the item.
+/// - `selected` — whether this item is the active destination.
 /// - `on_click` — callback invoked after the item becomes selected.
 ///
 /// ## Examples
 ///
 /// ```
 /// use tessera_components::navigation_rail::{navigation_rail, navigation_rail_item};
-/// use tessera_ui::tessera;
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
-///     navigation_rail().content(|| {
-///         navigation_rail_item().label("Home");
+///     let selected = remember(|| 0usize);
+///     navigation_rail().content(move || {
+///         navigation_rail_item()
+///             .label("Home")
+///             .selected(selected.get() == 0)
+///             .on_click(move || selected.set(0));
 ///     });
 /// }
 /// ```
@@ -504,26 +476,41 @@ pub fn navigation_rail_item(
     #[prop(into)] label: Option<String>,
     icon: Option<RenderSlot>,
     on_click: Option<Callback>,
+    selected: Option<bool>,
 ) {
     let label = label.unwrap_or_default();
     let on_click = on_click.unwrap_or_default();
+    let selected = selected.unwrap_or(false);
     let composition = use_context::<NavigationRailCompositionContext>()
         .expect("navigation_rail_item must be used inside navigation_rail")
         .get();
-    let index = {
-        let mut next_index = composition.next_index.lock();
-        let index = *next_index;
-        *next_index += 1;
-        index
-    };
 
+    // Each item owns its own selection animation, keyed by call position, so
+    // there is no shared index registry that could drift across rebuilds.
+    let animation = remember(|| NavigationRailItemAnimation::new(selected));
+    let frame_nanos = current_frame_nanos();
+    animation.with_mut(|state| state.set_selected(selected));
+    let selection_fraction = animation.with_mut(|state| {
+        state.update(frame_nanos);
+        state.progress()
+    });
+    if animation.with(|state| state.is_animating()) {
+        receive_frame_nanos(move |frame_nanos| {
+            let is_animating = animation.with_mut(|state| {
+                state.update(frame_nanos);
+                state.is_animating()
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+
+    let item_spacing = composition.item_spacing;
     layout()
-        .modifier(Modifier::new().padding(Padding::new(
-            Dp::ZERO,
-            Dp::ZERO,
-            Dp::ZERO,
-            composition.item_spacing,
-        )))
+        .modifier(Modifier::new().padding(Padding::new(Dp::ZERO, Dp::ZERO, Dp::ZERO, item_spacing)))
         .child(move || {
             let item = NavigationRailItemDefinition {
                 label: label.clone(),
@@ -531,33 +518,16 @@ pub fn navigation_rail_item(
                 on_click,
             };
             navigation_rail_item_view()
-                .controller(composition.controller)
-                .index(index)
                 .item(item)
-                .selected_index(composition.selected_index)
-                .previous_index(composition.previous_index)
-                .selection_progress(composition.selection_progress)
+                .selected(selected)
+                .selection_fraction(selection_fraction)
                 .icon_position(composition.icon_position)
                 .indicator_start_width(composition.indicator_start_width)
                 .item_min_height(composition.item_min_height);
         });
 }
 
-/// Collapsed or expanded mode for a navigation rail.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum NavigationRailValue {
-    /// Compact, icon-top layout.
-    Collapsed,
-    /// Expanded, icon-start layout.
-    Expanded,
-}
-
-impl NavigationRailValue {
-    fn is_expanded(self) -> bool {
-        matches!(self, Self::Expanded)
-    }
-}
-
+/// # navigation_rail
 /// # navigation_rail
 ///
 /// Navigation rail that switches between collapsed and expanded layouts for
@@ -569,51 +539,52 @@ impl NavigationRailValue {
 ///
 /// ## Parameters
 ///
-/// - `controller` — optional external controller.
+/// - `expanded` — whether the rail renders in expanded (icon-start) mode.
 /// - `content` — item declarations rendered in the rail.
 /// - `header` — optional header rendered above items.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::navigation_rail::{
-///     NavigationRailController, NavigationRailValue, navigation_rail, navigation_rail_item,
-/// };
-/// use tessera_ui::{LayoutResult, provide_context, remember, tessera};
+/// use tessera_components::navigation_rail::{navigation_rail, navigation_rail_item};
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
-///     let controller = remember(|| NavigationRailController::new(0));
-///     controller.with_mut(|c| c.set_value(NavigationRailValue::Expanded));
-///     assert!(controller.with(|c| c.is_expanded()));
-///
-///     navigation_rail().controller(controller).content(|| {
-///         navigation_rail_item().label("Home");
+///     let selected = remember(|| 0usize);
+///     navigation_rail().expanded(true).content(move || {
+///         navigation_rail_item()
+///             .label("Home")
+///             .selected(selected.get() == 0)
+///             .on_click(move || selected.set(0));
 ///     });
 /// }
 /// ```
 #[tessera]
 pub fn navigation_rail(
-    controller: Option<State<NavigationRailController>>,
+    expanded: Option<bool>,
     content: Option<RenderSlot>,
     header: Option<RenderSlot>,
 ) {
     let content = content.unwrap_or_else(RenderSlot::empty);
-    let controller = controller.unwrap_or_else(|| remember(|| NavigationRailController::new(0)));
+    let expanded = expanded.unwrap_or(false);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
+    let controller = remember(NavigationRailExpansion::default);
     let frame_nanos = current_frame_nanos();
-    let selection_progress = controller
-        .with(|c| c.selection_animation_progress(frame_nanos))
-        .unwrap_or(1.0);
-    let selected_index = controller.with(|c| c.selected());
-    let previous_index = controller.with(|c| c.previous_selected());
-    let expand_fraction = controller.with(|c| c.expand_fraction(frame_nanos));
-    if controller.with(|c| c.is_animating(frame_nanos)) {
+    controller.with_mut(|c| c.set_expanded(expanded));
+    let expand_fraction = controller.with_mut(|c| {
+        c.update(frame_nanos);
+        c.expand_fraction()
+    });
+    if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller.with(|controller| controller.is_animating(frame_nanos));
+            let is_animating = controller.with_mut(|c| {
+                c.update(frame_nanos);
+                c.is_animating()
+            });
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -640,15 +611,10 @@ pub fn navigation_rail(
     let indicator_start_width =
         Dp((container_width.0 - ITEM_HORIZONTAL_PADDING.0 * 2.0).max(INDICATOR_TOP_WIDTH.0));
     let composition = NavigationRailCompositionContext {
-        controller,
-        selected_index,
-        previous_index,
-        selection_progress,
         icon_position,
         indicator_start_width,
         item_min_height,
         item_spacing,
-        next_index: Arc::new(Mutex::new(0)),
     };
 
     let modifier = Modifier::new()
@@ -701,163 +667,230 @@ pub fn navigation_rail(
     });
 }
 
-/// Controller for the `navigation_rail` component.
+/// Per-item selection animation for a navigation rail destination.
 #[derive(Clone, PartialEq)]
-pub struct NavigationRailController {
-    selected: usize,
-    previous_selected: usize,
-    selection_start_frame_nanos: Option<u64>,
-    expanded: bool,
-    expand_start_frame_nanos: Option<u64>,
+struct NavigationRailItemAnimation {
+    selected: bool,
+    progress: f32,
+    start_progress: f32,
+    last_change_frame_nanos: Option<u64>,
 }
 
-impl NavigationRailController {
-    /// Create a new controller with the initial selected index.
-    pub fn new(selected: usize) -> Self {
-        Self::new_with_value(selected, NavigationRailValue::Collapsed)
-    }
-
-    /// Create a controller with an initial selection and expansion value.
-    pub fn new_with_value(selected: usize, value: NavigationRailValue) -> Self {
+impl NavigationRailItemAnimation {
+    fn new(selected: bool) -> Self {
+        let progress = if selected { 1.0 } else { 0.0 };
         Self {
             selected,
-            previous_selected: selected,
-            selection_start_frame_nanos: None,
-            expanded: value.is_expanded(),
-            expand_start_frame_nanos: None,
+            progress,
+            start_progress: progress,
+            last_change_frame_nanos: None,
         }
     }
 
-    /// Returns the index of the currently selected navigation item.
-    pub fn selected(&self) -> usize {
-        self.selected
-    }
-
-    /// Returns whether the rail is expanded.
-    pub fn is_expanded(&self) -> bool {
-        self.expanded
-    }
-
-    /// Returns the current expansion value.
-    pub fn value(&self) -> NavigationRailValue {
-        if self.expanded {
-            NavigationRailValue::Expanded
-        } else {
-            NavigationRailValue::Collapsed
+    fn set_selected(&mut self, selected: bool) {
+        if self.selected != selected {
+            self.selected = selected;
+            self.start_progress = self.progress;
+            self.last_change_frame_nanos = Some(current_frame_nanos());
         }
     }
 
-    /// Programmatically select an item by index.
-    pub fn select(&mut self, index: usize) {
-        self.set_selected(index);
-    }
-
-    /// Expand the rail.
-    pub fn expand(&mut self) {
-        self.set_expanded(true);
-    }
-
-    /// Collapse the rail.
-    pub fn collapse(&mut self) {
-        self.set_expanded(false);
-    }
-
-    /// Toggle between collapsed and expanded states.
-    pub fn toggle(&mut self) {
-        self.set_expanded(!self.expanded);
-    }
-
-    /// Set the expansion value.
-    pub fn set_value(&mut self, value: NavigationRailValue) {
-        self.set_expanded(value.is_expanded());
-    }
-
-    fn set_selected(&mut self, index: usize) {
-        if self.selected != index {
-            self.previous_selected = self.selected;
-            self.selected = index;
-            self.selection_start_frame_nanos = Some(current_frame_nanos());
+    fn update(&mut self, frame_nanos: u64) {
+        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
+            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
+            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+            let fraction = if animation_nanos == 0 {
+                1.0
+            } else {
+                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
+            };
+            let target = if self.selected { 1.0 } else { 0.0 };
+            let eased = animation::easing(fraction);
+            self.progress = self.start_progress + (target - self.start_progress) * eased;
+            if fraction >= 1.0 {
+                self.last_change_frame_nanos = None;
+                self.progress = target;
+                self.start_progress = target;
+            }
         }
     }
 
+    fn progress(&self) -> f32 {
+        self.progress
+    }
+
+    fn is_animating(&self) -> bool {
+        self.last_change_frame_nanos.is_some()
+    }
+}
+
+/// Expansion animation state for the navigation rail container.
+#[derive(Clone, PartialEq, Default)]
+struct NavigationRailExpansion {
+    expanded: bool,
+    start_frame_nanos: Option<u64>,
+}
+
+impl NavigationRailExpansion {
     fn set_expanded(&mut self, expanded: bool) {
         if self.expanded != expanded {
             self.expanded = expanded;
-            let now_nanos = current_frame_nanos();
-            if let Some(old_start_frame_nanos) = self.expand_start_frame_nanos {
-                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
-                let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-                if elapsed_nanos < animation_nanos {
-                    self.expand_start_frame_nanos =
-                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
-                    return;
-                }
-            }
-            self.expand_start_frame_nanos = Some(now_nanos);
+            self.start_frame_nanos = Some(current_frame_nanos());
         }
     }
 
-    fn selection_animation_progress(&self, frame_nanos: u64) -> Option<f32> {
-        if let Some(start_frame_nanos) = self.selection_start_frame_nanos {
-            let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            if elapsed_nanos < animation_nanos {
-                Some(animation::easing(
-                    elapsed_nanos as f32 / animation_nanos as f32,
-                ))
-            } else {
-                None
-            }
-        } else {
-            None
-        }
-    }
-
-    fn expand_fraction(&self, frame_nanos: u64) -> f32 {
-        let progress = calc_progress_from_timer(self.expand_start_frame_nanos, frame_nanos);
-        if self.expanded {
-            progress
-        } else {
-            1.0 - progress
-        }
-    }
-
-    fn previous_selected(&self) -> usize {
-        self.previous_selected
-    }
-
-    fn is_animating(&self, frame_nanos: u64) -> bool {
-        let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-        self.selection_start_frame_nanos
-            .is_some_and(|start_frame_nanos| {
-                frame_nanos.saturating_sub(start_frame_nanos) < animation_nanos
-            })
-            || self
-                .expand_start_frame_nanos
-                .is_some_and(|start_frame_nanos| {
-                    frame_nanos.saturating_sub(start_frame_nanos) < animation_nanos
-                })
-    }
-}
-
-impl Default for NavigationRailController {
-    fn default() -> Self {
-        Self::new(0)
-    }
-}
-
-fn calc_progress_from_timer(animation_start_frame_nanos: Option<u64>, frame_nanos: u64) -> f32 {
-    let raw = match animation_start_frame_nanos {
-        None => 1.0,
-        Some(start_frame_nanos) => {
+    fn update(&mut self, frame_nanos: u64) {
+        if let Some(start_frame_nanos) = self.start_frame_nanos {
             let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
             let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
             if elapsed_nanos >= animation_nanos {
-                1.0
-            } else {
-                elapsed_nanos as f32 / animation_nanos as f32
+                self.start_frame_nanos = None;
             }
         }
+    }
+
+    fn expand_fraction(&self) -> f32 {
+        let raw = match self.start_frame_nanos {
+            None => 1.0,
+            Some(start_frame_nanos) => {
+                let elapsed_nanos = current_frame_nanos().saturating_sub(start_frame_nanos);
+                let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
+                if elapsed_nanos >= animation_nanos {
+                    1.0
+                } else {
+                    elapsed_nanos as f32 / animation_nanos as f32
+                }
+            }
+        };
+        let eased = animation::easing(raw);
+        if self.expanded { eased } else { 1.0 - eased }
+    }
+
+    fn is_animating(&self) -> bool {
+        self.start_frame_nanos.is_some()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
+        PxPosition, remember, tessera,
     };
-    animation::easing(raw)
+
+    use crate::{
+        column::column,
+        lazy_list::lazy_column,
+        modifier::{ModifierExt as _, SemanticsArgs},
+        spacer::spacer,
+        theme::{MaterialTheme, material_theme},
+    };
+
+    use super::{navigation_rail, navigation_rail_item};
+
+    #[tessera]
+    fn navigation_rail_row() {
+        let selected = remember(|| 0usize);
+        column().children(move || {
+            navigation_rail().content(move || {
+                navigation_rail_item()
+                    .label("Home")
+                    .selected(selected.get() == 0)
+                    .on_click(move || selected.set(0));
+                navigation_rail_item()
+                    .label("Search")
+                    .selected(selected.get() == 1)
+                    .on_click(move || selected.set(1));
+                navigation_rail_item()
+                    .label("Settings")
+                    .selected(selected.get() == 2)
+                    .on_click(move || selected.set(2));
+            });
+            if selected.get() == 1 {
+                spacer().modifier(Modifier::new().width(Dp(10.0)).height(Dp(10.0)).semantics(
+                    SemanticsArgs {
+                        test_tag: Some("rail-search-active".to_string()),
+                        ..Default::default()
+                    },
+                ));
+            }
+        });
+    }
+
+    #[tessera]
+    fn navigation_rail_click_probe() {
+        material_theme()
+            .theme(MaterialTheme::default)
+            .child(move || {
+                lazy_column().item(move || {
+                    navigation_rail_row();
+                });
+            });
+    }
+
+    #[test]
+    fn clicking_middle_item_selects_middle_item() {
+        let mut session = tessera_ui::testing::start_layout_test_session(
+            tessera_ui::testing::layout_test(|| {
+                navigation_rail_click_probe();
+            })
+            .viewport_px(200, 400),
+        );
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+
+        // Collapsed rail items stack vertically at the 64dp minimum height with
+        // 4dp spacing after a 44dp top padding, so the middle item center is
+        // near y = 144.
+        let now = tessera_ui::time::Instant::now();
+        let cursor = Some(PxPosition::new(Px::new(48), Px::new(144)));
+
+        // Move the pointer over the middle item first so it rebuilds in
+        // isolation inside `lazy_column`; the per-item selection must still
+        // resolve to the middle destination after the click.
+        let moved = PointerChange::new(
+            now,
+            1,
+            CursorEventContent::Moved(PxPosition::new(Px::new(48), Px::new(144))),
+            GestureState::TapCandidate,
+        );
+        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
+            &mut session,
+            16_666_667,
+            vec![moved],
+            cursor,
+        );
+
+        let press = PointerChange::new(
+            now,
+            1,
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            GestureState::TapCandidate,
+        );
+        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
+            &mut session,
+            33_333_334,
+            vec![press],
+            cursor,
+        );
+        let release = PointerChange::new(
+            now,
+            1,
+            CursorEventContent::Released(PressKeyEventType::Left),
+            GestureState::TapCandidate,
+        );
+        let mut snapshot = tessera_ui::testing::pump_layout_test_session_with_input(
+            &mut session,
+            50_000_001,
+            vec![release],
+            cursor,
+        );
+        for frame in 3..40u64 {
+            snapshot = tessera_ui::testing::pump_layout_test_session(
+                &mut session,
+                50_000_001 + 16_666_667 * (frame - 2),
+            );
+        }
+
+        snapshot.node("rail-search-active").exists();
+    }
 }

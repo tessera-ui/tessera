@@ -58,10 +58,10 @@ impl Default for HelloPlugin {
 }
 
 impl Plugin for HelloPlugin {
-    fn on_resumed(&mut self, ctx: &PluginContext) -> PluginResult {
+    fn on_resumed(&mut self, _ctx: &PluginContext) -> PluginResult {
         #[cfg(target_os = "android")]
         {
-            self.android_app = Some(ctx.android_app().clone());
+            self.android_app = Some(_ctx.android_app().clone());
         }
         Ok(())
     }

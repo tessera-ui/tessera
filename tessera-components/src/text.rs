@@ -4,8 +4,7 @@
 //!
 //! Display labels, headings, and other text content.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
-    PxPosition, RenderInput, RenderPolicy,
+    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     accesskit::Role,
     layout::{MeasureScope, layout},
     tessera, use_context,
@@ -103,11 +102,12 @@ pub fn text(
         color,
         size,
         line_height,
+        shaped: std::sync::Arc::new(std::sync::OnceLock::new()),
     };
     layout()
         .modifier(modifier.semantics(semantics))
-        .layout_policy(policy.clone())
-        .render_policy(policy);
+        .policy(policy.clone())
+        .draw(policy);
 }
 
 #[derive(Clone)]
@@ -116,6 +116,7 @@ struct TextLayout {
     color: Color,
     size: Dp,
     line_height: Dp,
+    shaped: std::sync::Arc<std::sync::OnceLock<TextData>>,
 }
 
 impl PartialEq for TextLayout {
@@ -127,21 +128,36 @@ impl PartialEq for TextLayout {
     }
 }
 
-impl LayoutPolicy for TextLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl TextLayout {
+    fn shaped_text(&self, constraint: TextConstraint) -> TextData {
+        let mut data = self
+            .shaped
+            .get_or_init(|| {
+                TextData::shape(
+                    self.text.clone(),
+                    self.color,
+                    self.size.to_pixels_f32(),
+                    self.line_height.to_pixels_f32(),
+                    constraint,
+                )
+            })
+            .clone();
+        data.set_color(self.color);
+        data
+    }
+}
+
+impl tessera_ui::LayoutModifierNode for TextLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let max_width = input.parent_constraint().width().resolve_max();
         let max_height = input.parent_constraint().height().resolve_max();
 
-        let info = TextData::measure(
-            self.text.clone(),
-            self.color,
-            self.size.to_pixels_f32(),
-            self.line_height.to_pixels_f32(),
-            TextConstraint {
+        let info = self
+            .shaped_text(TextConstraint {
                 max_width: max_width.map(|px: Px| px.to_f32()),
                 max_height: max_height.map(|px: Px| px.to_f32()),
-            },
-        );
+            })
+            .measure_info();
 
         Ok(LayoutResult::new(ComputedData {
             width: info.size[0].into(),
@@ -150,23 +166,17 @@ impl LayoutPolicy for TextLayout {
     }
 }
 
-impl RenderPolicy for TextLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
-        let computed = {
-            let metadata = input.metadata_mut();
-            metadata
-                .computed_data()
-                .expect("ComputedData must exist during record")
+impl tessera_ui::DrawModifierNode for TextLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
+        let Some(mut text_data) = self.shaped.get().cloned() else {
+            return;
         };
-
-        // Use TextData::get() with the computed bounds to retrieve cached data
-        let text_data = TextData::get(
-            self.text.clone(),
-            self.color,
-            self.size.to_pixels_f32(),
-            self.line_height.to_pixels_f32(),
-            [computed.width.raw() as u32, computed.height.raw() as u32],
-        );
+        text_data.set_color(self.color);
 
         let drawable = TextCommand {
             data: text_data,
@@ -176,5 +186,6 @@ impl RenderPolicy for TextLayout {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(drawable);
+        content.draw(input);
     }
 }

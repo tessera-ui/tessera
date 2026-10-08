@@ -94,6 +94,12 @@ impl RenderFragment {
         &self.ops
     }
 
+    /// Returns fragment ops in insertion order for local position overrides.
+    #[must_use]
+    pub fn ops_mut(&mut self) -> &mut [RenderFragmentOp] {
+        &mut self.ops
+    }
+
     /// Returns local resources declared by this fragment.
     #[must_use]
     pub fn resources(&self) -> &[RenderResource] {
@@ -423,12 +429,51 @@ fn order_ops(ops: Vec<RenderGraphOp>) -> Vec<RenderGraphOp> {
         }
     }
 
-    let mut by_sequence: Vec<usize> = (0..ops.len()).collect();
-    by_sequence.sort_by_key(|idx| ops[*idx].sequence_index);
-    for (offset, &left) in by_sequence.iter().enumerate() {
-        for &right in &by_sequence[offset + 1..] {
-            if needs_ordering(&infos[left], &infos[right], &ops[left], &ops[right]) {
-                add_edge(&mut outgoing, &mut in_degree, left, right);
+    let by_sequence = sequence_order(&ops);
+
+    // State changes (clip push/pop, composite) act as sequence-ordered
+    // barriers. Without this, ops in different clip scopes have no ordering
+    // edge and can be hoisted ahead of the background they must paint on top
+    // of, which reorders overlapping content incorrectly.
+    for (index, op) in ops.iter().enumerate() {
+        if !is_state_change(op) {
+            continue;
+        }
+        for other in 0..ops.len() {
+            if other == index {
+                continue;
+            }
+            if index < other {
+                add_edge(&mut outgoing, &mut in_degree, index, other);
+            } else {
+                add_edge(&mut outgoing, &mut in_degree, other, index);
+            }
+        }
+    }
+
+    let Some(intervals) = clip_intervals(&ops, &by_sequence) else {
+        return fallback_by_sequence(ops);
+    };
+
+    for interval in &intervals {
+        let members = &by_sequence[interval.start..interval.end];
+        let member_count = members.len();
+        let mut left_offset = 0;
+        while left_offset < member_count {
+            let left = members[left_offset];
+            let mut right_offset = left_offset + 1;
+            while right_offset < member_count {
+                let right = members[right_offset];
+                if needs_ordering(&infos[left], &infos[right], &ops[left], &ops[right]) {
+                    add_edge(&mut outgoing, &mut in_degree, left, right);
+                }
+                right_offset += 1;
+            }
+            left_offset += 1;
+        }
+        if let Some(pred) = interval.predecessor {
+            for &member in members {
+                add_edge(&mut outgoing, &mut in_degree, pred, member);
             }
         }
     }
@@ -481,9 +526,7 @@ fn order_ops(ops: Vec<RenderGraphOp>) -> Vec<RenderGraphOp> {
     }
 
     if ordered_indices.len() != ops.len() {
-        let mut fallback = ops;
-        fallback.sort_by_key(|op| op.sequence_index);
-        return fallback;
+        return fallback_by_sequence(ops);
     }
 
     let mut ops = ops;
@@ -603,7 +646,7 @@ fn needs_ordering(
     left_op: &RenderGraphOp,
     right_op: &RenderGraphOp,
 ) -> bool {
-    if left.category == OpCategory::StateChange || right.category == OpCategory::StateChange {
+    if is_state_change(left_op) || is_state_change(right_op) {
         return true;
     }
 
@@ -690,11 +733,7 @@ fn scene_write_rect(op: &RenderGraphOp) -> Option<PxRect> {
 fn sample_region_rect(region: SampleRegion, position: PxPosition, size: PxSize) -> PxRect {
     match region {
         SampleRegion::Global => PxRect::new(Px::ZERO, Px::ZERO, Px::MAX, Px::MAX),
-        SampleRegion::PaddedLocal(_) => {
-            // Use component bounds to avoid padded sampling regions forcing
-            // dependencies.
-            PxRect::from_position_size(position, size)
-        }
+        SampleRegion::PaddedLocal(padding) => padded_rect(position, size, padding),
         SampleRegion::Absolute(rect) => rect,
     }
 }
@@ -709,9 +748,301 @@ fn draw_region_rect(region: DrawRegion, position: PxPosition, size: PxSize) -> P
 
 fn padded_rect(position: PxPosition, size: PxSize, padding: crate::PaddingRect) -> PxRect {
     PxRect::new(
-        position.x - padding.left,
-        position.y - padding.top,
+        position.x_px() - padding.left,
+        position.y_px() - padding.top,
         size.width + padding.left + padding.right,
         size.height + padding.top + padding.bottom,
     )
+}
+
+fn is_state_change(op: &RenderGraphOp) -> bool {
+    matches!(
+        op.command,
+        Command::Composite(_) | Command::ClipPush(_) | Command::ClipPop
+    )
+}
+
+fn sequence_order(ops: &[RenderGraphOp]) -> Vec<usize> {
+    let mut by_sequence: Vec<usize> = (0..ops.len()).collect();
+    by_sequence.sort_by_key(|idx| ops[*idx].sequence_index);
+    by_sequence
+}
+
+fn fallback_by_sequence(mut ops: Vec<RenderGraphOp>) -> Vec<RenderGraphOp> {
+    ops.sort_by_key(|op| op.sequence_index);
+    ops
+}
+
+struct ClipInterval {
+    start: usize,
+    end: usize,
+    predecessor: Option<usize>,
+}
+
+fn clip_intervals(ops: &[RenderGraphOp], by_sequence: &[usize]) -> Option<Vec<ClipInterval>> {
+    let mut intervals = Vec::new();
+    let mut stack_start: Vec<usize> = vec![0];
+    let mut stack_pred: Vec<Option<usize>> = vec![None];
+
+    for (cursor, &idx) in by_sequence.iter().enumerate() {
+        match &ops[idx].command {
+            Command::ClipPush(_) => {
+                close_open_span(&mut intervals, &stack_start, &stack_pred, cursor);
+                stack_start.push(cursor + 1);
+                stack_pred.push(Some(idx));
+            }
+            Command::ClipPop => {
+                if stack_start.len() <= 1 {
+                    return None;
+                }
+                let start = stack_start.pop().expect("clip stack checked above");
+                let predecessor = stack_pred.pop().expect("clip stack checked above");
+                if cursor > start {
+                    intervals.push(ClipInterval {
+                        start,
+                        end: cursor,
+                        predecessor,
+                    });
+                }
+                let pop_pred = if cursor > start {
+                    Some(by_sequence[cursor - 1])
+                } else {
+                    predecessor
+                };
+                intervals.push(ClipInterval {
+                    start: cursor,
+                    end: cursor + 1,
+                    predecessor: pop_pred,
+                });
+                let parent = stack_start.len() - 1;
+                stack_start[parent] = cursor + 1;
+                stack_pred[parent] = Some(idx);
+            }
+            Command::Composite(_) => {
+                close_open_span(&mut intervals, &stack_start, &stack_pred, cursor);
+                let parent = stack_start.len() - 1;
+                intervals.push(ClipInterval {
+                    start: cursor,
+                    end: cursor + 1,
+                    predecessor: stack_pred[parent],
+                });
+                stack_start[parent] = cursor + 1;
+                stack_pred[parent] = Some(idx);
+            }
+            _ => {}
+        }
+    }
+
+    if stack_start.len() != 1 {
+        return None;
+    }
+    close_open_span(&mut intervals, &stack_start, &stack_pred, by_sequence.len());
+    Some(intervals)
+}
+
+fn close_open_span(
+    intervals: &mut Vec<ClipInterval>,
+    stack_start: &[usize],
+    stack_pred: &[Option<usize>],
+    cursor: usize,
+) {
+    let parent = stack_start.len() - 1;
+    let start = stack_start[parent];
+    if cursor > start {
+        intervals.push(ClipInterval {
+            start,
+            end: cursor,
+            predecessor: stack_pred[parent],
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        PaddingRect, Px, PxPosition, PxSize, SampleRegion, renderer::drawer::command::DrawCommand,
+    };
+
+    #[derive(Clone)]
+    struct ProbeDraw {
+        id: u32,
+        sample: Option<SampleRegion>,
+    }
+
+    impl DrawCommand for ProbeDraw {
+        fn sample_region(&self) -> Option<SampleRegion> {
+            self.sample
+        }
+
+        fn apply_opacity(&mut self, _opacity: f32) {}
+    }
+
+    fn draw_op(id: u32, sequence: usize, x: i32, y: i32, w: i32, h: i32) -> RenderGraphOp {
+        RenderGraphOp {
+            command: Command::Draw(Box::new(ProbeDraw { id, sample: None })),
+            type_id: TypeId::of::<ProbeDraw>(),
+            read: None,
+            write: Some(RenderResourceId::SceneColor),
+            deps: SmallVec::new(),
+            size: PxSize::new(Px::new(w), Px::new(h)),
+            position: PxPosition::new(Px::new(x), Px::new(y)),
+            opacity: 1.0,
+            sequence_index: sequence,
+        }
+    }
+
+    fn padded_sample_op(
+        id: u32,
+        sequence: usize,
+        x: i32,
+        y: i32,
+        w: i32,
+        h: i32,
+        pad: i32,
+    ) -> RenderGraphOp {
+        let mut op = draw_op(id, sequence, x, y, w, h);
+        if let Command::Draw(command) = &mut op.command {
+            let probe = command.downcast_mut::<ProbeDraw>().expect("probe draw");
+            probe.sample = Some(SampleRegion::PaddedLocal(PaddingRect::uniform(Px::new(
+                pad,
+            ))));
+        }
+        op.read = Some(RenderResourceId::SceneColor);
+        op
+    }
+
+    fn clip_push(sequence: usize) -> RenderGraphOp {
+        RenderGraphOp {
+            command: Command::ClipPush(PxRect::new(Px::ZERO, Px::ZERO, Px::new(10), Px::new(10))),
+            type_id: TypeId::of::<Command>(),
+            read: None,
+            write: None,
+            deps: SmallVec::new(),
+            size: PxSize::ZERO,
+            position: PxPosition::ZERO,
+            opacity: 1.0,
+            sequence_index: sequence,
+        }
+    }
+
+    fn clip_pop(sequence: usize) -> RenderGraphOp {
+        RenderGraphOp {
+            command: Command::ClipPop,
+            type_id: TypeId::of::<Command>(),
+            read: None,
+            write: None,
+            deps: SmallVec::new(),
+            size: PxSize::ZERO,
+            position: PxPosition::ZERO,
+            opacity: 1.0,
+            sequence_index: sequence,
+        }
+    }
+
+    fn ordering_edge_count(ops: &[RenderGraphOp]) -> usize {
+        let infos: Vec<OpInfo> = ops.iter().map(OpInfo::new).collect();
+        let by_sequence = sequence_order(ops);
+        let intervals = clip_intervals(ops, &by_sequence).expect("closed clips");
+        let mut outgoing: Vec<SmallVec<[usize; 4]>> = vec![SmallVec::new(); ops.len()];
+        let mut in_degree = vec![0usize; ops.len()];
+        for interval in &intervals {
+            let members = &by_sequence[interval.start..interval.end];
+            let member_count = members.len();
+            let mut left_offset = 0;
+            while left_offset < member_count {
+                let left = members[left_offset];
+                let mut right_offset = left_offset + 1;
+                while right_offset < member_count {
+                    let right = members[right_offset];
+                    if needs_ordering(&infos[left], &infos[right], &ops[left], &ops[right]) {
+                        add_edge(&mut outgoing, &mut in_degree, left, right);
+                    }
+                    right_offset += 1;
+                }
+                left_offset += 1;
+            }
+            if let Some(pred) = interval.predecessor {
+                for &member in members {
+                    add_edge(&mut outgoing, &mut in_degree, pred, member);
+                }
+            }
+        }
+        outgoing.iter().map(SmallVec::len).sum()
+    }
+
+    fn legacy_state_change_edges(ops: &[RenderGraphOp]) -> usize {
+        let count = ops.len();
+        count.saturating_mul(count.saturating_sub(1)) / 2
+    }
+
+    fn probe_id(op: &RenderGraphOp) -> u32 {
+        match &op.command {
+            Command::Draw(command) => command.downcast_ref::<ProbeDraw>().expect("probe").id,
+            _ => u32::MAX,
+        }
+    }
+
+    #[test]
+    fn disjoint_clip_siblings_drop_cross_edges_but_keep_overlap_order() {
+        let mut ops = Vec::new();
+        let mut sequence = 0usize;
+        for clip in 0..8 {
+            ops.push(clip_push(sequence));
+            sequence += 1;
+            let x = (clip as i32) * 100;
+            ops.push(draw_op(clip * 2, sequence, x, 0, 20, 20));
+            sequence += 1;
+            ops.push(draw_op(clip * 2 + 1, sequence, x + 5, 5, 20, 20));
+            sequence += 1;
+            ops.push(clip_pop(sequence));
+            sequence += 1;
+        }
+
+        let edges = ordering_edge_count(&ops);
+        let legacy = legacy_state_change_edges(&ops);
+        assert!(
+            edges < legacy / 4,
+            "clip intervals should cut edges: {edges} vs legacy {legacy}"
+        );
+
+        let ordered = order_ops(ops);
+        let ids: Vec<u32> = ordered
+            .iter()
+            .map(probe_id)
+            .filter(|id| *id != u32::MAX)
+            .collect();
+        assert_eq!(ids, (0..16).collect::<Vec<_>>());
+    }
+
+    #[test]
+    fn padded_local_sampling_keeps_padding_overlap() {
+        let left = padded_sample_op(1, 0, 0, 0, 10, 10, 8);
+        let right = draw_op(2, 1, 14, 0, 10, 10);
+        let infos = [OpInfo::new(&left), OpInfo::new(&right)];
+        let read = infos[0].read_rect.expect("padded read rect");
+        assert_eq!(read.x, Px::new(-8));
+        assert_eq!(read.width, Px::new(26));
+        assert!(
+            scene_conflict(&infos[0], &infos[1]),
+            "padding overlap must still order the later draw"
+        );
+
+        let ordered = order_ops(vec![left, right]);
+        assert_eq!(probe_id(&ordered[0]), 1);
+        assert_eq!(probe_id(&ordered[1]), 2);
+    }
+
+    #[test]
+    fn unclosed_clip_falls_back_to_sequence() {
+        let ops = vec![
+            clip_push(0),
+            draw_op(7, 1, 0, 0, 10, 10),
+            draw_op(8, 2, 0, 0, 10, 10),
+        ];
+        let ordered = order_ops(ops);
+        assert_eq!(probe_id(&ordered[1]), 7);
+        assert_eq!(probe_id(&ordered[2]), 8);
+        assert!(matches!(ordered[0].command, Command::ClipPush(_)));
+    }
 }

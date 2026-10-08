@@ -7,7 +7,7 @@ use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
     ParentConstraint, Px, PxPosition,
     accesskit::Role,
-    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, layout},
     receive_frame_nanos, remember, tessera,
     time::Instant,
     use_context,
@@ -46,8 +46,8 @@ struct LinearProgressLayout {
     animation_cycle: Option<f32>,
 }
 
-impl LayoutPolicy for LinearProgressLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for LinearProgressLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let (self_width, self_height) = resolve_linear_size(input.parent_constraint());
         let is_butt = self.stroke_cap.effective_is_butt(self_width, self_height);
@@ -77,11 +77,11 @@ impl LayoutPolicy for LinearProgressLayout {
                 linear_segment_bounds(0.0, progress, self_width, self_height, is_butt)
             {
                 let constraint = Constraint::new(w, child_height);
-                indicator.measure(&constraint)?;
+                indicator.measure(input, &constraint)?;
                 result.place_child(indicator, PxPosition::new(x, Px(0)));
             } else {
                 let constraint = Constraint::new(Px(0), child_height);
-                indicator.measure(&constraint)?;
+                indicator.measure(input, &constraint)?;
                 result.place_child(indicator, PxPosition::new(Px(0), Px(0)));
             }
 
@@ -90,18 +90,18 @@ impl LayoutPolicy for LinearProgressLayout {
                     linear_segment_bounds(track_start, 1.0, self_width, self_height, is_butt)
             {
                 let constraint = Constraint::new(w, child_height);
-                track.measure(&constraint)?;
+                track.measure(input, &constraint)?;
                 result.place_child(track, PxPosition::new(x, Px(0)));
             } else {
                 let constraint = Constraint::new(Px(0), child_height);
-                track.measure(&constraint)?;
+                track.measure(input, &constraint)?;
                 result.place_child(track, PxPosition::new(Px(0), Px(0)));
             }
 
             if let Some(stop) = stop_id {
                 let (pos, stop_size) = stop_indicator_bounds(self_width, self_height);
                 let constraint = Constraint::new(stop_size, stop_size);
-                stop.measure(&constraint)?;
+                stop.measure(input, &constraint)?;
                 result.place_child(stop, pos);
             }
         } else {
@@ -117,7 +117,7 @@ impl LayoutPolicy for LinearProgressLayout {
             let line2 = children[3];
             let track_after = children[4];
 
-            let mut set_segment = |child: tessera_ui::layout::LayoutChild<'_>,
+            let mut set_segment = |child: tessera_ui::layout::LayoutChild,
                                    start: f32,
                                    end: f32|
              -> Result<(), MeasurementError> {
@@ -125,11 +125,11 @@ impl LayoutPolicy for LinearProgressLayout {
                     linear_segment_bounds(start, end, self_width, self_height, is_butt)
                 {
                     let constraint = Constraint::new(w, child_height);
-                    child.measure(&constraint)?;
+                    child.measure(input, &constraint)?;
                     result.place_child(child, PxPosition::new(x, Px(0)));
                 } else {
                     let constraint = Constraint::new(Px(0), child_height);
-                    child.measure(&constraint)?;
+                    child.measure(input, &constraint)?;
                     result.place_child(child, PxPosition::new(Px(0), Px(0)));
                 }
                 Ok(())
@@ -205,8 +205,8 @@ struct CircularProgressLayout {
     animation_start: Instant,
 }
 
-impl LayoutPolicy for CircularProgressLayout {
-    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for CircularProgressLayout {
+    fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let diameter_px = self.diameter.to_px();
         Ok(LayoutResult::new(ComputedData {
             width: diameter_px,
@@ -215,8 +215,13 @@ impl LayoutPolicy for CircularProgressLayout {
     }
 }
 
-impl RenderPolicy for CircularProgressLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for CircularProgressLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         let diameter_px = self.diameter.to_px();
         let stroke_px = self.stroke_width.to_px();
 
@@ -306,6 +311,7 @@ impl RenderPolicy for CircularProgressLayout {
                     });
             }
         }
+        content.draw(input);
     }
 }
 
@@ -602,7 +608,7 @@ pub fn linear_progress_indicator(
 
         layout()
             .modifier(Modifier::new().semantics(semantics))
-            .layout_policy(LinearProgressLayout {
+            .policy(LinearProgressLayout {
                 progress,
                 stroke_cap,
                 gap_size,
@@ -812,8 +818,8 @@ pub fn circular_progress_indicator(
     };
     layout()
         .modifier(Modifier::new().semantics(semantics))
-        .layout_policy(policy.clone())
-        .render_policy(policy);
+        .policy(policy.clone())
+        .draw(policy);
 }
 
 /// # progress

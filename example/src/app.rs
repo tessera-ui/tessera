@@ -16,7 +16,7 @@ use tessera_ui::{Dp, Modifier, State, remember, tessera};
 use crate::pages::{
     animation::AnimationPageDestination, basic_components::BasicComponentsPageDestination,
     custom_shader::CustomShaderPageDestination, glass_components::GlassComponentsPageDestination,
-    home::HomePageDestination,
+    home::HomePageDestination, material_components::MaterialComponentsPageDestination,
 };
 
 #[tessera]
@@ -104,6 +104,15 @@ pub fn app() {
                                         nav_item(
                                             "Basic Components",
                                             BasicComponentsPageDestination {},
+                                            nav_controller,
+                                            side_sheet_controller,
+                                        );
+
+                                        spacer().modifier(Modifier::new().height(Dp(8.0)));
+
+                                        nav_item(
+                                            "Material Components",
+                                            MaterialComponentsPageDestination {},
                                             nav_controller,
                                             side_sheet_controller,
                                         );

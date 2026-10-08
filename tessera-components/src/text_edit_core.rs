@@ -19,8 +19,6 @@
 //! management and [`text_edit_core()`] for rendering and layout within a
 //! component tree.
 
-mod cursor;
-
 use std::ops::Range;
 
 use glyphon::{
@@ -31,21 +29,48 @@ use tessera_platform::clipboard;
 use tessera_ui::{
     CallbackWith, Color, ComputedData, Dp, FocusRequester, LayoutResult, MeasurementError, Px,
     PxPosition, State, current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, layout},
     receive_frame_nanos, tessera,
     time::Instant,
     winit,
 };
 use winit::keyboard::NamedKey;
 
-use crate::{
-    pipelines::text::{
+use crate::pipelines::{
+    shape::command::ShapeCommand,
+    text::{
         command::{TextCommand, TextConstraint},
         pipeline::{TextData, write_font_system},
     },
-    selection_highlight_rect::selection_highlight_rect,
-    text_edit_core::cursor::CURSOR_WIDRH,
 };
+
+/// Width of the caret drawn by the text editor in device-independent pixels.
+const CURSOR_WIDTH: Dp = Dp(2.5);
+
+fn push_rect(fragment: &mut tessera_ui::RenderFragment, rect: &RectDef, color: Color) {
+    if rect.width <= Px::ZERO || rect.height <= Px::ZERO {
+        return;
+    }
+    let index = fragment.push_draw_command(ShapeCommand::Rect {
+        color,
+        corner_radii: glam::Vec4::ZERO.into(),
+        corner_g2: [3.0; 4],
+    });
+    if let Some(op) = fragment.ops_mut().get_mut(index as usize) {
+        op.position_override = Some(PxPosition::new(rect.x, rect.y));
+        op.size_override = Some(tessera_ui::PxSize::new(rect.width, rect.height));
+    }
+}
+
+fn push_highlight_rects(
+    fragment: &mut tessera_ui::RenderFragment,
+    rects: &[RectDef],
+    color: Color,
+) {
+    for rect in rects {
+        push_rect(fragment, rect, color);
+    }
+}
 
 /// Display-only text transform output with offset mapping between raw and
 /// transformed content.
@@ -144,24 +169,15 @@ pub type DisplayTransform = CallbackWith<String, TransformedText>;
 
 type CachedLayout = (Vec<RectDef>, Vec<RectDef>, Option<RectDef>, ComputedData);
 
-#[derive(Clone)]
-struct RawEditorSnapshot {
-    buffer: glyphon::Buffer,
-    cursor: Cursor,
-    selection: Option<(Cursor, Cursor)>,
-}
-
 struct DerivedGeometryInput {
     scroll_horizontal: Px,
     cursor_offset: usize,
     selection: Option<TextSelection>,
     composition_range: Option<Range<usize>>,
-    raw_editor: RawEditorSnapshot,
     raw_composition: Option<(Cursor, Cursor)>,
 }
 
 struct PointerActionContext<'a> {
-    raw_editor: RawEditorSnapshot,
     raw_text: &'a str,
     cursor_offset: usize,
     selection: Option<TextSelection>,
@@ -480,6 +496,14 @@ struct TextEditState {
     text_color: Color,
     cursor_color: Color,
     single_line: bool,
+    pending_preview: Option<PendingPreview>,
+}
+
+struct PendingPreview {
+    action: glyphon::Action,
+    editor: glyphon::Editor<'static>,
+    text: String,
+    selection: TextSelection,
 }
 
 impl TextEditState {
@@ -599,13 +623,29 @@ impl TextEditState {
         new_editor
     }
 
-    fn preview_action_result(&self, action: glyphon::Action) -> PreviewEditResult {
+    fn preview_action_result(&mut self, action: glyphon::Action) -> PreviewEditResult {
+        if let Some(preview) = self.pending_preview.as_ref()
+            && preview.action == action
+        {
+            return PreviewEditResult {
+                text: preview.text.clone(),
+                selection: preview.selection.clone(),
+            };
+        }
+
         let mut editor = self.clone_owned_editor();
         editor.action(&mut write_font_system(), action);
-        PreviewEditResult {
+        let preview = PreviewEditResult {
             text: editor_content(&editor),
             selection: editor_selection(&editor),
-        }
+        };
+        self.pending_preview = Some(PendingPreview {
+            action,
+            editor,
+            text: preview.text.clone(),
+            selection: preview.selection.clone(),
+        });
+        preview
     }
 
     fn preview_replace_result(
@@ -624,7 +664,14 @@ impl TextEditState {
         }
     }
 
+    fn commit_previewed_action(&mut self) {
+        if let Some(preview) = self.pending_preview.take() {
+            self.editor = preview.editor;
+        }
+    }
+
     fn apply_action(&mut self, action: glyphon::Action) {
+        self.pending_preview = None;
         self.editor.action(&mut write_font_system(), action);
     }
 
@@ -664,7 +711,9 @@ impl TextEditState {
         self.editor
             .with_buffer(|buffer| (buffer.metrics(), buffer.scroll()))
     }
-
+    fn with_buffer<R>(&self, f: impl FnOnce(&glyphon::Buffer) -> R) -> R {
+        self.editor.with_buffer(f)
+    }
     fn last_line_index(&self) -> usize {
         self.editor
             .with_buffer(|buffer| buffer.lines.len().saturating_sub(1))
@@ -731,6 +780,32 @@ impl TextEditState {
         })
     }
 
+    fn has_horizontal_overflow(&mut self) -> bool {
+        self.editor.with_buffer_mut(|buffer| {
+            let viewport_width = buffer.size().0.unwrap_or(0.0);
+            if viewport_width <= f32::EPSILON {
+                return false;
+            }
+            let content_width = buffer
+                .layout_runs()
+                .fold(0.0f32, |width, run| width.max(run.line_w));
+            content_width - viewport_width > f32::EPSILON
+        })
+    }
+
+    fn has_vertical_overflow(&mut self) -> bool {
+        self.editor.with_buffer_mut(|buffer| {
+            let viewport_height = buffer.size().1.unwrap_or(0.0);
+            if viewport_height <= f32::EPSILON {
+                return false;
+            }
+            let content_height = buffer.layout_runs().fold(0.0f32, |height, run| {
+                height.max(run.line_top + run.line_height)
+            });
+            content_height - viewport_height > f32::EPSILON
+        })
+    }
+
     fn scroll_vertical_by(&mut self, delta: f32) {
         self.editor.action(
             &mut write_font_system(),
@@ -754,14 +829,6 @@ impl TextEditState {
                 .map(|(next_cursor, _)| next_cursor)
         })?;
         Some(self.cursor_to_text_offset(next_cursor))
-    }
-
-    fn buffer_clone(&self) -> glyphon::Buffer {
-        match self.editor.buffer_ref() {
-            glyphon::cosmic_text::BufferRef::Owned(buffer) => buffer.clone(),
-            glyphon::cosmic_text::BufferRef::Borrowed(buffer) => (**buffer).to_owned(),
-            glyphon::cosmic_text::BufferRef::Arc(buffer) => (**buffer).clone(),
-        }
     }
 
     fn set_text_and_selection(&mut self, text: &str, selection: TextSelection) {
@@ -834,7 +901,9 @@ impl TextSelectionState {
             let time_diff = timestamp.duration_since(last_time).as_millis();
             let distance = (position.x - last_pos.x).abs() + (position.y - last_pos.y).abs();
 
-            if time_diff <= DOUBLE_CLICK_TIME_MS && distance <= CLICK_DISTANCE_THRESHOLD.abs() {
+            if time_diff <= DOUBLE_CLICK_TIME_MS
+                && distance <= CLICK_DISTANCE_THRESHOLD.abs() as f32
+            {
                 self.click_count += 1;
                 match self.click_count {
                     2 => ClickType::Double,
@@ -954,6 +1023,7 @@ impl TextSelectionState {
         })
     }
 
+    #[cfg(test)]
     fn selection_cursor_range(
         &self,
         selection: TextSelection,
@@ -1221,6 +1291,10 @@ impl TextLayoutState {
         &self.snapshot.composition_rects
     }
 
+    fn cursor_rect(&self) -> Option<RectDef> {
+        self.snapshot.cursor_rect.clone()
+    }
+
     fn ime_rect(&self) -> Option<RectDef> {
         self.snapshot.ime_rect.clone()
     }
@@ -1287,12 +1361,12 @@ impl TextLayoutState {
     fn set_text_snapshot(
         &mut self,
         cache_key: TextLayoutCacheKey,
-        buffer: glyphon::Buffer,
+        buffer: Option<glyphon::Buffer>,
         transformed_text: Option<TransformedText>,
         text_data: TextData,
     ) {
         self.snapshot.text_cache_key = Some(cache_key);
-        self.snapshot.buffer = Some(buffer);
+        self.snapshot.buffer = buffer;
         self.snapshot.transformed_text = transformed_text;
         self.snapshot.text_data = Some(text_data);
         self.reset_geometry_cache();
@@ -1301,7 +1375,7 @@ impl TextLayoutState {
     fn set_text_snapshot_for_constraint(
         &mut self,
         constraint: &TextConstraint,
-        buffer: glyphon::Buffer,
+        buffer: Option<glyphon::Buffer>,
         transformed_text: Option<TransformedText>,
         text_data: TextData,
     ) {
@@ -1311,14 +1385,6 @@ impl TextLayoutState {
             transformed_text,
             text_data,
         );
-    }
-
-    fn buffer(&self) -> Option<glyphon::Buffer> {
-        self.snapshot.buffer.clone()
-    }
-
-    fn buffer_or(&self, fallback_buffer: glyphon::Buffer) -> glyphon::Buffer {
-        self.buffer().unwrap_or(fallback_buffer)
     }
 
     fn transformed_text(&self) -> Option<&TransformedText> {
@@ -1359,7 +1425,7 @@ impl TextLayoutState {
         cursor_offset: usize,
         selection: Option<TextSelection>,
     ) -> Option<(glyphon::Editor<'static>, TransformedText)> {
-        let buffer = self.buffer()?;
+        let buffer = self.snapshot.buffer.clone()?;
         let transformed_text = self.cloned_transformed_text()?;
         let cursor =
             text_offset_to_cursor_in_buffer(&buffer, transformed_text.map_from_raw(cursor_offset));
@@ -1385,23 +1451,18 @@ impl TextLayoutState {
         ))
     }
 
-    fn raw_layout_editor(
+    fn derived_geometry(
         &self,
-        fallback_buffer: glyphon::Buffer,
-        cursor: Cursor,
-        selection: Option<(Cursor, Cursor)>,
-    ) -> glyphon::Editor<'static> {
-        build_display_editor(self.buffer_or(fallback_buffer), cursor, selection)
-    }
-
-    fn derived_geometry(&self, input: DerivedGeometryInput) -> Option<DerivedLayoutGeometry> {
+        input: DerivedGeometryInput,
+        raw_editor: &glyphon::Editor<'_>,
+    ) -> Option<DerivedLayoutGeometry> {
         let DerivedGeometryInput {
             scroll_horizontal,
             cursor_offset,
             selection,
             composition_range,
-            raw_editor,
             raw_composition,
+            ..
         } = input;
 
         if let Some((display_editor, transformed_text)) =
@@ -1427,12 +1488,10 @@ impl TextLayoutState {
             });
         }
 
-        let raw_editor =
-            self.raw_layout_editor(raw_editor.buffer, raw_editor.cursor, raw_editor.selection);
         let composition_rects = raw_editor
             .with_buffer(|buffer| compute_composition_rects_for_range(buffer, raw_composition));
         Some(DerivedLayoutGeometry {
-            selection_rects: compute_selection_rects(&raw_editor),
+            selection_rects: compute_selection_rects(raw_editor),
             composition_rects,
             cursor_position: raw_editor.cursor_position(),
             scroll_horizontal,
@@ -1451,16 +1510,8 @@ impl TextLayoutState {
         Some((transformed_text, hit_offset))
     }
 
-    fn raw_hit_offset(
-        &self,
-        fallback_buffer: glyphon::Buffer,
-        cursor: Cursor,
-        selection: Option<(Cursor, Cursor)>,
-        x: i32,
-        y: i32,
-    ) -> Option<usize> {
-        let editor = self.raw_layout_editor(fallback_buffer, cursor, selection);
-        editor_hit_offset(&editor, x, y)
+    fn raw_hit_offset(editor: &glyphon::Editor<'_>, x: i32, y: i32) -> Option<usize> {
+        editor_hit_offset(editor, x, y)
     }
 
     fn display_motion_offsets(
@@ -1590,21 +1641,14 @@ impl TextLayoutState {
     }
 
     fn raw_drag_selection(
-        &self,
+        editor: &glyphon::Editor<'_>,
         origin: Range<usize>,
-        raw_editor: &RawEditorSnapshot,
         text: &str,
         mode: DragSelectionMode,
         x: i32,
         y: i32,
     ) -> Option<TextSelection> {
-        let hit_offset = self.raw_hit_offset(
-            raw_editor.buffer.clone(),
-            raw_editor.cursor,
-            raw_editor.selection,
-            x,
-            y,
-        )?;
+        let hit_offset = Self::raw_hit_offset(editor, x, y)?;
         if matches!(mode, DragSelectionMode::Character) {
             return (hit_offset != origin.start).then_some(TextSelection {
                 start: origin.start,
@@ -1620,8 +1664,7 @@ impl TextLayoutState {
     }
 
     fn raw_pointer_selection(
-        &self,
-        raw_editor: &RawEditorSnapshot,
+        editor: &glyphon::Editor<'_>,
         text: &str,
         action: glyphon::Action,
     ) -> Option<TextSelection> {
@@ -1629,13 +1672,7 @@ impl TextLayoutState {
             glyphon::Action::DoubleClick { x, y } | glyphon::Action::TripleClick { x, y } => (x, y),
             _ => return None,
         };
-        let hit_offset = self.raw_hit_offset(
-            raw_editor.buffer.clone(),
-            raw_editor.cursor,
-            raw_editor.selection,
-            x,
-            y,
-        )?;
+        let hit_offset = Self::raw_hit_offset(editor, x, y)?;
         let target = match action {
             glyphon::Action::DoubleClick { .. } => word_range_at_offset(text, hit_offset)?,
             glyphon::Action::TripleClick { .. } => line_range_at_offset(text, hit_offset),
@@ -1681,15 +1718,19 @@ impl TextLayoutState {
         })
     }
 
-    fn pointer_action_outcome(&self, context: PointerActionContext<'_>) -> PointerActionOutcome {
+    fn pointer_action_outcome(
+        &self,
+        editor: &glyphon::Editor<'_>,
+        context: PointerActionContext<'_>,
+    ) -> PointerActionOutcome {
         let PointerActionContext {
-            raw_editor,
             raw_text,
             cursor_offset,
             selection,
             drag_selection_mode,
             drag_origin_selection,
             action,
+            ..
         } = context;
 
         if self.cloned_transformed_text().is_some() {
@@ -1732,12 +1773,12 @@ impl TextLayoutState {
         if let glyphon::Action::Drag { x, y } = action
             && let Some(origin) = drag_origin_selection
             && let Some(selection) =
-                self.raw_drag_selection(origin, &raw_editor, raw_text, drag_selection_mode, x, y)
+                Self::raw_drag_selection(editor, origin, raw_text, drag_selection_mode, x, y)
         {
             return PointerActionOutcome::Selection(selection);
         }
 
-        if let Some(selection) = self.raw_pointer_selection(&raw_editor, raw_text, action) {
+        if let Some(selection) = Self::raw_pointer_selection(editor, raw_text, action) {
             return PointerActionOutcome::Selection(selection);
         }
 
@@ -1871,6 +1912,10 @@ impl TextEditorController {
         self.layout_state.text_data()
     }
 
+    fn current_cursor_rect(&self) -> Option<RectDef> {
+        self.layout_state.cursor_rect()
+    }
+
     fn cached_layout(&self, constraint: &TextConstraint) -> Option<CachedLayout> {
         self.layout_state.cached_geometry_for_constraint(constraint)
     }
@@ -1938,6 +1983,7 @@ impl TextEditorController {
                 text_color,
                 cursor_color,
                 single_line: false,
+                pending_preview: None,
             },
             selection_state: TextSelectionState {
                 selection_color,
@@ -1972,29 +2018,38 @@ impl TextEditorController {
         self.edit_state
             .sync_size_and_shape_until_scroll(&constraint);
 
-        let (text_buffer, transformed_text) =
+        let (display_buffer, transformed_text) =
             if let Some(transform) = self.edit_state.display_transform_ref() {
                 let (metrics, scroll) = self.edit_state.metrics_and_scroll();
                 let content = self.edit_state.text();
-                let transformed_text = transform.call(content);
-                let text_buffer = build_display_buffer(
-                    transformed_text.text(),
-                    self.edit_state.text_color(),
-                    metrics.font_size,
-                    metrics.line_height,
-                    &constraint,
-                    self.wrap_mode(),
-                    scroll,
-                );
-                (text_buffer, Some(transformed_text))
+                let transformed = transform.call(content.clone());
+                if transformed.text() == content {
+                    (None, None)
+                } else {
+                    let text_buffer = build_display_buffer(
+                        transformed.text(),
+                        self.edit_state.text_color(),
+                        metrics.font_size,
+                        metrics.line_height,
+                        &constraint,
+                        self.wrap_mode(),
+                        scroll,
+                    );
+                    (Some(text_buffer), Some(transformed))
+                }
             } else {
-                (self.edit_state.buffer_clone(), None)
+                (None, None)
             };
 
-        let text_data = TextData::from_buffer(text_buffer.clone());
+        let text_data = if let Some(buffer) = display_buffer.as_ref() {
+            TextData::from_buffer(buffer.clone())
+        } else {
+            self.edit_state
+                .with_buffer(|buffer| TextData::from_buffer(buffer.clone()))
+        };
         self.layout_state.set_text_snapshot_for_constraint(
             &constraint,
-            text_buffer,
+            display_buffer,
             transformed_text,
             text_data.clone(),
         );
@@ -2144,6 +2199,36 @@ impl TextEditorController {
         }
     }
 
+    /// Scrolls horizontally by `delta` and returns the consumed amount.
+    ///
+    /// The returned value is the actual change applied in scroll space, so
+    /// callers can hand the remainder to an ancestor scroll container.
+    pub(crate) fn scroll_horizontal_consumed(&mut self, delta: f32) -> f32 {
+        let before = self.scroll_state().horizontal();
+        self.scroll_horizontal_by(delta);
+        self.scroll_state().horizontal() - before
+    }
+
+    /// Scrolls vertically by `delta` and returns the consumed amount.
+    ///
+    /// The returned value is the actual change applied in scroll space; the
+    /// editor engine clamps vertical scrolling to the content extent.
+    pub(crate) fn scroll_vertical_consumed(&mut self, delta: f32) -> f32 {
+        let before = self.scroll_state().vertical();
+        self.scroll_vertical_by(delta);
+        self.scroll_state().vertical() - before
+    }
+
+    /// Returns whether the editor content overflows horizontally.
+    pub(crate) fn has_horizontal_overflow(&mut self) -> bool {
+        self.edit_state.has_horizontal_overflow()
+    }
+
+    /// Returns whether the editor content overflows vertically.
+    pub(crate) fn has_vertical_overflow(&mut self) -> bool {
+        self.edit_state.has_vertical_overflow()
+    }
+
     /// Returns whether a display transform is active.
     pub fn display_transform_active(&self) -> bool {
         self.edit_state.display_transform().is_some()
@@ -2201,32 +2286,22 @@ impl TextEditorController {
         }
     }
 
-    fn current_editor_buffer_clone(&self) -> glyphon::Buffer {
-        self.edit_state.buffer_clone()
-    }
-
     #[cfg(test)]
-    fn current_raw_layout_editor(&self) -> Option<glyphon::Editor<'static>> {
-        Some(self.layout_state.raw_layout_editor(
-            self.current_editor_buffer_clone(),
-            self.edit_state.cursor(),
-            self.selection_cursor_range(),
-        ))
+    fn current_raw_layout_editor(&self) -> &glyphon::Editor<'static> {
+        self.edit_state.editor()
     }
 
     fn current_layout_geometry(&self) -> Option<DerivedLayoutGeometry> {
-        self.layout_state.derived_geometry(DerivedGeometryInput {
-            scroll_horizontal: Px(self.scroll_state.horizontal().round() as i32),
-            cursor_offset: self.cursor_offset(),
-            selection: self.has_selection().then(|| self.selection()),
-            composition_range: self.ime_state.composition_range(),
-            raw_editor: RawEditorSnapshot {
-                buffer: self.current_editor_buffer_clone(),
-                cursor: self.edit_state.cursor(),
-                selection: self.selection_cursor_range(),
+        self.layout_state.derived_geometry(
+            DerivedGeometryInput {
+                scroll_horizontal: Px(self.scroll_state.horizontal().round() as i32),
+                cursor_offset: self.cursor_offset(),
+                selection: self.has_selection().then(|| self.selection()),
+                composition_range: self.ime_state.composition_range(),
+                raw_composition: self.ime_state.composition_cursor_range(&self.edit_state),
             },
-            raw_composition: self.ime_state.composition_cursor_range(&self.edit_state),
-        })
+            self.edit_state.editor(),
+        )
     }
 
     fn apply_cursor_and_selection_offsets(
@@ -2243,21 +2318,17 @@ impl TextEditorController {
 
     pub(crate) fn apply_pointer_action(&mut self, action: glyphon::Action) {
         let text = self.text();
-        match self
-            .layout_state
-            .pointer_action_outcome(PointerActionContext {
-                raw_editor: RawEditorSnapshot {
-                    buffer: self.current_editor_buffer_clone(),
-                    cursor: self.edit_state.cursor(),
-                    selection: self.selection_cursor_range(),
-                },
+        match self.layout_state.pointer_action_outcome(
+            self.edit_state.editor(),
+            PointerActionContext {
                 raw_text: &text,
                 cursor_offset: self.cursor_offset(),
                 selection: self.has_selection().then(|| self.selection()),
                 drag_selection_mode: self.selection_state.drag_selection_mode(),
                 drag_origin_selection: self.selection_state.drag_origin_selection(),
                 action,
-            }) {
+            },
+        ) {
             PointerActionOutcome::Selection(selection) => {
                 self.apply_cursor_and_selection_offsets(selection.end, Some(selection));
             }
@@ -2364,8 +2435,8 @@ impl TextEditorController {
         if let Some((transformed_text, next_offset)) = self.layout_state.display_hit_offset(
             cursor_offset,
             self.has_selection().then(|| selection.clone()),
-            position.x.0,
-            position.y.0,
+            position.x_px().0,
+            position.y_px().0,
         ) {
             let next_offset = transformed_text.map_to_raw(next_offset);
             let next_selection = self.selection_state.extended_selection(
@@ -2377,12 +2448,10 @@ impl TextEditorController {
             return true;
         }
 
-        let Some(next_offset) = self.layout_state.raw_hit_offset(
-            self.current_editor_buffer_clone(),
-            self.edit_state.cursor(),
-            self.selection_cursor_range(),
-            position.x.0,
-            position.y.0,
+        let Some(next_offset) = TextLayoutState::raw_hit_offset(
+            self.edit_state.editor(),
+            position.x_px().0,
+            position.y_px().0,
         ) else {
             return false;
         };
@@ -2623,6 +2692,7 @@ impl TextEditorController {
         self.edit_state.selection()
     }
 
+    #[cfg(test)]
     fn selection_cursor_range(&self) -> Option<(Cursor, Cursor)> {
         self.selection_state
             .selection_cursor_range(self.selection(), &self.edit_state)
@@ -2675,6 +2745,16 @@ impl TextEditorController {
         on_change: CallbackWith<String, String>,
         input_transform: Option<CallbackWith<String, String>>,
     ) {
+        let can_apply_directly = input_transform.is_none() && on_change == CallbackWith::identity();
+        if can_apply_directly {
+            self.clear_composition();
+            self.edit_state.apply_action(action);
+            self.reset_cursor_blink();
+            self.ensure_cursor_visible();
+            self.invalidate_text_layout();
+            return;
+        }
+
         let preview = self.edit_state.preview_action_result(action);
         let raw_content_after_action = preview.text;
         let selection_after_action = preview.selection;
@@ -2688,7 +2768,6 @@ impl TextEditorController {
             &transformed_content,
             selection_after_action.clone(),
         );
-        let raw_action_matches_final = transformed_content == raw_content_after_action;
 
         let new_content = on_change.call(transformed_content.clone());
         let (final_content, final_selection) = if new_content != transformed_content {
@@ -2701,8 +2780,8 @@ impl TextEditorController {
         };
 
         self.clear_composition();
-        if raw_action_matches_final && final_selection == selection_after_action {
-            self.edit_state.apply_action(action);
+        if final_content == raw_content_after_action && final_selection == selection_after_action {
+            self.edit_state.commit_previewed_action();
             self.reset_cursor_blink();
             self.ensure_cursor_visible();
             self.invalidate_text_layout();
@@ -2871,17 +2950,8 @@ impl TextEditorController {
     }
 
     #[cfg(test)]
-    fn snapshot_buffer_scroll(&self) -> Option<glyphon::cosmic_text::Scroll> {
-        self.layout_state
-            .snapshot
-            .buffer
-            .as_ref()
-            .map(|buffer| buffer.scroll())
-    }
-
-    #[cfg(test)]
     fn snapshot_buffer(&self) -> Option<glyphon::Buffer> {
-        self.layout_state.buffer()
+        self.layout_state.snapshot.buffer.clone()
     }
 
     pub(crate) fn invalidate_layout_geometry(&mut self) {
@@ -3248,10 +3318,9 @@ impl PartialEq for TextEditLayout {
     }
 }
 
-impl LayoutPolicy for TextEditLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let mut result = LayoutResult::default();
-        let children = input.children();
+impl tessera_ui::LayoutModifierNode for TextEditLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let result = LayoutResult::default();
         let max_width_pixels: Option<Px> = input.parent_constraint().width().resolve_max();
         let max_height_pixels: Option<Px> = input.parent_constraint().height().resolve_max();
 
@@ -3259,39 +3328,15 @@ impl LayoutPolicy for TextEditLayout {
             max_width: max_width_pixels.map(|px: Px| px.to_f32()),
             max_height: max_height_pixels.map(|px: Px| px.to_f32()),
         };
+        if let Some((_, _, _, computed_data)) =
+            self.controller.with(|c| c.cached_layout(&text_constraint))
+        {
+            return Ok(result.with_size(computed_data));
+        }
+
         let text_data = self
             .controller
             .with_mut(|c| c.text_data(text_constraint.clone()));
-
-        let place_rect_children =
-            |rects: &[RectDef], child_offset: usize, result: &mut LayoutResult| {
-                let child_constraint = input.parent_constraint().without_min();
-                for (index, rect_def) in rects.iter().enumerate() {
-                    if let Some(rect_node) = children.get(child_offset + index).copied() {
-                        rect_node.measure(&child_constraint)?;
-                        result.place_child(rect_node, PxPosition::new(rect_def.x, rect_def.y));
-                    }
-                }
-                Ok::<(), MeasurementError>(())
-            };
-
-        if let Some((selection_rects, composition_rects, cursor_rect, computed_data)) =
-            self.controller.with(|c| c.cached_layout(&text_constraint))
-        {
-            place_rect_children(&selection_rects, 0, &mut result)?;
-            place_rect_children(&composition_rects, selection_rects.len(), &mut result)?;
-
-            if let Some(cursor_rect) = cursor_rect {
-                let cursor_node_index = selection_rects.len() + composition_rects.len();
-                if let Some(cursor_node) = children.get(cursor_node_index).copied() {
-                    let child_constraint = input.parent_constraint().without_min();
-                    cursor_node.measure(&child_constraint)?;
-                    result.place_child(cursor_node, PxPosition::new(cursor_rect.x, cursor_rect.y));
-                }
-            }
-
-            return Ok(result.with_size(computed_data));
-        }
 
         let line_height = self.controller.with(|c| c.line_height());
         let DerivedLayoutGeometry {
@@ -3306,11 +3351,6 @@ impl LayoutPolicy for TextEditLayout {
 
         apply_horizontal_scroll_offset(&mut selection_rects, scroll_horizontal);
         apply_horizontal_scroll_offset(&mut composition_rects, scroll_horizontal);
-        let selection_rects_len = selection_rects.len();
-        let composition_rects_len = composition_rects.len();
-
-        place_rect_children(&selection_rects, 0, &mut result)?;
-        place_rect_children(&composition_rects, selection_rects_len, &mut result)?;
 
         let visible_x1 = max_width_pixels.unwrap_or(Px(i32::MAX));
         let visible_y1 = max_height_pixels.unwrap_or(Px(i32::MAX));
@@ -3319,7 +3359,7 @@ impl LayoutPolicy for TextEditLayout {
         let cursor_rect = cursor_pos_raw.map(|cursor_pos_raw| RectDef {
             x: Px(cursor_pos_raw.0) - scroll_horizontal,
             y: Px(cursor_pos_raw.1),
-            width: CURSOR_WIDRH.to_px(),
+            width: CURSOR_WIDTH.to_px(),
             height: line_height,
         });
         let ime_rect = active_ime_rect(&selection_rects, &composition_rects, cursor_rect.clone());
@@ -3328,7 +3368,7 @@ impl LayoutPolicy for TextEditLayout {
         } else {
             text_data.size[1]
         };
-        let measured_width = Px::from(text_data.size[0]) + CURSOR_WIDRH.to_px();
+        let measured_width = Px::from(text_data.size[0]) + CURSOR_WIDTH.to_px();
         let constrained_width = if self.controller.with(|c| c.single_line()) {
             if let Some(max_width) = max_width_pixels {
                 measured_width.min(Px::from(max_width.abs()))
@@ -3353,30 +3393,58 @@ impl LayoutPolicy for TextEditLayout {
             );
         });
 
-        if let Some(cursor_rect) = cursor_rect {
-            let cursor_node_index = selection_rects_len + composition_rects_len;
-            if let Some(cursor_node) = children.get(cursor_node_index).copied() {
-                let child_constraint = input.parent_constraint().without_min();
-                cursor_node.measure(&child_constraint)?;
-                result.place_child(cursor_node, PxPosition::new(cursor_rect.x, cursor_rect.y));
-            }
-        }
-
         Ok(result.with_size(computed_data))
     }
 }
 
-impl RenderPolicy for TextEditLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for TextEditLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         let mut metadata = input.metadata_mut();
         metadata.set_clips_children(true);
-        if let Some(text_data) = self.controller.with(|c| c.current_text_data()) {
-            let drawable = TextCommand {
+        let focus = self.controller.with(|c| c.focus_handler().clone());
+        let focused = focus.is_focused();
+        let (
+            selection_rects,
+            composition_rects,
+            cursor_rect,
+            selection_color,
+            composition_color,
+            cursor_color,
+            cursor_visible,
+            text_data,
+        ) = self.controller.with(|c| {
+            let elapsed = c
+                .current_frame_nanos()
+                .saturating_sub(c.blink_start_frame_nanos());
+            (
+                c.current_selection_rects().to_vec(),
+                c.current_composition_rects().to_vec(),
+                c.current_cursor_rect(),
+                c.selection_color(),
+                c.cursor_color(),
+                c.cursor_color(),
+                focused && elapsed % 1_000_000_000 < 500_000_000,
+                c.current_text_data(),
+            )
+        });
+        let fragment = metadata.fragment_mut();
+        push_highlight_rects(fragment, &selection_rects, selection_color);
+        push_highlight_rects(fragment, &composition_rects, composition_color);
+        if cursor_visible && let Some(cursor_rect) = cursor_rect {
+            push_rect(fragment, &cursor_rect, cursor_color);
+        }
+        if let Some(text_data) = text_data {
+            fragment.push_draw_command(TextCommand {
                 data: text_data,
                 offset: PxPosition::ZERO,
-            };
-            metadata.fragment_mut().push_draw_command(drawable);
+            });
         }
+        content.draw(input);
     }
 }
 
@@ -3398,65 +3466,24 @@ pub fn text_edit_core(controller: Option<State<TextEditorController>>) {
         controller,
         layout_version,
     };
-    layout()
-        .layout_policy(policy.clone())
-        .render_policy(policy)
-        .child(move || {
-            {
-                let (rect_definitions, color_for_selection) = controller
-                    .with(|c| (c.current_selection_rects().to_vec(), c.selection_color()));
-
-                for def in rect_definitions {
-                    selection_highlight_rect()
-                        .width(def.width)
-                        .height(def.height)
-                        .color(color_for_selection);
-                }
-            }
-
-            {
-                let (rect_definitions, color_for_composition) =
-                    controller.with(|c| (c.current_composition_rects().to_vec(), c.cursor_color()));
-
-                for def in rect_definitions {
-                    selection_highlight_rect()
-                        .width(def.width)
-                        .height(def.height)
-                        .color(color_for_composition);
-                }
-            }
-
-            if controller.with(|c| c.focus_handler().is_focused()) {
-                let frame_nanos = current_frame_nanos();
-                controller.with_mut(|controller| controller.update_frame_nanos(frame_nanos));
-                receive_frame_nanos(move |frame_nanos| {
-                    let is_focused = controller.with_mut(|controller| {
-                        controller.update_frame_nanos(frame_nanos);
-                        controller.focus_handler().is_focused()
-                    });
-                    if is_focused {
-                        tessera_ui::FrameNanosControl::Continue
-                    } else {
-                        tessera_ui::FrameNanosControl::Stop
-                    }
+    layout().policy(policy.clone()).draw(policy).child(move || {
+        let focused = controller.with(|c| c.focus_handler().clone()).is_focused();
+        if focused {
+            let frame_nanos = current_frame_nanos();
+            controller.with_mut(|controller| controller.update_frame_nanos(frame_nanos));
+            receive_frame_nanos(move |frame_nanos| {
+                let is_focused = controller.with_mut(|controller| {
+                    controller.update_frame_nanos(frame_nanos);
+                    controller.focus_handler().is_focused()
                 });
-                let (line_height, blink_start_frame_nanos, frame_nanos, cursor_color) = controller
-                    .with(|c| {
-                        (
-                            c.line_height(),
-                            c.blink_start_frame_nanos(),
-                            c.current_frame_nanos(),
-                            c.cursor_color(),
-                        )
-                    });
-                cursor::cursor(
-                    line_height,
-                    blink_start_frame_nanos,
-                    frame_nanos,
-                    cursor_color,
-                );
-            }
-        });
+                if is_focused {
+                    tessera_ui::FrameNanosControl::Continue
+                } else {
+                    tessera_ui::FrameNanosControl::Stop
+                }
+            });
+        }
+    });
 }
 
 #[cfg(test)]
@@ -3470,6 +3497,68 @@ mod tests {
     use glyphon::{Action as GlyphonAction, Edit as _, cosmic_text::Motion};
     use tessera_ui::winit::keyboard::NamedKey;
     use tessera_ui::{ComputedData, Dp, Px};
+
+    mod layout_reuse {
+        use std::cell::{Cell, RefCell};
+
+        use tessera_ui::{
+            Dp, State,
+            layout::layout,
+            remember, tessera,
+            testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+        };
+
+        use super::super::{TextEditorController, text_edit_core};
+
+        thread_local! {
+            static BUILDS: Cell<usize> = const { Cell::new(0) };
+            static CONTROLLER: RefCell<Option<State<TextEditorController>>> =
+                const { RefCell::new(None) };
+        }
+
+        #[tessera]
+        fn editor_cache_probe() {
+            let controller = remember(|| {
+                let mut controller = TextEditorController::new(Dp(14.0), None);
+                controller.set_text("a");
+                controller
+            });
+            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            layout().child(move || {
+                BUILDS.with(|builds| builds.set(builds.get() + 1));
+                let _ = controller.with(|c| c.layout_version());
+                text_edit_core().controller(controller);
+            });
+        }
+
+        #[test]
+        fn cached_text_measurement_stops_rebuilding_without_edits() {
+            BUILDS.with(|builds| builds.set(0));
+            let mut session = start_layout_test_session(
+                layout_test(|| {
+                    editor_cache_probe();
+                })
+                .viewport_px(400, 100),
+            );
+            for frame in 0..4 {
+                let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            let settled_builds = BUILDS.with(Cell::get);
+            for frame in 4..12 {
+                let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            assert_eq!(BUILDS.with(Cell::get), settled_builds);
+
+            let controller = CONTROLLER.with(|slot| slot.borrow().expect("editor controller"));
+            let initial_width = controller.with(|c| c.current_text_data().unwrap().size[0]);
+            controller.with_mut(|c| c.set_text("a much longer value"));
+            for frame in 12..16 {
+                let _ = pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            assert!(BUILDS.with(Cell::get) > settled_builds);
+            assert!(controller.with(|c| c.current_text_data().unwrap().size[0]) > initial_width);
+        }
+    }
 
     fn controller_with_text(text: &str) -> TextEditorController {
         let mut controller = TextEditorController::new(Dp(14.0), None);
@@ -3566,7 +3655,7 @@ mod tests {
     }
 
     #[test]
-    fn scroll_horizontal_by_reuses_text_layout_cache_and_syncs_snapshot_scroll() {
+    fn scroll_horizontal_by_reuses_text_layout_cache_and_syncs_editor_scroll() {
         let mut controller =
             controller_with_text("hello world hello world hello world hello world");
         controller.set_single_line(true);
@@ -3588,9 +3677,7 @@ mod tests {
             Some(key) if key == text_cache_key
         ));
         assert_eq!(
-            controller
-                .snapshot_buffer_scroll()
-                .expect("layout snapshot buffer should exist"),
+            controller.editor().with_buffer(|buffer| buffer.scroll()),
             controller.scroll()
         );
 
@@ -3599,6 +3686,47 @@ mod tests {
             controller.text_cache_key(),
             Some(key) if key == text_cache_key
         ));
+    }
+
+    #[test]
+    fn horizontal_overflow_reports_and_clamps_consumed_scroll() {
+        let mut controller =
+            controller_with_text("hello world hello world hello world hello world");
+        controller.set_single_line(true);
+        controller.text_data(TextConstraint {
+            max_width: Some(60.0),
+            max_height: Some(40.0),
+        });
+
+        assert!(controller.has_horizontal_overflow());
+        let consumed = controller.scroll_horizontal_consumed(10_000.0);
+        assert!(consumed > 0.0);
+        // At the right edge nothing more is consumed, so an ancestor can take
+        // over.
+        assert_eq!(controller.scroll_horizontal_consumed(10_000.0), 0.0);
+    }
+
+    #[test]
+    fn vertical_overflow_is_detected_for_wrapped_content() {
+        let mut controller = controller_with_text("111\n222\n333\n444\n555\n666\n777\n888");
+        controller.text_data(TextConstraint {
+            max_width: Some(120.0),
+            max_height: Some(20.0),
+        });
+        assert!(controller.has_vertical_overflow());
+    }
+
+    #[test]
+    fn vertical_consumed_scroll_stops_at_the_content_boundary() {
+        let mut controller = controller_with_text("111\n222\n333\n444\n555\n666\n777\n888");
+        controller.text_data(TextConstraint {
+            max_width: Some(120.0),
+            max_height: Some(20.0),
+        });
+        assert!(controller.scroll_vertical_consumed(1_000.0) > 0.0);
+        // The editor engine clamps vertical scroll, so at the bottom nothing
+        // more is consumed and the remainder can go to an ancestor.
+        assert_eq!(controller.scroll_vertical_consumed(1_000.0), 0.0);
     }
 
     #[test]
@@ -3667,9 +3795,7 @@ mod tests {
             max_height: Some(40.0),
         });
 
-        let raw_editor = controller
-            .current_raw_layout_editor()
-            .expect("raw layout editor should exist");
+        let raw_editor = controller.current_raw_layout_editor();
         let anchor = match raw_editor.selection() {
             glyphon::cosmic_text::Selection::Normal(anchor)
             | glyphon::cosmic_text::Selection::Line(anchor)
@@ -4280,9 +4406,7 @@ mod tests {
             max_height: Some(80.0),
         };
         controller.text_data(constraint);
-        let buffer = controller
-            .snapshot_buffer()
-            .expect("raw layout buffer should exist");
+        let buffer = controller.editor().with_buffer(|buffer| buffer.clone());
         let editor = build_display_editor(
             buffer.clone(),
             text_offset_to_cursor_in_buffer(&buffer, "hello".len()),

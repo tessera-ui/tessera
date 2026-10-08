@@ -324,12 +324,12 @@ pub fn button(
     surface()
         .style(style)
         .shape(button_args.shape)
-        .modifier(button_args.modifier.clone().size_in(
-            Some(ButtonDefaults::MIN_WIDTH),
-            None,
-            Some(ButtonDefaults::MIN_HEIGHT),
-            None,
-        ))
+        .modifier(
+            button_args
+                .modifier
+                .clone()
+                .default_min_size(ButtonDefaults::MIN_WIDTH, ButtonDefaults::MIN_HEIGHT),
+        )
         .ripple_color(button_args.ripple_color)
         .content_alignment(Alignment::Center)
         .content_color(content_color)

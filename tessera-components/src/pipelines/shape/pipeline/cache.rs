@@ -241,8 +241,9 @@ impl ShapePipeline {
             return None;
         }
 
-        if let Some(entry) = self.cache.get(&key) {
-            return Some(entry.clone());
+        if self.cache.contains(&key) {
+            self.cache.promote(&key);
+            return self.cache.peek(&key).cloned();
         }
 
         let tracker = self
@@ -260,7 +261,7 @@ impl ShapePipeline {
 
         if tracker.hit_count >= super::CACHE_HEAT_THRESHOLD {
             let entry = Arc::new(self.build_cache_entry(gpu, gpu_queue, command, size));
-            self.cache.put(key, entry.clone());
+            self.cache.put(key, Arc::clone(&entry));
             Some(entry)
         } else {
             None

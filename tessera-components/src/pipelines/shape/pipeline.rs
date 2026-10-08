@@ -15,8 +15,10 @@ use lru::LruCache;
 use tessera_ui::{
     PxPosition, PxSize,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
-    wgpu::{self, include_wgsl, util::DeviceExt},
+    wgpu::{self, include_wgsl},
 };
+
+use crate::pipelines::SharedQuad;
 
 use self::cache::{ShapeCacheKey, ShapeHeatTracker};
 use super::command::ShapeCommand;
@@ -37,12 +39,6 @@ struct ShapeCacheEntry {
     _view: wgpu::TextureView,
     texture_bind_group: wgpu::BindGroup,
     padding: Vec2,
-}
-
-#[repr(C)]
-#[derive(Copy, Clone, PartialEq, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 2],
 }
 
 /// Uniforms for shape rendering pipeline.
@@ -70,8 +66,8 @@ struct ShapeInstances {
 pub struct ShapePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
-    quad_vertex_buffer: wgpu::Buffer,
-    quad_index_buffer: wgpu::Buffer,
+    quad_vertex_buffer: Arc<wgpu::Buffer>,
+    quad_index_buffer: Arc<wgpu::Buffer>,
     sample_count: u32,
     cache_sampler: wgpu::Sampler,
     cache_texture_bind_group_layout: wgpu::BindGroupLayout,
@@ -121,7 +117,7 @@ impl ShapePipeline {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    array_stride: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x2],
                 })],
@@ -154,33 +150,6 @@ impl ShapePipeline {
             }),
             multiview_mask: None,
             cache: pipeline_cache,
-        });
-
-        let quad_vertices = [
-            Vertex {
-                position: [0.0, 0.0],
-            },
-            Vertex {
-                position: [1.0, 0.0],
-            },
-            Vertex {
-                position: [1.0, 1.0],
-            },
-            Vertex {
-                position: [0.0, 1.0],
-            },
-        ];
-        let quad_vertex_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Shape Quad Vertex Buffer"),
-            contents: bytemuck::cast_slice(&quad_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let quad_indices: [u16; 6] = [0, 2, 1, 0, 3, 2];
-        let quad_index_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Shape Quad Index Buffer"),
-            contents: bytemuck::cast_slice(&quad_indices),
-            usage: wgpu::BufferUsages::INDEX,
         });
 
         let cache_sampler = gpu.create_sampler(&wgpu::SamplerDescriptor {
@@ -249,7 +218,7 @@ impl ShapePipeline {
                 module: &cached_shader,
                 entry_point: Some("vs_main"),
                 buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    array_stride: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x2],
                 })],
@@ -284,11 +253,13 @@ impl ShapePipeline {
             cache: pipeline_cache,
         });
 
+        let shared_quad = SharedQuad::get(gpu);
+
         Self {
             pipeline,
             bind_group_layout,
-            quad_vertex_buffer,
-            quad_index_buffer,
+            quad_vertex_buffer: Arc::clone(shared_quad.vertex()),
+            quad_index_buffer: Arc::clone(shared_quad.index()),
             sample_count,
             cache_sampler,
             cache_texture_bind_group_layout,

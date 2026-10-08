@@ -4,6 +4,8 @@
 //!
 //! Draw shadow masks into offscreen textures and composite blurred layers.
 
+use std::sync::Arc;
+
 use encase::{ShaderSize, ShaderType, StorageBuffer, UniformBuffer};
 use glam::Vec4;
 use tessera_ui::{
@@ -12,18 +14,15 @@ use tessera_ui::{
     wgpu::{self, include_wgsl, util::DeviceExt},
 };
 
-use crate::pipelines::shape::{
-    command::{ShapeCommand, rect_to_uniforms},
-    pipeline::ShapeUniforms,
+use crate::pipelines::{
+    SharedQuad,
+    shape::{
+        command::{ShapeCommand, rect_to_uniforms},
+        pipeline::ShapeUniforms,
+    },
 };
 
 use super::command::{ShadowCompositeCommand, ShadowMaskCommand};
-
-#[repr(C)]
-#[derive(Copy, Clone, PartialEq, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 2],
-}
 
 #[derive(PartialEq, ShaderType)]
 struct MaskInstances {
@@ -35,8 +34,8 @@ struct MaskInstances {
 pub struct ShadowMaskPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
-    quad_vertex_buffer: wgpu::Buffer,
-    quad_index_buffer: wgpu::Buffer,
+    quad_vertex_buffer: Arc<wgpu::Buffer>,
+    quad_index_buffer: Arc<wgpu::Buffer>,
 }
 
 impl ShadowMaskPipeline {
@@ -75,7 +74,7 @@ impl ShadowMaskPipeline {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    array_stride: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x2],
                 })],
@@ -110,38 +109,13 @@ impl ShadowMaskPipeline {
             cache: pipeline_cache,
         });
 
-        let quad_vertices = [
-            Vertex {
-                position: [0.0, 0.0],
-            },
-            Vertex {
-                position: [1.0, 0.0],
-            },
-            Vertex {
-                position: [1.0, 1.0],
-            },
-            Vertex {
-                position: [0.0, 1.0],
-            },
-        ];
-        let quad_vertex_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Shadow Mask Quad Vertex Buffer"),
-            contents: bytemuck::cast_slice(&quad_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let quad_indices: [u16; 6] = [0, 2, 1, 0, 3, 2];
-        let quad_index_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Shadow Mask Quad Index Buffer"),
-            contents: bytemuck::cast_slice(&quad_indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let shared_quad = SharedQuad::get(gpu);
 
         Self {
             pipeline,
             bind_group_layout,
-            quad_vertex_buffer,
-            quad_index_buffer,
+            quad_vertex_buffer: Arc::clone(shared_quad.vertex()),
+            quad_index_buffer: Arc::clone(shared_quad.index()),
         }
     }
 
@@ -348,9 +322,9 @@ impl ShadowCompositePipeline {
         uv_size: [f32; 2],
     ) -> CompositeUniforms {
         let rect = [
-            (start_pos.x.0 as f32 / target_size.width.to_f32()) * 2.0 - 1.0
+            (start_pos.x / target_size.width.to_f32()) * 2.0 - 1.0
                 + (size.width.0 as f32 / target_size.width.to_f32()),
-            (start_pos.y.0 as f32 / target_size.height.to_f32()) * -2.0 + 1.0
+            (start_pos.y / target_size.height.to_f32()) * -2.0 + 1.0
                 - (size.height.0 as f32 / target_size.height.to_f32()),
             size.width.0 as f32 / target_size.width.to_f32(),
             size.height.0 as f32 / target_size.height.to_f32(),

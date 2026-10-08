@@ -3,10 +3,7 @@
 //! ## Usage
 //!
 //! Pass one painter value into image-like and icon-like components.
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use tessera_ui::AssetExt;
 use thiserror::Error;
@@ -20,31 +17,19 @@ use crate::{
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum Painter {
     /// Vector content backed by decoded vector geometry.
-    Vector(Arc<ImageVectorData>),
+    Vector(ImageVectorData),
     /// Raster content backed by decoded image pixels.
-    Raster(Arc<ImageData>),
+    Raster(ImageData),
 }
 
 impl From<ImageVectorData> for Painter {
     fn from(data: ImageVectorData) -> Self {
-        Self::Vector(Arc::new(data))
-    }
-}
-
-impl From<Arc<ImageVectorData>> for Painter {
-    fn from(data: Arc<ImageVectorData>) -> Self {
         Self::Vector(data)
     }
 }
 
 impl From<ImageData> for Painter {
     fn from(data: ImageData) -> Self {
-        Self::Raster(Arc::new(data))
-    }
-}
-
-impl From<Arc<ImageData>> for Painter {
-    fn from(data: Arc<ImageData>) -> Self {
         Self::Raster(data)
     }
 }
@@ -112,19 +97,7 @@ impl TryIntoPainter for ImageData {
     }
 }
 
-impl TryIntoPainter for Arc<ImageData> {
-    fn try_into_painter(self) -> Result<Painter, PainterLoadError> {
-        Ok(Painter::from(self))
-    }
-}
-
 impl TryIntoPainter for ImageVectorData {
-    fn try_into_painter(self) -> Result<Painter, PainterLoadError> {
-        Ok(Painter::from(self))
-    }
-}
-
-impl TryIntoPainter for Arc<ImageVectorData> {
     fn try_into_painter(self) -> Result<Painter, PainterLoadError> {
         Ok(Painter::from(self))
     }
@@ -173,7 +146,7 @@ fn try_decode_bytes(bytes: &[u8]) -> Result<Painter, PainterLoadError> {
         Err(vector) => {
             let raster = bytes.try_into_image_data();
             match raster {
-                Ok(data) => Ok(Painter::Raster(Arc::new(data))),
+                Ok(data) => Ok(Painter::Raster(data)),
                 Err(raster) => Err(PainterLoadError::Decode { vector, raster }),
             }
         }
@@ -187,7 +160,7 @@ fn try_decode_path(path: &Path) -> Result<Painter, PainterLoadError> {
         Err(vector) => {
             let raster = path.try_into_image_data();
             match raster {
-                Ok(data) => Ok(Painter::Raster(Arc::new(data))),
+                Ok(data) => Ok(Painter::Raster(data)),
                 Err(raster) => Err(PainterLoadError::Decode { vector, raster }),
             }
         }

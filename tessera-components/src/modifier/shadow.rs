@@ -8,7 +8,7 @@ use crate::{
     shadow::ShadowLayers,
     shape_def::{ResolvedShape, Shape},
     surface::SurfaceDefaults,
-    theme::MaterialTheme,
+    theme::MaterialColorScheme,
 };
 
 use super::ModifierExt;
@@ -66,9 +66,12 @@ impl DrawModifierNode for ShadowModifierNode {
     }
 }
 
-pub(super) fn apply_shadow_modifier(base: Modifier, args: ShadowArgs) -> Modifier {
-    let scheme = MaterialTheme::default().color_scheme;
-    let mut layers = SurfaceDefaults::synthesize_shadow_layers(args.elevation, &scheme);
+pub(super) fn apply_shadow_modifier(
+    base: Modifier,
+    scheme: &MaterialColorScheme,
+    args: ShadowArgs,
+) -> Modifier {
+    let mut layers = SurfaceDefaults::synthesize_shadow_layers(args.elevation, scheme);
 
     if let Some(ambient) = args.ambient_color
         && let Some(ref mut layer) = layers.ambient

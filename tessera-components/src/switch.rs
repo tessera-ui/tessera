@@ -11,7 +11,7 @@ use tessera_ui::{
     MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -161,17 +161,17 @@ impl PartialEq for SwitchLayout {
     }
 }
 
-impl LayoutPolicy for SwitchLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for SwitchLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let track = children[0];
         let state_layer = children[1];
         let thumb = children[2];
         let thumb_constraint = Constraint::NONE;
-        let track_size = track.measure(&thumb_constraint)?;
-        let state_layer_size = state_layer.measure(&thumb_constraint)?;
-        let thumb_size = thumb.measure(&thumb_constraint)?;
+        let track_size = track.measure(input, &thumb_constraint)?;
+        let state_layer_size = state_layer.measure(input, &thumb_constraint)?;
+        let thumb_size = thumb.measure(input, &thumb_constraint)?;
 
         let self_width_px = track_size
             .width
@@ -244,11 +244,15 @@ impl LayoutPolicy for SwitchLayout {
             && self.is_pressed == other.is_pressed
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() < 3 {
-            return Some(result.into_placements());
+            return Some(result.into_placement_result());
         }
         let track = children[0];
         let state_layer = children[1];
@@ -298,7 +302,7 @@ impl LayoutPolicy for SwitchLayout {
             state_layer,
             PxPosition::new(Px(state_layer_x), Px(state_layer_y)),
         );
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }
 
@@ -307,8 +311,8 @@ struct SwitchThumbLayout {
     size: Px,
 }
 
-impl LayoutPolicy for SwitchThumbLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for SwitchThumbLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let constraint = Constraint::new(
             AxisConstraint::exact(self.size),
@@ -316,7 +320,7 @@ impl LayoutPolicy for SwitchThumbLayout {
         );
 
         for child in input.children() {
-            let _ = child.measure(&constraint)?;
+            let _ = child.measure(input, &constraint)?;
             result.place_child(child, PxPosition::ZERO);
         }
 
@@ -642,7 +646,7 @@ fn switch_content(
     let thumb_size_px = thumb_diameter_dp.to_px();
     layout()
         .modifier(modifier)
-        .layout_policy(SwitchLayout {
+        .policy(SwitchLayout {
             track_width: width,
             track_height: height,
             track_outline_width,
@@ -694,7 +698,7 @@ fn switch_content(
                 .ripple_state_optional(ripple_state)
                 .child(|| {});
             layout()
-                .layout_policy(SwitchThumbLayout {
+                .policy(SwitchThumbLayout {
                     size: thumb_size_px,
                 })
                 .modifier({
@@ -731,8 +735,7 @@ fn switch_content(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, NoopRenderPolicy, Px,
-        PxPosition,
+        ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px, PxPosition,
         layout::{MeasureScope, layout},
         receive_frame_nanos, remember, tessera,
     };
@@ -747,8 +750,8 @@ mod tests {
         x: i32,
     }
 
-    impl LayoutPolicy for OffsetChildPolicy {
-        fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for OffsetChildPolicy {
+        fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let mut result = LayoutResult::default();
             let child_constraint = input.parent_constraint().without_min();
             let child = input
@@ -756,7 +759,7 @@ mod tests {
                 .first()
                 .copied()
                 .expect("offset child policy requires a child");
-            let child_size = child.measure(&child_constraint)?;
+            let child_size = child.measure(input, &child_constraint)?;
             result.place_child(child, PxPosition::new(Px::new(self.x), Px::ZERO));
 
             Ok(result.with_size(ComputedData {
@@ -772,12 +775,12 @@ mod tests {
         height: i32,
     }
 
-    impl LayoutPolicy for FixedSizePolicy {
-        fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for FixedSizePolicy {
+        fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let mut result = LayoutResult::default();
             let child_constraint = input.parent_constraint().without_min();
             for child in input.children() {
-                let _ = child.measure(&child_constraint)?;
+                let _ = child.measure(input, &child_constraint)?;
                 result.place_child(child, PxPosition::ZERO);
             }
 
@@ -795,8 +798,8 @@ mod tests {
         let height = height.unwrap_or_default();
 
         layout()
-            .layout_policy(FixedSizePolicy { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedSizePolicy { width, height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()
@@ -829,8 +832,8 @@ mod tests {
 
         let offset = controller.with(|c| (c.animation_progress() * 100.0).round() as i32);
         layout()
-            .layout_policy(OffsetChildPolicy { x: offset })
-            .render_policy(NoopRenderPolicy)
+            .policy(OffsetChildPolicy { x: offset })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new())
             .child(|| {
                 tagged_probe()

@@ -28,8 +28,8 @@ use crate::{
 
 pub use constraint::{AxisConstraint, Constraint, ParentConstraint};
 pub use node::{
-    ComputedData, ImeInput, ImeInputHandlerFn, ImeRequest, ImeSession, KeyboardInput,
-    KeyboardInputHandlerFn, MeasurementError, PointerEventPass, PointerInput,
+    ComputedData, GloballyPositionedHandler, ImeInput, ImeInputHandlerFn, ImeRequest, ImeSession,
+    KeyboardInput, KeyboardInputHandlerFn, MeasurementError, PointerEventPass, PointerInput,
     PointerInputHandlerFn,
 };
 
@@ -76,6 +76,19 @@ impl LayoutSnapshotMap {
     }
 }
 
+/// Returns whether any node in the subtree still needs a rebuild.
+///
+/// This enforces the subtree-reuse precondition in one place: a reused subtree
+/// keeps its previous nodes untouched, so a descendant that still needs a
+/// rebuild would never observe the update. Reporting it lets the reuse path
+/// fall back to a real rebuild.
+fn subtree_has_pending_rebuild(root_node: indextree::NodeId, tree: &ComponentNodeTree) -> bool {
+    root_node.descendants(tree).any(|node_id| {
+        tree.get(node_id)
+            .is_some_and(|node| crate::runtime::instance_key_needs_rebuild(node.get().instance_key))
+    })
+}
+
 pub(crate) fn nearest_replay_boundary_instance_key(
     node_id: NodeId,
     tree: &ComponentNodeTree,
@@ -105,6 +118,21 @@ pub(crate) fn clear_layout_snapshots() {
     TesseraRuntime::with_mut(|runtime| {
         runtime.component_tree.clear_layout_snapshots();
     });
+}
+
+/// Invokes globally positioned callbacks collected by the last compute pass.
+///
+/// Must be called after the runtime borrow used by `compute` is released so
+/// callbacks can freely update state.
+pub(crate) fn flush_pending_globally_positioned_callbacks() {
+    let invocations = TesseraRuntime::with_mut(|runtime| {
+        runtime
+            .component_tree
+            .take_pending_globally_positioned_invocations()
+    });
+    for (handler, rect) in invocations {
+        handler.call(rect);
+    }
 }
 
 #[derive(Clone, Copy)]
@@ -323,6 +351,12 @@ pub struct ComponentTree {
     active_pointer_paths: HashMap<u64, Vec<u64>>,
     /// Per-tree focus owner used for keyboard and IME routing.
     focus_owner: FocusOwner,
+    /// Last reported window-space bounds for nodes with globally positioned
+    /// callbacks, keyed by instance key.
+    last_global_rects: HashMap<u64, PxRect>,
+    /// Globally positioned callbacks collected during compute and invoked
+    /// after the runtime borrow is released.
+    pending_globally_positioned_invocations: Vec<(GloballyPositionedHandler, PxRect)>,
 }
 
 #[derive(Clone, PartialEq)]
@@ -372,6 +406,8 @@ impl ComponentTree {
             replay_reuse_candidates: HashMap::default(),
             active_pointer_paths: HashMap::default(),
             focus_owner: FocusOwner::new(),
+            last_global_rects: HashMap::default(),
+            pending_globally_positioned_invocations: Vec::new(),
         }
     }
 
@@ -383,6 +419,8 @@ impl ComponentTree {
         self.node_queue.clear();
         self.replay_reuse_candidates.clear();
         self.active_pointer_paths.clear();
+        self.last_global_rects.clear();
+        self.pending_globally_positioned_invocations.clear();
     }
 
     /// Reset the entire component tree, including focus ownership state.
@@ -631,6 +669,13 @@ impl ComponentTree {
         if candidate_instance_logic_id != instance_logic_id {
             return false;
         }
+        // Reusing the detached subtree would skip every descendant, including
+        // replay boundaries that were invalidated this frame (for example by a
+        // render slot whose closure was rebuilt with new props). Bail out and
+        // let the caller rebuild the subtree so those nodes observe the update.
+        if subtree_has_pending_rebuild(candidate_node_id, &self.tree) {
+            return false;
+        }
 
         let Some(current_node_id) = self.node_queue.last().copied() else {
             return false;
@@ -718,6 +763,50 @@ impl ComponentTree {
         (&self.tree, &self.metadatas, &mut self.focus_owner)
     }
 
+    fn collect_globally_positioned_invocations(&mut self, root_node: indextree::NodeId) {
+        let mut next_rects = HashMap::default();
+        let mut invocations = Vec::new();
+        for node_id in root_node.descendants(&self.tree) {
+            let Some(node_ref) = self.tree.get(node_id) else {
+                continue;
+            };
+            let node = node_ref.get();
+            if node.globally_positioned_handlers.is_empty() {
+                continue;
+            }
+            let Some(metadata) = self.metadatas.get(&node_id) else {
+                continue;
+            };
+            let Some(position) = metadata.abs_position else {
+                continue;
+            };
+            let size = metadata.computed_data.unwrap_or(ComputedData::ZERO);
+            let rect = PxRect {
+                x: position.x_px(),
+                y: position.y_px(),
+                width: size.width,
+                height: size.height,
+            };
+            if self.last_global_rects.get(&node.instance_key) != Some(&rect) {
+                invocations.extend(
+                    node.globally_positioned_handlers
+                        .iter()
+                        .map(|handler| (*handler, rect)),
+                );
+            }
+            next_rects.insert(node.instance_key, rect);
+        }
+        self.last_global_rects = next_rects;
+        self.pending_globally_positioned_invocations
+            .extend(invocations);
+    }
+
+    pub(crate) fn take_pending_globally_positioned_invocations(
+        &mut self,
+    ) -> Vec<(GloballyPositionedHandler, PxRect)> {
+        std::mem::take(&mut self.pending_globally_positioned_invocations)
+    }
+
     pub(crate) fn take_pending_focus_callback_invocations(
         &mut self,
     ) -> Vec<PendingFocusCallbackInvocation> {
@@ -775,7 +864,7 @@ impl ComponentTree {
                 let abs_pos = metadata
                     .as_ref()
                     .and_then(|m| m.abs_position)
-                    .map(|p| (p.x.0, p.y.0));
+                    .map(|p| (p.x_px().0, p.y_px().0));
                 let size = metadata
                     .as_ref()
                     .and_then(|m| m.computed_data)
@@ -795,6 +884,153 @@ impl ComponentTree {
         }
 
         nodes
+    }
+
+    /// Dispatches pointer input across the tree and returns the window requests
+    /// raised by the handlers (currently the hover cursor icon).
+    fn dispatch_pointer_input(
+        &mut self,
+        root_node: indextree::NodeId,
+        pointer_changes: &mut [PointerChange],
+        cursor_position: &mut Option<PxPosition>,
+        modifiers: winit::keyboard::ModifiersState,
+    ) -> WindowRequests {
+        let mut window_requests = WindowRequests::default();
+        let node_ids_preorder = layout_node_ids_preorder(root_node, &self.tree);
+        let node_ids_postorder = layout_node_ids_postorder(root_node, &self.tree);
+        let pointer_change_paths = build_pointer_change_paths(
+            root_node,
+            &self.tree,
+            &self.metadatas,
+            pointer_changes,
+            *cursor_position,
+            &mut self.active_pointer_paths,
+        );
+        window_requests.cursor_icon =
+            resolve_hover_cursor_icon(root_node, &self.tree, &self.metadatas, *cursor_position)
+                .unwrap_or_default();
+
+        for node_id in node_ids_preorder.iter().copied() {
+            let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
+                continue;
+            };
+            let mut dispatch_ctx = PointerInputDispatchContext {
+                tree: &self.tree,
+                metadatas: &self.metadatas,
+                cursor_position: &mut *cursor_position,
+                pointer_changes: &mut *pointer_changes,
+                pointer_change_paths: &pointer_change_paths,
+                modifiers,
+                window_requests: &mut window_requests,
+                focus_owner: &mut self.focus_owner,
+            };
+            dispatch_pointer_modifiers_for_node_pass(
+                &mut dispatch_ctx,
+                node_id,
+                PointerEventPass::Initial,
+            );
+            let handlers = &node.pointer_preview_handlers;
+            for handler in handlers {
+                let mut dispatch_ctx = PointerInputDispatchContext {
+                    tree: &self.tree,
+                    metadatas: &self.metadatas,
+                    cursor_position: &mut *cursor_position,
+                    pointer_changes: &mut *pointer_changes,
+                    pointer_change_paths: &pointer_change_paths,
+                    modifiers,
+                    window_requests: &mut window_requests,
+                    focus_owner: &mut self.focus_owner,
+                };
+                run_pointer_handler_for_node(
+                    &mut dispatch_ctx,
+                    node_id,
+                    PointerEventPass::Initial,
+                    handler.as_ref(),
+                );
+            }
+        }
+
+        for node_id in node_ids_postorder.iter().copied() {
+            let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
+                continue;
+            };
+            let mut dispatch_ctx = PointerInputDispatchContext {
+                tree: &self.tree,
+                metadatas: &self.metadatas,
+                cursor_position: &mut *cursor_position,
+                pointer_changes: &mut *pointer_changes,
+                pointer_change_paths: &pointer_change_paths,
+                modifiers,
+                window_requests: &mut window_requests,
+                focus_owner: &mut self.focus_owner,
+            };
+            dispatch_pointer_modifiers_for_node_pass(
+                &mut dispatch_ctx,
+                node_id,
+                PointerEventPass::Main,
+            );
+            let handlers = &node.pointer_handlers;
+            for handler in handlers {
+                let mut dispatch_ctx = PointerInputDispatchContext {
+                    tree: &self.tree,
+                    metadatas: &self.metadatas,
+                    cursor_position: &mut *cursor_position,
+                    pointer_changes: &mut *pointer_changes,
+                    pointer_change_paths: &pointer_change_paths,
+                    modifiers,
+                    window_requests: &mut window_requests,
+                    focus_owner: &mut self.focus_owner,
+                };
+                run_pointer_handler_for_node(
+                    &mut dispatch_ctx,
+                    node_id,
+                    PointerEventPass::Main,
+                    handler.as_ref(),
+                );
+            }
+        }
+
+        for node_id in node_ids_preorder.iter().copied() {
+            let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
+                continue;
+            };
+            let mut dispatch_ctx = PointerInputDispatchContext {
+                tree: &self.tree,
+                metadatas: &self.metadatas,
+                cursor_position: &mut *cursor_position,
+                pointer_changes: &mut *pointer_changes,
+                pointer_change_paths: &pointer_change_paths,
+                modifiers,
+                window_requests: &mut window_requests,
+                focus_owner: &mut self.focus_owner,
+            };
+            dispatch_pointer_modifiers_for_node_pass(
+                &mut dispatch_ctx,
+                node_id,
+                PointerEventPass::Final,
+            );
+            let handlers = &node.pointer_final_handlers;
+            for handler in handlers {
+                let mut dispatch_ctx = PointerInputDispatchContext {
+                    tree: &self.tree,
+                    metadatas: &self.metadatas,
+                    cursor_position: &mut *cursor_position,
+                    pointer_changes: &mut *pointer_changes,
+                    pointer_change_paths: &pointer_change_paths,
+                    modifiers,
+                    window_requests: &mut window_requests,
+                    focus_owner: &mut self.focus_owner,
+                };
+                run_pointer_handler_for_node(
+                    &mut dispatch_ctx,
+                    node_id,
+                    PointerEventPass::Final,
+                    handler.as_ref(),
+                );
+            }
+        }
+
+        window_requests
     }
 
     /// Compute the ComponentTree into a render graph
@@ -851,6 +1087,10 @@ impl ComponentTree {
             removed_nodes,
         } = crate::runtime::reconcile_layout_structure(&current_children_by_node);
         self.remove_layout_snapshots(&removed_nodes);
+        // Layout nodes dropped from the tree must also drop the state-read
+        // dependencies they registered during measurement, otherwise recycled
+        // instance keys would keep stale placement dirtiness alive.
+        crate::runtime::remove_layout_state_read_dependencies(&removed_nodes);
 
         let mut dirty_nodes_self = layout_dirty_nodes.measure_self_nodes.clone();
         dirty_nodes_self.extend(layout_dirty_nodes.placement_self_nodes.iter().copied());
@@ -858,6 +1098,13 @@ impl ComponentTree {
         let dirty_nodes_structural = structural_dirty_nodes.len() as u64;
         let dirty_prepare_start = Instant::now();
         dirty_nodes_self.extend(structural_dirty_nodes.iter().copied());
+        // A node whose direct layout children changed must recompute
+        // placements: its cached placements are keyed by the previous
+        // children's instance keys, so reusing them against a different
+        // child set silently drops the new children and leaves them
+        // without a position.
+        let mut placement_dirty_nodes = layout_dirty_nodes.placement_self_nodes.clone();
+        placement_dirty_nodes.extend(structural_dirty_nodes.iter().copied());
         let dirty_nodes_effective =
             expand_dirty_nodes_with_ancestors(root_node, &self.tree, &dirty_nodes_self);
         let dirty_expand_ns = dirty_prepare_start.elapsed().as_nanos() as u64;
@@ -870,7 +1117,7 @@ impl ComponentTree {
         let layout_ctx = LayoutContext::new(
             &mut self.layout_snapshots,
             &layout_dirty_nodes.measure_self_nodes,
-            &layout_dirty_nodes.placement_self_nodes,
+            &placement_dirty_nodes,
             &dirty_nodes_effective,
             &mut diagnostics,
         );
@@ -910,6 +1157,13 @@ impl ComponentTree {
             #[cfg(feature = "testing")]
             ComputeMode::LayoutOnly => {
                 populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
+                self.collect_globally_positioned_invocations(root_node);
+                let _ = self.dispatch_pointer_input(
+                    root_node,
+                    pointer_changes.as_mut_slice(),
+                    &mut cursor_position,
+                    modifiers,
+                );
                 return (
                     RenderGraph::default(),
                     WindowRequests::default(),
@@ -922,6 +1176,7 @@ impl ComponentTree {
         };
 
         let record_timer = Instant::now();
+        let _focus_owner_guard = bind_focus_owner(&mut self.focus_owner);
         record_layout_commands(
             root_node,
             &self.tree,
@@ -931,6 +1186,7 @@ impl ComponentTree {
         );
         let record_cost = record_timer.elapsed();
         populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
+        self.collect_globally_positioned_invocations(root_node);
 
         let compute_draw_timer = Instant::now();
         debug!("Start computing render graph...");
@@ -944,142 +1200,13 @@ impl ComponentTree {
         );
 
         let input_dispatch_timer = Instant::now();
-        let mut window_requests = WindowRequests::default();
         debug!("Start executing typed input dispatch...");
-
-        let node_ids_preorder = layout_node_ids_preorder(root_node, &self.tree);
-        let node_ids_postorder = layout_node_ids_postorder(root_node, &self.tree);
-        let pointer_change_paths = build_pointer_change_paths(
+        let mut window_requests = self.dispatch_pointer_input(
             root_node,
-            &self.tree,
-            &self.metadatas,
-            &pointer_changes,
-            cursor_position,
-            &mut self.active_pointer_paths,
+            pointer_changes.as_mut_slice(),
+            &mut cursor_position,
+            modifiers,
         );
-        window_requests.cursor_icon =
-            resolve_hover_cursor_icon(root_node, &self.tree, &self.metadatas, cursor_position)
-                .unwrap_or_default();
-
-        for node_id in node_ids_preorder.iter().copied() {
-            let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
-                continue;
-            };
-            let mut dispatch_ctx = PointerInputDispatchContext {
-                tree: &self.tree,
-                metadatas: &self.metadatas,
-                cursor_position: &mut cursor_position,
-                pointer_changes: pointer_changes.as_mut_slice(),
-                pointer_change_paths: &pointer_change_paths,
-                modifiers,
-                window_requests: &mut window_requests,
-                focus_owner: &mut self.focus_owner,
-            };
-            dispatch_pointer_modifiers_for_node_pass(
-                &mut dispatch_ctx,
-                node_id,
-                PointerEventPass::Initial,
-            );
-            let handlers = &node.pointer_preview_handlers;
-            for handler in handlers {
-                let mut dispatch_ctx = PointerInputDispatchContext {
-                    tree: &self.tree,
-                    metadatas: &self.metadatas,
-                    cursor_position: &mut cursor_position,
-                    pointer_changes: pointer_changes.as_mut_slice(),
-                    pointer_change_paths: &pointer_change_paths,
-                    modifiers,
-                    window_requests: &mut window_requests,
-                    focus_owner: &mut self.focus_owner,
-                };
-                run_pointer_handler_for_node(
-                    &mut dispatch_ctx,
-                    node_id,
-                    PointerEventPass::Initial,
-                    handler.as_ref(),
-                );
-            }
-        }
-
-        for node_id in node_ids_postorder.iter().copied() {
-            let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
-                continue;
-            };
-            let mut dispatch_ctx = PointerInputDispatchContext {
-                tree: &self.tree,
-                metadatas: &self.metadatas,
-                cursor_position: &mut cursor_position,
-                pointer_changes: pointer_changes.as_mut_slice(),
-                pointer_change_paths: &pointer_change_paths,
-                modifiers,
-                window_requests: &mut window_requests,
-                focus_owner: &mut self.focus_owner,
-            };
-            dispatch_pointer_modifiers_for_node_pass(
-                &mut dispatch_ctx,
-                node_id,
-                PointerEventPass::Main,
-            );
-            let handlers = &node.pointer_handlers;
-            for handler in handlers {
-                let mut dispatch_ctx = PointerInputDispatchContext {
-                    tree: &self.tree,
-                    metadatas: &self.metadatas,
-                    cursor_position: &mut cursor_position,
-                    pointer_changes: pointer_changes.as_mut_slice(),
-                    pointer_change_paths: &pointer_change_paths,
-                    modifiers,
-                    window_requests: &mut window_requests,
-                    focus_owner: &mut self.focus_owner,
-                };
-                run_pointer_handler_for_node(
-                    &mut dispatch_ctx,
-                    node_id,
-                    PointerEventPass::Main,
-                    handler.as_ref(),
-                );
-            }
-        }
-
-        for node_id in node_ids_preorder.iter().copied() {
-            let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
-                continue;
-            };
-            let mut dispatch_ctx = PointerInputDispatchContext {
-                tree: &self.tree,
-                metadatas: &self.metadatas,
-                cursor_position: &mut cursor_position,
-                pointer_changes: pointer_changes.as_mut_slice(),
-                pointer_change_paths: &pointer_change_paths,
-                modifiers,
-                window_requests: &mut window_requests,
-                focus_owner: &mut self.focus_owner,
-            };
-            dispatch_pointer_modifiers_for_node_pass(
-                &mut dispatch_ctx,
-                node_id,
-                PointerEventPass::Final,
-            );
-            let handlers = &node.pointer_final_handlers;
-            for handler in handlers {
-                let mut dispatch_ctx = PointerInputDispatchContext {
-                    tree: &self.tree,
-                    metadatas: &self.metadatas,
-                    cursor_position: &mut cursor_position,
-                    pointer_changes: pointer_changes.as_mut_slice(),
-                    pointer_change_paths: &pointer_change_paths,
-                    modifiers,
-                    window_requests: &mut window_requests,
-                    focus_owner: &mut self.focus_owner,
-                };
-                run_pointer_handler_for_node(
-                    &mut dispatch_ctx,
-                    node_id,
-                    PointerEventPass::Final,
-                    handler.as_ref(),
-                );
-            }
-        }
 
         self.focus_owner.commit_pending();
         let pending_focus_move_retry = retry_focus_move.and_then(|direction| {
@@ -1348,7 +1475,10 @@ fn hit_path_node_ids(
         for child_id in children.into_iter().rev() {
             if let Some(mut child_path) = collect_hit_path(child_id, tree, metadatas, position) {
                 let mut path = Vec::with_capacity(child_path.len() + 1);
-                if let Some(metadata) = metadatas.get(&node_id)
+                if tree
+                    .get(node_id)
+                    .is_some_and(|node| node.get().role == NodeRole::Layout)
+                    && let Some(metadata) = metadatas.get(&node_id)
                     && metadata.base_abs_position.is_some()
                     && metadata.abs_position.is_some()
                     && metadata.computed_data.is_some()
@@ -1360,36 +1490,58 @@ fn hit_path_node_ids(
             }
         }
 
-        let metadata = metadatas.get(&node_id)?;
-        let base_abs_pos = metadata.base_abs_position?;
-        let abs_pos = metadata.abs_position?;
-        let size = metadata.computed_data?;
-        if size.width.0 <= 0 || size.height.0 <= 0 {
-            return None;
-        }
-        if let Some(clip_rect) = metadata.event_clip_rect
-            && !clip_rect.contains(position)
-        {
-            return None;
-        }
-        let bounds = PxRect::from_position_size(abs_pos, PxSize::new(size.width, size.height));
-        let node_handles_hover = tree.get(node_id).is_some_and(|node| {
-            node_handles_pointer_at_position(node.get(), base_abs_pos, size, position)
-        }) || bounds.contains(position)
-            && tree.get(node_id).is_some_and(|node| {
-                let node = node.get();
-                !node.pointer_preview_handlers.is_empty()
-                    || !node.pointer_handlers.is_empty()
-                    || !node.pointer_final_handlers.is_empty()
-            });
-
-        node_handles_hover.then_some(vec![node_id])
+        bounds_hit_path(node_id, tree, metadatas, position).map(|node_id| vec![node_id])
     }
 
     let Some(position) = position else {
         return Vec::new();
     };
     collect_hit_path(root_node, tree, metadatas, position).unwrap_or_default()
+}
+
+fn bounds_hit_path(
+    node_id: indextree::NodeId,
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    position: PxPosition,
+) -> Option<indextree::NodeId> {
+    let node = tree.get(node_id)?;
+    if node.get().role != NodeRole::Layout {
+        return None;
+    }
+    let metadata = metadatas.get(&node_id)?;
+    let base_abs_pos = metadata.base_abs_position?;
+    let abs_pos = metadata.abs_position?;
+    let size = metadata.computed_data?;
+    if size.width.0 <= 0 || size.height.0 <= 0 {
+        return None;
+    }
+    if let Some(clip_rect) = metadata.event_clip_rect
+        && !clip_rect.contains(position)
+    {
+        return None;
+    }
+    let bounds = PxRect::from_position_size(abs_pos, PxSize::new(size.width, size.height));
+    let node_data = node.get();
+    let has_pointer_modifier = node_data.modifier.ordered_actions().iter().any(|action| {
+        matches!(
+            action,
+            OrderedModifierAction::Cursor(_)
+                | OrderedModifierAction::PointerPreviewInput(_)
+                | OrderedModifierAction::PointerInput(_)
+                | OrderedModifierAction::PointerFinalInput(_)
+        )
+    });
+    let has_pointer_handler = !node_data.pointer_preview_handlers.is_empty()
+        || !node_data.pointer_handlers.is_empty()
+        || !node_data.pointer_final_handlers.is_empty();
+    if !has_pointer_modifier && !has_pointer_handler {
+        return None;
+    }
+    let node_handles_hover = has_pointer_modifier
+        && node_handles_pointer_at_position(node_data, base_abs_pos, size, position)
+        || bounds.contains(position) && has_pointer_handler;
+    node_handles_hover.then_some(node_id)
 }
 
 fn resolve_hover_cursor_icon(
@@ -1706,7 +1858,6 @@ fn run_pointer_input_for_node<F>(
             local_pointer_changes.push(change.clone());
         }
     }
-
     #[cfg(feature = "profiling")]
     let mut profiler_guard = Some(ProfilerScopeGuard::new(
         ProfilerPhase::Input,
@@ -1743,7 +1894,7 @@ fn run_pointer_input_for_node<F>(
 
     #[cfg(feature = "profiling")]
     {
-        let abs_tuple = (abs_pos.x.0, abs_pos.y.0);
+        let abs_tuple = (abs_pos.x_px().0, abs_pos.y_px().0);
         if let Some(g) = &mut profiler_guard {
             g.set_positions(Some(abs_tuple));
         }
@@ -1826,7 +1977,7 @@ fn run_keyboard_input_for_node<F>(
 
     #[cfg(feature = "profiling")]
     {
-        let abs_tuple = (abs_pos.x.0, abs_pos.y.0);
+        let abs_tuple = (abs_pos.x_px().0, abs_pos.y_px().0);
         if let Some(g) = &mut profiler_guard {
             g.set_positions(Some(abs_tuple));
         }
@@ -1924,7 +2075,7 @@ fn run_ime_input_for_node<F>(
 
     #[cfg(feature = "profiling")]
     {
-        let abs_tuple = (abs_pos.x.0, abs_pos.y.0);
+        let abs_tuple = (abs_pos.x_px().0, abs_pos.y_px().0);
         if let Some(g) = &mut profiler_guard {
             g.set_positions(Some(abs_tuple));
         }
@@ -2190,7 +2341,13 @@ fn record_layout_commands(
 ) {
     struct DrawModifierChainContent<'a> {
         draw_nodes: &'a [Arc<dyn crate::modifier::DrawModifierNode>],
-        render_policy: &'a dyn crate::layout::RenderPolicyDyn,
+        node_draw: &'a dyn crate::modifier::DrawModifierNode,
+    }
+
+    struct TerminalDrawContent;
+
+    impl DrawModifierContent for TerminalDrawContent {
+        fn draw(&mut self, _input: &mut RenderInput<'_>) {}
     }
 
     impl DrawModifierContent for DrawModifierChainContent<'_> {
@@ -2201,11 +2358,14 @@ fn record_layout_commands(
                 };
                 let mut next = DrawModifierChainContent {
                     draw_nodes: remaining,
-                    render_policy: self.render_policy,
+                    node_draw: self.node_draw,
                 };
                 draw_modifier.draw(&mut draw_ctx, &mut next);
             } else {
-                self.render_policy.record_dyn(input);
+                let mut draw_ctx = DrawModifierContext {
+                    render_input: input,
+                };
+                self.node_draw.draw(&mut draw_ctx, &mut TerminalDrawContent);
             }
         }
     }
@@ -2238,7 +2398,7 @@ fn record_layout_commands(
             .collect();
         let mut content = DrawModifierChainContent {
             draw_nodes: &draw_nodes,
-            render_policy: node_ref.render_policy.as_ref(),
+            node_draw: node_ref.draw_node.as_ref(),
         };
         content.draw(&mut input);
         stack.extend(node_id.children(tree));
@@ -2296,8 +2456,8 @@ fn prepare_layout_metadata_for_node(
         })
         .unwrap_or_default();
     let node_rect = PxRect {
-        x: self_position.x,
-        y: self_position.y,
+        x: self_position.x_px(),
+        y: self_position.y_px(),
         width: size.width,
         height: size.height,
     };
@@ -2488,7 +2648,7 @@ mod tests {
 
     use crate::{
         component_tree::{ComponentNode, NodeRole},
-        layout::{DefaultLayoutPolicy, NoopRenderPolicy},
+        layout::{DefaultLayoutNode, NoopDrawModifier},
         modifier::Modifier,
     };
 
@@ -2518,9 +2678,10 @@ mod tests {
             focus_event_handler: None,
             focus_beyond_bounds_handler: None,
             focus_reveal_handler: None,
+            globally_positioned_handlers: Vec::new(),
             modifier: Modifier::default(),
-            layout_policy: Box::new(DefaultLayoutPolicy),
-            render_policy: Box::new(NoopRenderPolicy),
+            layout_node: Box::new(DefaultLayoutNode),
+            draw_node: Box::new(NoopDrawModifier),
             replay: None,
             props_unchanged_from_previous: false,
         }
@@ -2667,5 +2828,43 @@ mod tests {
         assert_eq!(preorder, vec![layout_a, layout_b]);
         assert_eq!(postorder, vec![layout_b, layout_a]);
         assert_eq!(composition.children(tree.tree()).count(), 1);
+    }
+
+    #[test]
+    fn subtree_reuse_guard_tracks_pending_build_invalidations() {
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let _child = tree.add_node(node("child", 2, 2));
+        tree.pop_node();
+        tree.pop_node();
+
+        crate::runtime::reset_build_invalidations();
+        assert!(!subtree_has_pending_rebuild(root, tree.tree()));
+
+        crate::runtime::record_replay_boundary_invalidation_for_instance_key(2);
+        assert!(
+            subtree_has_pending_rebuild(root, tree.tree()),
+            "a descendant with a pending build invalidation must block subtree reuse"
+        );
+
+        crate::runtime::reset_build_invalidations();
+        assert!(!subtree_has_pending_rebuild(root, tree.tree()));
+    }
+
+    #[test]
+    fn subtree_reuse_guard_tracks_current_frame_dirty_keys() {
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let _child = tree.add_node(node("child", 2, 2));
+        tree.pop_node();
+        tree.pop_node();
+
+        crate::runtime::reset_build_invalidations();
+        let mut dirty = HashSet::default();
+        dirty.insert(2);
+        crate::runtime::with_build_dirty_instance_keys(&dirty, || {
+            assert!(subtree_has_pending_rebuild(root, tree.tree()));
+        });
+        assert!(!subtree_has_pending_rebuild(root, tree.tree()));
     }
 }

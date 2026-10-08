@@ -11,7 +11,7 @@ use tessera_ui::{
     Px, PxPosition, State,
     accesskit::{Role, Toggled},
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -472,7 +472,7 @@ fn fluid_switch_content(
 
     layout()
         .modifier(modifier)
-        .layout_policy(FluidSwitchLayout {
+        .policy(FluidSwitchLayout {
             track_width: FluidSwitchDefaults::TRACK_WIDTH.to_px(),
             track_height: FluidSwitchDefaults::TRACK_HEIGHT.to_px(),
             lens_width: lens_width.to_px(),
@@ -518,8 +518,8 @@ struct FluidSwitchLayout {
     progress: f32,
 }
 
-impl LayoutPolicy for FluidSwitchLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for FluidSwitchLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() < 2 {
@@ -534,8 +534,8 @@ impl LayoutPolicy for FluidSwitchLayout {
         let track_constraint = Constraint::exact(self.track_width, self.track_height);
         let lens_constraint = Constraint::exact(self.lens_width, self.lens_height);
 
-        let track_size = track.measure(&track_constraint)?;
-        let lens_size = lens.measure(&lens_constraint)?;
+        let track_size = track.measure(input, &track_constraint)?;
+        let lens_size = lens.measure(input, &lens_constraint)?;
         let width = track_size.width.max(lens_size.width);
         let height = track_size.height.max(lens_size.height);
         let track_x = (width - track_size.width) / 2;
@@ -560,11 +560,15 @@ impl LayoutPolicy for FluidSwitchLayout {
         self.measure_eq(other) && self.progress == other.progress
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() < 2 {
-            return Some(result.into_placements());
+            return Some(result.into_placement_result());
         }
 
         let track = children[0];
@@ -580,7 +584,7 @@ impl LayoutPolicy for FluidSwitchLayout {
 
         result.place_child(track, PxPosition::new(track_x, track_y));
         result.place_child(lens, PxPosition::new(lens_x, lens_y));
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }
 

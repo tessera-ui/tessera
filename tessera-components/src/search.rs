@@ -259,6 +259,52 @@ pub fn search_bar(
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
 ) {
+    resolve_search_bar(
+        modifier,
+        enabled,
+        read_only,
+        is_active,
+        placeholder,
+        leading_icon,
+        trailing_icon,
+        on_query_change,
+        on_search,
+        on_active_change,
+        shape,
+        colors,
+        tonal_elevation,
+        shadow_elevation,
+        dropdown_shape,
+        dropdown_gap,
+        content_padding,
+        controller,
+        content,
+        SearchBarLayoutKind::FullScreen,
+    );
+}
+
+fn resolve_search_bar(
+    modifier: Option<Modifier>,
+    enabled: Option<bool>,
+    read_only: Option<bool>,
+    is_active: Option<bool>,
+    placeholder: Option<String>,
+    leading_icon: Option<RenderSlot>,
+    trailing_icon: Option<RenderSlot>,
+    on_query_change: Option<CallbackWith<String, String>>,
+    on_search: Option<CallbackWith<String, ()>>,
+    on_active_change: Option<CallbackWith<bool, ()>>,
+    shape: Option<Shape>,
+    colors: Option<SearchBarColors>,
+    tonal_elevation: Option<Dp>,
+    shadow_elevation: Option<Dp>,
+    dropdown_shape: Option<Shape>,
+    dropdown_gap: Option<Dp>,
+    content_padding: Option<Dp>,
+    controller: Option<State<SearchBarController>>,
+    content: Option<RenderSlot>,
+    kind: SearchBarLayoutKind,
+) {
     let modifier = modifier.unwrap_or_default();
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
@@ -271,13 +317,14 @@ pub fn search_bar(
         container_color: theme.color_scheme.surface_container_high,
         divider_color: theme.color_scheme.outline,
     });
-    let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
-    let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
-    let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
-    let dropdown_gap = dropdown_gap.unwrap_or(SearchBarProps::default().dropdown_gap);
-    let content_padding = content_padding.unwrap_or(SearchBarProps::default().content_padding);
+    let defaults = SearchBarProps::default();
+    let tonal_elevation = tonal_elevation.unwrap_or(defaults.tonal_elevation);
+    let shadow_elevation = shadow_elevation.unwrap_or(defaults.shadow_elevation);
+    let dropdown_shape = dropdown_shape.unwrap_or(defaults.dropdown_shape);
+    let dropdown_gap = dropdown_gap.unwrap_or(defaults.dropdown_gap);
+    let content_padding = content_padding.unwrap_or(defaults.content_padding);
     let controller = controller.unwrap_or_else(|| remember(|| SearchBarController::new(is_active)));
-    let render_args = build_search_bar_props(
+    mount_search_bar(
         SearchBarProps {
             modifier,
             enabled,
@@ -299,30 +346,8 @@ pub fn search_bar(
             controller: Some(controller),
             content,
         },
-        SearchBarLayoutKind::FullScreen,
+        kind,
     );
-    let modifier = render_args.modifier.clone();
-    layout().modifier(modifier).child(move || {
-        search_bar_inner()
-            .kind(render_args.kind)
-            .enabled(render_args.enabled)
-            .read_only(render_args.read_only)
-            .shape(render_args.shape)
-            .colors(render_args.colors)
-            .tonal_elevation(render_args.tonal_elevation)
-            .shadow_elevation(render_args.shadow_elevation)
-            .dropdown_shape(render_args.dropdown_shape)
-            .dropdown_gap(render_args.dropdown_gap)
-            .content_padding(render_args.content_padding)
-            .controller(render_args.controller)
-            .content_shared(render_args.content)
-            .on_query_change_shared(render_args.on_query_change)
-            .on_search_shared(render_args.on_search)
-            .on_active_change_shared(render_args.on_active_change)
-            .placeholder_optional(render_args.placeholder.clone())
-            .leading_icon_optional(render_args.leading_icon)
-            .trailing_icon_optional(render_args.trailing_icon);
-    });
 }
 
 /// # docked_search_bar
@@ -376,48 +401,32 @@ pub fn docked_search_bar(
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
 ) {
-    let modifier = modifier.unwrap_or_default();
-    let enabled = enabled.unwrap_or(true);
-    let read_only = read_only.unwrap_or(false);
-    let is_active = is_active.unwrap_or(false);
-    let theme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get();
-    let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
-    let colors = colors.unwrap_or(SearchBarColors {
-        container_color: theme.color_scheme.surface_container_high,
-        divider_color: theme.color_scheme.outline,
-    });
-    let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
-    let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
-    let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
-    let dropdown_gap = dropdown_gap.unwrap_or(SearchBarProps::default().dropdown_gap);
-    let content_padding = content_padding.unwrap_or(SearchBarProps::default().content_padding);
-    let controller = controller.unwrap_or_else(|| remember(|| SearchBarController::new(is_active)));
-    let render_args = build_search_bar_props(
-        SearchBarProps {
-            modifier,
-            enabled,
-            read_only,
-            is_active,
-            placeholder,
-            leading_icon,
-            trailing_icon,
-            on_query_change,
-            on_search,
-            on_active_change,
-            shape,
-            colors,
-            tonal_elevation,
-            shadow_elevation,
-            dropdown_shape,
-            dropdown_gap,
-            content_padding,
-            controller: Some(controller),
-            content,
-        },
+    resolve_search_bar(
+        modifier,
+        enabled,
+        read_only,
+        is_active,
+        placeholder,
+        leading_icon,
+        trailing_icon,
+        on_query_change,
+        on_search,
+        on_active_change,
+        shape,
+        colors,
+        tonal_elevation,
+        shadow_elevation,
+        dropdown_shape,
+        dropdown_gap,
+        content_padding,
+        controller,
+        content,
         SearchBarLayoutKind::Docked,
     );
+}
+
+fn mount_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
+    let render_args = build_search_bar_props(args, kind);
     let modifier = render_args.modifier.clone();
     layout().modifier(modifier).child(move || {
         search_bar_inner()
@@ -536,27 +545,21 @@ fn search_bar_inner(
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
 ) {
-    let kind = kind.unwrap_or_default();
-    let enabled = enabled.unwrap_or(true);
-    let read_only = read_only.unwrap_or(false);
-    let theme = use_context::<MaterialTheme>()
-        .expect("MaterialTheme must be provided")
-        .get();
-    let shape = shape.unwrap_or(SearchBarDefaults::docked_shape());
-    let colors = colors.unwrap_or(SearchBarColors {
-        container_color: theme.color_scheme.surface_container_high,
-        divider_color: theme.color_scheme.outline,
-    });
-    let tonal_elevation = tonal_elevation.unwrap_or(SearchBarProps::default().tonal_elevation);
-    let shadow_elevation = shadow_elevation.unwrap_or(SearchBarProps::default().shadow_elevation);
-    let dropdown_shape = dropdown_shape.unwrap_or(SearchBarProps::default().dropdown_shape);
-    let dropdown_gap = dropdown_gap.unwrap_or(SearchBarProps::default().dropdown_gap);
-    let content_padding = content_padding.unwrap_or(SearchBarProps::default().content_padding);
+    let kind = kind.expect("search_bar_inner requires kind");
+    let enabled = enabled.expect("search_bar_inner requires enabled");
+    let read_only = read_only.expect("search_bar_inner requires read_only");
+    let shape = shape.expect("search_bar_inner requires shape");
+    let colors = colors.expect("search_bar_inner requires colors");
+    let tonal_elevation = tonal_elevation.expect("search_bar_inner requires tonal_elevation");
+    let shadow_elevation = shadow_elevation.expect("search_bar_inner requires shadow_elevation");
+    let dropdown_shape = dropdown_shape.expect("search_bar_inner requires dropdown_shape");
+    let dropdown_gap = dropdown_gap.expect("search_bar_inner requires dropdown_gap");
+    let content_padding = content_padding.expect("search_bar_inner requires content_padding");
     let controller = controller.expect("search_bar_inner requires controller");
-    let content = content.unwrap_or_else(RenderSlot::empty);
-    let on_query_change = on_query_change.unwrap_or_else(CallbackWith::identity);
-    let on_search = on_search.unwrap_or_else(CallbackWith::default_value);
-    let on_active_change = on_active_change.unwrap_or_else(CallbackWith::default_value);
+    let content = content.expect("search_bar_inner requires content");
+    let on_query_change = on_query_change.expect("search_bar_inner requires on_query_change");
+    let on_search = on_search.expect("search_bar_inner requires on_search");
+    let on_active_change = on_active_change.expect("search_bar_inner requires on_active_change");
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -584,7 +587,6 @@ fn search_bar_inner(
                     recognizer.update(
                         input.pass,
                         input.pointer_changes.as_mut_slice(),
-                        input.cursor_position_rel,
                         within_bounds,
                     )
                 });

@@ -4,15 +4,16 @@
 //!
 //! Collect short-form input when the full text field decoration is not needed.
 use glyphon::Action as GlyphonAction;
-use tessera_foundation::gesture::{ScrollRecognizer, ScrollResult, TapRecognizer};
+use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData, Dp,
     ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput, KeyboardInputModifierNode, Modifier,
-    PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, SemanticsModifierNode, State,
+    PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, ScrollDeltaUnit,
+    SemanticsModifierNode, State,
     accesskit::{Action, Role},
     layout::layout,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
-    remember, tessera, use_context, winit,
+    normalize_platform_scroll_delta, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -23,11 +24,18 @@ use crate::{
     text_edit_core::{
         ClickType, ImeEditResult, PlannedImeEvent, RectDef, TextSelection, text_edit_core,
     },
-    theme::{MaterialColorScheme, MaterialTheme, TextSelectionColors},
+    theme::{MaterialColorScheme, MaterialShapes, MaterialTheme, TextSelectionColors},
 };
 
 #[cfg(test)]
 use glyphon::Edit;
+
+/// State structure for the text input, managing text content, cursor,
+/// selection, and editing logic.
+pub use crate::text_edit_core::{
+    DisplayTransform, TextEditorController as TextInputController,
+    TransformedText as DisplayTransformText,
+};
 
 /// Material 3 opacity applied to disabled field text and labels.
 pub(crate) const DISABLED_CONTENT_ALPHA: f32 = 0.38;
@@ -37,13 +45,6 @@ pub(crate) const DISABLED_OUTLINE_ALPHA: f32 = 0.12;
 
 /// Material 3 opacity applied to the container of a disabled filled field.
 pub(crate) const DISABLED_FILL_ALPHA: f32 = 0.04;
-
-/// State structure for the text input, managing text content, cursor,
-/// selection, and editing logic.
-pub use crate::text_edit_core::{
-    DisplayTransform, TextEditorController as TextInputController,
-    TransformedText as DisplayTransformText,
-};
 
 struct TextInputPointerModifierNode {
     args: TextInputProps,
@@ -212,7 +213,7 @@ impl Default for TextInputProps {
             background_color: None,
             border_width: Dp(1.0),
             border_color: None,
-            shape: MaterialTheme::default().shapes.extra_small,
+            shape: MaterialShapes::default().extra_small,
             padding: Dp(16.0),
             focus_border_color: None,
             focus_border_width: Some(Dp(2.0)),
@@ -587,7 +588,6 @@ fn handle_text_input(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
             is_cursor_in_editor,
         )
     });
@@ -622,8 +622,8 @@ fn handle_text_input(
                         } else {
                             controller.with_mut(|s| {
                                 s.apply_pointer_action(GlyphonAction::Click {
-                                    x: text_relative_pos.x.0,
-                                    y: text_relative_pos.y.0,
+                                    x: text_relative_pos.x_px().0,
+                                    y: text_relative_pos.y_px().0,
                                 });
                             });
                         }
@@ -631,16 +631,16 @@ fn handle_text_input(
                     ClickType::Double => {
                         controller.with_mut(|s| {
                             s.apply_pointer_action(GlyphonAction::DoubleClick {
-                                x: text_relative_pos.x.0,
-                                y: text_relative_pos.y.0,
+                                x: text_relative_pos.x_px().0,
+                                y: text_relative_pos.y_px().0,
                             });
                         });
                     }
                     ClickType::Triple => {
                         controller.with_mut(|s| {
                             s.apply_pointer_action(GlyphonAction::TripleClick {
-                                x: text_relative_pos.x.0,
-                                y: text_relative_pos.y.0,
+                                x: text_relative_pos.x_px().0,
+                                y: text_relative_pos.y_px().0,
                             });
                         });
                     }
@@ -665,8 +665,8 @@ fn handle_text_input(
             if last_pos_px != Some(current_pos_px) {
                 controller.with_mut(|s| {
                     s.apply_pointer_action(GlyphonAction::Drag {
-                        x: current_pos_px.x.0,
-                        y: current_pos_px.y.0,
+                        x: current_pos_px.x_px().0,
+                        y: current_pos_px.y_px().0,
                     });
                 });
 
@@ -677,20 +677,54 @@ fn handle_text_input(
             }
         }
 
-        let scroll_result = scroll_recognizer.with_mut(|recognizer| {
-            recognizer.update(input.pass, input.pointer_changes.as_mut_slice())
+        scroll_recognizer.with_mut(|recognizer| {
+            recognizer.for_each(
+                input.pass,
+                input.pointer_changes.as_mut_slice(),
+                |_context, event| {
+                    let (dx, dy) = normalize_platform_scroll_delta(
+                        event.delta_x,
+                        event.delta_y,
+                        event.unit,
+                        event.source,
+                    );
+                    if controller.with(|s| s.single_line()) {
+                        let requested = if dx.abs() > f32::EPSILON { dx } else { dy };
+                        if requested.abs() <= f32::EPSILON
+                            || !controller.with_mut(|s| s.has_horizontal_overflow())
+                        {
+                            return;
+                        }
+                        let consumed =
+                            controller.with_mut(|s| s.scroll_horizontal_consumed(-requested));
+                        // `consumed` is in editor scroll space; the raw scroll
+                        // event uses the opposite sign.
+                        let consumed_raw = -consumed;
+                        if dx.abs() > f32::EPSILON {
+                            event.delta_x = dx - consumed_raw;
+                            event.delta_y = dy;
+                        } else {
+                            event.delta_y = dy - consumed_raw;
+                            event.delta_x = dx;
+                        }
+                    } else {
+                        if dy.abs() <= f32::EPSILON
+                            || !controller.with_mut(|s| s.has_vertical_overflow())
+                        {
+                            return;
+                        }
+                        // The editor engine clamps vertical scroll to the
+                        // content extent, so `consumed` is the exact amount
+                        // applied and the remainder goes to an ancestor.
+                        let consumed = controller.with_mut(|s| s.scroll_vertical_consumed(-dy));
+                        event.delta_y = dy + consumed;
+                    }
+                    // Rewrite the event as already-normalized pixels so an
+                    // ancestor scroll container receives exactly the remainder.
+                    event.unit = ScrollDeltaUnit::Pixel;
+                },
+            );
         });
-
-        // Handle scroll events (only when focused and cursor is in editor)
-        if controller.with(|s| s.focus_handler().is_focused()) && scroll_result.has_scroll() {
-            controller.with_mut(|s| {
-                if s.single_line() {
-                    s.scroll_horizontal_by(single_line_scroll_delta(&scroll_result));
-                    return;
-                }
-                s.scroll_vertical_by(-scroll_result.delta_y);
-            });
-        }
     }
 
     // Handle mouse release events (end drag), even if the pointer is outside
@@ -735,7 +769,7 @@ fn text_content_origin_from_values(padding_px: Px, border_width_px: Px) -> PxPos
     PxPosition::new(padding_px + border_width_px, padding_px + border_width_px)
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 struct DragSelectionPointerPosition {
     position: PxPosition,
     overflow_x: Px,
@@ -772,36 +806,43 @@ fn drag_selection_pointer_position_with_scroll(
     vertical_scroll: Px,
 ) -> DragSelectionPointerPosition {
     let viewport_size = text_viewport_size_from_origin(size, text_origin);
-    let text_relative_x_px = cursor_pos.x - text_origin.x;
-    let text_relative_y_px = cursor_pos.y - text_origin.y;
-    let overflow_x = if text_relative_x_px < Px::ZERO {
-        text_relative_x_px
-    } else if text_relative_x_px > viewport_size.width {
-        text_relative_x_px - viewport_size.width
+    let viewport_width = viewport_size.width.0 as f32;
+    let viewport_height = viewport_size.height.0 as f32;
+    let text_relative_x = cursor_pos.x - text_origin.x;
+    let text_relative_y = cursor_pos.y - text_origin.y;
+    let overflow_x = if text_relative_x < 0.0 {
+        Px(text_relative_x.round() as i32)
+    } else if text_relative_x > viewport_width {
+        Px((text_relative_x - viewport_width).round() as i32)
     } else {
         Px::ZERO
     };
-    let overflow_y = if text_relative_y_px < Px::ZERO {
-        text_relative_y_px
-    } else if text_relative_y_px > viewport_size.height {
-        text_relative_y_px - viewport_size.height
+    let overflow_y = if text_relative_y < 0.0 {
+        Px(text_relative_y.round() as i32)
+    } else if text_relative_y > viewport_height {
+        Px((text_relative_y - viewport_height).round() as i32)
     } else {
         Px::ZERO
     };
-    let clamped_x = text_relative_x_px.max(Px::ZERO).min(viewport_size.width);
-    let clamped_y = text_relative_y_px.max(Px::ZERO).min(viewport_size.height);
+    let clamped_x = text_relative_x.clamp(0.0, viewport_width);
+    let clamped_y = text_relative_y.clamp(0.0, viewport_height);
 
     DragSelectionPointerPosition {
-        position: PxPosition::new(clamped_x + horizontal_scroll, clamped_y + vertical_scroll),
+        position: PxPosition::from_f32_xy(
+            clamped_x + horizontal_scroll.0 as f32,
+            clamped_y + vertical_scroll.0 as f32,
+        ),
         overflow_x,
         overflow_y,
     }
 }
 
 fn text_viewport_size_from_origin(size: ComputedData, text_origin: PxPosition) -> ComputedData {
+    let width = (size.width.0 as f32 - text_origin.x * 2.0).round() as i32;
+    let height = (size.height.0 as f32 - text_origin.y * 2.0).round() as i32;
     ComputedData {
-        width: (size.width - text_origin.x - text_origin.x).max(Px::ZERO),
-        height: (size.height - text_origin.y - text_origin.y).max(Px::ZERO),
+        width: Px(width).max(Px::ZERO),
+        height: Px(height).max(Px::ZERO),
     }
 }
 
@@ -820,14 +861,6 @@ fn auto_scroll_drag_selection(
             s.scroll_vertical_by(drag_target.overflow_y.to_f32());
         }
     });
-}
-
-fn single_line_scroll_delta(scroll_result: &ScrollResult) -> f32 {
-    if scroll_result.delta_x.abs() > f32::EPSILON {
-        -scroll_result.delta_x
-    } else {
-        -scroll_result.delta_y
-    }
 }
 
 fn handle_text_input_keyboard(
@@ -984,8 +1017,7 @@ fn handle_text_input_ime(
         return;
     }
 
-    let ime_events: Vec<_> = input.ime_events.drain(..).collect();
-    for event in ime_events {
+    for event in input.ime_events.drain(..) {
         let Some(plan) = controller.with(|c| c.plan_ime_event(args.single_line, &event)) else {
             continue;
         };
@@ -1277,7 +1309,10 @@ pub(crate) fn create_surface_args(
 
     let mut modifier = args.modifier.clone();
     if args.min_width.is_some() || args.min_height.is_some() {
-        modifier = modifier.size_in(args.min_width, None, args.min_height, None);
+        modifier = modifier.default_min_size(
+            args.min_width.unwrap_or(Dp::ZERO),
+            args.min_height.unwrap_or(Dp::ZERO),
+        );
     }
 
     TextInputSurfaceArgs {
@@ -2774,13 +2809,13 @@ mod tests {
         let click_type = controller.handle_click(start_position, click_time);
         assert!(matches!(click_type, ClickType::Single));
         controller.apply_pointer_action(GlyphonAction::Click {
-            x: start_position.x.0,
-            y: start_position.y.0,
+            x: start_position.x_px().0,
+            y: start_position.y_px().0,
         });
         controller.start_drag(click_type);
         controller.apply_pointer_action(GlyphonAction::Drag {
-            x: drag_position.x.0,
-            y: drag_position.y.0,
+            x: drag_position.x_px().0,
+            y: drag_position.y_px().0,
         });
 
         assert_eq!(controller.selection(), TextSelection { start: 6, end: 1 });
@@ -2800,20 +2835,20 @@ mod tests {
         let first_click_type = controller.handle_click(first_position, first_click_time);
         assert!(matches!(first_click_type, ClickType::Single));
         controller.apply_pointer_action(GlyphonAction::Click {
-            x: first_position.x.0,
-            y: first_position.y.0,
+            x: first_position.x_px().0,
+            y: first_position.y_px().0,
         });
 
         let second_click_type = controller.handle_click(first_position, second_click_time);
         assert!(matches!(second_click_type, ClickType::Double));
         controller.apply_pointer_action(GlyphonAction::DoubleClick {
-            x: first_position.x.0,
-            y: first_position.y.0,
+            x: first_position.x_px().0,
+            y: first_position.y_px().0,
         });
         controller.start_drag(second_click_type);
         controller.apply_pointer_action(GlyphonAction::Drag {
-            x: drag_position.x.0,
-            y: drag_position.y.0,
+            x: drag_position.x_px().0,
+            y: drag_position.y_px().0,
         });
 
         assert_eq!(controller.selection(), TextSelection { start: 4, end: 11 });
@@ -2834,27 +2869,27 @@ mod tests {
         let first_click_type = controller.handle_click(line_position, first_click_time);
         assert!(matches!(first_click_type, ClickType::Single));
         controller.apply_pointer_action(GlyphonAction::Click {
-            x: line_position.x.0,
-            y: line_position.y.0,
+            x: line_position.x_px().0,
+            y: line_position.y_px().0,
         });
 
         let second_click_type = controller.handle_click(line_position, second_click_time);
         assert!(matches!(second_click_type, ClickType::Double));
         controller.apply_pointer_action(GlyphonAction::DoubleClick {
-            x: line_position.x.0,
-            y: line_position.y.0,
+            x: line_position.x_px().0,
+            y: line_position.y_px().0,
         });
 
         let third_click_type = controller.handle_click(line_position, third_click_time);
         assert!(matches!(third_click_type, ClickType::Triple));
         controller.apply_pointer_action(GlyphonAction::TripleClick {
-            x: line_position.x.0,
-            y: line_position.y.0,
+            x: line_position.x_px().0,
+            y: line_position.y_px().0,
         });
         controller.start_drag(third_click_type);
         controller.apply_pointer_action(GlyphonAction::Drag {
-            x: drag_position.x.0,
-            y: drag_position.y.0,
+            x: drag_position.x_px().0,
+            y: drag_position.y_px().0,
         });
 
         assert_eq!(controller.selection(), TextSelection { start: 4, end: 11 });
@@ -3235,5 +3270,217 @@ mod tests {
             resolve_border_width(Dp(1.0), Some(Dp(2.0)), false, true),
             Dp(1.0)
         );
+    }
+
+    mod scroll_propagation {
+        use std::cell::RefCell;
+
+        use tessera_ui::{
+            CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
+            PxPosition, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource, State,
+            layout::layout,
+            remember, tessera,
+            testing::{
+                layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
+                start_layout_test_session,
+            },
+            time::Instant,
+        };
+
+        use crate::{
+            column::column,
+            modifier::ModifierExt as _,
+            scrollable::ScrollableController,
+            spacer::spacer,
+            text_field::text_field,
+            text_input::text_input,
+            theme::{MaterialTheme, material_theme},
+        };
+
+        thread_local! {
+            static CONTROLLER: RefCell<Option<State<ScrollableController>>> =
+                const { RefCell::new(None) };
+        }
+
+        #[tessera]
+        fn scroll_probe_with_input() {
+            let controller = remember(ScrollableController::new);
+            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            material_theme()
+                .theme(|| MaterialTheme::default())
+                .child(move || {
+                    layout()
+                        .modifier(
+                            Modifier::new()
+                                .width(Dp(200.0))
+                                .height(Dp(100.0))
+                                .vertical_scroll(controller),
+                        )
+                        .child(move || {
+                            column().children(move || {
+                                text_input();
+                                spacer().modifier(Modifier::new().height(Dp(400.0)));
+                            });
+                        });
+                });
+        }
+
+        #[tessera]
+        fn scroll_probe_plain() {
+            let controller = remember(ScrollableController::new);
+            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            material_theme()
+                .theme(|| MaterialTheme::default())
+                .child(move || {
+                    layout()
+                        .modifier(
+                            Modifier::new()
+                                .width(Dp(200.0))
+                                .height(Dp(100.0))
+                                .vertical_scroll(controller),
+                        )
+                        .child(move || {
+                            column().children(move || {
+                                spacer().modifier(Modifier::new().height(Dp(56.0)));
+                                spacer().modifier(Modifier::new().height(Dp(400.0)));
+                            });
+                        });
+                });
+        }
+
+        fn scrolled_after_wheel(content: impl Fn(), focus_first: bool) -> f32 {
+            let mut session = start_layout_test_session(layout_test(content).viewport_px(200, 100));
+            let _ = pump_layout_test_session(&mut session, 0);
+            let controller =
+                CONTROLLER.with(|slot| (*slot.borrow()).expect("scrollable controller"));
+            let cursor = Some(PxPosition::new(Px::new(100), Px::new(20)));
+
+            if focus_first {
+                let press = PointerChange::new(
+                    Instant::now(),
+                    1,
+                    CursorEventContent::Pressed(PressKeyEventType::Left),
+                    GestureState::TapCandidate,
+                );
+                let _ = pump_layout_test_session_with_input(
+                    &mut session,
+                    16_666_667,
+                    vec![press],
+                    cursor,
+                );
+                let release = PointerChange::new(
+                    Instant::now(),
+                    1,
+                    CursorEventContent::Released(PressKeyEventType::Left),
+                    GestureState::TapCandidate,
+                );
+                let _ = pump_layout_test_session_with_input(
+                    &mut session,
+                    33_333_334,
+                    vec![release],
+                    cursor,
+                );
+            }
+
+            let scroll = PointerChange::new(
+                Instant::now(),
+                1,
+                CursorEventContent::Scroll(ScrollEventContent {
+                    delta_x: 0.0,
+                    delta_y: -40.0,
+                    unit: ScrollDeltaUnit::Pixel,
+                    source: ScrollEventSource::Wheel,
+                }),
+                GestureState::TapCandidate,
+            );
+
+            let _ =
+                pump_layout_test_session_with_input(&mut session, 50_000_000, vec![scroll], cursor);
+
+            for frame in 4..40u64 {
+                let _ = pump_layout_test_session(&mut session, 16_666_667 * frame);
+            }
+
+            controller.with(|c| c.child_position().y)
+        }
+
+        #[test]
+        fn parent_scrollable_scrolls_without_text_input() {
+            let offset = scrolled_after_wheel(
+                || {
+                    scroll_probe_plain();
+                },
+                false,
+            );
+            assert!(
+                offset != 0.0,
+                "plain content should scroll, got y={offset:?}"
+            );
+        }
+
+        #[test]
+        fn wheel_over_unfocused_input_reaches_parent_scrollable() {
+            let offset = scrolled_after_wheel(
+                || {
+                    scroll_probe_with_input();
+                },
+                false,
+            );
+            assert!(
+                offset != 0.0,
+                "wheel over an unfocused text input should scroll the parent, got y={offset:?}"
+            );
+        }
+
+        #[test]
+        fn wheel_over_focused_input_reaches_parent_scrollable() {
+            let offset = scrolled_after_wheel(
+                || {
+                    scroll_probe_with_input();
+                },
+                true,
+            );
+            assert!(
+                offset != 0.0,
+                "wheel over a focused text input should scroll the parent, got y={offset:?}"
+            );
+        }
+
+        #[tessera]
+        fn scroll_probe_with_field() {
+            let controller = remember(ScrollableController::new);
+            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            material_theme()
+                .theme(|| MaterialTheme::default())
+                .child(move || {
+                    layout()
+                        .modifier(
+                            Modifier::new()
+                                .width(Dp(200.0))
+                                .height(Dp(100.0))
+                                .vertical_scroll(controller),
+                        )
+                        .child(move || {
+                            column().children(move || {
+                                text_field();
+                                spacer().modifier(Modifier::new().height(Dp(400.0)));
+                            });
+                        });
+                });
+        }
+
+        #[test]
+        fn wheel_over_text_field_reaches_parent_scrollable() {
+            let offset = scrolled_after_wheel(
+                || {
+                    scroll_probe_with_field();
+                },
+                false,
+            );
+            assert!(
+                offset != 0.0,
+                "wheel over a text field should scroll the parent, got y={offset:?}"
+            );
+        }
     }
 }

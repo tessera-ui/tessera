@@ -10,13 +10,14 @@ use tessera_ui::{
     AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusProperties, KeyboardInput,
     KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier, PointerInput,
     PointerInputModifierNode, Px, PxPosition, ScrollDeltaUnit, ScrollEventSource, State, key,
-    layout::{LayoutPolicy, MeasureScope, PlacementScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera, winit,
 };
 
 use crate::{
-    alignment::CrossAxisAlignment, modifier::ModifierExt as _, pos_misc::is_position_inside_bounds,
+    alignment::CrossAxisAlignment, layout_flex::cross_axis_child_constraint,
+    modifier::ModifierExt as _, pos_misc::is_position_inside_bounds,
 };
 
 const DEFAULT_SNAP_THRESHOLD: f32 = 0.5;
@@ -493,8 +494,8 @@ impl PartialEq for PagerLayout {
     }
 }
 
-impl LayoutPolicy for PagerLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for PagerLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if self.page_count == 0 {
@@ -539,7 +540,7 @@ impl LayoutPolicy for PagerLayout {
         let mut max_cross = Px::ZERO;
         let mut measured_children = Vec::with_capacity(children.len());
         for &child in &children {
-            let measurement = child.measure(&child_constraint)?;
+            let measurement = child.measure(input, &child_constraint)?;
             max_cross = max_cross.max(self.axis.cross(measurement.size()));
             measured_children.push((child, measurement.size()));
         }
@@ -598,10 +599,14 @@ impl LayoutPolicy for PagerLayout {
             && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let mut result = LayoutResult::default();
         if self.page_count == 0 {
-            return Some(result.into_placements());
+            return Some(result.into_placement_result());
         }
 
         let children = input.children();
@@ -627,21 +632,27 @@ impl LayoutPolicy for PagerLayout {
             result.place_child(child, position);
         }
 
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }
 
-impl RenderPolicy for PagerLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for PagerLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         input.metadata_mut().set_clips_children(true);
+        content.draw(input);
     }
 }
 
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ZeroLayout;
 
-impl LayoutPolicy for ZeroLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ZeroLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::min_from_constraint(
             input.parent_constraint().as_ref(),
         )))
@@ -679,11 +690,14 @@ fn cross_dimension_for_alignment(
     alignment: CrossAxisAlignment,
 ) -> AxisConstraint {
     match alignment {
+        // Deviation from `cross_axis_child_constraint`: a page must fill the
+        // cross axis even when the parent offers a loose interval, so `Stretch`
+        // normalizes to the exact maximum instead of inheriting the interval.
         CrossAxisAlignment::Stretch => match cross_dimension.resolve_max() {
             Some(max) => AxisConstraint::exact(max),
             None => cross_dimension,
         },
-        _ => AxisConstraint::new(Px::ZERO, cross_dimension.resolve_max()),
+        _ => cross_axis_child_constraint(cross_dimension, alignment),
     }
 }
 
@@ -801,7 +815,6 @@ impl PointerInputModifierNode for PagerPointerModifierNode {
             recognizer.update(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
                 is_cursor_in_component,
             )
         });
@@ -1106,9 +1119,7 @@ fn pager_render(
     );
 
     if visible_pages.is_empty() {
-        layout()
-            .modifier(args.modifier.clone())
-            .layout_policy(ZeroLayout);
+        layout().modifier(args.modifier.clone()).policy(ZeroLayout);
         return;
     }
 
@@ -1138,8 +1149,8 @@ fn pager_render(
     };
     layout()
         .modifier(modifier)
-        .layout_policy(policy.clone())
-        .render_policy(policy)
+        .policy(policy.clone())
+        .draw(policy)
         .child(move || {
             for page_index in visible_pages.iter().copied() {
                 key(page_index, || {

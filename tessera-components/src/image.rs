@@ -3,15 +3,12 @@
 //! ## Usage
 //!
 //! Use to display images from pre-decoded data or bytes/assets loaded once.
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use image::GenericImageView;
 use tessera_ui::{
     AssetExt, Color, ComputedData, LayoutResult, MeasurementError, Modifier, Px,
-    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, layout},
     tessera,
 };
 use thiserror::Error;
@@ -48,21 +45,13 @@ pub trait TryIntoImageData {
     fn try_into_image_data(self) -> Result<ImageData, ImageLoadError>;
 }
 
-fn placeholder_image_data() -> Arc<ImageData> {
-    Arc::new(ImageData {
-        data: Arc::new(vec![0, 0, 0, 0]),
-        width: 1,
-        height: 1,
-    })
+fn placeholder_image_data() -> ImageData {
+    ImageData::from_rgba(vec![0, 0, 0, 0], 1, 1)
 }
 
 fn decode_dynamic_image(decoded: image::DynamicImage) -> ImageData {
     let (width, height) = decoded.dimensions();
-    ImageData {
-        data: Arc::new(decoded.to_rgba8().into_raw()),
-        width,
-        height,
-    }
+    ImageData::from_rgba(decoded.to_rgba8().into_raw(), width, height)
 }
 
 fn decode_image_from_bytes(bytes: &[u8]) -> Result<ImageData, ImageLoadError> {
@@ -134,13 +123,13 @@ impl ImageBuilder {
     }
 
     /// Replaces the image data with already-decoded raster pixels.
-    pub fn raster(mut self, data: impl Into<Arc<ImageData>>) -> Self {
+    pub fn raster(mut self, data: impl Into<ImageData>) -> Self {
         self.props.painter = Some(Painter::Raster(data.into()));
         self
     }
 
     /// Replaces the image content with already-decoded vector geometry.
-    pub fn vector(mut self, data: impl Into<Arc<ImageVectorData>>) -> Self {
+    pub fn vector(mut self, data: impl Into<ImageVectorData>) -> Self {
         self.props.painter = Some(Painter::Vector(data.into()));
         self
     }
@@ -150,7 +139,7 @@ impl ImageBuilder {
     where
         T: TryIntoImageData,
     {
-        self.props.painter = Some(Painter::Raster(Arc::new(source.try_into_image_data()?)));
+        self.props.painter = Some(Painter::Raster(source.try_into_image_data()?));
         Ok(self)
     }
 
@@ -171,9 +160,7 @@ impl ImageBuilder {
         let bytes = asset
             .read()
             .map_err(|source| ImageLoadError::AssetRead { source })?;
-        self.props.painter = Some(Painter::Raster(Arc::new(decode_image_from_bytes(
-            bytes.as_ref(),
-        )?)));
+        self.props.painter = Some(Painter::Raster(decode_image_from_bytes(bytes.as_ref())?));
         Ok(self)
     }
 
@@ -197,8 +184,8 @@ struct ImageLayout {
     painter: Painter,
 }
 
-impl LayoutPolicy for ImageLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ImageLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (intrinsic_width, intrinsic_height) = match &self.painter {
             Painter::Vector(data) => (
                 clamp_f32_to_px(data.viewport_width),
@@ -214,8 +201,13 @@ impl LayoutPolicy for ImageLayout {
     }
 }
 
-impl RenderPolicy for ImageLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for ImageLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         match &self.painter {
             Painter::Raster(data) => {
                 let image_command = ImageCommand {
@@ -240,6 +232,7 @@ impl RenderPolicy for ImageLayout {
                     .push_draw_command(vector_command);
             }
         }
+        content.draw(input);
     }
 }
 
@@ -263,14 +256,9 @@ impl RenderPolicy for ImageLayout {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use std::sync::Arc;
 /// use tessera_components::image::{ImageData, image};
 ///
-/// let image_data = ImageData {
-///     data: Arc::new(vec![255, 255, 255, 255]),
-///     width: 1,
-///     height: 1,
-/// };
+/// let image_data = ImageData::from_rgba(vec![255, 255, 255, 255], 1, 1);
 ///
 /// image().painter(image_data);
 /// # }
@@ -284,8 +272,8 @@ pub fn image(#[prop(skip_setter)] painter: Option<Painter>, modifier: Option<Mod
     };
     layout()
         .modifier(modifier)
-        .layout_policy(policy.clone())
-        .render_policy(policy);
+        .policy(policy.clone())
+        .draw(policy);
 }
 
 fn clamp_f32_to_px(value: f32) -> Px {

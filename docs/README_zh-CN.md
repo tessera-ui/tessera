@@ -29,7 +29,7 @@ tessera 是一个专注于性能与可扩展性的跨平台 UI 库。
 - 基于约束的布局系统
 - 实现任意视觉效果(自定义着色器的原生支持)
 - 独立的基本组件库(包括text_input，scrollable和更多)
-- 并行布局支持
+- 基于句柄的布局与测量 API
 - 跨平台支持（TODO：移动端和平台特定功能）
 - 现代化性能分析系统
 
@@ -38,6 +38,11 @@ tessera是一个实验性的框架，如果您在使用过程中遇到任何问�
 ## 概览
 
 - [体验 Web 示例](https://tessera-ui.github.io/tessera/example/)
+
+组件由无状态的 `#[tessera]` 函数组合，并通过 `remember` 创建的 `State<T>` 句柄保存持久状态。
+节点自身的布局和绘制分别使用 `LayoutModifierNode` 与 `DrawModifierNode`，布局策略通过句柄测量和放置直接子节点。
+`PxPosition` 保留小数坐标，在需要整数像素时再舍入。渲染命令分别声明采样区域与绘制区域，
+使特效可以读取更大的背景区域，而不扩大可见范围。
 
 tessera 采用采用声明式编程范式，设计灵感来自于现代 UI 框架，如 react 和 compose。
 

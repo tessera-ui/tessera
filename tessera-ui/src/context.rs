@@ -344,9 +344,10 @@ pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
     }
 
     // Recycle untouched context slots for logic ids recomposed in this pass.
-    with_slot_table_mut(|table| {
+    let removed = with_slot_table_mut(|table| {
         let epoch = table.epoch;
         let mut freed: Vec<(u32, SlotKey)> = Vec::new();
+        let mut removed = Vec::new();
         for (slot, entry) in table.entries.iter_mut().enumerate() {
             if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
                 continue;
@@ -359,7 +360,7 @@ pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
             }
 
             freed.push((slot as u32, entry.key));
-            entry.value = None;
+            removed.push(entry.value.take());
             entry.generation = entry.generation.wrapping_add(1);
             entry.last_alive_epoch = 0;
         }
@@ -368,7 +369,10 @@ pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
             table.key_to_slot.remove(&key);
             table.free_list.push(slot);
         }
+        removed
     });
+    // User destructors may read context after all slot metadata is consistent.
+    drop(removed);
 }
 
 pub(crate) fn live_context_slot_instance_logic_ids() -> HashSet<u64> {
@@ -387,8 +391,9 @@ pub(crate) fn drop_context_slots_for_instance_logic_ids(instance_logic_ids: &Has
         return;
     }
 
-    with_slot_table_mut(|table| {
+    let removed = with_slot_table_mut(|table| {
         let mut freed: Vec<(u32, SlotKey)> = Vec::new();
+        let mut removed = Vec::new();
         for (slot, entry) in table.entries.iter_mut().enumerate() {
             if entry.value.is_none() {
                 continue;
@@ -397,7 +402,7 @@ pub(crate) fn drop_context_slots_for_instance_logic_ids(instance_logic_ids: &Has
                 continue;
             }
             freed.push((slot as u32, entry.key));
-            entry.value = None;
+            removed.push(entry.value.take());
             entry.generation = entry.generation.wrapping_add(1);
             entry.last_alive_epoch = 0;
         }
@@ -406,7 +411,9 @@ pub(crate) fn drop_context_slots_for_instance_logic_ids(instance_logic_ids: &Has
             table.key_to_slot.remove(&key);
             table.free_list.push(slot);
         }
+        removed
     });
+    drop(removed);
 }
 
 /// Handle to a context value created by [`provide_context`] and retrieved by
@@ -747,6 +754,48 @@ mod tests {
         with_execution_context_mut(|context| {
             context.context_stack = vec![ContextMap::new()];
         });
+    }
+
+    #[test]
+    fn context_cleanup_drops_values_outside_table_borrow() {
+        struct ReadOnDrop;
+        impl Drop for ReadOnDrop {
+            fn drop(&mut self) {
+                super::with_slot_table(|table| {
+                    assert!(table.entries.iter().all(|entry| entry.value.is_none()));
+                    assert!(table.key_to_slot.is_empty());
+                });
+            }
+        }
+
+        for recycle in [false, true] {
+            reset_test_state();
+            let key = SlotKey {
+                instance_logic_id: 42,
+                slot_hash: 7,
+                type_id: TypeId::of::<ReadOnDrop>(),
+            };
+            with_slot_table_mut(|table| {
+                table.entries.push(SlotEntry {
+                    key,
+                    generation: 0,
+                    value: Some(Arc::new(ReadOnDrop)),
+                    last_alive_epoch: 0,
+                });
+                table.key_to_slot.insert(key, 0);
+                table.begin_epoch();
+            });
+            let instances = super::HashSet::from_iter([42]);
+            if recycle {
+                super::recycle_recomposed_context_slots_for_instance_logic_ids(&instances);
+            } else {
+                super::drop_context_slots_for_instance_logic_ids(&instances);
+            }
+            super::with_slot_table(|table| {
+                assert_eq!(table.free_list, [0]);
+                assert_eq!(table.entries[0].generation, 1);
+            });
+        }
     }
 
     #[test]

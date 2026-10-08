@@ -19,7 +19,6 @@ use std::{
     time::Duration,
 };
 
-use parking_lot::RwLock;
 use serde::Deserialize;
 use serde_json::{Value, json};
 use tracing::info;
@@ -33,7 +32,7 @@ use crate::{
         CursorEventContent, CursorState, GestureState, MOUSE_POINTER_ID, PointerChange, PointerId,
         PressKeyEventType, ScrollDeltaUnit, ScrollEventContent, ScrollEventSource,
     },
-    dp::SCALE_FACTOR,
+    dp::set_scale_factor,
     focus::flush_pending_focus_callbacks,
     ime_state::ImeState,
     keyboard_state::KeyboardState,
@@ -180,7 +179,7 @@ impl HeadlessRenderer {
         ));
 
         // Headless sessions map logical pixels to physical pixels 1:1.
-        let _ = SCALE_FACTOR.set(RwLock::new(1.0));
+        set_scale_factor(1.0);
 
         {
             let mut context = PipelineContext::new(&mut core);
@@ -278,8 +277,15 @@ impl HeadlessRenderer {
         });
     }
 
-    /// Queues a mouse-wheel scroll at the current pointer position.
-    pub fn pointer_scroll(&mut self, pointer_id: PointerId, delta_x: f32, delta_y: f32) {
+    /// Queues a mouse-wheel scroll at `position`.
+    pub fn pointer_scroll(
+        &mut self,
+        pointer_id: PointerId,
+        position: PxPosition,
+        delta_x: f32,
+        delta_y: f32,
+    ) {
+        self.cursor.update_position(position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
             pointer_id,
@@ -459,8 +465,8 @@ fn snapshot_node(
             let position = metadata.abs_position?;
             let size = metadata.computed_data?;
             Some(json!({
-                "x": position.x.0,
-                "y": position.y.0,
+                "x": position.x_px().0,
+                "y": position.y_px().0,
                 "width": size.width.0,
                 "height": size.height.0,
             }))
@@ -616,6 +622,7 @@ fn handle_request(
                 InputKind::Move => renderer.pointer_move(pointer_id, position),
                 InputKind::Scroll => renderer.pointer_scroll(
                     pointer_id,
+                    position,
                     delta_x.unwrap_or(0.0),
                     delta_y.unwrap_or(0.0),
                 ),

@@ -4,8 +4,6 @@
 //!
 //! Use style modules (for example [`filled`]) to obtain icon assets, then
 //! decode them with [`TryIntoImageVectorData`] or `try_painter_asset(...)`.
-use std::sync::Arc;
-
 use tessera_ui::AssetExt;
 
 use crate::{
@@ -19,7 +17,7 @@ pub use crate::res::material_icons::{filled, outlined, round, sharp, two_tone};
 pub type Asset = crate::res::Asset;
 
 impl TryIntoImageVectorData for Asset {
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
         let bytes = self
             .read()
             .map_err(|source| ImageVectorLoadError::AssetRead { source })?;

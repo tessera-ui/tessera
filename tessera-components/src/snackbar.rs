@@ -491,10 +491,10 @@ pub fn snackbar(
     let has_action = action_label.is_some();
     let action_on_new_line = action_on_new_line && has_action;
     let min_height = SnackbarDefaults::min_height(&message, action_on_new_line);
-    let modifier = modifier.size_in(
+    let modifier = modifier.default_min_size(Dp::ZERO, min_height).size_in(
         None,
         Some(SnackbarDefaults::MAX_WIDTH),
-        Some(min_height),
+        None,
         None,
     );
     let on_action = if has_action {

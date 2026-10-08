@@ -1,19 +1,17 @@
+use std::sync::Arc;
+
 use encase::{ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxSize,
     px::PxPosition,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
-    wgpu::{self, include_wgsl, util::DeviceExt},
+    wgpu::{self, include_wgsl},
 };
 
-use super::command::{ProgressArcCap, ProgressArcCommand};
+use crate::pipelines::SharedQuad;
 
-#[repr(C)]
-#[derive(Copy, Clone, PartialEq, Debug, bytemuck::Pod, bytemuck::Zeroable)]
-struct Vertex {
-    position: [f32; 2],
-}
+use super::command::{ProgressArcCap, ProgressArcCommand};
 
 #[derive(ShaderType, Clone, Copy, Debug, PartialEq)]
 struct ArcUniform {
@@ -37,8 +35,8 @@ struct ArcInstances {
 pub struct ProgressArcPipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
-    quad_vertex_buffer: wgpu::Buffer,
-    quad_index_buffer: wgpu::Buffer,
+    quad_vertex_buffer: Arc<wgpu::Buffer>,
+    quad_index_buffer: Arc<wgpu::Buffer>,
 }
 
 impl ProgressArcPipeline {
@@ -78,7 +76,7 @@ impl ProgressArcPipeline {
                 module: &shader,
                 entry_point: Some("vs_main"),
                 buffers: &[Some(wgpu::VertexBufferLayout {
-                    array_stride: std::mem::size_of::<Vertex>() as wgpu::BufferAddress,
+                    array_stride: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
                     step_mode: wgpu::VertexStepMode::Vertex,
                     attributes: &wgpu::vertex_attr_array![0 => Float32x2],
                 })],
@@ -113,38 +111,13 @@ impl ProgressArcPipeline {
             cache: pipeline_cache,
         });
 
-        let quad_vertices = [
-            Vertex {
-                position: [0.0, 0.0],
-            },
-            Vertex {
-                position: [1.0, 0.0],
-            },
-            Vertex {
-                position: [1.0, 1.0],
-            },
-            Vertex {
-                position: [0.0, 1.0],
-            },
-        ];
-        let quad_vertex_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Progress Arc Quad Vertex Buffer"),
-            contents: bytemuck::cast_slice(&quad_vertices),
-            usage: wgpu::BufferUsages::VERTEX,
-        });
-
-        let quad_indices: [u16; 6] = [0, 2, 1, 0, 3, 2];
-        let quad_index_buffer = gpu.create_buffer_init(&wgpu::util::BufferInitDescriptor {
-            label: Some("Progress Arc Quad Index Buffer"),
-            contents: bytemuck::cast_slice(&quad_indices),
-            usage: wgpu::BufferUsages::INDEX,
-        });
+        let shared_quad = SharedQuad::get(gpu);
 
         Self {
             pipeline,
             bind_group_layout,
-            quad_vertex_buffer,
-            quad_index_buffer,
+            quad_vertex_buffer: Arc::clone(shared_quad.vertex()),
+            quad_index_buffer: Arc::clone(shared_quad.index()),
         }
     }
 }
@@ -157,8 +130,8 @@ fn build_instances(
         .iter()
         .map(|(command, size, position)| ArcUniform {
             position: Vec4::new(
-                position.x.raw() as f32,
-                position.y.raw() as f32,
+                position.x,
+                position.y,
                 size.width.raw() as f32,
                 size.height.raw() as f32,
             ),

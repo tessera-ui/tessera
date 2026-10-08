@@ -5,13 +5,12 @@
 //! Use to let users choose a calendar date in scheduling or form flows.
 use std::{
     ops::RangeInclusive,
-    sync::Arc,
     time::{SystemTime, UNIX_EPOCH},
 };
 
 use tessera_ui::{
-    AxisConstraint, Callback, Color, Dp, Modifier, RenderSlot, State, provide_context, remember,
-    tessera,
+    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State,
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
@@ -30,6 +29,7 @@ use crate::{
 const DATE_COLUMNS: usize = 7;
 const DATE_ROWS: usize = 6;
 const DATE_CELL_SIZE: Dp = Dp(40.0);
+const DATE_PICKER_MAX_WIDTH: Dp = Dp(360.0);
 const DATE_CELL_RADIUS: Dp = Dp(20.0);
 const DATE_GRID_SPACING: Dp = Dp(4.0);
 const HEADER_VERTICAL_PADDING: Dp = Dp(12.0);
@@ -189,59 +189,56 @@ pub enum DatePickerDisplayMode {
     Input,
 }
 
-/// Controls which dates are selectable in the date picker.
-pub trait SelectableDates: Send + Sync {
-    /// Returns true when the date can be selected.
-    fn is_selectable_date(&self, date: CalendarDate) -> bool {
-        let _ = date;
-        true
-    }
-
-    /// Returns true when the year can be selected.
-    fn is_selectable_year(&self, year: i32) -> bool {
-        let _ = year;
-        true
-    }
-}
-
-struct AllDates;
-
-impl SelectableDates for AllDates {}
-
 /// Defaults for date picker behavior.
 pub struct DatePickerDefaults;
 
 impl DatePickerDefaults {
     /// Default selectable year range.
     pub const YEAR_RANGE: RangeInclusive<i32> = 1900..=2100;
-
-    /// Returns a selectable-dates policy that allows every date.
-    pub fn all_dates() -> Arc<dyn SelectableDates> {
-        Arc::new(AllDates)
-    }
 }
 
 /// Holds the current selection and display state for a date picker.
+///
+/// `is_selectable_date` and `is_selectable_year` are optional predicates.
+/// `None` means every date or year is selectable. A date is selectable only
+/// when it is inside the year range and both predicates allow it.
+///
+/// [`CallbackWith`] must be created during a component build, so these
+/// setters have to be called from inside a `#[tessera]` component. Closures
+/// passed to [`date_picker`] are turned into callbacks at that component
+/// boundary.
 pub struct DatePickerState {
     selected_date: Option<CalendarDate>,
     displayed_month: YearMonth,
     year_range: RangeInclusive<i32>,
-    selectable_dates: Arc<dyn SelectableDates>,
+    is_selectable_date: Option<CallbackWith<CalendarDate, bool>>,
+    is_selectable_year: Option<CallbackWith<i32, bool>>,
     display_mode: DatePickerDisplayMode,
 }
 
 impl DatePickerState {
     /// Creates a date picker state.
+    ///
+    /// `is_selectable_date` and `is_selectable_year` are optional. `None`
+    /// allows every date or year. When a callback is supplied, it must already
+    /// have been created during a component build.
     pub fn new(
         initial_selected_date: Option<CalendarDate>,
         initial_displayed_month: Option<YearMonth>,
         year_range: RangeInclusive<i32>,
-        selectable_dates: Arc<dyn SelectableDates>,
+        is_selectable_date: Option<CallbackWith<CalendarDate, bool>>,
+        is_selectable_year: Option<CallbackWith<i32, bool>>,
         display_mode: DatePickerDisplayMode,
     ) -> Self {
         let year_range = normalize_year_range(year_range);
-        let selected_date = initial_selected_date
-            .filter(|date| is_date_selectable(*date, &year_range, &selectable_dates));
+        let selected_date = initial_selected_date.filter(|date| {
+            is_date_selectable(
+                *date,
+                &year_range,
+                is_selectable_date.as_ref(),
+                is_selectable_year.as_ref(),
+            )
+        });
 
         let displayed_month = initial_displayed_month
             .filter(|month| year_range.contains(&month.year()))
@@ -252,7 +249,8 @@ impl DatePickerState {
             selected_date,
             displayed_month,
             year_range,
-            selectable_dates,
+            is_selectable_date,
+            is_selectable_year,
             display_mode,
         }
     }
@@ -277,14 +275,29 @@ impl DatePickerState {
         &self.year_range
     }
 
-    /// Returns the selectable-dates policy.
-    pub fn selectable_dates(&self) -> &Arc<dyn SelectableDates> {
-        &self.selectable_dates
+    /// Returns the date predicate, if one is set.
+    ///
+    /// `None` means every date is selectable, subject to the year range and
+    /// year predicate.
+    pub fn is_selectable_date(&self) -> Option<CallbackWith<CalendarDate, bool>> {
+        self.is_selectable_date
+    }
+
+    /// Returns the year predicate, if one is set.
+    ///
+    /// `None` means every year is selectable, subject to the year range.
+    pub fn is_selectable_year(&self) -> Option<CallbackWith<i32, bool>> {
+        self.is_selectable_year
     }
 
     /// Sets the selected date if it is allowed.
     pub fn set_selected_date(&mut self, date: CalendarDate) -> bool {
-        if !is_date_selectable(date, &self.year_range, &self.selectable_dates) {
+        if !is_date_selectable(
+            date,
+            &self.year_range,
+            self.is_selectable_date.as_ref(),
+            self.is_selectable_year.as_ref(),
+        ) {
             return false;
         }
         self.selected_date = Some(date);
@@ -337,17 +350,48 @@ impl DatePickerState {
         self.year_range = normalize_year_range(year_range);
         self.displayed_month = clamp_month_to_range(self.displayed_month, &self.year_range);
         if let Some(date) = self.selected_date
-            && !is_date_selectable(date, &self.year_range, &self.selectable_dates)
+            && !is_date_selectable(
+                date,
+                &self.year_range,
+                self.is_selectable_date.as_ref(),
+                self.is_selectable_year.as_ref(),
+            )
         {
             self.selected_date = None;
         }
     }
 
-    /// Updates the selectable-dates policy.
-    pub fn set_selectable_dates(&mut self, selectable_dates: Arc<dyn SelectableDates>) {
-        self.selectable_dates = selectable_dates;
+    /// Updates the date predicate.
+    ///
+    /// `None` means every date is selectable. A callback must be created during
+    /// a component build, so call this setter from inside a `#[tessera]`
+    /// component.
+    pub fn set_is_selectable_date(
+        &mut self,
+        is_selectable_date: Option<CallbackWith<CalendarDate, bool>>,
+    ) {
+        self.is_selectable_date = is_selectable_date;
+        self.clear_unselectable_date();
+    }
+
+    /// Updates the year predicate.
+    ///
+    /// `None` means every year is selectable. A callback must be created during
+    /// a component build, so call this setter from inside a `#[tessera]`
+    /// component.
+    pub fn set_is_selectable_year(&mut self, is_selectable_year: Option<CallbackWith<i32, bool>>) {
+        self.is_selectable_year = is_selectable_year;
+        self.clear_unselectable_date();
+    }
+
+    fn clear_unselectable_date(&mut self) {
         if let Some(date) = self.selected_date
-            && !is_date_selectable(date, &self.year_range, &self.selectable_dates)
+            && !is_date_selectable(
+                date,
+                &self.year_range,
+                self.is_selectable_date.as_ref(),
+                self.is_selectable_year.as_ref(),
+            )
         {
             self.selected_date = None;
         }
@@ -358,7 +402,8 @@ impl DatePickerState {
             selected_date: self.selected_date,
             displayed_month: self.displayed_month,
             year_range: self.year_range.clone(),
-            selectable_dates: self.selectable_dates.clone(),
+            is_selectable_date: self.is_selectable_date,
+            is_selectable_year: self.is_selectable_year,
             display_mode: self.display_mode,
         }
     }
@@ -370,7 +415,8 @@ impl Default for DatePickerState {
             None,
             None,
             DatePickerDefaults::YEAR_RANGE,
-            DatePickerDefaults::all_dates(),
+            None,
+            None,
             DatePickerDisplayMode::Picker,
         )
     }
@@ -381,7 +427,8 @@ struct DatePickerSnapshot {
     selected_date: Option<CalendarDate>,
     displayed_month: YearMonth,
     year_range: RangeInclusive<i32>,
-    selectable_dates: Arc<dyn SelectableDates>,
+    is_selectable_date: Option<CallbackWith<CalendarDate, bool>>,
+    is_selectable_year: Option<CallbackWith<i32, bool>>,
     display_mode: DatePickerDisplayMode,
 }
 
@@ -390,7 +437,8 @@ impl PartialEq for DatePickerSnapshot {
         self.selected_date == other.selected_date
             && self.displayed_month == other.displayed_month
             && self.year_range == other.year_range
-            && Arc::ptr_eq(&self.selectable_dates, &other.selectable_dates)
+            && self.is_selectable_date == other.is_selectable_date
+            && self.is_selectable_year == other.is_selectable_year
             && self.display_mode == other.display_mode
     }
 }
@@ -421,7 +469,11 @@ struct DatePickerConfig {
 /// - `initial_displayed_month` — initial displayed month for the internal
 ///   state.
 /// - `year_range` — year range allowed in the internal state.
-/// - `selectable_dates` — selectable-dates policy used by the internal state.
+/// - `is_selectable_date` — optional date predicate for the internal state.
+///   `None` allows every date. A date is selectable only when the year range,
+///   the year predicate, and this predicate all allow it.
+/// - `is_selectable_year` — optional year predicate for the internal state.
+///   `None` allows every year.
 /// - `display_mode` — initial display mode for the internal state.
 /// - `first_day_of_week` — first day of the week for the calendar grid.
 /// - `show_weekday_labels` — whether weekday labels are rendered.
@@ -457,7 +509,8 @@ pub fn date_picker(
     initial_selected_date: Option<CalendarDate>,
     initial_displayed_month: Option<YearMonth>,
     year_range: Option<RangeInclusive<i32>>,
-    selectable_dates: Option<Arc<dyn SelectableDates>>,
+    is_selectable_date: Option<CallbackWith<CalendarDate, bool>>,
+    is_selectable_year: Option<CallbackWith<i32, bool>>,
     display_mode: Option<DatePickerDisplayMode>,
     first_day_of_week: Option<Weekday>,
     show_weekday_labels: Option<bool>,
@@ -472,39 +525,47 @@ pub fn date_picker(
     let show_weekday_labels = show_weekday_labels.unwrap_or(true);
     let show_mode_toggle = show_mode_toggle.unwrap_or(true);
     let year_range = year_range.unwrap_or(DatePickerDefaults::YEAR_RANGE);
-    let selectable_dates = selectable_dates.unwrap_or_else(DatePickerDefaults::all_dates);
     let state = state.unwrap_or_else(|| {
         remember(|| {
             DatePickerState::new(
                 initial_selected_date,
                 initial_displayed_month,
                 year_range.clone(),
-                selectable_dates.clone(),
+                is_selectable_date,
+                is_selectable_year,
                 display_mode,
             )
         })
     });
-    date_picker_inner(DatePickerConfig {
-        modifier,
-        first_day_of_week,
-        show_weekday_labels,
-        show_mode_toggle,
-        title,
-        headline,
-        state: Some(state),
-    });
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    date_picker_inner(
+        DatePickerConfig {
+            modifier,
+            first_day_of_week,
+            show_weekday_labels,
+            show_mode_toggle,
+            title,
+            headline,
+            state: Some(state),
+        },
+        &theme,
+    );
 }
 
-fn date_picker_inner(args: DatePickerConfig) {
+fn date_picker_inner(args: DatePickerConfig, theme: &MaterialTheme) {
     let state = args
         .state
         .expect("date_picker_inner requires state to be set");
     let snapshot = state.with(|s| s.snapshot());
-    let theme = MaterialTheme::default();
-    let scheme = theme.color_scheme;
+    let theme = theme.clone();
+    let scheme = theme.color_scheme.clone();
     let typography = theme.typography;
 
-    let modifier = args.modifier;
+    let modifier =
+        args.modifier
+            .then(Modifier::new().size_in(None, Some(DATE_PICKER_MAX_WIDTH), None, None));
     let first_day_of_week = args.first_day_of_week;
     let show_weekday_labels = args.show_weekday_labels;
     let show_mode_toggle = args.show_mode_toggle;
@@ -516,6 +577,7 @@ fn date_picker_inner(args: DatePickerConfig) {
         .unwrap_or_else(|| default_headline(snapshot.selected_date));
 
     column().modifier(modifier).children(move || {
+        let header_theme = theme.clone();
         {
             let title_text = title_text.clone();
             let headline_text = headline_text.clone();
@@ -562,7 +624,7 @@ fn date_picker_inner(args: DatePickerConfig) {
 
                     if show_mode_toggle {
                         {
-                            display_mode_toggle(state);
+                            display_mode_toggle(state, &header_theme);
                         };
                     }
                 });
@@ -576,12 +638,13 @@ fn date_picker_inner(args: DatePickerConfig) {
                         first_day_of_week,
                         show_weekday_labels,
                         state,
+                        &theme,
                     );
                 };
             }
             DatePickerDisplayMode::Input => {
                 {
-                    input_view(snapshot.clone(), state);
+                    input_view(snapshot.clone(), state, &theme);
                 };
             }
         }
@@ -647,7 +710,10 @@ pub fn date_picker_dialog(
     let picker_first_day_of_week = picker_first_day_of_week.unwrap_or_default();
     let picker_show_weekday_labels = picker_show_weekday_labels.unwrap_or(true);
     let picker_show_mode_toggle = picker_show_mode_toggle.unwrap_or(true);
-    let scheme = MaterialTheme::default().color_scheme;
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let scheme = theme.color_scheme.clone();
     let has_confirm = confirm_button.is_some();
     let has_dismiss = dismiss_button.is_some();
 
@@ -665,7 +731,7 @@ pub fn date_picker_dialog(
                 {
                     text()
                         .content(title.clone())
-                        .size(MaterialTheme::default().typography.title_medium.font_size)
+                        .size(theme.typography.title_medium.font_size)
                         .color(scheme.on_surface);
                 };
                 {
@@ -674,15 +740,18 @@ pub fn date_picker_dialog(
             }
 
             {
-                date_picker_inner(DatePickerConfig {
-                    modifier: picker_modifier.clone(),
-                    first_day_of_week: picker_first_day_of_week,
-                    show_weekday_labels: picker_show_weekday_labels,
-                    show_mode_toggle: picker_show_mode_toggle,
-                    title: picker_title.clone(),
-                    headline: picker_headline.clone(),
-                    state: Some(state),
-                });
+                date_picker_inner(
+                    DatePickerConfig {
+                        modifier: picker_modifier.clone(),
+                        first_day_of_week: picker_first_day_of_week,
+                        show_weekday_labels: picker_show_weekday_labels,
+                        show_mode_toggle: picker_show_mode_toggle,
+                        title: picker_title.clone(),
+                        headline: picker_headline.clone(),
+                        state: Some(state),
+                    },
+                    &theme,
+                );
             };
 
             if has_confirm || has_dismiss {
@@ -727,30 +796,38 @@ fn calendar_view(
     first_day_of_week: Weekday,
     show_weekday_labels: bool,
     state: State<DatePickerState>,
+    theme: &MaterialTheme,
 ) {
+    let theme = theme.clone();
     column()
         .modifier(Modifier::new().fill_max_width())
         .children(move || {
             let nav_snapshot = snapshot.clone();
             {
-                month_navigation(nav_snapshot.clone(), state);
+                month_navigation(nav_snapshot.clone(), state, &theme);
             };
 
             if show_weekday_labels {
                 {
-                    weekday_labels_row(first_day_of_week);
+                    weekday_labels_row(first_day_of_week, &theme);
                 };
             }
 
             let grid_snapshot = snapshot.clone();
             {
-                date_grid(grid_snapshot.clone(), first_day_of_week, state);
+                date_grid(grid_snapshot.clone(), first_day_of_week, state, &theme);
             };
         });
 }
 
-fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn month_navigation(
+    snapshot: DatePickerSnapshot,
+    state: State<DatePickerState>,
+    theme: &MaterialTheme,
+) {
+    let theme = theme.clone();
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     let can_prev = can_navigate_prev(snapshot.displayed_month, &snapshot.year_range);
     let can_next = can_navigate_next(snapshot.displayed_month, &snapshot.year_range);
     let month_label = format_month_year(snapshot.displayed_month);
@@ -767,24 +844,25 @@ fn month_navigation(snapshot: DatePickerSnapshot, state: State<DatePickerState>)
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
             {
-                nav_button("<", can_prev, on_prev);
+                nav_button("<", can_prev, on_prev, &theme);
             };
 
             {
                 text()
                     .content(month_label.clone())
-                    .size(MaterialTheme::default().typography.title_medium.font_size)
+                    .size(typography.title_medium.font_size)
                     .color(scheme.on_surface);
             };
 
             {
-                nav_button(">", can_next, on_next);
+                nav_button(">", can_next, on_next, &theme);
             };
         });
 }
 
-fn weekday_labels_row(first_day_of_week: Weekday) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn weekday_labels_row(first_day_of_week: Weekday, theme: &MaterialTheme) {
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     let labels = weekday_sequence(first_day_of_week);
 
     flow_row()
@@ -793,6 +871,8 @@ fn weekday_labels_row(first_day_of_week: Weekday) {
         .children(move || {
             for weekday in labels {
                 let label = weekday_short_label(weekday);
+                let scheme = scheme.clone();
+                let typography = typography;
                 {
                     surface()
                         .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
@@ -801,7 +881,7 @@ fn weekday_labels_row(first_day_of_week: Weekday) {
                         .child(move || {
                             text()
                                 .content(label)
-                                .size(MaterialTheme::default().typography.label_small.font_size)
+                                .size(typography.label_small.font_size)
                                 .color(scheme.on_surface_variant);
                         });
                 };
@@ -813,8 +893,10 @@ fn date_grid(
     snapshot: DatePickerSnapshot,
     first_day_of_week: Weekday,
     state: State<DatePickerState>,
+    theme: &MaterialTheme,
 ) {
-    let scheme = MaterialTheme::default().color_scheme;
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     let today = CalendarDate::today();
     let grid = build_month_grid(snapshot.displayed_month, first_day_of_week);
 
@@ -829,8 +911,12 @@ fn date_grid(
                 if let Some(date) = cell {
                     let is_selected = snapshot.selected_date == Some(date);
                     let is_today = date == today;
-                    let is_enabled =
-                        is_date_selectable(date, &snapshot.year_range, &snapshot.selectable_dates);
+                    let is_enabled = is_date_selectable(
+                        date,
+                        &snapshot.year_range,
+                        snapshot.is_selectable_date.as_ref(),
+                        snapshot.is_selectable_year.as_ref(),
+                    );
                     let text_color = if is_selected {
                         scheme.on_primary
                     } else if is_enabled {
@@ -876,7 +962,7 @@ fn date_grid(
                             .child(move || {
                                 text()
                                     .content(format!("{}", date.day()))
-                                    .size(MaterialTheme::default().typography.body_medium.font_size)
+                                    .size(typography.body_medium.font_size)
                                     .color(text_color);
                             });
                     } else {
@@ -889,7 +975,7 @@ fn date_grid(
                             .child(move || {
                                 text()
                                     .content(format!("{}", date.day()))
-                                    .size(MaterialTheme::default().typography.body_medium.font_size)
+                                    .size(typography.body_medium.font_size)
                                     .color(text_color);
                             });
                     }
@@ -900,8 +986,10 @@ fn date_grid(
         });
 }
 
-fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>, theme: &MaterialTheme) {
+    let theme = theme.clone();
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     let current_date = snapshot
         .selected_date
         .or_else(|| snapshot.displayed_month.to_date(1))
@@ -926,6 +1014,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                     Callback::new(move || {
                         adjust_input_date(state, increment_snapshot.clone(), InputField::Year, 1);
                     }),
+                    &theme,
                 );
             };
             {
@@ -943,6 +1032,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                     Callback::new(move || {
                         adjust_input_date(state, increment_snapshot.clone(), InputField::Month, 1);
                     }),
+                    &theme,
                 );
             };
             {
@@ -960,6 +1050,7 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                     Callback::new(move || {
                         adjust_input_date(state, increment_snapshot.clone(), InputField::Day, 1);
                     }),
+                    &theme,
                 );
             };
             {
@@ -973,14 +1064,22 @@ fn input_view(snapshot: DatePickerSnapshot, state: State<DatePickerState>) {
                 };
                 text()
                     .content(description)
-                    .size(MaterialTheme::default().typography.body_small.font_size)
+                    .size(typography.body_small.font_size)
                     .color(scheme.on_surface_variant);
             };
         });
 }
 
-fn input_row(label: &'static str, value: String, on_decrement: Callback, on_increment: Callback) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn input_row(
+    label: &'static str,
+    value: String,
+    on_decrement: Callback,
+    on_increment: Callback,
+    theme: &MaterialTheme,
+) {
+    let theme = theme.clone();
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     row()
         .modifier(Modifier::new().fill_max_width())
         .main_axis_alignment(MainAxisAlignment::SpaceBetween)
@@ -989,17 +1088,20 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
             {
                 text()
                     .content(label)
-                    .size(MaterialTheme::default().typography.body_medium.font_size)
+                    .size(typography.body_medium.font_size)
                     .color(scheme.on_surface_variant);
             };
             {
                 let value = value.clone();
+                let theme = theme.clone();
+                let scheme = scheme.clone();
+                let typography = typography;
                 row()
                     .main_axis_alignment(MainAxisAlignment::Center)
                     .cross_axis_alignment(CrossAxisAlignment::Center)
                     .children(move || {
                         {
-                            nav_button("-", true, on_decrement);
+                            nav_button("-", true, on_decrement, &theme);
                         };
                         {
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
@@ -1007,28 +1109,33 @@ fn input_row(label: &'static str, value: String, on_decrement: Callback, on_incr
                         {
                             text()
                                 .content(value.clone())
-                                .size(MaterialTheme::default().typography.body_large.font_size)
+                                .size(typography.body_large.font_size)
                                 .color(scheme.on_surface);
                         };
                         {
                             spacer().modifier(Modifier::new().width(Dp(8.0)));
                         };
                         {
-                            nav_button("+", true, on_increment);
+                            nav_button("+", true, on_increment, &theme);
                         };
                     });
             };
         });
 }
 
-fn display_mode_toggle(state: State<DatePickerState>) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn display_mode_toggle(state: State<DatePickerState>, theme: &MaterialTheme) {
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     let label = state.with(|s| match s.display_mode() {
         DatePickerDisplayMode::Picker => "Input",
         DatePickerDisplayMode::Input => "Calendar",
     });
     surface()
-        .modifier(Modifier::new().padding_all(Dp(4.0)))
+        .modifier(
+            Modifier::new()
+                .padding_symmetric(Dp(12.0), Dp(8.0))
+                .default_min_size(Dp(56.0), Dp(40.0)),
+        )
         .style(SurfaceStyle::Filled {
             color: scheme.surface_container_high,
         })
@@ -1040,13 +1147,14 @@ fn display_mode_toggle(state: State<DatePickerState>) {
         .child(move || {
             text()
                 .content(label)
-                .size(MaterialTheme::default().typography.label_small.font_size)
+                .size(typography.label_small.font_size)
                 .color(scheme.primary);
         });
 }
 
-fn nav_button(label: &'static str, enabled: bool, on_click: Callback) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn nav_button(label: &'static str, enabled: bool, on_click: Callback, theme: &MaterialTheme) {
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     let text_color = if enabled {
         scheme.on_surface
     } else {
@@ -1070,7 +1178,7 @@ fn nav_button(label: &'static str, enabled: bool, on_click: Callback) {
         .child(move || {
             text()
                 .content(label)
-                .size(MaterialTheme::default().typography.body_medium.font_size)
+                .size(typography.body_medium.font_size)
                 .color(text_color);
         });
 }
@@ -1228,11 +1336,16 @@ fn build_month_grid(month: YearMonth, first_day_of_week: Weekday) -> Vec<Option<
 fn is_date_selectable(
     date: CalendarDate,
     year_range: &RangeInclusive<i32>,
-    selectable_dates: &Arc<dyn SelectableDates>,
+    is_selectable_date: Option<&CallbackWith<CalendarDate, bool>>,
+    is_selectable_year: Option<&CallbackWith<i32, bool>>,
 ) -> bool {
-    year_range.contains(&date.year())
-        && selectable_dates.is_selectable_year(date.year())
-        && selectable_dates.is_selectable_date(date)
+    let year_allowed = is_selectable_year
+        .map(|predicate| predicate.call(date.year()))
+        .unwrap_or(true);
+    let date_allowed = is_selectable_date
+        .map(|predicate| predicate.call(date))
+        .unwrap_or(true);
+    year_range.contains(&date.year()) && year_allowed && date_allowed
 }
 
 fn normalize_year_range(range: RangeInclusive<i32>) -> RangeInclusive<i32> {

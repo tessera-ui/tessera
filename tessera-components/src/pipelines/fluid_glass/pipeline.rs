@@ -1,4 +1,4 @@
-use std::{collections::HashMap, num::NonZeroUsize, sync::Arc};
+use std::{collections::HashMap, num::NonZeroUsize};
 
 use encase::{ShaderType, StorageBuffer, UniformBuffer};
 use glam::{Vec2, Vec4};
@@ -38,12 +38,13 @@ struct FluidGlassSdfCacheKey {
 }
 
 struct FluidGlassSdfCacheEntry {
+    _texture: wgpu::Texture,
     view: wgpu::TextureView,
 }
 
 struct PreparedGlassInstance {
     uniforms: GlassUniforms,
-    sdf_entry: Option<Arc<FluidGlassSdfCacheEntry>>,
+    sdf_key: Option<FluidGlassSdfCacheKey>,
 }
 
 struct InstanceBuildInput<'a> {
@@ -225,7 +226,10 @@ impl FluidGlassSdfGenerator {
 
         queue.submit(Some(encoder.finish()));
 
-        FluidGlassSdfCacheEntry { view }
+        FluidGlassSdfCacheEntry {
+            _texture: texture,
+            view,
+        }
     }
 }
 
@@ -272,7 +276,7 @@ pub(crate) struct FluidGlassPipeline {
     sampler: wgpu::Sampler,
     sdf_sampler: wgpu::Sampler,
     sdf_generator: FluidGlassSdfGenerator,
-    sdf_cache: LruCache<FluidGlassSdfCacheKey, Arc<FluidGlassSdfCacheEntry>>,
+    sdf_cache: LruCache<FluidGlassSdfCacheKey, FluidGlassSdfCacheEntry>,
     /// Tracks SDF usage frequency to avoid caching transient SDFs
     sdf_heat_tracker: HashMap<FluidGlassSdfCacheKey, SdfHeatTracker>,
     /// Current frame number for heat tracking
@@ -485,7 +489,7 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
         context.render_pass.set_pipeline(&self.pipeline);
         let mut alive_buffers: Vec<wgpu::Buffer> = Vec::new();
 
-        for (entry, uniforms) in groups {
+        for (key, uniforms) in groups {
             if uniforms.is_empty() {
                 continue;
             }
@@ -494,9 +498,9 @@ impl DrawablePipeline<FluidGlassCommand> for FluidGlassPipeline {
                     Ok(buf) => buf,
                     Err(_) => continue,
                 };
-            let sdf_view = entry
+            let sdf_view = key
                 .as_ref()
-                .map(|entry| &entry.view)
+                .and_then(|key| self.sdf_cache.peek(key).map(|entry| &entry.view))
                 .unwrap_or(&self.dummy_sdf_view);
             let bind_group = self.create_bind_group(
                 context.device,
@@ -539,10 +543,10 @@ impl FluidGlassPipeline {
         };
 
         let rect_uv_bounds = [
-            start_pos.x.0 as f32 / screen_w,
-            start_pos.y.0 as f32 / screen_h,
-            (start_pos.x.0 + size.width.0) as f32 / screen_w,
-            (start_pos.y.0 + size.height.0) as f32 / screen_h,
+            start_pos.x / screen_w,
+            start_pos.y / screen_h,
+            (start_pos.x + size.width.0 as f32) / screen_w,
+            (start_pos.y + size.height.0 as f32) / screen_h,
         ];
 
         let resolved_shape = render.shape.resolve_for_size(*size);
@@ -566,7 +570,7 @@ impl FluidGlassPipeline {
             .map(|b| b.width.0 as f32)
             .unwrap_or(0.0);
 
-        let sdf_entry =
+        let sdf_key =
             self.maybe_get_sdf_entry(gpu, queue, size, corner_radii, shape_type, corner_g2);
 
         let uniforms = GlassUniforms {
@@ -585,13 +589,10 @@ impl FluidGlassPipeline {
             ripple_alpha: render.ripple_alpha.unwrap_or(0.0),
             ripple_strength: render.ripple_strength.unwrap_or(0.0),
             border_width,
-            sdf_cache_enabled: if sdf_entry.is_some() { 1.0 } else { 0.0 },
+            sdf_cache_enabled: if sdf_key.is_some() { 1.0 } else { 0.0 },
         };
 
-        PreparedGlassInstance {
-            uniforms,
-            sdf_entry,
-        }
+        PreparedGlassInstance { uniforms, sdf_key }
     }
 
     fn build_instances(
@@ -635,7 +636,7 @@ impl FluidGlassPipeline {
         corner_radii: Vec4,
         shape_type: f32,
         corner_g2: Vec4,
-    ) -> Option<Arc<FluidGlassSdfCacheEntry>> {
+    ) -> Option<FluidGlassSdfCacheKey> {
         if !(shape_type == 0.0 || shape_type == 1.0) {
             return None;
         }
@@ -648,12 +649,11 @@ impl FluidGlassPipeline {
 
         let key = FluidGlassSdfCacheKey::new(shape_type, corner_radii, corner_g2, width, height);
 
-        // Check if already cached
-        if let Some(entry) = self.sdf_cache.get(&key) {
-            return Some(entry.clone());
+        if self.sdf_cache.contains(&key) {
+            self.sdf_cache.promote(&key);
+            return Some(key);
         }
 
-        // Update heat tracking
         let tracker = self
             .sdf_heat_tracker
             .entry(key.clone())
@@ -662,27 +662,24 @@ impl FluidGlassPipeline {
                 last_seen_frame: self.current_frame,
             });
 
-        // Update tracker
         if tracker.last_seen_frame != self.current_frame {
             tracker.hit_count += 1;
             tracker.last_seen_frame = self.current_frame;
         }
 
-        // Only cache if SDF has been requested frequently enough
         if tracker.hit_count >= SDF_CACHE_HEAT_THRESHOLD {
-            let entry = Arc::new(self.sdf_generator.generate(SdfGenerationInput {
+            let entry = self.sdf_generator.generate(SdfGenerationInput {
                 device: gpu,
                 queue,
                 size: (width, height),
                 corner_radii,
                 shape_type,
                 corner_g2,
-            }));
+            });
 
-            self.sdf_cache.put(key, entry.clone());
-            Some(entry)
+            self.sdf_cache.put(key.clone(), entry);
+            Some(key)
         } else {
-            // SDF is not hot enough yet, don't cache
             None
         }
     }
@@ -755,31 +752,18 @@ impl FluidGlassPipeline {
     fn group_instances_by_sdf(
         &self,
         instances: Vec<PreparedGlassInstance>,
-    ) -> Vec<(Option<Arc<FluidGlassSdfCacheEntry>>, Vec<GlassUniforms>)> {
-        let mut groups: Vec<(Option<Arc<FluidGlassSdfCacheEntry>>, Vec<GlassUniforms>)> =
-            Vec::new();
+    ) -> Vec<(Option<FluidGlassSdfCacheKey>, Vec<GlassUniforms>)> {
+        let mut groups: Vec<(Option<FluidGlassSdfCacheKey>, Vec<GlassUniforms>)> = Vec::new();
 
         for instance in instances {
-            if let Some((_, uniforms)) = groups.iter_mut().find(|(entry, _)| {
-                Self::sdf_entries_match(entry.as_ref(), instance.sdf_entry.as_ref())
-            }) {
+            if let Some((_, uniforms)) = groups.iter_mut().find(|(key, _)| *key == instance.sdf_key)
+            {
                 uniforms.push(instance.uniforms);
             } else {
-                groups.push((instance.sdf_entry.clone(), vec![instance.uniforms]));
+                groups.push((instance.sdf_key, vec![instance.uniforms]));
             }
         }
 
         groups
-    }
-
-    fn sdf_entries_match(
-        a: Option<&Arc<FluidGlassSdfCacheEntry>>,
-        b: Option<&Arc<FluidGlassSdfCacheEntry>>,
-    ) -> bool {
-        match (a, b) {
-            (None, None) => true,
-            (Some(left), Some(right)) => Arc::ptr_eq(left, right),
-            _ => false,
-        }
     }
 }

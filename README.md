@@ -39,6 +39,14 @@ Tessera is an experimental framework. If you encounter any issues, please feel f
 
 - [Try the Web Demo](https://tessera-ui.github.io/tessera/example/)
 
+Components compose stateless `#[tessera]` functions and keep persistent values in
+`State<T>` handles created with `remember`. Node-local layout and drawing use
+`LayoutModifierNode` and `DrawModifierNode`; layout policies measure and place
+direct children through handles. `PxPosition` preserves fractional coordinates
+until an integer pixel consumer rounds them. Rendering commands declare their
+sampling region separately from their drawing region, so effects can sample a
+wider background without expanding their visible bounds.
+
 Tessera uses a declarative programming paradigm inspired by modern UI frameworks such as React and Compose.
 
 We start by declaring a UI component:

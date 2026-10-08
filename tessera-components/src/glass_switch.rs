@@ -10,7 +10,7 @@ use tessera_ui::{
     MeasurementError, Modifier, Px, PxPosition, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     receive_frame_nanos, remember, tessera,
 };
 
@@ -237,7 +237,7 @@ pub fn glass_switch(
 
     layout()
         .modifier(modifier)
-        .layout_policy(GlassSwitchLayout {
+        .policy(GlassSwitchLayout {
             width: width_px,
             height: height_px,
             thumb_padding: thumb_padding.to_px(),
@@ -277,8 +277,8 @@ struct GlassSwitchLayout {
     progress: f32,
 }
 
-impl LayoutPolicy for GlassSwitchLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for GlassSwitchLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let track = children[0];
@@ -287,8 +287,8 @@ impl LayoutPolicy for GlassSwitchLayout {
         let track_constraint = Constraint::exact(self.width, self.height);
         let thumb_constraint = Constraint::NONE;
 
-        let _ = track.measure(&track_constraint)?;
-        let thumb_size = thumb.measure(&thumb_constraint)?;
+        let _ = track.measure(input, &track_constraint)?;
+        let thumb_size = thumb.measure(input, &thumb_constraint)?;
 
         let eased_progress = animation::easing(self.progress);
 
@@ -320,11 +320,15 @@ impl LayoutPolicy for GlassSwitchLayout {
             && self.progress == other.progress
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() < 2 {
-            return Some(result.into_placements());
+            return Some(result.into_placement_result());
         }
         let track = children[0];
         let thumb = children[1];
@@ -339,6 +343,6 @@ impl LayoutPolicy for GlassSwitchLayout {
         let thumb_y = (self.height - thumb_size.height) / 2;
 
         result.place_child(thumb, PxPosition::new(Px(thumb_x as i32), thumb_y));
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }

@@ -52,10 +52,7 @@
 
 use std::ops::{AddAssign, Neg, SubAssign};
 
-use crate::{
-    ComputedData,
-    dp::{Dp, SCALE_FACTOR},
-};
+use crate::{ComputedData, dp::Dp};
 
 /// A physical pixel coordinate value.
 ///
@@ -175,7 +172,7 @@ impl Px {
     /// let dp_value = px_value.to_dp();
     /// ```
     pub fn to_dp(self) -> Dp {
-        let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
+        let scale_factor = crate::dp::scale_factor();
         Dp((self.0 as f64) / scale_factor)
     }
 
@@ -399,9 +396,9 @@ impl Px {
 
 /// A 2D position in physical pixel space.
 ///
-/// This type represents a position with x and y coordinates in physical pixel
-/// space. Physical pixels correspond directly to screen pixels and are used
-/// internally by the rendering system.
+/// Coordinates may be fractional so layout can place nodes at sub-pixel
+/// offsets. Integer consumers use [`PxPosition::x_px`] / [`PxPosition::y_px`]
+/// to round to the nearest whole pixel.
 ///
 /// # Coordinate System
 ///
@@ -416,33 +413,31 @@ impl Px {
 /// ```
 /// use tessera_ui::px::{Px, PxPosition};
 ///
-/// // Create a position
 /// let position = PxPosition::new(Px::new(100), Px::new(200));
+/// let half = PxPosition::from_f32_xy(7.5, 7.5);
+/// assert_eq!(half.x_px(), Px::new(8));
 ///
-/// // Offset the position
 /// let offset_position = position.offset(Px::new(10), Px::new(-5));
 ///
-/// // Calculate distance between positions
 /// let other_position = PxPosition::new(Px::new(103), Px::new(196));
 /// let distance = position.distance_to(other_position);
 ///
-/// // Arithmetic operations
 /// let sum = position + other_position;
 /// let diff = position - other_position;
 /// ```
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct PxPosition {
-    /// The x-coordinate in physical pixels
-    pub x: Px,
-    /// The y-coordinate in physical pixels
-    pub y: Px,
+    /// The x-coordinate in physical pixels. May be fractional.
+    pub x: f32,
+    /// The y-coordinate in physical pixels. May be fractional.
+    pub y: f32,
 }
 
 impl PxPosition {
     /// A constant representing the zero position (0, 0).
-    pub const ZERO: Self = Self { x: Px(0), y: Px(0) };
+    pub const ZERO: Self = Self { x: 0.0, y: 0.0 };
 
-    /// Creates a new position from x and y coordinates.
+    /// Creates a new position from whole-pixel coordinates.
     ///
     /// # Arguments
     ///
@@ -455,18 +450,42 @@ impl PxPosition {
     /// use tessera_ui::px::{Px, PxPosition};
     ///
     /// let position = PxPosition::new(Px::new(100), Px::new(200));
-    /// assert_eq!(position.x, Px::new(100));
-    /// assert_eq!(position.y, Px::new(200));
+    /// assert_eq!(position.x_px(), Px::new(100));
+    /// assert_eq!(position.y_px(), Px::new(200));
     /// ```
     pub const fn new(x: Px, y: Px) -> Self {
+        Self {
+            x: x.0 as f32,
+            y: y.0 as f32,
+        }
+    }
+
+    /// Creates a position from fractional pixel coordinates.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tessera_ui::px::{Px, PxPosition};
+    ///
+    /// let position = PxPosition::from_f32_xy(7.5, 8.25);
+    /// assert_eq!(position.x_px(), Px::new(8));
+    /// assert_eq!(position.y_px(), Px::new(8));
+    /// ```
+    pub const fn from_f32_xy(x: f32, y: f32) -> Self {
         Self { x, y }
     }
 
-    /// Offsets the position by the given deltas.
-    ///
-    /// # Panics
-    ///
-    /// This function may panic on overflow in debug builds.
+    /// Returns the x-coordinate rounded to the nearest whole pixel.
+    pub fn x_px(self) -> Px {
+        Px(self.x.round() as i32)
+    }
+
+    /// Returns the y-coordinate rounded to the nearest whole pixel.
+    pub fn y_px(self) -> Px {
+        Px(self.y.round() as i32)
+    }
+
+    /// Offsets the position by the given whole-pixel deltas.
     ///
     /// # Arguments
     ///
@@ -484,6 +503,14 @@ impl PxPosition {
     /// ```
     pub fn offset(self, dx: Px, dy: Px) -> Self {
         Self {
+            x: self.x + dx.0 as f32,
+            y: self.y + dy.0 as f32,
+        }
+    }
+
+    /// Offsets the position by fractional pixel deltas.
+    pub fn offset_f32(self, dx: f32, dy: f32) -> Self {
+        Self {
             x: self.x + dx,
             y: self.y + dy,
         }
@@ -493,42 +520,16 @@ impl PxPosition {
     ///
     /// This prevents overflow by clamping the result to the valid coordinate
     /// range.
-    ///
-    /// # Arguments
-    ///
-    /// * `dx` - The x-axis offset in physical pixels
-    /// * `dy` - The y-axis offset in physical pixels
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::new(Px::new(10), Px::new(20));
-    /// let offset_position = position.saturating_offset(Px::new(5), Px::new(-3));
-    /// assert_eq!(offset_position, PxPosition::new(Px::new(15), Px::new(17)));
-    ///
-    /// // Prevents overflow
-    /// let max_position = PxPosition::new(Px::new(i32::MAX), Px::new(i32::MAX));
-    /// let safe_offset = max_position.saturating_offset(Px::new(1), Px::new(1));
-    /// assert_eq!(safe_offset, max_position);
-    /// ```
     pub fn saturating_offset(self, dx: Px, dy: Px) -> Self {
+        const MIN: f32 = i32::MIN as f32;
+        const MAX: f32 = i32::MAX as f32;
         Self {
-            x: self.x.saturating_add(dx),
-            y: self.y.saturating_add(dy),
+            x: (self.x + dx.0 as f32).clamp(MIN, MAX),
+            y: (self.y + dy.0 as f32).clamp(MIN, MAX),
         }
     }
 
     /// Calculates the Euclidean distance to another position.
-    ///
-    /// # Arguments
-    ///
-    /// * `other` - The other position to calculate distance to
-    ///
-    /// # Returns
-    ///
-    /// The distance as a floating-point value
     ///
     /// # Examples
     ///
@@ -540,164 +541,60 @@ impl PxPosition {
     /// assert_eq!(pos1.distance_to(pos2), 5.0);
     /// ```
     pub fn distance_to(self, other: Self) -> f32 {
-        let dx = (self.x.0 - other.x.0) as f32;
-        let dy = (self.y.0 - other.y.0) as f32;
+        let dx = self.x - other.x;
+        let dy = self.y - other.y;
         (dx * dx + dy * dy).sqrt()
     }
 
     /// Converts the position to a 2D f32 array.
-    ///
-    /// # Returns
-    ///
-    /// An array `[x, y]` where both coordinates are converted to f32
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::new(Px::new(10), Px::new(20));
-    /// assert_eq!(position.to_f32_arr2(), [10.0, 20.0]);
-    /// ```
     pub fn to_f32_arr2(self) -> [f32; 2] {
-        [self.x.0 as f32, self.y.0 as f32]
+        [self.x, self.y]
     }
 
     /// Converts the position to a 3D f32 array with z=0.
-    ///
-    /// # Returns
-    ///
-    /// An array `[x, y, 0.0]` where x and y are converted to f32 and z is 0.0
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::new(Px::new(10), Px::new(20));
-    /// assert_eq!(position.to_f32_arr3(), [10.0, 20.0, 0.0]);
-    /// ```
     pub fn to_f32_arr3(self) -> [f32; 3] {
-        [self.x.0 as f32, self.y.0 as f32, 0.0]
+        [self.x, self.y, 0.0]
     }
 
     /// Creates a position from a 2D f32 array.
-    ///
-    /// # Arguments
-    ///
-    /// * `arr` - An array `[x, y]` where both values will be converted to i32
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::from_f32_arr2([10.5, 20.7]);
-    /// assert_eq!(position, PxPosition::new(Px::new(10), Px::new(20)));
-    /// ```
     pub fn from_f32_arr2(arr: [f32; 2]) -> Self {
         Self {
-            x: Px::new(arr[0] as i32),
-            y: Px::new(arr[1] as i32),
+            x: arr[0],
+            y: arr[1],
         }
     }
 
     /// Creates a position from a 3D f32 array, ignoring the z component.
-    ///
-    /// # Arguments
-    ///
-    /// * `arr` - An array `[x, y, z]` where only x and y are used
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::from_f32_arr3([10.5, 20.7, 30.9]);
-    /// assert_eq!(position, PxPosition::new(Px::new(10), Px::new(20)));
-    /// ```
     pub fn from_f32_arr3(arr: [f32; 3]) -> Self {
         Self {
-            x: Px::new(arr[0] as i32),
-            y: Px::new(arr[1] as i32),
+            x: arr[0],
+            y: arr[1],
         }
     }
 
     /// Converts the position to a 2D f64 array.
-    ///
-    /// # Returns
-    ///
-    /// An array `[x, y]` where both coordinates are converted to f64
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::new(Px::new(10), Px::new(20));
-    /// assert_eq!(position.to_f64_arr2(), [10.0, 20.0]);
-    /// ```
     pub fn to_f64_arr2(self) -> [f64; 2] {
-        [self.x.0 as f64, self.y.0 as f64]
+        [self.x as f64, self.y as f64]
     }
 
     /// Converts the position to a 3D f64 array with z=0.
-    ///
-    /// # Returns
-    ///
-    /// An array `[x, y, 0.0]` where x and y are converted to f64 and z is 0.0
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::new(Px::new(10), Px::new(20));
-    /// assert_eq!(position.to_f64_arr3(), [10.0, 20.0, 0.0]);
-    /// ```
     pub fn to_f64_arr3(self) -> [f64; 3] {
-        [self.x.0 as f64, self.y.0 as f64, 0.0]
+        [self.x as f64, self.y as f64, 0.0]
     }
 
     /// Creates a position from a 2D f64 array.
-    ///
-    /// # Arguments
-    ///
-    /// * `arr` - An array `[x, y]` where both values will be converted to i32
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::from_f64_arr2([10.5, 20.7]);
-    /// assert_eq!(position, PxPosition::new(Px::new(10), Px::new(20)));
-    /// ```
     pub fn from_f64_arr2(arr: [f64; 2]) -> Self {
         Self {
-            x: Px::new(arr[0] as i32),
-            y: Px::new(arr[1] as i32),
+            x: arr[0] as f32,
+            y: arr[1] as f32,
         }
     }
 
     /// Creates a position from a 3D f64 array, ignoring the z component.
-    ///
-    /// # Arguments
-    ///
-    /// * `arr` - An array `[x, y, z]` where only x and y are used
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tessera_ui::px::{Px, PxPosition};
-    ///
-    /// let position = PxPosition::from_f64_arr3([10.5, 20.7, 30.9]);
-    /// assert_eq!(position, PxPosition::new(Px::new(10), Px::new(20)));
-    /// ```
     pub fn from_f64_arr3(arr: [f64; 3]) -> Self {
         Self {
-            x: Px::new(arr[0] as i32),
-            y: Px::new(arr[1] as i32),
+            x: arr[0] as f32,
+            y: arr[1] as f32,
         }
     }
 }
@@ -816,10 +713,12 @@ impl PxRect {
     }
 
     /// Creates a new rectangle from a position and size.
+    ///
+    /// The position is rounded to the nearest whole pixel.
     pub fn from_position_size(position: PxPosition, size: PxSize) -> Self {
         Self {
-            x: position.x,
-            y: position.y,
+            x: position.x_px(),
+            y: position.y_px(),
             width: size.width,
             height: size.height,
         }
@@ -976,10 +875,10 @@ impl PxRect {
     ///
     /// An bool shows that whether the point is inside rectangle.
     pub fn contains(&self, point: PxPosition) -> bool {
-        point.x.0 >= self.x.0
-            && point.x.0 < self.x.0 + self.width.0
-            && point.y.0 >= self.y.0
-            && point.y.0 < self.y.0 + self.height.0
+        point.x >= self.x.0 as f32
+            && point.x < (self.x.0 + self.width.0) as f32
+            && point.y >= self.y.0 as f32
+            && point.y < (self.y.0 + self.height.0) as f32
     }
 }
 
@@ -1102,8 +1001,8 @@ impl From<Dp> for Px {
 impl From<PxPosition> for winit::dpi::PhysicalPosition<i32> {
     fn from(pos: PxPosition) -> Self {
         winit::dpi::PhysicalPosition {
-            x: pos.x.0,
-            y: pos.y.0,
+            x: pos.x_px().0,
+            y: pos.y_px().0,
         }
     }
 }
@@ -1126,7 +1025,6 @@ impl SubAssign for Px {
     }
 }
 
-// Arithmetic operations support - PxPosition
 impl std::ops::Add for PxPosition {
     type Output = Self;
 
@@ -1152,46 +1050,37 @@ impl std::ops::Sub for PxPosition {
 // Type conversion implementations
 impl From<[i32; 2]> for PxPosition {
     fn from(pos: [i32; 2]) -> Self {
-        PxPosition {
-            x: Px(pos[0]),
-            y: Px(pos[1]),
-        }
+        PxPosition::from_f32_xy(pos[0] as f32, pos[1] as f32)
     }
 }
 
 impl From<PxPosition> for [i32; 2] {
     fn from(pos: PxPosition) -> Self {
-        [pos.x.0, pos.y.0]
+        [pos.x_px().0, pos.y_px().0]
     }
 }
 
 impl From<[u32; 2]> for PxPosition {
     fn from(pos: [u32; 2]) -> Self {
-        PxPosition {
-            x: Px(pos[0] as i32),
-            y: Px(pos[1] as i32),
-        }
+        PxPosition::from_f32_xy(pos[0] as f32, pos[1] as f32)
     }
 }
 
 impl From<PxPosition> for [u32; 2] {
     fn from(pos: PxPosition) -> Self {
-        [pos.x.positive(), pos.y.positive()]
+        [pos.x_px().positive(), pos.y_px().positive()]
     }
 }
 
 impl From<[Px; 2]> for PxPosition {
     fn from(pos: [Px; 2]) -> Self {
-        PxPosition {
-            x: pos[0],
-            y: pos[1],
-        }
+        PxPosition::from_f32_xy(pos[0].0 as f32, pos[1].0 as f32)
     }
 }
 
 impl From<PxPosition> for [Px; 2] {
     fn from(pos: PxPosition) -> Self {
-        [pos.x, pos.y]
+        [pos.x_px(), pos.y_px()]
     }
 }
 
@@ -1247,8 +1136,8 @@ mod tests {
     #[test]
     fn test_px_position() {
         let pos = PxPosition::new(Px(10), Px(-5));
-        assert_eq!(pos.x, Px(10));
-        assert_eq!(pos.y, Px(-5));
+        assert_eq!(pos.x_px(), Px(10));
+        assert_eq!(pos.y_px(), Px(-5));
 
         let offset_pos = pos.offset(Px(2), Px(3));
         assert_eq!(offset_pos, PxPosition::new(Px(12), Px(-2)));

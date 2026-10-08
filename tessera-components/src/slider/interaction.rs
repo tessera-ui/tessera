@@ -22,8 +22,8 @@ pub(super) fn cursor_within_bounds(
     computed: &ComputedData,
 ) -> bool {
     if let Some(pos) = cursor_pos {
-        let within_x = pos.x.0 >= 0 && pos.x.0 < computed.width.0;
-        let within_y = pos.y.0 >= 0 && pos.y.0 < computed.height.0;
+        let within_x = pos.x >= 0.0 && pos.x < computed.width.0 as f32;
+        let within_y = pos.y >= 0.0 && pos.y < computed.height.0 as f32;
         within_x && within_y
     } else {
         false
@@ -40,7 +40,7 @@ pub(super) fn cursor_progress(
         return None;
     }
     cursor_pos.map(|pos| {
-        let cursor_x = pos.x.to_f32();
+        let cursor_x = pos.x;
         let half_handle = layout.handle_width.to_f32() / 2.0;
         let start_x = layout.handle_gap.to_f32() + half_handle;
         let fraction = (cursor_x - start_x) / layout.track_total_width.to_f32();
@@ -64,7 +64,7 @@ fn range_cursor_progress(
         return None;
     }
     let start_x = gap + start_half;
-    let fraction = (cursor_pos.x.to_f32() - start_x) / track_total;
+    let fraction = (cursor_pos.x - start_x) / track_total;
     Some(fraction.clamp(0.0, 1.0))
 }
 
@@ -116,7 +116,6 @@ pub(super) fn handle_slider_state(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
             is_in_component,
         )
     });
@@ -124,7 +123,6 @@ pub(super) fn handle_slider_state(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
             is_in_component,
         )
     });
@@ -324,7 +322,6 @@ pub(super) fn handle_range_slider_state(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
             is_in_component,
         )
     });
@@ -332,7 +329,6 @@ pub(super) fn handle_range_slider_state(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
             is_in_component,
         )
     });
@@ -424,7 +420,7 @@ fn choose_range_slider_handle(
     start_handle_width: Px,
     end_handle_width: Px,
 ) -> RangeSliderHandle {
-    let cursor_x = cursor_pos.map(|pos| pos.x.to_f32());
+    let cursor_x = cursor_pos.map(|pos| pos.x);
     let start_center_x =
         range_handle_center_x(layout, start_value, start_handle_width, end_handle_width);
     let end_center_x =

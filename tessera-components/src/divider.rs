@@ -4,8 +4,7 @@
 //!
 //! Separate sections in lists, menus, and settings screens.
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px,
-    RenderInput, RenderPolicy,
+    AxisConstraint, Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
     layout::{MeasureScope, layout},
     tessera, use_context,
 };
@@ -50,8 +49,8 @@ struct DividerLayout {
     orientation: DividerOrientation,
 }
 
-impl LayoutPolicy for DividerLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for DividerLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (width, height) = match self.orientation {
             DividerOrientation::Horizontal => (
                 input
@@ -83,12 +82,18 @@ impl LayoutPolicy for DividerLayout {
     }
 }
 
-impl RenderPolicy for DividerLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for DividerLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         input
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(SimpleRectCommand { color: self.color });
+        content.draw(input);
     }
 }
 
@@ -129,7 +134,7 @@ pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
         color,
         orientation: DividerOrientation::Horizontal,
     };
-    layout().layout_policy(policy).render_policy(policy);
+    layout().policy(policy).draw(policy);
 }
 
 /// # vertical_divider
@@ -169,5 +174,5 @@ pub fn vertical_divider(thickness: Option<Dp>, color: Option<Color>) {
         color,
         orientation: DividerOrientation::Vertical,
     };
-    layout().layout_policy(policy).render_policy(policy);
+    layout().policy(policy).draw(policy);
 }

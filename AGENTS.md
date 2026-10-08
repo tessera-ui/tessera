@@ -111,9 +111,9 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 ### Barrier System & Performance Optimization
 
-- **BarrierRequirement**: An enum used by both `DrawCommand` and `ComputeCommand` to declare if it needs to sample from the previously rendered scene. This is crucial for effects like blur or glass morphism.
+- **SampleRegion**: An enum used by both `DrawCommand` and `ComputeCommand` to declare which part of the previously rendered scene a command samples. `DrawRegion` separately describes where the command draws. This distinction is crucial for effects like blur or glass morphism.
 - `Global`: Samples the entire screen. This is expensive as it requires a full-screen texture copy.
-- `PaddedLocal(PaddingRect)`: Defines a region relative to the component's bounding box plus the padding described by `PaddingRect` on each side. This is used to determine the **scissor rectangle** for the draw pass, limiting GPU work to the relevant area.
+- `PaddedLocal(PaddingRect)`: Defines a sampling region relative to the component's bounding box plus padding on each side. The draw region, clip stack, and render target bounds determine the scissor rectangle independently.
 - `Absolute(PxRect)`: Samples a specific, absolute region of the screen.
 - **Performance Optimization**: When a command requires a barrier, the renderer performs a **full-screen texture copy** to make the background available for sampling. The key optimization is **batching**: subsequent commands that also require a barrier and have non-overlapping draw regions are processed in the same render pass, avoiding additional expensive texture copies. A scissor rectangle is applied to limit the actual drawing area for each command.
 

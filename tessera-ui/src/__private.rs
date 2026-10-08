@@ -6,7 +6,7 @@ use indextree::NodeId;
 
 use crate::{
     component_tree::{ComponentNode, NodeRole},
-    layout::{DefaultLayoutPolicy, NoopRenderPolicy},
+    layout::{DefaultLayoutNode, NoopDrawModifier},
     modifier::Modifier,
     prop::ErasedComponentRunner,
     runtime::TesseraRuntime,
@@ -72,9 +72,10 @@ pub fn register_component_node(fn_name: &str, _component_type_id: u64) -> NodeId
             focus_event_handler: None,
             focus_beyond_bounds_handler: None,
             focus_reveal_handler: None,
+            globally_positioned_handlers: Vec::new(),
             modifier: Modifier::default(),
-            layout_policy: Box::new(DefaultLayoutPolicy),
-            render_policy: Box::new(NoopRenderPolicy),
+            layout_node: Box::new(DefaultLayoutNode),
+            draw_node: Box::new(NoopDrawModifier),
             replay: None,
             props_unchanged_from_previous: false,
         })
@@ -103,9 +104,10 @@ pub fn register_layout_node(fn_name: &str, _component_type_id: u64) -> NodeId {
             focus_event_handler: None,
             focus_beyond_bounds_handler: None,
             focus_reveal_handler: None,
+            globally_positioned_handlers: Vec::new(),
             modifier: Modifier::default(),
-            layout_policy: Box::new(DefaultLayoutPolicy),
-            render_policy: Box::new(NoopRenderPolicy),
+            layout_node: Box::new(DefaultLayoutNode),
+            draw_node: Box::new(NoopDrawModifier),
             replay: None,
             props_unchanged_from_previous: false,
         })

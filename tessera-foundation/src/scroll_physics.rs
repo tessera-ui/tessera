@@ -185,12 +185,18 @@ mod velocity_tests {
         tracker.push_delta(now, 2.0, 0.0);
         tracker.push_delta(now + Duration::from_millis(10), 8.0, 0.0);
         assert!(
-            (tracker.resolve(now + Duration::from_millis(10)).unwrap().x - 1000.0).abs() < 0.01
+            (tracker
+                .resolve(now + Duration::from_millis(10))
+                .expect("recent samples should resolve")
+                .x
+                - 1000.0)
+                .abs()
+                < 0.01
         );
         assert!(
             tracker
                 .resolve(now + Duration::from_millis(80))
-                .unwrap()
+                .expect("idle samples should resolve to zero")
                 .is_zero()
         );
     }
@@ -207,7 +213,13 @@ mod velocity_tests {
                 tracker.push_delta(now + Duration::from_millis(elapsed), interval as f32, 0.0);
             }
             assert!(
-                (tracker.resolve(now + Duration::from_millis(80)).unwrap().x - 1000.0).abs() < 0.01
+                (tracker
+                    .resolve(now + Duration::from_millis(80))
+                    .expect("recent samples should resolve")
+                    .x
+                    - 1000.0)
+                    .abs()
+                    < 0.01
             );
         }
     }

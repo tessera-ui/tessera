@@ -18,7 +18,7 @@ use crate::{
         remove_context_read_dependencies, remove_previous_component_context_snapshots,
         reset_context_read_dependencies, with_context_snapshot,
     },
-    layout::{DefaultLayoutPolicy, NoopRenderPolicy},
+    layout::{DefaultLayoutNode, NoopDrawModifier},
     modifier::Modifier,
     runtime::{
         TesseraRuntime, begin_frame_component_replay_tracking, begin_frame_layout_dirty_tracking,
@@ -26,10 +26,11 @@ use crate::{
         finalize_frame_component_replay_tracking, finalize_frame_component_replay_tracking_partial,
         finalize_frame_layout_dirty_tracking, previous_component_replay_nodes,
         remove_focus_read_dependencies, remove_frame_nanos_receivers,
-        remove_previous_component_replay_nodes, remove_render_slot_read_dependencies,
-        remove_state_read_dependencies, reset_focus_read_dependencies,
-        reset_render_slot_read_dependencies, reset_state_read_dependencies,
-        take_build_invalidations, with_build_dirty_instance_keys, with_replay_scope,
+        remove_layout_state_read_dependencies, remove_previous_component_replay_nodes,
+        remove_render_slot_read_dependencies, remove_state_read_dependencies,
+        reset_focus_read_dependencies, reset_render_slot_read_dependencies,
+        reset_state_read_dependencies, take_build_invalidations, with_build_dirty_instance_keys,
+        with_replay_scope,
     },
     time::Instant,
 };
@@ -441,9 +442,10 @@ fn push_build_root_node() -> BuildRootNodeGuard {
             focus_event_handler: None,
             focus_beyond_bounds_handler: None,
             focus_reveal_handler: None,
+            globally_positioned_handlers: Vec::new(),
             modifier: Modifier::default(),
-            layout_policy: Box::new(DefaultLayoutPolicy),
-            render_policy: Box::new(NoopRenderPolicy),
+            layout_node: Box::new(DefaultLayoutNode),
+            draw_node: Box::new(NoopDrawModifier),
             replay: None,
             props_unchanged_from_previous: false,
         });
@@ -486,7 +488,7 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
         BuildTreeResult::root_recompose(build_tree_cost)
     };
 
-    let tree_is_empty = TesseraRuntime::with(|rt| rt.component_tree.tree().len() == 0);
+    let tree_is_empty = TesseraRuntime::with(|rt| rt.component_tree.tree().is_empty());
     let invalidations = take_build_invalidations();
     #[cfg(feature = "debug-dirty-overlay")]
     let had_invalidations = !invalidations.dirty_instance_keys.is_empty();
@@ -539,14 +541,26 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
         let mut recomposed_instance_logic_ids = HashSet::default();
         let mut pending_dirty_instance_keys = invalidations.dirty_instance_keys.clone();
         let mut replay_roots_for_debug = Vec::new();
+        let mut deferred_backwards_instance_keys = HashSet::default();
         let mut fallback_to_root_recompose = false;
         #[cfg(feature = "profiling")]
         let mut replayed_nodes = 0_u64;
         #[cfg(feature = "profiling")]
         let total_nodes_before_build =
-            TesseraRuntime::with(|runtime| runtime.component_tree.tree().count() as u64);
+            TesseraRuntime::with(|runtime| runtime.component_tree.tree().len() as u64);
 
+        // Backwards writes can legitimately trigger follow-up rounds; cap them
+        // so a pair of components writing each other's inputs cannot
+        // loop forever within one frame. Leftover work is deferred to
+        // the next frame.
+        const MAX_REPLAY_ROUNDS_PER_FRAME: usize = 8;
+        let mut replay_round = 0_usize;
         while !pending_dirty_instance_keys.is_empty() {
+            replay_round += 1;
+            if replay_round > MAX_REPLAY_ROUNDS_PER_FRAME {
+                crate::runtime::defer_build_invalidations(&pending_dirty_instance_keys);
+                break;
+            }
             let live_dirty_instance_keys =
                 retain_live_dirty_instance_keys(&pending_dirty_instance_keys);
             if live_dirty_instance_keys.is_empty() {
@@ -674,6 +688,18 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
             });
 
             let round_invalidations = take_build_invalidations();
+            // A write from another component after an instance was rebuilt in
+            // this round means that instance observed a stale value. It cannot
+            // be replayed again in this frame (its replay snapshot
+            // is only recorded once the frame finishes), so it is
+            // deferred to the next frame.
+            deferred_backwards_instance_keys.extend(
+                round_invalidations
+                    .cross_instance_dirty_instance_keys
+                    .iter()
+                    .copied()
+                    .filter(|instance_key| round_covered_instance_keys.contains(instance_key)),
+            );
             pending_dirty_instance_keys.extend(round_invalidations.dirty_instance_keys);
             pending_dirty_instance_keys.retain(|instance_key| {
                 !stale_instance_keys.contains(instance_key)
@@ -695,7 +721,11 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
         remove_focus_read_dependencies(&stale_instance_keys);
         remove_render_slot_read_dependencies(&stale_instance_keys);
         remove_state_read_dependencies(&stale_instance_keys);
+        remove_layout_state_read_dependencies(&stale_instance_keys);
         crate::runtime::remove_build_invalidations(&stale_instance_keys);
+        deferred_backwards_instance_keys
+            .retain(|instance_key| !stale_instance_keys.contains(instance_key));
+        crate::runtime::defer_build_invalidations(&deferred_backwards_instance_keys);
         remove_previous_component_context_snapshots(&stale_instance_keys);
         remove_context_read_dependencies(&stale_instance_keys);
         drop_slots_for_instance_logic_ids(&stale_instance_logic_ids);

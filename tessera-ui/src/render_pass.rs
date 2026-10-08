@@ -342,8 +342,8 @@ fn compute_padded_rect(
     left: Px,
     texture_size: wgpu::Extent3d,
 ) -> PxRect {
-    let padded_x = (start_pos.x - left).max(Px(0));
-    let padded_y = (start_pos.y - top).max(Px(0));
+    let padded_x = (start_pos.x_px() - left).max(Px(0));
+    let padded_y = (start_pos.y_px() - top).max(Px(0));
     let padded_width = (size.width + left + right).min(Px(texture_size.width as i32 - padded_x.0));
     let padded_height =
         (size.height + top + bottom).min(Px(texture_size.height as i32 - padded_y.0));
@@ -429,8 +429,8 @@ fn extract_target_rect(
     start_pos: PxPosition,
     texture_size: wgpu::Extent3d,
 ) -> PxRect {
-    let x = start_pos.x.positive().min(texture_size.width);
-    let y = start_pos.y.positive().min(texture_size.height);
+    let x = start_pos.x_px().positive().min(texture_size.width);
+    let y = start_pos.y_px().positive().min(texture_size.height);
     let width = size.width.positive().min(texture_size.width - x);
     let height = size.height.positive().min(texture_size.height - y);
     PxRect {

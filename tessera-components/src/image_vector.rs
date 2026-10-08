@@ -68,10 +68,10 @@ pub enum ImageVectorLoadError {
     EmptyGeometry,
 }
 
-/// Converts a source into shared vector geometry data.
+/// Converts a source into vector geometry data.
 pub trait TryIntoImageVectorData {
-    /// Convert this source into shared vector geometry.
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError>;
+    /// Convert this source into vector geometry.
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError>;
 }
 
 fn load_image_vector_from_bytes(
@@ -98,44 +98,44 @@ fn load_image_vector_from_path(path: &StdPath) -> Result<ImageVectorData, ImageV
 }
 
 impl TryIntoImageVectorData for ImageVectorData {
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
-        Ok(Arc::new(self))
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
+        Ok(self)
     }
 }
 
 impl TryIntoImageVectorData for Vec<u8> {
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
-        Ok(Arc::new(load_image_vector_from_bytes(&self, None)?))
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
+        load_image_vector_from_bytes(&self, None)
     }
 }
 
 impl TryIntoImageVectorData for &[u8] {
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
-        Ok(Arc::new(load_image_vector_from_bytes(self, None)?))
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
+        load_image_vector_from_bytes(self, None)
     }
 }
 
 impl TryIntoImageVectorData for String {
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
-        Ok(Arc::new(load_image_vector_from_path(StdPath::new(&self))?))
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
+        load_image_vector_from_path(StdPath::new(&self))
     }
 }
 
 impl TryIntoImageVectorData for &str {
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
-        Ok(Arc::new(load_image_vector_from_path(StdPath::new(self))?))
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
+        load_image_vector_from_path(StdPath::new(self))
     }
 }
 
 impl TryIntoImageVectorData for PathBuf {
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
-        Ok(Arc::new(load_image_vector_from_path(self.as_path())?))
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
+        load_image_vector_from_path(self.as_path())
     }
 }
 
 impl TryIntoImageVectorData for &StdPath {
-    fn try_into_image_vector_data(self) -> Result<Arc<ImageVectorData>, ImageVectorLoadError> {
-        Ok(Arc::new(load_image_vector_from_path(self)?))
+    fn try_into_image_vector_data(self) -> Result<ImageVectorData, ImageVectorLoadError> {
+        load_image_vector_from_path(self)
     }
 }
 

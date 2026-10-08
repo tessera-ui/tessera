@@ -22,8 +22,7 @@
 //! See [`CheckmarkArgs`] for configuration options and usage examples in the
 //! [`checkmark`] function documentation.
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutPolicy, LayoutResult, MeasurementError, Px, RenderInput,
-    RenderPolicy,
+    Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
     layout::{MeasureScope, layout},
     tessera,
 };
@@ -39,8 +38,8 @@ struct CheckmarkLayout {
     padding: [f32; 2],
 }
 
-impl LayoutPolicy for CheckmarkLayout {
-    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for CheckmarkLayout {
+    fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData {
             width: self.size,
             height: self.size,
@@ -48,8 +47,13 @@ impl LayoutPolicy for CheckmarkLayout {
     }
 }
 
-impl RenderPolicy for CheckmarkLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for CheckmarkLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         let command = CheckmarkCommand::new()
             .with_color(self.color)
             .with_stroke_width(self.stroke_width)
@@ -59,6 +63,7 @@ impl RenderPolicy for CheckmarkLayout {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(command);
+        content.draw(input);
     }
 }
 
@@ -104,5 +109,5 @@ pub fn checkmark(
         progress,
         padding,
     };
-    layout().layout_policy(policy.clone()).render_policy(policy);
+    layout().policy(policy.clone()).draw(policy);
 }

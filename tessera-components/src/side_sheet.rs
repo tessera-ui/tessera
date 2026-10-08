@@ -10,7 +10,7 @@ use tessera_ui::{
     Callback, CallbackWith, Color, Constraint, Dp, FocusScopeNode, FocusTraversalPolicy,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, layout},
+    layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -349,7 +349,7 @@ fn build_side_sheet_nested_scroll_connection(
 /// Place side sheet if present. Extracted to reduce complexity of the parent
 /// function.
 fn place_side_sheet_if_present(
-    input: &MeasureScope<'_>,
+    input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
     is_open: bool,
     progress: f32,
@@ -382,7 +382,7 @@ fn place_side_sheet_if_present(
 
     let constraint = Constraint::exact(sheet_width, parent_height);
 
-    let child_size = match side_sheet.measure(&constraint) {
+    let child_size = match side_sheet.measure(input, &constraint) {
         Ok(s) => s,
         Err(_) => return,
     };
@@ -570,8 +570,8 @@ fn side_sheet_provider_render(
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = side_sheet_content.unwrap_or_else(RenderSlot::empty);
 
-    let (is_open, timer_opt, drag_offset) = controller.with(|c| c.snapshot());
-    let is_animating = controller.with(|c| c.is_animating());
+    let (is_open, timer_opt, drag_offset) = controller.get().snapshot();
+    let is_animating = controller.get().is_animating();
     let side_sheet_open_state = remember(|| false);
     let mut just_opened = false;
     side_sheet_open_state.with_mut(|was_open| {
@@ -604,7 +604,7 @@ fn side_sheet_provider_render(
     let progress = calc_progress_from_timer(timer_opt);
 
     layout()
-        .layout_policy(SideSheetLayout {
+        .policy(SideSheetLayout {
             progress,
             is_open,
             position,
@@ -760,18 +760,18 @@ struct SideSheetLayout {
     drag_offset: f32,
 }
 
-impl LayoutPolicy for SideSheetLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for SideSheetLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let child_constraint = input.parent_constraint().without_min();
         let main_content = children[0];
-        let main_content_size = main_content.measure(&child_constraint)?;
+        let main_content_size = main_content.measure(input, &child_constraint)?;
         result.place_child(main_content, PxPosition::new(Px(0), Px(0)));
 
         if children.len() > 1 {
             let scrim = children[1];
-            scrim.measure(&child_constraint)?;
+            scrim.measure(input, &child_constraint)?;
             result.place_child(scrim, PxPosition::new(Px(0), Px(0)));
         }
 

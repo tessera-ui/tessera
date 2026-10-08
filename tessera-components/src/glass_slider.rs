@@ -9,7 +9,7 @@ use tessera_ui::{
     LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px,
     PxPosition, State,
     accesskit::Role,
-    layout::{LayoutPolicy, MeasureScope, layout},
+    layout::{MeasureScope, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera,
     winit::window::CursorIcon,
@@ -226,8 +226,8 @@ fn default_slider_modifier() -> Modifier {
 /// Extracted to reduce duplication and keep the input handler concise.
 fn cursor_within_bounds(cursor_pos: Option<PxPosition>, computed: &ComputedData) -> bool {
     if let Some(pos) = cursor_pos {
-        let within_x = pos.x.0 >= 0 && pos.x.0 < computed.width.0;
-        let within_y = pos.y.0 >= 0 && pos.y.0 < computed.height.0;
+        let within_x = pos.x >= 0.0 && pos.x < computed.width.0 as f32;
+        let within_y = pos.y >= 0.0 && pos.y < computed.height.0 as f32;
         within_x && within_y
     } else {
         false
@@ -237,7 +237,7 @@ fn cursor_within_bounds(cursor_pos: Option<PxPosition>, computed: &ComputedData)
 /// Helper: compute normalized progress (0.0..1.0) from cursor X and width.
 /// Returns None when cursor is not available.
 fn cursor_progress(cursor_pos: Option<PxPosition>, width_f: f32) -> Option<f32> {
-    cursor_pos.map(|pos| (pos.x.0 as f32 / width_f).clamp(0.0, 1.0))
+    cursor_pos.map(|pos| (pos.x / width_f).clamp(0.0, 1.0))
 }
 
 /// Process pointer gestures and update the slider state accordingly.
@@ -254,7 +254,6 @@ fn process_pointer_gestures(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
             is_in_component,
         )
     });
@@ -262,7 +261,6 @@ fn process_pointer_gestures(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
             is_in_component,
         )
     });
@@ -391,7 +389,7 @@ fn glass_slider_progress_fill(
         .child(|| {});
 
     let clamped = value.clamp(0.0, 1.0);
-    layout().layout_policy(GlassSliderFillLayout { value: clamped });
+    layout().policy(GlassSliderFillLayout { value: clamped });
 }
 
 #[derive(Clone, PartialEq)]
@@ -399,8 +397,8 @@ struct GlassSliderFillLayout {
     value: f32,
 }
 
-impl LayoutPolicy for GlassSliderFillLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for GlassSliderFillLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let available_width = input
             .parent_constraint()
@@ -421,7 +419,7 @@ impl LayoutPolicy for GlassSliderFillLayout {
             .expect("progress fill child should exist");
 
         let child_constraint = Constraint::exact(width_px, available_height);
-        child.measure(&child_constraint)?;
+        child.measure(input, &child_constraint)?;
         result.place_child(child, PxPosition::new(Px(0), Px(0)));
 
         Ok(result.with_size(ComputedData {
@@ -471,7 +469,7 @@ fn render_glass_slider(
 
     layout()
         .modifier(modifier)
-        .layout_policy(GlassSliderLayout {
+        .policy(GlassSliderLayout {
             track_height: args.track_height.to_px(),
             fallback_width: Dp(200.0).to_px(),
         })
@@ -498,15 +496,15 @@ struct GlassSliderLayout {
     fallback_width: Px,
 }
 
-impl LayoutPolicy for GlassSliderLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for GlassSliderLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let self_width = input.parent_constraint().width().clamp(self.fallback_width);
         let self_height = self.track_height;
 
         let track = input.children()[0];
         let track_constraint = Constraint::exact(self_width, self_height);
-        track.measure(&track_constraint)?;
+        track.measure(input, &track_constraint)?;
         result.place_child(track, PxPosition::new(Px(0), Px(0)));
 
         Ok(result.with_size(ComputedData {

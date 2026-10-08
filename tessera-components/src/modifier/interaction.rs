@@ -9,8 +9,6 @@
 //! gesture flow. Accessibility is attached through semantics modifier nodes,
 //! and hover cursors use dedicated cursor modifiers.
 
-use std::sync::{Arc, Mutex};
-
 use tessera_foundation::{
     gesture::{LongPressRecognizer, TapRecognizer},
     modifier::{
@@ -23,6 +21,7 @@ use tessera_ui::{
     PointerInputModifierNode, PxPosition, PxSize, SemanticsModifierNode, State,
     accesskit::{self, Action, Toggled},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
+    remember,
     winit::window::CursorIcon,
 };
 
@@ -99,8 +98,8 @@ fn pointer_context(position: Option<PxPosition>, size: ComputedData) -> PointerE
     };
     let width = size.width.to_f32().max(1.0);
     let height = size.height.to_f32().max(1.0);
-    let x = (position.x.to_f32() / width).clamp(0.0, 1.0);
-    let y = (position.y.to_f32() / height).clamp(0.0, 1.0);
+    let x = (position.x / width).clamp(0.0, 1.0);
+    let y = (position.y / height).clamp(0.0, 1.0);
     PointerEventContext {
         normalized_pos: [x, y],
         size: PxSize::new(size.width, size.height),
@@ -124,56 +123,34 @@ fn reset_disabled_interaction_state(state: State<InteractionState>) {
     }
 }
 
-#[derive(Clone)]
 enum TapRecognizerHandle {
     State(State<TapRecognizer>),
-    Local(Arc<Mutex<TapRecognizer>>),
 }
 
 impl TapRecognizerHandle {
     fn new(state: Option<State<TapRecognizer>>) -> Self {
-        state
-            .map(Self::State)
-            .unwrap_or_else(|| Self::Local(Arc::new(Mutex::new(TapRecognizer::default()))))
+        Self::State(state.unwrap_or_else(|| remember(TapRecognizer::default)))
     }
 
     fn with_mut<R>(&self, f: impl FnOnce(&mut TapRecognizer) -> R) -> R {
         match self {
             Self::State(state) => state.with_mut(f),
-            Self::Local(recognizer) => match recognizer.lock() {
-                Ok(mut guard) => f(&mut guard),
-                Err(poisoned) => {
-                    let mut guard = poisoned.into_inner();
-                    f(&mut guard)
-                }
-            },
         }
     }
 }
 
-#[derive(Clone)]
 enum LongPressRecognizerHandle {
     State(State<LongPressRecognizer>),
-    Local(Arc<Mutex<LongPressRecognizer>>),
 }
 
 impl LongPressRecognizerHandle {
     fn new(state: Option<State<LongPressRecognizer>>) -> Self {
-        state
-            .map(Self::State)
-            .unwrap_or_else(|| Self::Local(Arc::new(Mutex::new(LongPressRecognizer::default()))))
+        Self::State(state.unwrap_or_else(|| remember(LongPressRecognizer::default)))
     }
 
     fn with_mut<R>(&self, f: impl FnOnce(&mut LongPressRecognizer) -> R) -> R {
         match self {
             Self::State(state) => state.with_mut(f),
-            Self::Local(recognizer) => match recognizer.lock() {
-                Ok(mut guard) => f(&mut guard),
-                Err(poisoned) => {
-                    let mut guard = poisoned.into_inner();
-                    f(&mut guard)
-                }
-            },
         }
     }
 }
@@ -208,7 +185,6 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
             recognizer.update(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
                 within_bounds,
             )
         });
@@ -216,7 +192,6 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
             recognizer.update(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
                 within_bounds,
             )
         });
@@ -231,7 +206,7 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
                 self.on_click.call();
             }
             if self.block_input && within_bounds {
-                input.block_all();
+                input.consume_pointer_changes();
             }
             return;
         };
@@ -292,7 +267,7 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
         }
 
         if self.block_input && within_bounds {
-            input.block_all();
+            input.consume_pointer_changes();
         }
     }
 }
@@ -383,7 +358,6 @@ impl PointerInputModifierNode for ToggleablePointerModifierNode {
             recognizer.update(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
                 within_bounds,
             )
         });
@@ -543,7 +517,6 @@ impl PointerInputModifierNode for SelectablePointerModifierNode {
             recognizer.update(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
                 within_bounds,
             )
         });
@@ -701,7 +674,6 @@ impl PointerInputModifierNode for WindowDragRegionPointerModifierNode {
             recognizer.update(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
                 within_bounds,
             )
         });

@@ -5,8 +5,8 @@
 //! Pair a primary action with a related secondary action or menu.
 
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, RenderSlot,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
+    Modifier, Px, PxPosition, RenderSlot,
     accesskit::Role,
     layout::{MeasureScope, layout},
     provide_context, tessera, use_context,
@@ -18,7 +18,7 @@ use crate::{
     modifier::{ModifierExt as _, Padding},
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
-    theme::MaterialTheme,
+    theme::{MaterialColorScheme, MaterialTheme},
 };
 
 const CORNER_G2_VALUE: f32 = 3.0;
@@ -187,8 +187,8 @@ impl SplitButtonDefaults {
     }
 
     /// Returns default colors for the requested variant.
-    pub fn colors(variant: SplitButtonVariant) -> SplitButtonColors {
-        let scheme = MaterialTheme::default().color_scheme;
+    pub fn colors(scheme: &MaterialColorScheme, variant: SplitButtonVariant) -> SplitButtonColors {
+        let scheme = scheme.clone();
 
         match variant {
             SplitButtonVariant::Filled => SplitButtonColors {
@@ -363,7 +363,7 @@ pub fn split_button_layout(
     let spacing = Px::from(spacing.unwrap_or(SplitButtonDefaults::SPACING)).max(Px::ZERO);
     layout()
         .modifier(modifier)
-        .layout_policy(SplitButtonLayoutPolicy { spacing })
+        .policy(SplitButton { spacing })
         .child(move || {
             leading_button.render();
             trailing_button.render();
@@ -444,6 +444,7 @@ pub fn split_leading_button(
         accessibility_label,
         accessibility_description,
     } = SplitButtonItemArgs::leading(
+        &theme.color_scheme,
         variant,
         size,
         enabled.unwrap_or(true),
@@ -583,6 +584,7 @@ pub fn split_trailing_button(
         accessibility_label,
         accessibility_description,
     } = SplitButtonItemArgs::trailing(
+        &theme.color_scheme,
         variant,
         size,
         enabled.unwrap_or(true),
@@ -663,6 +665,7 @@ struct SplitButtonItemArgs {
 
 impl SplitButtonItemArgs {
     fn leading(
+        scheme: &MaterialColorScheme,
         variant: SplitButtonVariant,
         size: SplitButtonSize,
         enabled: bool,
@@ -675,7 +678,7 @@ impl SplitButtonItemArgs {
             enabled,
             modifier,
             shape: SplitButtonDefaults::leading_shape(size),
-            colors: SplitButtonDefaults::colors(variant),
+            colors: SplitButtonDefaults::colors(scheme, variant),
             border_width: SplitButtonDefaults::border_width(variant),
             content_padding: SplitButtonDefaults::leading_content_padding(size),
             min_width: SplitButtonDefaults::MIN_WIDTH,
@@ -689,6 +692,7 @@ impl SplitButtonItemArgs {
     }
 
     fn trailing(
+        scheme: &MaterialColorScheme,
         variant: SplitButtonVariant,
         size: SplitButtonSize,
         enabled: bool,
@@ -701,7 +705,7 @@ impl SplitButtonItemArgs {
             enabled,
             modifier,
             shape: SplitButtonDefaults::trailing_shape(size),
-            colors: SplitButtonDefaults::colors(variant),
+            colors: SplitButtonDefaults::colors(scheme, variant),
             border_width: SplitButtonDefaults::border_width(variant),
             content_padding: SplitButtonDefaults::trailing_content_padding(size),
             min_width: SplitButtonDefaults::MIN_WIDTH,
@@ -716,12 +720,12 @@ impl SplitButtonItemArgs {
 }
 
 #[derive(Clone, PartialEq)]
-struct SplitButtonLayoutPolicy {
+struct SplitButton {
     spacing: Px,
 }
 
-impl LayoutPolicy for SplitButtonLayoutPolicy {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for SplitButton {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() != 2 {
@@ -737,7 +741,7 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
         );
 
         let leading = children[0];
-        let leading_size = leading.measure(&child_constraint)?.size();
+        let leading_size = leading.measure(input, &child_constraint)?.size();
 
         let trailing = children[1];
         let trailing_max_width = layout_constraint
@@ -746,9 +750,9 @@ impl LayoutPolicy for SplitButtonLayoutPolicy {
             .map(|max| (max - leading_size.width - self.spacing).max(Px::ZERO));
         let trailing_constraint = Constraint::new(
             AxisConstraint::new(Px::ZERO, trailing_max_width),
-            leading_size.height,
+            child_constraint.height,
         );
-        let trailing_size = trailing.measure(&trailing_constraint)?.size();
+        let trailing_size = trailing.measure(input, &trailing_constraint)?.size();
 
         let content_width = leading_size.width + trailing_size.width + self.spacing;
         let content_height = leading_size.height.max(trailing_size.height);
@@ -783,5 +787,64 @@ fn center_offset(child: Px, container: Px) -> Px {
         (container - child) / 2
     } else {
         Px::ZERO
+    }
+}
+
+mod tests {
+    use tessera_ui::{Modifier, tessera};
+
+    use crate::{
+        modifier::{ModifierExt as _, SemanticsArgs},
+        split_buttons::{
+            SplitButtonSize, split_button_layout, split_leading_button, split_trailing_button,
+        },
+        text::text,
+        theme::{MaterialTheme, material_theme},
+    };
+
+    #[tessera]
+    fn split_button_case() {
+        material_theme()
+            .theme(|| MaterialTheme::default())
+            .child(|| {
+                split_button_layout()
+                    .leading_button(|| {
+                        split_leading_button()
+                            .filled()
+                            .size(SplitButtonSize::Small)
+                            .modifier(Modifier::new().semantics(SemanticsArgs {
+                                test_tag: Some("split-leading".to_string()),
+                                ..Default::default()
+                            }))
+                            .content(|| {
+                                text().content("Send");
+                            });
+                    })
+                    .trailing_button(|| {
+                        split_trailing_button()
+                            .filled()
+                            .size(SplitButtonSize::ExtraLarge)
+                            .modifier(Modifier::new().semantics(SemanticsArgs {
+                                test_tag: Some("split-trailing".to_string()),
+                                ..Default::default()
+                            }))
+                            .content(|| {
+                                text().content("More");
+                            });
+                    });
+            });
+    }
+
+    #[test]
+    fn trailing_segment_keeps_its_own_height() {
+        tessera_ui::assert_layout! {
+            viewport: (400, 200),
+            content: {
+                split_button_case();
+            },
+            expect: {
+                node("split-trailing").height(136);
+            }
+        }
     }
 }

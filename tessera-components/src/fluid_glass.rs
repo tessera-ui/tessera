@@ -8,7 +8,7 @@ use tessera_ui::{
     Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, layout},
     modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera,
 };
@@ -328,8 +328,8 @@ fn fluid_glass_inner(
     };
     layout()
         .modifier(modifier)
-        .layout_policy(policy.clone())
-        .render_policy(policy)
+        .policy(policy.clone())
+        .draw(policy)
         .child(move || {
             if let Some(child) = child.as_ref() {
                 child.render();
@@ -345,8 +345,8 @@ struct FluidGlassLayout {
     padding: Dp,
 }
 
-impl LayoutPolicy for FluidGlassLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for FluidGlassLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let parent_constraint = *input.parent_constraint().as_ref();
 
@@ -357,13 +357,10 @@ impl LayoutPolicy for FluidGlassLayout {
 
         let children = input.children();
         let child_measurement = if let Some(&child) = children.first() {
-            let child_measurement = child.measure(&child_constraint)?;
+            let child_measurement = child.measure(input, &child_constraint)?;
             result.place_child(
                 child,
-                PxPosition {
-                    x: self.padding.into(),
-                    y: self.padding.into(),
-                },
+                PxPosition::from_f32_xy(self.padding.to_pixels_f32(), self.padding.to_pixels_f32()),
             );
             child_measurement.size()
         } else {
@@ -383,8 +380,13 @@ impl LayoutPolicy for FluidGlassLayout {
     }
 }
 
-impl RenderPolicy for FluidGlassLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for FluidGlassLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         if self.blur_radius > Dp(0.0) {
             let blur_command =
                 DualBlurCommand::horizontal_then_vertical(self.blur_radius.to_pixels_f32());
@@ -413,5 +415,6 @@ impl RenderPolicy for FluidGlassLayout {
             .metadata_mut()
             .fragment_mut()
             .push_draw_command(drawable);
+        content.draw(input);
     }
 }

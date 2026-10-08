@@ -1,9 +1,11 @@
-//! A container that allows its content to be scrolled.
+//! Scrollable viewports driven by a [`ScrollableController`].
 //!
 //! ## Usage
 //!
-//! Use to display content that might overflow the available space.
-pub(crate) mod scrollbar;
+//! Turn a layout node into a scroll viewport with `Modifier::vertical_scroll`
+//! or `Modifier::horizontal_scroll` to display content that overflows its
+//! bounds.
+pub mod scrollbar;
 use std::time::Duration;
 
 use tessera_foundation::{
@@ -11,11 +13,12 @@ use tessera_foundation::{
     scroll_physics::{ExponentialInertia, ScrollVelocityTracker as FoundationVelocityTracker},
 };
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
-    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot,
-    ScrollDeltaUnit, ScrollEventSource, State, current_frame_nanos,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutModifierChild,
+    LayoutModifierInput, LayoutModifierNode, LayoutResult, MeasurementError, Modifier,
+    PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, ScrollDeltaUnit,
+    ScrollEventSource, State, current_frame_nanos,
     focus::FocusRevealRequest,
-    layout::{LayoutPolicy, MeasureScope, PlacementScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     normalize_platform_scroll_delta, receive_frame_nanos, remember, tessera,
     time::Instant,
@@ -28,7 +31,10 @@ use crate::{
     modifier::ModifierExt,
     nested_scroll::{NestedScrollConnection, ScrollDelta, ScrollVelocity},
     pos_misc::is_position_inside_bounds,
-    scrollable::scrollbar::{ScrollBarState, ScrollbarDefaults, scrollbar_h, scrollbar_v},
+};
+
+pub use crate::scrollable::scrollbar::{
+    ScrollBarState, ScrollbarDefaults, scrollbar_h, scrollbar_v,
 };
 
 const SCROLL_INERTIA_DECAY_CONSTANT: f32 = 5.0;
@@ -229,8 +235,11 @@ impl ScrollableController {
     }
 
     /// Overrides the child size used for scroll extent calculation.
+    ///
+    /// The new extent is immediately available to scrolling and scrollbars.
     pub fn override_child_size(&mut self, size: ComputedData) {
         self.override_child_size = Some(size);
+        self.child_size = size;
     }
 
     pub(crate) fn target_position(&self) -> PxPosition {
@@ -242,7 +251,7 @@ impl ScrollableController {
         self.velocity_tracker = None;
         self.positioned = true;
         self.target_position = target;
-        self.target_position_f32 = (target.x.to_f32(), target.y.to_f32());
+        self.target_position_f32 = (target.x, target.y);
     }
 
     /// Instantly sets the scroll position without animation.
@@ -256,8 +265,8 @@ impl ScrollableController {
         self.positioned = true;
         self.child_position = position;
         self.target_position = position;
-        self.child_position_f32 = (position.x.to_f32(), position.y.to_f32());
-        self.target_position_f32 = (position.x.to_f32(), position.y.to_f32());
+        self.child_position_f32 = (position.x, position.y);
+        self.target_position_f32 = (position.x, position.y);
     }
 
     /// Updates the scroll position based on time-based interpolation
@@ -293,10 +302,8 @@ impl ScrollableController {
         if (target_y - self.child_position_f32.1).abs() < 0.01 {
             self.child_position_f32.1 = target_y;
         }
-        self.child_position = PxPosition {
-            x: Px::saturating_from_f32(self.child_position_f32.0),
-            y: Px::saturating_from_f32(self.child_position_f32.1),
-        };
+        self.child_position =
+            PxPosition::from_f32_xy(self.child_position_f32.0, self.child_position_f32.1);
         if !self.has_pending_animation_frame() {
             self.last_frame_nanos = None;
         }
@@ -350,28 +357,25 @@ impl ScrollableController {
         self.positioned = true;
         let current_target = self.target_position_f32;
         let proposed = (current_target.0 + delta.x, current_target.1 + delta.y);
+        let extent_size = self.override_child_size.unwrap_or(self.child_size);
         let constrained_target = constrain_position(
             PxPosition::new(Px::new(i32::MIN), Px::new(i32::MIN)),
-            &self.child_size,
+            &extent_size,
             container_size,
             vertical_scrollable,
             horizontal_scrollable,
         );
-        let constrained = (constrained_target.x.to_f32(), constrained_target.y.to_f32());
+        let constrained = (constrained_target.x, constrained_target.y);
         let next = (
             clamp_scroll_coordinate(proposed.0, constrained.0, horizontal_scrollable),
             clamp_scroll_coordinate(proposed.1, constrained.1, vertical_scrollable),
         );
         self.target_position_f32 = next;
-        self.target_position = PxPosition::new(
-            Px::saturating_from_f32(next.0),
-            Px::saturating_from_f32(next.1),
-        );
+        self.target_position = PxPosition::from_f32_xy(next.0, next.1);
         ScrollDelta::new(next.0 - current_target.0, next.1 - current_target.1)
     }
 
     fn push_touch_delta(&mut self, now: Instant, dx: f32, dy: f32) {
-        self.cancel_inertia();
         let tracker = self.velocity_tracker.get_or_insert_with(|| {
             FoundationVelocityTracker::new(
                 now,
@@ -433,14 +437,11 @@ impl ScrollableController {
             horizontal_scrollable,
         );
         let next = (
-            clamp_scroll_coordinate(proposed.0, constrained.x.to_f32(), horizontal_scrollable),
-            clamp_scroll_coordinate(proposed.1, constrained.y.to_f32(), vertical_scrollable),
+            clamp_scroll_coordinate(proposed.0, constrained.x, horizontal_scrollable),
+            clamp_scroll_coordinate(proposed.1, constrained.y, vertical_scrollable),
         );
         self.target_position_f32 = next;
-        self.target_position = PxPosition::new(
-            Px::saturating_from_f32(next.0),
-            Px::saturating_from_f32(next.1),
-        );
+        self.target_position = PxPosition::from_f32_xy(next.0, next.1);
         self.child_position_f32 = next;
         self.child_position = self.target_position;
         if (next.0 - proposed.0).abs() > f32::EPSILON {
@@ -476,8 +477,8 @@ struct ScrollableAlongsideLayout {
     horizontal: bool,
 }
 
-impl LayoutPolicy for ScrollableAlongsideLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ScrollableAlongsideLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let mut final_size = ComputedData::ZERO;
@@ -489,7 +490,7 @@ impl LayoutPolicy for ScrollableAlongsideLayout {
 
         if self.vertical {
             let scrollbar = children[1];
-            let size = scrollbar.measure(&child_constraint)?;
+            let size = scrollbar.measure(input, &child_constraint)?;
             content_constraint.width -= size.width;
             final_size.width += size.width;
         }
@@ -500,13 +501,13 @@ impl LayoutPolicy for ScrollableAlongsideLayout {
             } else {
                 children[1]
             };
-            let size = scrollbar.measure(&child_constraint)?;
+            let size = scrollbar.measure(input, &child_constraint)?;
             content_constraint.height -= size.height;
             final_size.height += size.height;
         }
 
         let content = children[0];
-        let content_measurement = content.measure(&content_constraint)?;
+        let content_measurement = content.measure(input, &content_constraint)?;
         final_size.width += content_measurement.width;
         final_size.height += content_measurement.height;
 
@@ -533,30 +534,37 @@ impl LayoutPolicy for ScrollableAlongsideLayout {
     }
 }
 
-#[derive(Clone)]
-struct ScrollableInnerLayout {
+/// Layout modifier that turns a node into a scroll viewport.
+///
+/// Measures the wrapped content without constraining the scroll axes, reports
+/// the constrained viewport size, and places the content at the current scroll
+/// offset. Reading the controller during measure registers a layout dependency,
+/// so the offset is re-applied when the controller moves.
+struct ScrollLayoutModifierNode {
     controller: State<ScrollableController>,
     vertical: bool,
     horizontal: bool,
-    has_override: bool,
     apply_child_offset: bool,
+    has_override: bool,
 }
 
-impl PartialEq for ScrollableInnerLayout {
+impl PartialEq for ScrollLayoutModifierNode {
     fn eq(&self, other: &Self) -> bool {
         self.vertical == other.vertical
             && self.horizontal == other.horizontal
-            && self.has_override == other.has_override
             && self.apply_child_offset == other.apply_child_offset
+            && self.has_override == other.has_override
     }
 }
 
-impl LayoutPolicy for ScrollableInnerLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let mut result = LayoutResult::default();
-        let children = input.children();
-        let mut child_constraint = *input.parent_constraint().as_ref();
-
+impl LayoutModifierNode for ScrollLayoutModifierNode {
+    fn measure_content(
+        &self,
+        input: &LayoutModifierInput<'_>,
+        child: &mut dyn LayoutModifierChild,
+    ) -> Result<LayoutResult, MeasurementError> {
+        let parent = input.layout_input.parent_constraint();
+        let mut child_constraint = *parent.as_ref();
         if self.vertical {
             child_constraint.height = AxisConstraint::NONE;
         }
@@ -564,14 +572,11 @@ impl LayoutPolicy for ScrollableInnerLayout {
             child_constraint.width = AxisConstraint::NONE;
         }
 
-        let child = children[0];
         let child_measurement = child.measure(&child_constraint)?;
-        let child_measurement = child_measurement.size();
         let next_child_size = self
             .controller
             .with(|c| c.override_child_size.unwrap_or(child_measurement));
-        let needs_child_size_update = self.controller.with(|c| c.child_size != next_child_size);
-        if needs_child_size_update {
+        if self.controller.with(|c| c.child_size != next_child_size) {
             self.controller.with_mut(|c| c.child_size = next_child_size);
         }
 
@@ -580,107 +585,107 @@ impl LayoutPolicy for ScrollableInnerLayout {
         } else {
             PxPosition::ZERO
         };
-        result.place_child(child, current_child_position);
+        child.place(current_child_position);
 
-        let width = input
-            .parent_constraint()
-            .width()
-            .clamp(child_measurement.width);
-        let height = input
-            .parent_constraint()
-            .height()
-            .clamp(child_measurement.height);
-
+        let width = parent.width().clamp(child_measurement.width);
+        let height = parent.height().clamp(child_measurement.height);
         let computed_data = ComputedData { width, height };
-        let needs_visible_size_update = self.controller.with(|c| c.visible_size != computed_data);
-        if needs_visible_size_update {
+        if self.controller.with(|c| c.visible_size != computed_data) {
             self.controller.with_mut(|c| c.visible_size = computed_data);
         }
-        Ok(result.with_size(computed_data))
+
+        Ok(LayoutResult::new(computed_data))
     }
 
-    fn measure_eq(&self, other: &Self) -> bool {
-        self.vertical == other.vertical
-            && self.horizontal == other.horizontal
-            && self.has_override == other.has_override
-            && self.apply_child_offset == other.apply_child_offset
-    }
-
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
-        let mut result = LayoutResult::default();
-        let Some(&child) = input.children().first() else {
-            return Some(result.into_placements());
-        };
-        let child_position = if self.apply_child_offset {
+    fn place_children(
+        &self,
+        _scope: &PlacementScope<'_>,
+        inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        // The viewport only shifts its content by the current scroll offset.
+        // Re-applying it from cached placements keeps scrolling from forcing a
+        // full re-measure of the content subtree.
+        let offset = if self.apply_child_offset {
             self.controller.with(|c| c.child_position())
         } else {
             PxPosition::ZERO
         };
-        result.place_child(child, child_position);
-        Some(result.into_placements())
+        let mut result = PlacementResult::new();
+        for (instance_key, position) in inner.iter() {
+            result.place(*instance_key, offset + *position);
+        }
+        Some(result)
     }
 }
 
-impl RenderPolicy for ScrollableInnerLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
-        input.metadata_mut().set_clips_children(true);
+/// Makes `base` behave as a scroll viewport driven by `controller`.
+///
+/// Composes the layout (viewport measure + content offset), clipping, wheel and
+/// drag input, smoothing frame ticking, focus reveal, and nested-scroll
+/// participation.
+pub(crate) fn apply_scroll_modifier(
+    base: Modifier,
+    controller: State<ScrollableController>,
+    vertical: bool,
+    horizontal: bool,
+) -> Modifier {
+    if !(vertical || horizontal) {
+        return base;
     }
+
+    let scrollbar_state_v = controller.with(|c| c.scrollbar_state_v());
+    let scrollbar_state_h = controller.with(|c| c.scrollbar_state_h());
+    let tap_recognizer = remember(TapRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
+    if controller.with(|c| c.has_pending_animation_frame()) {
+        receive_frame_nanos(move |frame_nanos| {
+            let pending = controller.with_mut(|c| {
+                c.update_scroll_position(frame_nanos, DEFAULT_SCROLL_SMOOTHING);
+                c.has_pending_animation_frame()
+            });
+            if pending {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+    let has_override = controller.with(|c| c.override_child_size.is_some());
+    let nested_scroll_connection =
+        use_context::<NestedScrollConnection>().map(|context| context.get());
+    let modifier = apply_scrollable_viewport_input_modifier(ScrollableViewportInputArgs {
+        base,
+        controller,
+        vertical,
+        horizontal,
+        scrollbar_behavior: ScrollBarBehavior::Hidden,
+        scrollbar_state_v,
+        scrollbar_state_h,
+        tap_recognizer,
+        scroll_recognizer,
+        nested_scroll_connection,
+    });
+    let modifier =
+        apply_scrollable_focus_reveal_modifier(modifier, controller, vertical, horizontal);
+    modifier
+        .push_layout(ScrollLayoutModifierNode {
+            controller,
+            vertical,
+            horizontal,
+            apply_child_offset: true,
+            has_override,
+        })
+        .clip_to_bounds()
 }
 
-/// # scrollable
+/// Internal scroll container: a sized viewport with scrollbars around the
+/// scroll modifier. Public scrolling is expressed through
+/// `Modifier::vertical_scroll` / `Modifier::horizontal_scroll`.
 ///
-/// Creates a container that makes its content scrollable when it overflows.
-///
-/// ## Usage
-///
-/// Wrap a large component or a long list of items to allow the user to scroll
-/// through them.
-///
-/// ## Parameters
-///
-/// - `modifier` — optional modifier chain applied to the scrollable subtree.
-/// - `vertical` — whether vertical scrolling is enabled.
-/// - `horizontal` — whether horizontal scrolling is enabled.
-/// - `scroll_smoothing` — fraction of the remaining distance kept per 60Hz
-///   frame while animating a scroll step. `0.0` jumps straight to the target,
-///   larger values ease in over more frames; defaults to 0.75 (about 175ms to
-///   cover 95% of a step).
-/// - `apply_child_offset` — whether the viewport shifts its child by the
-///   current scroll position or leaves placement to the child layout.
-/// - `scrollbar_behavior` — scrollbar visibility behavior.
-/// - `scrollbar_track_color` — optional scrollbar track color; transparent by
-///   default.
-/// - `scrollbar_thumb_color` — optional scrollbar thumb color; defaults to the
-///   Material `on-surface` color at the resting scrollbar opacity.
-/// - `scrollbar_thumb_hover_color` — optional scrollbar thumb hover color.
-/// - `scrollbar_layout` — layout of the scrollbar relative to content.
-/// - `controller` — optional external scroll controller.
-/// - `child` — optional scrollable child content.
-///
-/// ## Examples
-///
-/// ```
-/// use tessera_components::{
-///     column::column, modifier::ModifierExt as _, scrollable::scrollable, text::text,
-/// };
-/// use tessera_ui::{Dp, LayoutResult, Modifier, tessera};
-///
-/// #[tessera]
-/// fn demo() {
-///     scrollable()
-///         .modifier(Modifier::new().height(Dp(100.0)))
-///         .child(|| {
-///             column().children(|| {
-///                 for i in 0..20 {
-///                     let text_content = format!("Item #{}", i + 1);
-///                     text().content(text_content);
-///                 }
-///             });
-///         });
-/// }
-/// ```
+/// Retained as a crate-internal helper because it also lays out scrollbar
+/// siblings, which a modifier cannot add.
 #[tessera]
-pub fn scrollable(
+pub(crate) fn scrollable(
     modifier: Option<Modifier>,
     vertical: Option<bool>,
     horizontal: Option<bool>,
@@ -753,7 +758,7 @@ fn scrollbar_v_bound(
     scrollbar_v()
         .total(controller.with(|c| c.child_size().height))
         .visible(controller.with(|c| c.visible_size().height))
-        .offset(controller.with(|c| c.child_position().y))
+        .offset(controller.with(|c| c.child_position().y_px()))
         .thickness_optional(thickness)
         .state(controller)
         .scrollbar_behavior(scrollbar_behavior)
@@ -780,7 +785,7 @@ fn scrollbar_h_bound(
     scrollbar_h()
         .total(controller.with(|c| c.child_size().width))
         .visible(controller.with(|c| c.visible_size().width))
-        .offset(controller.with(|c| c.child_position().x))
+        .offset(controller.with(|c| c.child_position().x_px()))
         .thickness_optional(thickness)
         .state(controller)
         .scrollbar_behavior(scrollbar_behavior)
@@ -816,7 +821,7 @@ fn scrollable_with_alongside_scrollbar(
     let scrollbar_h_state = controller.with(|c| c.scrollbar_state_h());
 
     layout()
-        .layout_policy(ScrollableAlongsideLayout {
+        .policy(ScrollableAlongsideLayout {
             vertical,
             horizontal,
         })
@@ -1016,9 +1021,9 @@ impl ScrollableViewportPointerModifierNode {
                     tessera_ui::CursorEventContent::Scroll(ref scroll)
                         if scroll.source == ScrollEventSource::Touch
                 );
-            let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-                recognizer.update(pass, changes, cursor_position_rel, is_cursor_in_component)
-            });
+            let tap_result = self
+                .tap_recognizer
+                .with_mut(|recognizer| recognizer.update(pass, changes, is_cursor_in_component));
             if tap_result.pressed {
                 self.controller.with_mut(|c| {
                     c.cancel_inertia();
@@ -1219,18 +1224,16 @@ fn scrollable_viewport(
     } else {
         modifier
     };
-    let policy = ScrollableInnerLayout {
-        controller,
-        vertical,
-        horizontal,
-        has_override,
-        apply_child_offset,
-    };
-    layout()
-        .modifier(modifier)
-        .layout_policy(policy.clone())
-        .render_policy(policy)
-        .child(move || child.render());
+    let modifier = modifier
+        .push_layout(ScrollLayoutModifierNode {
+            controller,
+            vertical,
+            horizontal,
+            apply_child_offset,
+            has_override,
+        })
+        .clip_to_bounds();
+    layout().modifier(modifier).child(move || child.render());
 }
 
 fn apply_scrollable_focus_reveal_modifier(
@@ -1247,20 +1250,20 @@ fn apply_scrollable_focus_reveal_modifier(
         if horizontal {
             desired_position.x = reveal_axis_position(
                 current_position.x,
-                request.target_rect.x,
-                request.target_rect.x + request.target_rect.width,
-                request.viewport_rect.x,
-                request.viewport_rect.x + request.viewport_rect.width,
+                request.target_rect.x.0 as f32,
+                (request.target_rect.x + request.target_rect.width).0 as f32,
+                request.viewport_rect.x.0 as f32,
+                (request.viewport_rect.x + request.viewport_rect.width).0 as f32,
             );
         }
 
         if vertical {
             desired_position.y = reveal_axis_position(
                 current_position.y,
-                request.target_rect.y,
-                request.target_rect.y + request.target_rect.height,
-                request.viewport_rect.y,
-                request.viewport_rect.y + request.viewport_rect.height,
+                request.target_rect.y.0 as f32,
+                (request.target_rect.y + request.target_rect.height).0 as f32,
+                request.viewport_rect.y.0 as f32,
+                (request.viewport_rect.y + request.viewport_rect.height).0 as f32,
             );
         }
 
@@ -1285,12 +1288,12 @@ fn apply_scrollable_focus_reveal_modifier(
 }
 
 fn reveal_axis_position(
-    current: Px,
-    target_start: Px,
-    target_end: Px,
-    viewport_start: Px,
-    viewport_end: Px,
-) -> Px {
+    current: f32,
+    target_start: f32,
+    target_end: f32,
+    viewport_start: f32,
+    viewport_end: f32,
+) -> f32 {
     if target_start < viewport_start {
         current + (viewport_start - target_start)
     } else if target_end > viewport_end {
@@ -1304,15 +1307,17 @@ fn reveal_axis_position(
 ///
 /// Split per-axis logic into a helper to simplify reasoning and reduce
 /// cyclomatic complexity.
-fn constrain_axis(pos: Px, child_len: Px, container_len: Px) -> Px {
+fn constrain_axis(pos: f32, child_len: Px, container_len: Px) -> f32 {
+    let child_len = child_len.0 as f32;
+    let container_len = container_len.0 as f32;
     if child_len <= container_len {
-        return Px::ZERO;
+        return 0.0;
     }
 
-    if pos > Px::ZERO {
-        Px::ZERO
-    } else if pos.saturating_add(child_len) < container_len {
-        container_len.saturating_sub(child_len)
+    if pos > 0.0 {
+        0.0
+    } else if pos + child_len < container_len {
+        container_len - child_len
     } else {
         pos
     }
@@ -1328,16 +1333,16 @@ fn constrain_position(
     let x = if horizontal_scrollable {
         constrain_axis(position.x, child_size.width, container_size.width)
     } else {
-        Px::ZERO
+        0.0
     };
 
     let y = if vertical_scrollable {
         constrain_axis(position.y, child_size.height, container_size.height)
     } else {
-        Px::ZERO
+        0.0
     };
 
-    PxPosition { x, y }
+    PxPosition::from_f32_xy(x, y)
 }
 
 #[cfg(test)]
@@ -1384,7 +1389,27 @@ mod scroll_tests {
             controller.update_scroll_position(frame * 16_666_667, 0.99);
         }
         assert!(!controller.has_pending_animation_frame());
-        assert_eq!(controller.child_position.y, Px(-100));
+        assert_eq!(controller.child_position.y, -100.0);
+    }
+
+    #[test]
+    fn overridden_child_extent_allows_scrolling_past_measured_child() {
+        let mut controller = controller();
+        controller.child_size.height = controller.visible_size.height;
+        controller.override_child_size(ComputedData {
+            width: controller.child_size.width,
+            height: Px(2000),
+        });
+        let viewport = controller.visible_size;
+        controller.apply_input_delta(
+            ScrollDelta::new(0.0, -300.0),
+            ScrollEventSource::Wheel,
+            ScrollDeltaUnit::Pixel,
+            &viewport,
+            true,
+            false,
+        );
+        assert!(controller.target_position.y < 0.0);
     }
     #[test]
     fn touch_and_programmatic_position_interrupt_inertia() {
@@ -1426,7 +1451,7 @@ mod scroll_tests {
         controller.set_scroll_position(PxPosition::new(Px(0), Px(-1900)));
         let mut frame = 0u64;
         let mut steps = 0;
-        while controller.child_position.y != Px(0) && steps < 200 {
+        while controller.child_position.y != 0.0 && steps < 200 {
             controller.apply_input_delta(
                 ScrollDelta::new(0.0, 40.0),
                 ScrollEventSource::Wheel,
@@ -1443,7 +1468,7 @@ mod scroll_tests {
         }
         assert_eq!(
             controller.child_position.y,
-            Px(0),
+            0.0,
             "steps={steps} current={:?} target={:?} target_f32={:?} pending={}",
             controller.child_position,
             controller.target_position,
@@ -1469,8 +1494,7 @@ mod scroll_tests {
             controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
         }
         assert_eq!(
-            controller.child_position.y,
-            Px(0),
+            controller.child_position.y, 0.0,
             "current={:?}",
             controller.child_position
         );
@@ -1490,16 +1514,16 @@ mod scroll_tests {
             false,
         );
         // A notch must not teleport: the position only moves once frames run.
-        assert_eq!(controller.child_position.y, Px(0));
+        assert_eq!(controller.child_position.y, 0.0);
         assert!(controller.has_pending_animation_frame());
 
         let mut travelled = Vec::new();
         for frame in 1..=4u64 {
             controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
-            travelled.push(controller.child_position.y.0);
+            travelled.push(controller.child_position.y);
         }
         // Each frame covers less than the whole step and moves forwards.
-        assert!(travelled[0] < 0 && travelled[0] > -120, "{travelled:?}");
+        assert!(travelled[0] < 0.0 && travelled[0] > -120.0, "{travelled:?}");
         assert!(
             travelled.windows(2).all(|pair| pair[1] <= pair[0]),
             "scroll must stay monotonic: {travelled:?}"
@@ -1512,7 +1536,7 @@ mod scroll_tests {
         for frame in 5..=60u64 {
             controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
         }
-        assert_eq!(controller.child_position.y, Px(-120));
+        assert_eq!(controller.child_position.y, -120.0);
         assert!(!controller.has_pending_animation_frame());
     }
 
@@ -1528,7 +1552,7 @@ mod scroll_tests {
             true,
             false,
         );
-        assert_eq!(controller.child_position.y, Px(-8));
+        assert_eq!(controller.child_position.y, -8.0);
         assert!(!controller.has_pending_animation_frame());
     }
 
@@ -1556,7 +1580,7 @@ mod scroll_tests {
             controller.update_scroll_position(frame * 16_666_667, DEFAULT_SCROLL_SMOOTHING);
         }
         assert!(controller.is_positioned());
-        assert_eq!(controller.child_position.y, Px(-500));
+        assert_eq!(controller.child_position.y, -500.0);
         controller.apply_input_delta(
             ScrollDelta::new(0.0, 500.0),
             ScrollEventSource::Wheel,
@@ -1574,5 +1598,99 @@ mod scroll_tests {
             controller.is_positioned(),
             "a viewport at the top must not look like a fresh one"
         );
+    }
+
+    mod scroll_modifier_api {
+        use std::cell::RefCell;
+
+        use tessera_ui::{
+            Dp, Modifier, Px, PxPosition, State,
+            layout::layout,
+            remember, tessera,
+            testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+        };
+
+        use crate::{
+            column::column,
+            modifier::{ModifierExt as _, SemanticsArgs},
+            spacer::spacer,
+        };
+
+        use super::ScrollableController;
+
+        thread_local! {
+            static CONTROLLER: RefCell<Option<State<ScrollableController>>> =
+                const { RefCell::new(None) };
+        }
+
+        #[tessera]
+        fn scroll_modifier_case() {
+            let controller = remember(ScrollableController::new);
+            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            layout()
+                .modifier(Modifier::new().vertical_scroll(controller))
+                .child(move || {
+                    column().children(move || {
+                        spacer().modifier(Modifier::new().height(Dp(400.0)).semantics(
+                            SemanticsArgs {
+                                test_tag: Some("inner".to_string()),
+                                ..Default::default()
+                            },
+                        ));
+                    });
+                });
+        }
+
+        #[test]
+        fn cached_viewport_publishes_updated_scroll_extent() {
+            let mut session = start_layout_test_session(
+                layout_test(|| {
+                    scroll_modifier_case();
+                })
+                .viewport_px(100, 100),
+            );
+            let _ = pump_layout_test_session(&mut session, 0);
+            let controller = CONTROLLER.with(|slot| slot.borrow().expect("scroll controller"));
+            controller.with_mut(|c| {
+                c.override_child_size(tessera_ui::ComputedData {
+                    width: Px(100),
+                    height: Px(400),
+                });
+            });
+            let _ = pump_layout_test_session(&mut session, 16_666_667);
+            controller.with_mut(|c| {
+                c.override_child_size(tessera_ui::ComputedData {
+                    width: Px(100),
+                    height: Px(800),
+                });
+            });
+            let _ = pump_layout_test_session(&mut session, 33_333_334);
+            assert_eq!(controller.with(|c| c.child_size().height), Px(800));
+            controller.with_mut(|c| c.set_scroll_position(PxPosition::new(Px(0), Px(-650))));
+            let snapshot = pump_layout_test_session(&mut session, 50_000_001);
+            snapshot.node("inner").y(-650);
+        }
+
+        #[test]
+        fn vertical_scroll_modifier_reapplies_offset() {
+            let mut session = start_layout_test_session(
+                layout_test(|| {
+                    scroll_modifier_case();
+                })
+                .viewport_px(100, 100),
+            );
+            let snapshot = pump_layout_test_session(&mut session, 0);
+            snapshot.node("inner").y(0);
+
+            let controller = CONTROLLER.with(|slot| (*slot.borrow()).expect("controller"));
+            controller.with_mut(|c| {
+                c.child_position_f32 = (0.0, -40.0);
+                c.child_position = PxPosition::new(Px(0), Px(-40));
+                c.target_position_f32 = (0.0, -40.0);
+            });
+
+            let snapshot = pump_layout_test_session(&mut session, 16_666_667);
+            snapshot.node("inner").y(-40);
+        }
     }
 }

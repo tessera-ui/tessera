@@ -9,10 +9,11 @@ pub mod handle;
 /// Internal map and slot storage used by shard state handles.
 pub mod storage;
 
-pub use handle::ShardState;
+pub use handle::{ShardState, ShardStateError};
 
 pub(crate) use storage::{
-    ShardStateMap, ShardStateSlot, init_or_get_shard_state_in_map, recycle_shard_state_slot,
+    ShardSlotTableHandle, ShardStateMap, ShardStateSlot, init_or_get_shard_state_in_map,
+    recycle_shard_state_slot,
 };
 
 /// Describes the lifecycle of shard state values.

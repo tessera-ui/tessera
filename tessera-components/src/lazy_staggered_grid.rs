@@ -13,14 +13,16 @@ use std::{
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
     LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, State, key,
-    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     remember, tessera,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
+    layout_flex::cross_axis_child_constraint,
     lazy_grid::GridCells,
+    lazy_shared::clamp_reported_main,
     scrollable::{ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable},
 };
 
@@ -626,8 +628,8 @@ enum StaggeredGridAxis {
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct ZeroLayout;
 
-impl LayoutPolicy for ZeroLayout {
-    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ZeroLayout {
+    fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::ZERO))
     }
 }
@@ -672,8 +674,8 @@ impl PartialEq for LazyStaggeredGridLayout {
     }
 }
 
-impl LayoutPolicy for LazyStaggeredGridLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for LazyStaggeredGridLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() != self.visible_items.len() {
@@ -683,52 +685,46 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
         }
 
         let (placements, total_main) = self.controller.with_mut(|c| {
+            c.cache.prepare(
+                self.total_count,
+                self.slots.len(),
+                self.estimated_item_main,
+                self.main_spacing,
+            );
+
             let mut placements = Vec::with_capacity(self.visible_items.len());
-            let mut visible_iter = self.visible_items.iter().zip(children.iter()).peekable();
-
-            let mut lane_offsets = vec![Px::ZERO; self.slots.len()];
-
-            for index in 0..self.total_count {
-                if self.slots.len() == 0 {
-                    break;
-                }
-
-                let lane = find_shortest_lane(&lane_offsets);
+            for (visible, child) in self.visible_items.iter().zip(children.iter()) {
+                let index = visible.item_index;
+                let Some(lane) = c.cache.lane_of(index) else {
+                    continue;
+                };
                 let lane_cross = self.slots.sizes.get(lane).copied().unwrap_or(Px::ZERO);
-                let item_start = lane_offsets[lane];
-                let mut item_main = c.cache.item_main(index).unwrap_or(self.estimated_item_main);
+                let child_constraint = self.axis.child_constraint(lane_cross, self.item_alignment);
+                let child_size = child.measure(input, &child_constraint)?;
+                let child_size = child_size.size();
+                let item_main = self.axis.main(&child_size);
+                c.cache.record_measurement(index, item_main);
+                let Some(lane) = c.cache.lane_of(index) else {
+                    continue;
+                };
+                let item_start = c.cache.item_start(index);
 
-                if let Some((visible, child)) = visible_iter.peek()
-                    && visible.item_index == index
-                {
-                    let child_constraint =
-                        self.axis.child_constraint(lane_cross, self.item_alignment);
-                    let child_size = child.measure(&child_constraint)?;
-                    let child_size = child_size.size();
-                    item_main = self.axis.main(&child_size);
-                    c.cache.record_measurement(index, item_main);
-
-                    let cell_offset = compute_cell_offset(
-                        lane_cross,
-                        self.axis.cross(&child_size),
-                        self.item_alignment,
-                    );
-                    let cross_offset = self.padding_cross
-                        + self.slots.positions.get(lane).copied().unwrap_or(Px::ZERO)
-                        + cell_offset;
-                    let position = self.axis.position(
-                        item_start + self.padding_main - self.scroll_offset,
-                        cross_offset,
-                    );
-                    placements.push((**child, position));
-
-                    visible_iter.next();
-                }
-
-                lane_offsets[lane] = item_start + item_main + self.main_spacing;
+                let cell_offset = compute_cell_offset(
+                    lane_cross,
+                    self.axis.cross(&child_size),
+                    self.item_alignment,
+                );
+                let cross_offset = self.padding_cross
+                    + self.slots.positions.get(lane).copied().unwrap_or(Px::ZERO)
+                    + cell_offset;
+                let position = self.axis.position(
+                    item_start + self.padding_main - self.scroll_offset,
+                    cross_offset,
+                );
+                placements.push((*child, position));
             }
 
-            let total_main = finalize_lane_offsets(&lane_offsets, self.main_spacing);
+            let total_main = c.cache.total_main();
             Ok::<_, MeasurementError>((placements, total_main))
         })?;
 
@@ -741,10 +737,9 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
             .with_mut(|c| c.override_child_size(size));
 
         let reported_main = clamp_reported_main(
-            self.axis,
-            input.parent_constraint(),
             total_main_with_padding,
             self.viewport_limit,
+            self.axis.constraint_max(input.parent_constraint()),
             self.max_viewport_main,
         );
 
@@ -773,7 +768,11 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
         self.measure_eq(other) && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let children = input.children();
         if children.len() != self.visible_items.len() {
             return None;
@@ -805,7 +804,7 @@ impl LayoutPolicy for LazyStaggeredGridLayout {
             result.place_child(*child, position);
         }
 
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }
 
@@ -854,19 +853,15 @@ fn lazy_staggered_grid_view(
     );
     let lane_count = grid_slots.len();
 
-    controller.with_mut(|c| c.cache.set_item_count(total_count));
-    let total_main = controller.with(|c| {
-        if lane_count == 0 || total_count == 0 {
-            return Px::ZERO;
-        }
-        let mut lane_offsets = vec![Px::ZERO; lane_count];
-        for index in 0..total_count {
-            let lane = find_shortest_lane(&lane_offsets);
-            let item_main = c.cache.item_main(index).unwrap_or(estimated_item_main);
-            lane_offsets[lane] = lane_offsets[lane] + item_main + main_axis_spacing;
-        }
-        finalize_lane_offsets(&lane_offsets, main_axis_spacing)
+    controller.with_mut(|c| {
+        c.cache.prepare(
+            total_count,
+            lane_count,
+            estimated_item_main,
+            main_axis_spacing,
+        );
     });
+    let total_main = controller.with(|c| c.cache.total_main());
     let total_main_with_padding = total_main + padding_main + padding_main;
     let cross_with_padding = grid_slots.cross_size + padding_cross + padding_cross;
     scroll_controller.with_mut(|c| {
@@ -889,14 +884,13 @@ fn lazy_staggered_grid_view(
             scroll_offset,
             viewport_span,
             overscan,
-            estimated_item_main,
             main_axis_spacing,
         )
     });
     let visible_items = plan.visible_items(visible_range.clone());
 
     if visible_items.is_empty() {
-        layout().layout_policy(ZeroLayout);
+        layout().policy(ZeroLayout);
         return;
     }
 
@@ -905,8 +899,6 @@ fn lazy_staggered_grid_view(
             axis,
             controller,
             scroll_controller,
-            estimated_item_main,
-            main_axis_spacing,
             total_count,
             total_main,
             viewport_span,
@@ -924,7 +916,7 @@ fn lazy_staggered_grid_view(
 
     layout()
         .modifier(focus_modifier)
-        .layout_policy(LazyStaggeredGridLayout {
+        .policy(LazyStaggeredGridLayout {
             axis,
             item_alignment,
             estimated_item_main,
@@ -971,7 +963,6 @@ fn resolve_viewport_span(current: Px, estimated: Px, spacing: Px) -> Px {
     }
 }
 
-#[allow(clippy::too_many_arguments)]
 fn compute_visible_range(
     cache: &StaggeredGridCache,
     total_count: usize,
@@ -979,33 +970,39 @@ fn compute_visible_range(
     scroll_offset: Px,
     viewport_span: Px,
     overscan: usize,
-    estimated_item_main: Px,
     spacing: Px,
 ) -> Range<usize> {
-    if total_count == 0 || lane_count == 0 {
+    if total_count == 0 || lane_count == 0 || cache.built_len() != total_count {
         return 0..0;
     }
 
     let viewport_start = scroll_offset;
     let viewport_end = scroll_offset + viewport_span;
-    let mut lane_offsets = vec![Px::ZERO; lane_count];
     let mut first_visible = None;
     let mut last_visible = None;
 
-    for index in 0..total_count {
-        let item_main = cache.item_main(index).unwrap_or(estimated_item_main);
-        let lane = find_shortest_lane(&lane_offsets);
-        let item_start = lane_offsets[lane];
-        let item_end = item_start + item_main;
-
-        if item_end >= viewport_start && item_start <= viewport_end {
-            if first_visible.is_none() {
-                first_visible = Some(index);
-            }
-            last_visible = Some(index);
+    for lane in 0..lane_count {
+        let ends = cache.lane_ends(lane);
+        if ends.is_empty() {
+            continue;
         }
-
-        lane_offsets[lane] = item_end + spacing;
+        let first = ends.partition_point(|end| *end < viewport_start);
+        let last = if viewport_end < Px::ZERO {
+            0
+        } else {
+            (ends.partition_point(|end| *end + spacing <= viewport_end) + 1).min(ends.len())
+        };
+        if first >= last {
+            continue;
+        }
+        if let Some(start_index) = cache.item_at_lane_slot(lane, first) {
+            first_visible =
+                Some(first_visible.map_or(start_index, |current: usize| current.min(start_index)));
+        }
+        if let Some(end_index) = cache.item_at_lane_slot(lane, last - 1) {
+            last_visible =
+                Some(last_visible.map_or(end_index, |current: usize| current.max(end_index)));
+        }
     }
 
     let (mut start, mut end) = match (first_visible, last_visible) {
@@ -1025,21 +1022,6 @@ fn compute_visible_range(
     }
 
     start..end
-}
-
-fn clamp_reported_main(
-    axis: StaggeredGridAxis,
-    parent_constraint: ParentConstraint<'_>,
-    total_main: Px,
-    viewport_span: Px,
-    fallback_limit: Option<Px>,
-) -> Px {
-    let viewport = viewport_span.max(Px::ZERO);
-    let mut report = total_main.min(viewport);
-    if let Some(max_value) = axis.constraint_max(parent_constraint).or(fallback_limit) {
-        report = report.min(max_value.max(Px::ZERO));
-    }
-    report
 }
 
 fn compute_cell_offset(cell_cross: Px, child_cross: Px, alignment: CrossAxisAlignment) -> Px {
@@ -1086,8 +1068,8 @@ impl StaggeredGridAxis {
 
     fn position(&self, main: Px, cross: Px) -> PxPosition {
         match self {
-            Self::Vertical => PxPosition { x: cross, y: main },
-            Self::Horizontal => PxPosition { x: main, y: cross },
+            Self::Vertical => PxPosition::new(cross, main),
+            Self::Horizontal => PxPosition::new(main, cross),
         }
     }
 
@@ -1114,8 +1096,8 @@ impl StaggeredGridAxis {
 
     fn scroll_offset(&self, position: PxPosition) -> Px {
         match self {
-            Self::Vertical => (-position.y).max(Px::ZERO),
-            Self::Horizontal => (-position.x).max(Px::ZERO),
+            Self::Vertical => Px((-position.y).max(0.0) as i32),
+            Self::Horizontal => Px((-position.x).max(0.0) as i32),
         }
     }
 
@@ -1137,10 +1119,10 @@ impl StaggeredGridAxis {
 
     fn child_constraint(&self, cross: Px, alignment: CrossAxisAlignment) -> Constraint {
         let cross = cross.max(Px::ZERO);
-        let cross_constraint = match alignment {
-            CrossAxisAlignment::Stretch => AxisConstraint::exact(cross),
-            _ => AxisConstraint::new(Px::ZERO, Some(cross)),
-        };
+        // The cell defines an exact cross extent, so the shared rule reproduces
+        // the previous behavior: `Stretch` fills the cell, other alignments let
+        // the item measure itself within that extent.
+        let cross_constraint = cross_axis_child_constraint(AxisConstraint::exact(cross), alignment);
 
         match self {
             Self::Vertical => Constraint::new(cross_constraint, AxisConstraint::NONE),
@@ -1399,8 +1381,6 @@ struct LazyStaggeredGridFocusArgs {
     axis: StaggeredGridAxis,
     controller: State<LazyStaggeredGridController>,
     scroll_controller: State<ScrollableController>,
-    estimated_item_main: Px,
-    main_axis_spacing: Px,
     total_count: usize,
     total_main: Px,
     viewport_span: Px,
@@ -1436,15 +1416,9 @@ fn lazy_staggered_grid_focus_beyond_bounds_modifier(args: LazyStaggeredGridFocus
             }
         };
 
-        let Some((target_offset, target_main)) = args.controller.with(|c| {
-            staggered_item_layout_info(
-                &c.cache,
-                target_index,
-                args.lane_count,
-                args.estimated_item_main,
-                args.main_axis_spacing,
-            )
-        }) else {
+        let Some((target_offset, target_main)) =
+            args.controller.with(|c| c.cache.item_layout(target_index))
+        else {
             return false;
         };
 
@@ -1467,17 +1441,64 @@ fn lazy_staggered_grid_focus_beyond_bounds_modifier(args: LazyStaggeredGridFocus
     }))
 }
 
-#[derive(PartialEq, Default)]
+#[derive(PartialEq)]
 struct StaggeredGridCache {
+    /// Measured main-axis sizes. `None` still uses the estimated size.
     item_main: Vec<Option<Px>>,
+    /// Lane assignment for each built item, parallel to the item prefix.
+    lane_of: Vec<usize>,
+    /// Exclusive main-axis end of every item in a lane, in placement order.
+    lane_ends: Vec<Vec<Px>>,
+    /// Item index occupying each slot of `lane_ends`.
+    lane_items: Vec<Vec<usize>>,
+    lane_count: usize,
+    spacing: Px,
+    estimated_item_main: Px,
+}
+
+impl Default for StaggeredGridCache {
+    fn default() -> Self {
+        Self {
+            item_main: Vec::new(),
+            lane_of: Vec::new(),
+            lane_ends: Vec::new(),
+            lane_items: Vec::new(),
+            lane_count: 0,
+            spacing: Px::ZERO,
+            estimated_item_main: Px::ZERO,
+        }
+    }
 }
 
 impl StaggeredGridCache {
-    fn set_item_count(&mut self, count: usize) {
-        if self.item_main.len() == count {
-            return;
+    /// Keep `item_main` aligned with `count` and refresh lane geometry.
+    ///
+    /// A longer list only appends. A shorter list truncates. Changing lane
+    /// count, spacing, or estimated size drops the lane tables. Inserts and
+    /// reorders cannot be told apart from length, so they invalidate the whole
+    /// table instead of pretending keys stayed stable.
+    fn prepare(&mut self, count: usize, lane_count: usize, estimated_item_main: Px, spacing: Px) {
+        if self.lane_count != lane_count
+            || self.spacing != spacing
+            || self.estimated_item_main != estimated_item_main
+        {
+            self.invalidate_geometry();
+            self.lane_count = lane_count;
+            self.spacing = spacing;
+            self.estimated_item_main = estimated_item_main;
         }
-        self.item_main.resize(count, None);
+
+        if self.item_main.len() > count {
+            self.item_main.truncate(count);
+        } else if self.item_main.len() < count {
+            self.item_main.resize(count, None);
+        }
+
+        if self.lane_of.len() > self.item_main.len() {
+            self.truncate_geometry(self.item_main.len());
+        }
+
+        self.ensure_built(self.item_main.len());
     }
 
     fn item_main(&self, index: usize) -> Option<Px> {
@@ -1488,32 +1509,172 @@ impl StaggeredGridCache {
         if index >= self.item_main.len() {
             return;
         }
+        if self.item_main[index] == Some(actual) {
+            return;
+        }
         self.item_main[index] = Some(actual);
+        self.truncate_geometry(index);
+        self.ensure_built(self.item_main.len());
+    }
+
+    fn built_len(&self) -> usize {
+        self.lane_of.len()
+    }
+
+    fn lane_of(&self, index: usize) -> Option<usize> {
+        self.lane_of.get(index).copied()
+    }
+
+    fn lane_ends(&self, lane: usize) -> &[Px] {
+        self.lane_ends.get(lane).map(Vec::as_slice).unwrap_or(&[])
+    }
+
+    fn item_start(&self, index: usize) -> Px {
+        let Some(lane) = self.lane_of.get(index).copied() else {
+            return Px::ZERO;
+        };
+        let Some(items) = self.lane_items.get(lane) else {
+            return Px::ZERO;
+        };
+        let Some(slot) = items.iter().position(|item| *item == index) else {
+            return Px::ZERO;
+        };
+        if slot == 0 {
+            Px::ZERO
+        } else {
+            self.lane_ends
+                .get(lane)
+                .and_then(|ends| ends.get(slot - 1))
+                .copied()
+                .unwrap_or(Px::ZERO)
+                + self.spacing
+        }
+    }
+
+    fn item_layout(&self, index: usize) -> Option<(Px, Px)> {
+        if index >= self.lane_of.len() {
+            return None;
+        }
+        Some((self.item_start(index), self.resolved_main(index)))
+    }
+
+    fn item_at_lane_slot(&self, lane: usize, slot: usize) -> Option<usize> {
+        self.lane_items.get(lane)?.get(slot).copied()
+    }
+
+    fn total_main(&self) -> Px {
+        if self.lane_count == 0
+            || self.item_main.is_empty()
+            || self.lane_of.len() != self.item_main.len()
+        {
+            return Px::ZERO;
+        }
+        let max_end = self
+            .lane_ends
+            .iter()
+            .filter_map(|ends| ends.last().copied())
+            .max()
+            .unwrap_or(Px::ZERO);
+        if max_end == Px::ZERO {
+            Px::ZERO
+        } else {
+            (max_end - self.spacing).max(Px::ZERO)
+        }
+    }
+
+    fn resolved_main(&self, index: usize) -> Px {
+        self.item_main(index).unwrap_or(self.estimated_item_main)
+    }
+
+    fn invalidate_geometry(&mut self) {
+        self.lane_of.clear();
+        self.lane_ends.clear();
+        self.lane_items.clear();
+    }
+
+    /// Drop lane rows at and after `from`. Rows before `from` stay put.
+    fn truncate_geometry(&mut self, from: usize) {
+        let keep = from.min(self.lane_of.len());
+        if keep == self.lane_of.len() && self.lane_ends.len() == self.lane_count {
+            return;
+        }
+        self.lane_of.truncate(keep);
+        for items in &mut self.lane_items {
+            items.retain(|index| *index < keep);
+        }
+        let spacing = self.spacing;
+        let mains: Vec<Px> = (0..keep).map(|index| self.resolved_main(index)).collect();
+        for lane in 0..self.lane_items.len() {
+            let Some(items) = self.lane_items.get(lane).cloned() else {
+                continue;
+            };
+            let mut cursor = Px::ZERO;
+            let mut rebuilt = Vec::with_capacity(items.len());
+            for (slot, index) in items.iter().copied().enumerate() {
+                let main = mains.get(index).copied().unwrap_or(Px::ZERO);
+                if slot > 0 {
+                    cursor += spacing;
+                }
+                cursor += main;
+                rebuilt.push(cursor);
+            }
+            if let Some(ends) = self.lane_ends.get_mut(lane) {
+                *ends = rebuilt;
+            }
+        }
+    }
+
+    fn ensure_built(&mut self, through: usize) {
+        let through = through.min(self.item_main.len());
+        if self.lane_count == 0 {
+            self.lane_of.clear();
+            self.lane_ends.clear();
+            self.lane_items.clear();
+            return;
+        }
+        if self.lane_ends.len() != self.lane_count || self.lane_items.len() != self.lane_count {
+            self.invalidate_geometry();
+            self.lane_ends = vec![Vec::new(); self.lane_count];
+            self.lane_items = vec![Vec::new(); self.lane_count];
+        }
+        if self.lane_of.len() > through {
+            self.truncate_geometry(through);
+        }
+        while self.lane_of.len() < through {
+            let index = self.lane_of.len();
+            let lane = shortest_lane_index(&self.lane_ends);
+            let item_main = self.resolved_main(index);
+            let start = self
+                .lane_ends
+                .get(lane)
+                .and_then(|ends| ends.last().copied())
+                .map(|end| end + self.spacing)
+                .unwrap_or(Px::ZERO);
+            self.lane_of.push(lane);
+            if let Some(items) = self.lane_items.get_mut(lane) {
+                items.push(index);
+            }
+            if let Some(ends) = self.lane_ends.get_mut(lane) {
+                ends.push(start + item_main);
+            }
+        }
     }
 }
 
-fn staggered_item_layout_info(
-    cache: &StaggeredGridCache,
-    target_index: usize,
-    lane_count: usize,
-    estimated_item_main: Px,
-    spacing: Px,
-) -> Option<(Px, Px)> {
-    if lane_count == 0 || target_index >= cache.item_main.len() {
-        return None;
-    }
-
-    let mut lane_offsets = vec![Px::ZERO; lane_count];
-    for index in 0..=target_index {
-        let lane = find_shortest_lane(&lane_offsets);
-        let item_main = cache.item_main(index).unwrap_or(estimated_item_main);
-        let item_offset = lane_offsets[lane];
-        if index == target_index {
-            return Some((item_offset, item_main));
+fn shortest_lane_index(lane_ends: &[Vec<Px>]) -> usize {
+    let mut index = 0;
+    let mut best = lane_ends
+        .first()
+        .and_then(|ends| ends.last().copied())
+        .unwrap_or(Px::ZERO);
+    for (lane, ends) in lane_ends.iter().enumerate().skip(1) {
+        let end = ends.last().copied().unwrap_or(Px::ZERO);
+        if end < best {
+            best = end;
+            index = lane;
         }
-        lane_offsets[lane] = item_offset + item_main + spacing;
     }
-    None
+    index
 }
 
 fn calculate_cells_cross_axis_size(available: Px, slot_count: usize, spacing: Px) -> Vec<Px> {
@@ -1555,36 +1716,18 @@ fn sanitize_spacing(px: Px) -> Px {
     if px < Px::ZERO { Px::ZERO } else { px }
 }
 
-fn find_shortest_lane(lane_offsets: &[Px]) -> usize {
-    let mut index = 0;
-    let mut best = lane_offsets.first().copied().unwrap_or(Px::ZERO);
-    for (i, offset) in lane_offsets.iter().enumerate().skip(1) {
-        if *offset < best {
-            best = *offset;
-            index = i;
-        }
-    }
-    index
-}
-
-fn finalize_lane_offsets(lane_offsets: &[Px], spacing: Px) -> Px {
-    let max_offset = lane_offsets.iter().copied().max().unwrap_or(Px::ZERO);
-    if max_offset == Px::ZERO {
-        Px::ZERO
-    } else {
-        (max_offset - spacing).max(Px::ZERO)
-    }
-}
-
 struct ComputeStaggeredLayoutPositionsArgs<'a> {
     axis: StaggeredGridAxis,
     item_alignment: CrossAxisAlignment,
     cache: &'a StaggeredGridCache,
+    #[allow(dead_code)]
     total_count: usize,
     slots: &'a GridSlots,
     padding_main: Px,
     padding_cross: Px,
+    #[allow(dead_code)]
     estimated_item_main: Px,
+    #[allow(dead_code)]
     main_spacing: Px,
     visible_items: &'a [VisibleStaggeredLayoutItem],
     child_sizes: &'a [ComputedData],
@@ -1598,44 +1741,33 @@ fn compute_staggered_layout_positions(
         axis,
         item_alignment,
         cache,
-        total_count,
+        total_count: _,
         slots,
         padding_main,
         padding_cross,
-        estimated_item_main,
-        main_spacing,
+        estimated_item_main: _,
+        main_spacing: _,
         visible_items,
         child_sizes,
         scroll_offset,
     } = args;
 
     let mut positions = Vec::with_capacity(visible_items.len());
-    let mut visible_iter = visible_items.iter().zip(child_sizes.iter()).peekable();
-    let mut lane_offsets = vec![Px::ZERO; slots.len()];
+    if slots.len() == 0 {
+        return positions;
+    }
 
-    for index in 0..total_count {
-        if slots.len() == 0 {
-            break;
-        }
-
-        let lane = find_shortest_lane(&lane_offsets);
+    for (visible, child_size) in visible_items.iter().zip(child_sizes.iter()) {
+        let index = visible.item_index;
+        let Some(lane) = cache.lane_of(index) else {
+            continue;
+        };
         let lane_cross = slots.sizes.get(lane).copied().unwrap_or(Px::ZERO);
-        let item_start = lane_offsets[lane];
-        let item_main = cache.item_main(index).unwrap_or(estimated_item_main);
-
-        if let Some((visible, child_size)) = visible_iter.peek()
-            && visible.item_index == index
-        {
-            let cell_offset =
-                compute_cell_offset(lane_cross, axis.cross(child_size), item_alignment);
-            let cross_offset = padding_cross
-                + slots.positions.get(lane).copied().unwrap_or(Px::ZERO)
-                + cell_offset;
-            positions.push(axis.position(item_start + padding_main - scroll_offset, cross_offset));
-            visible_iter.next();
-        }
-
-        lane_offsets[lane] = item_start + item_main + main_spacing;
+        let item_start = cache.item_start(index);
+        let cell_offset = compute_cell_offset(lane_cross, axis.cross(child_size), item_alignment);
+        let cross_offset =
+            padding_cross + slots.positions.get(lane).copied().unwrap_or(Px::ZERO) + cell_offset;
+        positions.push(axis.position(item_start + padding_main - scroll_offset, cross_offset));
     }
 
     positions
@@ -1646,8 +1778,7 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use tessera_ui::{
-        ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, NoopRenderPolicy, Px,
-        PxPosition,
+        ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px, PxPosition,
         layout::{MeasureScope, layout},
         receive_frame_nanos, remember, tessera,
     };
@@ -1655,7 +1786,7 @@ mod tests {
     use crate::{
         alignment::{CrossAxisAlignment, MainAxisAlignment},
         modifier::{ModifierExt as _, SemanticsArgs},
-        scrollable::{ScrollableController, scrollable},
+        scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
         theme::{MaterialTheme, material_theme},
     };
 
@@ -1671,8 +1802,8 @@ mod tests {
         height: i32,
     }
 
-    impl LayoutPolicy for FixedTestLayout {
-        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+        fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
@@ -1687,8 +1818,8 @@ mod tests {
         let height = height.unwrap_or(0);
 
         layout()
-            .layout_policy(FixedTestLayout { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedTestLayout { width, height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()
@@ -1821,6 +1952,7 @@ mod tests {
         });
 
         scrollable()
+            .scrollbar_behavior(ScrollBarBehavior::Hidden)
             .vertical(true)
             .horizontal(false)
             .apply_child_offset(false)
@@ -1979,23 +2111,60 @@ mod tests {
     fn lazy_vertical_staggered_does_not_rebuild_visible_items_when_scroll_stays_in_same_window() {
         LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.store(0, Ordering::Relaxed);
 
-        let mut session = tessera_ui::testing::__private::start_layout_test_session(
+        let mut session = tessera_ui::testing::start_layout_test_session(
             tessera_ui::testing::layout_test(|| {
                 lazy_vertical_staggered_stable_visible_items_case();
             })
             .viewport_px(80, 60),
         );
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 0);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
         let first_builds = LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert!(first_builds > 0);
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 16_666_667);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
         let second_builds = LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert_eq!(second_builds, first_builds);
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 33_333_334);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
         let third_builds = LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert_eq!(third_builds, first_builds);
+    }
+
+    #[test]
+    fn staggered_cache_keeps_lanes_before_a_remeasured_item() {
+        let mut cache = super::StaggeredGridCache::default();
+        let estimated = Px::new(10);
+        let spacing = Px::new(2);
+        cache.prepare(6, 2, estimated, spacing);
+        cache.record_measurement(0, Px::new(30));
+        cache.record_measurement(1, Px::new(10));
+        cache.record_measurement(2, Px::new(10));
+        cache.record_measurement(3, Px::new(40));
+        cache.record_measurement(4, Px::new(12));
+        cache.record_measurement(5, Px::new(8));
+
+        let lanes_before: Vec<usize> = (0..6)
+            .map(|index| {
+                cache
+                    .lane_of(index)
+                    .expect("every measured item must have a lane")
+            })
+            .collect();
+        let starts_before: Vec<Px> = (0..3).map(|index| cache.item_start(index)).collect();
+
+        cache.record_measurement(3, Px::new(4));
+
+        let lanes_after: Vec<usize> = (0..6)
+            .map(|index| {
+                cache
+                    .lane_of(index)
+                    .expect("every measured item must have a lane")
+            })
+            .collect();
+        let starts_after: Vec<Px> = (0..3).map(|index| cache.item_start(index)).collect();
+        assert_eq!(&lanes_after[..3], &lanes_before[..3]);
+        assert_eq!(starts_after, starts_before);
+        assert_ne!(&lanes_after[3..], &lanes_before[3..]);
     }
 }

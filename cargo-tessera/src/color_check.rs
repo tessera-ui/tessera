@@ -1,6 +1,6 @@
 use std::panic;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result, anyhow, bail};
 
 use crate::output;
 
@@ -92,8 +92,8 @@ pub fn run(options: CheckOptions<'_>) -> Result<()> {
     let workspace = workspace::load_workspace(&options)?;
     let db = workspace.host.raw_database();
 
-    // rust-analyzer's internal trait solver may panic on certain edge cases
-    // (e.g. ConstId in generic positions). Catch and degrade to a warning.
+    // rust-analyzer may panic on unsupported semantic edge cases. Incomplete
+    // analysis must fail closed rather than approve unchecked Tessera calls.
     let analyzer_result = panic::catch_unwind(panic::AssertUnwindSafe(|| {
         ra_ap_hir::attach_db(db, || {
             let local_files = workspace::selected_local_files(db, &workspace.vfs, &options)
@@ -109,18 +109,7 @@ pub fn run(options: CheckOptions<'_>) -> Result<()> {
         })
     }));
 
-    let analyzer = match analyzer_result {
-        Ok(Ok(analyzer)) => analyzer,
-        Ok(Err(e)) => return Err(e),
-        Err(_) => {
-            if !options.message_format.is_json() {
-                output::warn(
-                    "ColorCheck: internal rust-analyzer panic during color check; skipping. Consider running `cargo check` separately to verify compilation.",
-                );
-            }
-            return Ok(());
-        }
-    };
+    let analyzer = finish_analysis(analyzer_result)?;
 
     if analyzer.diagnostics.is_empty() {
         if !options.message_format.is_json() {
@@ -136,6 +125,32 @@ pub fn run(options: CheckOptions<'_>) -> Result<()> {
         "Tessera color check failed with {} diagnostic(s)",
         analyzer.diagnostics.len()
     )
+}
+
+fn finish_analysis<T>(result: std::thread::Result<Result<T>>) -> Result<T> {
+    result.map_err(|_| {
+        anyhow!("Tessera color check could not complete because rust-analyzer panicked; refusing to proceed with unchecked calls")
+    })?
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn analyzer_panics_fail_closed() {
+        let result = panic::catch_unwind(|| -> Result<()> { panic!("semantic analysis failed") });
+        let error = finish_analysis(result).expect_err("incomplete analysis must fail");
+        assert!(error.to_string().contains("refusing to proceed"));
+    }
+
+    #[test]
+    fn analyzer_results_are_preserved() {
+        assert_eq!(finish_analysis(Ok(Ok(7))).expect("complete analysis"), 7);
+        let error = finish_analysis::<()>(Ok(Err(anyhow!("unresolved call"))))
+            .expect_err("semantic errors must propagate");
+        assert_eq!(error.to_string(), "unresolved call");
+    }
 }
 
 mod analyzer;

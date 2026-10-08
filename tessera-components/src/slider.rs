@@ -9,7 +9,7 @@ use tessera_ui::{
     ComputedData, Constraint, Dp, FocusProperties, FocusRequester, LayoutResult, MeasurementError,
     Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
-    layout::{LayoutPolicy, MeasureScope, layout},
+    layout::{MeasureScope, layout},
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember, tessera, use_context,
 };
@@ -444,14 +444,14 @@ struct RangeSliderMeasureArgs {
 }
 
 #[derive(Clone)]
-struct SliderLayoutPolicy {
+struct Slider {
     args: SliderConfig,
     clamped_value: f32,
     handle_width: Px,
     has_inset_icon: bool,
 }
 
-impl PartialEq for SliderLayoutPolicy {
+impl PartialEq for Slider {
     fn eq(&self, other: &Self) -> bool {
         self.args.size == other.args.size
             && self.args.show_stop_indicator == other.args.show_stop_indicator
@@ -462,8 +462,8 @@ impl PartialEq for SliderLayoutPolicy {
     }
 }
 
-impl LayoutPolicy for SliderLayoutPolicy {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for Slider {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let component_width = resolve_component_width(&self.args, input.parent_constraint());
         let resolved_layout =
@@ -481,13 +481,13 @@ impl LayoutPolicy for SliderLayoutPolicy {
 }
 
 #[derive(Clone)]
-struct CenteredSliderLayoutPolicy {
+struct CenteredSlider {
     args: SliderConfig,
     clamped_value: f32,
     handle_width: Px,
 }
 
-impl PartialEq for CenteredSliderLayoutPolicy {
+impl PartialEq for CenteredSlider {
     fn eq(&self, other: &Self) -> bool {
         self.args.size == other.args.size
             && self.args.show_stop_indicator == other.args.show_stop_indicator
@@ -497,8 +497,8 @@ impl PartialEq for CenteredSliderLayoutPolicy {
     }
 }
 
-impl LayoutPolicy for CenteredSliderLayoutPolicy {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for CenteredSlider {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let component_width = resolve_component_width(&self.args, input.parent_constraint());
         let resolved_layout = CenteredSliderLayout {
@@ -516,7 +516,7 @@ impl LayoutPolicy for CenteredSliderLayoutPolicy {
 }
 
 #[derive(Clone)]
-struct RangeSliderLayoutPolicy {
+struct RangeSlider {
     args: RangeSliderConfig,
     slider: SliderConfig,
     start: f32,
@@ -525,7 +525,7 @@ struct RangeSliderLayoutPolicy {
     end_handle_width: Px,
 }
 
-impl PartialEq for RangeSliderLayoutPolicy {
+impl PartialEq for RangeSlider {
     fn eq(&self, other: &Self) -> bool {
         self.args.size == other.args.size
             && self.args.show_stop_indicator == other.args.show_stop_indicator
@@ -537,8 +537,8 @@ impl PartialEq for RangeSliderLayoutPolicy {
     }
 }
 
-impl LayoutPolicy for RangeSliderLayoutPolicy {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for RangeSlider {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let component_width = resolve_component_width(&self.slider, input.parent_constraint());
         let resolved_layout = range_slider_layout(&self.args, component_width);
@@ -873,7 +873,7 @@ fn range_slider_config_from_params(
 }
 
 fn measure_slider(
-    input: &MeasureScope<'_>,
+    input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
     layout: SliderLayout,
     clamped_value: f32,
@@ -920,14 +920,14 @@ fn measure_slider(
         AxisConstraint::exact(active_width),
         AxisConstraint::exact(layout.track_height),
     );
-    active.measure(&active_constraint)?;
+    active.measure(input, &active_constraint)?;
     result.place_child(active, PxPosition::new(Px(0), layout.track_y));
 
     let inactive_constraint = Constraint::new(
         AxisConstraint::exact(inactive_width),
         AxisConstraint::exact(layout.track_height),
     );
-    inactive.measure(&inactive_constraint)?;
+    inactive.measure(input, &inactive_constraint)?;
     result.place_child(
         inactive,
         PxPosition::new(
@@ -940,13 +940,16 @@ fn measure_slider(
         AxisConstraint::exact(handle_width),
         AxisConstraint::exact(layout.handle_height),
     );
-    handle.measure(&handle_constraint)?;
+    handle.measure(input, &handle_constraint)?;
 
     let handle_center = layout.handle_center(clamped_value);
     let handle_offset = layout.center_child_offset(handle_width);
     result.place_child(
         handle,
-        PxPosition::new(Px(handle_center.x.0 - handle_offset.0), layout.handle_y),
+        PxPosition::from_f32_xy(
+            handle_center.x - handle_offset.0 as f32,
+            layout.handle_y.0 as f32,
+        ),
     );
 
     if let Some(stop) = stop_id {
@@ -955,7 +958,7 @@ fn measure_slider(
             AxisConstraint::exact(stop_size),
             AxisConstraint::exact(stop_size),
         );
-        stop.measure(&stop_constraint)?;
+        stop.measure(input, &stop_constraint)?;
         let stop_offset = layout.center_child_offset(layout.stop_indicator_diameter);
         let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + handle_width.0;
         let corner = layout.track_corner_radius.to_px();
@@ -973,7 +976,7 @@ fn measure_slider(
             AxisConstraint::at_most(icon_size.into()),
             AxisConstraint::at_most(icon_size.into()),
         );
-        let icon_measured = icon_id.measure(&icon_constraint)?;
+        let icon_measured = icon_id.measure(input, &icon_constraint)?;
 
         // Icon placement: 8dp padding from left edge, vertically centered
         // within the track
@@ -991,7 +994,7 @@ fn measure_slider(
         let tick_offset = layout.center_child_offset(tick_size);
         let start_x = layout.handle_gap.to_f32() + handle_width.to_f32() / 2.0;
         for (i, tick_id) in tick_ids.iter().copied().enumerate() {
-            tick_id.measure(&tick_constraint)?;
+            tick_id.measure(input, &tick_constraint)?;
             let fraction = i as f32 / (steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * layout.track_total_width.to_f32();
             result.place_child(
@@ -1202,7 +1205,7 @@ fn slider_content(
 
     layout()
         .modifier(modifier)
-        .layout_policy(SliderLayoutPolicy {
+        .policy(Slider {
             args: args.clone(),
             clamped_value,
             handle_width,
@@ -1261,7 +1264,7 @@ fn slider_content(
 }
 
 fn measure_centered_slider(
-    input: &MeasureScope<'_>,
+    input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
     layout: CenteredSliderLayout,
     value: f32,
@@ -1294,27 +1297,36 @@ fn measure_centered_slider(
     let segments = layout.segments(value);
 
     // 1. Left Inactive
-    left_inactive.measure(&Constraint::new(
-        AxisConstraint::exact(segments.left_inactive.1),
-        AxisConstraint::exact(layout.base.track_height),
-    ))?;
+    left_inactive.measure(
+        input,
+        &Constraint::new(
+            AxisConstraint::exact(segments.left_inactive.1),
+            AxisConstraint::exact(layout.base.track_height),
+        ),
+    )?;
     result.place_child(
         left_inactive,
         PxPosition::new(segments.left_inactive.0, track_y),
     );
 
     // 2. Active
-    active.measure(&Constraint::new(
-        AxisConstraint::exact(segments.active.1),
-        AxisConstraint::exact(layout.base.track_height),
-    ))?;
+    active.measure(
+        input,
+        &Constraint::new(
+            AxisConstraint::exact(segments.active.1),
+            AxisConstraint::exact(layout.base.track_height),
+        ),
+    )?;
     result.place_child(active, PxPosition::new(segments.active.0, track_y));
 
     // 3. Right Inactive
-    right_inactive.measure(&Constraint::new(
-        AxisConstraint::exact(segments.right_inactive.1),
-        AxisConstraint::exact(layout.base.track_height),
-    ))?;
+    right_inactive.measure(
+        input,
+        &Constraint::new(
+            AxisConstraint::exact(segments.right_inactive.1),
+            AxisConstraint::exact(layout.base.track_height),
+        ),
+    )?;
     result.place_child(
         right_inactive,
         PxPosition::new(segments.right_inactive.0, track_y),
@@ -1322,15 +1334,18 @@ fn measure_centered_slider(
 
     // 4. Handle
     let handle_offset = layout.base.center_child_offset(handle_width);
-    handle.measure(&Constraint::new(
-        AxisConstraint::exact(handle_width),
-        AxisConstraint::exact(layout.base.handle_height),
-    ))?;
+    handle.measure(
+        input,
+        &Constraint::new(
+            AxisConstraint::exact(handle_width),
+            AxisConstraint::exact(layout.base.handle_height),
+        ),
+    )?;
     result.place_child(
         handle,
-        PxPosition::new(
-            Px(segments.handle_center.x.0 - handle_offset.0),
-            layout.base.handle_y,
+        PxPosition::from_f32_xy(
+            segments.handle_center.x - handle_offset.0 as f32,
+            layout.base.handle_y.0 as f32,
         ),
     );
 
@@ -1346,7 +1361,7 @@ fn measure_centered_slider(
             AxisConstraint::exact(stop_size),
             AxisConstraint::exact(stop_size),
         );
-        left_stop_id.measure(&stop_constraint)?;
+        left_stop_id.measure(input, &stop_constraint)?;
 
         let stop_offset = layout.base.center_child_offset(stop_size);
         let stop_padding = layout.stop_indicator_offset();
@@ -1362,7 +1377,7 @@ fn measure_centered_slider(
         );
 
         // 6. Right Stop
-        right_stop_id.measure(&stop_constraint)?;
+        right_stop_id.measure(input, &stop_constraint)?;
         let right_stop_x = Px(self_width.0 - stop_padding.0);
 
         result.place_child(
@@ -1383,7 +1398,7 @@ fn measure_centered_slider(
         let tick_offset = layout.base.center_child_offset(tick_size);
         let start_x = layout.base.handle_gap.to_f32() + handle_width.to_f32() / 2.0;
         for (i, tick_id) in tick_ids.iter().copied().enumerate() {
-            tick_id.measure(&tick_constraint)?;
+            tick_id.measure(input, &tick_constraint)?;
             let fraction = i as f32 / (steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * layout.base.track_total_width.to_f32();
             result.place_child(
@@ -1551,7 +1566,7 @@ fn centered_slider_content(
 
     layout()
         .modifier(modifier)
-        .layout_policy(CenteredSliderLayoutPolicy {
+        .policy(CenteredSlider {
             args: args.clone(),
             clamped_value,
             handle_width,
@@ -1589,7 +1604,7 @@ fn centered_slider_content(
 }
 
 fn measure_range_slider(
-    input: &MeasureScope<'_>,
+    input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
     layout: RangeSliderLayout,
     args: RangeSliderMeasureArgs,
@@ -1626,25 +1641,34 @@ fn measure_range_slider(
         args.end_handle_width,
     );
 
-    left_inactive.measure(&Constraint::new(
-        AxisConstraint::exact(segments.left_inactive.1),
-        AxisConstraint::exact(layout.base.track_height),
-    ))?;
+    left_inactive.measure(
+        input,
+        &Constraint::new(
+            AxisConstraint::exact(segments.left_inactive.1),
+            AxisConstraint::exact(layout.base.track_height),
+        ),
+    )?;
     result.place_child(
         left_inactive,
         PxPosition::new(segments.left_inactive.0, track_y),
     );
 
-    active.measure(&Constraint::new(
-        AxisConstraint::exact(segments.active.1),
-        AxisConstraint::exact(layout.base.track_height),
-    ))?;
+    active.measure(
+        input,
+        &Constraint::new(
+            AxisConstraint::exact(segments.active.1),
+            AxisConstraint::exact(layout.base.track_height),
+        ),
+    )?;
     result.place_child(active, PxPosition::new(segments.active.0, track_y));
 
-    right_inactive.measure(&Constraint::new(
-        AxisConstraint::exact(segments.right_inactive.1),
-        AxisConstraint::exact(layout.base.track_height),
-    ))?;
+    right_inactive.measure(
+        input,
+        &Constraint::new(
+            AxisConstraint::exact(segments.right_inactive.1),
+            AxisConstraint::exact(layout.base.track_height),
+        ),
+    )?;
     result.place_child(
         right_inactive,
         PxPosition::new(segments.right_inactive.0, track_y),
@@ -1661,21 +1685,21 @@ fn measure_range_slider(
     let start_handle_offset = layout.base.center_child_offset(args.start_handle_width);
     let end_handle_offset = layout.base.center_child_offset(args.end_handle_width);
 
-    handle_start.measure(&start_handle_constraint)?;
+    handle_start.measure(input, &start_handle_constraint)?;
     result.place_child(
         handle_start,
-        PxPosition::new(
-            Px(segments.start_handle_center.x.0 - start_handle_offset.0),
-            layout.base.handle_y,
+        PxPosition::from_f32_xy(
+            segments.start_handle_center.x - start_handle_offset.0 as f32,
+            layout.base.handle_y.0 as f32,
         ),
     );
 
-    handle_end.measure(&end_handle_constraint)?;
+    handle_end.measure(input, &end_handle_constraint)?;
     result.place_child(
         handle_end,
-        PxPosition::new(
-            Px(segments.end_handle_center.x.0 - end_handle_offset.0),
-            layout.base.handle_y,
+        PxPosition::from_f32_xy(
+            segments.end_handle_center.x - end_handle_offset.0 as f32,
+            layout.base.handle_y.0 as f32,
         ),
     );
 
@@ -1694,7 +1718,7 @@ fn measure_range_slider(
         let track_total = (component_width - start_half - end_half - gap * 2.0).max(0.0);
         let start_x = gap + start_half;
         for (i, tick_id) in tick_ids.iter().copied().enumerate() {
-            tick_id.measure(&tick_constraint)?;
+            tick_id.measure(input, &tick_constraint)?;
             let fraction = i as f32 / (args.steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * track_total;
             result.place_child(
@@ -1719,7 +1743,7 @@ fn measure_range_slider(
             AxisConstraint::exact(stop_size),
             AxisConstraint::exact(stop_size),
         );
-        stop_start_id.measure(&stop_constraint)?;
+        stop_start_id.measure(input, &stop_constraint)?;
 
         let stop_offset = layout.base.center_child_offset(stop_size);
         let corner = layout.base.track_corner_radius.to_px();
@@ -1733,7 +1757,7 @@ fn measure_range_slider(
             ),
         );
 
-        stop_end_id.measure(&stop_constraint)?;
+        stop_end_id.measure(input, &stop_constraint)?;
         let end_stop_x = Px(self_width.0 - corner.0);
 
         result.place_child(
@@ -1905,7 +1929,7 @@ fn range_slider_content(
 
     layout()
         .modifier(modifier)
-        .layout_policy(RangeSliderLayoutPolicy {
+        .policy(RangeSlider {
             args: args.clone(),
             slider,
             start,

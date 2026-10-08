@@ -1,0 +1,8 @@
+[submodule "tessera-glyphon"]
+	path = tessera-glyphon
+	url = https://github.com/tessera-ui/tessera-glyphon
+	branch = main
+[submodule "tessera-cosmic-text"]
+	path = tessera-cosmic-text
+	url = https://github.com/tessera-ui/cosmic-text-tessera-fork
+	branch = main

@@ -1,4 +1,4 @@
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 
 use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
@@ -29,9 +29,9 @@ struct AtlasKey {
 }
 
 impl AtlasKey {
-    fn new(data: &Arc<ImageVectorData>, width: u32, height: u32) -> Self {
+    fn new(data: &ImageVectorData, width: u32, height: u32) -> Self {
         Self {
-            data: (**data).clone(),
+            data: data.clone(),
             width,
             height,
         }
@@ -277,7 +277,7 @@ impl ImageVectorPipeline {
         }
     }
 
-    fn create_resources(device: &wgpu::Device, data: &Arc<ImageVectorData>) -> GeometryResources {
+    fn create_resources(device: &wgpu::Device, data: &ImageVectorData) -> GeometryResources {
         let vertex_buffer = device.create_buffer_init(&wgpu::util::BufferInitDescriptor {
             label: Some("image_vector_vertex_buffer"),
             contents: bytemuck::cast_slice(data.vertices.as_slice()),
@@ -301,7 +301,7 @@ impl ImageVectorPipeline {
         &mut self,
         device: &wgpu::Device,
         queue: &wgpu::Queue,
-        data: &Arc<ImageVectorData>,
+        data: &ImageVectorData,
         width: u32,
         height: u32,
     ) {
@@ -310,7 +310,7 @@ impl ImageVectorPipeline {
             return;
         }
 
-        let geometry_key = (**data).clone();
+        let geometry_key = data.clone();
         self.resources
             .entry(geometry_key.clone())
             .or_insert_with(|| Self::create_resources(device, data));
@@ -566,10 +566,10 @@ fn compute_sample_uniforms(params: SampleUniformParams) -> AtlasSampleUniforms {
         target_size,
     } = params;
 
-    let left = (start_pos.x.0 as f32 / target_size.width.to_f32()) * 2.0 - 1.0;
-    let right = ((start_pos.x.0 + size.width.0) as f32 / target_size.width.to_f32()) * 2.0 - 1.0;
-    let top = 1.0 - (start_pos.y.0 as f32 / target_size.height.to_f32()) * 2.0;
-    let bottom = 1.0 - ((start_pos.y.0 + size.height.0) as f32 / target_size.height.to_f32()) * 2.0;
+    let left = (start_pos.x / target_size.width.to_f32()) * 2.0 - 1.0;
+    let right = ((start_pos.x + size.width.0 as f32) / target_size.width.to_f32()) * 2.0 - 1.0;
+    let top = 1.0 - (start_pos.y / target_size.height.to_f32()) * 2.0;
+    let bottom = 1.0 - ((start_pos.y + size.height.0 as f32) / target_size.height.to_f32()) * 2.0;
 
     AtlasSampleUniforms {
         origin: Vec2::new(left, top),

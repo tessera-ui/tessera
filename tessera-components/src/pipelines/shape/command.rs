@@ -374,13 +374,7 @@ pub(crate) fn rect_to_uniforms(
         ripple_params,
         ripple_color,
         border_width,
-        position: [
-            position.x.to_f32(),
-            position.y.to_f32(),
-            width.to_f32(),
-            height.to_f32(),
-        ]
-        .into(),
+        position: [position.x, position.y, width.to_f32(), height.to_f32()].into(),
         screen_size: Vec2::ZERO, // Will be populated in the pipeline
     }
 }

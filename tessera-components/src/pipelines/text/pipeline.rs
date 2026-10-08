@@ -60,14 +60,21 @@ fn color_to_glyphon(color: Color) -> glyphon::Color {
     glyphon::Color::rgba(r, g, b, a)
 }
 
-#[derive(PartialEq)]
 struct LruKey {
     text: String,
-    color: Color,
     font_size: f32,
     line_height: f32,
     /// The final computed bounds, used as the cache key instead of constraint.
     bounds: [u32; 2],
+}
+
+impl PartialEq for LruKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.text == other.text
+            && self.font_size.to_bits() == other.font_size.to_bits()
+            && self.line_height.to_bits() == other.line_height.to_bits()
+            && self.bounds == other.bounds
+    }
 }
 
 impl Eq for LruKey {}
@@ -75,10 +82,6 @@ impl Eq for LruKey {}
 impl std::hash::Hash for LruKey {
     fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
         self.text.hash(state);
-        self.color.r.to_bits().hash(state);
-        self.color.g.to_bits().hash(state);
-        self.color.b.to_bits().hash(state);
-        self.color.a.to_bits().hash(state);
         self.font_size.to_bits().hash(state);
         self.line_height.to_bits().hash(state);
         self.bounds.hash(state);
@@ -287,7 +290,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
         );
 
         let text_areas = context.commands.iter().map(|(command, _size, start_pos)| {
-            let start_pos = PxPosition::new(
+            let start_pos = PxPosition::from_f32_xy(
                 start_pos.x + command.offset.x,
                 start_pos.y + command.offset.y,
             );
@@ -367,39 +370,23 @@ impl PartialEq for TextData {
 }
 
 impl TextData {
-    /// Measures text layout and caches the result.
-    ///
-    /// This method performs the expensive text shaping and layout computation,
-    /// stores the result in the LRU cache, and returns measurement information.
-    /// The cached result can later be retrieved using [`TextData::get()`].
-    ///
-    /// # Parameters
-    /// - `text`: The text string.
-    /// - `color`: The text color.
-    /// - `font_size`: Font size.
-    /// - `line_height`: Line height.
-    /// - `constraint`: Text constraint for layout.
-    pub fn measure(
+    /// Shapes text once and stores the shaped buffer in the global LRU.
+    pub(crate) fn shape(
         text: String,
         color: Color,
         font_size: f32,
         line_height: f32,
         constraint: TextConstraint,
-    ) -> TextMeasureInfo {
+    ) -> Self {
         let (text_buffer, bounds, first_baseline, last_baseline, line_count) =
-            Self::build_buffer(&text, color, font_size, line_height, &constraint);
-
-        // Build cache key using bounds (not constraint)
+            Self::build_buffer(&text, font_size, line_height, &constraint);
         let key = LruKey {
             text: text.clone(),
-            color,
             font_size,
             line_height,
             bounds,
         };
-
-        // Store in cache
-        let data: TextData = Self {
+        let data = Self {
             text_buffer,
             size: bounds,
             first_baseline,
@@ -411,79 +398,10 @@ impl TextData {
             font_size,
             line_height,
         };
-        write_lru_cache().put(key, data);
-
-        TextMeasureInfo {
-            size: bounds,
-            first_baseline,
-            last_baseline,
-            line_count,
-        }
-    }
-
-    /// Retrieves cached text data using the computed bounds.
-    ///
-    /// This method attempts to retrieve cached data from a prior
-    /// [`TextData::measure()`] call. If the cache entry was evicted (due to LRU
-    /// limits), it will automatically recompute the text layout using the
-    /// bounds as the constraint.
-    ///
-    /// # Parameters
-    /// - `text`: The text string.
-    /// - `color`: The text color.
-    /// - `font_size`: Font size.
-    /// - `line_height`: Line height.
-    /// - `bounds`: The computed bounds from measurement (width, height).
-    pub fn get(
-        text: String,
-        color: Color,
-        font_size: f32,
-        line_height: f32,
-        bounds: [u32; 2],
-    ) -> Self {
-        let key = LruKey {
-            text: text.clone(),
-            color,
-            font_size,
-            line_height,
-            bounds,
-        };
-
-        // Try to get from cache first
-        if let Some(cached) = write_lru_cache().get(&key).cloned() {
-            return cached;
-        }
-
-        // Cache miss (possibly evicted by LRU), recompute using bounds as
-        // constraint
-        let constraint = TextConstraint {
-            max_width: Some(bounds[0] as f32),
-            max_height: Some(bounds[1] as f32),
-        };
-        let (text_buffer, computed_bounds, first_baseline, last_baseline, line_count) =
-            Self::build_buffer(&text, color, font_size, line_height, &constraint);
-
-        let data = Self {
-            text_buffer,
-            size: computed_bounds,
-            first_baseline,
-            last_baseline,
-            line_count,
-            base_color: color,
-            current_color: color,
-            text: text.clone(),
-            font_size,
-            line_height,
-        };
-
-        // Store back in cache
         write_lru_cache().put(key, data.clone());
         data
     }
 
-    /// Prepares text data for rendering (legacy API, combines measure + get).
-    ///
-    /// # Parameters
     /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
         // Calculate total height including descender for the last line
@@ -522,15 +440,15 @@ impl TextData {
     /// Get the glyphon text area from the text data
     fn text_area(&'_ self, start_pos: PxPosition) -> glyphon::TextArea<'_> {
         let bounds = glyphon::TextBounds {
-            left: start_pos.x.raw(),
-            top: start_pos.y.raw(),
-            right: start_pos.x.raw() + self.size[0] as i32,
-            bottom: start_pos.y.raw() + self.size[1] as i32,
+            left: start_pos.x_px().raw(),
+            top: start_pos.y_px().raw(),
+            right: start_pos.x_px().raw() + self.size[0] as i32,
+            bottom: start_pos.y_px().raw() + self.size[1] as i32,
         };
         glyphon::TextArea {
             buffer: &self.text_buffer,
-            left: start_pos.x.to_f32(),
-            top: start_pos.y.to_f32(),
+            left: start_pos.x,
+            top: start_pos.y,
             scale: 1.0,
             bounds,
             default_color: color_to_glyphon(self.current_color),
@@ -540,24 +458,19 @@ impl TextData {
 
     fn build_buffer(
         text: &str,
-        color: Color,
         size: f32,
         line_height: f32,
         constraint: &TextConstraint,
     ) -> (glyphon::Buffer, [u32; 2], f32, f32, u32) {
-        // Create text buffer
         let mut text_buffer = glyphon::Buffer::new(
             &mut write_font_system(),
             glyphon::Metrics::new(size, line_height),
         );
-        let color = color_to_glyphon(color);
         text_buffer.set_wrap(glyphon::Wrap::Glyph);
         text_buffer.set_size(constraint.max_width, constraint.max_height);
         text_buffer.set_text(
             text,
-            &glyphon::Attrs::new()
-                .family(fontdb::Family::SansSerif)
-                .color(color),
+            &glyphon::Attrs::new().family(fontdb::Family::SansSerif),
             glyphon::Shaping::Advanced,
             None,
         );
@@ -587,6 +500,20 @@ impl TextData {
         )
     }
 
+    pub(crate) fn set_color(&mut self, color: Color) {
+        self.base_color = color;
+        self.current_color = color;
+    }
+
+    pub(crate) fn measure_info(&self) -> TextMeasureInfo {
+        TextMeasureInfo {
+            size: self.size,
+            first_baseline: self.first_baseline,
+            last_baseline: self.last_baseline,
+            line_count: self.line_count,
+        }
+    }
+
     pub(crate) fn apply_opacity(&mut self, opacity: f32) {
         let target_alpha = (self.base_color.a * opacity).clamp(0.0, 1.0);
         let target_color = self.base_color.with_alpha(target_alpha);
@@ -598,23 +525,6 @@ impl TextData {
             return;
         }
 
-        // Use the current size as constraint for rebuilding with new color
-        let constraint = TextConstraint {
-            max_width: Some(self.size[0] as f32),
-            max_height: Some(self.size[1] as f32),
-        };
-        let (buffer, bounds, first_baseline, last_baseline, line_count) = Self::build_buffer(
-            &self.text,
-            target_color,
-            self.font_size,
-            self.line_height,
-            &constraint,
-        );
-        self.text_buffer = buffer;
-        self.size = bounds;
-        self.first_baseline = first_baseline;
-        self.last_baseline = last_baseline;
-        self.line_count = line_count;
         self.current_color = target_color;
     }
 }

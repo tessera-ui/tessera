@@ -63,7 +63,9 @@ impl Application {
                 DetectEditorError::NoDefaultEditorSet => Self::detect_associated_command(TEXT_EXT),
                 _ => Err(err),
             })?;
-        let argv: Vec<_> = NativeArgv::new(&editor_command).into();
+        let argv: Vec<_> = NativeArgv::new(&editor_command)
+            .map_err(DetectEditorError::IOError)?
+            .into();
         Ok(Self { argv })
     }
 
@@ -105,7 +107,7 @@ impl Application {
                 ASSOCSTR_COMMAND,
                 // In Shlwapi.h, this parameter's type is `LPCWSTR`.
                 // So it's not modified actually.
-                PCWSTR::from_raw(RUST_EXT.as_ptr()),
+                PCWSTR::from_raw(ext.as_ptr()),
                 PCWSTR::null(),
                 Some(PWSTR(command.as_mut_ptr())),
                 &mut len as _,
@@ -153,12 +155,17 @@ pub fn open_file_with(
     path: impl AsRef<OsStr>,
     env: &Env,
 ) -> Result<(), OpenFileError> {
-    // In windows, there is no standerd way to find application by name.
+    // Windows has no standard way to resolve arbitrary application display
+    // names.
     match application.as_ref().to_str() {
         Some("Android Studio") => open_file_with_android_studio(path, env),
-        _ => {
-            unimplemented!()
-        }
+        _ => Err(OpenFileError::IOError(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            format!(
+                "Unsupported application: {}",
+                application.as_ref().to_string_lossy()
+            ),
+        ))),
     }
 }
 
@@ -171,6 +178,7 @@ const STUDIO_EXE_PATH: &str = "bin/studio64.exe";
 const STUDIO_EXE_PATH: &str = "bin/studio.exe";
 
 fn open_file_with_android_studio(path: impl AsRef<OsStr>, env: &Env) -> Result<(), OpenFileError> {
+    let path = dunce::canonicalize(Path::new(path.as_ref())).map_err(OpenFileError::IOError)?;
     let mut application_path = which("studio.cmd").unwrap_or_default();
     if !application_path.is_file() {
         let mut buffer = [0; MAX_PATH as usize];
@@ -189,19 +197,18 @@ fn open_file_with_android_studio(path: impl AsRef<OsStr>, env: &Env) -> Result<(
         let uninstaller_path = OsString::from_wide(&buffer[..len]);
         application_path = Path::new(&uninstaller_path)
             .parent()
-            .expect("Failed to get Android Studio uninstaller's parent path")
+            .ok_or_else(|| {
+                OpenFileError::IOError(std::io::Error::new(
+                    std::io::ErrorKind::InvalidData,
+                    "Android Studio uninstaller has no parent directory",
+                ))
+            })?
             .join(STUDIO_EXE_PATH);
     }
-    duct::cmd(
-        application_path,
-        [
-            dunce::canonicalize(Path::new(path.as_ref()))
-                .expect("Failed to canonicalize file path"),
-        ],
-    )
-    .vars(env.explicit_env())
-    .run_and_detach()
-    .map_err(OpenFileError::LaunchFailed)?;
+    duct::cmd(application_path, [path])
+        .vars(env.explicit_env())
+        .run_and_detach()
+        .map_err(OpenFileError::LaunchFailed)?;
     Ok(())
 }
 
@@ -216,12 +223,15 @@ struct NativeArgv {
 
 impl NativeArgv {
     // The buffer must be null terminated.
-    fn new(buffer: &[u16]) -> Self {
+    fn new(buffer: &[u16]) -> std::io::Result<Self> {
         let mut len = 0;
         // In shellap.h, lpcmdline's type is `LPCWSTR`.
         // So it's not modified actually.
         let argv = unsafe { CommandLineToArgvW(PCWSTR::from_raw(buffer.as_ptr()), &mut len as _) };
-        Self { argv, len }
+        if argv.is_null() {
+            return Err(std::io::Error::last_os_error());
+        }
+        Ok(Self { argv, len })
     }
 }
 
@@ -282,4 +292,53 @@ pub mod consts {
     pub const AR: &str = "ar.exe";
     pub const READELF: &str = "readelf.exe";
     pub const NDK_STACK: &str = "ndk-stack.cmd";
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn unsupported_application_returns_error() {
+        let env = Env::new().expect("Windows environment should be available");
+        let result = open_file_with("Not a supported application", "unused", &env);
+        assert!(matches!(
+            result,
+            Err(OpenFileError::IOError(error)) if error.kind() == std::io::ErrorKind::Unsupported
+        ));
+    }
+
+    #[test]
+    fn missing_android_studio_project_returns_error() {
+        let env = Env::new().expect("Windows environment should be available");
+        let path = std::env::temp_dir()
+            .join("tessera-missing-project")
+            .join("missing");
+        assert!(matches!(
+            open_file_with("Android Studio", path, &env),
+            Err(OpenFileError::IOError(_))
+        ));
+    }
+
+    #[test]
+    fn native_command_line_preserves_quoted_arguments() {
+        let command: Vec<_> = OsStr::new("\"C:\\Program Files\\editor.exe\" \"%1\"")
+            .encode_wide()
+            .chain(Some(0))
+            .collect();
+        let argv: Vec<OsString> = NativeArgv::new(&command)
+            .expect("valid command line")
+            .into();
+        assert_eq!(
+            argv,
+            [
+                OsString::from("C:\\Program Files\\editor.exe"),
+                OsString::from("%1")
+            ]
+        );
+        assert_eq!(
+            Application::replace_command_arg(&argv[1], OsStr::new("C:\\file.rs")),
+            OsString::from("C:\\file.rs")
+        );
+    }
 }

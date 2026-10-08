@@ -5,8 +5,8 @@
 //! Highlight counts or status markers on top of icons and other UI elements.
 
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
-    MeasurementError, Px, PxPosition, PxSize, RenderInput, RenderPolicy, RenderSlot,
+    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Px,
+    PxPosition, PxSize, RenderSlot,
     layout::{MeasureScope, layout},
     provide_context, tessera, use_context,
 };
@@ -34,8 +34,8 @@ fn relax_min_constraint(axis: AxisConstraint) -> AxisConstraint {
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
 struct BadgedBoxLayout;
 
-impl LayoutPolicy for BadgedBoxLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for BadgedBoxLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         debug_assert_eq!(
@@ -53,8 +53,8 @@ impl LayoutPolicy for BadgedBoxLayout {
         let anchor = children[0];
         let badge = children[1];
 
-        let badge_data = badge.measure(&badge_constraint)?;
-        let anchor_size = anchor.measure(&parent_constraint)?;
+        let badge_data = badge.measure(input, &badge_constraint)?;
+        let anchor_size = anchor.measure(input, &parent_constraint)?;
 
         result.place_child(anchor, PxPosition::new(Px(0), Px(0)));
 
@@ -92,8 +92,8 @@ struct BadgeLayout {
     container_color: Color,
 }
 
-impl LayoutPolicy for BadgeLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for BadgeLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let size_px = BadgeDefaults::SIZE.to_px();
         let intrinsic = Constraint::new(
             AxisConstraint::new(size_px, None),
@@ -113,8 +113,13 @@ impl LayoutPolicy for BadgeLayout {
     }
 }
 
-impl RenderPolicy for BadgeLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for BadgeLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         let mut metadata = input.metadata_mut();
         let size = metadata
             .computed_data()
@@ -135,6 +140,7 @@ impl RenderPolicy for BadgeLayout {
                 corner_radii,
                 corner_g2,
             });
+        content.draw(input);
     }
 }
 
@@ -144,8 +150,8 @@ struct BadgeWithContentLayout {
     padding_px: Px,
 }
 
-impl LayoutPolicy for BadgeWithContentLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for BadgeWithContentLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         debug_assert_eq!(
@@ -176,7 +182,7 @@ impl LayoutPolicy for BadgeWithContentLayout {
         );
 
         let row = children[0];
-        let row_data = row.measure(&child_constraint)?;
+        let row_data = row.measure(input, &child_constraint)?;
 
         let measured_width = (row_data.width + self.padding_px * 2).max(min_size_px);
         let measured_height = row_data.height.max(min_size_px);
@@ -192,8 +198,13 @@ impl LayoutPolicy for BadgeWithContentLayout {
     }
 }
 
-impl RenderPolicy for BadgeWithContentLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for BadgeWithContentLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         let mut metadata = input.metadata_mut();
         let size = metadata
             .computed_data()
@@ -214,6 +225,7 @@ impl RenderPolicy for BadgeWithContentLayout {
                 corner_radii,
                 corner_g2,
             });
+        content.draw(input);
     }
 }
 
@@ -269,7 +281,7 @@ impl BadgeDefaults {
 /// ```
 #[tessera]
 pub fn badged_box(badge: Option<RenderSlot>, content: Option<RenderSlot>) {
-    layout().layout_policy(BadgedBoxLayout).child(move || {
+    layout().policy(BadgedBoxLayout).child(move || {
         content.unwrap_or_else(RenderSlot::empty).render();
         badge.unwrap_or_else(RenderSlot::empty).render();
     });
@@ -316,7 +328,7 @@ pub fn badge(container_color: Option<Color>, content_color: Option<Color>) {
             .error
     });
     let policy = BadgeLayout { container_color };
-    layout().layout_policy(policy).render_policy(policy);
+    layout().policy(policy).draw(policy);
 }
 
 /// # badge_with_content
@@ -386,25 +398,22 @@ pub fn badge_with_content(
         container_color,
         padding_px,
     };
-    layout()
-        .layout_policy(policy)
-        .render_policy(policy)
-        .child(move || {
-            provide_context(
-                || ContentColor {
-                    current: content_color,
-                },
-                || {
-                    provide_context(
-                        || typography.label_small,
-                        move || {
-                            row()
-                                .main_axis_alignment(MainAxisAlignment::Center)
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .children_shared(content);
-                        },
-                    );
-                },
-            );
-        });
+    layout().policy(policy).draw(policy).child(move || {
+        provide_context(
+            || ContentColor {
+                current: content_color,
+            },
+            || {
+                provide_context(
+                    || typography.label_small,
+                    move || {
+                        row()
+                            .main_axis_alignment(MainAxisAlignment::Center)
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children_shared(content);
+                    },
+                );
+            },
+        );
+    });
 }

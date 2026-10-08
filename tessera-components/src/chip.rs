@@ -18,7 +18,7 @@ use crate::{
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{MaterialAlpha, MaterialTheme},
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
 /// Visual variants supported by [`chip`].
@@ -214,8 +214,12 @@ impl ChipDefaults {
     }
 
     /// Default colors for chips by variant and style.
-    pub fn colors(variant: ChipVariant, style: ChipStyle) -> ChipColors {
-        let scheme = MaterialTheme::default().color_scheme;
+    pub fn colors(
+        scheme: &MaterialColorScheme,
+        variant: ChipVariant,
+        style: ChipStyle,
+    ) -> ChipColors {
+        let scheme = scheme.clone();
         let disabled_content = scheme
             .on_surface
             .with_alpha(MaterialAlpha::DISABLED_CONTENT);
@@ -337,12 +341,16 @@ impl ChipDefaults {
     }
 
     /// Default border stroke configuration for chips by variant and style.
-    pub fn border(variant: ChipVariant, style: ChipStyle) -> Option<ChipBorder> {
+    pub fn border(
+        scheme: &MaterialColorScheme,
+        variant: ChipVariant,
+        style: ChipStyle,
+    ) -> Option<ChipBorder> {
         if matches!(style, ChipStyle::Elevated) {
             return None;
         }
 
-        let scheme = MaterialTheme::default().color_scheme;
+        let scheme = scheme.clone();
         let outline = scheme.outline_variant;
         let disabled_outline = scheme
             .on_surface
@@ -535,8 +543,10 @@ pub fn chip(
     let selected = args.selected && selectable;
     let colors = args
         .colors
-        .unwrap_or_else(|| ChipDefaults::colors(variant, style));
-    let border = args.border.or_else(|| ChipDefaults::border(variant, style));
+        .unwrap_or_else(|| ChipDefaults::colors(&theme.color_scheme, variant, style));
+    let border = args
+        .border
+        .or_else(|| ChipDefaults::border(&theme.color_scheme, variant, style));
     let elevation = args.elevation.or_else(|| ChipDefaults::elevation(style));
     let shape = args.shape.unwrap_or(theme.shapes.small);
     let padding = chip_padding(
@@ -569,17 +579,23 @@ pub fn chip(
 
     let mut modifier = args
         .modifier
-        .size_in(None, None, Some(ChipDefaults::HEIGHT), None);
+        .default_min_size(Dp::ZERO, ChipDefaults::HEIGHT)
+        // Match Material: every chip reserves the minimum interactive target,
+        // including non-clickable ones, so a row of chips stays visually aligned.
+        .minimum_interactive_component_size();
     if matches!(style, ChipStyle::Elevated)
         && let Some(elevation) = elevation
     {
-        modifier = modifier.shadow(&ShadowArgs {
-            elevation,
-            shape,
-            ambient_color: Some(theme.color_scheme.shadow.with_alpha(0.12)),
-            spot_color: Some(Color::TRANSPARENT),
-            ..Default::default()
-        });
+        modifier = modifier.shadow(
+            &theme.color_scheme,
+            &ShadowArgs {
+                elevation,
+                shape,
+                ambient_color: Some(theme.color_scheme.shadow.with_alpha(0.12)),
+                spot_color: Some(Color::TRANSPARENT),
+                ..Default::default()
+            },
+        );
     }
 
     let surface_elevation = (!matches!(style, ChipStyle::Elevated))

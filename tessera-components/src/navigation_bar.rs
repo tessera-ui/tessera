@@ -3,16 +3,15 @@
 //! ## Usage
 //!
 //! Use for bottom navigation between a small set of top-level destinations.
-use std::{sync::Arc, time::Duration};
+use std::time::Duration;
 
-use parking_lot::Mutex;
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, layout},
+    layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -57,28 +56,15 @@ pub enum NavigationBarLabelBehavior {
     SelectedOnly,
 }
 
-#[derive(Clone)]
-struct NavigationBarCompositionContext {
-    controller: State<NavigationBarController>,
-    selected_index: usize,
-    previous_index: usize,
-    animation_progress: f32,
-    next_index: Arc<Mutex<usize>>,
-}
-
 #[tessera]
 fn navigation_bar_item_view_content(
     item: Option<NavigationBarItemDefinition>,
-    is_selected: Option<bool>,
-    was_selected: Option<bool>,
-    animation_progress: Option<f32>,
+    selection_fraction: Option<f32>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
 ) {
     let item = item.unwrap_or_default();
-    let is_selected = is_selected.unwrap_or(false);
-    let was_selected = was_selected.unwrap_or(false);
-    let animation_progress = animation_progress.unwrap_or(0.0);
+    let selection_fraction = selection_fraction.unwrap_or(0.0);
     let interaction_state = interaction_state.expect("interaction_state must be set");
     let ripple_state = ripple_state.expect("ripple_state must be set");
     let theme = use_context::<MaterialTheme>()
@@ -86,14 +72,6 @@ fn navigation_bar_item_view_content(
         .get();
     let scheme = theme.color_scheme;
     let typography = theme.typography;
-
-    let selection_fraction = if is_selected {
-        animation_progress
-    } else if was_selected {
-        1.0 - animation_progress
-    } else {
-        0.0
-    };
 
     let always_show_label = matches!(item.label_behavior, NavigationBarLabelBehavior::AlwaysShow);
     let has_label = !item.label.is_empty();
@@ -128,7 +106,7 @@ fn navigation_bar_item_view_content(
         .max(0.0) as i32);
 
     layout()
-        .layout_policy(NavigationBarItemLayout {
+        .policy(NavigationBarItemLayout {
             selection_fraction,
             always_show_label,
             has_label,
@@ -202,8 +180,8 @@ struct NavigationBarItemLayout {
     has_icon: bool,
 }
 
-impl LayoutPolicy for NavigationBarItemLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let parent_width = input
@@ -236,17 +214,17 @@ impl LayoutPolicy for NavigationBarItemLayout {
 
         let child_constraint = Constraint::NONE;
 
-        let indicator_size = indicator_background.measure(&child_constraint)?;
-        let indicator_ripple_size = indicator_ripple.measure(&child_constraint)?;
+        let indicator_size = indicator_background.measure(input, &child_constraint)?;
+        let indicator_ripple_size = indicator_ripple.measure(input, &child_constraint)?;
 
         let icon_size = if let Some(icon_id) = icon_id {
-            Some(icon_id.measure(&child_constraint)?)
+            Some(icon_id.measure(input, &child_constraint)?)
         } else {
             None
         };
 
         let label_size = if let Some(label_id) = label_id {
-            Some(label_id.measure(&child_constraint)?)
+            Some(label_id.measure(input, &child_constraint)?)
         } else {
             None
         };
@@ -340,25 +318,19 @@ impl LayoutPolicy for NavigationBarItemLayout {
 
 #[tessera]
 fn navigation_bar_item_view(
-    controller: Option<State<NavigationBarController>>,
-    index: Option<usize>,
     item: Option<NavigationBarItemDefinition>,
-    selected_index: Option<usize>,
-    previous_index: Option<usize>,
-    animation_progress: Option<f32>,
+    selected: Option<bool>,
+    selection_fraction: Option<f32>,
+    on_click: Option<Callback>,
 ) {
-    let controller = controller.expect("controller must be set");
-    let index = index.unwrap_or(0);
     let item = item.unwrap_or_default();
-    let selected_index = selected_index.unwrap_or(0);
-    let previous_index = previous_index.unwrap_or(0);
-    let animation_progress = animation_progress.unwrap_or(0.0);
+    let selected = selected.unwrap_or(false);
+    let selection_fraction = selection_fraction.unwrap_or(0.0);
+    let on_click = on_click.unwrap_or_default();
     let interaction_state = remember(InteractionState::new);
     let ripple_state = remember(RippleState::new);
     let tap_recognizer = remember(TapRecognizer::default);
 
-    let is_selected = index == selected_index;
-    let was_selected = index == previous_index && selected_index != previous_index;
     let label = item.label.clone();
 
     let on_press = move |ctx: PointerEventContext| {
@@ -378,15 +350,9 @@ fn navigation_bar_item_view(
         ripple_state.with_mut(|state| state.release());
     };
 
-    let on_click_item = item.on_click;
-    let on_click = move || {
-        controller.with_mut(|c| c.set_selected(index));
-        on_click_item.call();
-    };
-
     let selectable_args = SelectableArgs {
-        selected: is_selected,
-        on_click: on_click.into(),
+        selected,
+        on_click,
         enabled: true,
         role: Some(Role::Tab),
         label: Some(label),
@@ -403,9 +369,7 @@ fn navigation_bar_item_view(
         move || {
             navigation_bar_item_view_content()
                 .item(item.clone())
-                .is_selected(is_selected)
-                .was_selected(was_selected)
-                .animation_progress(animation_progress)
+                .selection_fraction(selection_fraction)
                 .interaction_state(interaction_state)
                 .ripple_state(ripple_state);
         }
@@ -432,6 +396,7 @@ struct NavigationBarItemDefinition {
 ///
 /// - `label` — text label shown under the icon.
 /// - `icon` — optional icon rendered above the label.
+/// - `selected` — whether this item is the active destination.
 /// - `on_click` — callback invoked after the item becomes selected.
 /// - `label_behavior` — whether the label is always shown or only when
 ///   selected.
@@ -440,12 +405,16 @@ struct NavigationBarItemDefinition {
 ///
 /// ```
 /// use tessera_components::navigation_bar::{navigation_bar, navigation_bar_item};
-/// use tessera_ui::tessera;
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
-///     navigation_bar().content(|| {
-///         navigation_bar_item().label("Home");
+///     let selected = remember(|| 0usize);
+///     navigation_bar().content(move || {
+///         navigation_bar_item()
+///             .label("Home")
+///             .selected(selected.get() == 0)
+///             .on_click(move || selected.set(0));
 ///     });
 /// }
 /// ```
@@ -455,19 +424,36 @@ pub fn navigation_bar_item(
     icon: Option<RenderSlot>,
     on_click: Option<Callback>,
     label_behavior: Option<NavigationBarLabelBehavior>,
+    selected: Option<bool>,
 ) {
     let label = label.unwrap_or_default();
     let on_click = on_click.unwrap_or_default();
     let label_behavior = label_behavior.unwrap_or_default();
-    let composition = use_context::<NavigationBarCompositionContext>()
-        .expect("navigation_bar_item must be used inside navigation_bar")
-        .get();
-    let index = {
-        let mut next_index = composition.next_index.lock();
-        let index = *next_index;
-        *next_index += 1;
-        index
-    };
+    let selected = selected.unwrap_or(false);
+
+    // Each item owns its own selection animation. State is keyed by the item's
+    // call position, so it stays stable across rebuilds without any shared
+    // index registry.
+    let animation = remember(|| NavigationBarItemAnimation::new(selected));
+    let frame_nanos = current_frame_nanos();
+    animation.with_mut(|state| state.set_selected(selected));
+    let selection_fraction = animation.with_mut(|state| {
+        state.update(frame_nanos);
+        state.progress()
+    });
+    if animation.with(|state| state.is_animating()) {
+        receive_frame_nanos(move |frame_nanos| {
+            let is_animating = animation.with_mut(|state| {
+                state.update(frame_nanos);
+                state.is_animating()
+            });
+            if is_animating {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
 
     layout()
         .modifier(Modifier::new().weight(1.0))
@@ -479,12 +465,10 @@ pub fn navigation_bar_item(
                 label_behavior,
             };
             navigation_bar_item_view()
-                .controller(composition.controller)
-                .index(index)
                 .item(item)
-                .selected_index(composition.selected_index)
-                .previous_index(composition.previous_index)
-                .animation_progress(composition.animation_progress);
+                .selected(selected)
+                .selection_fraction(selection_fraction)
+                .on_click_shared(on_click);
         });
 }
 
@@ -495,76 +479,50 @@ pub fn navigation_bar_item(
 /// ## Usage
 ///
 /// Place at the bottom of the app to switch between 3–5 primary destinations.
-///
 /// ## Parameters
 ///
-/// - `controller` — optional external controller.
 /// - `content` — item declarations rendered inside the bar.
 ///
 /// ## Examples
 ///
 /// ```
 /// use tessera_components::navigation_bar::{navigation_bar, navigation_bar_item};
-/// use tessera_ui::tessera;
+/// use tessera_ui::{remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
-///     navigation_bar().content(|| {
-///         navigation_bar_item().label("Home");
-///         navigation_bar_item().label("Search");
+///     let selected = remember(|| 0usize);
+///     navigation_bar().content(move || {
+///         navigation_bar_item()
+///             .label("Home")
+///             .selected(selected.get() == 0)
+///             .on_click(move || selected.set(0));
+///         navigation_bar_item()
+///             .label("Search")
+///             .selected(selected.get() == 1)
+///             .on_click(move || selected.set(1));
 ///     });
 /// }
 /// ```
 #[tessera]
-pub fn navigation_bar(
-    controller: Option<State<NavigationBarController>>,
-    content: Option<RenderSlot>,
-) {
+pub fn navigation_bar(content: Option<RenderSlot>) {
     let content = content.unwrap_or_else(RenderSlot::empty);
-    let controller = controller.unwrap_or_else(|| remember(|| NavigationBarController::new(0)));
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let frame_nanos = current_frame_nanos();
-
-    let animation_progress = controller
-        .with(|c| c.animation_progress(frame_nanos))
-        .unwrap_or(1.0);
-    if controller.with(|c| c.is_animating(frame_nanos)) {
-        receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller.with(|controller| controller.is_animating(frame_nanos));
-            if is_animating {
-                tessera_ui::FrameNanosControl::Continue
-            } else {
-                tessera_ui::FrameNanosControl::Stop
-            }
-        });
-    }
-    let selected_index = controller.with(|c| c.selected());
-    let previous_index = controller.with(|c| c.previous_selected());
-    let composition = NavigationBarCompositionContext {
-        controller,
-        selected_index,
-        previous_index,
-        animation_progress,
-        next_index: Arc::new(Mutex::new(0)),
-    };
 
     let modifier = Modifier::new()
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout().modifier(modifier).child({
-        let composition = composition.clone();
         move || {
-            let composition = composition.clone();
             surface()
                 .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
                 .style(scheme.surface_container.into())
                 .elevation(Dp(3.0))
                 .block_input(true)
                 .child(move || {
-                    let composition = composition.clone();
                     let separator_color = scheme.outline_variant.with_alpha(0.12);
                     column()
                         .modifier(Modifier::new().fill_max_size())
@@ -579,19 +537,12 @@ pub fn navigation_bar(
                                     .child(|| {});
                             };
 
-                            let content_context = composition.clone();
                             row()
                                 .modifier(Modifier::new().fill_max_size().weight(1.0))
                                 .main_axis_alignment(MainAxisAlignment::Start)
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .children(move || {
-                                    let provided_context = content_context.clone();
-                                    provide_context(
-                                        move || provided_context.clone(),
-                                        move || {
-                                            content.render();
-                                        },
-                                    );
+                                    content.render();
                                 });
                         });
                 });
@@ -599,75 +550,189 @@ pub fn navigation_bar(
     });
 }
 
-/// Controller for the `navigation_bar` component.
+/// Per-item selection animation for a navigation bar destination.
+///
+/// Each item owns one of these; there is no shared index registry, so the
+/// animation is keyed purely by the item's own call position.
 #[derive(Clone, PartialEq)]
-pub struct NavigationBarController {
-    selected: usize,
-    previous_selected: usize,
-    animation_start_frame_nanos: Option<u64>,
+struct NavigationBarItemAnimation {
+    selected: bool,
+    progress: f32,
+    start_progress: f32,
+    last_change_frame_nanos: Option<u64>,
 }
 
-impl NavigationBarController {
-    /// Create a new state with an initial selected index.
-    pub fn new(selected: usize) -> Self {
+impl NavigationBarItemAnimation {
+    fn new(selected: bool) -> Self {
+        let progress = if selected { 1.0 } else { 0.0 };
         Self {
             selected,
-            previous_selected: selected,
-            animation_start_frame_nanos: None,
+            progress,
+            start_progress: progress,
+            last_change_frame_nanos: None,
         }
     }
 
-    /// Returns the index of the currently selected navigation item.
-    pub fn selected(&self) -> usize {
-        self.selected
-    }
-
-    /// Returns the index of the previously selected navigation item.
-    pub(crate) fn previous_selected(&self) -> usize {
-        self.previous_selected
-    }
-
-    /// Programmatically select an item by index.
-    pub fn select(&mut self, index: usize) {
-        self.set_selected(index);
-    }
-
-    fn set_selected(&mut self, index: usize) {
-        if self.selected != index {
-            self.previous_selected = self.selected;
-            self.selected = index;
-            self.animation_start_frame_nanos = Some(current_frame_nanos());
+    fn set_selected(&mut self, selected: bool) {
+        if self.selected != selected {
+            self.selected = selected;
+            self.start_progress = self.progress;
+            self.last_change_frame_nanos = Some(current_frame_nanos());
         }
     }
 
-    fn animation_progress(&self, frame_nanos: u64) -> Option<f32> {
-        if let Some(start_frame_nanos) = self.animation_start_frame_nanos {
+    fn target(&self) -> f32 {
+        if self.selected { 1.0 } else { 0.0 }
+    }
+
+    fn update(&mut self, frame_nanos: u64) {
+        if let Some(start_frame_nanos) = self.last_change_frame_nanos {
             let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
             let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            if elapsed_nanos < animation_nanos {
-                Some(animation::easing(
-                    elapsed_nanos as f32 / animation_nanos as f32,
-                ))
+            let fraction = if animation_nanos == 0 {
+                1.0
             } else {
-                None
+                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
+            };
+            let eased = animation::easing(fraction);
+            let target = self.target();
+            self.progress = self.start_progress + (target - self.start_progress) * eased;
+            if fraction >= 1.0 {
+                self.last_change_frame_nanos = None;
+                self.progress = target;
+                self.start_progress = target;
             }
-        } else {
-            None
         }
     }
 
-    fn is_animating(&self, frame_nanos: u64) -> bool {
-        self.animation_start_frame_nanos
-            .is_some_and(|start_frame_nanos| {
-                let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-                let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-                elapsed_nanos < animation_nanos
-            })
+    fn progress(&self) -> f32 {
+        self.progress
+    }
+
+    fn is_animating(&self) -> bool {
+        self.last_change_frame_nanos.is_some()
     }
 }
 
-impl Default for NavigationBarController {
-    fn default() -> Self {
-        Self::new(0)
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{
+        CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
+        PxPosition, remember, tessera,
+    };
+
+    use crate::{
+        column::column,
+        lazy_list::lazy_column,
+        modifier::{ModifierExt as _, SemanticsArgs},
+        spacer::spacer,
+        theme::{MaterialTheme, material_theme},
+    };
+
+    use super::{navigation_bar, navigation_bar_item};
+
+    #[tessera]
+    fn navigation_bar_row() {
+        let selected = remember(|| 0usize);
+        column().children(move || {
+            navigation_bar().content(move || {
+                navigation_bar_item()
+                    .label("Home")
+                    .selected(selected.get() == 0)
+                    .on_click(move || selected.set(0));
+                navigation_bar_item()
+                    .label("Search")
+                    .selected(selected.get() == 1)
+                    .on_click(move || selected.set(1));
+                navigation_bar_item()
+                    .label("Settings")
+                    .selected(selected.get() == 2)
+                    .on_click(move || selected.set(2));
+            });
+            if selected.get() == 1 {
+                spacer().modifier(Modifier::new().width(Dp(10.0)).height(Dp(10.0)).semantics(
+                    SemanticsArgs {
+                        test_tag: Some("nav-search-active".to_string()),
+                        ..Default::default()
+                    },
+                ));
+            }
+        });
+    }
+
+    #[tessera]
+    fn navigation_bar_click_probe() {
+        material_theme()
+            .theme(MaterialTheme::default)
+            .child(move || {
+                lazy_column().item(move || {
+                    navigation_bar_row();
+                });
+            });
+    }
+
+    #[test]
+    fn clicking_middle_item_selects_middle_item() {
+        let mut session = tessera_ui::testing::start_layout_test_session(
+            tessera_ui::testing::layout_test(|| {
+                navigation_bar_click_probe();
+            })
+            .viewport_px(300, 200),
+        );
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+
+        // Three equal items span the 300px viewport, so the middle item covers
+        // x in [100, 200] and its center is at x = 150.
+        let now = tessera_ui::time::Instant::now();
+        let cursor = Some(PxPosition::new(Px::new(150), Px::new(40)));
+
+        // Move the pointer over the middle item first so it rebuilds in
+        // isolation inside `lazy_column`; the per-item selection must still
+        // resolve to the middle destination after the click.
+        let moved = PointerChange::new(
+            now,
+            1,
+            CursorEventContent::Moved(PxPosition::new(Px::new(150), Px::new(40))),
+            GestureState::TapCandidate,
+        );
+        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
+            &mut session,
+            16_666_667,
+            vec![moved],
+            cursor,
+        );
+
+        let press = PointerChange::new(
+            now,
+            1,
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            GestureState::TapCandidate,
+        );
+        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
+            &mut session,
+            33_333_334,
+            vec![press],
+            cursor,
+        );
+        let release = PointerChange::new(
+            now,
+            1,
+            CursorEventContent::Released(PressKeyEventType::Left),
+            GestureState::TapCandidate,
+        );
+        let mut snapshot = tessera_ui::testing::pump_layout_test_session_with_input(
+            &mut session,
+            50_000_001,
+            vec![release],
+            cursor,
+        );
+        for frame in 3..40u64 {
+            snapshot = tessera_ui::testing::pump_layout_test_session(
+                &mut session,
+                50_000_001 + 16_666_667 * (frame - 2),
+            );
+        }
+
+        snapshot.node("nav-search-active").exists();
     }
 }

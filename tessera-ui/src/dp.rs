@@ -14,8 +14,10 @@
 //! ## Scale Factor
 //!
 //! The conversion between dp and physical pixels is controlled by a global
-//! scale factor stored in [`SCALE_FACTOR`]. This factor is typically set based
-//! on the device's DPI (dots per inch) and user preferences.
+//! scale factor returned by [`scale_factor`]. This factor is typically set
+//! based on the device's DPI (dots per inch) and user preferences, and can be
+//! updated at runtime. It is a single process-global value, so a multi-window
+//! application cannot customize it per window; see [`set_scale_factor`].
 //!
 //! ## Usage
 //!
@@ -41,31 +43,81 @@
 use std::{
     fmt::Display,
     ops::{Div, Mul},
-    sync::OnceLock,
+    sync::atomic::{AtomicU64, Ordering},
 };
-
-use parking_lot::RwLock;
 
 use crate::Px;
 
+/// Bit pattern of `1.0`, used until [`set_scale_factor`] stores another value.
+const DEFAULT_SCALE_FACTOR_BITS: u64 = 1.0f64.to_bits();
+
 /// Global scale factor for converting between density-independent pixels and
-/// physical pixels.
+/// physical pixels, stored as `f64::to_bits`.
 ///
-/// This static variable holds the current scale factor used for dp-to-pixel
-/// conversions. It's typically initialized once during application startup
-/// based on the device's screen density and user scaling preferences.
+/// Uninitialized reads return `1.0`. This is a single **process-global** value
+/// shared by every window; see [`set_scale_factor`] for the multi-window
+/// assumption and for the fact that only positive finite factors are ever
+/// stored.
+pub(crate) static SCALE_FACTOR: AtomicU64 = AtomicU64::new(DEFAULT_SCALE_FACTOR_BITS);
+
+/// Sets the global scale factor used to convert between dp and physical pixels.
 ///
-/// The scale factor represents how many physical pixels correspond to one dp
-/// unit. For example:
-/// - Scale factor of 1.0: 1 dp = 1 pixel (standard density)
-/// - Scale factor of 2.0: 1 dp = 2 pixels (high density)
-/// - Scale factor of 0.75: 1 dp = 0.75 pixels (low density)
+/// Unlike a one-shot initialization, this can be called again when the display
+/// scale changes. Only *positive finite* values are honored: any `NaN`, `±inf`,
+/// or a value `<= 0.0` leaves the previous factor in place and trips a
+/// `debug_assert!` so the misuse is flagged during development. This keeps a
+/// bad DPI report from silently poisoning every `Dp`↔`Px` conversion. In
+/// release builds the setter simply ignores the invalid input instead of
+/// panicking, and it deliberately returns `()` so existing call sites need no
+/// `Result` handling.
 ///
-/// # Thread Safety
+/// # Process-global, single-factor semantics
 ///
-/// This variable uses `OnceLock<RwLock<f64>>` to ensure thread-safe access
-/// while allowing the scale factor to be updated during runtime if needed.
-pub static SCALE_FACTOR: OnceLock<RwLock<f64>> = OnceLock::new();
+/// The factor is one **process-global** value shared by every window (see
+/// [`SCALE_FACTOR`]). Callers such as the renderer set it from each window's
+/// DPI, so a multi-window application currently cannot give different windows
+/// different factors: the last writer wins for the whole process. This
+/// limitation is only documented here; no per-window factor is provided.
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::dp::{scale_factor, set_scale_factor};
+///
+/// set_scale_factor(2.0);
+/// assert_eq!(scale_factor(), 2.0);
+/// set_scale_factor(1.5);
+/// assert_eq!(scale_factor(), 1.5);
+/// ```
+pub fn set_scale_factor(scale_factor: f64) {
+    debug_assert!(
+        scale_factor.is_finite() && scale_factor > 0.0,
+        "set_scale_factor called with a non-positive or non-finite value \
+         ({scale_factor}); keeping the previous scale factor. Expected a \
+         positive finite value."
+    );
+    if scale_factor.is_finite() && scale_factor > 0.0 {
+        SCALE_FACTOR.store(scale_factor.to_bits(), Ordering::Relaxed);
+    }
+}
+
+/// Returns the current global scale factor.
+///
+/// The value is `1.0` until a positive finite factor is stored via
+/// [`set_scale_factor`]. Because that setter ignores non-positive or non-finite
+/// input, the value returned here is always positive and finite (or the initial
+/// `1.0`).
+///
+/// # Examples
+///
+/// ```
+/// use tessera_ui::dp::scale_factor;
+///
+/// let _ = scale_factor();
+/// ```
+pub fn scale_factor() -> f64 {
+    f64::from_bits(SCALE_FACTOR.load(Ordering::Relaxed))
+}
 
 /// Density-independent pixels (dp) for UI scaling.
 ///
@@ -83,7 +135,7 @@ pub static SCALE_FACTOR: OnceLock<RwLock<f64>> = OnceLock::new();
 /// ## Internal Representation
 ///
 /// The `Dp` struct wraps a single `f64` value representing the dp measurement.
-/// This value is converted to physical pixels using the global [`SCALE_FACTOR`]
+/// This value is converted to physical pixels using the global [`scale_factor`]
 /// when rendering operations require pixel-precise measurements.
 ///
 /// ## Examples
@@ -161,7 +213,7 @@ impl Dp {
     ///
     /// This method applies the current global scale factor to convert
     /// density-independent pixels to physical pixels. The scale factor is
-    /// read from [`SCALE_FACTOR`].
+    /// read from [`scale_factor`].
     ///
     /// # Returns
     ///
@@ -179,7 +231,7 @@ impl Dp {
     /// // Result depends on the current scale factor
     /// ```
     pub fn to_pixels_f64(&self) -> f64 {
-        let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
+        let scale_factor = scale_factor();
         self.0 * scale_factor
     }
 
@@ -209,7 +261,7 @@ impl Dp {
     /// let dp_value = Dp::from_pixels_f64(96.0);
     /// ```
     pub fn from_pixels_f64(value: f64) -> Self {
-        let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
+        let scale_factor = scale_factor();
         Dp(value / scale_factor)
     }
 
@@ -242,7 +294,7 @@ impl Dp {
     /// rounding behavior, use [`to_pixels_f64`](Self::to_pixels_f64) and
     /// apply your preferred rounding method.
     pub fn to_pixels_u32(&self) -> u32 {
-        let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
+        let scale_factor = scale_factor();
         (self.0 * scale_factor) as u32
     }
 
@@ -271,7 +323,7 @@ impl Dp {
     /// let dp_value = Dp::from_pixels_u32(96);
     /// ```
     pub fn from_pixels_u32(value: u32) -> Self {
-        let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
+        let scale_factor = scale_factor();
         Dp((value as f64) / scale_factor)
     }
 
@@ -303,7 +355,7 @@ impl Dp {
     /// large or very precise values. For maximum precision, use
     /// [`to_pixels_f64`](Self::to_pixels_f64).
     pub fn to_pixels_f32(&self) -> f32 {
-        let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
+        let scale_factor = scale_factor();
         (self.0 * scale_factor) as f32
     }
 
@@ -333,7 +385,7 @@ impl Dp {
     /// let dp_value = Dp::from_pixels_f32(36.0);
     /// ```
     pub fn from_pixels_f32(value: f32) -> Self {
-        let scale_factor = SCALE_FACTOR.get().map(|lock| *lock.read()).unwrap_or(1.0);
+        let scale_factor = scale_factor();
         Dp((value as f64) / scale_factor)
     }
 
@@ -459,5 +511,124 @@ impl Div<f64> for Dp {
 
     fn div(self, rhs: f64) -> Self::Output {
         Dp(self.0 / rhs)
+    }
+}
+
+#[cfg(test)]
+mod set_scale_factor_tests {
+    use super::*;
+    use std::panic::{AssertUnwindSafe, catch_unwind};
+    use std::sync::{Mutex, MutexGuard};
+
+    /// Serializes every test that touches the process-global [`SCALE_FACTOR`].
+    ///
+    /// The factor is shared by the whole test binary, so tests that mutate it
+    /// must not run concurrently. The guard also restores the value that was
+    /// current on entry (even if the test panics).
+    static SCALE_FACTOR_TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    /// RAII guard holding the module-wide lock and restoring the original scale
+    /// factor on drop.
+    struct ScaleFactorGuard {
+        // Held until the guard is dropped so the restore below is race-free.
+        _lock: MutexGuard<'static, ()>,
+        original: f64,
+    }
+
+    impl Drop for ScaleFactorGuard {
+        fn drop(&mut self) {
+            super::set_scale_factor(self.original);
+        }
+    }
+
+    fn guard() -> ScaleFactorGuard {
+        let lock = SCALE_FACTOR_TEST_LOCK
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        let original = scale_factor();
+        ScaleFactorGuard {
+            _lock: lock,
+            original,
+        }
+    }
+
+    /// Calls [`set_scale_factor`], containing the `debug_assert!` panic that
+    /// flags invalid input in debug builds (the profile `cargo test` uses).
+    fn set_scale_factor_expecting_rejection(value: f64) {
+        // Silence the default panic hook for the sampled window so catching the
+        // debug assertion does not print a scary backtrace into the test log.
+        let previous_hook = std::panic::take_hook();
+        std::panic::set_hook(Box::new(|_| {}));
+        let caught = catch_unwind(AssertUnwindSafe(|| set_scale_factor(value)));
+        std::panic::set_hook(previous_hook);
+
+        if cfg!(debug_assertions) {
+            assert!(
+                caught.is_err(),
+                "invalid factor {value} should trip the debug_assert!"
+            );
+        }
+    }
+
+    #[test]
+    fn set_scale_factor_accepts_positive_finite_values() {
+        let _guard = guard();
+        set_scale_factor(2.5);
+        assert_eq!(scale_factor(), 2.5);
+        assert_eq!(Dp(10.0).to_pixels_f64(), 25.0);
+    }
+
+    #[test]
+    fn set_scale_factor_rejects_nan_keeping_previous_factor() {
+        let _guard = guard();
+        set_scale_factor(2.0);
+        set_scale_factor_expecting_rejection(f64::NAN);
+
+        assert_eq!(scale_factor(), 2.0, "NaN must not replace the valid factor");
+        assert_eq!(Dp(10.0).to_pixels_f64(), 20.0);
+        assert_eq!(Dp(10.0).to_pixels_f32(), 20.0);
+        assert_eq!(Dp(10.0).to_px(), Px::from_f32(20.0));
+    }
+
+    #[test]
+    fn set_scale_factor_rejects_zero_keeping_previous_factor() {
+        let _guard = guard();
+        set_scale_factor(2.0);
+        set_scale_factor_expecting_rejection(0.0);
+
+        assert_eq!(scale_factor(), 2.0, "0.0 must not replace the valid factor");
+        assert_eq!(Dp(10.0).to_pixels_f64(), 20.0);
+        assert_eq!(Dp(10.0).to_px(), Px::from_f32(20.0));
+    }
+
+    #[test]
+    fn set_scale_factor_rejects_negative_keeping_previous_factor() {
+        let _guard = guard();
+        set_scale_factor(2.0);
+        set_scale_factor_expecting_rejection(-1.0);
+
+        assert_eq!(
+            scale_factor(),
+            2.0,
+            "-1.0 must not replace the valid factor"
+        );
+        assert_eq!(Dp(10.0).to_pixels_f64(), 20.0);
+        assert_eq!(Dp(10.0).to_px(), Px::from_f32(20.0));
+    }
+
+    #[test]
+    fn set_scale_factor_rejects_non_finite_keeping_previous_factor() {
+        let _guard = guard();
+        set_scale_factor(2.0);
+        set_scale_factor_expecting_rejection(f64::INFINITY);
+        set_scale_factor_expecting_rejection(f64::NEG_INFINITY);
+
+        assert_eq!(
+            scale_factor(),
+            2.0,
+            "±inf must not replace the valid factor"
+        );
+        assert_eq!(Dp(10.0).to_pixels_f64(), 20.0);
+        assert_eq!(Dp(10.0).to_px(), Px::from_f32(20.0));
     }
 }

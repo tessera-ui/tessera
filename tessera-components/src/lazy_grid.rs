@@ -13,13 +13,15 @@ use std::{
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusDirection,
     LayoutResult, MeasurementError, Modifier, ParentConstraint, Px, PxPosition, State, key,
-    layout::{LayoutChild, LayoutPolicy, MeasureScope, PlacementScope, layout},
+    layout::{LayoutChild, MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     remember, tessera,
 };
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
+    layout_flex::cross_axis_child_constraint,
+    lazy_shared::clamp_reported_main,
     scrollable::{ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable},
 };
 
@@ -136,8 +138,8 @@ impl LazyGridContent {
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct ZeroLayout;
 
-impl LayoutPolicy for ZeroLayout {
-    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ZeroLayout {
+    fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::ZERO))
     }
 }
@@ -183,8 +185,8 @@ impl PartialEq for LazyGridLayout {
     }
 }
 
-impl LayoutPolicy for LazyGridLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for LazyGridLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() != self.visible_items.len() {
@@ -205,7 +207,7 @@ impl LayoutPolicy for LazyGridLayout {
                 .copied()
                 .unwrap_or(Px::ZERO);
             let child_constraint = self.axis.child_constraint(cell_cross, self.item_alignment);
-            let child_size = child.measure(&child_constraint)?;
+            let child_size = child.measure(input, &child_constraint)?;
             let line_idx = visible.line_index - self.line_range.start;
             if let Some(line_value) = line_max.get_mut(line_idx) {
                 *line_value = (*line_value).max(self.axis.main(&child_size.size()));
@@ -273,10 +275,9 @@ impl LayoutPolicy for LazyGridLayout {
             .with_mut(|c| c.override_child_size(size));
 
         let reported_main = clamp_reported_main(
-            self.axis,
-            input.parent_constraint(),
             total_main_with_padding,
             self.viewport_limit,
+            self.axis.constraint_max(input.parent_constraint()),
             self.max_viewport_main,
         );
 
@@ -305,7 +306,11 @@ impl LayoutPolicy for LazyGridLayout {
         self.measure_eq(other) && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let children = input.children();
         if children.len() != self.visible_items.len() {
             return None;
@@ -347,7 +352,7 @@ impl LayoutPolicy for LazyGridLayout {
             result.place_child(*child, position);
         }
 
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }
 
@@ -982,7 +987,7 @@ fn lazy_grid_view(
     });
 
     if visible_plan.items.is_empty() {
-        layout().layout_policy(ZeroLayout);
+        layout().policy(ZeroLayout);
         return;
     }
 
@@ -1012,7 +1017,7 @@ fn lazy_grid_view(
     let line_range = visible_plan.line_range.clone();
     layout()
         .modifier(focus_modifier)
-        .layout_policy(LazyGridLayout {
+        .policy(LazyGridLayout {
             axis,
             item_alignment,
             estimated_line_main,
@@ -1118,21 +1123,6 @@ fn compute_visible_items(
     }
 }
 
-fn clamp_reported_main(
-    axis: LazyGridAxis,
-    parent_constraint: ParentConstraint<'_>,
-    total_main: Px,
-    viewport_span: Px,
-    fallback_limit: Option<Px>,
-) -> Px {
-    let viewport = viewport_span.max(Px::ZERO);
-    let mut report = total_main.min(viewport);
-    if let Some(max_value) = axis.constraint_max(parent_constraint).or(fallback_limit) {
-        report = report.min(max_value.max(Px::ZERO));
-    }
-    report
-}
-
 fn compute_cell_offset(cell_cross: Px, child_cross: Px, alignment: CrossAxisAlignment) -> Px {
     match alignment {
         CrossAxisAlignment::Start | CrossAxisAlignment::Stretch => Px::ZERO,
@@ -1177,8 +1167,8 @@ impl LazyGridAxis {
 
     fn position(&self, main: Px, cross: Px) -> PxPosition {
         match self {
-            Self::Vertical => PxPosition { x: cross, y: main },
-            Self::Horizontal => PxPosition { x: main, y: cross },
+            Self::Vertical => PxPosition::new(cross, main),
+            Self::Horizontal => PxPosition::new(main, cross),
         }
     }
 
@@ -1205,8 +1195,8 @@ impl LazyGridAxis {
 
     fn scroll_offset(&self, position: PxPosition) -> Px {
         match self {
-            Self::Vertical => (-position.y).max(Px::ZERO),
-            Self::Horizontal => (-position.x).max(Px::ZERO),
+            Self::Vertical => Px((-position.y).max(0.0) as i32),
+            Self::Horizontal => Px((-position.x).max(0.0) as i32),
         }
     }
 
@@ -1228,10 +1218,10 @@ impl LazyGridAxis {
 
     fn child_constraint(&self, cross: Px, alignment: CrossAxisAlignment) -> Constraint {
         let cross = cross.max(Px::ZERO);
-        let cross_constraint = match alignment {
-            CrossAxisAlignment::Stretch => AxisConstraint::exact(cross),
-            _ => AxisConstraint::new(Px::ZERO, Some(cross)),
-        };
+        // The cell defines an exact cross extent, so the shared rule reproduces
+        // the previous behavior: `Stretch` fills the cell, other alignments let
+        // the item measure itself within that extent.
+        let cross_constraint = cross_axis_child_constraint(AxisConstraint::exact(cross), alignment);
 
         match self {
             Self::Vertical => Constraint::new(cross_constraint, AxisConstraint::NONE),
@@ -1345,8 +1335,8 @@ fn calculate_alignment_offsets(
 }
 
 #[derive(Clone, PartialEq)]
-struct MeasuredGridItem<'a> {
-    child: LayoutChild<'a>,
+struct MeasuredGridItem {
+    child: LayoutChild,
     line_index: usize,
     slot_index: usize,
     size: ComputedData,
@@ -1699,8 +1689,8 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
-        NoopRenderPolicy, Px, PxPosition,
+        AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
+        Px, PxPosition,
         layout::{MeasureScope, layout},
         receive_frame_nanos, remember, tessera,
     };
@@ -1708,7 +1698,7 @@ mod tests {
     use crate::{
         alignment::{CrossAxisAlignment, MainAxisAlignment},
         modifier::{ModifierExt as _, SemanticsArgs},
-        scrollable::{ScrollableController, scrollable},
+        scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
         theme::{MaterialTheme, material_theme},
     };
 
@@ -1722,8 +1712,8 @@ mod tests {
         height: i32,
     }
 
-    impl LayoutPolicy for FixedTestLayout {
-        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+        fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
@@ -1738,8 +1728,8 @@ mod tests {
         let height = height.unwrap_or(0);
 
         layout()
-            .layout_policy(FixedTestLayout { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedTestLayout { width, height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()
@@ -1872,6 +1862,7 @@ mod tests {
         });
 
         scrollable()
+            .scrollbar_behavior(ScrollBarBehavior::Hidden)
             .modifier(Modifier::new().constrain(
                 Some(AxisConstraint::exact(Px::new(60))),
                 Some(AxisConstraint::exact(Px::new(60))),
@@ -2033,22 +2024,22 @@ mod tests {
     fn lazy_vertical_grid_does_not_rebuild_visible_items_when_scroll_stays_in_same_window() {
         LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.store(0, Ordering::Relaxed);
 
-        let mut session = tessera_ui::testing::__private::start_layout_test_session(
+        let mut session = tessera_ui::testing::start_layout_test_session(
             tessera_ui::testing::layout_test(|| {
                 lazy_vertical_grid_stable_visible_items_case();
             })
             .viewport_px(80, 60),
         );
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 0);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
         let first_builds = LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert!(first_builds > 0);
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 16_666_667);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
         let second_builds = LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert_eq!(second_builds, first_builds);
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 33_333_334);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
         let third_builds = LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert_eq!(third_builds, first_builds);
     }

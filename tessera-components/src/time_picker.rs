@@ -7,6 +7,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use tessera_ui::{
     AxisConstraint, Callback, Dp, Modifier, RenderSlot, State, provide_context, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -271,21 +272,27 @@ pub fn time_picker(
     let state = state.unwrap_or_else(|| {
         remember(|| TimePickerState::new(initial_hour, initial_minute, is_24_hour, display_mode))
     });
-    time_picker_inner(TimePickerConfig {
-        modifier,
-        hour_step,
-        minute_step,
-        state: Some(state),
-    });
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    time_picker_inner(
+        TimePickerConfig {
+            modifier,
+            hour_step,
+            minute_step,
+            state: Some(state),
+        },
+        &theme,
+    );
 }
 
-fn time_picker_inner(args: TimePickerConfig) {
+fn time_picker_inner(args: TimePickerConfig, theme: &MaterialTheme) {
     let state = args
         .state
         .expect("time_picker_inner requires state to be set");
     let snapshot = state.with(|s| s.snapshot());
-    let theme = MaterialTheme::default();
-    let scheme = theme.color_scheme;
+    let theme = theme.clone();
+    let scheme = theme.color_scheme.clone();
     let typography = theme.typography;
 
     let modifier = args.modifier;
@@ -297,6 +304,8 @@ fn time_picker_inner(args: TimePickerConfig) {
     let show_labels = snapshot.display_mode == TimePickerDisplayMode::Input;
 
     column().modifier(modifier).children(move || {
+        let theme = theme.clone();
+        let row_theme = theme.clone();
         {
             let hour_display = hour_display.clone();
             let minute_display = minute_display.clone();
@@ -316,6 +325,7 @@ fn time_picker_inner(args: TimePickerConfig) {
                             Callback::new(move || {
                                 state.with_mut(|s| s.decrement_hour(hour_step));
                             }),
+                            &row_theme,
                         );
                     };
 
@@ -347,6 +357,7 @@ fn time_picker_inner(args: TimePickerConfig) {
                             Callback::new(move || {
                                 state.with_mut(|s| s.decrement_minute(minute_step));
                             }),
+                            &row_theme,
                         );
                     };
                 });
@@ -358,7 +369,7 @@ fn time_picker_inner(args: TimePickerConfig) {
             };
             let is_pm = snapshot.hour >= 12;
             {
-                period_toggle(is_pm, state);
+                period_toggle(is_pm, state, &theme);
             };
         }
     });
@@ -430,7 +441,10 @@ pub fn time_picker_dialog(
     let picker_hour_step = picker_hour_step.unwrap_or(1);
     let picker_minute_step = picker_minute_step.unwrap_or(1);
     let state = state.unwrap_or_else(|| remember(TimePickerState::default));
-    let scheme = MaterialTheme::default().color_scheme;
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
+    let scheme = theme.color_scheme.clone();
     let has_confirm = confirm_button.is_some();
     let has_dismiss = dismiss_button.is_some();
 
@@ -443,6 +457,8 @@ pub fn time_picker_dialog(
             Some(AxisConstraint::NONE),
         ))
         .children(move || {
+            let theme = theme.clone();
+            let scheme = scheme.clone();
             {
                 let title = title.clone();
                 row()
@@ -454,12 +470,12 @@ pub fn time_picker_dialog(
                             let title_text = title.as_deref().unwrap_or("Select time");
                             text()
                                 .content(title_text)
-                                .size(MaterialTheme::default().typography.title_medium.font_size)
+                                .size(theme.typography.title_medium.font_size)
                                 .color(scheme.on_surface);
                         };
                         if show_mode_toggle {
                             {
-                                time_display_mode_toggle(state);
+                                time_display_mode_toggle(state, &theme);
                             };
                         }
                     });
@@ -524,29 +540,30 @@ fn time_stepper_column(
     show_label: bool,
     on_increment: Callback,
     on_decrement: Callback,
+    theme: &MaterialTheme,
 ) {
-    let theme = MaterialTheme::default();
-    let scheme = theme.color_scheme;
+    let theme = theme.clone();
+    let scheme = theme.color_scheme.clone();
     let typography = theme.typography;
 
     column()
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
             {
-                step_button("+", on_increment);
+                step_button("+", on_increment, &theme);
             };
             {
                 spacer().modifier(Modifier::new().height(Dp(6.0)));
             };
             let value_text = value.clone();
             {
-                time_value_cell(value_text.clone());
+                time_value_cell(value_text.clone(), &theme);
             };
             {
                 spacer().modifier(Modifier::new().height(Dp(6.0)));
             };
             {
-                step_button("-", on_decrement);
+                step_button("-", on_decrement, &theme);
             };
             if show_label {
                 {
@@ -565,8 +582,9 @@ fn time_stepper_column(
         });
 }
 
-fn time_value_cell(value: String) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn time_value_cell(value: String, theme: &MaterialTheme) {
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     surface()
         .modifier(
             Modifier::new()
@@ -581,13 +599,14 @@ fn time_value_cell(value: String) {
         .child(move || {
             text()
                 .content(value.clone())
-                .size(MaterialTheme::default().typography.headline_small.font_size)
+                .size(typography.headline_small.font_size)
                 .color(scheme.on_surface);
         });
 }
 
-fn step_button(label: &'static str, on_click: Callback) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn step_button(label: &'static str, on_click: Callback, theme: &MaterialTheme) {
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     surface()
         .modifier(Modifier::new().size(TIME_STEP_BUTTON_SIZE, TIME_STEP_BUTTON_SIZE))
         .style(SurfaceStyle::Filled {
@@ -599,24 +618,25 @@ fn step_button(label: &'static str, on_click: Callback) {
         .child(move || {
             text()
                 .content(label)
-                .size(MaterialTheme::default().typography.body_medium.font_size)
+                .size(typography.body_medium.font_size)
                 .color(scheme.on_surface);
         });
 }
 
-fn period_toggle(is_pm: bool, state: State<TimePickerState>) {
+fn period_toggle(is_pm: bool, state: State<TimePickerState>, theme: &MaterialTheme) {
+    let theme = theme.clone();
     row()
         .main_axis_alignment(MainAxisAlignment::Center)
         .cross_axis_alignment(CrossAxisAlignment::Center)
         .children(move || {
             {
-                period_button("AM", !is_pm, DayPeriod::Am, state);
+                period_button("AM", !is_pm, DayPeriod::Am, state, &theme);
             };
             {
                 spacer().modifier(Modifier::new().width(Dp(8.0)));
             };
             {
-                period_button("PM", is_pm, DayPeriod::Pm, state);
+                period_button("PM", is_pm, DayPeriod::Pm, state, &theme);
             };
         });
 }
@@ -626,8 +646,10 @@ fn period_button(
     selected: bool,
     period: DayPeriod,
     state: State<TimePickerState>,
+    theme: &MaterialTheme,
 ) {
-    let scheme = MaterialTheme::default().color_scheme;
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     let text_color = if selected {
         scheme.on_primary
     } else {
@@ -657,13 +679,14 @@ fn period_button(
         .child(move || {
             text()
                 .content(label)
-                .size(MaterialTheme::default().typography.label_medium.font_size)
+                .size(typography.label_medium.font_size)
                 .color(text_color);
         });
 }
 
-fn time_display_mode_toggle(state: State<TimePickerState>) {
-    let scheme = MaterialTheme::default().color_scheme;
+fn time_display_mode_toggle(state: State<TimePickerState>, theme: &MaterialTheme) {
+    let scheme = theme.color_scheme.clone();
+    let typography = theme.typography;
     let label = state.with(|s| match s.display_mode() {
         TimePickerDisplayMode::Picker => "Input",
         TimePickerDisplayMode::Input => "Picker",
@@ -681,7 +704,7 @@ fn time_display_mode_toggle(state: State<TimePickerState>) {
         .child(move || {
             text()
                 .content(label)
-                .size(MaterialTheme::default().typography.label_small.font_size)
+                .size(typography.label_small.font_size)
                 .color(scheme.primary);
         });
 }

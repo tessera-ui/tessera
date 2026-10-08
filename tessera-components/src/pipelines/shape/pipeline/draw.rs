@@ -1,12 +1,10 @@
-use std::sync::Arc;
-
 use encase::{ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{PxPosition, PxSize, wgpu};
 
 use super::{
     super::command::{ShapeCommand, rect_to_uniforms},
-    CachedInstanceBatch, ShapeCacheEntry, ShapeInstances, ShapePipeline, ShapeUniforms,
+    CachedInstanceBatch, ShapeInstances, ShapePipeline, ShapeUniforms,
 };
 
 #[repr(C)]
@@ -65,6 +63,7 @@ impl ShapePipeline {
         });
 
         let uniforms = ShapeInstances { instances };
+
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content
             .write(&uniforms)
@@ -93,7 +92,8 @@ impl ShapePipeline {
         gpu_queue: &wgpu::Queue,
         target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
-        entry: Arc<ShapeCacheEntry>,
+        texture_bind_group: &wgpu::BindGroup,
+        padding: Vec2,
         instances: &[(PxPosition, PxSize)],
     ) {
         if instances.is_empty() {
@@ -104,17 +104,18 @@ impl ShapePipeline {
             .iter()
             .map(|(position, size)| CachedRectUniform {
                 position: Vec4::new(
-                    position.x.raw() as f32 - entry.padding.x,
-                    position.y.raw() as f32 - entry.padding.y,
-                    size.width.raw() as f32 + entry.padding.x * 2.0,
-                    size.height.raw() as f32 + entry.padding.y * 2.0,
+                    position.x - padding.x,
+                    position.y - padding.y,
+                    size.width.raw() as f32 + padding.x * 2.0,
+                    size.height.raw() as f32 + padding.y * 2.0,
                 ),
                 screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
-                padding: entry.padding,
+                padding,
             })
             .collect();
 
         let rect_instances = CachedRectInstances { rects };
+
         let mut buffer_content = StorageBuffer::new(Vec::<u8>::new());
         buffer_content
             .write(&rect_instances)
@@ -140,7 +141,7 @@ impl ShapePipeline {
         render_pass.set_pipeline(&self.cached_pipeline);
         render_pass.set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
         render_pass.set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
-        render_pass.set_bind_group(0, &entry.texture_bind_group, &[]);
+        render_pass.set_bind_group(0, texture_bind_group, &[]);
         render_pass.set_bind_group(1, &transform_bind_group, &[]);
         render_pass.draw_indexed(0..6, 0, 0..instances.len() as u32);
     }
@@ -153,8 +154,19 @@ impl ShapePipeline {
         render_pass: &mut wgpu::RenderPass<'_>,
         pending: &mut CachedInstanceBatch,
     ) {
-        if let Some((entry, instances)) = pending.take() {
-            self.draw_cached_run(gpu, gpu_queue, target_size, render_pass, entry, &instances);
-        }
+        let Some((entry, instances)) = pending.take() else {
+            return;
+        };
+        let texture_bind_group = entry.texture_bind_group.clone();
+        let padding = entry.padding;
+        self.draw_cached_run(
+            gpu,
+            gpu_queue,
+            target_size,
+            render_pass,
+            &texture_bind_group,
+            padding,
+            &instances,
+        );
     }
 }

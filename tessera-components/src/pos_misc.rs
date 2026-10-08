@@ -30,8 +30,8 @@ pub fn is_position_in_rect(
     let rect_y = rect_pos.y;
 
     // Check X and Y independently and combine for clarity.
-    let within_x = x >= rect_x && x <= rect_x + rect_width;
-    let within_y = y >= rect_y && y <= rect_y + rect_height;
+    let within_x = x >= rect_x && x <= rect_x + rect_width.0 as f32;
+    let within_y = y >= rect_y && y <= rect_y + rect_height.0 as f32;
     within_x && within_y
 }
 

@@ -7,7 +7,7 @@ use std::sync::{Arc, OnceLock};
 
 use tessera_ui::{
     AssetExt, AxisConstraint, Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
-    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, layout},
     tessera, use_context,
 };
 
@@ -25,13 +25,7 @@ use crate::{
 fn placeholder_raster_data() -> Arc<ImageData> {
     static PLACEHOLDER: OnceLock<Arc<ImageData>> = OnceLock::new();
     PLACEHOLDER
-        .get_or_init(|| {
-            Arc::new(ImageData {
-                data: Arc::new(vec![0, 0, 0, 0]),
-                width: 1,
-                height: 1,
-            })
-        })
+        .get_or_init(|| Arc::new(ImageData::from_rgba(vec![0, 0, 0, 0], 1, 1)))
         .clone()
 }
 
@@ -52,13 +46,13 @@ impl IconBuilder {
     }
 
     /// Sets vector icon content using already-decoded vector geometry.
-    pub fn vector(mut self, data: impl Into<Arc<ImageVectorData>>) -> Self {
+    pub fn vector(mut self, data: impl Into<ImageVectorData>) -> Self {
         self.props.content = Some(Painter::Vector(data.into()));
         self
     }
 
     /// Sets raster icon content using already-decoded image pixels.
-    pub fn raster(mut self, data: impl Into<Arc<ImageData>>) -> Self {
+    pub fn raster(mut self, data: impl Into<ImageData>) -> Self {
         self.props.content = Some(Painter::Raster(data.into()));
         self
     }
@@ -77,7 +71,7 @@ impl IconBuilder {
     where
         T: TryIntoImageData,
     {
-        self.props.content = Some(Painter::Raster(Arc::new(source.try_into_image_data()?)));
+        self.props.content = Some(Painter::Raster(source.try_into_image_data()?));
         Ok(self)
     }
 
@@ -103,14 +97,12 @@ impl IconBuilder {
         let bytes = asset
             .read()
             .map_err(|source| ImageLoadError::AssetRead { source })?;
-        self.props.content = Some(Painter::Raster(Arc::new(
-            bytes.as_ref().try_into_image_data()?,
-        )));
+        self.props.content = Some(Painter::Raster(bytes.as_ref().try_into_image_data()?));
         Ok(self)
     }
 }
 
-impl From<crate::material_icons::Asset> for Arc<ImageVectorData> {
+impl From<crate::material_icons::Asset> for ImageVectorData {
     fn from(asset: crate::material_icons::Asset) -> Self {
         asset
             .try_into_image_vector_data()
@@ -129,8 +121,8 @@ struct IconLayout {
     rotation: f32,
 }
 
-impl LayoutPolicy for IconLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for IconLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (intrinsic_width, intrinsic_height) = intrinsic_dimensions(&self.content);
         let size_px = self.size.to_px();
 
@@ -147,8 +139,13 @@ impl LayoutPolicy for IconLayout {
     }
 }
 
-impl RenderPolicy for IconLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for IconLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         let mut metadata = input.metadata_mut();
         match &self.content {
             Painter::Vector(data) => {
@@ -168,6 +165,7 @@ impl RenderPolicy for IconLayout {
                 metadata.fragment_mut().push_draw_command(command);
             }
         }
+        content.draw(input);
     }
 }
 
@@ -214,7 +212,7 @@ pub fn icon(
     tint_mode: Option<TintMode>,
     rotation: Option<f32>,
 ) {
-    let content = content.unwrap_or_else(|| Painter::Raster(placeholder_raster_data()));
+    let content = content.unwrap_or_else(|| Painter::Raster((*placeholder_raster_data()).clone()));
     let size = size.unwrap_or(Dp(24.0));
     let tint = tint.unwrap_or_else(|| {
         let theme = use_context::<MaterialTheme>();
@@ -234,7 +232,7 @@ pub fn icon(
         tint_mode,
         rotation,
     };
-    layout().layout_policy(policy.clone()).render_policy(policy);
+    layout().policy(policy.clone()).draw(policy);
 }
 
 fn intrinsic_dimensions(content: &Painter) -> (Px, Px) {

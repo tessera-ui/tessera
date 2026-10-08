@@ -1,3 +1,10 @@
+//! Scrollbar components for scrollable viewports.
+//!
+//! ## Usage
+//!
+//! Compose a scrollbar next to a `Modifier::vertical_scroll` or
+//! `Modifier::horizontal_scroll` viewport to show and drag the scroll thumb.
+
 use std::sync::Arc;
 
 use parking_lot::RwLock;
@@ -7,7 +14,7 @@ use tessera_ui::{
     Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::ModifierCapabilityExt as _,
     receive_frame_nanos, remember, tessera, use_context,
 };
@@ -61,8 +68,8 @@ enum ScrollOrientation {
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 struct ZeroLayout;
 
-impl LayoutPolicy for ZeroLayout {
-    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ZeroLayout {
+    fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::ZERO))
     }
 }
@@ -79,16 +86,16 @@ struct ScrollBarVLayout {
     thumb_offset: Px,
 }
 
-impl LayoutPolicy for ScrollBarVLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ScrollBarVLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let track = children[0];
-        let size = track.measure(&Constraint::NONE)?;
+        let size = track.measure(input, &Constraint::NONE)?;
         result.place_child(track, PxPosition::ZERO);
 
         let thumb = children[1];
-        thumb.measure(&Constraint::NONE)?;
+        thumb.measure(input, &Constraint::NONE)?;
         result.place_child(thumb, PxPosition::new(Px::ZERO, self.thumb_offset));
 
         Ok(result.with_size(size.size()))
@@ -102,18 +109,22 @@ impl LayoutPolicy for ScrollBarVLayout {
         self.thumb_offset == other.thumb_offset
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let Some(&track) = children.first() else {
-            return Some(result.into_placements());
+            return Some(result.into_placement_result());
         };
         result.place_child(track, PxPosition::ZERO);
         let Some(&thumb) = children.get(1) else {
-            return Some(result.into_placements());
+            return Some(result.into_placement_result());
         };
         result.place_child(thumb, PxPosition::new(Px::ZERO, self.thumb_offset));
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }
 
@@ -122,16 +133,16 @@ struct ScrollBarHLayout {
     thumb_offset: Px,
 }
 
-impl LayoutPolicy for ScrollBarHLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ScrollBarHLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let track = children[0];
-        let size = track.measure(&Constraint::NONE)?;
+        let size = track.measure(input, &Constraint::NONE)?;
         result.place_child(track, PxPosition::ZERO);
 
         let thumb = children[1];
-        thumb.measure(&Constraint::NONE)?;
+        thumb.measure(input, &Constraint::NONE)?;
         result.place_child(thumb, PxPosition::new(self.thumb_offset, Px::ZERO));
 
         Ok(result.with_size(size.size()))
@@ -145,18 +156,22 @@ impl LayoutPolicy for ScrollBarHLayout {
         self.thumb_offset == other.thumb_offset
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let Some(&track) = children.first() else {
-            return Some(result.into_placements());
+            return Some(result.into_placement_result());
         };
         result.place_child(track, PxPosition::ZERO);
         let Some(&thumb) = children.get(1) else {
-            return Some(result.into_placements());
+            return Some(result.into_placement_result());
         };
         result.place_child(thumb, PxPosition::new(self.thumb_offset, Px::ZERO));
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }
 #[derive(Clone, PartialEq)]
@@ -174,6 +189,7 @@ struct ScrollBarConfig {
 }
 
 #[derive(PartialEq, Default)]
+/// Mutable state shared by a scrollbar and its viewport.
 pub struct ScrollBarStateInner {
     /// Whether the scrollbar's thumb is currently being dragged.
     pub is_dragging: bool,
@@ -204,16 +220,19 @@ impl PartialEq for ScrollBarState {
 }
 
 impl ScrollBarState {
+    /// Creates a new scrollbar state.
     pub fn new() -> Self {
         Self {
             inner: Arc::new(RwLock::new(ScrollBarStateInner::default())),
         }
     }
 
+    /// Returns a read guard over the scrollbar state.
     pub fn read(&self) -> parking_lot::RwLockReadGuard<'_, ScrollBarStateInner> {
         self.inner.read()
     }
 
+    /// Returns a write guard over the scrollbar state.
     pub fn write(&self) -> parking_lot::RwLockWriteGuard<'_, ScrollBarStateInner> {
         self.inner.write()
     }
@@ -259,10 +278,7 @@ fn calculate_target_pos_v(
     }
 
     let new_target_y = Px::from_f32(-progress * content_scrollable_range.to_f32());
-    PxPosition {
-        x: Px::ZERO, // Vertical scrollbar doesn't affect X
-        y: new_target_y,
-    }
+    PxPosition::new(Px::ZERO, new_target_y)
 }
 
 /// Calculate the target content position for a horizontal scrollbar given a
@@ -291,10 +307,7 @@ fn calculate_target_pos_h(
     }
 
     let new_target_x = Px::from_f32(-progress * content_scrollable_range.to_f32());
-    PxPosition {
-        x: new_target_x,
-        y: Px::ZERO, // Horizontal scrollbar doesn't affect Y
-    }
+    PxPosition::new(new_target_x, Px::ZERO)
 }
 
 /// Compute the thumb color with hover interpolation.
@@ -424,34 +437,34 @@ fn compute_thumb_size(visible: Px, total: Px) -> Px {
 
 /// Helper to check whether a cursor position overlaps the vertical thumb.
 fn cursor_on_thumb_v(cursor_pos: PxPosition, width: Px, thumb_y: f32, thumb_height: Px) -> bool {
-    cursor_pos.x >= Px::ZERO
-        && cursor_pos.x <= width
-        && cursor_pos.y >= Px::from_f32(thumb_y)
-        && cursor_pos.y <= Px::from_f32(thumb_y + thumb_height.to_f32())
+    cursor_pos.x >= 0.0
+        && cursor_pos.x <= width.0 as f32
+        && cursor_pos.y >= thumb_y
+        && cursor_pos.y <= thumb_y + thumb_height.0 as f32
 }
 
 /// Helper to check whether a cursor position overlaps the horizontal thumb.
 fn cursor_on_thumb_h(cursor_pos: PxPosition, height: Px, thumb_x: f32, thumb_width: Px) -> bool {
-    cursor_pos.y >= Px::ZERO
-        && cursor_pos.y <= height
-        && cursor_pos.x >= Px::from_f32(thumb_x)
-        && cursor_pos.x <= Px::from_f32(thumb_x + thumb_width.to_f32())
+    cursor_pos.y >= 0.0
+        && cursor_pos.y <= height.0 as f32
+        && cursor_pos.x >= thumb_x
+        && cursor_pos.x <= thumb_x + thumb_width.0 as f32
 }
 
 /// Return true if the cursor press position is on vertical track area.
 fn is_on_track_v(cursor_pos: PxPosition, thickness: Px, track_height: Px) -> bool {
-    cursor_pos.x >= Px::ZERO
-        && cursor_pos.x <= thickness
-        && cursor_pos.y >= Px::ZERO
-        && cursor_pos.y <= track_height
+    cursor_pos.x >= 0.0
+        && cursor_pos.x <= thickness.0 as f32
+        && cursor_pos.y >= 0.0
+        && cursor_pos.y <= track_height.0 as f32
 }
 
 /// Return true if the cursor press position is on horizontal track area.
 fn is_on_track_h(cursor_pos: PxPosition, thickness: Px, track_width: Px) -> bool {
-    cursor_pos.y >= Px::ZERO
-        && cursor_pos.y <= thickness
-        && cursor_pos.x >= Px::ZERO
-        && cursor_pos.x <= track_width
+    cursor_pos.y >= 0.0
+        && cursor_pos.y <= thickness.0 as f32
+        && cursor_pos.x >= 0.0
+        && cursor_pos.x <= track_width.0 as f32
 }
 
 fn apply_scrollbar_semantics(
@@ -533,9 +546,10 @@ fn scroll_accessibility_step(
         }
     };
 
-    let new_target = args
-        .state
-        .with(|c| c.target_position().saturating_offset(delta.x, delta.y));
+    let new_target = args.state.with(|c| {
+        c.target_position()
+            .saturating_offset(delta.x_px(), delta.y_px())
+    });
     args.state.with_mut(|c| c.set_target_position(new_target));
 
     mark_scroll_activity(state, &args.scrollbar_behavior, current_frame_nanos());
@@ -550,7 +564,7 @@ fn update_drag_vertical(
     frame_nanos: u64,
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
-        let new_target_pos = calculate_target(cursor_pos.y);
+        let new_target_pos = calculate_target(cursor_pos.y_px());
         // Dragging the thumb is direct manipulation: the content has to follow
         // the pointer without the eased follow used for wheel notches.
         args.state
@@ -620,7 +634,6 @@ fn handle_state_v(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            cursor_pos,
             within_track,
         )
     });
@@ -628,7 +641,6 @@ fn handle_state_v(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            cursor_pos,
             within_track,
         )
     });
@@ -637,7 +649,7 @@ fn handle_state_v(
         if is_on_thumb {
             state.write().pressed_on_thumb = true;
         } else if within_track && let Some(cursor_pos) = cursor_pos {
-            let new_target_pos = calculate_target_pos(cursor_pos.y);
+            let new_target_pos = calculate_target_pos(cursor_pos.y_px());
             args.state
                 .with_mut(|c| c.set_target_position(new_target_pos));
             mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
@@ -673,7 +685,7 @@ fn update_drag_horizontal(
     frame_nanos: u64,
 ) {
     if let Some(cursor_pos) = input.cursor_position_rel {
-        let new_target_pos = calculate_target(cursor_pos.x);
+        let new_target_pos = calculate_target(cursor_pos.x_px());
         // Dragging the thumb is direct manipulation: the content has to follow
         // the pointer without the eased follow used for wheel notches.
         args.state
@@ -724,7 +736,6 @@ fn handle_state_h(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            cursor_pos,
             within_track,
         )
     });
@@ -732,7 +743,6 @@ fn handle_state_h(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            cursor_pos,
             within_track,
         )
     });
@@ -741,7 +751,7 @@ fn handle_state_h(
         if is_on_thumb {
             state.write().pressed_on_thumb = true;
         } else if within_track && let Some(cursor_pos) = cursor_pos {
-            let new_target_pos = calculate_target_pos(cursor_pos.x);
+            let new_target_pos = calculate_target_pos(cursor_pos.x_px());
             args.state
                 .with_mut(|c| c.set_target_position(new_target_pos));
             mark_scroll_activity(state, &args.scrollbar_behavior, frame_nanos);
@@ -767,6 +777,26 @@ fn handle_state_h(
     }
 }
 
+/// # scrollbar_v
+///
+/// Draw a vertical scrollbar for a scroll viewport.
+///
+/// ## Usage
+///
+/// Compose next to a `Modifier::vertical_scroll` viewport to indicate and drag
+/// the current vertical scroll offset.
+///
+/// ## Parameters
+///
+/// - `total` — content extent along the scroll axis, in physical pixels.
+/// - `visible` — viewport extent along the scroll axis, in physical pixels.
+/// - `offset` — current scroll offset; defaults to the controller position.
+/// - `thickness` — thickness of the scrollbar track.
+/// - `state` — scroll controller the scrollbar reads and drives.
+/// - `scrollbar_behavior` — visibility behavior (always, auto-hide, hidden).
+/// - `track_color`, `thumb_color`, `thumb_hover_color` — themed colors.
+/// - `scrollbar_state` — shared interaction state; created internally when
+///   absent.
 #[tessera]
 pub fn scrollbar_v(
     total: Option<Px>,
@@ -834,13 +864,13 @@ pub fn scrollbar_v(
 
     // If scrollbar should be hidden, don't render anything
     if !should_show {
-        layout().layout_policy(ZeroLayout);
+        layout().policy(ZeroLayout);
         return;
     }
 
     // Ensure the scrollbar is visible
     if args.visible <= Px::ZERO || args.total <= Px::ZERO || args.thickness <= Dp::ZERO {
-        layout().layout_policy(ZeroLayout);
+        layout().policy(ZeroLayout);
         return;
     }
 
@@ -892,7 +922,7 @@ pub fn scrollbar_v(
 
     layout()
         .modifier(modifier)
-        .layout_policy(ScrollBarVLayout {
+        .policy(ScrollBarVLayout {
             thumb_offset: Px::from_f32(thumb_y),
         })
         .child(move || {
@@ -915,6 +945,26 @@ pub fn scrollbar_v(
         });
 }
 
+/// # scrollbar_h
+///
+/// Draw a horizontal scrollbar for a scroll viewport.
+///
+/// ## Usage
+///
+/// Compose next to a `Modifier::horizontal_scroll` viewport to indicate and
+/// drag the current horizontal scroll offset.
+///
+/// ## Parameters
+///
+/// - `total` — content extent along the scroll axis, in physical pixels.
+/// - `visible` — viewport extent along the scroll axis, in physical pixels.
+/// - `offset` — current scroll offset; defaults to the controller position.
+/// - `thickness` — thickness of the scrollbar track.
+/// - `state` — scroll controller the scrollbar reads and drives.
+/// - `scrollbar_behavior` — visibility behavior (always, auto-hide, hidden).
+/// - `track_color`, `thumb_color`, `thumb_hover_color` — themed colors.
+/// - `scrollbar_state` — shared interaction state; created internally when
+///   absent.
 #[tessera]
 pub fn scrollbar_h(
     total: Option<Px>,
@@ -982,13 +1032,13 @@ pub fn scrollbar_h(
 
     // If scrollbar should be hidden, don't render anything
     if !should_show {
-        layout().layout_policy(ZeroLayout);
+        layout().policy(ZeroLayout);
         return;
     }
 
     // Ensure the scrollbar is visible
     if args.visible <= Px::ZERO || args.total <= Px::ZERO || args.thickness <= Dp::ZERO {
-        layout().layout_policy(ZeroLayout);
+        layout().policy(ZeroLayout);
         return;
     }
 
@@ -1040,7 +1090,7 @@ pub fn scrollbar_h(
 
     layout()
         .modifier(modifier)
-        .layout_policy(ScrollBarHLayout {
+        .policy(ScrollBarHLayout {
             thumb_offset: Px::from_f32(thumb_x),
         })
         .child(move || {

@@ -15,8 +15,9 @@ use tessera_ui::{
 use crate::alignment::Alignment;
 
 use layout::{
-    AlignmentParentDataModifierNode, ConstraintModifierNode, MinimumInteractiveModifierNode,
-    OffsetModifierNode, PaddingModifierNode, WeightParentDataModifierNode,
+    AlignmentParentDataModifierNode, ConstraintModifierNode, DefaultMinSizeModifierNode,
+    MinimumInteractiveModifierNode, OffsetModifierNode, PaddingModifierNode,
+    RequiredSizeModifierNode, WeightParentDataModifierNode,
 };
 
 pub use interaction::{
@@ -44,6 +45,19 @@ pub trait ModifierExt {
 
     /// Constrains the content to an exact size when possible.
     fn size(self, width: Dp, height: Dp) -> Modifier;
+
+    /// Pins the content to an exact size regardless of incoming constraints.
+    fn required_size(self, width: Dp, height: Dp) -> Modifier;
+
+    /// Pins the content width regardless of incoming constraints.
+    fn required_width(self, width: Dp) -> Modifier;
+
+    /// Pins the content height regardless of incoming constraints.
+    fn required_height(self, height: Dp) -> Modifier;
+
+    /// Applies a default minimum size only when the incoming axis leaves the
+    /// minimum open, so an explicit outer size always wins.
+    fn default_min_size(self, min_width: Dp, min_height: Dp) -> Modifier;
 
     /// Constrains the content to an exact width when possible.
     fn width(self, width: Dp) -> Modifier;
@@ -113,6 +127,13 @@ impl ModifierExt for Modifier {
         self.push_placement(OffsetModifierNode { x, y })
     }
 
+    fn default_min_size(self, min_width: Dp, min_height: Dp) -> Modifier {
+        self.push_layout(DefaultMinSizeModifierNode {
+            min_width,
+            min_height,
+        })
+    }
+
     fn size(self, width: Dp, height: Dp) -> Modifier {
         let width_px: Px = width.into();
         let height_px: Px = height.into();
@@ -121,9 +142,34 @@ impl ModifierExt for Modifier {
             height_override: Some(AxisConstraint::exact(height_px)),
             fill_width: false,
             fill_height: false,
+            enforce_incoming: true,
         })
     }
 
+    fn required_size(self, width: Dp, height: Dp) -> Modifier {
+        let width_px: Px = width.into();
+        let height_px: Px = height.into();
+        self.push_layout(RequiredSizeModifierNode {
+            width: Some(AxisConstraint::exact(width_px)),
+            height: Some(AxisConstraint::exact(height_px)),
+        })
+    }
+
+    fn required_width(self, width: Dp) -> Modifier {
+        let width_px: Px = width.into();
+        self.push_layout(RequiredSizeModifierNode {
+            width: Some(AxisConstraint::exact(width_px)),
+            height: None,
+        })
+    }
+
+    fn required_height(self, height: Dp) -> Modifier {
+        let height_px: Px = height.into();
+        self.push_layout(RequiredSizeModifierNode {
+            width: None,
+            height: Some(AxisConstraint::exact(height_px)),
+        })
+    }
     fn width(self, width: Dp) -> Modifier {
         let width_px: Px = width.into();
         self.push_layout(ConstraintModifierNode {
@@ -131,6 +177,7 @@ impl ModifierExt for Modifier {
             height_override: None,
             fill_width: false,
             fill_height: false,
+            enforce_incoming: true,
         })
     }
 
@@ -141,6 +188,7 @@ impl ModifierExt for Modifier {
             height_override: Some(AxisConstraint::exact(height_px)),
             fill_width: false,
             fill_height: false,
+            enforce_incoming: true,
         })
     }
 
@@ -164,6 +212,7 @@ impl ModifierExt for Modifier {
             height_override: Some(height),
             fill_width: false,
             fill_height: false,
+            enforce_incoming: true,
         })
     }
 
@@ -173,6 +222,7 @@ impl ModifierExt for Modifier {
             height_override: height,
             fill_width: false,
             fill_height: false,
+            enforce_incoming: false,
         })
     }
 
@@ -182,6 +232,7 @@ impl ModifierExt for Modifier {
             height_override: None,
             fill_width: true,
             fill_height: false,
+            enforce_incoming: false,
         })
     }
 
@@ -191,6 +242,7 @@ impl ModifierExt for Modifier {
             height_override: None,
             fill_width: false,
             fill_height: true,
+            enforce_incoming: false,
         })
     }
 
@@ -200,6 +252,7 @@ impl ModifierExt for Modifier {
             height_override: None,
             fill_width: true,
             fill_height: true,
+            enforce_incoming: false,
         })
     }
 

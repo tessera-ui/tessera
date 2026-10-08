@@ -46,7 +46,13 @@ const WASM_MAIN_STUB: &str = r#"
 #[cfg(target_family = "wasm")]
 fn main() {}
 "#;
-const DESKTOP_MAIN_GUARD: &str = "#[cfg(not(target_family = \"wasm\"))]";
+const NON_DESKTOP_MAIN_STUB: &str = r#"
+#[cfg(any(target_family = "wasm", target_os = "android"))]
+fn main() {}
+"#;
+const LEGACY_DESKTOP_MAIN_GUARD: &str = "#[cfg(not(target_family = \"wasm\"))]";
+const DESKTOP_MAIN_GUARD: &str =
+    "#[cfg(all(not(target_family = \"wasm\"), not(target_os = \"android\")))]";
 const WASM_TARGET: &str = "wasm32-unknown-unknown";
 const WEB_HOST_DIR: &str = "gen/web";
 const WEB_OUTPUT_DIR: &str = "gen/web/pkg-web";
@@ -477,9 +483,13 @@ fn ensure_main_has_wasm_cfg(project_dir: &Path) -> Result<bool> {
         .with_context(|| format!("Failed to read {}", main_path.display()))?;
 
     let mut changed = false;
+    if content.contains(LEGACY_DESKTOP_MAIN_GUARD) {
+        content = content.replace(LEGACY_DESKTOP_MAIN_GUARD, DESKTOP_MAIN_GUARD);
+        changed = true;
+    }
     if !content.contains(DESKTOP_MAIN_GUARD) {
         if let Some(pos) = content.find("fn main()") {
-            content.insert_str(pos, "#[cfg(not(target_family = \"wasm\"))]\n");
+            content.insert_str(pos, &format!("{DESKTOP_MAIN_GUARD}\n"));
             changed = true;
         } else {
             output::warn(format!(
@@ -489,12 +499,16 @@ fn ensure_main_has_wasm_cfg(project_dir: &Path) -> Result<bool> {
         }
     }
 
-    if !content.contains("cfg(target_family = \"wasm\")") || !content.contains("fn main() {}") {
+    if content.contains(WASM_MAIN_STUB.trim()) {
+        content = content.replace(WASM_MAIN_STUB.trim(), NON_DESKTOP_MAIN_STUB.trim());
+        changed = true;
+    }
+    if !content.contains(NON_DESKTOP_MAIN_STUB.trim()) {
         if !content.ends_with('\n') {
             content.push('\n');
         }
         content.push('\n');
-        content.push_str(WASM_MAIN_STUB.trim_start_matches('\n'));
+        content.push_str(NON_DESKTOP_MAIN_STUB.trim_start_matches('\n'));
         changed = true;
     }
 
@@ -578,6 +592,8 @@ fn spawn_static_file_server(listener: TcpListener, project_dir: PathBuf) {
 }
 
 fn handle_http_request(mut stream: TcpStream, project_dir: &Path) -> Result<()> {
+    stream.set_read_timeout(Some(Duration::from_secs(5)))?;
+    stream.set_write_timeout(Some(Duration::from_secs(5)))?;
     let mut buffer = [0_u8; 4096];
     let bytes_read = stream
         .read(&mut buffer)
@@ -643,7 +659,9 @@ fn resolve_served_file(project_dir: &Path, requested_path: &str) -> Option<PathB
         full_path = full_path.join("index.html");
     }
 
-    full_path.exists().then_some(full_path)
+    let root = project_dir.canonicalize().ok()?;
+    let full_path = full_path.canonicalize().ok()?;
+    (full_path.starts_with(root) && full_path.is_file()).then_some(full_path)
 }
 
 fn content_type_for_path(path: &Path) -> &'static str {
@@ -690,4 +708,117 @@ fn write_headers(
         "HTTP/1.1 {status}\r\nContent-Type: {content_type}\r\nContent-Length: {content_length}\r\nCache-Control: no-cache\r\nConnection: close\r\n\r\n"
     )
     .context("Failed to write HTTP response headers")
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::atomic::{AtomicU64, Ordering};
+
+    use super::*;
+
+    static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
+
+    struct Fixture(PathBuf);
+
+    impl Fixture {
+        fn new() -> Self {
+            let id = NEXT_FIXTURE_ID.fetch_add(1, Ordering::Relaxed);
+            let root =
+                std::env::temp_dir().join(format!("tessera-web-{}-{id}", std::process::id()));
+            fs::create_dir_all(root.join("web/nested")).expect("create fixture");
+            fs::write(root.join("web/index.html"), "home").expect("write index");
+            fs::write(root.join("web/nested/index.html"), "nested").expect("write nested index");
+            fs::write(root.join("secret.txt"), "outside web root").expect("write outside file");
+            Self(root)
+        }
+    }
+
+    impl Drop for Fixture {
+        fn drop(&mut self) {
+            let _ = fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn app_templates_share_platform_entry_guards() {
+        for source in [
+            include_str!("../../templates/basic/src/main.rs.hbs"),
+            include_str!("../../templates/blank/src/main.rs.hbs"),
+        ] {
+            assert!(source.contains(DESKTOP_MAIN_GUARD));
+            assert!(source.contains(NON_DESKTOP_MAIN_STUB.trim()));
+            assert!(!source.contains(LEGACY_DESKTOP_MAIN_GUARD));
+        }
+    }
+
+    #[test]
+    fn main_guards_migrate_legacy_templates_and_stay_idempotent() {
+        let fixture = Fixture::new();
+        fs::create_dir(fixture.0.join("src")).expect("create src");
+        let main = fixture.0.join("src/main.rs");
+        fs::write(
+            &main,
+            format!("{LEGACY_DESKTOP_MAIN_GUARD}\nfn main() {{ run(); }}\n{WASM_MAIN_STUB}"),
+        )
+        .expect("write legacy main");
+        assert!(ensure_main_has_wasm_cfg(&fixture.0).expect("migrate main"));
+        let content = fs::read_to_string(&main).expect("read main");
+        assert!(content.contains(DESKTOP_MAIN_GUARD));
+        assert!(content.contains(NON_DESKTOP_MAIN_STUB.trim()));
+        assert!(!ensure_main_has_wasm_cfg(&fixture.0).expect("idempotent migration"));
+        assert_eq!(fs::read_to_string(main).expect("read main again"), content);
+    }
+
+    #[test]
+    fn static_files_stay_inside_web_root() {
+        let fixture = Fixture::new();
+        let root = fixture.0.join("web");
+        assert_eq!(
+            resolve_served_file(&root, "/"),
+            root.join("index.html").canonicalize().ok()
+        );
+        assert_eq!(
+            resolve_served_file(&root, "/nested/"),
+            root.join("nested/index.html").canonicalize().ok()
+        );
+        for path in ["/../secret.txt", "/nested/../../secret.txt", "/missing"] {
+            assert!(resolve_served_file(&root, path).is_none(), "{path}");
+        }
+        fs::create_dir(root.join("empty")).expect("create empty directory");
+        assert!(resolve_served_file(&root, "/empty").is_none());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn static_files_reject_symlinks_outside_web_root() {
+        let fixture = Fixture::new();
+        let root = fixture.0.join("web");
+        std::os::unix::fs::symlink(fixture.0.join("secret.txt"), root.join("secret.txt"))
+            .expect("create symlink");
+        assert!(resolve_served_file(&root, "/secret.txt").is_none());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn static_files_reject_junctions_outside_web_root() {
+        let fixture = Fixture::new();
+        let root = fixture.0.join("web");
+        let outside = fixture.0.join("outside");
+        fs::create_dir(&outside).expect("create outside directory");
+        fs::write(outside.join("index.html"), "private").expect("write outside index");
+        let junction = root.join("escape");
+        let output = Command::new("cmd")
+            .args(["/C", "mklink", "/J"])
+            .arg(&junction)
+            .arg(&outside)
+            .output()
+            .expect("create junction");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(resolve_served_file(&root, "/escape").is_none());
+        fs::remove_dir(junction).expect("remove junction");
+    }
 }

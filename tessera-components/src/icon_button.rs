@@ -136,7 +136,7 @@ pub fn icon_button(
     });
 
     button()
-        .modifier(Modifier::new().size(Dp(40.0), Dp(40.0)))
+        .modifier(Modifier::new().required_size(Dp(40.0), Dp(40.0)))
         .padding(Dp(8.0))
         .shape(Shape::rounded_rectangle(Dp(20.0)))
         .color(container_color)

@@ -4,45 +4,36 @@
 
 use std::collections::VecDeque;
 
-/// Maximum number of IME events to keep in the queue.
+/// Former maximum number of IME events kept in the queue.
 ///
-/// This constant limits the size of the event queue to prevent unbounded memory
-/// growth. When the queue exceeds this size, the oldest events are
-/// automatically removed. The value of 10 provides a reasonable balance between
-/// memory usage and ensuring that recent events are not lost during
-/// high-frequency input scenarios.
+/// This constant is retained for compatibility. The IME event queue is now
+/// unbounded: [`ImeState::push_event`] only appends and never truncates, so
+/// this value is unused and no longer drops the oldest events.
+#[deprecated(note = "IME events are no longer truncated; the queue is unbounded")]
+#[allow(dead_code)]
 pub const KEEP_EVENTS_COUNT: usize = 10;
 
 /// Manages the state and event queue for Input Method Editor (IME) operations.
 ///
-/// The `ImeState` struct provides a bounded queue for storing IME events from
-/// the windowing system. It automatically manages memory by discarding old
-/// events when the queue becomes too large, ensuring consistent performance
-/// even during intensive text input sessions.
-///
-/// ## Memory Limitation
-///
-/// The internal queue automatically maintains a maximum size of
-/// [`KEEP_EVENTS_COUNT`] events. When new events are added beyond this limit,
-/// the oldest events are automatically removed to prevent unbounded memory
-/// growth.
+/// The `ImeState` struct provides an unbounded queue for storing IME events
+/// from the windowing system. Events are retained until they are drained, so a
+/// long frame cannot drop composition updates or committed text.
 #[derive(Default)]
 pub(crate) struct ImeState {
     /// Internal queue storing pending IME events.
     ///
-    /// Events are stored in the order they were received, with new events
-    /// added to the back and old events removed from the front when the
-    /// queue size limit is exceeded.
+    /// Events are stored in the order they were received. New events are added
+    /// to the back and stay there until [`ImeState::take_events`] drains the
+    /// queue. The queue is unbounded and does not drop the oldest events.
     events: VecDeque<winit::event::Ime>,
 }
 
 impl ImeState {
     /// Adds a new IME event to the end of the queue.
     ///
-    /// This method appends the provided IME event to the internal queue. If
-    /// adding this event would cause the queue to exceed
-    /// [`KEEP_EVENTS_COUNT`], the oldest event is automatically removed to
-    /// maintain the size limit.
+    /// This method appends the provided IME event to the internal queue. The
+    /// queue is unbounded, so the event is never discarded to make room for a
+    /// newer one.
     ///
     /// # Arguments
     ///
@@ -50,14 +41,7 @@ impl ImeState {
     ///   of [`winit::event::Ime`], including composition text, committed text,
     ///   or IME state changes.
     pub fn push_event(&mut self, event: winit::event::Ime) {
-        // Add the event to the back of the deque
         self.events.push_back(event);
-
-        // Maintain the queue size limit by removing the oldest event if
-        // necessary
-        if self.events.len() > KEEP_EVENTS_COUNT {
-            self.events.pop_front();
-        }
     }
 
     /// Removes and returns all IME events from the queue.

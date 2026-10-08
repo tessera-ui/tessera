@@ -11,7 +11,9 @@ members = [
     "tessera-shard",
     "cargo-tessera",
     "tessera-mobile",
+    "tessera-glyphon",
 ]
+exclude = ["tessera-cosmic-text"]
 
 [workspace.package]
 license = "MIT OR Apache-2.0"

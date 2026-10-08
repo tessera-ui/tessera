@@ -179,10 +179,10 @@ pub fn execute(
             Ok(response) => response,
             Err(err) => json!({"ok": false, "error": format!("{err}")}),
         };
-        if let Some(map) = response.as_object_mut() {
-            if let Some(id) = id {
-                map.insert("id".to_string(), json!(id));
-            }
+        if let Some(map) = response.as_object_mut()
+            && let Some(id) = id
+        {
+            map.insert("id".to_string(), json!(id));
         }
         write_line(&mut out, response)?;
 

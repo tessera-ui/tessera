@@ -4,8 +4,8 @@
 //!
 //! Layer top/bottom bars, floating buttons, and snackbars above app content.
 use tessera_ui::{
-    ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
-    PxPosition, RenderSlot,
+    ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    RenderSlot,
     layout::{MeasureScope, layout},
     tessera,
 };
@@ -75,8 +75,8 @@ impl ScaffoldLayout {
     }
 }
 
-impl LayoutPolicy for ScaffoldLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ScaffoldLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let mut iter = children.into_iter();
@@ -106,7 +106,7 @@ impl LayoutPolicy for ScaffoldLayout {
         let unconstrained_children = input.parent_constraint().without_min();
 
         let top_bar_size = if let Some(child) = top_bar {
-            child.measure(&unconstrained_children)?.size()
+            child.measure(input, &unconstrained_children)?.size()
         } else {
             ComputedData {
                 width: Px::ZERO,
@@ -115,7 +115,7 @@ impl LayoutPolicy for ScaffoldLayout {
         };
 
         let bottom_bar_size = if let Some(child) = bottom_bar {
-            child.measure(&unconstrained_children)?.size()
+            child.measure(input, &unconstrained_children)?.size()
         } else {
             ComputedData {
                 width: Px::ZERO,
@@ -129,7 +129,7 @@ impl LayoutPolicy for ScaffoldLayout {
                 top_bar_size.height,
                 bottom_bar_size.height,
             );
-            let size = child.measure(&constraint)?.size();
+            let size = child.measure(input, &constraint)?.size();
             let content_x: Px = self.content_padding.left.into();
             let content_y: Px = self.content_padding.top.into();
             result.place_child(
@@ -181,7 +181,7 @@ impl LayoutPolicy for ScaffoldLayout {
         let bottom_reserved = bottom_bar_size.height;
 
         if let Some(child) = snackbar {
-            let size = child.measure(&unconstrained_children)?.size();
+            let size = child.measure(input, &unconstrained_children)?.size();
             let (x, mut y) = compute_overlay_offset(
                 self.snackbar_alignment,
                 final_width,
@@ -201,7 +201,7 @@ impl LayoutPolicy for ScaffoldLayout {
         }
 
         if let Some(child) = fab {
-            let size = child.measure(&unconstrained_children)?.size();
+            let size = child.measure(input, &unconstrained_children)?.size();
             let (x, mut y) = compute_overlay_offset(
                 self.fab_alignment,
                 final_width,
@@ -302,7 +302,7 @@ pub fn scaffold(
 
     layout()
         .modifier(modifier)
-        .layout_policy(ScaffoldLayout {
+        .policy(ScaffoldLayout {
             content_padding,
             fab_alignment,
             fab_offset: floating_action_button_offset,
@@ -336,7 +336,7 @@ pub fn scaffold(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, NoopRenderPolicy, Px,
+        ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px,
         layout::{MeasureScope, layout},
         tessera,
     };
@@ -351,8 +351,8 @@ mod tests {
         height: i32,
     }
 
-    impl LayoutPolicy for FixedTestLayout {
-        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+        fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
@@ -367,8 +367,8 @@ mod tests {
         let height = height.unwrap_or_default();
 
         layout()
-            .layout_policy(FixedTestLayout { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedTestLayout { width, height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()

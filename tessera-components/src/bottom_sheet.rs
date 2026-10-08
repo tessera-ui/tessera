@@ -10,7 +10,7 @@ use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusScopeNode, FocusTraversalPolicy,
     LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, layout},
+    layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -243,7 +243,6 @@ fn handle_drag_gestures(
         recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
-            input.cursor_position_rel,
             within_bounds,
         )
     });
@@ -270,7 +269,7 @@ fn handle_drag_gestures(
 /// Place bottom sheet if present. Extracted to reduce complexity of the parent
 /// function.
 fn place_bottom_sheet_if_present(
-    input: &MeasureScope<'_>,
+    input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
     is_open: bool,
     drag_offset: f32,
@@ -314,7 +313,7 @@ fn place_bottom_sheet_if_present(
 
     let constraint = Constraint::new(sheet_width, AxisConstraint::new(Px::ZERO, Some(max_height)));
 
-    let child_size = match bottom_sheet.measure(&constraint) {
+    let child_size = match bottom_sheet.measure(input, &constraint) {
         Ok(s) => s,
         Err(_) => return,
     };
@@ -589,14 +588,14 @@ pub fn bottom_sheet_provider(
         });
     }
 
-    if !(is_open || is_animating) {
-        return;
-    }
+    // The sheet overlay is gated by open state, but `main_content` must keep
+    // rendering: providers host the rest of the page inside it.
+    let show_bottom_sheet = is_open || is_animating;
 
     let progress = calc_progress_from_timer(timer_opt);
 
     layout()
-        .layout_policy(BottomSheetLayout {
+        .policy(BottomSheetLayout {
             progress,
             is_open,
             drag_offset,
@@ -604,6 +603,10 @@ pub fn bottom_sheet_provider(
         .child(move || {
             let bottom_sheet_content = bottom_sheet_content;
             main_content.render();
+
+            if !show_bottom_sheet {
+                return;
+            }
 
             let scrim_alpha = scrim_alpha_for(progress, is_open);
             let scrim_color = use_context::<MaterialTheme>()
@@ -633,18 +636,18 @@ struct BottomSheetLayout {
     drag_offset: f32,
 }
 
-impl LayoutPolicy for BottomSheetLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for BottomSheetLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let child_constraint = input.parent_constraint().without_min();
         let main_content = children[0];
-        let main_content_size = main_content.measure(&child_constraint)?;
+        let main_content_size = main_content.measure(input, &child_constraint)?;
         result.place_child(main_content, PxPosition::new(Px(0), Px(0)));
 
         if children.len() > 1 {
             let scrim = children[1];
-            scrim.measure(&child_constraint)?;
+            scrim.measure(input, &child_constraint)?;
             result.place_child(scrim, PxPosition::new(Px(0), Px(0)));
         }
 

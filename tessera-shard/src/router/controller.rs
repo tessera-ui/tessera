@@ -3,8 +3,8 @@ use std::{collections::HashSet, sync::Arc};
 use crate::{
     router::{RouteId, RouteShardKey, RouterDestination},
     state::{
-        ShardState, ShardStateLifeCycle, ShardStateMap, init_or_get_shard_state_in_map,
-        recycle_shard_state_slot,
+        ShardSlotTableHandle, ShardState, ShardStateLifeCycle, ShardStateMap,
+        init_or_get_shard_state_in_map, recycle_shard_state_slot,
     },
 };
 
@@ -13,9 +13,11 @@ struct RouteEntry {
     destination: Arc<dyn RouterDestination>,
 }
 
-/// Reactive navigation controller for one shard tree.
+/// Each controller owns its shard slot table. `ShardState` handles are bound
+/// to that table, so two controllers never share or alias slots.
 pub struct RouterController {
     route_stack: Vec<RouteEntry>,
+    slots: ShardSlotTableHandle,
     scope_shards: ShardStateMap<String>,
     route_shards: ShardStateMap<RouteShardKey>,
 }
@@ -25,6 +27,7 @@ impl RouterController {
     pub fn new() -> Self {
         Self {
             route_stack: Vec::new(),
+            slots: ShardSlotTableHandle::new(),
             scope_shards: Default::default(),
             route_shards: Default::default(),
         }
@@ -117,11 +120,19 @@ impl RouterController {
     }
 
     pub(crate) fn exec_current(&self) -> bool {
-        let Some(entry) = self.route_stack.last() else {
+        let Some(destination) = self.current_destination() else {
             return false;
         };
-        entry.destination.exec_component();
+        destination();
         true
+    }
+
+    /// Copies the current page entry point so callers can run it without
+    /// holding a borrow of the controller.
+    pub(crate) fn current_destination(&self) -> Option<Arc<dyn Fn() + Send + Sync>> {
+        self.route_stack
+            .last()
+            .map(|entry| entry.destination.exec_component_handle())
     }
 
     /// Get or initialize route-scoped state and provide it to `f`.
@@ -145,14 +156,20 @@ impl RouterController {
         F: FnOnce(ShardState<T>) -> R,
     {
         match life_cycle {
-            ShardStateLifeCycle::Scope => {
-                init_or_get_shard_state_in_map(&self.scope_shards, id.to_owned(), id, "scope", f)
-            }
+            ShardStateLifeCycle::Scope => init_or_get_shard_state_in_map(
+                &self.slots,
+                &self.scope_shards,
+                id.to_owned(),
+                id,
+                "scope",
+                f,
+            ),
             ShardStateLifeCycle::Shard => {
                 let route_id = self.current_route_id().unwrap_or_else(|| {
                     panic!("route-scoped shard state requires a non-empty router stack")
                 });
                 init_or_get_shard_state_in_map(
+                    &self.slots,
                     &self.route_shards,
                     RouteShardKey {
                         route_id,
@@ -184,7 +201,7 @@ impl RouterController {
             .collect();
         for key in keys {
             if let Some((_, slot)) = self.route_shards.remove(&key) {
-                recycle_shard_state_slot(slot);
+                recycle_shard_state_slot(&self.slots, slot);
             }
         }
     }
@@ -210,7 +227,7 @@ impl RouterController {
             .collect();
         for key in keys {
             if let Some((_, slot)) = self.route_shards.remove(&key) {
-                recycle_shard_state_slot(slot);
+                recycle_shard_state_slot(&self.slots, slot);
             }
         }
     }
@@ -239,7 +256,7 @@ impl Drop for RouterController {
         self.route_shards.clear();
 
         for slot in scope_slots.into_iter().chain(route_slots) {
-            recycle_shard_state_slot(slot);
+            recycle_shard_state_slot(&self.slots, slot);
         }
     }
 }
@@ -270,6 +287,10 @@ mod tests {
 
     impl RouterDestination for DummyDestination {
         fn exec_component(&self) {}
+
+        fn exec_component_handle(&self) -> std::sync::Arc<dyn Fn() + Send + Sync> {
+            std::sync::Arc::new(|| {})
+        }
 
         fn destination_id() -> &'static str {
             "dummy"
@@ -347,5 +368,50 @@ mod tests {
             let _ = increment_state(&router, shard_id, ShardStateLifeCycle::Shard);
         }));
         assert!(result.is_err());
+    }
+
+    #[test]
+    fn controllers_do_not_share_or_alias_slots() {
+        let shard_id = unique_shard_id("isolated");
+        let left = RouterController::with_root(DummyDestination);
+        let right = RouterController::with_root(DummyDestination);
+
+        left.init_or_get::<CounterState, _, _>(shard_id, |state| {
+            state.with(|value| value.value.store(11, Ordering::SeqCst));
+        });
+        right.init_or_get::<CounterState, _, _>(shard_id, |state| {
+            state.with(|value| value.value.store(22, Ordering::SeqCst));
+        });
+
+        assert_eq!(
+            left.init_or_get::<CounterState, _, _>(shard_id, |state| {
+                state.with(|value| value.value.load(Ordering::SeqCst))
+            }),
+            11
+        );
+        assert_eq!(
+            right.init_or_get::<CounterState, _, _>(shard_id, |state| {
+                state.with(|value| value.value.load(Ordering::SeqCst))
+            }),
+            22
+        );
+
+        let stale = left.init_or_get::<CounterState, _, _>(shard_id, |state| state);
+        drop(left);
+
+        right.init_or_get::<CounterState, _, _>(shard_id, |state| {
+            state.with(|value| value.value.store(33, Ordering::SeqCst));
+        });
+        assert!(
+            stale
+                .try_with(|value| value.value.load(Ordering::SeqCst))
+                .is_err()
+        );
+        assert_eq!(
+            right.init_or_get::<CounterState, _, _>(shard_id, |state| {
+                state.with(|value| value.value.load(Ordering::SeqCst))
+            }),
+            33
+        );
     }
 }

@@ -12,6 +12,7 @@ pub(crate) struct ExecutionContext {
     pub(crate) phase_stack: Vec<RuntimePhase>,
     pub(crate) order_frame_stack: Vec<OrderFrame>,
     pub(crate) instance_key_stack: Vec<u64>,
+    pub(crate) measured_node_instance_key_stack: Vec<u64>,
     pub(crate) current_component_instance_stack: Vec<u64>,
     pub(crate) next_node_instance_logic_id_override: Option<u64>,
     pub(crate) build_dirty_instance_keys_stack: Vec<Arc<HashSet<u64>>>,

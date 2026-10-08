@@ -11,7 +11,7 @@ readme = "../README.md"
 
 [features]
 default = []
-profiling = ["serde", "serde_json"]
+profiling = ["serde", "serde_json", "interprocess"]
 debug-dirty-overlay = []
 testing = []
 headless = ["serde", "serde_json"]
@@ -36,6 +36,7 @@ dirs = "6.0.0"
 im = "15.1.0"
 serde = { version = "1.0.228", features = ["derive"], optional = true }
 serde_json = { version = "1.0.149", optional = true }
+interprocess = { version = "2.4.4", optional = true }
 
 [target.'cfg(target_family = "unix")'.dependencies]
 libc = "0.2.185"

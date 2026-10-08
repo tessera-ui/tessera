@@ -11,7 +11,7 @@ use tessera_ui::{
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, ParentConstraint, Px,
     PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
-    layout::{LayoutPolicy, MeasureScope, layout},
+    layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, remember, tessera, use_context, winit,
 };
@@ -66,7 +66,7 @@ fn default_scrim_color() -> Color {
 }
 
 /// Describes the anchor rectangle used to position a menu.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct MenuAnchor {
     /// Top-left corner of the anchor rectangle, relative to the menu container.
     pub origin: PxPosition,
@@ -226,6 +226,7 @@ impl Default for MenuBounds {
 
 #[derive(Clone)]
 struct MenuLayout {
+    is_open: bool,
     placement: MenuPlacement,
     offset: [Dp; 2],
     anchor: Option<MenuAnchor>,
@@ -234,14 +235,15 @@ struct MenuLayout {
 
 impl PartialEq for MenuLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.placement == other.placement
+        self.is_open == other.is_open
+            && self.placement == other.placement
             && self.offset == other.offset
             && self.anchor == other.anchor
     }
 }
 
-impl LayoutPolicy for MenuLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for MenuLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let child_constraint = input.parent_constraint().without_min();
@@ -249,8 +251,13 @@ impl LayoutPolicy for MenuLayout {
             .first()
             .copied()
             .expect("main content should exist");
-        let main_size = main_content.measure(&child_constraint)?;
+        let main_size = main_content.measure(input, &child_constraint)?;
         result.place_child(main_content, PxPosition::new(Px::ZERO, Px::ZERO));
+
+        if !self.is_open {
+            *self.bounds.write() = None;
+            return Ok(result.with_size(main_size.size()));
+        }
 
         let background = children
             .get(1)
@@ -258,10 +265,10 @@ impl LayoutPolicy for MenuLayout {
             .expect("menu background should exist");
         let menu = children.get(2).copied().expect("menu surface should exist");
 
-        let background_size = background.measure(&child_constraint)?;
+        let background_size = background.measure(input, &child_constraint)?;
         result.place_child(background, PxPosition::new(Px::ZERO, Px::ZERO));
 
-        let menu_size = menu.measure(&child_constraint)?;
+        let menu_size = menu.measure(input, &child_constraint)?;
         let background_size = background_size.size();
         let menu_size = menu_size.size();
         let main_size = main_size.size();
@@ -296,41 +303,45 @@ fn resolve_menu_position(
     available: ComputedData,
     offset: [Dp; 2],
 ) -> PxPosition {
-    let anchor_end_x = anchor.origin.x + anchor.size.width;
-    let anchor_end_y = anchor.origin.y + anchor.size.height;
+    let anchor_x = anchor.origin.x;
+    let anchor_y = anchor.origin.y;
+    let anchor_end_x = anchor_x + anchor.size.width.0 as f32;
+    let anchor_end_y = anchor_y + anchor.size.height.0 as f32;
 
     let mut x = match placement {
-        MenuPlacement::BelowStart | MenuPlacement::AboveStart => anchor.origin.x,
-        MenuPlacement::BelowEnd | MenuPlacement::AboveEnd => anchor_end_x - menu_size.width,
+        MenuPlacement::BelowStart | MenuPlacement::AboveStart => anchor_x,
+        MenuPlacement::BelowEnd | MenuPlacement::AboveEnd => {
+            anchor_end_x - menu_size.width.0 as f32
+        }
         MenuPlacement::RightStart => anchor_end_x,
-        MenuPlacement::LeftStart => anchor.origin.x - menu_size.width,
+        MenuPlacement::LeftStart => anchor_x - menu_size.width.0 as f32,
     };
 
     let mut y = match placement {
         MenuPlacement::BelowStart | MenuPlacement::BelowEnd => anchor_end_y,
-        MenuPlacement::AboveStart | MenuPlacement::AboveEnd => anchor.origin.y - menu_size.height,
-        MenuPlacement::RightStart | MenuPlacement::LeftStart => anchor.origin.y,
+        MenuPlacement::AboveStart | MenuPlacement::AboveEnd => anchor_y - menu_size.height.0 as f32,
+        MenuPlacement::RightStart | MenuPlacement::LeftStart => anchor_y,
     };
 
-    x += Px::from(offset[0]);
-    y += Px::from(offset[1]);
+    x += offset[0].to_pixels_f32();
+    y += offset[1].to_pixels_f32();
 
-    let max_x = available.width - menu_size.width;
-    let max_y = available.height - menu_size.height;
-    if x < Px::ZERO {
-        x = Px::ZERO;
+    let max_x = available.width.0 as f32 - menu_size.width.0 as f32;
+    let max_y = available.height.0 as f32 - menu_size.height.0 as f32;
+    if x < 0.0 {
+        x = 0.0;
     }
-    if y < Px::ZERO {
-        y = Px::ZERO;
+    if y < 0.0 {
+        y = 0.0;
     }
-    if max_x > Px::ZERO {
+    if max_x > 0.0 {
         x = x.min(max_x);
     }
-    if max_y > Px::ZERO {
+    if max_y > 0.0 {
         y = y.min(max_y);
     }
 
-    PxPosition::new(x, y)
+    PxPosition::from_f32_xy(x, y)
 }
 
 fn extract_available_size(constraint: ParentConstraint<'_>) -> ComputedData {
@@ -433,6 +444,7 @@ pub fn menu_provider(
     main_content: Option<RenderSlot>,
     menu_content: Option<RenderSlot>,
 ) {
+    let controlled_is_open = is_open;
     let is_open = is_open.unwrap_or(false);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -460,12 +472,19 @@ pub fn menu_provider(
         .controller
         .unwrap_or_else(|| remember(MenuController::new));
 
-    if controller.with(|c| c.is_open()) != provider_args.is_open {
-        if provider_args.is_open {
-            controller.with_mut(|c| c.open());
-        } else {
-            controller.with_mut(|c| c.close());
-        }
+    // Only a controlled `is_open` prop drives the controller. When the caller
+    // manages visibility through the `controller` (the common case), leave the
+    // controller untouched so `open_at`/`open`/`close` are not overwritten.
+    if let Some(target) = controlled_is_open
+        && controller.with(|c| c.is_open()) != target
+    {
+        controller.with_mut(|c| {
+            if target {
+                c.open();
+            } else {
+                c.close();
+            }
+        });
     }
 
     let main_content = provider_args.main_content.unwrap_or_else(RenderSlot::empty);
@@ -478,39 +497,34 @@ pub fn menu_provider(
         just_opened = !*was_open && is_open;
         *was_open = is_open;
     });
-    main_content.render();
-    if !is_open {
-        return;
-    }
-
-    // Track menu bounds for outside-click detection.
-    let bounds: Arc<RwLock<Option<MenuBounds>>> = Arc::new(RwLock::new(None));
+    let bounds: Arc<RwLock<Option<MenuBounds>>> = remember(|| Arc::new(RwLock::new(None))).get();
 
     // Parent pointer handler: block propagation and close on background click.
     let bounds = bounds.clone();
     let on_dismiss = provider_args.on_dismiss;
     let close_on_escape = provider_args.close_on_escape;
     let close_on_background = provider_args.close_on_background;
-    let mut modifier = with_pointer_input(Modifier::new(), {
-        let bounds = bounds.clone();
-        move |mut input| {
-            let cursor_position = input.cursor_position_rel;
-            let menu_bounds = *bounds.read();
-            let should_close_click = close_on_background
-                && input.has_unconsumed_release()
-                && is_click_outside_menu(cursor_position, menu_bounds);
+    let mut modifier = Modifier::new();
+    if is_open {
+        modifier = with_pointer_input(modifier, {
+            let bounds = bounds.clone();
+            move |mut input| {
+                let cursor_position = input.cursor_position_rel;
+                let menu_bounds = *bounds.read();
+                let should_close_click = close_on_background
+                    && input.has_unconsumed_release()
+                    && is_click_outside_menu(cursor_position, menu_bounds);
 
-            // Prevent underlying content from receiving input while menu is
-            // open.
-            input.block_all();
+                input.block_all();
 
-            if should_close_click {
-                apply_close_action(controller, &on_dismiss);
+                if should_close_click {
+                    apply_close_action(controller, &on_dismiss);
+                }
             }
-        }
-    });
+        });
+    }
 
-    if close_on_escape {
+    if is_open && close_on_escape {
         let on_dismiss = provider_args.on_dismiss;
         modifier = with_keyboard_input(modifier, move |mut input| {
             let should_close_escape = input.keyboard_events.iter().any(|event| {
@@ -527,30 +541,34 @@ pub fn menu_provider(
         });
     }
 
-    // Measure and place the menu overlay only while it is open.
+    // Keep the main content under one parent so opening the popup preserves
+    // its state and layout caches.
     layout()
         .modifier(modifier)
-        .layout_policy(MenuLayout {
+        .policy(MenuLayout {
+            is_open,
             placement: provider_args.placement,
             offset: provider_args.offset,
             anchor,
             bounds,
         })
         .child(move || {
-            let menu_content = menu_content;
-            surface()
-                .style(SurfaceStyle::Filled {
-                    color: provider_args.scrim_color,
-                })
-                .modifier(Modifier::new().fill_max_size())
-                .block_input(true)
-                .child(|| {});
+            main_content.render();
+            if is_open {
+                surface()
+                    .style(SurfaceStyle::Filled {
+                        color: provider_args.scrim_color,
+                    })
+                    .modifier(Modifier::new().fill_max_size())
+                    .block_input(true)
+                    .child(|| {});
 
-            menu_panel()
-                .provider(provider_args.clone())
-                .controller(controller)
-                .menu_content_shared(menu_content)
-                .just_opened(just_opened);
+                menu_panel()
+                    .provider(provider_args.clone())
+                    .controller(controller)
+                    .menu_content_shared(menu_content)
+                    .just_opened(just_opened);
+            }
         });
 }
 
@@ -1065,5 +1083,91 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
             .menu_content_shared(submenu_content);
     } else {
         menu_item_surface().item(args);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+
+    use tessera_ui::testing::{layout_test, pump_layout_test_session, start_layout_test_session};
+    use tessera_ui::{Modifier, Px, PxPosition, State, remember, tessera, testing::LayoutSnapshot};
+
+    use crate::{
+        column::column,
+        modifier::{ModifierExt as _, SemanticsArgs},
+        theme::material_theme,
+    };
+
+    use super::{MenuAnchor, MenuController, menu_item, menu_provider};
+
+    thread_local! {
+        static MENU_CONTROLLER: RefCell<Option<State<MenuController>>> =
+            const { RefCell::new(None) };
+        static MAIN_STATE: RefCell<Option<State<u32>>> = const { RefCell::new(None) };
+    }
+
+    #[tessera]
+    fn menu_controller_fixture() {
+        let controller = remember(MenuController::new);
+        MENU_CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+        material_theme().child(move || {
+            menu_provider()
+                .controller(controller)
+                .main_content(|| {
+                    let state = remember(|| 0_u32);
+                    MAIN_STATE.with(|slot| *slot.borrow_mut() = Some(state));
+                    column().children(|| {});
+                })
+                .menu_content(|| {
+                    column()
+                        .modifier(Modifier::new().semantics(SemanticsArgs {
+                            test_tag: Some("menu_content_tag".to_string()),
+                            ..Default::default()
+                        }))
+                        .children(|| {
+                            menu_item().label("Edit");
+                        });
+                });
+        });
+    }
+
+    #[test]
+    fn menu_provider_renders_menu_items_after_controller_opens() {
+        let mut session = start_layout_test_session(
+            layout_test(|| menu_controller_fixture()).viewport_px(400, 300),
+        );
+        let _ = pump_layout_test_session(&mut session, 0);
+
+        let controller =
+            MENU_CONTROLLER.with(|slot| slot.borrow().expect("menu controller available"));
+        controller.with_mut(|menu| {
+            menu.open_at(MenuAnchor::at(PxPosition::new(Px(10), Px(10))));
+        });
+
+        let opened: LayoutSnapshot = pump_layout_test_session(&mut session, 16_666_667);
+        opened.node("menu_content_tag").exists();
+    }
+
+    #[test]
+    fn menu_visibility_preserves_main_content_state() {
+        let mut session = start_layout_test_session(
+            layout_test(|| menu_controller_fixture()).viewport_px(400, 300),
+        );
+        let _ = pump_layout_test_session(&mut session, 0);
+        let main_state = MAIN_STATE.with(|slot| slot.borrow().expect("main content state"));
+        main_state.set(7);
+        let controller = MENU_CONTROLLER.with(|slot| slot.borrow().expect("menu controller"));
+        controller.with_mut(|menu| {
+            menu.open_at(MenuAnchor::at(PxPosition::new(Px(10), Px(10))));
+        });
+        let _ = pump_layout_test_session(&mut session, 16_666_667);
+        assert!(MAIN_STATE.with(|slot| slot.borrow().unwrap()) == main_state);
+        assert_eq!(main_state.get(), 7);
+
+        controller.with_mut(MenuController::close);
+        let _ = pump_layout_test_session(&mut session, 33_333_334);
+        assert!(MAIN_STATE.with(|slot| slot.borrow().unwrap()) == main_state);
+        assert_eq!(main_state.get(), 7);
     }
 }

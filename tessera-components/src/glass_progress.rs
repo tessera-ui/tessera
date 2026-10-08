@@ -5,7 +5,7 @@
 //! Use to indicate the completion of a task or a specific value in a range.
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    layout::{LayoutPolicy, MeasureScope, layout},
+    layout::{MeasureScope, layout},
     tessera,
 };
 
@@ -43,7 +43,7 @@ fn glass_progress_fill(
     let shape = shape.unwrap_or(Shape::CAPSULE);
     let value = value.clamp(0.0, 1.0);
     layout()
-        .layout_policy(GlassProgressFillLayout { value })
+        .policy(GlassProgressFillLayout { value })
         .child(move || {
             fluid_glass()
                 .tint_color(tint_color)
@@ -58,8 +58,8 @@ struct GlassProgressFillLayout {
     value: f32,
 }
 
-impl LayoutPolicy for GlassProgressFillLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for GlassProgressFillLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let available_width = input
             .parent_constraint()
@@ -80,7 +80,7 @@ impl LayoutPolicy for GlassProgressFillLayout {
             .expect("progress fill child should exist");
 
         let child_constraint = Constraint::exact(width_px, available_height);
-        child.measure(&child_constraint)?;
+        child.measure(input, &child_constraint)?;
         result.place_child(child, PxPosition::new(Px(0), Px(0)));
 
         Ok(result.with_size(ComputedData {
@@ -142,7 +142,7 @@ pub fn glass_progress(
     let height_px = height.to_px();
     layout()
         .modifier(modifier)
-        .layout_policy(GlassProgressLayout { height: height_px })
+        .policy(GlassProgressLayout { height: height_px })
         .child(move || {
             let effective_height = Dp((height.0 - (track_border_width.0 * 2.0)).max(0.0));
             let fill_shape = capsule_shape_for_height(effective_height);
@@ -168,8 +168,8 @@ struct GlassProgressLayout {
     height: Px,
 }
 
-impl LayoutPolicy for GlassProgressLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for GlassProgressLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let track = input
             .children()
@@ -177,7 +177,7 @@ impl LayoutPolicy for GlassProgressLayout {
             .copied()
             .expect("track should exist");
         let constraint = Constraint::new(input.parent_constraint().width(), self.height);
-        let track_measurement = track.measure(&constraint)?;
+        let track_measurement = track.measure(input, &constraint)?;
         result.place_child(track, PxPosition::new(Px(0), Px(0)));
         Ok(result.with_size(track_measurement.size()))
     }

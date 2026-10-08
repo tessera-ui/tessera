@@ -297,8 +297,8 @@ fn rect_from_geometry(
     let position = abs_position?;
     let size = computed_data?;
 
-    let x0 = position.x.0 as f64;
-    let y0 = position.y.0 as f64;
+    let x0 = position.x as f64;
+    let y0 = position.y as f64;
     let x1 = x0 + size.width.0 as f64;
     let y1 = y0 + size.height.0 as f64;
 
@@ -313,8 +313,8 @@ fn rect_from_geometry_with_padding(
     let position = abs_position?;
     let size = computed_data?;
 
-    let x0 = position.x.0 as f64 - padding.left.0 as f64;
-    let y0 = position.y.0 as f64 - padding.top.0 as f64;
+    let x0 = position.x as f64 - padding.left.0 as f64;
+    let y0 = position.y as f64 - padding.top.0 as f64;
     let x1 = x0 + size.width.0 as f64 + (padding.left + padding.right).0 as f64;
     let y1 = y0 + size.height.0 as f64 + (padding.top + padding.bottom).0 as f64;
 

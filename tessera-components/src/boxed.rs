@@ -4,8 +4,8 @@
 //!
 //! Use to create layered UIs, overlays, or composite controls.
 use tessera_ui::{
-    AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier, Px,
-    PxPosition, RenderSlot,
+    AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    RenderSlot,
     layout::{MeasureScope, layout},
     tessera,
 };
@@ -16,8 +16,8 @@ fn resolve_final_dimension(axis: AxisConstraint, largest_child: Px) -> Px {
     axis.clamp(largest_child)
 }
 
-fn center_axis(container: Px, child: Px) -> Px {
-    (container - child) / 2
+fn center_axis(container: Px, child: Px) -> f32 {
+    (container.0 - child.0) as f32 / 2.0
 }
 
 fn compute_child_offset(
@@ -26,20 +26,29 @@ fn compute_child_offset(
     container_h: Px,
     child_w: Px,
     child_h: Px,
-) -> (Px, Px) {
+) -> (f32, f32) {
     match alignment {
-        Alignment::TopStart => (Px(0), Px(0)),
-        Alignment::TopCenter => (center_axis(container_w, child_w), Px(0)),
-        Alignment::TopEnd => (container_w - child_w, Px(0)),
-        Alignment::CenterStart => (Px(0), center_axis(container_h, child_h)),
+        Alignment::TopStart => (0.0, 0.0),
+        Alignment::TopCenter => (center_axis(container_w, child_w), 0.0),
+        Alignment::TopEnd => ((container_w.0 - child_w.0) as f32, 0.0),
+        Alignment::CenterStart => (0.0, center_axis(container_h, child_h)),
         Alignment::Center => (
             center_axis(container_w, child_w),
             center_axis(container_h, child_h),
         ),
-        Alignment::CenterEnd => (container_w - child_w, center_axis(container_h, child_h)),
-        Alignment::BottomStart => (Px(0), container_h - child_h),
-        Alignment::BottomCenter => (center_axis(container_w, child_w), container_h - child_h),
-        Alignment::BottomEnd => (container_w - child_w, container_h - child_h),
+        Alignment::CenterEnd => (
+            (container_w.0 - child_w.0) as f32,
+            center_axis(container_h, child_h),
+        ),
+        Alignment::BottomStart => (0.0, (container_h.0 - child_h.0) as f32),
+        Alignment::BottomCenter => (
+            center_axis(container_w, child_w),
+            (container_h.0 - child_h.0) as f32,
+        ),
+        Alignment::BottomEnd => (
+            (container_w.0 - child_w.0) as f32,
+            (container_h.0 - child_h.0) as f32,
+        ),
     }
 }
 
@@ -90,7 +99,7 @@ pub fn boxed(
     let children = children.unwrap_or_else(RenderSlot::empty);
     layout()
         .modifier(modifier)
-        .layout_policy(BoxedLayout { alignment })
+        .policy(BoxedLayout { alignment })
         .child(move || {
             children.render();
         });
@@ -101,11 +110,11 @@ struct BoxedLayout {
     alignment: Alignment,
 }
 
-impl LayoutPolicy for BoxedLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for BoxedLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
-        let child_alignments = collect_child_alignments(&children);
+        let child_alignments = collect_child_alignments(input, &children);
         let n = child_alignments.len();
         debug_assert_eq!(
             children.len(),
@@ -121,7 +130,7 @@ impl LayoutPolicy for BoxedLayout {
         let mut children_sizes = vec![None; n];
 
         for (i, child) in children.iter().enumerate().take(n) {
-            let child_result = child.measure(&child_constraint)?;
+            let child_result = child.measure(input, &child_constraint)?;
             max_child_width = max_child_width.max(child_result.width);
             max_child_height = max_child_height.max(child_result.height);
             children_sizes[i] = Some(child_result);
@@ -141,7 +150,7 @@ impl LayoutPolicy for BoxedLayout {
                     child_size.width,
                     child_size.height,
                 );
-                result.place_child(child_id, PxPosition::new(x, y));
+                result.place_child(child_id, PxPosition::from_f32_xy(x, y));
             }
         }
 
@@ -153,13 +162,14 @@ impl LayoutPolicy for BoxedLayout {
 }
 
 fn collect_child_alignments(
-    children: &[tessera_ui::layout::LayoutChild<'_>],
+    scope: &MeasureScope<'_>,
+    children: &[tessera_ui::layout::LayoutChild],
 ) -> Vec<Option<Alignment>> {
     children
         .iter()
         .map(|child| {
             child
-                .parent_data::<crate::modifier::AlignmentParentData>()
+                .parent_data::<crate::modifier::AlignmentParentData>(scope)
                 .map(|data| data.alignment)
         })
         .collect()
@@ -168,8 +178,8 @@ fn collect_child_alignments(
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
-        NoopRenderPolicy, Px,
+        AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
+        Px,
         layout::{MeasureScope, layout},
         tessera,
     };
@@ -187,8 +197,8 @@ mod tests {
         height: i32,
     }
 
-    impl LayoutPolicy for FixedTestLayout {
-        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+        fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
@@ -203,8 +213,8 @@ mod tests {
         let height = height.unwrap_or_default();
 
         layout()
-            .layout_policy(FixedTestLayout { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedTestLayout { width, height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()
@@ -224,8 +234,8 @@ mod tests {
         let height = height.unwrap_or_default();
 
         layout()
-            .layout_policy(FixedTestLayout { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedTestLayout { width, height })
+            .draw(NoopDrawModifier)
             .modifier(modifier.then(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()

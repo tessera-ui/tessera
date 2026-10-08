@@ -81,8 +81,8 @@ pub enum VectorTintMode {
 /// Draw command for vector images.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ImageVectorCommand {
-    /// Shared vector mesh data.
-    pub data: Arc<ImageVectorData>,
+    /// Vector mesh data.
+    pub data: ImageVectorData,
     /// Tint color multiplied with the mesh.
     pub tint: Color,
     /// How to apply the tint.

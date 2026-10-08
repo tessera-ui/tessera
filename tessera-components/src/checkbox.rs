@@ -223,7 +223,6 @@ pub fn checkbox(
     #[prop(skip_setter)] controller: Option<State<CheckboxController>>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let checked = checked.unwrap_or(false);
     let disabled = disabled.unwrap_or(false);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -241,7 +240,13 @@ pub fn checkbox(
             .with_alpha(MaterialAlpha::DISABLED_CONTENT),
     );
     let disabled_checkmark_color = disabled_checkmark_color.unwrap_or(scheme.surface);
-    let controller = controller.unwrap_or_else(|| remember(|| CheckboxController::new(checked)));
+    let controller = controller
+        .unwrap_or_else(|| remember(|| CheckboxController::new(checked.unwrap_or(false))));
+    if let Some(checked) = checked
+        && controller.with(|c| c.is_checked()) != checked
+    {
+        controller.with_mut(|c| c.set_checked(checked));
+    }
 
     checkbox_inner()
         .modifier(modifier)

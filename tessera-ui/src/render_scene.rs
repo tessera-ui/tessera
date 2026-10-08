@@ -107,6 +107,14 @@ pub enum Command {
 }
 
 impl Command {
+    /// Downcasts a draw command when the caller knows its concrete type.
+    pub fn downcast_draw_ref<T: DrawCommand + 'static>(&self) -> Option<&T> {
+        match self {
+            Self::Draw(command) => command.as_ref().downcast_ref::<T>(),
+            _ => None,
+        }
+    }
+
     /// Returns the barrier requirement for this command.
     ///
     /// Commands that need to sample from previously rendered content

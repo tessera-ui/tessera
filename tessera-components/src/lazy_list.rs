@@ -13,13 +13,15 @@ use std::{
 use tessera_ui::{
     AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusDirection, LayoutResult,
     MeasurementError, Modifier, ParentConstraint, Px, PxPosition, RenderSlotWith, State, key,
-    layout::{LayoutPolicy, MeasureScope, PlacementScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     remember, tessera,
 };
 
 use crate::{
     alignment::CrossAxisAlignment,
+    layout_flex::cross_axis_child_constraint,
+    lazy_shared::clamp_reported_main,
     scrollable::{ScrollableController, scrollable},
 };
 
@@ -191,11 +193,11 @@ struct LazyListSlotsArgs {
 }
 
 fn lazy_column_slots(args: LazyListSlotsArgs) {
-    // Restore the retained position the first time this viewport is set up. A
-    // viewport that sits at the top also reports a zero offset, so ask the
-    // controller whether it has been positioned at all instead of comparing the
-    // offset against zero; otherwise scrolling back to the top would restore
-    // the previous offset and the last stretch of the gesture would be undone.
+    // The viewport controller is recreated whenever the list is remounted,
+    // while the list controller retains the last scroll position. Restore
+    // that position once, before the viewport has been positioned;
+    // comparing every frame would overwrite a newer wheel or drag offset
+    // with the previous frame's value.
     let saved_position = args.controller.with(|c| c.scroll.child_position());
     let scroll_controller = args.scroll_controller;
     let should_restore_position =
@@ -542,11 +544,11 @@ where
 }
 
 fn lazy_row_slots(args: LazyListSlotsArgs) {
-    // Restore the retained position the first time this viewport is set up. A
-    // viewport that sits at the start also reports a zero offset, so ask the
-    // controller whether it has been positioned at all instead of comparing the
-    // offset against zero; otherwise scrolling back to the start would restore
-    // the previous offset and the last stretch of the gesture would be undone.
+    // The viewport controller is recreated whenever the list is remounted,
+    // while the list controller retains the last scroll position. Restore
+    // that position once, before the viewport has been positioned;
+    // comparing every frame would overwrite a newer wheel or drag offset
+    // with the previous frame's value.
     let saved_position = args.controller.with(|c| c.scroll.child_position());
     let scroll_controller = args.scroll_controller;
     let should_restore_position =
@@ -665,7 +667,7 @@ fn lazy_list_view(
     });
 
     if visible_children.children.is_empty() {
-        layout().layout_policy(ZeroLayout);
+        layout().policy(ZeroLayout);
         return;
     }
 
@@ -692,7 +694,7 @@ fn lazy_list_view(
     let children = visible_children.children;
     layout()
         .modifier(focus_modifier)
-        .layout_policy(LazyListLayout {
+        .policy(LazyListLayout {
             axis,
             cross_axis_alignment,
             item_spacing,
@@ -720,8 +722,8 @@ fn lazy_list_view(
 #[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ZeroLayout;
 
-impl LayoutPolicy for ZeroLayout {
-    fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for ZeroLayout {
+    fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         Ok(LayoutResult::new(ComputedData::ZERO))
     }
 }
@@ -759,8 +761,8 @@ impl PartialEq for LazyListLayout {
     }
 }
 
-impl LayoutPolicy for LazyListLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for LazyListLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() != self.visible_item_indices.len() {
@@ -784,7 +786,7 @@ impl LayoutPolicy for LazyListLayout {
         let mut measured_entries = Vec::with_capacity(self.visible_item_indices.len());
         let mut inner_cross = Px::ZERO;
         for (item_index, child) in &measured_children {
-            let child_size = child.measure(&child_constraint)?;
+            let child_size = child.measure(input, &child_constraint)?;
             let child_size = child_size.size();
             let measured_main = self.axis.main(&child_size);
             inner_cross = inner_cross.max(self.axis.cross(&child_size));
@@ -844,10 +846,9 @@ impl LayoutPolicy for LazyListLayout {
         }
 
         let reported_main = clamp_reported_main(
-            self.axis,
-            input.parent_constraint(),
             total_main_with_padding,
             self.viewport_limit,
+            self.axis.constraint_max(input.parent_constraint()),
             self.max_viewport_main,
         );
 
@@ -908,7 +909,11 @@ impl LayoutPolicy for LazyListLayout {
             && self.scroll_offset == other.scroll_offset
     }
 
-    fn place_children(&self, input: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
         let mut result = LayoutResult::default();
         let children = input.children();
         if children.len() != self.visible_item_indices.len() {
@@ -955,7 +960,7 @@ impl LayoutPolicy for LazyListLayout {
             result.place_child(placement.1, position);
         }
 
-        Some(result.into_placements())
+        Some(result.into_placement_result())
     }
 }
 
@@ -1026,21 +1031,6 @@ fn compute_visible_children(
     }
 }
 
-fn clamp_reported_main(
-    axis: LazyListAxis,
-    parent_constraint: ParentConstraint<'_>,
-    total_main: Px,
-    viewport_span: Px,
-    fallback_limit: Option<Px>,
-) -> Px {
-    let viewport = viewport_span.max(Px::ZERO);
-    let mut report = total_main.min(viewport);
-    if let Some(max_value) = axis.constraint_max(parent_constraint).or(fallback_limit) {
-        report = report.min(max_value.max(Px::ZERO));
-    }
-    report
-}
-
 fn compute_cross_offset(final_cross: Px, child_cross: Px, alignment: CrossAxisAlignment) -> Px {
     match alignment {
         CrossAxisAlignment::Start | CrossAxisAlignment::Stretch => Px::ZERO,
@@ -1092,8 +1082,8 @@ impl LazyListAxis {
 
     fn position(&self, main: Px, cross: Px) -> PxPosition {
         match self {
-            Self::Vertical => PxPosition { x: cross, y: main },
-            Self::Horizontal => PxPosition { x: main, y: cross },
+            Self::Vertical => PxPosition::new(cross, main),
+            Self::Horizontal => PxPosition::new(main, cross),
         }
     }
 
@@ -1113,8 +1103,8 @@ impl LazyListAxis {
 
     fn scroll_offset(&self, position: PxPosition) -> Px {
         match self {
-            Self::Vertical => (-position.y).max(Px::ZERO),
-            Self::Horizontal => (-position.x).max(Px::ZERO),
+            Self::Vertical => Px((-position.y).max(0.0) as i32),
+            Self::Horizontal => Px((-position.x).max(0.0) as i32),
         }
     }
 
@@ -1139,11 +1129,9 @@ impl LazyListAxis {
         parent: ParentConstraint<'_>,
         alignment: CrossAxisAlignment,
     ) -> Constraint {
-        let cross_constraint = match (self, alignment) {
-            (Self::Vertical, CrossAxisAlignment::Stretch) => parent.width(),
-            (Self::Horizontal, CrossAxisAlignment::Stretch) => parent.height(),
-            (Self::Vertical, _) => parent.width().without_min(),
-            (Self::Horizontal, _) => parent.height().without_min(),
+        let cross_constraint = match self {
+            Self::Vertical => cross_axis_child_constraint(parent.width(), alignment),
+            Self::Horizontal => cross_axis_child_constraint(parent.height(), alignment),
         };
 
         match self {
@@ -1588,8 +1576,8 @@ mod tests {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
-        NoopRenderPolicy, Px, PxPosition,
+        AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
+        Px, PxPosition,
         layout::{MeasureScope, layout},
         receive_frame_nanos, remember, tessera,
     };
@@ -1616,8 +1604,8 @@ mod tests {
         preferred_height: i32,
     }
 
-    impl LayoutPolicy for FixedTestLayout {
-        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+        fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
@@ -1625,8 +1613,8 @@ mod tests {
         }
     }
 
-    impl LayoutPolicy for PreferredConstraintTestLayout {
-        fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for PreferredConstraintTestLayout {
+        fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let preferred_width = Px::new(self.preferred_width);
             let preferred_height = Px::new(self.preferred_height);
             let width = AxisConstraint::exact(preferred_width)
@@ -1646,8 +1634,8 @@ mod tests {
         let height = height.unwrap_or(0);
 
         layout()
-            .layout_policy(FixedTestLayout { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedTestLayout { width, height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()
@@ -1661,11 +1649,11 @@ mod tests {
         let height = height.unwrap_or(0);
 
         layout()
-            .layout_policy(PreferredConstraintTestLayout {
+            .policy(PreferredConstraintTestLayout {
                 preferred_width: width,
                 preferred_height: height,
             })
-            .render_policy(NoopRenderPolicy)
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()
@@ -1949,22 +1937,22 @@ mod tests {
     fn lazy_column_rebuilds_visible_items_when_item_slot_updates() {
         LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.store(0, Ordering::Relaxed);
 
-        let mut session = tessera_ui::testing::__private::start_layout_test_session(
+        let mut session = tessera_ui::testing::start_layout_test_session(
             tessera_ui::testing::layout_test(|| {
                 lazy_column_stable_visible_items_case();
             })
             .viewport_px(80, 60),
         );
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 0);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
         let first_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert!(first_builds > 0);
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 16_666_667);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
         let second_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert!(second_builds > first_builds);
 
-        let _ = tessera_ui::testing::__private::pump_layout_test_session(&mut session, 33_333_334);
+        let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
         let third_builds = LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert!(third_builds > second_builds);
     }

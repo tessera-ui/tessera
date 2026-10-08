@@ -265,7 +265,6 @@ pub fn radio_button(
     controller: Option<State<RadioButtonController>>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let selected = selected.unwrap_or(false);
     let enabled = enabled.unwrap_or(true);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -289,17 +288,19 @@ pub fn radio_button(
     );
     let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
 
-    let controller =
-        controller.unwrap_or_else(|| remember(|| RadioButtonController::new(selected)));
+    let controller = controller
+        .unwrap_or_else(|| remember(|| RadioButtonController::new(selected.unwrap_or(false))));
 
-    if controller.with(|c| c.is_selected()) != selected {
+    if let Some(selected) = selected
+        && controller.with(|c| c.is_selected()) != selected
+    {
         controller.with_mut(|c| c.set_selected(selected));
     }
 
     radio_button_inner()
         .modifier(modifier)
         .on_select_shared(on_select)
-        .selected(selected)
+        .selected(selected.unwrap_or(false))
         .size(size)
         .touch_target_size(touch_target_size)
         .stroke_width(stroke_width)

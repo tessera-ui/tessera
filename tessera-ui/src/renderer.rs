@@ -36,7 +36,7 @@ use crate::{
         CursorEventContent, CursorState, GestureState, MOUSE_POINTER_ID, PointerChange,
         PressKeyEventType,
     },
-    dp::SCALE_FACTOR,
+    dp::set_scale_factor,
     focus::{FocusDirection, flush_pending_focus_callbacks},
     keyboard_state::KeyboardState,
     pipeline_context::PipelineContext,
@@ -149,7 +149,7 @@ impl RuntimePendingWork {
 }
 
 #[cfg(feature = "profiling")]
-fn resolve_profiler_output_path(config: &TesseraConfig) -> PathBuf {
+pub(crate) fn resolve_profiler_output_path(config: &TesseraConfig) -> PathBuf {
     if let Ok(path) = std::env::var("TESSERA_PROFILING_OUTPUT")
         && !path.trim().is_empty()
     {
@@ -807,13 +807,13 @@ struct RenderFrameOutcome {
     overlay_clear_pending: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 struct RendererImeBridgeState {
     current_request: Option<ImeRequest>,
     ime_allowed: bool,
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[derive(Clone, Debug, Default, PartialEq)]
 struct RendererImeBridgeUpdate {
     allowed: Option<bool>,
     cursor_area: Option<(PxPosition, PxSize)>,
@@ -943,8 +943,8 @@ impl<F: Fn()> Renderer<F> {
         edge_threshold: f64,
     ) -> bool {
         if let Some(pos) = cursor_position {
-            let x = pos.x.0 as f64;
-            let y = pos.y.0 as f64;
+            let x = pos.x as f64;
+            let y = pos.y as f64;
             x > edge_threshold
                 && x < window_width - edge_threshold
                 && y > edge_threshold
@@ -960,8 +960,8 @@ impl<F: Fn()> Renderer<F> {
         edge_threshold: f64,
     ) -> Option<ResizeDirection> {
         let position = cursor_position?;
-        let x = position.x.0 as f64;
-        let y = position.y.0 as f64;
+        let x = position.x as f64;
+        let y = position.y as f64;
         let width = window_size.width as f64;
         let height = window_size.height as f64;
 
@@ -1153,6 +1153,7 @@ Fps: {:.2}
             )
         });
         flush_pending_focus_callbacks();
+        crate::component_tree::flush_pending_globally_positioned_callbacks();
 
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
@@ -2294,11 +2295,7 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
                 redraw_reasons.push(RedrawReason::TouchInput);
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
-                if let Some(scale_factor_lock) = SCALE_FACTOR.get() {
-                    *scale_factor_lock.write() = scale_factor;
-                } else {
-                    let _ = SCALE_FACTOR.set(RwLock::new(scale_factor));
-                }
+                set_scale_factor(scale_factor);
                 if let Some(app) = self.app.as_ref() {
                     self.update_native_window_shape(app.window());
                 }

@@ -5,8 +5,8 @@ use tessera_components::{
 };
 use tessera_shard::shard;
 use tessera_ui::{
-    Dp, DrawCommand, EntryRegistry, FrameNanosControl, Modifier, PipelineContext, RenderInput,
-    RenderModule, RenderPolicy, State, TesseraPackage,
+    Dp, DrawCommand, EntryRegistry, FrameNanosControl, Modifier, PipelineContext, RenderModule,
+    State, TesseraPackage,
     layout::layout,
     px::{Px, PxPosition, PxRect, PxSize},
     receive_frame_nanos, remember,
@@ -116,7 +116,7 @@ fn raymarch_canvas(modifier: Modifier, time_scale_state: State<f32>) {
     let (camera_forward, camera_right, camera_up) =
         camera_basis_look_at(camera_position, CAMERA_TARGET);
 
-    let policy = RaymarchRenderPolicy {
+    let policy = Raymarch {
         time_seconds,
         mouse: [0.0, 0.0],
         camera_position,
@@ -125,7 +125,7 @@ fn raymarch_canvas(modifier: Modifier, time_scale_state: State<f32>) {
         camera_up,
     };
 
-    layout().modifier(modifier).render_policy(policy);
+    layout().modifier(modifier).draw(policy);
 }
 
 #[derive(Clone, Copy, Default, PartialEq)]
@@ -171,7 +171,7 @@ impl DrawCommand for RaymarchCommand {
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
-struct RaymarchRenderPolicy {
+struct Raymarch {
     time_seconds: f32,
     mouse: [f32; 2],
     camera_position: [f32; 3],
@@ -180,8 +180,13 @@ struct RaymarchRenderPolicy {
     camera_up: [f32; 3],
 }
 
-impl RenderPolicy for RaymarchRenderPolicy {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for Raymarch {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         input
             .metadata_mut()
             .fragment_mut()
@@ -194,6 +199,7 @@ impl RenderPolicy for RaymarchRenderPolicy {
                 camera_up: self.camera_up,
                 opacity: 1.0,
             });
+        content.draw(input);
     }
 }
 
@@ -297,8 +303,8 @@ impl RaymarchPipeline {
         target_size: PxSize,
     ) {
         let values = [
-            position.x.raw() as f32,
-            position.y.raw() as f32,
+            position.x,
+            position.y,
             size.width.raw() as f32,
             size.height.raw() as f32,
             command.mouse[0],

@@ -2,7 +2,6 @@
 
 use std::{
     any::{Any, TypeId},
-    cell::RefCell,
     collections::HashMap,
     hash::{DefaultHasher, Hash, Hasher},
 };
@@ -14,7 +13,10 @@ use crate::{
         ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, LayoutContext,
         measure_node,
     },
-    modifier::{Modifier, OrderedModifierAction, ParentDataMap},
+    modifier::{
+        DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutModifierNode, Modifier,
+        OrderedModifierAction, ParentDataMap,
+    },
     prop::Prop,
     px::PxPosition,
     render_graph::RenderFragment,
@@ -29,106 +31,76 @@ pub(crate) struct ChildMeasure {
     pub consistent: bool,
 }
 
+pub(crate) struct ChildProbe {
+    constraint: Constraint,
+    size: ComputedData,
+}
+
 /// Input for a pure layout policy.
 pub struct LayoutInput<'a> {
     tree: &'a ComponentNodeTree,
     parent_constraint: ParentConstraint<'a>,
     children_ids: &'a [crate::NodeId],
-    metadatas: *mut ComponentNodeMetaDatas,
     layout_ctx: Option<&'a LayoutContext<'a>>,
-    measured_children: RefCell<HashMap<crate::NodeId, ChildMeasure>>,
+    measured_children: HashMap<crate::NodeId, ChildMeasure>,
+    probes: HashMap<crate::NodeId, ChildProbe>,
 }
 
 /// A direct child layout node available during a measure pass.
 #[derive(Clone, Copy)]
-pub struct LayoutChild<'a> {
+pub struct LayoutChild {
     node_id: crate::NodeId,
     instance_key: u64,
-    tree: &'a ComponentNodeTree,
-    metadatas: *mut ComponentNodeMetaDatas,
-    layout_ctx: Option<&'a LayoutContext<'a>>,
-    measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
+    index: usize,
 }
 
-impl PartialEq for LayoutChild<'_> {
+impl PartialEq for LayoutChild {
     fn eq(&self, other: &Self) -> bool {
         self.node_id == other.node_id
     }
 }
 
-impl Eq for LayoutChild<'_> {}
+impl Eq for LayoutChild {}
 
-impl Hash for LayoutChild<'_> {
+impl Hash for LayoutChild {
     fn hash<H: Hasher>(&self, state: &mut H) {
         self.node_id.hash(state);
     }
 }
 
-impl<'a> LayoutChild<'a> {
+impl LayoutChild {
     /// Measures this child under the given constraint.
-    pub fn measure(&self, constraint: &Constraint) -> Result<MeasuredChild, MeasurementError> {
-        // SAFETY: Layout measurement is single-threaded. `LayoutChild` handles
-        // are created from a unique metadata borrow that outlives the measure
-        // pass and are only used during that pass.
-        let metadatas = unsafe { &mut *self.metadatas };
-        let size = measure_node(
-            self.node_id,
-            constraint,
-            self.tree,
-            metadatas,
-            self.layout_ctx,
-        )?;
-        let mut measured_children = self.measured_children.borrow_mut();
-        if let Some(entry) = measured_children.get_mut(&self.node_id) {
-            let consistent =
-                entry.consistent && entry.constraint == *constraint && entry.size == size;
-            entry.constraint = *constraint;
-            entry.size = size;
-            entry.consistent = consistent;
-        } else {
-            measured_children.insert(
-                self.node_id,
-                ChildMeasure {
-                    constraint: *constraint,
-                    size,
-                    consistent: true,
-                },
-            );
-        }
-        Ok(MeasuredChild {
-            instance_key: self.instance_key,
-            width: size.width,
-            height: size.height,
-        })
-    }
-
-    /// Measures this child without recording it for layout cache keys.
-    pub fn measure_untracked(
+    ///
+    /// The child is borrowed by index from the current measure scope so the
+    /// metadata map stays uniquely borrowed for the duration of the call.
+    pub fn measure(
         &self,
+        scope: &mut MeasureScope<'_>,
         constraint: &Constraint,
     ) -> Result<MeasuredChild, MeasurementError> {
-        // SAFETY: See `LayoutChild::measure`.
-        let metadatas = unsafe { &mut *self.metadatas };
-        let size = measure_node(
-            self.node_id,
-            constraint,
-            self.tree,
-            metadatas,
-            self.layout_ctx,
-        )?;
-        Ok(MeasuredChild {
-            instance_key: self.instance_key,
-            width: size.width,
-            height: size.height,
-        })
+        scope.measure_child(self.index, constraint, true)
+    }
+
+    /// Probes this child under the given constraint.
+    ///
+    /// A later probe or measure of the same child under the same constraint
+    /// reuses this result and does not call into the child again. A different
+    /// constraint is measured normally; only the final [`Self::measure`] is
+    /// recorded for the parent snapshot cache.
+    pub fn probe(
+        &self,
+        scope: &mut MeasureScope<'_>,
+        constraint: &Constraint,
+    ) -> Result<MeasuredChild, MeasurementError> {
+        scope.measure_child(self.index, constraint, false)
     }
 
     /// Reads a typed parent-data payload from this direct child layout node.
-    pub fn parent_data<T>(&self) -> Option<T>
+    pub fn parent_data<T>(&self, scope: &MeasureScope<'_>) -> Option<T>
     where
         T: Clone + Send + Sync + 'static,
     {
-        let node = self.tree.get(self.node_id)?;
+        let node = scope.tree.get(self.node_id)?;
         let mut data: ParentDataMap = HashMap::default();
         for action in node.get().modifier.ordered_actions() {
             if let OrderedModifierAction::ParentData(node) = action {
@@ -207,9 +179,10 @@ impl<'a> PlacementChild<'a> {
 /// Shared measurement helpers available during a layout pass.
 pub struct MeasureScope<'a> {
     tree: &'a ComponentNodeTree,
-    metadatas: *mut ComponentNodeMetaDatas,
+    metadatas: &'a mut ComponentNodeMetaDatas,
     layout_ctx: Option<&'a LayoutContext<'a>>,
-    measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
+    measured_children: &'a mut HashMap<crate::NodeId, ChildMeasure>,
+    probes: &'a mut HashMap<crate::NodeId, ChildProbe>,
     parent_constraint: ParentConstraint<'a>,
     children_ids: &'a [crate::NodeId],
 }
@@ -217,9 +190,10 @@ pub struct MeasureScope<'a> {
 impl<'a> MeasureScope<'a> {
     pub(crate) fn new(
         tree: &'a ComponentNodeTree,
-        metadatas: *mut ComponentNodeMetaDatas,
+        metadatas: &'a mut ComponentNodeMetaDatas,
         layout_ctx: Option<&'a LayoutContext<'a>>,
-        measured_children: &'a RefCell<HashMap<crate::NodeId, ChildMeasure>>,
+        measured_children: &'a mut HashMap<crate::NodeId, ChildMeasure>,
+        probes: &'a mut HashMap<crate::NodeId, ChildProbe>,
         parent_constraint: ParentConstraint<'a>,
         children_ids: &'a [crate::NodeId],
     ) -> Self {
@@ -228,6 +202,7 @@ impl<'a> MeasureScope<'a> {
             metadatas,
             layout_ctx,
             measured_children,
+            probes,
             parent_constraint,
             children_ids,
         }
@@ -238,11 +213,13 @@ impl<'a> MeasureScope<'a> {
         self.parent_constraint
     }
 
-    /// Returns the direct child layout nodes of the current node.
-    pub fn children(&self) -> Vec<LayoutChild<'_>> {
+    /// Returns copyable child identities. Measurement borrows this scope by
+    /// child index so metadata stays uniquely borrowed for each call.
+    pub fn children(&self) -> Vec<LayoutChild> {
         self.children_ids
             .iter()
-            .map(|&node_id| {
+            .enumerate()
+            .map(|(index, &node_id)| {
                 let instance_key = self
                     .tree
                     .get(node_id)
@@ -252,13 +229,97 @@ impl<'a> MeasureScope<'a> {
                 LayoutChild {
                     node_id,
                     instance_key,
-                    tree: self.tree,
-                    metadatas: self.metadatas,
-                    layout_ctx: self.layout_ctx,
-                    measured_children: self.measured_children,
+                    index,
                 }
             })
             .collect()
+    }
+
+    pub(crate) fn measure_at(
+        &mut self,
+        index: usize,
+        constraint: &Constraint,
+    ) -> Result<MeasuredChild, MeasurementError> {
+        self.measure_child(index, constraint, true)
+    }
+
+    fn measure_child(
+        &mut self,
+        index: usize,
+        constraint: &Constraint,
+        record: bool,
+    ) -> Result<MeasuredChild, MeasurementError> {
+        let node_id = *self
+            .children_ids
+            .get(index)
+            .expect("Layout child index must refer to a direct child");
+        let instance_key = self
+            .tree
+            .get(node_id)
+            .expect("Direct child layout node must exist")
+            .get()
+            .instance_key;
+
+        if let Some(probe) = self.probes.get(&node_id) {
+            if probe.constraint == *constraint {
+                let size = probe.size;
+                if record {
+                    self.record_measure(node_id, *constraint, size);
+                }
+                return Ok(MeasuredChild {
+                    instance_key,
+                    width: size.width,
+                    height: size.height,
+                });
+            }
+        }
+
+        let size = measure_node(
+            node_id,
+            constraint,
+            self.tree,
+            self.metadatas,
+            self.layout_ctx,
+        )?;
+        self.probes.insert(
+            node_id,
+            ChildProbe {
+                constraint: *constraint,
+                size,
+            },
+        );
+        if record {
+            self.record_measure(node_id, *constraint, size);
+        }
+        Ok(MeasuredChild {
+            instance_key,
+            width: size.width,
+            height: size.height,
+        })
+    }
+
+    fn record_measure(
+        &mut self,
+        node_id: crate::NodeId,
+        constraint: Constraint,
+        size: ComputedData,
+    ) {
+        if let Some(entry) = self.measured_children.get_mut(&node_id) {
+            let consistent =
+                entry.consistent && entry.constraint == constraint && entry.size == size;
+            entry.constraint = constraint;
+            entry.size = size;
+            entry.consistent = consistent;
+        } else {
+            self.measured_children.insert(
+                node_id,
+                ChildMeasure {
+                    constraint,
+                    size,
+                    consistent: true,
+                },
+            );
+        }
     }
 }
 
@@ -327,16 +388,15 @@ impl<'a> LayoutInput<'a> {
         tree: &'a ComponentNodeTree,
         parent_constraint: ParentConstraint<'a>,
         children_ids: &'a [crate::NodeId],
-        metadatas: *mut ComponentNodeMetaDatas,
         layout_ctx: Option<&'a LayoutContext<'a>>,
     ) -> Self {
         Self {
             tree,
             parent_constraint,
             children_ids,
-            metadatas,
             layout_ctx,
-            measured_children: RefCell::new(HashMap::new()),
+            measured_children: HashMap::new(),
+            probes: HashMap::new(),
         }
     }
 
@@ -345,14 +405,16 @@ impl<'a> LayoutInput<'a> {
         self.parent_constraint
     }
 
-    pub(crate) fn take_measured_children(&self) -> HashMap<crate::NodeId, ChildMeasure> {
-        std::mem::take(&mut *self.measured_children.borrow_mut())
+    pub(crate) fn take_measured_children(&mut self) -> HashMap<crate::NodeId, ChildMeasure> {
+        std::mem::take(&mut self.measured_children)
     }
 
-    pub(crate) fn extend_measured_children(&self, children: HashMap<crate::NodeId, ChildMeasure>) {
-        let mut measured_children = self.measured_children.borrow_mut();
+    pub(crate) fn extend_measured_children(
+        &mut self,
+        children: HashMap<crate::NodeId, ChildMeasure>,
+    ) {
         for (child_id, measurement) in children {
-            if let Some(entry) = measured_children.get_mut(&child_id) {
+            if let Some(entry) = self.measured_children.get_mut(&child_id) {
                 let consistent = entry.consistent
                     && entry.constraint == measurement.constraint
                     && entry.size == measurement.size
@@ -361,27 +423,32 @@ impl<'a> LayoutInput<'a> {
                 entry.size = measurement.size;
                 entry.consistent = consistent;
             } else {
-                measured_children.insert(child_id, measurement);
+                self.measured_children.insert(child_id, measurement);
             }
         }
     }
 
-    pub(crate) fn measure_scope(&self) -> MeasureScope<'_> {
+    pub(crate) fn measure_scope<'s>(
+        &'s mut self,
+        metadatas: &'s mut ComponentNodeMetaDatas,
+    ) -> MeasureScope<'s> {
         MeasureScope::new(
             self.tree,
-            self.metadatas,
+            metadatas,
             self.layout_ctx,
-            &self.measured_children,
+            &mut self.measured_children,
+            &mut self.probes,
             self.parent_constraint,
             self.children_ids,
         )
     }
 
     /// Returns the direct child layout nodes of the current node.
-    pub fn children(&self) -> Vec<LayoutChild<'_>> {
+    pub fn children(&self) -> Vec<LayoutChild> {
         self.children_ids
             .iter()
-            .map(|&node_id| {
+            .enumerate()
+            .map(|(index, &node_id)| {
                 let instance_key = self
                     .tree
                     .get(node_id)
@@ -391,10 +458,7 @@ impl<'a> LayoutInput<'a> {
                 LayoutChild {
                     node_id,
                     instance_key,
-                    tree: self.tree,
-                    metadatas: self.metadatas,
-                    layout_ctx: self.layout_ctx,
-                    measured_children: &self.measured_children,
+                    index,
                 }
             })
             .collect()
@@ -424,7 +488,12 @@ impl LayoutResult {
     where
         T: LayoutPlacementTarget,
     {
-        self.placements.push((child.instance_key(), position));
+        self.place(child.instance_key(), position);
+    }
+
+    /// Places a direct child by its `instance_key`.
+    pub fn place(&mut self, instance_key: u64, position: PxPosition) {
+        self.placements.push((instance_key, position));
     }
 
     /// Replaces the computed size while preserving recorded placements.
@@ -434,6 +503,63 @@ impl LayoutResult {
     }
 
     /// Consumes the result and returns only the recorded placements.
+    pub fn into_placements(self) -> Vec<(u64, PxPosition)> {
+        self.placements
+    }
+
+    /// Consumes the result and wraps the recorded placements.
+    pub fn into_placement_result(self) -> PlacementResult {
+        PlacementResult {
+            placements: self.placements,
+        }
+    }
+}
+
+/// Child placements produced by a measure pass, relative to the node origin.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct PlacementResult {
+    placements: Vec<(u64, PxPosition)>,
+}
+
+impl PlacementResult {
+    /// Creates an empty placement result.
+    pub const fn new() -> Self {
+        Self {
+            placements: Vec::new(),
+        }
+    }
+
+    /// Wraps an existing list of placements.
+    pub fn from_placements(placements: Vec<(u64, PxPosition)>) -> Self {
+        Self { placements }
+    }
+
+    /// Records a placement for a direct child `instance_key`.
+    pub fn place(&mut self, instance_key: u64, position: PxPosition) {
+        self.placements.push((instance_key, position));
+    }
+
+    /// Returns whether nothing was placed.
+    pub fn is_empty(&self) -> bool {
+        self.placements.is_empty()
+    }
+
+    /// Returns the number of recorded placements.
+    pub fn len(&self) -> usize {
+        self.placements.len()
+    }
+
+    /// Borrows the recorded placements.
+    pub fn items(&self) -> &[(u64, PxPosition)] {
+        &self.placements
+    }
+
+    /// Iterates over the recorded placements.
+    pub fn iter(&self) -> std::slice::Iter<'_, (u64, PxPosition)> {
+        self.placements.iter()
+    }
+
+    /// Consumes the result and returns the recorded placements.
     pub fn into_placements(self) -> Vec<(u64, PxPosition)> {
         self.placements
     }
@@ -451,7 +577,7 @@ pub trait LayoutPlacementTarget: Copy {
     fn instance_key(&self) -> u64;
 }
 
-impl LayoutPlacementTarget for LayoutChild<'_> {
+impl LayoutPlacementTarget for LayoutChild {
     fn instance_key(&self) -> u64 {
         self.instance_key()
     }
@@ -531,243 +657,216 @@ impl RenderMetadataMut<'_> {
     }
 }
 
-/// Pure layout policy for measuring and placing child nodes.
-pub trait LayoutPolicy: Send + Sync + Clone + PartialEq + 'static {
-    /// Computes layout for the current node.
-    fn measure(&self, scope: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
-
-    /// Compares measurement-relevant state for layout dirty tracking.
-    fn measure_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-
-    /// Compares placement-relevant state for layout dirty tracking.
-    fn placement_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-
-    /// Recomputes child placements using cached child measurements.
-    ///
-    /// Returns placements when the placement pass was handled without
-    /// remeasurement.
-    fn place_children(&self, _scope: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
-        None
-    }
-}
-
-/// Render policy for recording draw and compute commands for the current node.
-pub trait RenderPolicy: Send + Sync + Clone + PartialEq + 'static {
-    /// Records draw and compute commands for the current node.
-    fn record(&self, _input: &mut RenderInput<'_>) {}
-}
-
-/// Type-erased layout policy used by the runtime.
+/// Type-erased layout node used by the runtime.
 #[doc(hidden)]
-pub trait LayoutPolicyDyn: Send + Sync {
+pub trait LayoutModifierDyn: Send + Sync {
     /// Returns a typed reference for downcasting.
     fn as_any(&self) -> &dyn Any;
-    /// Measures layout using a type-erased policy.
-    fn measure_dyn(&self, scope: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
+    /// Measures layout using a type-erased node.
+    fn measure_dyn(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError>;
     /// Recomputes child placements using cached child measurements.
-    fn place_children_dyn(&self, scope: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>>;
-    /// Compares two type-erased policies for equality.
-    fn dyn_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Compares two type-erased policies for measurement-relevant equality.
-    fn dyn_measure_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Compares two type-erased policies for placement-relevant equality.
-    fn dyn_placement_eq(&self, other: &dyn LayoutPolicyDyn) -> bool;
-    /// Clones the type-erased policy.
-    fn clone_box(&self) -> Box<dyn LayoutPolicyDyn>;
+    fn place_children_dyn(
+        &self,
+        scope: &PlacementScope<'_>,
+        inner: &PlacementResult,
+    ) -> Option<PlacementResult>;
+    /// Compares two type-erased nodes for equality.
+    fn dyn_eq(&self, other: &dyn LayoutModifierDyn) -> bool;
+    /// Compares two type-erased nodes for measurement-relevant equality.
+    fn dyn_measure_eq(&self, other: &dyn LayoutModifierDyn) -> bool;
+    /// Compares two type-erased nodes for placement-relevant equality.
+    fn dyn_placement_eq(&self, other: &dyn LayoutModifierDyn) -> bool;
+    /// Clones the type-erased node.
+    fn clone_box(&self) -> Box<dyn LayoutModifierDyn>;
 }
 
-impl<T> LayoutPolicyDyn for T
+impl<T> LayoutModifierDyn for T
 where
-    T: LayoutPolicy,
+    T: LayoutModifierNode + Clone + PartialEq,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn measure_dyn(&self, scope: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        LayoutPolicy::measure(self, scope)
+    fn measure_dyn(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        LayoutModifierNode::measure(self, scope)
     }
 
-    fn place_children_dyn(&self, scope: &PlacementScope<'_>) -> Option<Vec<(u64, PxPosition)>> {
-        LayoutPolicy::place_children(self, scope)
+    fn place_children_dyn(
+        &self,
+        scope: &PlacementScope<'_>,
+        inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        LayoutModifierNode::place_children(self, scope, inner)
     }
 
-    fn dyn_eq(&self, other: &dyn LayoutPolicyDyn) -> bool {
+    fn dyn_eq(&self, other: &dyn LayoutModifierDyn) -> bool {
         other
             .as_any()
             .downcast_ref::<T>()
             .is_some_and(|other| self == other)
     }
 
-    fn dyn_measure_eq(&self, other: &dyn LayoutPolicyDyn) -> bool {
+    fn dyn_measure_eq(&self, other: &dyn LayoutModifierDyn) -> bool {
         other
             .as_any()
             .downcast_ref::<T>()
-            .is_some_and(|other| LayoutPolicy::measure_eq(self, other))
+            .is_some_and(|other| LayoutModifierNode::measure_eq(self, other))
     }
 
-    fn dyn_placement_eq(&self, other: &dyn LayoutPolicyDyn) -> bool {
+    fn dyn_placement_eq(&self, other: &dyn LayoutModifierDyn) -> bool {
         other
             .as_any()
             .downcast_ref::<T>()
-            .is_some_and(|other| LayoutPolicy::placement_eq(self, other))
+            .is_some_and(|other| LayoutModifierNode::placement_eq(self, other))
     }
 
-    fn clone_box(&self) -> Box<dyn LayoutPolicyDyn> {
+    fn clone_box(&self) -> Box<dyn LayoutModifierDyn> {
         Box::new(self.clone())
     }
 }
 
-/// Type-erased render policy used by the runtime.
-#[doc(hidden)]
-pub trait RenderPolicyDyn: Send + Sync {
-    /// Returns a typed reference for downcasting.
-    fn as_any(&self) -> &dyn Any;
-    /// Records render commands using a type-erased policy.
-    fn record_dyn(&self, input: &mut RenderInput<'_>);
-    /// Compares two type-erased policies for equality.
-    fn dyn_eq(&self, other: &dyn RenderPolicyDyn) -> bool;
-    /// Clones the type-erased policy.
-    fn clone_box(&self) -> Box<dyn RenderPolicyDyn>;
+impl Clone for Box<dyn LayoutModifierDyn> {
+    fn clone(&self) -> Self {
+        self.clone_box()
+    }
 }
 
-impl<T> RenderPolicyDyn for T
+/// Type-erased layout node handle consumed by [`layout`].
+///
+/// Most callers do not construct this type directly. Instead, pass any
+/// [`LayoutModifierNode`] to the `policy(...)` builder method and rely on the
+/// `From<T>` conversion.
+#[derive(Clone)]
+pub struct LayoutModifierHandle {
+    node: Box<dyn LayoutModifierDyn>,
+}
+
+impl LayoutModifierHandle {
+    pub(crate) fn into_box(self) -> Box<dyn LayoutModifierDyn> {
+        self.node
+    }
+}
+
+impl Default for LayoutModifierHandle {
+    fn default() -> Self {
+        Self {
+            node: Box::new(DefaultLayoutNode),
+        }
+    }
+}
+
+impl PartialEq for LayoutModifierHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.node.dyn_eq(other.node.as_ref())
+    }
+}
+
+impl Prop for LayoutModifierHandle {
+    fn prop_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl<S> From<S> for LayoutModifierHandle
 where
-    T: RenderPolicy,
+    S: LayoutModifierNode + Clone + PartialEq,
+{
+    fn from(node: S) -> Self {
+        Self {
+            node: Box::new(node),
+        }
+    }
+}
+
+/// Type-erased draw modifier handle consumed by [`layout`].
+///
+/// Most callers do not construct this type directly. Instead, pass any
+/// [`DrawModifierNode`] to the `draw(...)` builder method and rely on the
+/// `From<T>` conversion.
+#[derive(Clone)]
+pub struct DrawModifierHandle {
+    node: Box<dyn ErasedDrawModifierNode>,
+}
+
+impl DrawModifierHandle {
+    pub(crate) fn into_node(self) -> Box<dyn DrawModifierNode> {
+        self.node.into_node()
+    }
+}
+
+impl Default for DrawModifierHandle {
+    fn default() -> Self {
+        Self {
+            node: Box::new(NoopDrawModifier),
+        }
+    }
+}
+
+impl PartialEq for DrawModifierHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.node.dyn_eq(other.node.as_ref())
+    }
+}
+
+impl Prop for DrawModifierHandle {
+    fn prop_eq(&self, other: &Self) -> bool {
+        self == other
+    }
+}
+
+impl<N> From<N> for DrawModifierHandle
+where
+    N: DrawModifierNode + Clone + PartialEq,
+{
+    fn from(node: N) -> Self {
+        Self {
+            node: Box::new(node),
+        }
+    }
+}
+
+/// Type-erased draw modifier node used by [`DrawModifierHandle`].
+trait ErasedDrawModifierNode: Send + Sync {
+    fn as_any(&self) -> &dyn Any;
+    fn into_node(self: Box<Self>) -> Box<dyn DrawModifierNode>;
+    fn dyn_eq(&self, other: &dyn ErasedDrawModifierNode) -> bool;
+    fn clone_box(&self) -> Box<dyn ErasedDrawModifierNode>;
+}
+
+impl<N> ErasedDrawModifierNode for N
+where
+    N: DrawModifierNode + Clone + PartialEq,
 {
     fn as_any(&self) -> &dyn Any {
         self
     }
 
-    fn record_dyn(&self, input: &mut RenderInput<'_>) {
-        RenderPolicy::record(self, input);
+    fn into_node(self: Box<Self>) -> Box<dyn DrawModifierNode> {
+        self
     }
 
-    fn dyn_eq(&self, other: &dyn RenderPolicyDyn) -> bool {
+    fn dyn_eq(&self, other: &dyn ErasedDrawModifierNode) -> bool {
         other
             .as_any()
-            .downcast_ref::<T>()
+            .downcast_ref::<N>()
             .is_some_and(|other| self == other)
     }
 
-    fn clone_box(&self) -> Box<dyn RenderPolicyDyn> {
+    fn clone_box(&self) -> Box<dyn ErasedDrawModifierNode> {
         Box::new(self.clone())
     }
 }
 
-impl Clone for Box<dyn LayoutPolicyDyn> {
+impl Clone for Box<dyn ErasedDrawModifierNode> {
     fn clone(&self) -> Self {
         self.clone_box()
-    }
-}
-
-impl Clone for Box<dyn RenderPolicyDyn> {
-    fn clone(&self) -> Self {
-        self.clone_box()
-    }
-}
-
-/// Type-erased layout policy handle consumed by [`layout`].
-///
-/// Most callers do not construct this type directly. Instead, pass any
-/// [`LayoutPolicy`] to the `layout_policy(...)` builder method and rely on the
-/// `From<T>` conversion.
-#[derive(Clone)]
-pub struct LayoutPolicyHandle {
-    policy: Box<dyn LayoutPolicyDyn>,
-}
-
-impl LayoutPolicyHandle {
-    pub(crate) fn into_box(self) -> Box<dyn LayoutPolicyDyn> {
-        self.policy
-    }
-}
-
-impl Default for LayoutPolicyHandle {
-    fn default() -> Self {
-        Self {
-            policy: Box::new(DefaultLayoutPolicy),
-        }
-    }
-}
-
-impl PartialEq for LayoutPolicyHandle {
-    fn eq(&self, other: &Self) -> bool {
-        self.policy.dyn_eq(other.policy.as_ref())
-    }
-}
-
-impl Prop for LayoutPolicyHandle {
-    fn prop_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl<S> From<S> for LayoutPolicyHandle
-where
-    S: LayoutPolicy,
-{
-    fn from(policy: S) -> Self {
-        Self {
-            policy: Box::new(policy),
-        }
-    }
-}
-
-/// Type-erased render policy handle consumed by [`layout`].
-///
-/// Most callers do not construct this type directly. Instead, pass any
-/// [`RenderPolicy`] to the `render_policy(...)` builder method and rely on the
-/// `From<T>` conversion.
-#[derive(Clone)]
-pub struct RenderPolicyHandle {
-    policy: Box<dyn RenderPolicyDyn>,
-}
-
-impl RenderPolicyHandle {
-    pub(crate) fn into_box(self) -> Box<dyn RenderPolicyDyn> {
-        self.policy
-    }
-}
-
-impl Default for RenderPolicyHandle {
-    fn default() -> Self {
-        Self {
-            policy: Box::new(NoopRenderPolicy),
-        }
-    }
-}
-
-impl PartialEq for RenderPolicyHandle {
-    fn eq(&self, other: &Self) -> bool {
-        self.policy.dyn_eq(other.policy.as_ref())
-    }
-}
-
-impl Prop for RenderPolicyHandle {
-    fn prop_eq(&self, other: &Self) -> bool {
-        self == other
-    }
-}
-
-impl<S> From<S> for RenderPolicyHandle
-where
-    S: RenderPolicy,
-{
-    fn from(policy: S) -> Self {
-        Self {
-            policy: Box::new(policy),
-        }
     }
 }
 
 /// # layout
 ///
-/// Emit an explicit layout node with a layout policy, render policy, modifier
+/// Emit an explicit layout node with a layout policy, draw modifier, modifier
 /// chain, and optional child slot.
 ///
 /// ## Usage
@@ -777,10 +876,10 @@ where
 ///
 /// ## Parameters
 ///
-/// - `layout_policy` - pure layout policy used for measuring and placing the
-///   emitted layout node, defaulting to [`DefaultLayoutPolicy`]
-/// - `render_policy` - render policy used to record draw and compute commands
-///   for the emitted layout node, defaulting to [`NoopRenderPolicy`]
+/// - `policy` - the unified layout node used for measuring and placing the
+///   emitted layout node, defaulting to [`DefaultLayoutNode`]
+/// - `draw` - draw modifier used to record draw and compute commands for the
+///   emitted layout node, defaulting to [`NoopDrawModifier`]
 /// - `modifier` - node-local modifier chain attached before child content is
 ///   emitted, defaulting to an empty [`Modifier`]
 /// - `child` - optional child slot rendered as the emitted node's content
@@ -789,28 +888,28 @@ where
 /// ## Examples
 /// ```
 /// use tessera_ui::{
-///     Modifier, NoopRenderPolicy, RenderSlot,
-///     layout::{DefaultLayoutPolicy, layout},
+///     Modifier, NoopDrawModifier, RenderSlot,
+///     layout::{DefaultLayoutNode, layout},
 /// };
 ///
 /// #[tessera_ui::tessera]
 /// fn primitive_example(modifier: Modifier, child: RenderSlot) {
 ///     layout()
-///         .layout_policy(DefaultLayoutPolicy)
-///         .render_policy(NoopRenderPolicy)
+///         .policy(DefaultLayoutNode)
+///         .draw(NoopDrawModifier)
 ///         .modifier(modifier)
 ///         .child(move || child.render());
 /// }
 /// ```
 #[tessera(crate)]
 pub fn layout(
-    #[prop(into)] layout_policy: Option<LayoutPolicyHandle>,
-    #[prop(into)] render_policy: Option<RenderPolicyHandle>,
+    #[prop(into)] policy: Option<LayoutModifierHandle>,
+    #[prop(into)] draw: Option<DrawModifierHandle>,
     modifier: Option<Modifier>,
     child: Option<RenderSlot>,
 ) {
-    let layout_policy = layout_policy.unwrap_or(LayoutPolicyHandle::from(DefaultLayoutPolicy));
-    let render_policy = render_policy.unwrap_or(RenderPolicyHandle::from(NoopRenderPolicy));
+    let policy = policy.unwrap_or(LayoutModifierHandle::from(DefaultLayoutNode));
+    let draw = draw.unwrap_or(DrawModifierHandle::from(NoopDrawModifier));
     let modifier = modifier.unwrap_or_default();
     let layout_node_component_type_id = layout_node_component_type_id();
     let layout_node_id =
@@ -837,8 +936,8 @@ pub fn layout(
     crate::__private::set_current_node_identity(layout_instance_key, layout_instance_logic_id);
     modifier.attach();
     TesseraRuntime::with_mut(|runtime| {
-        runtime.set_current_layout_policy_boxed(layout_policy.into_box());
-        runtime.set_current_render_policy_boxed(render_policy.into_box());
+        runtime.set_current_layout_node_boxed(policy.into_box());
+        runtime.set_current_draw_node_boxed(draw.into_node());
     });
     if let Some(child) = child {
         child.render();
@@ -851,15 +950,15 @@ fn layout_node_component_type_id() -> u64 {
     hasher.finish()
 }
 
-/// Default layout policy that stacks children at (0,0) and uses the bounding
+/// Default layout node that stacks children at (0,0) and uses the bounding
 /// size.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct DefaultLayoutPolicy;
+pub struct DefaultLayoutNode;
 
-impl LayoutPolicy for DefaultLayoutPolicy {
-    fn measure(&self, scope: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let children = scope.children();
-        if children.is_empty() {
+impl LayoutModifierNode for DefaultLayoutNode {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let child_count = scope.children().len();
+        if child_count == 0 {
             return Ok(LayoutResult::new(ComputedData::min_from_constraint(
                 scope.parent_constraint().as_ref(),
             )));
@@ -868,8 +967,9 @@ impl LayoutPolicy for DefaultLayoutPolicy {
         let mut result = LayoutResult::new(ComputedData::ZERO);
         let mut final_width = Px(0);
         let mut final_height = Px(0);
-        for child in children {
-            let measurement = child.measure(scope.parent_constraint().as_ref())?;
+        let constraint = *scope.parent_constraint().as_ref();
+        for index in 0..child_count {
+            let measurement = scope.measure_at(index, &constraint)?;
             result.place_child(measurement, PxPosition::ZERO);
             let size = measurement.size();
             final_width = final_width.max(size.width);
@@ -882,10 +982,28 @@ impl LayoutPolicy for DefaultLayoutPolicy {
         };
         Ok(result)
     }
+
+    fn place_children(
+        &self,
+        scope: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        // Children are stacked at the origin, so placements only depend on the
+        // cached child identities, not on their measured sizes.
+        let mut result = PlacementResult::new();
+        for child in scope.children() {
+            result.place(child.instance_key(), PxPosition::ZERO);
+        }
+        Some(result)
+    }
 }
 
-/// Default render policy that emits no draw commands.
+/// Default draw modifier that records the wrapped content unchanged.
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
-pub struct NoopRenderPolicy;
+pub struct NoopDrawModifier;
 
-impl RenderPolicy for NoopRenderPolicy {}
+impl DrawModifierNode for NoopDrawModifier {
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
+        content.draw(ctx.render_input);
+    }
+}

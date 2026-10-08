@@ -347,11 +347,12 @@ pub fn pull_refresh_indicator(
 /// use tessera_components::theme::{MaterialTheme, material_theme};
 /// use tessera_components::{
 ///     column::column,
+///     modifier::ModifierExt as _,
 ///     pull_refresh::{PullRefreshController, pull_refresh},
-///     scrollable::scrollable,
+///     scrollable::ScrollableController,
 ///     text::text,
 /// };
-/// use tessera_ui::{remember, tessera};
+/// use tessera_ui::{Modifier, layout::layout, remember, tessera};
 ///
 /// #[tessera]
 /// fn demo() {
@@ -359,16 +360,19 @@ pub fn pull_refresh_indicator(
 ///         .theme(|| MaterialTheme::default())
 ///         .child(|| {
 ///             let refresh_controller = remember(PullRefreshController::new);
+///             let scroll = remember(ScrollableController::new);
 ///             pull_refresh()
 ///                 .on_refresh(|| {})
 ///                 .refreshing(false)
 ///                 .controller(refresh_controller)
-///                 .child(|| {
-///                     scrollable().child(|| {
-///                         column().children(|| {
-///                             text().content("Pull down to refresh");
+///                 .child(move || {
+///                     layout()
+///                         .modifier(Modifier::new().vertical_scroll(scroll))
+///                         .child(move || {
+///                             column().children(|| {
+///                                 text().content("Pull down to refresh");
+///                             });
 ///                         });
-///                     });
 ///                 });
 ///             assert!(!refresh_controller.with(|s| s.refreshing()));
 ///         });

@@ -98,7 +98,7 @@ pub struct TesseraConfig {
 pub struct AssetsConfig {
     /// Asset directory relative to the package root. Defaults to `assets`.
     pub dir: Option<String>,
-    /// Tree-shaking rules for excluding matched assets.
+    /// Tree-shaking rules for retaining matched platform assets.
     pub tree_shaking: Option<AssetsTreeShakingConfig>,
 }
 
@@ -114,7 +114,8 @@ impl AssetsConfig {
 /// Tree-shaking rules applied during asset discovery.
 #[derive(Debug, Clone, Deserialize, Default)]
 pub struct AssetsTreeShakingConfig {
-    /// Patterns of asset paths to exclude from the generated bundle.
+    /// Patterns of asset paths to keep even when platform tree shaking finds no
+    /// references.
     #[serde(default)]
     pub exclude: Vec<String>,
 }
@@ -496,6 +497,7 @@ fn is_keyword(value: &str) -> bool {
             | "false"
             | "fn"
             | "for"
+            | "gen"
             | "if"
             | "impl"
             | "in"
@@ -537,4 +539,34 @@ fn is_keyword(value: &str) -> bool {
             | "yield"
             | "try"
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn module_names_escape_rust_2024_keywords() {
+        for keyword in ["gen", "async", "await", "self", "type", "try"] {
+            assert_eq!(mangle_module_name(keyword), format!("{keyword}_"));
+        }
+        assert_eq!(mangle_module_name("images"), "images");
+    }
+
+    #[test]
+    fn generated_assets_accept_keyword_directories() {
+        let entries = [AssetEntry {
+            absolute_path: PathBuf::from("assets/gen/icon.png"),
+            relative_path: "gen/icon.png".into(),
+            platform_path: "tessera/test/0.1.0/gen/icon.png".into(),
+            module_segments: vec![("gen".into(), mangle_module_name("gen"))],
+            const_name: mangle_file_name("icon.png"),
+        }];
+        for backend in [AssetBackend::Embed, AssetBackend::Platform] {
+            let generated = generate_asset_file(&entries, backend).expect("valid asset bindings");
+            assert!(generated.contains("pub mod gen_"));
+            assert!(generated.contains("pub const ICON_PNG"));
+            syn::parse_file(&generated).expect("generated bindings must be valid Rust");
+        }
+    }
 }

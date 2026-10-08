@@ -175,3 +175,25 @@ fn mark_gradlew_executable_with_git(out_path: &Path) {
         .current_dir(root_path)
         .status();
 }
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn plugin_templates_match_the_app_ui_requirement() {
+        let app: toml::Value = toml::from_str(include_str!("../templates/basic/Cargo.toml.hbs"))
+            .expect("valid app template manifest");
+        let requirement = app["dependencies"]["tessera-ui"]
+            .as_str()
+            .expect("app UI requirement");
+        for source in [
+            include_str!("../templates/plugin/basic/Cargo.toml.hbs"),
+            include_str!("../templates/plugin/android/Cargo.toml.hbs"),
+        ] {
+            let manifest: toml::Value = toml::from_str(source).expect("valid plugin manifest");
+            assert_eq!(
+                manifest["dependencies"]["tessera-ui"].as_str(),
+                Some(requirement)
+            );
+        }
+    }
+}

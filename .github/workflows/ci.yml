@@ -30,11 +30,24 @@ jobs:
       - name: Check all targets
         run: cargo +stable check --workspace --all-targets --verbose
       - name: Run tests
-        run: cargo +stable test --workspace --verbose
+        run: cargo +stable test --workspace --lib --bins --tests --verbose
+      - name: Run documentation tests
+        run: cargo +stable test --workspace --doc --verbose
       - name: Install rust-script
         run: cargo install rust-script
+      - name: Test profiler script
+        run: rust-script --test scripts/analyze-profiler.rs
       - name: Check formatting
-        run: rust-script scripts/check-imports.rs --check .
+        run: >-
+          rust-script scripts/check-imports.rs --check
+          cargo-tessera example tessera-ui tessera-components tessera-foundation
+          tessera-macros tessera-shard tessera-platform tessera-build tessera-mobile
+      - name: Check Rust formatting
+        run: >-
+          cargo +nightly fmt
+          -p cargo-tessera -p example -p tessera-ui -p tessera-components
+          -p tessera-foundation -p tessera-macros -p tessera-shard
+          -p tessera-platform -p tessera-build -p tessera-mobile -- --check
 
   check_macos:
     name: Check macOS

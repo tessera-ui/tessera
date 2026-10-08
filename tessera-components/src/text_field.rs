@@ -4,13 +4,13 @@
 //!
 //! Collect short-form inputs like names, passwords, or search queries.
 use glyphon::Action as GlyphonAction;
-use tessera_foundation::gesture::{TapRecognizer, TapSettings};
+use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer, TapSettings};
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutPolicy, LayoutResult,
-    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, State,
+    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
+    Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, ScrollDeltaUnit, State,
     layout::{MeasureScope, layout},
     modifier::CursorModifierExt as _,
-    provide_context, remember, tessera, use_context, winit,
+    normalize_platform_scroll_delta, provide_context, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -30,7 +30,10 @@ use crate::{
         DISABLED_CONTENT_ALPHA, DISABLED_FILL_ALPHA, DisplayTransformText, TextInputController,
         TextInputProps, create_surface_args, text_input_core,
     },
-    theme::{ContentColor, MaterialColorScheme, MaterialTheme, TextSelectionColors, TextStyle},
+    theme::{
+        ContentColor, MaterialColorScheme, MaterialShapes, MaterialTheme, TextSelectionColors,
+        TextStyle,
+    },
 };
 
 /// Defaults for Material text fields.
@@ -224,13 +227,8 @@ impl TextFieldBuilder {
         text_field()
             .background_color(Color::TRANSPARENT)
             .border_width(TextFieldDefaults::OUTLINED_BORDER_WIDTH)
-            .border_color(Color::new(0.5, 0.5, 0.5, 1.0))
-            .focus_border_color(Color::new(0.0, 0.5, 1.0, 1.0))
             .focus_border_width(TextFieldDefaults::OUTLINED_FOCUS_BORDER_WIDTH)
             .focus_background_color(Color::TRANSPARENT)
-            .selection_color(Color::new(0.7, 0.85, 1.0, 0.4))
-            .text_color(Color::new(0.1, 0.1, 0.1, 1.0))
-            .cursor_color(Color::new(0.0, 0.5, 1.0, 1.0))
     }
 
     /// Creates secure text field defaults.
@@ -252,7 +250,7 @@ impl TextFieldBuilder {
 
 impl Default for TextFieldProps {
     fn default() -> Self {
-        let shape = filled_container_shape(&MaterialTheme::default());
+        let shape = filled_container_shape(&MaterialShapes::default());
         Self {
             enabled: true,
             read_only: false,
@@ -310,8 +308,8 @@ fn obfuscate_text(value: &str, mask: char) -> String {
         .collect()
 }
 
-fn filled_container_shape(theme: &MaterialTheme) -> Shape {
-    match theme.shapes.extra_small {
+fn filled_container_shape(shapes: &MaterialShapes) -> Shape {
+    match shapes.extra_small {
         Shape::RoundedRectangle {
             top_left,
             top_right,
@@ -519,21 +517,13 @@ fn field_click_pointer_position(
 ) -> PxPosition {
     let text_origin =
         field_text_content_origin(args, controller.with(|c| c.focus_handler().is_focused()));
-    let (horizontal_scroll, vertical_scroll) = controller.with(|s| {
-        (
-            Px(s.scroll_state().horizontal().round() as i32),
-            Px(s.scroll_state().vertical().round() as i32),
-        )
-    });
-    let viewport_width = (size.width - text_origin.x - text_origin.x).max(Px::ZERO);
-    let viewport_height = (size.height - text_origin.y - text_origin.y).max(Px::ZERO);
-    let text_relative_x = (cursor_pos.x - text_origin.x)
-        .max(Px::ZERO)
-        .min(viewport_width);
-    let text_relative_y = (cursor_pos.y - text_origin.y)
-        .max(Px::ZERO)
-        .min(viewport_height);
-    PxPosition::new(
+    let (horizontal_scroll, vertical_scroll) =
+        controller.with(|s| (s.scroll_state().horizontal(), s.scroll_state().vertical()));
+    let viewport_width = (size.width.0 as f32 - text_origin.x - text_origin.x).max(0.0);
+    let viewport_height = (size.height.0 as f32 - text_origin.y - text_origin.y).max(0.0);
+    let text_relative_x = (cursor_pos.x - text_origin.x).max(0.0).min(viewport_width);
+    let text_relative_y = (cursor_pos.y - text_origin.y).max(0.0).min(viewport_height);
+    PxPosition::from_f32_xy(
         text_relative_x + horizontal_scroll,
         text_relative_y + vertical_scroll,
     )
@@ -558,8 +548,8 @@ struct OutlinedFloatingLabelLayout {
     notch_vertical_padding: Px,
 }
 
-impl LayoutPolicy for OutlinedFloatingLabelLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for OutlinedFloatingLabelLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         debug_assert_eq!(
@@ -571,15 +561,15 @@ impl LayoutPolicy for OutlinedFloatingLabelLayout {
         let label = children[1];
 
         let parent_constraint = input.parent_constraint().without_min();
-        let label_measurement = label.measure(&parent_constraint)?;
+        let label_measurement = label.measure(input, &parent_constraint)?;
         let notch_width = label_measurement.width + self.notch_padding * 2;
         let notch_height = label_measurement.height + self.notch_vertical_padding * 2;
         let notch_constraint = Constraint::exact(notch_width, notch_height);
-        let _ = notch.measure(&notch_constraint)?;
+        let _ = notch.measure(input, &notch_constraint)?;
 
-        let notch_position = PxPosition::new(
-            self.label_offset.x - self.notch_padding,
-            self.label_offset.y - self.notch_vertical_padding,
+        let notch_position = PxPosition::from_f32_xy(
+            self.label_offset.x - self.notch_padding.0 as f32,
+            self.label_offset.y - self.notch_vertical_padding.0 as f32,
         );
         result.place_child(notch, notch_position);
         result.place_child(label, self.label_offset);
@@ -613,7 +603,7 @@ fn outlined_floating_label(
     let notch_padding = notch_padding.unwrap_or(Dp(0.0));
     let notch_vertical_padding = notch_vertical_padding.unwrap_or(Dp(0.0));
     layout()
-        .layout_policy(OutlinedFloatingLabelLayout {
+        .policy(OutlinedFloatingLabelLayout {
             label_offset: PxPosition::new(label_offset_x.into(), label_offset_y.into()),
             notch_padding: notch_padding.into(),
             notch_vertical_padding: notch_vertical_padding.into(),
@@ -737,9 +727,29 @@ fn text_field_content(
                         let label_text = label_text.clone();
                         let suffix = suffix;
                         let trailing_icon = trailing_icon;
-                        let row_modifier = Modifier::new()
-                            .fill_max_height()
-                            .padding(Padding::all(content_padding));
+                        // Filled fields with a floated label reserve vertical
+                        // room for the label above the input text so the text
+                        // is not cramped against it.
+                        // The total padding is preserved so
+                        // the field keeps its height.
+                        let label_reserve = if !is_outlined && label_should_float {
+                            TextFieldDefaults::FLOATING_LABEL_Y_OFFSET.0
+                                + TextFieldDefaults::LABEL_BOTTOM_PADDING.0
+                        } else {
+                            0.0
+                        };
+                        let row_padding =
+                            if label_reserve > 0.0 && content_padding.0 > label_reserve {
+                                Padding::new(
+                                    content_padding,
+                                    Dp(content_padding.0 + label_reserve),
+                                    content_padding,
+                                    Dp(content_padding.0 - label_reserve),
+                                )
+                            } else {
+                                Padding::all(content_padding)
+                            };
+                        let row_modifier = Modifier::new().fill_max_height().padding(row_padding);
                         row()
                             .modifier(row_modifier)
                             .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -1226,6 +1236,7 @@ pub fn text_field(
     let on_change = args.on_change;
     let render_args = args.clone();
     let focus_tap_recognizer = remember(TapRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
     let context_menu_tap_recognizer = remember(|| {
         TapRecognizer::new(TapSettings {
             button: PressKeyEventType::Right,
@@ -1243,20 +1254,10 @@ pub fn text_field(
             .map(|pos| is_position_inside_bounds(input.computed_data, pos))
             .unwrap_or(false);
         let context_menu_tap_result = context_menu_tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
-                is_inside,
-            )
+            recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), is_inside)
         });
         let focus_tap_result = focus_tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                input.cursor_position_rel,
-                is_inside,
-            )
+            recognizer.update(input.pass, input.pointer_changes.as_mut_slice(), is_inside)
         });
 
         if menu_policy.enabled {
@@ -1302,13 +1303,60 @@ pub fn text_field(
                             c.extend_selection_to_point(click_position);
                         } else {
                             c.apply_pointer_action(GlyphonAction::Click {
-                                x: click_position.x.0,
-                                y: click_position.y.0,
+                                x: click_position.x_px().0,
+                                y: click_position.y_px().0,
                             });
                         }
                     });
                 }
             }
+        }
+
+        if enabled && is_inside {
+            scroll_recognizer.with_mut(|recognizer| {
+                recognizer.for_each(
+                    input.pass,
+                    input.pointer_changes.as_mut_slice(),
+                    |_context, event| {
+                        let (dx, dy) = normalize_platform_scroll_delta(
+                            event.delta_x,
+                            event.delta_y,
+                            event.unit,
+                            event.source,
+                        );
+                        if controller.with(|c| c.single_line()) {
+                            let requested = if dx.abs() > f32::EPSILON { dx } else { dy };
+                            if requested.abs() <= f32::EPSILON
+                                || !controller.with_mut(|c| c.has_horizontal_overflow())
+                            {
+                                return;
+                            }
+                            let consumed =
+                                controller.with_mut(|c| c.scroll_horizontal_consumed(-requested));
+                            let consumed_raw = -consumed;
+                            if dx.abs() > f32::EPSILON {
+                                event.delta_x = dx - consumed_raw;
+                                event.delta_y = dy;
+                            } else {
+                                event.delta_y = dy - consumed_raw;
+                                event.delta_x = dx;
+                            }
+                        } else {
+                            if dy.abs() <= f32::EPSILON
+                                || !controller.with_mut(|c| c.has_vertical_overflow())
+                            {
+                                return;
+                            }
+                            // The editor engine clamps vertical scroll to the
+                            // content extent, so `consumed` is the exact amount
+                            // applied and the remainder goes to an ancestor.
+                            let consumed = controller.with_mut(|c| c.scroll_vertical_consumed(-dy));
+                            event.delta_y = dy + consumed;
+                        }
+                        event.unit = ScrollDeltaUnit::Pixel;
+                    },
+                );
+            });
         }
 
         if is_inside {

@@ -10,7 +10,7 @@ mod visual;
 
 use tessera_foundation::modifier::ModifierExt as FoundationModifierExt;
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier,
+    AxisConstraint, Callback, CallbackWith, Color, Dp, Modifier, State,
     modifier::ModifierCapabilityExt as _,
 };
 
@@ -22,7 +22,10 @@ pub use tessera_foundation::modifier::{
 
 pub(crate) use tessera_foundation::modifier::{AlignmentParentData, WeightParentData};
 
-use crate::{alignment::Alignment, shape_def::Shape};
+use crate::{
+    alignment::Alignment, scrollable::ScrollableController, shape_def::Shape,
+    theme::MaterialColorScheme,
+};
 
 use interaction::{
     apply_block_touch_propagation_modifier, apply_clickable_modifier, apply_selectable_modifier,
@@ -55,6 +58,20 @@ pub trait ModifierExt {
     /// Clips descendants to this modifier's bounds.
     fn clip_to_bounds(self) -> Modifier;
 
+    /// Makes this node a vertical scroll viewport driven by `controller`.
+    fn vertical_scroll(self, controller: State<ScrollableController>) -> Modifier;
+
+    /// Makes this node a horizontal scroll viewport driven by `controller`.
+    fn horizontal_scroll(self, controller: State<ScrollableController>) -> Modifier;
+
+    /// Makes this node a scroll viewport on the selected axes.
+    fn scroll(
+        self,
+        controller: State<ScrollableController>,
+        vertical: bool,
+        horizontal: bool,
+    ) -> Modifier;
+
     /// Draws a background behind the subtree.
     fn background(self, color: Color) -> Modifier;
 
@@ -68,10 +85,23 @@ pub trait ModifierExt {
     fn border_with_shape(self, width: Dp, color: Color, shape: Shape) -> Modifier;
 
     /// Adds a shadow with advanced configuration options.
-    fn shadow(self, args: &ShadowArgs) -> Modifier;
+    fn shadow(self, scheme: &MaterialColorScheme, args: &ShadowArgs) -> Modifier;
 
     /// Constrains the content to an exact size when possible.
     fn size(self, width: Dp, height: Dp) -> Modifier;
+
+    /// Pins the content to an exact size regardless of incoming constraints.
+    fn required_size(self, width: Dp, height: Dp) -> Modifier;
+
+    /// Pins the content width regardless of incoming constraints.
+    fn required_width(self, width: Dp) -> Modifier;
+
+    /// Pins the content height regardless of incoming constraints.
+    fn required_height(self, height: Dp) -> Modifier;
+
+    /// Applies a default minimum size only when the incoming axis leaves the
+    /// minimum open, so an explicit outer size always wins.
+    fn default_min_size(self, min_width: Dp, min_height: Dp) -> Modifier;
 
     /// Constrains the content to an exact width when possible.
     fn width(self, width: Dp) -> Modifier;
@@ -186,6 +216,23 @@ impl ModifierExt for Modifier {
         self.push_draw(ClipModifierNode)
     }
 
+    fn vertical_scroll(self, controller: State<ScrollableController>) -> Modifier {
+        crate::scrollable::apply_scroll_modifier(self, controller, true, false)
+    }
+
+    fn horizontal_scroll(self, controller: State<ScrollableController>) -> Modifier {
+        crate::scrollable::apply_scroll_modifier(self, controller, false, true)
+    }
+
+    fn scroll(
+        self,
+        controller: State<ScrollableController>,
+        vertical: bool,
+        horizontal: bool,
+    ) -> Modifier {
+        crate::scrollable::apply_scroll_modifier(self, controller, vertical, horizontal)
+    }
+
     fn background(self, color: Color) -> Modifier {
         self.background_with_shape(color, Shape::RECTANGLE)
     }
@@ -214,14 +261,29 @@ impl ModifierExt for Modifier {
         })
     }
 
-    fn shadow(self, args: &ShadowArgs) -> Modifier {
-        shadow::apply_shadow_modifier(self, args.clone())
+    fn shadow(self, scheme: &MaterialColorScheme, args: &ShadowArgs) -> Modifier {
+        shadow::apply_shadow_modifier(self, scheme, args.clone())
+    }
+
+    fn default_min_size(self, min_width: Dp, min_height: Dp) -> Modifier {
+        FoundationModifierExt::default_min_size(self, min_width, min_height)
     }
 
     fn size(self, width: Dp, height: Dp) -> Modifier {
         FoundationModifierExt::size(self, width, height)
     }
 
+    fn required_size(self, width: Dp, height: Dp) -> Modifier {
+        FoundationModifierExt::required_size(self, width, height)
+    }
+
+    fn required_width(self, width: Dp) -> Modifier {
+        FoundationModifierExt::required_width(self, width)
+    }
+
+    fn required_height(self, height: Dp) -> Modifier {
+        FoundationModifierExt::required_height(self, height)
+    }
     fn width(self, width: Dp) -> Modifier {
         FoundationModifierExt::width(self, width)
     }

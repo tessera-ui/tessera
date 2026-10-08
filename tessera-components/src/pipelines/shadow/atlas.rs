@@ -250,9 +250,9 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
             let page = self.atlas.page(entry.page_index);
             let mut blur_resources: Vec<[RenderResourceId; 2]> =
                 Vec::with_capacity(item.layers.len());
-            for layer_index in 0..item.layers.len() {
-                let a = output.add_external_texture(page.blur[layer_index][0].desc(false));
-                let b = output.add_external_texture(page.blur[layer_index][1].desc(false));
+            for layer in &page.blur[..item.layers.len()] {
+                let a = output.add_external_texture(layer[0].desc(false));
+                let b = output.add_external_texture(layer[1].desc(false));
                 blur_resources.push([a, b]);
             }
 
@@ -443,7 +443,7 @@ struct ShadowStampKey {
     shape: ResolvedShapeKey,
     size: PxSize,
     mask_size: PxSize,
-    pad_pos: PxPosition,
+    pad_pos: (i32, i32),
     layers: Vec<ShadowLayerKey>,
     sample_count: u32,
 }
@@ -453,7 +453,7 @@ fn build_stamp_key(item: &ShadowItem, sample_count: u32) -> ShadowStampKey {
         shape: ResolvedShapeKey::from_shape(item.shape),
         size: item.size,
         mask_size: item.mask_size,
-        pad_pos: item.pad_pos,
+        pad_pos: (item.pad_pos.x_px().0, item.pad_pos.y_px().0),
         layers: item
             .layers
             .iter()

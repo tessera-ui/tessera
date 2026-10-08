@@ -144,12 +144,10 @@ pub fn glass_button(
     };
 
     let child = button_args.child.unwrap_or_else(RenderSlot::empty);
-    let outer_modifier = button_args.modifier.clone().size_in(
-        Some(ButtonDefaults::MIN_WIDTH),
-        None,
-        Some(ButtonDefaults::MIN_HEIGHT),
-        None,
-    );
+    let outer_modifier = button_args
+        .modifier
+        .clone()
+        .default_min_size(ButtonDefaults::MIN_WIDTH, ButtonDefaults::MIN_HEIGHT);
 
     layout().modifier(outer_modifier).child(move || {
         fluid_glass()

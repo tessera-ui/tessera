@@ -4,17 +4,20 @@
 //!
 //! Use to stack children horizontally.
 use tessera_ui::{
-    AxisConstraint, ComputedData, Constraint, LayoutPolicy, LayoutResult, MeasurementError,
-    Modifier, Px, PxPosition, RenderSlot,
+    AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier, Px,
+    PxPosition, RenderSlot,
     layout::{MeasureScope, layout},
     tessera,
 };
 
-use crate::alignment::{CrossAxisAlignment, MainAxisAlignment};
+use crate::{
+    alignment::{CrossAxisAlignment, MainAxisAlignment},
+    layout_flex::cross_axis_child_constraint,
+};
 
 struct PlaceChildrenArgs<'a> {
     children_sizes: &'a [Option<ComputedData>],
-    children: &'a [tessera_ui::layout::LayoutChild<'a>],
+    children: &'a [tessera_ui::layout::LayoutChild],
     final_row_width: Px,
     final_row_height: Px,
     total_children_width: Px,
@@ -24,7 +27,6 @@ struct PlaceChildrenArgs<'a> {
 }
 
 struct MeasureWeightedChildrenArgs<'a> {
-    input: &'a MeasureScope<'a>,
     weighted_indices: &'a [usize],
     children_sizes: &'a mut [Option<ComputedData>],
     max_child_height: &'a mut Px,
@@ -32,6 +34,7 @@ struct MeasureWeightedChildrenArgs<'a> {
     total_weight: f32,
     row_parent_constraint: &'a Constraint,
     child_weights: &'a [f32],
+    cross_axis_alignment: CrossAxisAlignment,
 }
 
 #[derive(Clone, PartialEq)]
@@ -40,8 +43,8 @@ struct RowLayout {
     cross_axis_alignment: CrossAxisAlignment,
 }
 
-impl LayoutPolicy for RowLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for RowLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
         let child_weights = collect_child_weights(input);
@@ -125,7 +128,7 @@ pub fn row(
     let children = children.unwrap_or_else(RenderSlot::empty);
     layout()
         .modifier(modifier)
-        .layout_policy(RowLayout {
+        .policy(RowLayout {
             main_axis_alignment,
             cross_axis_alignment,
         })
@@ -135,7 +138,7 @@ pub fn row(
 }
 
 fn measure_weighted_row(
-    input: &MeasureScope<'_>,
+    input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,
@@ -168,18 +171,22 @@ fn measure_weighted_row(
         &mut children_sizes,
         &mut max_child_height,
         row_parent_constraint,
+        cross_axis_alignment,
     )?;
 
-    measure_weighted_children(&mut MeasureWeightedChildrenArgs {
+    measure_weighted_children(
         input,
-        weighted_indices: &weighted_indices,
-        children_sizes: &mut children_sizes,
-        max_child_height: &mut max_child_height,
-        remaining_width: available_width_for_children - total_width_of_unweighted_children,
-        total_weight,
-        row_parent_constraint,
-        child_weights,
-    })?;
+        &mut MeasureWeightedChildrenArgs {
+            weighted_indices: &weighted_indices,
+            children_sizes: &mut children_sizes,
+            max_child_height: &mut max_child_height,
+            remaining_width: available_width_for_children - total_width_of_unweighted_children,
+            total_weight,
+            row_parent_constraint,
+            child_weights,
+            cross_axis_alignment,
+        },
+    )?;
 
     let final_row_width = available_width_for_children;
     let final_row_height = calculate_final_row_height(row_parent_constraint, max_child_height);
@@ -211,7 +218,7 @@ fn measure_weighted_row(
 }
 
 fn measure_unweighted_row(
-    input: &MeasureScope<'_>,
+    input: &mut MeasureScope<'_>,
     result: &mut LayoutResult,
     main_axis_alignment: MainAxisAlignment,
     cross_axis_alignment: CrossAxisAlignment,
@@ -224,11 +231,11 @@ fn measure_unweighted_row(
 
     let parent_offered_constraint_for_child = Constraint::new(
         row_parent_constraint.width.without_min(),
-        row_parent_constraint.height,
+        cross_axis_child_constraint(row_parent_constraint.height, cross_axis_alignment),
     );
 
     for (i, child_id) in children.iter().enumerate() {
-        let child_result = child_id.measure(&parent_offered_constraint_for_child)?;
+        let child_result = child_id.measure(input, &parent_offered_constraint_for_child)?;
         children_sizes[i] = Some(child_result.size());
         total_children_measured_width += child_result.width;
         max_child_height = max_child_height.max(child_result.height);
@@ -260,41 +267,27 @@ fn measure_unweighted_row(
 }
 
 fn classify_children(child_weights: &[f32]) -> (Vec<usize>, Vec<usize>, f32) {
-    // Split children into weighted and unweighted categories and compute the
-    // total weight of weighted children. Returns: (weighted_indices,
-    // unweighted_indices, total_weight)
-    let mut weighted_indices = Vec::new();
-    let mut unweighted_indices = Vec::new();
-    let mut total_weight = 0.0;
-
-    for (i, &weight) in child_weights.iter().enumerate() {
-        if weight > 0.0 {
-            weighted_indices.push(i);
-            total_weight += weight;
-        } else {
-            unweighted_indices.push(i);
-        }
-    }
-    (weighted_indices, unweighted_indices, total_weight)
+    crate::layout_flex::classify_children(child_weights)
 }
 
 fn measure_unweighted_children(
-    input: &MeasureScope<'_>,
+    input: &mut MeasureScope<'_>,
     unweighted_indices: &[usize],
     children_sizes: &mut [Option<ComputedData>],
     max_child_height: &mut Px,
     row_parent_constraint: &Constraint,
+    cross_axis_alignment: CrossAxisAlignment,
 ) -> Result<Px, MeasurementError> {
     let mut total_width = Px(0);
 
     let parent_offered_constraint_for_child = Constraint::new(
         row_parent_constraint.width.without_min(),
-        row_parent_constraint.height,
+        cross_axis_child_constraint(row_parent_constraint.height, cross_axis_alignment),
     );
 
     for &child_idx in unweighted_indices {
         let child_id = input.children()[child_idx];
-        let child_result = child_id.measure(&parent_offered_constraint_for_child)?;
+        let child_result = child_id.measure(input, &parent_offered_constraint_for_child)?;
         children_sizes[child_idx] = Some(child_result.size());
         total_width += child_result.width;
         *max_child_height = (*max_child_height).max(child_result.height);
@@ -304,7 +297,8 @@ fn measure_unweighted_children(
 }
 
 fn measure_weighted_children(
-    args: &mut MeasureWeightedChildrenArgs,
+    scope: &mut MeasureScope<'_>,
+    args: &mut MeasureWeightedChildrenArgs<'_>,
 ) -> Result<(), MeasurementError> {
     if args.total_weight <= 0.0 {
         return Ok(());
@@ -314,12 +308,15 @@ fn measure_weighted_children(
         let child_weight = args.child_weights[child_idx];
         let allocated_width =
             Px((args.remaining_width.0 as f32 * (child_weight / args.total_weight)) as i32);
-        let child_id = args.input.children()[child_idx];
+        let child_id = scope.children()[child_idx];
         let parent_offered_constraint_for_child = Constraint::new(
             AxisConstraint::exact(allocated_width),
-            args.row_parent_constraint.height,
+            cross_axis_child_constraint(
+                args.row_parent_constraint.height,
+                args.cross_axis_alignment,
+            ),
         );
-        let child_result = child_id.measure(&parent_offered_constraint_for_child)?;
+        let child_result = child_id.measure(scope, &parent_offered_constraint_for_child)?;
         args.children_sizes[child_idx] = Some(child_result.size());
         *args.max_child_height = (*args.max_child_height).max(child_result.height);
     }
@@ -327,13 +324,13 @@ fn measure_weighted_children(
     Ok(())
 }
 
-fn collect_child_weights(input: &MeasureScope<'_>) -> Vec<f32> {
+fn collect_child_weights(input: &mut MeasureScope<'_>) -> Vec<f32> {
     input
         .children()
         .iter()
         .map(|child_id| {
             child_id
-                .parent_data::<crate::modifier::WeightParentData>()
+                .parent_data::<crate::modifier::WeightParentData>(input)
                 .map(|data| data.weight)
                 .unwrap_or(0.0)
         })
@@ -370,8 +367,8 @@ fn place_children_with_alignment(args: &PlaceChildrenArgs, result: &mut LayoutRe
                 args.cross_axis_alignment,
             );
 
-            result.place_child(child_id, PxPosition::new(current_x, y_offset));
-            current_x += child_actual_size.width;
+            result.place_child(child_id, PxPosition::from_f32_xy(current_x, y_offset));
+            current_x += child_actual_size.width.0 as f32;
             if i < args.child_count - 1 {
                 current_x += spacing;
             }
@@ -379,74 +376,32 @@ fn place_children_with_alignment(args: &PlaceChildrenArgs, result: &mut LayoutRe
     }
 }
 
-fn calculate_main_axis_layout(args: &PlaceChildrenArgs) -> (Px, Px) {
-    // Calculate the start position on the main axis and the spacing between
-    // children: Returns (start_x, spacing_between_children)
-    let available_space = (args.final_row_width - args.total_children_width).max(Px(0));
-    match args.main_axis_alignment {
-        MainAxisAlignment::Start => (Px(0), Px(0)),
-        MainAxisAlignment::Center => (available_space / 2, Px(0)),
-        MainAxisAlignment::End => (available_space, Px(0)),
-        MainAxisAlignment::SpaceEvenly => calculate_space_evenly(available_space, args.child_count),
-        MainAxisAlignment::SpaceBetween => {
-            calculate_space_between(available_space, args.child_count)
-        }
-        MainAxisAlignment::SpaceAround => calculate_space_around(available_space, args.child_count),
-    }
-}
-
-fn calculate_space_evenly(available_space: Px, child_count: usize) -> (Px, Px) {
-    if child_count > 0 {
-        let s = available_space / (child_count as i32 + 1);
-        (s, s)
-    } else {
-        (Px(0), Px(0))
-    }
-}
-
-fn calculate_space_between(available_space: Px, child_count: usize) -> (Px, Px) {
-    if child_count > 1 {
-        (Px(0), available_space / (child_count as i32 - 1))
-    } else if child_count == 1 {
-        (available_space / 2, Px(0))
-    } else {
-        (Px(0), Px(0))
-    }
-}
-
-fn calculate_space_around(available_space: Px, child_count: usize) -> (Px, Px) {
-    if child_count > 0 {
-        let s = available_space / (child_count as i32);
-        (s / 2, s)
-    } else {
-        (Px(0), Px(0))
-    }
+fn calculate_main_axis_layout(args: &PlaceChildrenArgs) -> (f32, f32) {
+    crate::layout_flex::main_axis_offsets(
+        args.final_row_width,
+        args.total_children_width,
+        args.main_axis_alignment,
+        args.child_count,
+    )
 }
 
 fn calculate_cross_axis_offset(
     child_actual_size: &ComputedData,
     final_row_height: Px,
     cross_axis_alignment: CrossAxisAlignment,
-) -> Px {
-    // Compute child's offset on the cross axis (vertical):
-    // - Start: align to top (0)
-    // - Center: center (remaining_height / 2)
-    // - End: align to bottom (remaining_height)
-    // - Stretch: no offset (the child will be stretched to fill height;
-    //   stretching handled in measurement)
-    match cross_axis_alignment {
-        CrossAxisAlignment::Start => Px(0),
-        CrossAxisAlignment::Center => (final_row_height - child_actual_size.height).max(Px(0)) / 2,
-        CrossAxisAlignment::End => (final_row_height - child_actual_size.height).max(Px(0)),
-        CrossAxisAlignment::Stretch => Px(0),
-    }
+) -> f32 {
+    crate::layout_flex::cross_axis_offset(
+        child_actual_size.height,
+        final_row_height,
+        cross_axis_alignment,
+    )
 }
 
 #[cfg(test)]
 mod tests {
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutPolicy, LayoutResult, MeasurementError, Modifier,
-        NoopRenderPolicy, Px,
+        AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
+        Px,
         layout::{MeasureScope, layout},
         tessera,
     };
@@ -469,8 +424,8 @@ mod tests {
         height: i32,
     }
 
-    impl LayoutPolicy for FixedTestLayout {
-        fn measure(&self, _input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for FixedTestLayout {
+        fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             Ok(LayoutResult::new(ComputedData {
                 width: Px::new(self.width),
                 height: Px::new(self.height),
@@ -478,8 +433,8 @@ mod tests {
         }
     }
 
-    impl LayoutPolicy for FillWidthTestLayout {
-        fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+    impl tessera_ui::LayoutModifierNode for FillWidthTestLayout {
+        fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
             let width = input
                 .parent_constraint()
                 .width()
@@ -500,8 +455,8 @@ mod tests {
         let height = height.unwrap_or_default();
 
         layout()
-            .layout_policy(FixedTestLayout { width, height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FixedTestLayout { width, height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()
@@ -514,8 +469,8 @@ mod tests {
         let height = height.unwrap_or_default();
 
         layout()
-            .layout_policy(FillWidthTestLayout { height })
-            .render_policy(NoopRenderPolicy)
+            .policy(FillWidthTestLayout { height })
+            .draw(NoopDrawModifier)
             .modifier(Modifier::new().semantics(SemanticsArgs {
                 test_tag: Some(tag),
                 ..Default::default()

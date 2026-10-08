@@ -13,7 +13,10 @@ use crate::{
     modifier::{InteractionState, ModifierExt as _},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
-    theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
+    theme::{
+        ContentColor, MaterialAlpha, MaterialColorScheme, MaterialShapes, MaterialTheme,
+        content_color_for,
+    },
 };
 
 /// Sizes supported by [`floating_action_button`].
@@ -139,7 +142,7 @@ impl FloatingActionButtonDefaults {
 
     /// Returns the default shape for the provided FAB size.
     pub fn shape(size: FloatingActionButtonSize) -> Shape {
-        shape_from_size(size, &MaterialTheme::default())
+        shape_from_size(size, &MaterialShapes::default())
     }
 
     /// Default container color for floating action buttons.
@@ -296,7 +299,7 @@ pub fn floating_action_button(
     let content = args.content;
     let shape = args
         .shape
-        .unwrap_or_else(|| shape_from_size(args.size, &theme));
+        .unwrap_or_else(|| shape_from_size(args.size, &theme.shapes));
     let typography = theme.typography;
     let scheme = theme.color_scheme;
     let inherited_content_color = use_context::<ContentColor>()
@@ -334,7 +337,7 @@ pub fn floating_action_button(
     let tonal_elevation = elevation.tonal_elevation();
 
     surface()
-        .modifier(args.modifier.size_in(Some(size), None, Some(size), None))
+        .modifier(args.modifier.default_min_size(size, size))
         .style(SurfaceStyle::Filled {
             color: container_color,
         })
@@ -384,10 +387,10 @@ impl FloatingActionButtonBuilder {
     }
 }
 
-fn shape_from_size(size: FloatingActionButtonSize, theme: &MaterialTheme) -> Shape {
+fn shape_from_size(size: FloatingActionButtonSize, shapes: &MaterialShapes) -> Shape {
     match size {
-        FloatingActionButtonSize::Small => theme.shapes.medium,
-        FloatingActionButtonSize::Standard => theme.shapes.large,
-        FloatingActionButtonSize::Large => theme.shapes.extra_large,
+        FloatingActionButtonSize::Small => shapes.medium,
+        FloatingActionButtonSize::Standard => shapes.large,
+        FloatingActionButtonSize::Large => shapes.extra_large,
     }
 }

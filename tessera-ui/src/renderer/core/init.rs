@@ -1,6 +1,5 @@
 use std::sync::Arc;
 
-use parking_lot::RwLock;
 use tracing::{error, info, warn};
 use wgpu::TextureFormat;
 use winit::window::Window;
@@ -8,7 +7,6 @@ use winit::window::Window;
 use crate::{
     CompositePipelineRegistry,
     compute::resource::ComputeResourceManager,
-    dp::SCALE_FACTOR,
     pipeline_cache::initialize_cache,
     renderer::{
         compute::ComputePipelineRegistry, drawer::Drawer, external::ExternalTextureRegistry,
@@ -302,6 +300,7 @@ impl RenderCore {
         // Create Pass Targets (Offscreen and Compute)
         let offscreen_texture = Self::create_pass_target(&device, &config, "Offscreen");
         let offscreen_copy_texture = Self::create_pass_target(&device, &config, "Offscreen Copy");
+        let scene_sample_texture = Self::create_pass_target(&device, &config, "Scene Sample");
         let compute_target_a = Self::create_compute_pass_target(
             &device,
             &config,
@@ -319,7 +318,7 @@ impl RenderCore {
 
         // Set scale factor for dp conversion
         info!("Render core scale factor: {scale_factor}");
-        let _ = SCALE_FACTOR.set(RwLock::new(scale_factor));
+        crate::dp::set_scale_factor(scale_factor);
 
         // Create blit pipeline resources
         let blit_shader = device.create_shader_module(wgpu::include_wgsl!("../shaders/blit.wgsl"));
@@ -453,6 +452,7 @@ impl RenderCore {
         let targets = FrameTargets {
             offscreen: offscreen_texture,
             offscreen_copy: offscreen_copy_texture,
+            scene_sample: scene_sample_texture,
             msaa_texture,
             msaa_view,
             sample_count,
@@ -609,12 +609,15 @@ impl RenderCore {
         self.local_textures.clear();
         self.targets.offscreen.texture().destroy();
         self.targets.offscreen_copy.texture().destroy();
+        self.targets.scene_sample.texture().destroy();
         self.compute.target_a.texture().destroy();
         self.compute.target_b.texture().destroy();
 
         self.targets.offscreen = Self::create_pass_target(&self.device, &self.config, "Offscreen");
         self.targets.offscreen_copy =
             Self::create_pass_target(&self.device, &self.config, "Offscreen Copy");
+        self.targets.scene_sample =
+            Self::create_pass_target(&self.device, &self.config, "Scene Sample");
         self.compute.target_a = Self::create_compute_pass_target(
             &self.device,
             &self.config,

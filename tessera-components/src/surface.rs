@@ -10,7 +10,7 @@ use tessera_ui::{
     RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
-    layout::{LayoutPolicy, MeasureScope, RenderInput, RenderPolicy, layout},
+    layout::{MeasureScope, layout},
     modifier::ModifierCapabilityExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
@@ -156,32 +156,32 @@ fn compute_content_offset(
     container_h: Px,
     content_w: Px,
     content_h: Px,
-) -> (Px, Px) {
-    fn center_axis(container: Px, content: Px) -> Px {
-        Px(((container.0 - content.0).max(0)) / 2)
+) -> (f32, f32) {
+    fn center_axis(container: Px, content: Px) -> f32 {
+        ((container.0 - content.0).max(0)) as f32 / 2.0
     }
 
     match alignment {
-        Alignment::TopStart => (Px(0), Px(0)),
-        Alignment::TopCenter => (center_axis(container_w, content_w), Px(0)),
-        Alignment::TopEnd => (Px((container_w.0 - content_w.0).max(0)), Px(0)),
-        Alignment::CenterStart => (Px(0), center_axis(container_h, content_h)),
+        Alignment::TopStart => (0.0, 0.0),
+        Alignment::TopCenter => (center_axis(container_w, content_w), 0.0),
+        Alignment::TopEnd => ((container_w.0 - content_w.0).max(0) as f32, 0.0),
+        Alignment::CenterStart => (0.0, center_axis(container_h, content_h)),
         Alignment::Center => (
             center_axis(container_w, content_w),
             center_axis(container_h, content_h),
         ),
         Alignment::CenterEnd => (
-            Px((container_w.0 - content_w.0).max(0)),
+            (container_w.0 - content_w.0).max(0) as f32,
             center_axis(container_h, content_h),
         ),
-        Alignment::BottomStart => (Px(0), Px((container_h.0 - content_h.0).max(0))),
+        Alignment::BottomStart => (0.0, (container_h.0 - content_h.0).max(0) as f32),
         Alignment::BottomCenter => (
             center_axis(container_w, content_w),
-            Px((container_h.0 - content_h.0).max(0)),
+            (container_h.0 - content_h.0).max(0) as f32,
         ),
         Alignment::BottomEnd => (
-            Px((container_w.0 - content_w.0).max(0)),
-            Px((container_h.0 - content_h.0).max(0)),
+            (container_w.0 - content_w.0).max(0) as f32,
+            (container_h.0 - content_h.0).max(0) as f32,
         ),
     }
 }
@@ -501,8 +501,8 @@ impl PartialEq for SurfaceLayout {
     }
 }
 
-impl LayoutPolicy for SurfaceLayout {
-    fn measure(&self, input: &MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+impl tessera_ui::LayoutModifierNode for SurfaceLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let parent_constraint = *input.parent_constraint().as_ref();
         let child_constraint = input.parent_constraint().without_min();
@@ -512,7 +512,7 @@ impl LayoutPolicy for SurfaceLayout {
             let mut max_width = Px::ZERO;
             let mut max_height = Px::ZERO;
             for &child in &children {
-                let measurement = child.measure(&child_constraint)?;
+                let measurement = child.measure(input, &child_constraint)?;
                 max_width = max_width.max(measurement.width);
                 max_height = max_height.max(measurement.height);
             }
@@ -537,10 +537,7 @@ impl LayoutPolicy for SurfaceLayout {
                 child_measurement.width,
                 child_measurement.height,
             );
-            let origin = PxPosition {
-                x: extra_x,
-                y: extra_y,
-            };
+            let origin = PxPosition::from_f32_xy(extra_x, extra_y);
             for &child in &children {
                 result.place_child(child, origin);
             }
@@ -550,8 +547,13 @@ impl LayoutPolicy for SurfaceLayout {
     }
 }
 
-impl RenderPolicy for SurfaceLayout {
-    fn record(&self, input: &mut RenderInput<'_>) {
+impl tessera_ui::DrawModifierNode for SurfaceLayout {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let input = &mut *ctx.render_input;
         let state_layer_alpha = if self.args.show_state_layer {
             self.interaction_state
                 .as_ref()
@@ -604,6 +606,7 @@ impl RenderPolicy for SurfaceLayout {
 
             metadata.fragment_mut().push_draw_command(drawable);
         }
+        content.draw(input);
     }
 }
 
@@ -616,7 +619,7 @@ impl PointerInputModifierNode for SurfaceBlockInputPointerModifierNode {
             .map(|pos| is_position_inside_bounds(input.computed_data, pos))
             .unwrap_or(false);
         if is_cursor_in_surface {
-            input.block_all();
+            input.consume_pointer_changes();
         }
     }
 }
@@ -698,8 +701,8 @@ fn surface_content(
     };
     layout()
         .modifier(modifier)
-        .layout_policy(policy.clone())
-        .render_policy(policy)
+        .policy(policy.clone())
+        .draw(policy)
         .child(move || {
             provide_context(
                 || AbsoluteTonalElevation {
@@ -926,12 +929,15 @@ pub fn surface(
     if let Some(elevation) = resolved.elevation
         && elevation.0 > 0.0
     {
-        modifier = modifier.shadow(&ShadowArgs {
-            elevation,
-            shape: resolved.shape,
-            clip: false,
-            ..Default::default()
-        });
+        modifier = modifier.shadow(
+            &scheme,
+            &ShadowArgs {
+                elevation,
+                shape: resolved.shape,
+                clip: false,
+                ..Default::default()
+            },
+        );
     }
 
     layout().modifier(modifier).child(move || {

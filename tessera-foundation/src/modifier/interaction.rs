@@ -317,19 +317,13 @@ impl PointerInputModifierNode for DraggablePointerModifierNode {
             return;
         }
 
-        let cursor_position_abs = input.cursor_position_abs();
         let within_bounds = cursor_within_bounds(
             input.cursor_position_rel,
             PxSize::new(input.computed_data.width, input.computed_data.height),
         );
         let (was_dragging, drag_result) = self.drag_recognizer.with_mut(|recognizer| {
             let was_dragging = recognizer.is_dragging();
-            let drag_result = recognizer.update(
-                input.pass,
-                input.pointer_changes,
-                cursor_position_abs,
-                within_bounds,
-            );
+            let drag_result = recognizer.update(input.pass, input.pointer_changes, within_bounds);
             (was_dragging, drag_result)
         });
 
@@ -365,10 +359,10 @@ fn cursor_within_bounds(position: Option<PxPosition>, size: PxSize) -> bool {
         return false;
     };
 
-    position.x >= Px::ZERO
-        && position.y >= Px::ZERO
-        && position.x < size.width
-        && position.y < size.height
+    position.x >= 0.0
+        && position.y >= 0.0
+        && position.x < size.width.0 as f32
+        && position.y < size.height.0 as f32
 }
 
 pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> Modifier {

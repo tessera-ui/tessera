@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::{collections::HashMap, sync::Arc};
 
 use encase::{ShaderType, UniformBuffer};
 use glam::Vec4;
@@ -7,6 +7,8 @@ use tessera_ui::{
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu,
 };
+
+use crate::pipelines::SharedQuad;
 
 use super::command::{ImageCommand, ImageData};
 
@@ -26,6 +28,8 @@ struct ImageResources {
 pub struct ImagePipeline {
     pipeline: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
+    quad_vertex_buffer: Arc<wgpu::Buffer>,
+    quad_index_buffer: Arc<wgpu::Buffer>,
     resources: HashMap<ImageData, ImageResources>,
 }
 
@@ -86,7 +90,11 @@ impl ImagePipeline {
             vertex: wgpu::VertexState {
                 module: &shader,
                 entry_point: Some("vs_main"),
-                buffers: &[],
+                buffers: &[Some(wgpu::VertexBufferLayout {
+                    array_stride: std::mem::size_of::<[f32; 2]>() as wgpu::BufferAddress,
+                    step_mode: wgpu::VertexStepMode::Vertex,
+                    attributes: &wgpu::vertex_attr_array![0 => Float32x2],
+                })],
                 compilation_options: Default::default(),
             },
             fragment: Some(wgpu::FragmentState {
@@ -110,9 +118,13 @@ impl ImagePipeline {
             cache: pipeline_cache,
         });
 
+        let shared_quad = SharedQuad::get(device);
+
         Self {
             pipeline,
             bind_group_layout,
+            quad_vertex_buffer: Arc::clone(shared_quad.vertex()),
+            quad_index_buffer: Arc::clone(shared_quad.index()),
             resources: HashMap::new(),
         }
     }
@@ -141,9 +153,9 @@ impl ImagePipeline {
         // Convert pixel positions/sizes into normalized device coordinates and
         // size ratios.
         let rect = [
-            (start_pos.x.0 as f32 / target_size.width.to_f32()) * 2.0 - 1.0
+            (start_pos.x / target_size.width.to_f32()) * 2.0 - 1.0
                 + (size.width.0 as f32 / target_size.width.to_f32()),
-            (start_pos.y.0 as f32 / target_size.height.to_f32()) * -2.0 + 1.0
+            (start_pos.y / target_size.height.to_f32()) * -2.0 + 1.0
                 - (size.height.0 as f32 / target_size.height.to_f32()),
             size.width.0 as f32 / target_size.width.to_f32(),
             size.height.0 as f32 / target_size.height.to_f32(),
@@ -251,6 +263,12 @@ impl ImagePipeline {
 impl DrawablePipeline<ImageCommand> for ImagePipeline {
     fn draw(&mut self, context: &mut DrawContext<ImageCommand>) {
         context.render_pass.set_pipeline(&self.pipeline);
+        context
+            .render_pass
+            .set_vertex_buffer(0, self.quad_vertex_buffer.slice(..));
+        context
+            .render_pass
+            .set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
         for (command, size, start_pos) in context.commands.iter() {
             // Use the extracted helper to obtain or create GPU resources.
@@ -280,7 +298,7 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
             context
                 .render_pass
                 .set_bind_group(0, &resources.bind_group, &[]);
-            context.render_pass.draw(0..6, 0..1);
+            context.render_pass.draw_indexed(0..6, 0, 0..1);
         }
     }
 }
