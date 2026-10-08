@@ -15,6 +15,10 @@ use unicode_width::{UnicodeWidthChar, UnicodeWidthStr};
 
 use crate::output;
 
+pub use watch::{WatchOptions, bind_ipc_listener, run_view};
+
+mod watch;
+
 const DEFAULT_ANDROID_REMOTE_PATHS: [&str; 2] =
     ["tessera-profiler.jsonl", "files/tessera-profiler.jsonl"];
 

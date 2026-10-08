@@ -61,6 +61,9 @@ enum TesseraCommands {
         /// (desktop only)
         #[arg(long, value_name = "FILE")]
         profiling_output: Option<PathBuf>,
+        /// Show a live, top-like component profiler in the dev terminal
+        #[arg(long)]
+        top: bool,
         /// Overlay dirty replay regions with a translucent debug color
         #[arg(long)]
         debug_dirty_overlay: bool,
@@ -317,6 +320,9 @@ struct HeadlessArgs {
     /// Virtual frame step in milliseconds for new sessions
     #[arg(long, default_value_t = 16)]
     frame_time_ms: u32,
+    /// Enable profiling output and write records to this JSONL file
+    #[arg(long, value_name = "FILE")]
+    profiling_output: Option<PathBuf>,
 }
 
 #[derive(Args)]
@@ -432,6 +438,7 @@ fn run() -> Result<()> {
                 package,
                 release,
                 profiling_output,
+                top,
                 debug_dirty_overlay,
                 asset_backend,
             } => {
@@ -442,6 +449,7 @@ fn run() -> Result<()> {
                     profiling_output.as_deref(),
                     debug_dirty_overlay,
                     asset_backend.map(AssetBackendArg::to_backend),
+                    top,
                 )?;
             }
             TesseraCommands::Headless(args) => {
@@ -451,6 +459,7 @@ fn run() -> Result<()> {
                     args.width,
                     args.height,
                     args.frame_time_ms,
+                    args.profiling_output.as_deref(),
                 )?;
             }
             TesseraCommands::Build {

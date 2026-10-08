@@ -101,7 +101,7 @@
 use std::{
     collections::HashMap,
     fs::{File, OpenOptions, create_dir_all},
-    io::{BufWriter, Write},
+    io::{self, BufWriter, Write},
     path::{Path, PathBuf},
     sync::{
         OnceLock,
@@ -109,7 +109,7 @@ use std::{
         mpsc,
     },
     thread,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
 use indextree::NodeId;
@@ -309,9 +309,35 @@ struct ProfilerRuntime {
     sender: mpsc::Sender<Message>,
 }
 
+/// Destination for profiler records: a file for offline analysis, or a local
+/// IPC stream for the live dev view (no intermediate file, no network).
+enum OutputSink {
+    File(File),
+    #[cfg(feature = "profiling")]
+    Ipc(interprocess::local_socket::Stream),
+}
+
+impl Write for OutputSink {
+    fn write(&mut self, buf: &[u8]) -> io::Result<usize> {
+        match self {
+            OutputSink::File(file) => file.write(buf),
+            #[cfg(feature = "profiling")]
+            OutputSink::Ipc(stream) => stream.write(buf),
+        }
+    }
+
+    fn flush(&mut self) -> io::Result<()> {
+        match self {
+            OutputSink::File(file) => file.flush(),
+            #[cfg(feature = "profiling")]
+            OutputSink::Ipc(stream) => stream.flush(),
+        }
+    }
+}
+
 struct WorkerState {
     frames: HashMap<u64, Vec<Sample>>,
-    writer: BufWriter<File>,
+    writer: BufWriter<OutputSink>,
     header_written: bool,
 }
 
@@ -342,10 +368,67 @@ fn profiler_runtime() -> &'static ProfilerRuntime {
     })
 }
 
-fn worker_loop(receiver: mpsc::Receiver<Message>) {
-    let mut options = OpenOptions::new();
-    options.create(true).write(true).truncate(true);
+/// Opens the profiler destination. When `TESSERA_PROFILING_IPC` is set to a
+/// local socket name/path the records are streamed over IPC (live, no temp
+/// file, no network); otherwise they are written to the configured JSONL file.
+fn open_output_sink() -> Option<OutputSink> {
+    #[cfg(feature = "profiling")]
+    if let Ok(raw) = std::env::var("TESSERA_PROFILING_IPC") {
+        let raw = raw.trim();
+        if !raw.is_empty() {
+            if let Some(sink) = connect_ipc_sink(raw) {
+                return Some(sink);
+            }
+            error!(
+                "tessera profiler failed to connect to IPC endpoint {raw}; falling back to file output"
+            );
+        }
+    }
+    open_file_sink()
+}
 
+#[cfg(feature = "profiling")]
+fn ipc_name(raw: &str) -> Option<interprocess::local_socket::Name<'_>> {
+    use interprocess::local_socket::prelude::*;
+    #[cfg(windows)]
+    {
+        raw.to_ns_name::<interprocess::local_socket::GenericNamespaced>()
+            .ok()
+    }
+    #[cfg(unix)]
+    {
+        raw.to_fs_name::<interprocess::local_socket::GenericFilePath>()
+            .ok()
+    }
+}
+
+#[cfg(feature = "profiling")]
+fn connect_ipc_sink(raw: &str) -> Option<OutputSink> {
+    use interprocess::local_socket::{prelude::LocalSocketStream, traits::Stream as _};
+    // The dev process may start listening slightly after the app launches.
+    let mut last_error = None;
+    for _ in 0..40 {
+        let Some(name) = ipc_name(raw) else {
+            return None;
+        };
+        match LocalSocketStream::connect(name) {
+            Ok(stream) => return Some(OutputSink::Ipc(stream)),
+            Err(err) => {
+                last_error = Some(err);
+                thread::sleep(Duration::from_millis(50));
+            }
+        }
+    }
+    error!(
+        "tessera profiler could not connect to IPC endpoint: {}",
+        last_error
+            .map(|err| err.to_string())
+            .unwrap_or_else(|| "unknown error".to_string())
+    );
+    None
+}
+
+fn open_file_sink() -> Option<OutputSink> {
     let output_path = output_path();
     if let Some(parent) = output_path.parent()
         && !parent.as_os_str().is_empty()
@@ -355,21 +438,29 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
             "tessera profiler failed to create output directory {}: {err}",
             parent.display()
         );
-        return;
+        return None;
     }
-    let file = match options.open(&output_path) {
-        Ok(file) => file,
+    let mut options = OpenOptions::new();
+    options.create(true).write(true).truncate(true);
+    match options.open(&output_path) {
+        Ok(file) => Some(OutputSink::File(file)),
         Err(err) => {
             error!(
                 "tessera profiler failed to open output file {}: {err}",
                 output_path.display()
             );
-            return;
+            None
         }
+    }
+}
+
+fn worker_loop(receiver: mpsc::Receiver<Message>) {
+    let Some(sink) = open_output_sink() else {
+        return;
     };
     let mut state = WorkerState {
         frames: HashMap::new(),
-        writer: BufWriter::new(file),
+        writer: BufWriter::new(sink),
         header_written: false,
     };
 

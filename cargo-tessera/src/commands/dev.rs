@@ -1,7 +1,13 @@
 use std::{
+    io::{BufRead, BufReader, Read},
     path::{Path, PathBuf},
-    process::{Child, Command},
-    sync::mpsc::channel,
+    process::{Child, Command, Stdio},
+    sync::{
+        Arc,
+        atomic::{AtomicBool, Ordering},
+        mpsc::{Sender, channel},
+    },
+    thread,
     time::{Duration, Instant},
 };
 
@@ -20,21 +26,181 @@ pub fn execute(
     profiling_output: Option<&Path>,
     debug_dirty_overlay: bool,
     asset_backend_override: Option<AssetBackend>,
+    top: bool,
 ) -> Result<()> {
-    let feature_overrides = build_tessera_ui_features(profiling_output, debug_dirty_overlay);
-    run_color_check(package, &feature_overrides)?;
+    let asset_backend = resolve_asset_backend(asset_backend_override)?;
 
-    output::status("Starting", "dev server (auto rebuild/restart)");
+    if !top {
+        let feature_overrides =
+            build_tessera_ui_features(profiling_output, None, debug_dirty_overlay);
+        return supervise(SuperviseConfig {
+            verbose,
+            package: package.map(str::to_string),
+            release,
+            profiling_output: profiling_output.map(Path::to_path_buf),
+            profiling_ipc: None,
+            asset_backend,
+            feature_overrides,
+            reporter: Reporter::Console,
+            stop: Arc::new(AtomicBool::new(false)),
+        });
+    }
+
+    // Live `--top` mode: a private local IPC endpoint is created here and the
+    // app connects to it automatically. The endpoint is managed entirely by the
+    // tool and is never user-specified.
+    let ipc_name = unique_profiler_endpoint();
+    let listener = crate::commands::profiling::bind_ipc_listener(&ipc_name)?;
+    let feature_overrides =
+        build_tessera_ui_features(profiling_output, Some(&ipc_name), debug_dirty_overlay);
+    let (logs_tx, logs_rx) = channel();
+    let stop = Arc::new(AtomicBool::new(false));
+
+    let package_owned = package.map(str::to_string);
+    let profiling_output_owned = profiling_output.map(Path::to_path_buf);
+    let ipc_name_owned = ipc_name.clone();
+    let supervisor = {
+        let stop = Arc::clone(&stop);
+        let feature_overrides = feature_overrides.clone();
+        thread::spawn(move || {
+            supervise(SuperviseConfig {
+                verbose,
+                package: package_owned,
+                release,
+                profiling_output: profiling_output_owned,
+                profiling_ipc: Some(ipc_name_owned),
+                asset_backend,
+                feature_overrides,
+                reporter: Reporter::Tui(logs_tx),
+                stop,
+            })
+        })
+    };
+
+    let options = crate::commands::profiling::WatchOptions {
+        refresh: Duration::from_millis(250),
+        top: 15,
+        window: 120,
+        min_count: 1,
+    };
+    let view = crate::commands::profiling::run_view(listener, options, logs_rx, Arc::clone(&stop));
+    // The user quit the live view; tear the dev server down as well.
+    stop.store(true, Ordering::Relaxed);
+    let _ = supervisor.join();
+    view
+}
+
+/// Builds a per-process local IPC endpoint name/path for the live profiler.
+fn unique_profiler_endpoint() -> String {
+    let pid = std::process::id();
+    #[cfg(windows)]
+    {
+        format!("tessera-profiler-{pid}")
+    }
+    #[cfg(unix)]
+    {
+        std::env::temp_dir()
+            .join(format!("tessera-profiler-{pid}.sock"))
+            .to_string_lossy()
+            .into_owned()
+    }
+}
+
+/// Where dev-server status messages go: the terminal, or the live view's log
+/// pane.
+#[derive(Clone)]
+enum Reporter {
+    Console,
+    Tui(Sender<String>),
+}
+
+impl Reporter {
+    fn status(&self, label: &str, message: impl AsRef<str>) {
+        match self {
+            Reporter::Console => output::status(label, message),
+            Reporter::Tui(tx) => {
+                let _ = tx.send(format!("{label:>10} {}", message.as_ref()));
+            }
+        }
+    }
+
+    fn log(&self, line: impl Into<String>) {
+        match self {
+            Reporter::Console => println!("{}", line.into()),
+            Reporter::Tui(tx) => {
+                let _ = tx.send(line.into());
+            }
+        }
+    }
+
+    fn warn(&self, message: impl AsRef<str>) {
+        match self {
+            Reporter::Console => output::warn(message),
+            Reporter::Tui(tx) => {
+                let _ = tx.send(format!("{:>10} {}", "warn", message.as_ref()));
+            }
+        }
+    }
+
+    fn error(&self, message: impl AsRef<str>) {
+        match self {
+            Reporter::Console => output::error(message),
+            Reporter::Tui(tx) => {
+                let _ = tx.send(format!("{:>10} {}", "error", message.as_ref()));
+            }
+        }
+    }
+
+    fn is_tui(&self) -> bool {
+        matches!(self, Reporter::Tui(_))
+    }
+}
+
+struct SuperviseConfig {
+    verbose: bool,
+    package: Option<String>,
+    release: bool,
+    profiling_output: Option<PathBuf>,
+    profiling_ipc: Option<String>,
+    asset_backend: AssetBackend,
+    feature_overrides: Vec<String>,
+    reporter: Reporter,
+    stop: Arc<AtomicBool>,
+}
+
+fn supervise(config: SuperviseConfig) -> Result<()> {
+    let SuperviseConfig {
+        verbose,
+        package,
+        release,
+        profiling_output,
+        profiling_ipc,
+        asset_backend,
+        feature_overrides,
+        reporter,
+        stop,
+    } = config;
+    let package = package.as_deref();
+    let profiling_output = profiling_output.as_deref();
+    let profiling_ipc = profiling_ipc.as_deref();
+
+    // Color-check diagnostics print straight to the terminal, which would
+    // corrupt the live view, so they are skipped while `--top` owns the screen.
+    if !reporter.is_tui() {
+        run_color_check(package, &feature_overrides)?;
+    }
+
+    reporter.status("Starting", "dev server (auto rebuild/restart)");
     if let Some(pkg) = package {
-        output::status("Package", format!("`{}`", pkg));
+        reporter.status("Package", format!("`{pkg}`"));
     }
     if let Some(path) = profiling_output {
-        output::status("Profiling", format!("enabled ({})", path.display()));
+        reporter.status("Profiling", format!("enabled ({})", path.display()));
     }
-    if debug_dirty_overlay {
-        output::status("DirtyOverlay", "enabled");
+    if let Some(name) = profiling_ipc {
+        reporter.status("Profiling", format!("live view over local IPC ({name})"));
     }
-    output::status("Watching", "for file changes");
+    reporter.status("Watching", "for file changes");
 
     let (tx, rx) = channel();
     let mut watcher = notify::recommended_watcher(move |res: Result<Event, _>| {
@@ -54,8 +220,7 @@ pub fn execute(
     } else {
         PathBuf::from(".")
     };
-    let asset_backend = resolve_asset_backend(asset_backend_override)?;
-    output::status("Assets", format!("backend `{}`", asset_backend.as_str()));
+    reporter.status("Assets", format!("backend `{}`", asset_backend.as_str()));
 
     // Watch the src directory
     let src_path = package_dir.join("src");
@@ -95,6 +260,10 @@ pub fn execute(
     let debounce_window = Duration::from_millis(300);
 
     loop {
+        if stop.load(Ordering::Relaxed) {
+            break;
+        }
+
         // Wait for file changes (or time out to check running processes)
         match rx.recv_timeout(Duration::from_millis(100)) {
             Ok(_) => {
@@ -105,7 +274,7 @@ pub fn execute(
                 // Cancel an in-flight build so we only build once per stable
                 // tree.
                 if let Some(mut active_build) = build_child.take() {
-                    output::status("Canceling", "in-progress build due to changes");
+                    reporter.status("Canceling", "in-progress build due to changes");
                     let _ = active_build.kill();
                     let _ = active_build.wait();
                 }
@@ -117,14 +286,14 @@ pub fn execute(
         // Kick off a build once the tree is quiet and no build is currently
         // running.
         if pending_change && build_child.is_none() && last_change.elapsed() >= debounce_window {
-            if !color_check_current {
+            if !color_check_current && !reporter.is_tui() {
                 match run_color_check(package, &feature_overrides) {
                     Ok(()) => {
                         color_check_current = true;
                     }
                     Err(err) => {
-                        output::error(format!("color check failed: {err}"));
-                        output::warn("waiting for changes");
+                        reporter.error(format!("color check failed: {err}"));
+                        reporter.warn("waiting for changes");
                         pending_change = false;
                         continue;
                     }
@@ -137,7 +306,7 @@ pub fn execute(
                 let _ = c.wait();
             }
 
-            output::status("Building", "project");
+            reporter.status("Building", "project");
 
             let mut build_cmd = Command::new("cargo");
             build_cmd.arg("build");
@@ -150,16 +319,25 @@ pub fn execute(
             if let Some(pkg) = package {
                 build_cmd.arg("-p").arg(pkg);
             }
-            configure_tessera_ui_features(&mut build_cmd, &feature_overrides, profiling_output);
+            configure_tessera_ui_features(
+                &mut build_cmd,
+                &feature_overrides,
+                profiling_output,
+                profiling_ipc,
+            );
             build_cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
+            if reporter.is_tui() {
+                build_cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+            }
 
             match build_cmd.spawn() {
-                Ok(c) => {
+                Ok(mut c) => {
+                    forward_child_output(&mut c, &reporter);
                     build_child = Some(c);
                     pending_change = false;
                 }
                 Err(e) => {
-                    output::error(format!("failed to start build: {e}"));
+                    reporter.error(format!("failed to start build: {e}"));
                 }
             }
         }
@@ -169,9 +347,9 @@ pub fn execute(
             match active_build.try_wait() {
                 Ok(Some(status)) => {
                     if !status.success() {
-                        output::warn("build failed; waiting for changes");
+                        reporter.warn("build failed; waiting for changes");
                     } else if pending_change {
-                        output::status("Rebuilding", "new changes arrived during build");
+                        reporter.status("Rebuilding", "new changes arrived during build");
                     } else {
                         let mut run_cmd = Command::new("cargo");
                         run_cmd.arg("run");
@@ -185,16 +363,21 @@ pub fn execute(
                             &mut run_cmd,
                             &feature_overrides,
                             profiling_output,
+                            profiling_ipc,
                         );
                         run_cmd.env("TESSERA_ASSET_BACKEND", asset_backend.as_str());
+                        if reporter.is_tui() {
+                            run_cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
+                        }
 
                         match run_cmd.spawn() {
-                            Ok(c) => {
+                            Ok(mut c) => {
+                                forward_child_output(&mut c, &reporter);
                                 child = Some(c);
-                                output::status("Running", "app (watching for changes)");
+                                reporter.status("Running", "app (watching for changes)");
                             }
                             Err(e) => {
-                                output::error(format!("failed to start app: {e}"));
+                                reporter.error(format!("failed to start app: {e}"));
                             }
                         }
                     }
@@ -203,7 +386,7 @@ pub fn execute(
                     build_child = Some(active_build);
                 }
                 Err(err) => {
-                    output::warn(format!("failed to check build status: {err}"));
+                    reporter.warn(format!("failed to check build status: {err}"));
                 }
             }
         }
@@ -217,18 +400,18 @@ pub fn execute(
                             .code()
                             .map(|c| c.to_string())
                             .unwrap_or_else(|| "unknown".to_string());
-                        output::warn(format!("application exited with status {code}"));
+                        reporter.warn(format!("application exited with status {code}"));
                     } else {
-                        output::status("Stopped", "application exited normally");
+                        reporter.status("Stopped", "application exited normally");
                     }
-                    output::status("Stopping", "dev server");
+                    reporter.status("Stopping", "dev server");
                     break;
                 }
                 Ok(None) => {
                     child = Some(running_child);
                 }
                 Err(err) => {
-                    output::warn(format!("failed to check app status: {err}"));
+                    reporter.warn(format!("failed to check app status: {err}"));
                 }
             }
         }
@@ -244,15 +427,44 @@ pub fn execute(
         let _ = c.wait();
     }
 
+    stop.store(true, Ordering::Relaxed);
     Ok(())
+}
+
+/// Forwards a managed child's stdout/stderr lines to the reporter's log sink.
+///
+/// The live view owns the terminal, so subprocess output is piped here instead
+/// of being inherited; before the view starts these lines are echoed to the
+/// console, and afterwards they appear in the view's log pane.
+fn forward_child_output(child: &mut Child, reporter: &Reporter) {
+    if let Some(stdout) = child.stdout.take() {
+        forward_lines(stdout, reporter.clone());
+    }
+    if let Some(stderr) = child.stderr.take() {
+        forward_lines(stderr, reporter.clone());
+    }
+}
+
+fn forward_lines(stream: impl Read + Send + 'static, reporter: Reporter) {
+    let _ = thread::Builder::new()
+        .name("tessera-dev-log".to_string())
+        .spawn(move || {
+            for line in BufReader::new(stream)
+                .lines()
+                .map_while(std::result::Result::ok)
+            {
+                reporter.log(line);
+            }
+        });
 }
 
 fn build_tessera_ui_features(
     profiling_output: Option<&Path>,
+    profiling_ipc: Option<&str>,
     debug_dirty_overlay: bool,
 ) -> Vec<String> {
     let mut features = Vec::new();
-    if profiling_output.is_some() {
+    if profiling_output.is_some() || profiling_ipc.is_some() {
         features.push("tessera-ui/profiling".to_string());
     }
     if debug_dirty_overlay {
@@ -265,12 +477,16 @@ fn configure_tessera_ui_features(
     cmd: &mut Command,
     features: &[String],
     profiling_output: Option<&Path>,
+    profiling_ipc: Option<&str>,
 ) {
     if !features.is_empty() {
         cmd.arg("--features").arg(features.join(","));
     }
     if let Some(output_path) = profiling_output {
         cmd.env("TESSERA_PROFILING_OUTPUT", output_path);
+    }
+    if let Some(name) = profiling_ipc {
+        cmd.env("TESSERA_PROFILING_IPC", name);
     }
 }
 

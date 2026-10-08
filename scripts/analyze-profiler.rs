@@ -731,12 +731,26 @@ fn format_pct(rate: f64) -> String {
 }
 
 fn truncate(text: &str, limit: usize) -> String {
-    if text.len() <= limit {
+    if text.chars().count() <= limit {
         text.to_string()
     } else if limit <= 3 {
-        "...".to_string()
+        ".".repeat(limit)
     } else {
-        let cutoff = limit - 3;
-        format!("{}...", &text[..cutoff])
+        let prefix: String = text.chars().take(limit - 3).collect();
+        format!("{prefix}...")
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::truncate;
+
+    #[test]
+    fn truncation_handles_unicode_and_small_limits() {
+        assert_eq!(truncate("component", 6), "com...");
+        assert_eq!(truncate("ééééééé", 6), "ééé...");
+        assert_eq!(truncate("🙂🙂", 2), "🙂🙂");
+        assert_eq!(truncate("component", 0), "");
+        assert_eq!(truncate("component", 2), "..");
     }
 }

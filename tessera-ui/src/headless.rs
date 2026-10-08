@@ -51,6 +51,12 @@ use crate::{
     time::Instant,
 };
 
+#[cfg(feature = "profiling")]
+use crate::profiler::{
+    FrameMeta, begin_frame as profiler_begin_frame, end_frame as profiler_end_frame,
+    submit_frame_meta,
+};
+
 /// Environment variable that switches a Tessera application into headless mode.
 pub const HEADLESS_ENV: &str = "TESSERA_HEADLESS";
 /// Environment variable overriding the initial headless surface width.
@@ -326,13 +332,19 @@ impl HeadlessRenderer {
             .current_frame_nanos
             .saturating_add(self.frame_time.as_nanos().min(u64::MAX as u128) as u64);
         let frame_time = self.frame_origin + Duration::from_nanos(self.current_frame_nanos);
+        #[cfg(feature = "profiling")]
+        profiler_begin_frame(self.frame_index);
+        #[cfg(feature = "profiling")]
+        let frame_timer = Instant::now();
         begin_frame_clock(frame_time);
         // Tick frame-nanos receivers before the build so their state writes are
         // consumed by the current recomposition pass.
         tick_frame_nanos_receivers();
 
-        let _ = build_component_tree(&self.entry);
+        let _build_tree_result = build_component_tree(&self.entry);
 
+        #[cfg(feature = "profiling")]
+        let draw_timer = Instant::now();
         let cursor_position = self.cursor.position();
         let pointer_changes = self.cursor.take_events();
         let keyboard_events = self.keyboard.take_events();
@@ -344,9 +356,9 @@ impl HeadlessRenderer {
         self.core.compute_resource_manager_mut().clear();
 
         let core = &mut self.core;
-        let graph = TesseraRuntime::with_mut(|runtime| {
+        let (graph, _diagnostics, _record_cost) = TesseraRuntime::with_mut(|runtime| {
             let (gpu, compute_resource_manager) = core.record_resources();
-            let (graph, _requests, _diagnostics, _record_cost, _move, _reveal) =
+            let (graph, _requests, diagnostics, record_cost, _move, _reveal) =
                 runtime.component_tree.compute(
                     ComputeParams {
                         screen_size,
@@ -364,21 +376,53 @@ impl HeadlessRenderer {
                         gpu,
                     },
                 );
-            graph
+            (graph, diagnostics, record_cost)
         });
         flush_pending_focus_callbacks();
+        #[cfg(feature = "profiling")]
+        let draw_duration = draw_timer.elapsed();
 
         let frame_index = self.frame_index;
         let (composite_context, composite_registry) =
             self.core.composite_context_parts(screen_size, frame_index);
         let graph = expand_composites(graph, composite_context, composite_registry);
         let execution = graph.into_execution();
-        #[cfg(feature = "debug-dirty-overlay")]
+        #[cfg(feature = "profiling")]
+        let render_timer = Instant::now();
         #[cfg(feature = "debug-dirty-overlay")]
         self.core.render(execution, &[]);
         #[cfg(not(feature = "debug-dirty-overlay"))]
         self.core.render(execution);
+        #[cfg(feature = "profiling")]
+        let render_duration = render_timer.elapsed();
         self.cursor.frame_cleanup();
+        #[cfg(feature = "profiling")]
+        {
+            let breakdown = self.core.last_render_breakdown();
+            let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
+            submit_frame_meta(FrameMeta {
+                frame_idx: self.frame_index,
+                build_mode: _build_tree_result.profiler_build_mode(),
+                redraw_reasons: Vec::new(),
+                inter_frame_wait_ns: None,
+                partial_replay_nodes: _build_tree_result.partial_replay_nodes(),
+                total_nodes_before_build: _build_tree_result.total_nodes_before_build(),
+                render_time_ns: Some(render_duration.as_nanos()),
+                render_acquire_ns: breakdown.map(|timing| timing.acquire.as_nanos()),
+                render_build_passes_ns: breakdown.map(|timing| timing.build_passes.as_nanos()),
+                render_encode_ns: breakdown.map(|timing| timing.encode.as_nanos()),
+                render_submit_ns: breakdown.map(|timing| timing.submit.as_nanos()),
+                render_present_ns: breakdown.map(|timing| timing.present.as_nanos()),
+                build_tree_time_ns: Some(_build_tree_result.duration().as_nanos()),
+                draw_time_ns: Some(draw_duration.as_nanos()),
+                record_time_ns: Some(_record_cost.as_nanos()),
+                frame_total_ns: Some(frame_timer.elapsed().as_nanos()),
+                layout_diagnostics: Some(_diagnostics),
+                nodes,
+            });
+            profiler_end_frame();
+        }
+
         self.frame_index = self.frame_index.wrapping_add(1);
     }
 
@@ -548,6 +592,8 @@ pub fn run_headless(
 
     let mut renderer = HeadlessRenderer::new(entry, modules, headless_config)?;
     renderer.frame_time = frame_time;
+    #[cfg(feature = "profiling")]
+    crate::profiler::set_output_path(crate::renderer::resolve_profiler_output_path(&config));
 
     let stdout = std::io::stdout();
     let mut out = stdout.lock();

@@ -31,6 +31,7 @@ pub fn execute(
     width: u32,
     height: u32,
     frame_time_ms: u32,
+    profiling_output: Option<&Path>,
 ) -> Result<()> {
     let defaults = SupervisorDefaults {
         package: package.map(str::to_string),
@@ -38,6 +39,7 @@ pub fn execute(
         width,
         height,
         frame_time_ms,
+        profiling_output: profiling_output.map(|p| p.to_path_buf()),
     };
 
     let mut sessions: HashMap<String, Session> = HashMap::new();
@@ -203,6 +205,7 @@ struct SupervisorDefaults {
     width: u32,
     height: u32,
     frame_time_ms: u32,
+    profiling_output: Option<PathBuf>,
 }
 
 struct Session {
@@ -212,6 +215,7 @@ struct Session {
     width: u32,
     height: u32,
     frame_time_ms: u32,
+    profiling_output: Option<PathBuf>,
     child: Child,
     stdin: ChildStdin,
     stdout: BufReader<ChildStdout>,
@@ -294,6 +298,7 @@ fn spawn_session(
         width,
         height,
         defaults.frame_time_ms,
+        defaults.profiling_output.as_deref(),
     )?;
     let description = worker.describe();
     sessions.insert(name, worker);
@@ -302,7 +307,7 @@ fn spawn_session(
 }
 
 fn rebuild_session(sessions: &mut HashMap<String, Session>, name: &str) -> Result<Value> {
-    let (package, release, width, height, frame_time_ms) = {
+    let (package, release, width, height, frame_time_ms, profiling_output) = {
         let session = sessions
             .get(name)
             .ok_or_else(|| anyhow!("unknown session `{name}`"))?;
@@ -312,6 +317,7 @@ fn rebuild_session(sessions: &mut HashMap<String, Session>, name: &str) -> Resul
             session.width,
             session.height,
             session.frame_time_ms,
+            session.profiling_output.clone(),
         )
     };
 
@@ -319,7 +325,15 @@ fn rebuild_session(sessions: &mut HashMap<String, Session>, name: &str) -> Resul
         old.terminate();
     }
 
-    let mut worker = launch_worker(name, &package, release, width, height, frame_time_ms)?;
+    let mut worker = launch_worker(
+        name,
+        &package,
+        release,
+        width,
+        height,
+        frame_time_ms,
+        profiling_output.as_deref(),
+    )?;
     let description = worker.describe();
     worker.send(json!({"cmd": "resize", "width": width, "height": height}))?;
     sessions.insert(name.to_string(), worker);
@@ -349,18 +363,25 @@ fn launch_worker(
     width: u32,
     height: u32,
     frame_time_ms: u32,
+    profiling_output: Option<&Path>,
 ) -> Result<Session> {
-    build_package(package, release)?;
+    let profiling = profiling_output.is_some();
+    build_package(package, release, profiling)?;
     let binary = resolve_binary(package, release)?;
 
-    let mut child = Command::new(&binary)
+    let mut child_command = Command::new(&binary);
+    child_command
         .env("TESSERA_HEADLESS", "1")
         .env("TESSERA_HEADLESS_WIDTH", width.to_string())
         .env("TESSERA_HEADLESS_HEIGHT", height.to_string())
         .env("TESSERA_HEADLESS_FRAME_TIME_MS", frame_time_ms.to_string())
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::inherit())
+        .stderr(Stdio::inherit());
+    if let Some(path) = profiling_output {
+        child_command.env("TESSERA_PROFILING_OUTPUT", path);
+    }
+    let mut child = child_command
         .spawn()
         .map_err(|err| anyhow!("failed to spawn `{}`: {err}", binary.display()))?;
 
@@ -388,18 +409,22 @@ fn launch_worker(
         width,
         height,
         frame_time_ms,
+        profiling_output: profiling_output.map(|p| p.to_path_buf()),
         child,
         stdin,
         stdout,
     })
 }
 
-fn build_package(package: &str, release: bool) -> Result<()> {
+fn build_package(package: &str, release: bool, profiling: bool) -> Result<()> {
     eprintln!("[headless] building package `{package}`");
     let mut command = Command::new("cargo");
     command.arg("build").arg("-p").arg(package);
     if release {
         command.arg("--release");
+    }
+    if profiling {
+        command.arg("--features").arg("tessera-ui/profiling");
     }
     let status = command
         .status()

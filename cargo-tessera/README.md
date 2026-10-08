@@ -82,6 +82,17 @@ cargo tessera profiling analyze-android \
   --pull-to profiles/android.jsonl
 ```
 
+### Headless profiling
+
+```bash
+cargo tessera headless -p example --profiling-output target/headless-profile.jsonl
+```
+
+The JSONL session protocol supports synthetic input, frame rendering, snapshots,
+and viewport resizing without opening a window. Profiler records include
+component build, layout/draw calculation, command encoding, and queue submission
+timings. These measure CPU wall time, not GPU execution or desktop presentation.
+
 ### Build for Android (experimental)
 
 Make sure Android SDK/NDK are installed and `adb` is available in your PATH.
