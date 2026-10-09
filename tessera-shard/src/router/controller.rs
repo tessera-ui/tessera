@@ -119,14 +119,6 @@ impl RouterController {
         self.route_stack.last().map(|entry| entry.route_id)
     }
 
-    pub(crate) fn exec_current(&self) -> bool {
-        let Some(destination) = self.current_destination() else {
-            return false;
-        };
-        destination();
-        true
-    }
-
     /// Copies the current page entry point so callers can run it without
     /// holding a borrow of the controller.
     pub(crate) fn current_destination(&self) -> Option<Arc<dyn Fn() + Send + Sync>> {
