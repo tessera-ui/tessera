@@ -9,7 +9,7 @@ use std::{collections::BTreeSet, time::Duration};
 use rustc_hash::FxHashMap as HashMap;
 
 use crate::{
-    Px, PxPosition, PxSize,
+    Px, PxPosition, PxRect, PxSize,
     build_tree::build_component_tree,
     component_tree::{ComputeMode, ComputeParams, LayoutFrameDiagnostics, clear_layout_snapshots},
     context::{reset_component_context_tracking, reset_context_read_dependencies},
@@ -339,6 +339,12 @@ impl<'a> NodeAssert<'a> {
     /// Assert that the node exists.
     pub fn exists(self) -> Self {
         self
+    }
+
+    /// Returns the node's bounds in physical pixels for geometry comparisons.
+    pub fn bounds(&self) -> PxRect {
+        let node = self.current();
+        PxRect::from_position_size(node.position, node.size)
     }
 
     /// Assert the node position in physical pixels.

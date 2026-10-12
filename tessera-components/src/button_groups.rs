@@ -665,14 +665,18 @@ mod tests {
             .viewport_px(400, 120),
         );
         let first = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-        first.node("one").x(16);
-        first.node("one").width(26);
-        first.node("two").x(83);
-        first.node("two").width(25);
-        first.node("three").x(144);
+        let one = first.node("one").bounds();
+        let two = first.node("two").bounds();
+        let three = first.node("three").bounds();
+        assert!(one.width > Px::ZERO);
+        first.node("one").left_of("two");
+        first.node("two").left_of("three");
 
         let now = Instant::now();
-        let cursor = Some(PxPosition::new(Px::new(29), Px::new(28)));
+        let cursor = Some(PxPosition::from_f32_xy(
+            one.x.to_f32() + one.width.to_f32() / 2.0,
+            one.y.to_f32() + one.height.to_f32() / 2.0,
+        ));
         let press = PointerChange::new(
             now,
             1,
@@ -703,7 +707,11 @@ mod tests {
                 33_333_334 + 16_666_667 * (frame - 2),
             );
         }
-        snap.node("three").x(156);
+        snap.node("one").x(one.x.raw() + 6).width(one.width.raw());
+        snap.node("two").x(two.x.raw() + 12).width(two.width.raw());
+        snap.node("three")
+            .x(three.x.raw() + 12)
+            .width(three.width.raw());
     }
 
     #[tessera]
@@ -726,12 +734,18 @@ mod tests {
             .viewport_px(400, 120),
         );
         let first = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-        first.node("one").width(26);
-        first.node("two").x(83);
-        first.node("three").x(144);
+        let one = first.node("one").bounds();
+        let two = first.node("two").bounds();
+        let three = first.node("three").bounds();
+        assert!(one.width > Px::ZERO);
+        first.node("one").left_of("two");
+        first.node("two").left_of("three");
 
         let now = Instant::now();
-        let cursor = Some(PxPosition::new(Px::new(29), Px::new(28)));
+        let cursor = Some(PxPosition::from_f32_xy(
+            one.x.to_f32() + one.width.to_f32() / 2.0,
+            one.y.to_f32() + one.height.to_f32() / 2.0,
+        ));
         let press = PointerChange::new(
             now,
             1,
@@ -762,7 +776,11 @@ mod tests {
                 33_333_334 + 16_666_667 * (frame - 2),
             );
         }
-        snap.node("three").x(156);
+        snap.node("one").x(one.x.raw() + 6).width(one.width.raw());
+        snap.node("two").x(two.x.raw() + 12).width(two.width.raw());
+        snap.node("three")
+            .x(three.x.raw() + 12)
+            .width(three.width.raw());
     }
 
     #[test]
