@@ -33,6 +33,7 @@ thread_local! {
 }
 
 /// Returns the layout diagnostics captured by the most recent pumped frame.
+#[cfg(test)]
 pub(crate) fn last_layout_frame_diagnostics() -> Option<LayoutFrameDiagnostics> {
     LAST_LAYOUT_FRAME_DIAGNOSTICS.with(|cell| cell.get())
 }
