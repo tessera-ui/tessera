@@ -594,13 +594,12 @@ impl ShadowAtlasPage {
     fn new(
         registry: &ExternalTextureRegistry,
         device: &wgpu::Device,
-        size: u32,
+        size: PxSize,
         sample_count: u32,
         frame_index: u64,
     ) -> Self {
-        let size_px = PxSize::new(Px::new(size as i32), Px::new(size as i32));
         let desc = RenderTextureDesc {
-            size: size_px,
+            size,
             format: wgpu::TextureFormat::Rgba8Unorm,
         };
         let mask = registry.allocate(device, desc.clone(), sample_count);
@@ -610,14 +609,14 @@ impl ShadowAtlasPage {
             [a, b]
         });
         Self {
-            size: size_px,
+            size,
             mask,
             blur,
             free_rects: vec![AtlasRect {
                 x: 0,
                 y: 0,
-                width: size,
-                height: size,
+                width: size.width.positive(),
+                height: size.height.positive(),
             }],
             last_used_frame: frame_index,
         }
@@ -701,7 +700,6 @@ impl ShadowAtlasPage {
 
 struct ShadowAtlas {
     pages: Vec<Option<ShadowAtlasPage>>,
-    default_size: u32,
     max_dimension: u32,
     sample_count: Option<u32>,
 }
@@ -710,7 +708,6 @@ impl ShadowAtlas {
     fn new() -> Self {
         Self {
             pages: Vec::new(),
-            default_size: SHADOW_ATLAS_DEFAULT_SIZE,
             max_dimension: 0,
             sample_count: None,
         }
@@ -720,10 +717,6 @@ impl ShadowAtlas {
         if self.max_dimension == 0 {
             let max_dimension = device.limits().max_texture_dimension_2d;
             self.max_dimension = max_dimension;
-            self.default_size = self
-                .default_size
-                .min(max_dimension)
-                .max(SHADOW_ATLAS_MIN_SIZE);
         }
     }
 
@@ -771,9 +764,13 @@ impl ShadowAtlas {
             }
         }
 
-        let needed = width.max(height).max(SHADOW_ATLAS_MIN_SIZE);
-        let mut page_size = self.default_size.max(needed);
-        page_size = page_size.min(self.max_dimension);
+        let previous_size = self
+            .pages
+            .iter()
+            .flatten()
+            .map(|page| page.size)
+            .max_by_key(|size| size.width.positive() as u64 * size.height.positive() as u64);
+        let page_size = atlas_page_size(width, height, previous_size, self.max_dimension);
         let page_index = self.add_page(registry, device, page_size, sample_count, frame_index);
         let rect = self
             .pages
@@ -788,7 +785,7 @@ impl ShadowAtlas {
         &mut self,
         registry: &ExternalTextureRegistry,
         device: &wgpu::Device,
-        size: u32,
+        size: PxSize,
         sample_count: u32,
         frame_index: u64,
     ) -> usize {
@@ -865,7 +862,7 @@ fn filter_active_layers(shadow: ShadowLayers) -> Vec<ShadowLayer> {
     layers
 }
 
-const SHADOW_ATLAS_DEFAULT_SIZE: u32 = 2048;
+const SHADOW_ATLAS_MAX_GROWTH_SIZE: u32 = 2048;
 const SHADOW_ATLAS_MIN_SIZE: u32 = 256;
 const SHADOW_ATLAS_GUARD_PX: u32 = 1;
 const SHADOW_ATLAS_LAYER_CAPACITY: usize = 2;
@@ -875,6 +872,28 @@ const SHADOW_ATLAS_HEAT_EVICT_FRAMES: u64 = 120;
 const SHADOW_AA_MARGIN_PX: f32 = 1.0;
 const SHADOW_MAX_SINGLE_BLUR_RADIUS: f32 = 30.0;
 const SHADOW_STAMP_EVICT_FRAMES: u64 = 120;
+
+fn atlas_page_size(
+    width: u32,
+    height: u32,
+    previous: Option<PxSize>,
+    max_dimension: u32,
+) -> PxSize {
+    // A page owns multiple double-buffered textures. Keep the first allocation
+    // proportional to the shadow, then grow new pages to amortize dense scenes.
+    let dimension = |required: u32, previous: u32| {
+        required
+            .max(SHADOW_ATLAS_MIN_SIZE)
+            .next_power_of_two()
+            .max(previous.saturating_mul(2).min(SHADOW_ATLAS_MAX_GROWTH_SIZE))
+            .min(max_dimension)
+    };
+    let previous = previous.unwrap_or(PxSize::ZERO);
+    PxSize::new(
+        Px(dimension(width, previous.width.positive()) as i32),
+        Px(dimension(height, previous.height.positive()) as i32),
+    )
+}
 
 fn blur_pass_radii(radius: f32) -> SmallVec<[f32; 4]> {
     if radius <= 0.0 {
@@ -1044,4 +1063,32 @@ fn build_fallback_output(items: &[ShadowItem]) -> CompositeOutput {
         emit_fallback_item(&mut output, item);
     }
     output
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn first_wide_shadow_uses_a_compact_rectangular_page() {
+        let size = atlas_page_size(1000, 120, None, 8192);
+        assert_eq!(size, PxSize::new(Px(1024), Px(256)));
+        let texture_bytes = size.width.positive() as u64 * size.height.positive() as u64 * 4;
+        let page_bytes = texture_bytes * (1 + 2 * SHADOW_ATLAS_LAYER_CAPACITY as u64) * 2;
+        assert_eq!(page_bytes, 10 * 1024 * 1024);
+    }
+
+    #[test]
+    fn additional_pages_grow_without_exceeding_the_growth_target() {
+        let size = atlas_page_size(120, 120, Some(PxSize::new(Px(256), Px(256))), 8192);
+        assert_eq!(size, PxSize::new(Px(512), Px(512)));
+        let size = atlas_page_size(3000, 120, Some(PxSize::new(Px(2048), Px(2048))), 8192);
+        assert_eq!(size, PxSize::new(Px(4096), Px(2048)));
+    }
+
+    #[test]
+    fn page_size_respects_non_power_of_two_device_limits() {
+        let size = atlas_page_size(590, 120, Some(PxSize::new(Px(512), Px(256))), 600);
+        assert_eq!(size, PxSize::new(Px(600), Px(512)));
+    }
 }
