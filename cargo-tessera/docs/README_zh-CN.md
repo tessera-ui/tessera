@@ -25,6 +25,9 @@ cargo tessera dev
 
 `cargo tessera dev` 会持续监听 `src/`、`Cargo.toml` 以及（若存在）`build.rs`，保存后立即重建并重启应用。加上 `--verbose` 可查看底层 `cargo` 命令。
 
+桌面性能记录中的 `frame_total_ns` 包含无障碍更新发布及光标／输入法请求的应用耗时。
+Headless 会话不会执行这些平台操作；如果无窗口测量没有复现卡顿，应对照桌面性能记录。
+
 ### 构建发布版本
 
 ```bash

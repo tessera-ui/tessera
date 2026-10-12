@@ -803,6 +803,8 @@ struct RenderFrameOutcome {
     accessibility_update: Option<TreeUpdate>,
     request_window_drag: bool,
     runtime_pending_work: RuntimePendingWork,
+    #[cfg(feature = "profiling")]
+    frame_meta: FrameMeta,
     #[cfg(feature = "debug-dirty-overlay")]
     overlay_clear_pending: bool,
 }
@@ -1295,8 +1297,6 @@ Fps: {:.2}
             redraw_reasons,
         } = context;
         #[cfg(feature = "profiling")]
-        let frame_timer = Instant::now();
-        #[cfg(feature = "profiling")]
         profiler_begin_frame(frame_idx);
         begin_frame_clock(Instant::now());
         // Tick frame-nanos receivers before build so their state writes are
@@ -1412,7 +1412,7 @@ Fps: {:.2}
         );
 
         #[cfg(feature = "profiling")]
-        {
+        let frame_meta = {
             let render_duration_ns = Some(render_cost.as_nanos());
             let render_acquire_ns = render_breakdown.map(|breakdown| breakdown.acquire.as_nanos());
             let render_build_passes_ns =
@@ -1420,10 +1420,9 @@ Fps: {:.2}
             let render_encode_ns = render_breakdown.map(|breakdown| breakdown.encode.as_nanos());
             let render_submit_ns = render_breakdown.map(|breakdown| breakdown.submit.as_nanos());
             let render_present_ns = render_breakdown.map(|breakdown| breakdown.present.as_nanos());
-            let frame_total_ns = frame_timer.elapsed().as_nanos();
             let inter_frame_wait_ns = (frame_idx > 0).then(|| frame_delta().as_nanos());
             let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
-            submit_frame_meta(FrameMeta {
+            FrameMeta {
                 frame_idx,
                 build_mode: build_tree_result.profiler_build_mode(),
                 redraw_reasons,
@@ -1441,11 +1440,11 @@ Fps: {:.2}
                 build_tree_time_ns: Some(build_tree_result.duration().as_nanos()),
                 draw_time_ns: Some(draw_cost.as_nanos()),
                 record_time_ns: Some(record_cost.as_nanos()),
-                frame_total_ns: Some(frame_total_ns),
+                frame_total_ns: None,
                 layout_diagnostics: Some(layout_diagnostics),
                 nodes,
-            });
-        }
+            }
+        };
 
         // Prepare accessibility tree update before clearing the component tree
         // if needed
@@ -1454,9 +1453,6 @@ Fps: {:.2}
         } else {
             None
         };
-
-        #[cfg(feature = "profiling")]
-        profiler_end_frame();
 
         // Handle the window requests (cursor / IME)
         // Only set cursor when not at window edges to let window manager handle
@@ -1539,6 +1535,8 @@ Fps: {:.2}
             accessibility_update,
             request_window_drag,
             runtime_pending_work,
+            #[cfg(feature = "profiling")]
+            frame_meta,
             #[cfg(feature = "debug-dirty-overlay")]
             overlay_clear_pending,
         }
@@ -1949,11 +1947,15 @@ impl<F: Fn()> Renderer<F> {
         #[cfg(feature = "profiling")]
         let redraw_reasons = self.take_pending_redraw_reasons();
         let window_label = &self.config.window_title;
+        #[cfg(feature = "profiling")]
+        let frame_timer = Instant::now();
 
         let RenderFrameOutcome {
             accessibility_update,
             request_window_drag,
             runtime_pending_work,
+            #[cfg(feature = "profiling")]
+            mut frame_meta,
             #[cfg(feature = "debug-dirty-overlay")]
             overlay_clear_pending,
         } = {
@@ -1991,6 +1993,13 @@ impl<F: Fn()> Renderer<F> {
 
         if let Some(tree_update) = accessibility_update {
             self.push_accessibility_update(tree_update);
+        }
+
+        #[cfg(feature = "profiling")]
+        {
+            frame_meta.frame_total_ns = Some(frame_timer.elapsed().as_nanos());
+            submit_frame_meta(frame_meta);
+            profiler_end_frame();
         }
 
         self.app = Some(app);

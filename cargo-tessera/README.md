@@ -94,6 +94,10 @@ component build, layout/draw calculation, render graph preparation
 (`render_prepare_ns`), command encoding, and queue submission timings. These
 measure CPU wall time, not GPU execution or desktop presentation.
 
+Desktop `frame_total_ns` also includes publishing accessibility updates and
+applying cursor/IME requests. Headless sessions omit these platform operations;
+compare desktop traces when offscreen measurements do not reproduce a stutter.
+
 Set `TESSERA_HEADLESS_GPU_TIMING=1` to add `render_gpu_ns` timestamp measurements
 on supported native adapters. This mode waits for GPU readback after each frame;
 the wait is excluded from CPU frame timings and changes CPU/GPU overlap. GPU
