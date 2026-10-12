@@ -20,7 +20,7 @@ use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 use tessera_ui::{
     Color, PxPosition,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
 
@@ -226,16 +226,19 @@ pub struct GlyphonTextRender {
     /// Glyphon font atlas, a heavy-weight, shared resource.
     atlas: glyphon::TextAtlas,
     /// Glyphon cache, a heavy-weight, shared resource.
-    #[allow(unused)]
     cache: glyphon::Cache,
-    /// Glyphon viewport, holds screen-size related buffers.
-    viewport: glyphon::Viewport,
     /// Glyphon swash cache, a CPU-side cache for glyph rasterization.
     swash_cache: glyphon::SwashCache,
     /// Multisample state for anti-aliasing.
     msaa: wgpu::MultisampleState,
     /// Glyphon text renderer, responsible for rendering text.
+    renderers: Vec<TextBatchResources>,
+    next_renderer: usize,
+}
+
+struct TextBatchResources {
     renderer: glyphon::TextRenderer,
+    viewport: glyphon::Viewport,
 }
 
 impl GlyphonTextRender {
@@ -267,27 +270,23 @@ impl GlyphonTextRender {
         Self {
             atlas,
             cache,
-            viewport,
             swash_cache,
             msaa,
-            renderer,
+            renderers: vec![TextBatchResources { renderer, viewport }],
+            next_renderer: 0,
         }
     }
 }
 
 impl DrawablePipeline<TextCommand> for GlyphonTextRender {
+    fn begin_frame(&mut self, _context: &FrameContext<'_>) {
+        self.next_renderer = 0;
+    }
+
     fn draw(&mut self, context: &mut DrawContext<TextCommand>) {
         if context.commands.is_empty() {
             return;
         }
-
-        self.viewport.update(
-            context.queue,
-            glyphon::Resolution {
-                width: context.target_size.width.positive(),
-                height: context.target_size.height.positive(),
-            },
-        );
 
         let text_areas = context.commands.iter().map(|(command, _size, start_pos)| {
             let start_pos = PxPosition::from_f32_xy(
@@ -297,27 +296,45 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             command.data.text_area(start_pos)
         });
 
+        // Batches in one submission need distinct buffers because queued
+        // uploads precede all of its draw commands. Reuse them across frames.
+        if self.next_renderer == self.renderers.len() {
+            self.renderers.push(TextBatchResources {
+                renderer: glyphon::TextRenderer::new(
+                    &mut self.atlas,
+                    context.device,
+                    self.msaa,
+                    None,
+                ),
+                viewport: glyphon::Viewport::new(context.device, &self.cache),
+            });
+        }
+        let resources = &mut self.renderers[self.next_renderer];
+        self.next_renderer += 1;
+        resources.viewport.update(
+            context.queue,
+            glyphon::Resolution {
+                width: context.target_size.width.positive(),
+                height: context.target_size.height.positive(),
+            },
+        );
+        let renderer = &mut resources.renderer;
         let mut font_system = write_font_system();
-        self.renderer
+        renderer
             .prepare(
                 context.device,
                 context.queue,
                 &mut font_system,
                 &mut self.atlas,
-                &self.viewport,
+                &resources.viewport,
                 text_areas,
                 &mut self.swash_cache,
             )
             .expect("glyphon prepare failed");
 
-        self.renderer
-            .render(&self.atlas, &self.viewport, context.render_pass)
+        renderer
+            .render(&self.atlas, &resources.viewport, context.render_pass)
             .expect("glyphon render failed");
-
-        // Re-create the renderer to release borrow on atlas
-        let new_renderer =
-            glyphon::TextRenderer::new(&mut self.atlas, context.device, self.msaa, None);
-        let _ = std::mem::replace(&mut self.renderer, new_renderer);
     }
 }
 

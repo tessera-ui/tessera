@@ -4,7 +4,7 @@ use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     Color, PxPosition, PxSize,
-    renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
+    renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu::{self, util::DeviceExt},
 };
 
@@ -44,6 +44,12 @@ struct AtlasCacheEntry {
     page_index: usize,
 }
 
+struct SampleResources {
+    buffer: wgpu::Buffer,
+    bind_group: wgpu::BindGroup,
+    page_index: usize,
+}
+
 #[derive(ShaderType, Clone, PartialEq, Copy)]
 struct ImageVectorUniforms {
     origin: Vec2,
@@ -74,6 +80,8 @@ pub struct ImageVectorPipeline {
     resources: HashMap<ImageVectorData, GeometryResources>,
     cache: HashMap<AtlasKey, AtlasCacheEntry>,
     raster_sample_count: u32,
+    sample_resources: Vec<SampleResources>,
+    next_sample: usize,
 }
 
 impl ImageVectorPipeline {
@@ -274,6 +282,8 @@ impl ImageVectorPipeline {
             resources: HashMap::new(),
             cache: HashMap::new(),
             raster_sample_count,
+            sample_resources: Vec::new(),
+            next_sample: 0,
         }
     }
 
@@ -444,6 +454,10 @@ impl ImageVectorPipeline {
 }
 
 impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
+    fn begin_frame(&mut self, _context: &FrameContext<'_>) {
+        self.next_sample = 0;
+    }
+
     fn draw(&mut self, context: &mut DrawContext<ImageVectorCommand>) {
         if context.commands.is_empty() {
             return;
@@ -488,42 +502,74 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
                 .write(&uniforms)
                 .expect("sample uniform serialization failed");
 
-            let uniform_buffer =
-                context
-                    .device
-                    .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                        label: Some("image_vector_sample_uniform_buffer"),
-                        contents: &buffer.into_inner(),
-                        usage: wgpu::BufferUsages::UNIFORM,
-                    });
-
-            let bind_group = context
-                .device
-                .create_bind_group(&wgpu::BindGroupDescriptor {
-                    layout: &self.sample_bind_group_layout,
-                    entries: &[
-                        wgpu::BindGroupEntry {
-                            binding: 0,
-                            resource: wgpu::BindingResource::TextureView(
-                                self.atlas.page_view(entry.page_index),
-                            ),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 1,
-                            resource: wgpu::BindingResource::Sampler(&self.atlas_sampler),
-                        },
-                        wgpu::BindGroupEntry {
-                            binding: 2,
-                            resource: uniform_buffer.as_entire_binding(),
-                        },
-                    ],
-                    label: Some("image_vector_sample_bind_group"),
+            let bytes = buffer.into_inner();
+            let slot_index = self.next_sample;
+            self.next_sample += 1;
+            if slot_index == self.sample_resources.len() {
+                let buffer = context.device.create_buffer(&wgpu::BufferDescriptor {
+                    label: Some("image_vector_sample_uniform_buffer"),
+                    size: bytes.len() as u64,
+                    usage: wgpu::BufferUsages::UNIFORM | wgpu::BufferUsages::COPY_DST,
+                    mapped_at_creation: false,
                 });
-
-            context.render_pass.set_bind_group(0, &bind_group, &[]);
+                let bind_group = create_sample_bind_group(
+                    context.device,
+                    &self.sample_bind_group_layout,
+                    self.atlas.page_view(entry.page_index),
+                    &self.atlas_sampler,
+                    &buffer,
+                );
+                self.sample_resources.push(SampleResources {
+                    buffer,
+                    bind_group,
+                    page_index: entry.page_index,
+                });
+            }
+            let resources = &mut self.sample_resources[slot_index];
+            if resources.page_index != entry.page_index {
+                resources.bind_group = create_sample_bind_group(
+                    context.device,
+                    &self.sample_bind_group_layout,
+                    self.atlas.page_view(entry.page_index),
+                    &self.atlas_sampler,
+                    &resources.buffer,
+                );
+                resources.page_index = entry.page_index;
+            }
+            context.queue.write_buffer(&resources.buffer, 0, &bytes);
+            context
+                .render_pass
+                .set_bind_group(0, &resources.bind_group, &[]);
             context.render_pass.draw(0..6, 0..1);
         }
     }
+}
+
+fn create_sample_bind_group(
+    device: &wgpu::Device,
+    layout: &wgpu::BindGroupLayout,
+    view: &wgpu::TextureView,
+    sampler: &wgpu::Sampler,
+    buffer: &wgpu::Buffer,
+) -> wgpu::BindGroup {
+    device.create_bind_group(&wgpu::BindGroupDescriptor {
+        layout,
+        entries: &[
+            wgpu::BindGroupEntry {
+                binding: 0,
+                resource: wgpu::BindingResource::TextureView(view),
+            },
+            wgpu::BindGroupEntry {
+                binding: 1,
+                resource: wgpu::BindingResource::Sampler(sampler),
+            },
+            wgpu::BindGroupEntry {
+                binding: 2,
+                resource: buffer.as_entire_binding(),
+            },
+        ],
+        label: Some("image_vector_sample_bind_group"),
+    })
 }
 
 fn desired_raster_sample_count(global_sample_count: u32) -> u32 {
