@@ -1,7 +1,8 @@
-//! Accessibility tree building
+//! Accessibility trees and action dispatch for assistive technology.
 //!
-//! This module contains the logic to build AccessKit TreeUpdates from Tessera's
-//! component tree.
+//! ## Usage
+//!
+//! Expose controls, text, and semantic groups to assistive technology.
 
 use accesskit::{Node, NodeId as AccessKitNodeId, Rect, Tree, TreeId, TreeUpdate};
 use indextree::NodeId as ComponentNodeId;
@@ -13,13 +14,15 @@ use crate::{
     px::PxPosition,
 };
 
-/// Builds an AccessKit TreeUpdate from the component tree.
-///
-/// This function:
-/// 1. Traverses the component tree starting from the root
-/// 2. Collects all nodes that have accessibility metadata
-/// 3. Builds AccessKit nodes with proper parent-child relationships
-/// 4. Determines the current focus
+#[derive(Default)]
+struct CollectedNodes {
+    nodes: Vec<(AccessKitNodeId, Node)>,
+    focus: Option<AccessKitNodeId>,
+}
+
+/// Builds an accessibility update with semantic groups, bounds, actions, and
+/// focus. Nodes without semantics preserve their descendants' reading order;
+/// a window root is supplied when the root has no explicit semantics.
 ///
 /// # Arguments
 ///
@@ -38,8 +41,8 @@ pub fn build_tree_update(
     root_node_id: ComponentNodeId,
     root_label: Option<&str>,
 ) -> Option<TreeUpdate> {
-    let mut nodes = Vec::new();
-    let mut focus = None;
+    let mut collected = CollectedNodes::default();
+    let mut root_children = Vec::new();
 
     // Convert root node ID
     let root_accesskit_id = AccessibilityId::from_component_node_id(root_node_id);
@@ -49,14 +52,14 @@ pub fn build_tree_update(
         tree,
         metadatas,
         root_node_id,
-        &mut nodes,
-        &mut focus,
+        &mut collected,
+        &mut root_children,
         true,
         root_label,
     );
 
     // If no nodes were collected anywhere in the tree, don't create an update
-    if !has_nodes || nodes.is_empty() {
+    if !has_nodes || collected.nodes.is_empty() {
         return None;
     }
 
@@ -64,23 +67,25 @@ pub fn build_tree_update(
     let tree_struct = Tree::new(root_accesskit_id.to_accesskit_id());
 
     Some(TreeUpdate {
-        nodes,
+        nodes: collected.nodes,
         tree: Some(tree_struct),
         tree_id: TreeId::ROOT,
-        focus: focus.unwrap_or_else(|| root_accesskit_id.to_accesskit_id()),
+        focus: collected
+            .focus
+            .unwrap_or_else(|| root_accesskit_id.to_accesskit_id()),
     })
 }
 
 /// Recursively traverses the component tree and collects accessibility nodes.
 ///
 /// Returns `true` if this subtree produced at least one accessibility node
-/// (real or synthesized), `false` otherwise.
+/// (real or synthesized root), `false` otherwise.
 fn traverse_and_collect(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
     node_id: ComponentNodeId,
-    nodes: &mut Vec<(AccessKitNodeId, Node)>,
-    focus: &mut Option<AccessKitNodeId>,
+    collected: &mut CollectedNodes,
+    parent_children: &mut Vec<AccessKitNodeId>,
     is_root: bool,
     root_label: Option<&str>,
 ) -> bool {
@@ -94,7 +99,24 @@ fn traverse_and_collect(
     let abs_position = metadata.abs_position;
     let computed_data = metadata.computed_data;
 
-    let mut has_accessible_descendants = false;
+    // Layout wrappers have no semantics. Publishing each wrapper makes every
+    // scroll update change many redundant bounds and multiplies platform
+    // events.
+    if accessibility_node.is_none() && !is_root {
+        let mut has_accessible_descendants = false;
+        for child_id in node_id.children(tree) {
+            has_accessible_descendants |= traverse_and_collect(
+                tree,
+                metadatas,
+                child_id,
+                collected,
+                parent_children,
+                false,
+                root_label,
+            );
+        }
+        return has_accessible_descendants;
+    }
 
     let merge_descendants = accessibility_node
         .as_ref()
@@ -106,15 +128,15 @@ fn traverse_and_collect(
     if merge_descendants {
         for child_id in node_id.children(tree) {
             // Recursively process child
-            let child_has_accessibility =
-                traverse_and_collect(tree, metadatas, child_id, nodes, focus, false, root_label);
-
-            has_accessible_descendants |= child_has_accessibility;
-
-            if child_has_accessibility {
-                let child_accesskit_id = AccessibilityId::from_component_node_id(child_id);
-                accessible_children.push(child_accesskit_id.to_accesskit_id());
-            }
+            traverse_and_collect(
+                tree,
+                metadatas,
+                child_id,
+                collected,
+                &mut accessible_children,
+                false,
+                root_label,
+            );
         }
     }
 
@@ -222,7 +244,7 @@ fn traverse_and_collect(
 
         // Set focused (and remember for TreeUpdate)
         if accessibility_node.focused {
-            *focus = Some(accesskit_id.to_accesskit_id());
+            collected.focus = Some(accesskit_id.to_accesskit_id());
         }
 
         // Set toggled state
@@ -260,20 +282,16 @@ fn traverse_and_collect(
         }
 
         // Add to collection
-        nodes.push((accesskit_id.to_accesskit_id(), node));
+        collected.nodes.push((accesskit_id.to_accesskit_id(), node));
+        parent_children.push(accesskit_id.to_accesskit_id());
 
         true
-    } else if is_root || has_accessible_descendants {
+    } else if is_root {
         let accesskit_id = AccessibilityId::from_component_node_id(node_id);
-        let mut node = if is_root {
-            let mut root_node = Node::new(accesskit::Role::Window);
-            if let Some(label) = root_label {
-                root_node.set_label(label.to_string());
-            }
-            root_node
-        } else {
-            Node::new(accesskit::Role::GenericContainer)
-        };
+        let mut node = Node::new(accesskit::Role::Window);
+        if let Some(label) = root_label {
+            node.set_label(label.to_string());
+        }
 
         if !accessible_children.is_empty() {
             node.set_children(accessible_children);
@@ -283,7 +301,8 @@ fn traverse_and_collect(
             node.set_bounds(bounds);
         }
 
-        nodes.push((accesskit_id.to_accesskit_id(), node));
+        collected.nodes.push((accesskit_id.to_accesskit_id(), node));
+        parent_children.push(accesskit_id.to_accesskit_id());
         true
     } else {
         false
@@ -367,4 +386,189 @@ pub fn dispatch_action(
     }
 
     false
+}
+
+#[cfg(test)]
+mod tests {
+    use accesskit::{Action, Role};
+
+    use crate::{
+        Modifier, Px,
+        accessibility::AccessibilityNode,
+        component_tree::{ComponentNode, ComponentNodeMetaData, NodeRole},
+        layout::{DefaultLayoutNode, NoopDrawModifier},
+    };
+
+    use super::*;
+
+    fn append_node(
+        tree: &mut ComponentNodeTree,
+        metadatas: &mut ComponentNodeMetaDatas,
+        parent: Option<ComponentNodeId>,
+        accessibility: Option<AccessibilityNode>,
+    ) -> ComponentNodeId {
+        let id = tree.new_node(ComponentNode {
+            fn_name: "test_node".to_string(),
+            role: NodeRole::Layout,
+            instance_logic_id: 0,
+            instance_key: 0,
+            pointer_preview_handlers: Vec::new(),
+            pointer_handlers: Vec::new(),
+            pointer_final_handlers: Vec::new(),
+            keyboard_preview_handlers: Vec::new(),
+            keyboard_handlers: Vec::new(),
+            ime_preview_handlers: Vec::new(),
+            ime_handlers: Vec::new(),
+            focus_requester_binding: None,
+            focus_registration: None,
+            focus_restorer_fallback: None,
+            focus_traversal_policy: None,
+            focus_changed_handler: None,
+            focus_event_handler: None,
+            focus_beyond_bounds_handler: None,
+            focus_reveal_handler: None,
+            globally_positioned_handlers: Vec::new(),
+            modifier: Modifier::default(),
+            layout_node: Box::new(DefaultLayoutNode),
+            draw_node: Box::new(NoopDrawModifier),
+            replay: None,
+            props_unchanged_from_previous: false,
+        });
+        if let Some(parent) = parent {
+            parent.append(id, tree);
+        }
+        let mut metadata = ComponentNodeMetaData::none();
+        metadata.accessibility = accessibility;
+        metadata.abs_position = Some(PxPosition::new(Px(10), Px(20)));
+        metadata.computed_data = Some(ComputedData {
+            width: Px(40),
+            height: Px(50),
+        });
+        metadatas.insert(id, metadata);
+        id
+    }
+
+    fn accesskit_id(id: ComponentNodeId) -> AccessKitNodeId {
+        AccessibilityId::from_component_node_id(id).to_accesskit_id()
+    }
+
+    fn node(update: &TreeUpdate, id: ComponentNodeId) -> &Node {
+        &update
+            .nodes
+            .iter()
+            .find(|(node_id, _)| *node_id == accesskit_id(id))
+            .expect("semantic node must be present")
+            .1
+    }
+
+    #[test]
+    fn wrappers_preserve_semantic_groups_order_bounds_and_focus() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
+        let group = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(wrapper),
+            Some(AccessibilityNode::new().with_role(Role::Group)),
+        );
+        let mut parent = group;
+        for _ in 0..12 {
+            parent = append_node(&mut tree, &mut metadatas, Some(parent), None);
+        }
+        let day = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(parent),
+            Some(
+                AccessibilityNode::new()
+                    .with_role(Role::Button)
+                    .with_label("12")
+                    .with_action(Action::Click)
+                    .focusable()
+                    .focused(),
+            ),
+        );
+        let label = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(parent),
+            Some(AccessibilityNode::new().with_role(Role::Label)),
+        );
+        let next = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(wrapper),
+            Some(AccessibilityNode::new().with_role(Role::Button)),
+        );
+
+        let update = build_tree_update(&tree, &metadatas, root, Some("Calendar"))
+            .expect("valid tree must produce an accessibility update");
+        assert_eq!(update.nodes.len(), 5);
+        assert_eq!(node(&update, root).role(), Role::Window);
+        assert_eq!(node(&update, root).label(), Some("Calendar"));
+        assert_eq!(
+            node(&update, root).children(),
+            &[accesskit_id(group), accesskit_id(next)]
+        );
+        assert_eq!(node(&update, group).role(), Role::Group);
+        assert_eq!(
+            node(&update, group).children(),
+            &[accesskit_id(day), accesskit_id(label)]
+        );
+        assert_eq!(node(&update, day).label(), Some("12"));
+        assert_eq!(
+            node(&update, day).bounds(),
+            Some(Rect {
+                x0: 10.0,
+                y0: 20.0,
+                x1: 50.0,
+                y1: 70.0
+            })
+        );
+        assert!(node(&update, day).supports_action(Action::Click));
+        assert!(node(&update, day).supports_action(Action::Focus));
+        assert_eq!(update.focus, accesskit_id(day));
+    }
+
+    #[test]
+    fn cleared_semantics_still_suppress_descendants_and_their_focus() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let mut semantics = AccessibilityNode::new().with_role(Role::Button);
+        semantics.merge_descendants = false;
+        let button = append_node(&mut tree, &mut metadatas, Some(root), Some(semantics));
+        let wrapper = append_node(&mut tree, &mut metadatas, Some(button), None);
+        append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(wrapper),
+            Some(AccessibilityNode::new().with_role(Role::Label).focused()),
+        );
+
+        let update = build_tree_update(&tree, &metadatas, root, None)
+            .expect("valid tree must produce an accessibility update");
+        assert_eq!(update.nodes.len(), 2);
+        assert_eq!(node(&update, root).children(), &[accesskit_id(button)]);
+        assert!(node(&update, button).children().is_empty());
+        assert_eq!(update.focus, accesskit_id(root));
+    }
+
+    #[test]
+    fn tree_without_semantics_keeps_only_the_window_root() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
+        append_node(&mut tree, &mut metadatas, Some(wrapper), None);
+
+        let update = build_tree_update(&tree, &metadatas, root, Some("Empty"))
+            .expect("valid tree must produce an accessibility update");
+        assert_eq!(update.nodes.len(), 1);
+        assert_eq!(node(&update, root).role(), Role::Window);
+        assert!(node(&update, root).children().is_empty());
+        assert_eq!(update.focus, accesskit_id(root));
+    }
 }

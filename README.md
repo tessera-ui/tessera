@@ -51,6 +51,10 @@ sampling regions, with full-screen capture for global sampling. This limits
 texture bandwidth for small glass surfaces while preserving their padded source
 pixels.
 
+Accessibility exposes controls, text, and explicit semantic groups directly,
+skipping layout and composition wrappers without semantics. This keeps platform
+updates small when many controls move together during scrolling.
+
 Tessera uses a declarative programming paradigm inspired by modern UI frameworks such as React and Compose.
 
 We start by declaring a UI component:

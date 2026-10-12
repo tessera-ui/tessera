@@ -88,6 +88,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 ### Component Tree & Node Metadata
 
 - The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.
+- Accessibility updates flatten layout and composition nodes without semantics. Preserve explicit semantic nodes, their order, bounds, actions, and focus; synthesize only the root window node.
 
 ---
 
