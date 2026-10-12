@@ -88,6 +88,8 @@ struct FrameRecord {
     partial_replay_nodes: Option<u64>,
     total_nodes_before_build: Option<u64>,
     render_time_ns: Option<u64>,
+    render_prepare_ns: Option<u64>,
+    render_gpu_ns: Option<u64>,
     render_acquire_ns: Option<u64>,
     render_build_passes_ns: Option<u64>,
     render_encode_ns: Option<u64>,
@@ -259,6 +261,8 @@ struct Summary {
     render_max: Option<u128>,
     render_count: u64,
     render_acquire: MetricSummary,
+    render_prepare: MetricSummary,
+    render_gpu: MetricSummary,
     render_build_passes: MetricSummary,
     render_encode: MetricSummary,
     render_submit: MetricSummary,
@@ -715,6 +719,8 @@ fn process_frame(
         partial_replay_nodes,
         total_nodes_before_build,
         render_time_ns,
+        render_prepare_ns,
+        render_gpu_ns,
         render_acquire_ns,
         render_build_passes_ns,
         render_encode_ns,
@@ -729,6 +735,12 @@ fn process_frame(
     } = frame;
 
     summary.frames += 1;
+    if let Some(value) = render_prepare_ns {
+        summary.render_prepare.record(u128::from(value));
+    }
+    if let Some(value) = render_gpu_ns {
+        summary.render_gpu.record(u128::from(value));
+    }
     match build_mode {
         BuildMode::RootRecompose => summary.build_mode_root_recompose += 1,
         BuildMode::PartialReplay => {
@@ -876,7 +888,8 @@ fn process_frame(
                 + frame_totals.measure
                 + frame_totals.record
                 + frame_totals.input
-                + render;
+                + render
+                + u128::from(render_prepare_ns.unwrap_or(0));
             let unaccounted = total.saturating_sub(accounted);
             summary.unaccounted_total_sum += unaccounted;
             summary.unaccounted_total_count += 1;
@@ -1020,6 +1033,18 @@ fn build_frame_rows(summary: &Summary) -> Vec<CompactTimingRow> {
 
 fn build_render_rows(summary: &Summary) -> Vec<CompactTimingRow> {
     let mut rows = Vec::new();
+    if summary.render_prepare.count > 0 {
+        rows.push(CompactTimingRow {
+            label: "Prepare",
+            avg_ns: summary.render_prepare.sum as f64 / summary.render_prepare.count as f64,
+        });
+    }
+    if summary.render_gpu.count > 0 {
+        rows.push(CompactTimingRow {
+            label: "GPU",
+            avg_ns: summary.render_gpu.sum as f64 / summary.render_gpu.count as f64,
+        });
+    }
     if summary.render_acquire.count > 0 {
         rows.push(CompactTimingRow {
             label: "Acquire",
@@ -1353,6 +1378,23 @@ fn print_summary_verbose(summary: &Summary) {
                 format_ms(summary.render_present.max.unwrap_or(0) as f64)
             )),
         ]));
+    }
+
+    for (label, metric) in [
+        ("Render preparation time", &summary.render_prepare),
+        ("GPU execution time", &summary.render_gpu),
+    ] {
+        if metric.count > 0 {
+            table.add_row(Row::from(vec![
+                Cell::new(label),
+                Cell::new(format!(
+                    "{} ms",
+                    format_ms(metric.sum as f64 / metric.count as f64)
+                )),
+                Cell::new(format!("{} ms", format_ms(metric.min.unwrap_or(0) as f64))),
+                Cell::new(format!("{} ms", format_ms(metric.max.unwrap_or(0) as f64))),
+            ]));
+        }
     }
 
     if summary.build_total_count > 0 {
@@ -1987,4 +2029,46 @@ fn add_metric_ns_row(table: &mut Table, label: &str, metric: &MetricSummary) {
         Cell::new(format!("{} us", format_us(metric.min.unwrap_or(0) as f64))),
         Cell::new(format!("{} us", format_us(metric.max.unwrap_or(0) as f64))),
     ]));
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn preparation_is_cpu_cost_and_gpu_time_is_reported_separately() {
+        let frame: FrameRecord = serde_json::from_value(serde_json::json!({
+            "frame": 0,
+            "build_mode": "skip_no_invalidation",
+            "redraw_reasons": [],
+            "frame_total_ns": 1000,
+            "render_time_ns": 200,
+            "render_prepare_ns": 100,
+            "render_gpu_ns": 10000,
+            "components": []
+        }))
+        .unwrap();
+        let mut summary = Summary::default();
+        process_frame(frame, &mut summary, &mut HashMap::new());
+        assert_eq!(summary.render_prepare.sum, 100);
+        assert_eq!(summary.render_gpu.sum, 10000);
+        assert_eq!(summary.frame_total_sum, 1000);
+        assert_eq!(summary.unaccounted_total_sum, 700);
+        let rows = build_render_rows(&summary);
+        assert!(rows.iter().any(|row| row.label == "Prepare"));
+        assert!(rows.iter().any(|row| row.label == "GPU"));
+    }
+
+    #[test]
+    fn older_frames_do_not_require_preparation_or_gpu_timings() {
+        let frame: FrameRecord = serde_json::from_value(serde_json::json!({
+            "frame": 0,
+            "build_mode": "skip_no_invalidation",
+            "redraw_reasons": [],
+            "components": []
+        }))
+        .unwrap();
+        assert_eq!(frame.render_prepare_ns, None);
+        assert_eq!(frame.render_gpu_ns, None);
+    }
 }

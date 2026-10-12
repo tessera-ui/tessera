@@ -54,7 +54,7 @@ impl RenderCore {
     ) -> wgpu::Adapter {
         match instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::default(),
+                power_preference: wgpu::PowerPreference::from_env().unwrap_or_default(),
                 compatible_surface: Some(surface),
                 force_fallback_adapter: false,
                 apply_limit_buckets: false,
@@ -74,7 +74,8 @@ impl RenderCore {
     async fn request_adapter_offscreen(instance: &wgpu::Instance) -> wgpu::Adapter {
         match instance
             .request_adapter(&wgpu::RequestAdapterOptions {
-                power_preference: wgpu::PowerPreference::HighPerformance,
+                power_preference: wgpu::PowerPreference::from_env()
+                    .unwrap_or(wgpu::PowerPreference::HighPerformance),
                 compatible_surface: None,
                 force_fallback_adapter: false,
                 apply_limit_buckets: false,
@@ -91,6 +92,7 @@ impl RenderCore {
 
     async fn request_device_and_queue_for_adapter(
         adapter: &wgpu::Adapter,
+        _offscreen: bool,
     ) -> (wgpu::Device, wgpu::Queue) {
         let required_limits = if cfg!(target_arch = "wasm32") {
             wgpu::Limits::downlevel_webgl2_defaults()
@@ -98,6 +100,22 @@ impl RenderCore {
             wgpu::Limits::default()
         };
         let base_features = wgpu::Features::CLEAR_TEXTURE;
+        #[cfg(all(
+            feature = "profiling",
+            feature = "headless",
+            not(target_arch = "wasm32")
+        ))]
+        let base_features = if _offscreen && super::gpu_timing::GpuTimingProbe::requested() {
+            let features = super::gpu_timing::GpuTimingProbe::FEATURES;
+            if adapter.features().contains(features) {
+                base_features | features
+            } else {
+                tracing::warn!("Headless GPU timing is unsupported by this adapter");
+                base_features
+            }
+        } else {
+            base_features
+        };
         let supports_pipeline_cache = adapter.features().contains(wgpu::Features::PIPELINE_CACHE);
         let requested_features = if supports_pipeline_cache {
             base_features | wgpu::Features::PIPELINE_CACHE
@@ -246,7 +264,8 @@ impl RenderCore {
         let adapter_info = adapter.get_info();
         info!("Using WGPU adapter: {adapter_info:#?}");
         // Create a device and queue
-        let (device, queue) = Self::request_device_and_queue_for_adapter(&adapter).await;
+        let (device, queue) =
+            Self::request_device_and_queue_for_adapter(&adapter, surface.is_none()).await;
         // Create the render configuration. Offscreen cores build the surface
         // configuration by hand because there is no surface to query.
         let config = match &surface {
@@ -473,6 +492,18 @@ impl RenderCore {
             dirty_overlay_pipeline,
         };
 
+        #[cfg(all(
+            feature = "profiling",
+            feature = "headless",
+            not(target_arch = "wasm32")
+        ))]
+        let gpu_timing = (surface.is_none()
+            && super::gpu_timing::GpuTimingProbe::requested()
+            && device
+                .features()
+                .contains(super::gpu_timing::GpuTimingProbe::FEATURES))
+        .then(|| super::gpu_timing::GpuTimingProbe::new(&device, &queue));
+
         Self {
             window,
             instance,
@@ -492,6 +523,12 @@ impl RenderCore {
             external_textures: ExternalTextureRegistry::new(),
             frame_index: 0,
             last_render_breakdown: None,
+            #[cfg(all(
+                feature = "profiling",
+                feature = "headless",
+                not(target_arch = "wasm32")
+            ))]
+            gpu_timing,
         }
     }
 

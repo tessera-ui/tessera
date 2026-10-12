@@ -1378,6 +1378,8 @@ Fps: {:.2}
             Self::collect_dirty_overlay_rects(screen_size, &build_tree_result);
         #[cfg(feature = "debug-dirty-overlay")]
         let overlay_clear_pending = !dirty_overlay_rects.is_empty();
+        #[cfg(feature = "profiling")]
+        let prepare_timer = Instant::now();
         let (composite_context, composite_registry) =
             args.app.composite_context_parts(screen_size, frame_idx);
         let new_graph =
@@ -1387,6 +1389,8 @@ Fps: {:.2}
             resources,
             external_resources,
         } = new_graph.into_execution();
+        #[cfg(feature = "profiling")]
+        let render_prepare_ns = Some(prepare_timer.elapsed().as_nanos());
         // Perform GPU render every frame.
         let render_cost = Self::perform_render(
             args,
@@ -1427,11 +1431,13 @@ Fps: {:.2}
                 partial_replay_nodes: build_tree_result.partial_replay_nodes(),
                 total_nodes_before_build: build_tree_result.total_nodes_before_build(),
                 render_time_ns: render_duration_ns,
+                render_prepare_ns,
                 render_acquire_ns,
                 render_build_passes_ns,
                 render_encode_ns,
                 render_submit_ns,
                 render_present_ns,
+                render_gpu_ns: None,
                 build_tree_time_ns: Some(build_tree_result.duration().as_nanos()),
                 draw_time_ns: Some(draw_cost.as_nanos()),
                 record_time_ns: Some(record_cost.as_nanos()),

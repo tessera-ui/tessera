@@ -524,6 +524,14 @@ impl RenderCore {
         let local_textures = &mut self.local_textures;
 
         let encode_start = Instant::now();
+        #[cfg(all(
+            feature = "profiling",
+            feature = "headless",
+            not(target_arch = "wasm32")
+        ))]
+        if let Some(timing) = &mut self.gpu_timing {
+            timing.begin(device, &mut encoder, passes.len(), current_frame);
+        }
         local_textures.begin_frame(current_frame);
 
         // Frame-level begin for all pipelines
@@ -559,6 +567,7 @@ impl RenderCore {
         };
 
         for (pass_index, pass) in passes.iter_mut().enumerate() {
+            let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
             Self::execute_render_pass(
                 &mut frame_state,
                 RenderPassExecParams {
@@ -572,6 +581,31 @@ impl RenderCore {
                 },
             );
             frame_resources.release_for_pass(pass_index);
+            #[cfg(all(
+                feature = "profiling",
+                feature = "headless",
+                not(target_arch = "wasm32")
+            ))]
+            if let Some(timing) = &mut self.gpu_timing {
+                timing.mark(&mut encoder, || {
+                    let kind = match pass.kind {
+                        RenderPassKind::Draw => "Draw",
+                        RenderPassKind::Compute => "Compute",
+                    };
+                    format!(
+                        "{kind} read={:?} write={:?}",
+                        pass.read_resource, pass.write_resource
+                    )
+                });
+            }
+            if let Some(timing) = timing {
+                debug!(
+                    pass_index,
+                    elapsed_us = timing.elapsed().as_micros(),
+                    frame_nanos = crate::current_frame_nanos(),
+                    "render_pass_cpu"
+                );
+            }
         }
 
         let target_size = PxSize::new(Px(self.config.width as i32), Px(self.config.height as i32));
@@ -602,6 +636,15 @@ impl RenderCore {
             .pipeline_registry
             .end_all_frames(device, queue, config);
         let encode = encode_start.elapsed();
+
+        #[cfg(all(
+            feature = "profiling",
+            feature = "headless",
+            not(target_arch = "wasm32")
+        ))]
+        if let Some(timing) = &mut self.gpu_timing {
+            timing.finish(&mut encoder);
+        }
 
         let submit_start = Instant::now();
         queue.submit(Some(encoder.finish()));
@@ -1222,6 +1265,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
         wgpu::LoadOp::Load
     };
 
+    let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("Render Pass"),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
@@ -1381,6 +1425,17 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
         &mut rpass,
         &scene_texture_view,
     );
+    let record_us = timing.map(|start| start.elapsed().as_micros());
+    let finalize_start = timing.map(|_| Instant::now());
+    drop(rpass);
+    if let Some(finalize_start) = finalize_start {
+        debug!(
+            record_us,
+            finalize_us = finalize_start.elapsed().as_micros(),
+            frame_nanos = crate::current_frame_nanos(),
+            "draw_pass_cpu"
+        );
+    }
 }
 
 fn resolve_scene_view(

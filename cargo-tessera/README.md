@@ -90,8 +90,25 @@ cargo tessera headless -p example --profiling-output target/headless-profile.jso
 
 The JSONL session protocol supports synthetic input, frame rendering, snapshots,
 and viewport resizing without opening a window. Profiler records include
-component build, layout/draw calculation, command encoding, and queue submission
-timings. These measure CPU wall time, not GPU execution or desktop presentation.
+component build, layout/draw calculation, render graph preparation
+(`render_prepare_ns`), command encoding, and queue submission timings. These
+measure CPU wall time, not GPU execution or desktop presentation.
+
+Set `TESSERA_HEADLESS_GPU_TIMING=1` to add `render_gpu_ns` timestamp measurements
+on supported native adapters. This mode waits for GPU readback after each frame;
+the wait is excluded from CPU frame timings and changes CPU/GPU overlap. GPU
+timestamps cover the main frame command buffer, including its render, compute,
+and copy passes; separate submissions used to populate pipeline caches are
+excluded. Use `WGPU_POWER_PREF=low` or `high` to compare integrated and discrete
+adapters, and check the adapter name in the startup log.
+Set `TESSERA_HEADLESS_SCALE_FACTOR=1.5` or `2` to reproduce high-DPI rendering;
+the configured viewport dimensions remain physical pixels. Headless sessions
+default to a scale factor of 1, and ready/snapshot responses include the factor.
+
+Enable `RUST_LOG=tessera_ui::renderer::core::gpu_timing=debug` with GPU timing to
+log GPU duration per render-graph pass and the final output blit. Draw stages
+include any background capture needed by sampled effects; compute stages include
+their input preservation and dispatches.
 
 ### Build for Android (experimental)
 

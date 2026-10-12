@@ -420,6 +420,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         context: ErasedDrawContext<'_, '_>,
         commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
     ) -> bool {
+        let timing = tracing::enabled!(tracing::Level::DEBUG).then(crate::time::Instant::now);
         if commands.is_empty() {
             return true;
         }
@@ -458,6 +459,16 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
                 scene_texture_view,
                 clip_rect,
             });
+            if let Some(timing) = timing {
+                tracing::debug!(
+                    pipeline = std::any::type_name::<P>(),
+                    phase = "draw",
+                    commands = commands.len(),
+                    elapsed_us = timing.elapsed().as_micros(),
+                    frame_nanos = crate::current_frame_nanos(),
+                    "pipeline_cpu"
+                );
+            }
             true
         } else {
             false

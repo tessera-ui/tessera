@@ -63,6 +63,9 @@ pub const HEADLESS_ENV: &str = "TESSERA_HEADLESS";
 pub const HEADLESS_WIDTH_ENV: &str = "TESSERA_HEADLESS_WIDTH";
 /// Environment variable overriding the initial headless surface height.
 pub const HEADLESS_HEIGHT_ENV: &str = "TESSERA_HEADLESS_HEIGHT";
+/// Environment variable overriding physical pixels per density-independent
+/// pixel.
+pub const HEADLESS_SCALE_FACTOR_ENV: &str = "TESSERA_HEADLESS_SCALE_FACTOR";
 /// Environment variable overriding the virtual frame step in milliseconds.
 pub const HEADLESS_FRAME_TIME_MS_ENV: &str = "TESSERA_HEADLESS_FRAME_TIME_MS";
 
@@ -128,6 +131,8 @@ pub struct HeadlessConfig {
     pub width: u32,
     /// Offscreen target height in physical pixels.
     pub height: u32,
+    /// Physical pixels per density-independent pixel; invalid values use 1.0.
+    pub scale_factor: f64,
     /// MSAA sample count for render pipelines.
     pub sample_count: u32,
     /// Offscreen target format; RGBA8 is required for readback and PNG output.
@@ -141,6 +146,7 @@ impl Default for HeadlessConfig {
         Self {
             width: 800,
             height: 600,
+            scale_factor: 1.0,
             sample_count: 1,
             format: wgpu::TextureFormat::Rgba8UnormSrgb,
             frame_time: Duration::from_nanos(16_666_667),
@@ -160,6 +166,7 @@ pub struct HeadlessRenderer {
     ime: ImeState,
     size: PxSize,
     physical_size: winit::dpi::PhysicalSize<u32>,
+    scale_factor: f64,
     frame_index: u64,
     frame_origin: Instant,
     current_frame_nanos: u64,
@@ -184,8 +191,8 @@ impl HeadlessRenderer {
             config.sample_count,
         ));
 
-        // Headless sessions map logical pixels to physical pixels 1:1.
-        set_scale_factor(1.0);
+        let scale_factor = normalize_scale_factor(config.scale_factor);
+        set_scale_factor(scale_factor);
 
         {
             let mut context = PipelineContext::new(&mut core);
@@ -209,6 +216,7 @@ impl HeadlessRenderer {
             ime: ImeState::default(),
             size: PxSize::new(Px(width as i32), Px(height as i32)),
             physical_size,
+            scale_factor,
             frame_index: 0,
             frame_origin: Instant::now(),
             current_frame_nanos: 0,
@@ -383,10 +391,25 @@ impl HeadlessRenderer {
         let draw_duration = draw_timer.elapsed();
 
         let frame_index = self.frame_index;
+        #[cfg(feature = "profiling")]
+        let prepare_timer = Instant::now();
+        let composite_timer = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
         let (composite_context, composite_registry) =
             self.core.composite_context_parts(screen_size, frame_index);
         let graph = expand_composites(graph, composite_context, composite_registry);
+        let composite_us = composite_timer.map(|start| start.elapsed().as_micros());
+        let order_timer = composite_timer.map(|_| Instant::now());
         let execution = graph.into_execution();
+        if let Some(order_timer) = order_timer {
+            tracing::debug!(
+                frame_index,
+                composite_us,
+                order_us = order_timer.elapsed().as_micros(),
+                "headless_graph_cpu"
+            );
+        }
+        #[cfg(feature = "profiling")]
+        let prepare_duration = prepare_timer.elapsed();
         #[cfg(feature = "profiling")]
         let render_timer = Instant::now();
         #[cfg(feature = "debug-dirty-overlay")]
@@ -399,7 +422,20 @@ impl HeadlessRenderer {
         #[cfg(feature = "profiling")]
         {
             let breakdown = self.core.last_render_breakdown();
+            let metadata_timer = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
             let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
+            if let Some(metadata_timer) = metadata_timer {
+                tracing::debug!(
+                    frame_index,
+                    elapsed_us = metadata_timer.elapsed().as_micros(),
+                    "headless_profiler_metadata_cpu"
+                );
+            }
+            let frame_duration = frame_timer.elapsed();
+            #[cfg(not(target_arch = "wasm32"))]
+            let render_gpu_ns = self.core.read_gpu_time().map(|time| time.as_nanos());
+            #[cfg(target_arch = "wasm32")]
+            let render_gpu_ns = None;
             submit_frame_meta(FrameMeta {
                 frame_idx: self.frame_index,
                 build_mode: _build_tree_result.profiler_build_mode(),
@@ -408,15 +444,17 @@ impl HeadlessRenderer {
                 partial_replay_nodes: _build_tree_result.partial_replay_nodes(),
                 total_nodes_before_build: _build_tree_result.total_nodes_before_build(),
                 render_time_ns: Some(render_duration.as_nanos()),
+                render_prepare_ns: Some(prepare_duration.as_nanos()),
                 render_acquire_ns: breakdown.map(|timing| timing.acquire.as_nanos()),
                 render_build_passes_ns: breakdown.map(|timing| timing.build_passes.as_nanos()),
                 render_encode_ns: breakdown.map(|timing| timing.encode.as_nanos()),
                 render_submit_ns: breakdown.map(|timing| timing.submit.as_nanos()),
                 render_present_ns: breakdown.map(|timing| timing.present.as_nanos()),
+                render_gpu_ns,
                 build_tree_time_ns: Some(_build_tree_result.duration().as_nanos()),
                 draw_time_ns: Some(draw_duration.as_nanos()),
                 record_time_ns: Some(_record_cost.as_nanos()),
-                frame_total_ns: Some(frame_timer.elapsed().as_nanos()),
+                frame_total_ns: Some(frame_duration.as_nanos()),
                 layout_diagnostics: Some(_diagnostics),
                 nodes,
             });
@@ -480,6 +518,7 @@ impl HeadlessRenderer {
             json!({
                 "width": self.physical_size.width,
                 "height": self.physical_size.height,
+                "scale_factor": self.scale_factor,
                 "frame_index": self.frame_index,
                 "node_count": counter,
                 "root": root_value,
@@ -582,6 +621,11 @@ pub fn run_headless(
     let headless_config = HeadlessConfig {
         width: env_u32(HEADLESS_WIDTH_ENV).unwrap_or(800),
         height: env_u32(HEADLESS_HEIGHT_ENV).unwrap_or(600),
+        scale_factor: std::env::var(HEADLESS_SCALE_FACTOR_ENV)
+            .ok()
+            .and_then(|value| value.trim().parse().ok())
+            .map(normalize_scale_factor)
+            .unwrap_or(1.0),
         sample_count: config.sample_count.max(1),
         ..HeadlessConfig::default()
     };
@@ -603,6 +647,7 @@ pub fn run_headless(
             "event": "ready",
             "width": renderer.physical_size.width,
             "height": renderer.physical_size.height,
+            "scale_factor": renderer.scale_factor,
         }),
     )?;
 
@@ -745,6 +790,14 @@ fn env_u32(key: &str) -> Option<u32> {
     std::env::var(key)
         .ok()
         .and_then(|value| value.trim().parse::<u32>().ok())
+}
+
+fn normalize_scale_factor(value: f64) -> f64 {
+    if value.is_finite() && value > 0.0 {
+        value
+    } else {
+        1.0
+    }
 }
 
 fn init_headless_tracing() {
