@@ -115,7 +115,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - `Global`: Samples the entire screen. This is expensive as it requires a full-screen texture copy.
 - `PaddedLocal(PaddingRect)`: Defines a sampling region relative to the component's bounding box plus padding on each side. The draw region, clip stack, and render target bounds determine the scissor rectangle independently.
 - `Absolute(PxRect)`: Samples a specific, absolute region of the screen.
-- **Performance Optimization**: When a command requires a barrier, the renderer performs a **full-screen texture copy** to make the background available for sampling. The key optimization is **batching**: subsequent commands that also require a barrier and have non-overlapping draw regions are processed in the same render pass, avoiding additional expensive texture copies. A scissor rectangle is applied to limit the actual drawing area for each command.
+- **Performance Optimization**: Sampled draw passes capture the bounding union of their declared sampling regions. `Global` and explicit scene reads without a declared sampling region retain full-screen capture. Sampling bounds must expand outward at fractional positions and remain independent of draw clipping. Scene compute passes still preserve the full target outside their dispatched regions. **Batching** groups subsequent barrier commands with non-overlapping draw regions into the same render pass, avoiding additional captures. A separate scissor rectangle limits actual drawing for each command.
 
 ### WebGPU Resource Usage Guidelines
 

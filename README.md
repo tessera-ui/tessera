@@ -46,6 +46,10 @@ direct children through handles. `PxPosition` preserves fractional coordinates
 until an integer pixel consumer rounds them. Rendering commands declare their
 sampling region separately from their drawing region, so effects can sample a
 wider background without expanding their visible bounds.
+Background captures for sampled draw passes cover the union of their declared
+sampling regions, with full-screen capture for global sampling. This limits
+texture bandwidth for small glass surfaces while preserving their padded source
+pixels.
 
 Tessera uses a declarative programming paradigm inspired by modern UI frameworks such as React and Compose.
 

@@ -5,7 +5,7 @@ use smallvec::SmallVec;
 use tracing::{debug, error, warn};
 
 use crate::{
-    DrawCommand, Px, PxPosition, PxRect, PxSize,
+    DrawCommand, Px, PxPosition, PxRect, PxSize, SampleRegion,
     render_graph::{
         ExternalTextureDesc, RenderGraphExecution, RenderResource, RenderResourceId,
         RenderTextureDesc,
@@ -957,6 +957,7 @@ impl RenderCore {
                     && matches!(*scene_source, SceneSource::Offscreen)
                 {
                     let sample_view = state.targets.scene_sample.clone();
+                    let sample_rect = scene_sampling_rect(&pass.draws, target_size);
                     Self::blit_to_view(BlitParams {
                         encoder,
                         device: state.device,
@@ -969,7 +970,7 @@ impl RenderCore {
                             Px(state.config.width as i32),
                             Px(state.config.height as i32),
                         ),
-                        scissor_rect: None,
+                        scissor_rect: sample_rect,
                     });
                     scene_view = sample_view;
                 }
@@ -1587,9 +1588,132 @@ fn merge_batch_rect(current: Option<PxRect>, next: PxRect) -> PxRect {
     current.map(|dr| dr.union(&next)).unwrap_or(next)
 }
 
+fn scene_sampling_rect(commands: &[DrawOrClip], target_size: PxSize) -> Option<PxRect> {
+    let target = PxRect::new(Px::ZERO, Px::ZERO, target_size.width, target_size.height);
+    let mut captured = None;
+    for command in commands {
+        let DrawOrClip::Draw(command) = command else {
+            continue;
+        };
+        let rect = match command.command.sample_region()? {
+            SampleRegion::Global => return Some(target),
+            SampleRegion::Absolute(rect) => rect,
+            SampleRegion::PaddedLocal(padding) => {
+                // Fractional positions must expand outward so edge samples
+                // remain available while a component moves between pixels.
+                let left = (command.start_pos.x - padding.left.to_f32()).floor();
+                let top = (command.start_pos.y - padding.top.to_f32()).floor();
+                let right =
+                    (command.start_pos.x + command.size.width.to_f32() + padding.right.to_f32())
+                        .ceil();
+                let bottom =
+                    (command.start_pos.y + command.size.height.to_f32() + padding.bottom.to_f32())
+                        .ceil();
+                PxRect::new(
+                    Px::from_f32(left),
+                    Px::from_f32(top),
+                    Px::from_f32((right - left).max(0.0)),
+                    Px::from_f32((bottom - top).max(0.0)),
+                )
+            }
+        };
+        if let Some(rect) = rect.intersection(&target) {
+            captured = Some(merge_batch_rect(captured, rect));
+        }
+    }
+    Some(captured.unwrap_or(PxRect::ZERO))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[derive(Clone)]
+    struct SampleCommand(Option<SampleRegion>);
+
+    impl DrawCommand for SampleCommand {
+        fn sample_region(&self) -> Option<SampleRegion> {
+            self.0
+        }
+
+        fn apply_opacity(&mut self, _opacity: f32) {}
+    }
+
+    fn sampled_draw(region: Option<SampleRegion>, position: PxPosition) -> DrawOrClip {
+        let size = PxSize::new(Px(50), Px(50));
+        DrawOrClip::Draw(crate::render_pass::DrawCommandWithMetadata {
+            command: Box::new(SampleCommand(region)),
+            type_id: std::any::TypeId::of::<SampleCommand>(),
+            size,
+            start_pos: position,
+            draw_rect: PxRect::from_position_size(position, size),
+            read_resource: Some(RenderResourceId::SceneColor),
+        })
+    }
+
+    #[test]
+    fn scene_capture_unions_sampling_regions_without_applying_draw_clips() {
+        let commands = [
+            DrawOrClip::Clip(ClipOps::Push(PxRect::new(Px(100), Px(100), Px(1), Px(1)))),
+            sampled_draw(
+                Some(SampleRegion::uniform_padding_local(Px(10))),
+                PxPosition::new(Px(100), Px(100)),
+            ),
+            sampled_draw(
+                Some(SampleRegion::Absolute(PxRect::new(
+                    Px(300),
+                    Px(100),
+                    Px(20),
+                    Px(20),
+                ))),
+                PxPosition::ZERO,
+            ),
+        ];
+        assert_eq!(
+            scene_sampling_rect(&commands, PxSize::new(Px(400), Px(400))),
+            Some(PxRect::new(Px(90), Px(90), Px(230), Px(70)))
+        );
+    }
+
+    #[test]
+    fn scene_capture_rounds_fractional_sampling_edges_outward() {
+        let commands = [sampled_draw(
+            Some(SampleRegion::uniform_padding_local(Px(10))),
+            PxPosition::from_f32_xy(100.25, 200.75),
+        )];
+        assert_eq!(
+            scene_sampling_rect(&commands, PxSize::new(Px(400), Px(400))),
+            Some(PxRect::new(Px(90), Px(190), Px(71), Px(71)))
+        );
+    }
+
+    #[test]
+    fn scene_capture_clamps_regions_at_screen_edges() {
+        let commands = [sampled_draw(
+            Some(SampleRegion::uniform_padding_local(Px(10))),
+            PxPosition::from_f32_xy(-5.25, -6.75),
+        )];
+        assert_eq!(
+            scene_sampling_rect(&commands, PxSize::new(Px(400), Px(400))),
+            Some(PxRect::new(Px::ZERO, Px::ZERO, Px(55), Px(54)))
+        );
+    }
+
+    #[test]
+    fn scene_capture_preserves_global_and_undeclared_scene_reads() {
+        let target_size = PxSize::new(Px(400), Px(400));
+        assert_eq!(
+            scene_sampling_rect(
+                &[sampled_draw(Some(SampleRegion::Global), PxPosition::ZERO)],
+                target_size
+            ),
+            Some(PxRect::new(Px::ZERO, Px::ZERO, Px(400), Px(400)))
+        );
+        assert_eq!(
+            scene_sampling_rect(&[sampled_draw(None, PxPosition::ZERO)], target_size),
+            None
+        );
+    }
 
     #[test]
     fn apply_clip_to_batch_rect_intersects_full_clip_stack() {
