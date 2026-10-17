@@ -1,6 +1,8 @@
 //! Example page that showcases Material components not covered by the basic
 //! page.
 
+use std::sync::Arc;
+
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
     badge::{badge, badge_with_content, badged_box},
@@ -9,20 +11,36 @@ use tessera_components::{
     button::button,
     button_groups::button_groups,
     card::card,
+    carousel::{CarouselController, CarouselVariant, carousel},
     chip::chip,
     column::column,
-    date_picker::date_picker,
+    date_picker::{DatePickerState, Weekday, date_picker_dialog},
     dialog::{basic_dialog, dialog_provider},
     divider::{horizontal_divider, vertical_divider},
-    floating_action_button::floating_action_button,
+    extended_floating_action_button::{
+        ExtendedFloatingActionButtonSize, extended_floating_action_button,
+    },
+    floating_action_button::{FloatingActionButtonSize, floating_action_button},
+    floating_action_button_menu::{
+        FloatingActionButtonMenuColor, FloatingActionButtonMenuItem, floating_action_button_menu,
+    },
     flow_row::flow_row,
     icon::icon,
+    icon_button::{
+        IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
+    },
     lazy_list::lazy_column,
+    loading_indicator::loading_indicator,
     material_icons::filled,
-    menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
+    menus::{
+        MenuAnchor, MenuController, MenuPlacement, MenuPosition, menu_group, menu_item,
+        menu_provider,
+    },
     modifier::ModifierExt,
     navigation_bar::{navigation_bar, navigation_bar_item},
+    navigation_drawer::{navigation_drawer, navigation_drawer_item},
     navigation_rail::{navigation_rail, navigation_rail_item},
+    painter::try_painter_asset,
     radio_button::{RadioGroupOrientation, radio_button, radio_group},
     row::row,
     search::{docked_search_bar, search_bar},
@@ -30,17 +48,27 @@ use tessera_components::{
         SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
         single_choice_segmented_button_row,
     },
+    slider::{centered_slider, range_slider, slider},
     snackbar::{SnackbarHostState, SnackbarRequest, snackbar_host},
     spacer::spacer,
-    split_buttons::{split_button_layout, split_leading_button, split_trailing_button},
+    split_buttons::{
+        SplitButtonDefaults, SplitButtonSize, SplitButtonVariant, split_button_layout,
+        split_leading_button, split_trailing_button,
+    },
+    surface::surface,
     tabs::{tab, tabs},
     text::text,
     text_field::{TextFieldBuilder, text_field},
     theme::MaterialTheme,
-    time_picker::time_picker,
+    time_picker::{TimePickerState, time_picker_dialog},
+    toolbar::{ToolbarColorStyle, ToolbarOrientation, docked_toolbar, floating_toolbar},
+    tooltip::{TooltipController, TooltipVariant, tooltip_anchor, tooltip_provider},
 };
 use tessera_shard::shard;
-use tessera_ui::{Dp, Modifier, Px, PxPosition, remember, tessera, use_context};
+use tessera_ui::{
+    Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State, modifier::FocusModifierExt as _,
+    remember, tessera, use_context,
+};
 
 #[tessera]
 fn section_header(#[prop(into)] title: String, #[prop(into)] description: String) {
@@ -59,10 +87,317 @@ fn section_header(#[prop(into)] title: String, #[prop(into)] description: String
     });
 }
 
+#[tessera]
+fn icon_button_demo(
+    variant: State<IconButtonVariant>,
+    width: State<IconButtonWidth>,
+    shape: State<IconButtonShape>,
+    toggle: State<bool>,
+    enabled: State<bool>,
+    selected: State<[bool; 5]>,
+    actions: State<u32>,
+) {
+    column().children(move || {
+        section_header("Icon buttons", "Five Expressive sizes with narrow, uniform, and wide containers. Tab to an action, then press Enter or Space.");
+        flow_row().item_spacing(Dp(8.0)).line_spacing(Dp(8.0)).children(move || {
+            button().tonal().on_click(move || variant.set(match variant.get() {
+                IconButtonVariant::Filled => IconButtonVariant::FilledTonal,
+                IconButtonVariant::FilledTonal => IconButtonVariant::Outlined,
+                IconButtonVariant::Outlined => IconButtonVariant::Standard,
+                IconButtonVariant::Standard => IconButtonVariant::Filled,
+            })).child(move || {
+                text().content(match variant.get() {
+                    IconButtonVariant::Filled => "Style: Filled",
+                    IconButtonVariant::FilledTonal => "Style: Tonal",
+                    IconButtonVariant::Outlined => "Style: Outlined",
+                    IconButtonVariant::Standard => "Style: Standard",
+                });
+            });
+            button().tonal().on_click(move || width.set(match width.get() {
+                IconButtonWidth::Uniform => IconButtonWidth::Wide,
+                IconButtonWidth::Wide => IconButtonWidth::Narrow,
+                IconButtonWidth::Narrow => IconButtonWidth::Uniform,
+            })).child(move || {
+                text().content(match width.get() {
+                    IconButtonWidth::Uniform => "Width: Uniform",
+                    IconButtonWidth::Wide => "Width: Wide",
+                    IconButtonWidth::Narrow => "Width: Narrow",
+                });
+            });
+            button().tonal().on_click(move || shape.set(if shape.get() == IconButtonShape::Round {
+                IconButtonShape::Square
+            } else { IconButtonShape::Round })).child(move || {
+                text().content(if shape.get() == IconButtonShape::Round { "Shape: Round" } else { "Shape: Square" });
+            });
+            button().tonal().on_click(move || toggle.set(!toggle.get())).child(move || {
+                text().content(if toggle.get() { "Mode: Toggle" } else { "Mode: Action" });
+            });
+            button().text().on_click(move || enabled.set(!enabled.get())).child(move || {
+                text().content(if enabled.get() { "Disable icon buttons" } else { "Enable icon buttons" });
+            });
+        });
+        spacer().modifier(Modifier::new().height(Dp(16.0)));
+        flow_row().item_spacing(Dp(16.0)).line_spacing(Dp(16.0))
+            .cross_axis_alignment(CrossAxisAlignment::Center).children(move || {
+                for (index, size, label) in [
+                    (0, IconButtonSize::ExtraSmall, "Extra-small favorite"),
+                    (1, IconButtonSize::Small, "Small favorite"),
+                    (2, IconButtonSize::Medium, "Medium favorite"),
+                    (3, IconButtonSize::Large, "Large favorite"),
+                    (4, IconButtonSize::ExtraLarge, "Extra-large favorite"),
+                ] {
+                    icon_button().icon(filled::STAR_SVG).size(size).width(width.get())
+                        .variant(variant.get()).shape_style(shape.get()).enabled(enabled.get())
+                        .selected_optional(if toggle.get() { Some(selected.get()[index]) } else { None })
+                        .accessibility_label(label).on_click(move || {
+                            actions.set(actions.get() + 1);
+                            if toggle.get() { selected.with_mut(|values| values[index] = !values[index]); }
+                        });
+                }
+            });
+        spacer().modifier(Modifier::new().height(Dp(8.0)));
+        text().content(format!("Icon actions: {}", actions.get()));
+    });
+}
+
+struct MenuSourceLease {
+    controller: State<MenuController>,
+    split_index: State<Option<usize>>,
+    split: bool,
+}
+
+impl Drop for MenuSourceLease {
+    fn drop(&mut self) {
+        if self.controller.is_alive()
+            && self.split_index.is_alive()
+            && self.split_index.get().is_some() == self.split
+            && self.controller.with(MenuController::is_open)
+        {
+            self.controller.with_mut(MenuController::close);
+        }
+    }
+}
+
+#[tessera]
+fn split_button_demo(
+    variant: State<SplitButtonVariant>,
+    enabled: State<bool>,
+    status: State<String>,
+    actions: State<u32>,
+    menu: State<MenuController>,
+    menu_index: State<Option<usize>>,
+    anchors: State<[PxRect; 5]>,
+) {
+    let _lease = remember(move || MenuSourceLease {
+        controller: menu,
+        split_index: menu_index,
+        split: true,
+    });
+    column().children(move || {
+        section_header(
+            "Split buttons",
+            "Five sizes with primary actions and related menu options.",
+        );
+        flow_row()
+            .item_spacing(Dp(8.0))
+            .line_spacing(Dp(8.0))
+            .children(move || {
+                button()
+                    .tonal()
+                    .on_click(move || {
+                        variant.set(match variant.get() {
+                            SplitButtonVariant::Filled => SplitButtonVariant::Tonal,
+                            SplitButtonVariant::Tonal => SplitButtonVariant::Outlined,
+                            SplitButtonVariant::Outlined => SplitButtonVariant::Elevated,
+                            SplitButtonVariant::Elevated => SplitButtonVariant::Filled,
+                        })
+                    })
+                    .child(move || {
+                        text().content(match variant.get() {
+                            SplitButtonVariant::Filled => "Split style: Filled",
+                            SplitButtonVariant::Tonal => "Split style: Tonal",
+                            SplitButtonVariant::Outlined => "Split style: Outlined",
+                            SplitButtonVariant::Elevated => "Split style: Elevated",
+                        });
+                    });
+                button()
+                    .text()
+                    .on_click(move || enabled.set(!enabled.get()))
+                    .child(move || {
+                        text().content(if enabled.get() {
+                            "Disable split buttons"
+                        } else {
+                            "Enable split buttons"
+                        });
+                    });
+            });
+        spacer().modifier(Modifier::new().height(Dp(12.0)));
+        for (index, (size, name)) in [
+            (SplitButtonSize::ExtraSmall, "extra-small"),
+            (SplitButtonSize::Small, "small"),
+            (SplitButtonSize::Medium, "medium"),
+            (SplitButtonSize::Large, "large"),
+            (SplitButtonSize::ExtraLarge, "extra-large"),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            split_button_layout()
+                .leading_button(move || {
+                    split_leading_button()
+                        .variant(variant.get())
+                        .size(size)
+                        .enabled(enabled.get())
+                        .accessibility_label(format!("Send {name}"))
+                        .on_click(move || {
+                            actions.set(actions.get() + 1);
+                            status.set(format!("Send {name} activated"));
+                        })
+                        .content(move || {
+                            icon().painter(filled::SEND_SVG);
+                            spacer().modifier(
+                                Modifier::new().width(SplitButtonDefaults::icon_spacing(size)),
+                            );
+                            text().content("Send");
+                        });
+                })
+                .trailing_button(move || {
+                    split_trailing_button()
+                        .variant(variant.get())
+                        .size(size)
+                        .enabled(enabled.get())
+                        .modifier(Modifier::new().on_globally_positioned(move |bounds| {
+                            if anchors.get()[index] != bounds {
+                                anchors.with_mut(|anchors| anchors[index] = bounds);
+                            }
+                        }))
+                        .expanded(
+                            menu.with(MenuController::is_open) && menu_index.get() == Some(index),
+                        )
+                        .accessibility_label(format!("Send options {name}"))
+                        .on_click(move || {
+                            if menu.with(MenuController::is_open) && menu_index.get() == Some(index)
+                            {
+                                menu.with_mut(MenuController::close);
+                            } else {
+                                menu_index.set(Some(index));
+                                menu.with_mut(MenuController::open);
+                            }
+                        })
+                        .content(|| {
+                            icon().painter(filled::ARROW_DROP_DOWN_SVG);
+                        });
+                });
+            spacer().modifier(Modifier::new().height(Dp(12.0)));
+        }
+        text().content(format!("Split actions: {}", actions.get()));
+        text().content(status.get());
+    });
+}
+
+#[tessera]
+fn carousel_demo(
+    controller: State<CarouselController>,
+    variant: State<CarouselVariant>,
+    enabled: State<bool>,
+    reverse: State<bool>,
+    selected: State<String>,
+) {
+    let theme = use_context::<MaterialTheme>().expect("material theme");
+    let painter = remember(|| try_painter_asset(crate::res::LOGO_PNG).expect("carousel artwork"));
+    let aspect_ratios = remember(|| {
+        Arc::<[f32]>::from([
+            16.0 / 9.0,
+            9.0 / 16.0,
+            1.0,
+            3.0 / 4.0,
+            4.0 / 3.0,
+            1.0,
+            16.0 / 9.0,
+            9.0 / 16.0,
+            1.0,
+            3.0 / 4.0,
+            4.0 / 3.0,
+            1.0,
+        ])
+    });
+    column().children(move || {
+        section_header("Carousel", if variant.get() == CarouselVariant::FullScreen { "Portrait full-screen preview. Drag vertically or use Up, Down, Home, and End." } else { "Items retain their full size as masks expand and collapse. Drag horizontally or use arrow keys, Home, and End." });
+        flow_row().item_spacing(Dp(8.0)).line_spacing(Dp(8.0)).children(move || {
+            button().tonal().on_click(move || {
+                variant.set(match variant.get() {
+                    CarouselVariant::MultiBrowse => CarouselVariant::Uncontained,
+                    CarouselVariant::Uncontained => CarouselVariant::UncontainedMultiAspectRatio,
+                    CarouselVariant::UncontainedMultiAspectRatio => CarouselVariant::Hero,
+                    CarouselVariant::Hero => CarouselVariant::CenteredHero,
+                    CarouselVariant::CenteredHero => CarouselVariant::FullScreen,
+                    CarouselVariant::FullScreen => CarouselVariant::MultiBrowse,
+                });
+                controller.with_mut(|state| state.jump_to_item(0));
+            }).child(move || {
+                text().content(match variant.get() {
+                    CarouselVariant::MultiBrowse => "Layout: Multi-browse",
+                    CarouselVariant::Uncontained => "Layout: Uncontained",
+                    CarouselVariant::UncontainedMultiAspectRatio => "Layout: Multi-aspect",
+                    CarouselVariant::Hero => "Layout: Hero",
+                    CarouselVariant::CenteredHero => "Layout: Centered hero",
+                    CarouselVariant::FullScreen => "Layout: Full screen",
+                });
+            });
+            button().text().on_click(move || controller.with_mut(|state| state.animate_to_item(state.current_item().saturating_sub(1)))).child(|| { text().content("Previous item"); });
+            button().text().on_click(move || controller.with_mut(|state| state.animate_to_item(state.current_item().saturating_add(1)))).child(|| { text().content("Next item"); });
+            button().text().on_click(move || reverse.set(!reverse.get())).child(move || { text().content(if reverse.get() { "Use forward layout" } else { "Use reverse layout" }); });
+            button().text().on_click(move || enabled.set(!enabled.get())).child(move || { text().content(if enabled.get() { "Disable scrolling" } else { "Enable scrolling" }); });
+        });
+        spacer().modifier(Modifier::new().height(Dp(12.0)));
+        carousel(12).modifier(if variant.get() == CarouselVariant::FullScreen { Modifier::new().width(Dp(320.0)) } else { Modifier::new().fill_max_width() }).height(Dp(if variant.get() == CarouselVariant::FullScreen { 480.0 } else { 180.0 }))
+            .variant(variant.get()).controller(controller).item_aspect_ratios(aspect_ratios.get()).content_padding_start(Dp(0.0)).item_spacing(Dp(if variant.get() == CarouselVariant::FullScreen { 16.0 } else { 8.0 }))
+            .preferred_item_width_optional(matches!(variant.get(), CarouselVariant::MultiBrowse | CarouselVariant::Uncontained).then_some(Dp(186.0)))
+            .user_scroll_enabled(enabled.get()).reverse_layout(reverse.get()).accessibility_label("Featured collections")
+            .content(move |item| {
+                let scheme = theme.get().color_scheme;
+                let (background, foreground) = match item.index % 3 {
+                    0 => (scheme.primary_container, scheme.on_primary_container),
+                    1 => (scheme.secondary_container, scheme.on_secondary_container),
+                    _ => (scheme.tertiary_container, scheme.on_tertiary_container),
+                };
+                button().modifier(Modifier::new().fill_max_size()).padding(Dp(0.0))
+                    .shape(tessera_components::shape_def::Shape::RECTANGLE).color(background).content_color(foreground)
+                    .accessibility_label(format!("Open collection {}", item.index + 1))
+                    .on_click(move || selected.set(format!("Collection {} activated", item.index + 1)))
+                    .child(move || {
+                        boxed().modifier(Modifier::new().fill_max_size()).alignment(Alignment::Center).children(move || {
+                            tessera_components::image::image().painter(painter.get()).modifier(Modifier::new().size(Dp(100.0), Dp(100.0)));
+                            column().modifier(Modifier::new().align(Alignment::BottomStart).padding_all(Dp(16.0))).children(move || {
+                                let width = item.masked_width();
+                                if width >= Dp(120.0) && width.0 + 0.5 >= item.full_width().0 {
+                                    text().content(format!("Collection {}", item.index + 1)).style(theme.get().typography.title_medium);
+                                }
+                            });
+                        });
+                    });
+            });
+        text().content(format!("Current item: {} / 12", controller.with(CarouselController::current_item) + 1));
+        text().content(selected.get());
+    });
+}
+
 #[shard]
 pub fn material_components_page() {
     let theme = use_context::<MaterialTheme>().unwrap();
 
+    let carousel_controller = remember(CarouselController::default);
+    let carousel_variant = remember(CarouselVariant::default);
+    let carousel_enabled = remember(|| true);
+    let carousel_reverse = remember(|| false);
+    let carousel_selected = remember(|| "No item activated".to_string());
+    let icon_variant = remember(|| IconButtonVariant::Filled);
+    let icon_width = remember(IconButtonWidth::default);
+    let icon_shape = remember(IconButtonShape::default);
+    let icon_toggle = remember(|| false);
+    let icon_enabled = remember(|| true);
+    let icon_selected = remember(|| [false; 5]);
+    let icon_actions = remember(|| 0_u32);
     let chip_selected = remember(|| false);
     let segmented_index = remember(|| 0_usize);
     let multi_segmented = remember(|| [false, false, false]);
@@ -71,14 +406,43 @@ pub fn material_components_page() {
     let dialog_open = remember(|| false);
     let bottom_sheet_open = remember(|| false);
     let menu_controller = remember(MenuController::new);
+    let menu_actions = remember(|| 0_u32);
+    let menu_status = remember(|| "No menu action yet".to_string());
+    let menu_trigger_bounds = remember(|| PxRect::ZERO);
+    let page_bounds = remember(|| PxRect::ZERO);
     let group_status = remember(|| "No button group action yet".to_string());
     let split_status = remember(|| "No split action yet".to_string());
+    let split_variant = remember(SplitButtonVariant::default);
+    let split_enabled = remember(|| true);
+    let split_actions = remember(|| 0_u32);
+    let split_menu_index = remember(|| None::<usize>);
+    let split_anchors = remember(|| [PxRect::ZERO; 5]);
     let fab_status = remember(|| "No floating action yet".to_string());
+    let fab_expanded = remember(|| true);
+    let fab_menu_color = remember(|| FloatingActionButtonMenuColor::Primary);
+    let loading_paused = remember(|| false);
+    let loading_progress = remember(|| 0.5_f32);
+    let keyboard_slider_value = remember(|| 0.5_f32);
+    let centered_slider_value = remember(|| 0.5_f32);
+    let slider_range = remember(|| (0.2_f32, 0.8_f32));
+    let slider_steps = remember(|| false);
+    let sliders_disabled = remember(|| false);
+    let plain_tooltip = remember(TooltipController::new);
+    let rich_tooltip = remember(TooltipController::new);
+    let tooltip_clicks = remember(|| 0_u32);
+    let tooltip_help = remember(|| false);
+    let tooltip_action = remember(|| false);
     let snackbar_host_state = remember(SnackbarHostState::new);
+    let date_state = remember(DatePickerState::default);
+    let time_state = remember(|| TimePickerState::new(10, 8, false, Default::default()));
+    let picker_status = remember(String::new);
     let navigation_bar_selected = remember(|| 0_usize);
     let navigation_rail_selected = remember(|| 0_usize);
+    let drawer_selected = remember(|| 0_usize);
+    let toolbar_expanded = remember(|| true);
+    let toolbar_status = remember(|| "No toolbar action yet".to_string());
 
-    let page_content = move || {
+    let page_content = RenderSlot::new(move || {
         lazy_column()
             .modifier(Modifier::new().fill_max_size())
             .estimated_item_size(Dp(280.0))
@@ -91,6 +455,307 @@ pub fn material_components_page() {
                         .style(theme.with(|t| t.typography.headline_large));
                     spacer().modifier(Modifier::new().height(Dp(8.0)));
                     text().content("Additional Material 3 components beyond the basic set.");
+                });
+            })
+            .item(move || { carousel_demo(carousel_controller, carousel_variant, carousel_enabled, carousel_reverse, carousel_selected); })
+            .item(move || { icon_button_demo(icon_variant, icon_width, icon_shape, icon_toggle, icon_enabled, icon_selected, icon_actions); })
+            .item(move || {
+                column().children(move || {
+                    section_header("Tooltips", "Hover, focus with Tab, or hold on touch. Escape dismisses without activating the control.");
+                    flow_row().item_spacing(Dp(16.0)).line_spacing(Dp(8.0)).children(move || {
+                        tooltip_anchor().controller(plain_tooltip).child(move || {
+                            button().tonal().on_click(move || tooltip_clicks.set(tooltip_clicks.get() + 1)).child(|| {
+                                text().content("Plain help");
+                            });
+                        });
+                        tooltip_anchor().controller(rich_tooltip).child(move || {
+                            button().tonal().on_click(move || rich_tooltip.with_mut(TooltipController::show)).child(|| {
+                                text().content("Rich help");
+                            });
+                        });
+                        button().text().on_click(move || tooltip_help.set(!tooltip_help.get())).child(|| {
+                            text().content("Change help text");
+                        });
+                    });
+                    text().content(format!("Plain activations: {} · Rich action: {}", tooltip_clicks.get(), if tooltip_action.get() { "done" } else { "not yet" }));
+                });
+            })
+            .item(move || {
+                column().children(move || {
+                    section_header("Sliders", "Use arrow keys, Home/End, and PageUp/PageDown. Tab between range handles.");
+                    flow_row().item_spacing(Dp(12.0)).line_spacing(Dp(8.0)).children(move || {
+                        button().tonal().on_click(move || slider_steps.set(!slider_steps.get())).child(move || {
+                            text().content(if slider_steps.get() { "Use continuous values" } else { "Use discrete steps" });
+                        });
+                        button().tonal().on_click(move || sliders_disabled.set(!sliders_disabled.get())).child(move || {
+                            text().content(if sliders_disabled.get() { "Enable sliders" } else { "Disable sliders" });
+                        });
+                        button().text().on_click(move || {
+                            keyboard_slider_value.set(0.5);
+                            centered_slider_value.set(0.5);
+                            slider_range.set((0.2, 0.8));
+                        }).child(|| { text().content("Reset values"); });
+                    });
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                    text().content(format!("Single: {:.0}%", keyboard_slider_value.get() * 100.0));
+                    slider().modifier(Modifier::new().width(Dp(320.0))).value(keyboard_slider_value.get()).on_change(move |value| keyboard_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Single value");
+                    text().content(format!("Centered: {:.0}%", centered_slider_value.get() * 100.0));
+                    centered_slider().modifier(Modifier::new().width(Dp(320.0))).value(centered_slider_value.get()).on_change(move |value| centered_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Centered value");
+                    text().content(format!("Range: {:.0}% - {:.0}%", slider_range.get().0 * 100.0, slider_range.get().1 * 100.0));
+                    range_slider().modifier(Modifier::new().width(Dp(320.0))).value(slider_range.get()).on_change(move |value| slider_range.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Value interval").start_accessibility_label("Minimum value").end_accessibility_label("Maximum value");
+                });
+            })
+            .item(move || {
+                column().children(move || {
+                    section_header("Loading indicators", "Morphing shapes, rotation, and determinate progress with optional containers.");
+                    button().tonal().on_click(move || loading_paused.set(!loading_paused.get())).child(move || {
+                        text().content(if loading_paused.get() { "Resume animation" } else { "Pause animation" });
+                    });
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                    flow_row().item_spacing(Dp(24.0)).line_spacing(Dp(16.0)).children(move || {
+                        loading_indicator().paused(loading_paused.get()).accessibility_label("Loading content");
+                        loading_indicator().contained(true).paused(loading_paused.get()).accessibility_label("Refreshing content");
+                        loading_indicator().modifier(Modifier::new().size(Dp(64.0), Dp(64.0))).progress(loading_progress.get()).accessibility_label("Download progress");
+                        loading_indicator().modifier(Modifier::new().size(Dp(64.0), Dp(64.0))).contained(true).progress(loading_progress.get()).accessibility_label("Upload progress");
+                    });
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                    slider().modifier(Modifier::new().width(Dp(240.0))).value(loading_progress.get()).on_change(move |value| loading_progress.set(value)).accessibility_label("Loading progress");
+                    text().content(format!("Determinate progress: {:.0}%", loading_progress.get() * 100.0));
+                });
+            })
+            .item(move || {
+                column().children(move || {
+                    section_header(
+                        "FAB menu",
+                        "Open the creation menu. Click outside or press Escape to dismiss.",
+                    );
+                    button()
+                        .tonal()
+                        .on_click(move || {
+                            fab_menu_color.set(match fab_menu_color.get() {
+                                FloatingActionButtonMenuColor::Primary => {
+                                    FloatingActionButtonMenuColor::Secondary
+                                }
+                                FloatingActionButtonMenuColor::Secondary => {
+                                    FloatingActionButtonMenuColor::Tertiary
+                                }
+                                FloatingActionButtonMenuColor::Tertiary => {
+                                    FloatingActionButtonMenuColor::Primary
+                                }
+                            });
+                        })
+                        .child(move || {
+                            text().content(format!("Color: {:?}", fab_menu_color.get()));
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(12.0)));
+                    floating_action_button_menu()
+                        .modifier(Modifier::new().fill_max_width().height(Dp(320.0)))
+                        .color(fab_menu_color.get())
+                        .items(vec![
+                            FloatingActionButtonMenuItem::new(
+                                "New document",
+                                Some(filled::EDIT_SVG.into()),
+                                tessera_ui::Callback::new(move || {
+                                    fab_status.set("New document action".into())
+                                }),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                "New folder",
+                                Some(filled::FOLDER_SVG.into()),
+                                tessera_ui::Callback::new(move || {
+                                    fab_status.set("New folder action".into())
+                                }),
+                            ),
+                            FloatingActionButtonMenuItem::new(
+                                "Upload file",
+                                Some(filled::UPLOAD_SVG.into()),
+                                tessera_ui::Callback::new(move || {
+                                    fab_status.set("Upload file action".into())
+                                }),
+                            ),
+                        ])
+                        .main_content(move || {
+                            surface()
+                                .modifier(Modifier::new().fill_max_size())
+                                .style(theme.get().color_scheme.surface_container_low.into())
+                                .child(move || {
+                                    column()
+                                        .modifier(Modifier::new().padding_all(Dp(16.0)))
+                                        .children(move || {
+                                            text()
+                                                .content("Create something")
+                                                .style(theme.get().typography.title_large);
+                                            text().content(fab_status.get());
+                                        });
+                                });
+                        });
+                });
+            })
+            .item(move || {
+                column().children(move || {
+                    section_header(
+                        "Extended FABs",
+                        "Small, medium, and large primary actions with animated labels.",
+                    );
+                    button()
+                        .tonal()
+                        .on_click(move || fab_expanded.set(!fab_expanded.get()))
+                        .child(move || {
+                            text().content(if fab_expanded.get() {
+                                "Collapse labels"
+                            } else {
+                                "Expand labels"
+                            });
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                    flow_row()
+                        .item_spacing(Dp(16.0))
+                        .line_spacing(Dp(16.0))
+                        .children(move || {
+                            extended_floating_action_button("Compose")
+                                .icon(filled::EDIT_SVG)
+                                .expanded(fab_expanded.get())
+                                .on_click(move || fab_status.set("Compose action".into()));
+                            extended_floating_action_button("Create")
+                                .size(ExtendedFloatingActionButtonSize::Medium)
+                                .icon(filled::ADD_SVG)
+                                .expanded(fab_expanded.get())
+                                .on_click(move || fab_status.set("Create action".into()));
+                            extended_floating_action_button("New project")
+                                .size(ExtendedFloatingActionButtonSize::Large)
+                                .icon(filled::ADD_SVG)
+                                .expanded(fab_expanded.get())
+                                .on_click(move || fab_status.set("New project action".into()));
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                    extended_floating_action_button("Label-only action")
+                        .on_click(move || fab_status.set("Label-only action".into()));
+                    spacer().modifier(Modifier::new().height(Dp(16.0)));
+                    floating_action_button()
+                        .size(FloatingActionButtonSize::Medium)
+                        .accessibility_label("Medium floating action")
+                        .on_click(move || fab_status.set("Medium floating action".into()))
+                        .content(|| {
+                            icon().painter(filled::ADD_SVG).size(Dp(28.0));
+                        });
+                    text().content(fab_status.get());
+                });
+            })
+            .item(move || {
+                column().children(move || {
+                    section_header(
+                        "Toolbars",
+                        "Floating and docked contextual actions with 48dp targets.",
+                    );
+                    floating_toolbar()
+                        .accessibility_label("Editing actions")
+                        .color_style(ToolbarColorStyle::Vibrant)
+                        .expanded(toolbar_expanded.get())
+                        .content(move || {
+                            button()
+                                .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                                .padding(Dp(12.0))
+                                .shape(tessera_components::shape_def::Shape::CAPSULE)
+                                .color(tessera_ui::Color::TRANSPARENT)
+                                .content_color(theme.get().color_scheme.on_primary_container)
+                                .accessibility_label("Expand editing actions")
+                                .on_click(move || toolbar_expanded.set(!toolbar_expanded.get()))
+                                .child(|| {
+                                    icon().painter(filled::MENU_SVG);
+                                });
+                        })
+                        .trailing(move || {
+                            button()
+                                .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                                .padding(Dp(12.0))
+                                .shape(tessera_components::shape_def::Shape::CAPSULE)
+                                .color(tessera_ui::Color::TRANSPARENT)
+                                .content_color(theme.get().color_scheme.on_primary_container)
+                                .accessibility_label("Save changes")
+                                .on_click(move || toolbar_status.set("Changes saved".into()))
+                                .child(|| {
+                                    icon().painter(filled::CHECK_SVG);
+                                });
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(12.0)));
+                    floating_toolbar()
+                        .orientation(ToolbarOrientation::Vertical)
+                        .accessibility_label("Page actions")
+                        .content(move || {
+                            button()
+                                .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                                .padding(Dp(12.0))
+                                .color(tessera_ui::Color::TRANSPARENT)
+                                .content_color(theme.get().color_scheme.on_surface_variant)
+                                .accessibility_label("Go home")
+                                .on_click(move || toolbar_status.set("Home selected".into()))
+                                .child(|| {
+                                    icon().painter(filled::HOME_SVG);
+                                });
+                        });
+                    text().content(toolbar_status.get());
+                    spacer().modifier(Modifier::new().height(Dp(12.0)));
+                    docked_toolbar()
+                        .accessibility_label("Document actions")
+                        .content(move || {
+                            button()
+                                .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+                                .padding(Dp(12.0))
+                                .color(tessera_ui::Color::TRANSPARENT)
+                                .content_color(theme.get().color_scheme.on_surface_variant)
+                                .accessibility_label("Mark document as saved")
+                                .on_click(move || {
+                                    toolbar_status.set("Document marked as saved".into())
+                                })
+                                .child(|| {
+                                    icon().painter(filled::STAR_SVG);
+                                });
+                            button()
+                                .filled()
+                                .on_click(move || toolbar_status.set("Editing complete".into()))
+                                .child(|| {
+                                    text().content("Done");
+                                });
+                        });
+                });
+            })
+            .item(move || {
+                column().children(move || {
+                    section_header(
+                        "Navigation drawer",
+                        "Select destinations using pointer or keyboard input.",
+                    );
+                    navigation_drawer()
+                        .accessibility_label("Mail folders")
+                        .content(move || {
+                            text()
+                                .content("Mail")
+                                .style(theme.get().typography.title_small)
+                                .modifier(Modifier::new().padding_all(Dp(16.0)));
+                            navigation_drawer_item()
+                                .label("Inbox")
+                                .selected(drawer_selected.get() == 0)
+                                .icon(|| {
+                                    icon().painter(filled::HOME_SVG);
+                                })
+                                .badge(|| {
+                                    text().content("24");
+                                })
+                                .on_click(move || drawer_selected.set(0));
+                            navigation_drawer_item()
+                                .label("Saved")
+                                .selected(drawer_selected.get() == 1)
+                                .icon(|| {
+                                    icon().painter(filled::STAR_SVG);
+                                })
+                                .on_click(move || drawer_selected.set(1));
+                            navigation_drawer_item()
+                                .label("Unavailable")
+                                .enabled(false)
+                                .icon(|| {
+                                    icon().painter(filled::SETTINGS_SVG);
+                                });
+                        });
                 });
             })
             .item(move || {
@@ -357,30 +1022,7 @@ pub fn material_components_page() {
                 });
             })
             .item(move || {
-                column().children(move || {
-                    section_header(
-                        "Split button",
-                        "Pair a primary action with a secondary action.",
-                    );
-                    split_button_layout()
-                        .leading_button(move || {
-                            split_leading_button()
-                                .filled()
-                                .on_click(move || split_status.set("Send pressed".to_string()))
-                                .content(|| {
-                                    text().content("Send");
-                                });
-                        })
-                        .trailing_button(move || {
-                            split_trailing_button()
-                                .filled()
-                                .on_click(move || split_status.set("More pressed".to_string()))
-                                .content(|| {
-                                    text().content("More");
-                                });
-                        });
-                    text().content(split_status.get());
-                });
+                split_button_demo(split_variant, split_enabled, split_status, split_actions, menu_controller, split_menu_index, split_anchors);
             })
             .item(move || {
                 column().children(move || {
@@ -470,19 +1112,26 @@ pub fn material_components_page() {
             })
             .item(move || {
                 column().children(move || {
+                    let _lease = remember(move || MenuSourceLease {
+                        controller: menu_controller,
+                        split_index: split_menu_index,
+                        split: false,
+                    });
                     section_header("Menu", "Show a list of actions in a temporary surface.");
-                    // The menu itself is hosted by the page-level
-                    // `menu_provider`; the trigger only marks the anchor.
                     button()
                         .outlined()
+                        .modifier(Modifier::new().on_globally_positioned(move |bounds| {
+                            menu_trigger_bounds.set(bounds);
+                        }))
                         .on_click(move || {
-                            menu_controller.with_mut(|menu| {
-                                menu.open_at(MenuAnchor::at(PxPosition::new(Px(16), Px(16))));
-                            });
+                            split_menu_index.set(None);
+                            menu_controller.with_mut(MenuController::open);
                         })
                         .child(|| {
                             text().content("Open menu");
                         });
+                    text().content(format!("Menu actions: {}", menu_actions.get()));
+                    text().content(menu_status.get());
                 });
             })
             .item(move || {
@@ -511,13 +1160,75 @@ pub fn material_components_page() {
             .item(move || {
                 column().children(move || {
                     section_header("Date picker", "Select a date from a calendar.");
-                    date_picker();
+                    surface()
+                        .style(theme.with(|t| t.color_scheme.surface_container_high).into())
+                        .shape(theme.with(|t| t.shapes.extra_large))
+                        .child(move || {
+                            date_picker_dialog()
+                                .state(date_state)
+                                .picker_first_day_of_week(Weekday::Sunday)
+                                .dismiss_button(move || {
+                                    button()
+                                        .text()
+                                        .on_click(move || {
+                                            date_state
+                                                .with_mut(DatePickerState::clear_selected_date);
+                                            picker_status.set("Date selection cleared".to_owned());
+                                        })
+                                        .child(|| {
+                                            text().content("Cancel");
+                                        });
+                                })
+                                .confirm_button(move || {
+                                    button()
+                                        .text()
+                                        .enabled(date_state.with(|s| s.selected_date().is_some()))
+                                        .on_click(move || {
+                                            picker_status.set("Date confirmed".to_owned())
+                                        })
+                                        .child(|| {
+                                            text().content("OK");
+                                        });
+                                });
+                        });
+                    text().content(picker_status.get());
                 });
             })
             .item(move || {
                 column().children(move || {
-                    section_header("Time picker", "Select a time with steppers.");
-                    time_picker();
+                    section_header("Time picker", "Select a time with the clock or keyboard.");
+                    surface()
+                        .style(theme.with(|t| t.color_scheme.surface_container_high).into())
+                        .shape(theme.with(|t| t.shapes.extra_large))
+                        .child(move || {
+                            column()
+                                .modifier(Modifier::new().padding_all(Dp(24.0)))
+                                .children(move || {
+                                    time_picker_dialog()
+                                        .state(time_state)
+                                        .dismiss_button(move || {
+                                            button()
+                                                .text()
+                                                .on_click(move || {
+                                                    picker_status
+                                                        .set("Time selection cancelled".to_owned())
+                                                })
+                                                .child(|| {
+                                                    text().content("Cancel");
+                                                });
+                                        })
+                                        .confirm_button(move || {
+                                            button()
+                                                .text()
+                                                .on_click(move || {
+                                                    picker_status.set("Time confirmed".to_owned())
+                                                })
+                                                .child(|| {
+                                                    text().content("OK");
+                                                });
+                                        });
+                                });
+                        });
                 });
             })
             .item(move || {
@@ -582,11 +1293,17 @@ pub fn material_components_page() {
                             });
                         });
                 });
-            })
-    };
+            });
+    });
 
     boxed()
-        .modifier(Modifier::new().fill_max_size())
+        .modifier(
+            Modifier::new()
+                .fill_max_size()
+                .on_globally_positioned(move |bounds| {
+                    page_bounds.set(bounds);
+                }),
+        )
         .children(move || {
             dialog_provider()
                 .is_open(dialog_open.get())
@@ -596,9 +1313,23 @@ pub fn material_components_page() {
                         .is_open(bottom_sheet_open.get())
                         .on_close_request(move || bottom_sheet_open.set(false))
                         .main_content(move || {
-                            // Hosting the menu above the whole page keeps it
-                            // on top of later list items, like a Compose popup.
+                            let trigger = if let Some(index) = split_menu_index.get() {
+                                split_anchors.get()[index]
+                            } else {
+                                menu_trigger_bounds.get()
+                            };
+                            let page = page_bounds.get();
+                            if menu_controller.with(MenuController::is_open)
+                                && trigger.intersection(&page).is_none()
+                            {
+                                menu_controller.with_mut(MenuController::close);
+                            }
                             menu_provider()
+                                .anchor(MenuAnchor::new(
+                                    PxPosition::new(trigger.x - page.x, trigger.y - page.y),
+                                    PxSize::new(trigger.width, trigger.height),
+                                ))
+                                .grouped(true)
                                 .placement(MenuPlacement::BelowStart)
                                 .controller(menu_controller)
                                 .main_content(move || {
@@ -606,7 +1337,24 @@ pub fn material_components_page() {
                                     // so it overlays the bottom edge.
                                     boxed().modifier(Modifier::new().fill_max_size()).children(
                                         move || {
-                                            page_content();
+                                            tooltip_provider("Share this item with your team. You can change access at any time.")
+                                                .variant(TooltipVariant::Rich)
+                                                .headline("Sharing options")
+                                                .actions(move || {
+                                                    row().children(move || {
+                                                        button().text().accessibility_label("Not now").on_click(move || rich_tooltip.with_mut(TooltipController::dismiss)).child(|| { text().content("Not now"); });
+                                                        button().text().accessibility_label("Got it").on_click(move || {
+                                                            rich_tooltip.with_mut(TooltipController::dismiss);
+                                                            tooltip_action.set(true);
+                                                        }).child(|| { text().content("Got it"); });
+                                                    });
+                                                })
+                                                .controller(rich_tooltip)
+                                                .child(move || {
+                                                    tooltip_provider(if tooltip_help.get() { "This updated description wraps across several lines while staying within the tooltip width." } else { "Explain this action" })
+                                                        .controller(plain_tooltip)
+                                                        .child_shared(page_content);
+                                                });
                                             snackbar_host()
                                                 .modifier(
                                                     Modifier::new()
@@ -618,11 +1366,49 @@ pub fn material_components_page() {
                                     );
                                 })
                                 .menu_content(move || {
-                                    let close =
-                                        move || menu_controller.with_mut(|menu| menu.close());
-                                    menu_item().label("Edit").on_click(close);
-                                    menu_item().label("Duplicate").on_click(close);
-                                    menu_item().label("Delete").on_click(close);
+                                    if split_menu_index.get().is_some() {
+                                        menu_group().children(move || {
+                                        menu_item().label("Send later").position(MenuPosition::First).on_click(move || {
+                                            split_actions.set(split_actions.get() + 1);
+                                            split_status.set("Scheduled send selected".to_string());
+                                            menu_controller.with_mut(MenuController::close);
+                                        });
+                                        menu_item().label("Save draft").position(MenuPosition::Last).on_click(move || {
+                                            split_actions.set(split_actions.get() + 1);
+                                            split_status.set("Draft saved".to_string());
+                                            menu_controller.with_mut(MenuController::close);
+                                        });
+                                        });
+                                    } else {
+                                        menu_group().position(MenuPosition::First).children(move || {
+                                            menu_item().label("Edit").position(MenuPosition::First).on_click(move || {
+                                                menu_actions.set(menu_actions.get() + 1);
+                                                menu_status.set("Edit selected".to_string());
+                                            });
+                                            menu_item().label("Duplicate").position(MenuPosition::Middle).on_click(move || {
+                                                menu_actions.set(menu_actions.get() + 1);
+                                                menu_status.set("Duplicate selected".to_string());
+                                            });
+                                            menu_item().label("Share").position(MenuPosition::Last).submenu_content(move || {
+                                                menu_item().label("Copy link").position(MenuPosition::First).on_click(move || {
+                                                    menu_actions.set(menu_actions.get() + 1);
+                                                    menu_status.set("Copy link selected".to_string());
+                                                });
+                                                menu_item().label("More options").position(MenuPosition::Last).submenu_content(move || {
+                                                    menu_item().label("Export link").on_click(move || {
+                                                        menu_actions.set(menu_actions.get() + 1);
+                                                        menu_status.set("Export link selected".to_string());
+                                                    });
+                                                });
+                                            });
+                                        });
+                                        menu_group().position(MenuPosition::Last).children(move || {
+                                            menu_item().label("Delete").on_click(move || {
+                                                menu_actions.set(menu_actions.get() + 1);
+                                                menu_status.set("Delete selected".to_string());
+                                            });
+                                        });
+                                    }
                                 });
                         })
                         .bottom_sheet_content(move || {
