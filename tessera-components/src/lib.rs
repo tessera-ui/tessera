@@ -142,6 +142,7 @@ pub mod text_input;
 pub mod theme;
 pub mod time_picker;
 pub mod toolbar;
+pub mod tooltip;
 
 #[cfg(test)]
 mod test_utils;
