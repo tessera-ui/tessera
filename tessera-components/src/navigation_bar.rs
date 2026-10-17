@@ -17,12 +17,9 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation,
-    column::column,
     modifier::{InteractionState, ModifierExt, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
-    row::row,
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
     text::text,
@@ -30,10 +27,9 @@ use crate::{
 };
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
-const CONTAINER_HEIGHT: Dp = Dp(80.0);
+const CONTAINER_HEIGHT: Dp = Dp(64.0);
 const INDICATOR_WIDTH: Dp = Dp(56.0);
 const INDICATOR_HEIGHT: Dp = Dp(32.0);
-const DIVIDER_HEIGHT: Dp = Dp(1.0);
 const INDICATOR_TO_LABEL_PADDING: Dp = Dp(4.0);
 const INDICATOR_VERTICAL_PADDING: Dp = Dp(4.0);
 
@@ -44,6 +40,18 @@ fn interpolate_color(from: Color, to: Color, progress: f32) -> Color {
         b: from.b + (to.b - from.b) * progress,
         a: from.a + (to.a - from.a) * progress,
     }
+}
+
+/// Position of the icon relative to the destination label.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum NavigationBarIconPosition {
+    /// Switch from top to start at a container width of 600dp.
+    #[default]
+    Auto,
+    /// Place the icon above the label on compact screens.
+    Top,
+    /// Place the icon before the label on wider screens.
+    Start,
 }
 
 /// Controls label visibility for a navigation bar item.
@@ -92,18 +100,16 @@ fn navigation_bar_item_view_content(
     };
     let label_color_base = interpolate_color(
         scheme.on_surface_variant,
-        scheme.secondary,
+        if item.icon_position == NavigationBarIconPosition::Start {
+            scheme.on_secondary_container
+        } else {
+            scheme.secondary
+        },
         selection_fraction,
     );
     let label_color = label_color_base.with_alpha(label_color_base.a * label_alpha);
 
     let indicator_color = scheme.secondary_container.with_alpha(indicator_alpha);
-
-    let size_animation_progress = selection_fraction.max(0.0);
-    let indicator_width_px = INDICATOR_WIDTH.to_px();
-    let animated_indicator_width_px = Px(((indicator_width_px.0 as f32) * size_animation_progress)
-        .round()
-        .max(0.0) as i32);
 
     layout()
         .policy(NavigationBarItemLayout {
@@ -111,6 +117,7 @@ fn navigation_bar_item_view_content(
             always_show_label,
             has_label,
             has_icon,
+            icon_position: item.icon_position,
         })
         .child(move || {
             surface()
@@ -118,10 +125,6 @@ fn navigation_bar_item_view_content(
                     color: indicator_color,
                 })
                 .shape(Shape::CAPSULE)
-                .modifier(Modifier::new().constrain(
-                    Some(AxisConstraint::exact(animated_indicator_width_px)),
-                    Some(AxisConstraint::exact(INDICATOR_HEIGHT.to_px())),
-                ))
                 .show_state_layer(false)
                 .show_ripple(false)
                 .child(|| {});
@@ -131,7 +134,6 @@ fn navigation_bar_item_view_content(
                     color: Color::TRANSPARENT,
                 })
                 .shape(Shape::CAPSULE)
-                .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
                 .enabled(true)
                 .interaction_state(interaction_state)
                 .ripple_color(ripple_color)
@@ -141,7 +143,7 @@ fn navigation_bar_item_view_content(
                             color: Color::TRANSPARENT,
                         })
                         .shape(Shape::CAPSULE)
-                        .modifier(Modifier::new().size(INDICATOR_WIDTH, INDICATOR_HEIGHT))
+                        .modifier(Modifier::new().fill_max_size())
                         .enabled(true)
                         .ripple_color(ripple_color)
                         .show_state_layer(false)
@@ -155,6 +157,12 @@ fn navigation_bar_item_view_content(
                         current: icon_color,
                     },
                     || {
+                        let color = use_context::<ContentColor>().unwrap();
+                        if color.with(|value| value.current) != icon_color {
+                            color.set(ContentColor {
+                                current: icon_color,
+                            });
+                        }
                         draw_icon.render();
                     },
                 );
@@ -178,6 +186,7 @@ struct NavigationBarItemLayout {
     always_show_label: bool,
     has_label: bool,
     has_icon: bool,
+    icon_position: NavigationBarIconPosition,
 }
 
 impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
@@ -214,9 +223,6 @@ impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
 
         let child_constraint = Constraint::NONE;
 
-        let indicator_size = indicator_background.measure(input, &child_constraint)?;
-        let indicator_ripple_size = indicator_ripple.measure(input, &child_constraint)?;
-
         let icon_size = if let Some(icon_id) = icon_id {
             Some(icon_id.measure(input, &child_constraint)?)
         } else {
@@ -231,6 +237,61 @@ impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
 
         let width = parent_width;
         let height = parent_height;
+        let horizontal = self.icon_position == NavigationBarIconPosition::Start && self.has_label;
+        let indicator_width = if horizontal {
+            icon_size.map_or(Px::ZERO, |size| size.width)
+                + label_size.map_or(Px::ZERO, |size| size.width)
+                + Dp(36.0).to_px()
+        } else {
+            INDICATOR_WIDTH.to_px()
+        };
+        let indicator_height = if horizontal {
+            Dp(40.0).to_px()
+        } else {
+            INDICATOR_HEIGHT.to_px()
+        };
+        let animated_width =
+            Px((indicator_width.to_f32() * self.selection_fraction).round() as i32);
+        let indicator_size = indicator_background.measure(
+            input,
+            &Constraint::new(
+                AxisConstraint::exact(animated_width),
+                AxisConstraint::exact(indicator_height),
+            ),
+        )?;
+        let indicator_ripple_size = indicator_ripple.measure(
+            input,
+            &Constraint::new(
+                AxisConstraint::exact(indicator_width),
+                AxisConstraint::exact(indicator_height),
+            ),
+        )?;
+        if horizontal {
+            let x = (width - indicator_width) / 2;
+            let y = (height - indicator_height) / 2;
+            result.place_child(
+                indicator_background,
+                PxPosition::new((width - animated_width) / 2, y),
+            );
+            result.place_child(indicator_ripple, PxPosition::new(x, y));
+            let icon_width = icon_size.map_or(Px::ZERO, |size| size.width);
+            if let (Some(id), Some(size)) = (icon_id, icon_size) {
+                result.place_child(
+                    id,
+                    PxPosition::new(x + Dp(16.0).to_px(), (height - size.height) / 2),
+                );
+            }
+            if let (Some(id), Some(size)) = (label_id, label_size) {
+                result.place_child(
+                    id,
+                    PxPosition::new(
+                        x + Dp(20.0).to_px() + icon_width,
+                        (height - size.height) / 2,
+                    ),
+                );
+            }
+            return Ok(result.with_size(ComputedData { width, height }));
+        }
 
         if !self.has_label {
             let ripple_x = (width - indicator_ripple_size.width) / 2;
@@ -263,13 +324,13 @@ impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
 
         let indicator_vertical_padding_px = INDICATOR_VERTICAL_PADDING.to_px();
         let content_height = icon_size.height
-            + indicator_vertical_padding_px
+            + indicator_vertical_padding_px * 2
             + INDICATOR_TO_LABEL_PADDING.to_px()
             + label_size.height;
 
         let content_vertical_padding =
             ((height - content_height) / 2).max(indicator_vertical_padding_px);
-        let selected_icon_y = content_vertical_padding;
+        let selected_icon_y = content_vertical_padding + indicator_vertical_padding_px;
         let unselected_icon_y = if self.always_show_label {
             selected_icon_y
         } else {
@@ -382,6 +443,7 @@ struct NavigationBarItemDefinition {
     icon: Option<RenderSlot>,
     on_click: Callback,
     label_behavior: NavigationBarLabelBehavior,
+    icon_position: NavigationBarIconPosition,
 }
 
 /// # navigation_bar_item
@@ -397,6 +459,7 @@ struct NavigationBarItemDefinition {
 /// - `label` — text label shown under the icon.
 /// - `icon` — optional icon rendered above the label.
 /// - `selected` — whether this item is the active destination.
+/// - `icon_position` — place the icon above or before the label.
 /// - `on_click` — callback invoked after the item becomes selected.
 /// - `label_behavior` — whether the label is always shown or only when
 ///   selected.
@@ -425,7 +488,12 @@ pub fn navigation_bar_item(
     on_click: Option<Callback>,
     label_behavior: Option<NavigationBarLabelBehavior>,
     selected: Option<bool>,
+    icon_position: Option<NavigationBarIconPosition>,
 ) {
+    let icon_position = icon_position
+        .filter(|position| *position != NavigationBarIconPosition::Auto)
+        .or_else(|| use_context::<NavigationBarIconPosition>().map(|position| position.get()))
+        .unwrap_or(NavigationBarIconPosition::Top);
     let label = label.unwrap_or_default();
     let on_click = on_click.unwrap_or_default();
     let label_behavior = label_behavior.unwrap_or_default();
@@ -463,6 +531,7 @@ pub fn navigation_bar_item(
                 icon,
                 on_click,
                 label_behavior,
+                icon_position,
             };
             navigation_bar_item_view()
                 .item(item)
@@ -482,6 +551,7 @@ pub fn navigation_bar_item(
 /// ## Parameters
 ///
 /// - `content` — item declarations rendered inside the bar.
+/// - `icon_position` — icon placement; defaults to adapting at 600dp.
 ///
 /// ## Examples
 ///
@@ -505,7 +575,21 @@ pub fn navigation_bar_item(
 /// }
 /// ```
 #[tessera]
-pub fn navigation_bar(content: Option<RenderSlot>) {
+pub fn navigation_bar(
+    content: Option<RenderSlot>,
+    icon_position: Option<NavigationBarIconPosition>,
+) {
+    let icon_position = icon_position.unwrap_or_default();
+    let wide = remember(|| false);
+    let resolved_position = if icon_position == NavigationBarIconPosition::Auto {
+        if wide.get() {
+            NavigationBarIconPosition::Start
+        } else {
+            NavigationBarIconPosition::Top
+        }
+    } else {
+        icon_position
+    };
     let content = content.unwrap_or_else(RenderSlot::empty);
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -513,6 +597,12 @@ pub fn navigation_bar(content: Option<RenderSlot>) {
         .color_scheme;
 
     let modifier = Modifier::new()
+        .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
+            let value = bounds.width.to_f32() >= Dp(600.0).to_pixels_f32();
+            if value != wide.get() {
+                wide.set(value);
+            }
+        })
         .focus_group()
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout().modifier(modifier).child({
@@ -520,34 +610,68 @@ pub fn navigation_bar(content: Option<RenderSlot>) {
             surface()
                 .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
                 .style(scheme.surface_container.into())
-                .elevation(Dp(3.0))
                 .block_input(true)
                 .child(move || {
-                    let separator_color = scheme.outline_variant.with_alpha(0.12);
-                    column()
-                        .modifier(Modifier::new().fill_max_size())
-                        .cross_axis_alignment(CrossAxisAlignment::Stretch)
-                        .children(move || {
-                            {
-                                surface()
-                                    .modifier(
-                                        Modifier::new().fill_max_width().height(DIVIDER_HEIGHT),
-                                    )
-                                    .style(separator_color.into())
-                                    .child(|| {});
-                            };
-
-                            row()
-                                .modifier(Modifier::new().fill_max_size().weight(1.0))
-                                .main_axis_alignment(MainAxisAlignment::Start)
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .children(move || {
+                    provide_context(
+                        || resolved_position,
+                        || {
+                            let position = use_context::<NavigationBarIconPosition>().unwrap();
+                            if position.get() != resolved_position {
+                                position.set(resolved_position);
+                            }
+                            layout()
+                                .policy(NavigationBarLayout {
+                                    centered: resolved_position == NavigationBarIconPosition::Start,
+                                })
+                                .child(move || {
                                     content.render();
                                 });
-                        });
+                        },
+                    );
                 });
         }
     });
+}
+
+#[derive(Clone, PartialEq)]
+struct NavigationBarLayout {
+    centered: bool,
+}
+
+impl tessera_ui::LayoutModifierNode for NavigationBarLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let children = input.children();
+        let width = input
+            .parent_constraint()
+            .width()
+            .resolve_max()
+            .unwrap_or(Px::ZERO);
+        let height = input
+            .parent_constraint()
+            .height()
+            .clamp(CONTAINER_HEIGHT.to_px());
+        let count = children.len();
+        let padding = if self.centered && count <= 6 {
+            Px((width.to_f32() * ((100.0 - 10.0 * (count as f32 + 3.0)) / 200.0)).round() as i32)
+        } else {
+            Px::ZERO
+        };
+        let available = width - padding * 2;
+        let mut result = LayoutResult::default();
+        for (index, child) in children.into_iter().enumerate() {
+            let start = Px(available.0 * index as i32 / count as i32);
+            let end = Px(available.0 * (index + 1) as i32 / count as i32);
+            child.measure(
+                input,
+                &Constraint::new(
+                    AxisConstraint::exact(end - start),
+                    AxisConstraint::exact(height),
+                ),
+            )?;
+            result.place_child(child, PxPosition::new(padding + start, Px::ZERO));
+        }
+        Ok(result.with_size(ComputedData { width, height }))
+    }
 }
 
 /// Per-item selection animation for a navigation bar destination.

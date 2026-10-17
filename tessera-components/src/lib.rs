@@ -108,6 +108,7 @@ pub mod material_icons;
 pub mod menus;
 pub mod modifier;
 pub mod navigation_bar;
+pub mod navigation_drawer;
 pub mod navigation_rail;
 mod nested_scroll;
 mod padding_utils;
@@ -140,6 +141,7 @@ pub mod text_field;
 pub mod text_input;
 pub mod theme;
 pub mod time_picker;
+pub mod toolbar;
 
 #[cfg(test)]
 mod test_utils;
