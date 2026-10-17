@@ -1,0 +1,13 @@
+Loading indicator shape and morph data
+Copyright 2024 The Android Open Source Project
+
+Derived from MaterialShapes.kt and LoadingIndicator.kt in AndroidX Material 3,
+and generated with androidx.graphics:graphics-shapes-desktop:1.1.0.
+
+https://github.com/androidx/androidx/tree/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3
+https://developer.android.com/jetpack/androidx/releases/graphics
+
+Licensed under the Apache License, Version 2.0.
+See material_loading_shapes.LICENSE for the complete license.
+
+The offline generator and regeneration instructions are in tools/material-shapes.

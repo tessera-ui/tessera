@@ -5,6 +5,7 @@ use crate::pipelines::{
     fluid_glass::pipeline::FluidGlassPipeline,
     image::pipeline::ImagePipeline,
     image_vector::pipeline::ImageVectorPipeline,
+    loading_shape::pipeline::LoadingShapePipeline,
     progress_arc::pipeline::ProgressArcPipeline,
     shadow::pipeline::{ShadowCompositePipeline, ShadowMaskPipeline},
     shape::pipeline::ShapePipeline,
@@ -22,6 +23,18 @@ pub(super) fn register(context: &mut PipelineContext<'_>) {
     register_fluid_glass(context);
     register_image(context);
     register_image_vector(context);
+    register_loading_shape(context);
+}
+
+fn register_loading_shape(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
+    let pipeline = LoadingShapePipeline::new(
+        resources.device,
+        resources.surface_config,
+        resources.pipeline_cache,
+        resources.sample_count,
+    );
+    context.register_draw_pipeline(pipeline);
 }
 
 fn register_simple_rect(context: &mut PipelineContext<'_>) {

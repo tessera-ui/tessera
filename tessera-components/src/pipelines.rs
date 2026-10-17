@@ -11,6 +11,7 @@ pub(crate) mod contrast;
 pub(crate) mod fluid_glass;
 pub(crate) mod image;
 pub(crate) mod image_vector;
+pub(crate) mod loading_shape;
 pub(crate) mod mean;
 pub(crate) mod pos_misc;
 pub(crate) mod progress_arc;

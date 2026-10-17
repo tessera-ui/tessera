@@ -103,6 +103,7 @@ pub mod lazy_list;
 mod lazy_shared;
 pub mod lazy_staggered_grid;
 pub mod list_item;
+pub mod loading_indicator;
 pub mod material_icons;
 pub mod menus;
 pub mod modifier;
