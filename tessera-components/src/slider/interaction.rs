@@ -1,11 +1,105 @@
 use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, CallbackWith, ComputedData, FocusRequester,
-    PointerInput, Px, PxPosition, State,
+    KeyboardInput, KeyboardInputModifierNode, PointerInput, Px, PxPosition, State,
     accesskit::{Action, Role},
+    winit::{
+        event::ElementState,
+        keyboard::{Key, ModifiersState, NamedKey},
+    },
 };
 
 use super::{ACCESSIBILITY_STEP, SliderArgs, SliderController, SliderLayout};
+
+#[derive(Clone, Copy, PartialEq)]
+pub(super) enum SliderKeyboardModel {
+    Single(State<f32>),
+    Start(State<(f32, f32)>),
+    End(State<(f32, f32)>),
+}
+
+impl SliderKeyboardModel {
+    fn snapshot(self) -> (f32, f32, f32) {
+        match self {
+            Self::Single(value) => (value.get(), 0.0, 1.0),
+            Self::Start(value) => {
+                let (start, end) = value.get();
+                (start, 0.0, end)
+            }
+            Self::End(value) => {
+                let (start, end) = value.get();
+                (end, start, 1.0)
+            }
+        }
+    }
+
+    fn update(self, next: f32) {
+        match self {
+            Self::Single(value) => value.set(next),
+            Self::Start(value) => value.with_mut(|value| value.0 = next),
+            Self::End(value) => value.with_mut(|value| value.1 = next),
+        }
+    }
+}
+
+pub(super) struct SliderKeyboardModifierNode {
+    pub model: SliderKeyboardModel,
+    pub steps: usize,
+    pub disabled: bool,
+    pub on_change: CallbackWith<f32>,
+}
+
+fn key_target(key: &Key, value: f32, min: f32, max: f32, steps: usize) -> Option<f32> {
+    let intervals = if steps == 0 {
+        100
+    } else {
+        steps.saturating_add(1)
+    };
+    let delta = 1.0 / intervals as f32;
+    let page = (intervals / 10).clamp(1, 10) as f32;
+    let next = match key {
+        Key::Named(NamedKey::ArrowRight | NamedKey::ArrowUp) => value + delta,
+        Key::Named(NamedKey::ArrowLeft | NamedKey::ArrowDown) => value - delta,
+        Key::Named(NamedKey::PageUp) => value + page * delta,
+        Key::Named(NamedKey::PageDown) => value - page * delta,
+        Key::Named(NamedKey::Home) => return Some(min),
+        Key::Named(NamedKey::End) => return Some(max),
+        _ => return None,
+    };
+    Some(snap_fraction(next, steps).clamp(min, max))
+}
+
+impl SliderKeyboardModifierNode {
+    fn handle_key(&self, key: &Key, state: ElementState, modifiers: ModifiersState) -> bool {
+        if self.disabled || modifiers.control_key() || modifiers.alt_key() || modifiers.super_key()
+        {
+            return false;
+        }
+        let (value, min, max) = self.model.snapshot();
+        let value = if value.is_nan() {
+            min
+        } else {
+            value.clamp(min, max)
+        };
+        let Some(next) = key_target(key, value, min, max, self.steps) else {
+            return false;
+        };
+        if state == ElementState::Pressed && (next - value).abs() > f32::EPSILON {
+            self.model.update(next);
+            self.on_change.call(next);
+        }
+        true
+    }
+}
+
+impl KeyboardInputModifierNode for SliderKeyboardModifierNode {
+    fn on_keyboard_input(&self, input: KeyboardInput<'_>) {
+        let modifiers = input.key_modifiers;
+        input
+            .keyboard_events
+            .retain(|event| !self.handle_key(&event.logical_key, event.state, modifiers));
+    }
+}
 
 pub(super) fn snap_fraction(value: f32, steps: usize) -> f32 {
     if steps == 0 {
@@ -441,8 +535,194 @@ pub(super) fn apply_range_slider_semantics(
     _current_end: f32,
     _on_change: &CallbackWith<(f32, f32)>,
 ) {
-    accessibility.hidden = true;
-    if args.disabled {
-        accessibility.disabled = true;
+    accessibility.role = Some(Role::Group);
+    accessibility.label = args.accessibility_label.clone();
+    accessibility.description = args.accessibility_description.clone();
+    accessibility.hidden = false;
+    accessibility.focusable = false;
+    accessibility.merge_descendants = true;
+    accessibility.disabled = args.disabled;
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use parking_lot::Mutex;
+
+    use super::*;
+
+    #[test]
+    fn continuous_and_discrete_keys_follow_their_step_and_page_sizes() {
+        for (key, expected) in [
+            (NamedKey::ArrowRight, 0.51),
+            (NamedKey::ArrowUp, 0.51),
+            (NamedKey::ArrowLeft, 0.49),
+            (NamedKey::ArrowDown, 0.49),
+            (NamedKey::Home, 0.0),
+            (NamedKey::End, 1.0),
+            (NamedKey::PageUp, 0.6),
+            (NamedKey::PageDown, 0.4),
+        ] {
+            assert!(
+                (key_target(&Key::Named(key), 0.5, 0.0, 1.0, 0).unwrap() - expected).abs()
+                    < 0.000001
+            );
+        }
+        for (steps, next, page) in [(3, 0.75, 0.75), (19, 0.55, 0.6), (199, 0.505, 0.55)] {
+            assert!(
+                (key_target(&Key::Named(NamedKey::ArrowRight), 0.5, 0.0, 1.0, steps).unwrap()
+                    - next)
+                    .abs()
+                    < 0.000001
+            );
+            assert!(
+                (key_target(&Key::Named(NamedKey::PageUp), 0.5, 0.0, 1.0, steps).unwrap() - page)
+                    .abs()
+                    < 0.000001
+            );
+        }
+    }
+
+    #[test]
+    fn range_keys_observe_the_neighbor_without_rescaling_the_step() {
+        assert_eq!(
+            key_target(&Key::Named(NamedKey::Home), 0.5, 0.2, 0.8, 0),
+            Some(0.2)
+        );
+        assert_eq!(
+            key_target(&Key::Named(NamedKey::End), 0.5, 0.2, 0.8, 0),
+            Some(0.8)
+        );
+        assert!(
+            (key_target(&Key::Named(NamedKey::ArrowRight), 0.5, 0.2, 0.8, 0).unwrap() - 0.51).abs()
+                < 0.000001
+        );
+        assert_eq!(
+            key_target(&Key::Named(NamedKey::ArrowRight), 0.75, 0.0, 0.8, 3),
+            Some(0.8)
+        );
+        assert_eq!(
+            key_target(&Key::Named(NamedKey::ArrowLeft), 0.25, 0.2, 1.0, 3),
+            Some(0.2)
+        );
+    }
+
+    #[tessera_ui::tessera]
+    fn key_dispatch_fixture() {
+        let changes = Arc::new(Mutex::new(Vec::new()));
+        let recorded = changes.clone();
+        let value = tessera_ui::remember(|| 0.5);
+        let mut node = SliderKeyboardModifierNode {
+            model: SliderKeyboardModel::Single(value),
+            steps: 0,
+            disabled: false,
+            on_change: CallbackWith::new(move |value| recorded.lock().push(value)),
+        };
+        assert!(node.handle_key(
+            &Key::Named(NamedKey::ArrowRight),
+            ElementState::Released,
+            ModifiersState::empty()
+        ));
+        assert!(changes.lock().is_empty());
+        for modifiers in [
+            ModifiersState::CONTROL,
+            ModifiersState::ALT,
+            ModifiersState::SUPER,
+        ] {
+            assert!(!node.handle_key(&Key::Named(NamedKey::End), ElementState::Pressed, modifiers));
+        }
+        for key in [Key::Named(NamedKey::Tab), Key::Character("q".into())] {
+            assert!(!node.handle_key(&key, ElementState::Pressed, ModifiersState::empty()));
+        }
+        for _ in 0..3 {
+            assert!(node.handle_key(
+                &Key::Named(NamedKey::ArrowRight),
+                ElementState::Pressed,
+                ModifiersState::empty()
+            ));
+        }
+        assert_eq!(changes.lock().len(), 3);
+        assert!((value.get() - 0.53).abs() < 0.000001);
+        node.handle_key(
+            &Key::Named(NamedKey::End),
+            ElementState::Pressed,
+            ModifiersState::empty(),
+        );
+        assert!(node.handle_key(
+            &Key::Named(NamedKey::ArrowRight),
+            ElementState::Pressed,
+            ModifiersState::empty()
+        ));
+        assert_eq!(changes.lock().len(), 4);
+        node.disabled = true;
+        assert!(!node.handle_key(
+            &Key::Named(NamedKey::Home),
+            ElementState::Pressed,
+            ModifiersState::empty()
+        ));
+        assert_eq!(value.get(), 1.0);
+        let range = tessera_ui::remember(|| (0.2, 0.8));
+        let start = SliderKeyboardModifierNode {
+            model: SliderKeyboardModel::Start(range),
+            steps: 0,
+            disabled: false,
+            on_change: CallbackWith::new(move |_| recorded_range(range)),
+        };
+        let end = SliderKeyboardModifierNode {
+            model: SliderKeyboardModel::End(range),
+            steps: 0,
+            disabled: false,
+            on_change: CallbackWith::new(move |_| recorded_range(range)),
+        };
+        for key in [
+            NamedKey::ArrowRight,
+            NamedKey::ArrowRight,
+            NamedKey::ArrowRight,
+        ] {
+            assert!(start.handle_key(
+                &Key::Named(key),
+                ElementState::Pressed,
+                ModifiersState::empty(),
+            ));
+        }
+        assert!((range.get().0 - 0.23).abs() < 0.000001);
+        end.handle_key(
+            &Key::Named(NamedKey::Home),
+            ElementState::Pressed,
+            ModifiersState::empty(),
+        );
+        assert_eq!(range.get().0, range.get().1);
+        start.handle_key(
+            &Key::Named(NamedKey::End),
+            ElementState::Pressed,
+            ModifiersState::empty(),
+        );
+        assert_eq!(range.get().0, range.get().1);
+        end.handle_key(
+            &Key::Named(NamedKey::End),
+            ElementState::Pressed,
+            ModifiersState::empty(),
+        );
+        start.handle_key(
+            &Key::Named(NamedKey::End),
+            ElementState::Pressed,
+            ModifiersState::empty(),
+        );
+        assert_eq!(range.get(), (1.0, 1.0));
+        crate::spacer::spacer();
+    }
+
+    fn recorded_range(range: State<(f32, f32)>) {
+        let (start, end) = range.get();
+        assert!(start <= end);
+    }
+
+    #[test]
+    fn key_dispatch_consumes_limits_and_releases_but_preserves_shortcuts_and_tab() {
+        tessera_ui::testing::layout_test(|| {
+            key_dispatch_fixture();
+        })
+        .run();
     }
 }

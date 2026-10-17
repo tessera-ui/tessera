@@ -81,15 +81,18 @@ impl SliderLayout {
     }
 
     pub fn handle_center(&self, value: f32) -> PxPosition {
+        if self.track_total_width <= Px::ZERO {
+            return PxPosition::from_f32_xy(
+                self.component_width.to_f32().max(0.0) / 2.0,
+                self.component_height.to_f32() / 2.0,
+            );
+        }
         let active_width = self.active_width(value);
         let center_x =
             active_width.to_f32() + self.handle_gap.to_f32() + self.handle_width.to_f32() / 2.0;
         let max_x = (self.component_width.to_f32() - self.handle_width.to_f32() / 2.0).max(0.0);
         let clamped_x = center_x.clamp(self.handle_width.to_f32() / 2.0, max_x);
-        PxPosition::new(
-            Px(clamped_x.round() as i32),
-            Px(self.component_height.0 / 2),
-        )
+        PxPosition::from_f32_xy(clamped_x, self.component_height.to_f32() / 2.0)
     }
 }
 
@@ -110,74 +113,29 @@ impl CenteredSliderLayout {
         let value = value.clamp(0.0, 1.0);
         let w = self.base.component_width.to_f32();
         let h_w = self.base.handle_width.to_f32();
-        let h_gap = self.base.handle_gap.to_f32(); // Handle gap
-        let center_x_track = w / 2.0; // Geometric center of the component, for tracks
-
-        // Calculate Handle Center X using base logic.
-        // This maps the 0.0-1.0 value to the physical X position of the
-        // handle's center.
-        let track_total_length = self.base.track_total_width.to_f32();
-        let handle_center_x_raw = (value * track_total_length) + h_gap + (h_w / 2.0);
-
-        // Clamp handle center X within component boundaries, considering handle
-        // width and its gaps.
-        let min_handle_center_x = h_w / 2.0; // Handle's left edge at 0
-        let max_handle_center_x = w - h_w / 2.0; // Handle's right edge at w
-        let handle_center_x = handle_center_x_raw.clamp(min_handle_center_x, max_handle_center_x);
-
-        let handle_left = handle_center_x - h_w / 2.0;
-        let handle_right = handle_center_x + h_w / 2.0;
-
-        let (li_x, li_w, a_x, a_w, ri_x, ri_w): (f32, f32, f32, f32, f32, f32) = if value > 0.5 {
-            // Handle is to the right of center_x_track
-            // Left Inactive: From 0 to the start of the active segment,
-            // accounting for a single h_gap at the center.
-            let li_x_calc = 0.0;
-            let li_w_calc = (center_x_track - h_gap / 2.0).max(0.0);
-
-            // Active: From end of left inactive to start of handle's left gap.
-            // This segment starts after the h_gap at the center and ends before
-            // the handle's left h_gap.
-            let a_x_calc = center_x_track + h_gap / 2.0;
-            let a_w_calc = (handle_left - h_gap - a_x_calc).max(0.0); // Ensure width is non-negative
-
-            // Right Inactive: From end of handle's right gap to component
-            // width.
-            let ri_x_calc = handle_right + h_gap;
-            let ri_w_calc = (w - ri_x_calc).max(0.0);
-
-            (
-                li_x_calc, li_w_calc, a_x_calc, a_w_calc, ri_x_calc, ri_w_calc,
-            )
+        let gap = self.base.handle_gap.to_f32();
+        let midpoint = w / 2.0;
+        let handle_center = self.base.handle_center(value);
+        let handle_left = handle_center.x - h_w / 2.0;
+        let handle_right = handle_center.x + h_w / 2.0;
+        let left_end = (handle_left - gap).min(midpoint - gap / 2.0).max(0.0);
+        let right_start = (handle_right + gap).max(midpoint + gap / 2.0).min(w);
+        let (active_start, active_end) = if value > 0.5 {
+            let start = midpoint + gap / 2.0;
+            (start, (handle_left - gap).max(start))
         } else {
-            // Handle is to the left of or at center_x_track
-            // Left Inactive: From 0 to start of handle's left gap.
-            let li_x_calc = 0.0;
-            let li_w_calc = (handle_left - h_gap).max(0.0);
-
-            // Active: From end of handle's right gap to before the h_gap at the
-            // center.
-            let a_x_calc = handle_right + h_gap;
-            let a_w_calc = (center_x_track - h_gap / 2.0 - a_x_calc).max(0.0);
-
-            // Right Inactive: From after the h_gap at the center to component
-            // width.
-            let ri_x_calc = center_x_track + h_gap / 2.0;
-            let ri_w_calc = (w - ri_x_calc).max(0.0);
-
-            (
-                li_x_calc, li_w_calc, a_x_calc, a_w_calc, ri_x_calc, ri_w_calc,
-            )
+            let start = handle_right + gap;
+            (start, (midpoint - gap / 2.0).max(start))
         };
+        let active_start = Px(active_start.round() as i32);
+        let active_end = Px(active_end.round() as i32);
+        let right_start = Px(right_start.round() as i32);
 
         CenteredSegments {
-            left_inactive: (Px(li_x.round() as i32), Px(li_w.round() as i32)),
-            active: (Px(a_x.round() as i32), Px(a_w.round() as i32)),
-            right_inactive: (Px(ri_x.round() as i32), Px(ri_w.round() as i32)),
-            handle_center: PxPosition::new(
-                Px(handle_center_x.round() as i32),
-                Px(self.base.component_height.0 / 2),
-            ),
+            left_inactive: (Px::ZERO, Px(left_end.round() as i32)),
+            active: (active_start, active_end - active_start),
+            right_inactive: (right_start, self.base.component_width - right_start),
+            handle_center,
         }
     }
 
@@ -284,6 +242,19 @@ impl RangeSliderLayout {
         let start_half = start_handle_width.to_f32() / 2.0;
         let end_half = end_handle_width.to_f32() / 2.0;
         let track_total = (w - start_half - end_half - gap * 2.0).max(0.0);
+        if track_total == 0.0 {
+            let center = PxPosition::from_f32_xy(
+                w.max(0.0) / 2.0,
+                self.base.component_height.to_f32() / 2.0,
+            );
+            return RangeSegments {
+                left_inactive: (Px::ZERO, Px::ZERO),
+                active: (Px::ZERO, Px::ZERO),
+                right_inactive: (Px::ZERO, Px::ZERO),
+                start_handle_center: center,
+                end_handle_center: center,
+            };
+        }
 
         let start_center_raw = (start * track_total) + gap + start_half;
         let end_center_raw = (end * track_total) + gap + start_half;
@@ -293,8 +264,10 @@ impl RangeSliderLayout {
         let end_min = start_min;
         let end_max = (w - gap - end_half).max(end_min);
 
-        let start_handle_center_x = start_center_raw.clamp(start_min, start_max);
-        let end_handle_center_x = end_center_raw.clamp(end_min, end_max);
+        let start_handle_center_x =
+            (start_center_raw.clamp(start_min, start_max) - start_half).round() + start_half;
+        let end_handle_center_x =
+            (end_center_raw.clamp(end_min, end_max) - end_half).round() + end_half;
 
         let start_handle_right = start_handle_center_x + start_half;
         let end_handle_left = end_handle_center_x - end_half;
@@ -322,13 +295,13 @@ impl RangeSliderLayout {
             left_inactive: (Px(li_x.round() as i32), Px(li_w.round() as i32)),
             active: (Px(a_x.round() as i32), Px(a_w.round() as i32)),
             right_inactive: (Px(ri_x.round() as i32), Px(ri_w.round() as i32)),
-            start_handle_center: PxPosition::new(
-                Px(start_handle_center_x.round() as i32),
-                Px(self.base.component_height.0 / 2),
+            start_handle_center: PxPosition::from_f32_xy(
+                start_handle_center_x,
+                self.base.component_height.to_f32() / 2.0,
             ),
-            end_handle_center: PxPosition::new(
-                Px(end_handle_center_x.round() as i32),
-                Px(self.base.component_height.0 / 2),
+            end_handle_center: PxPosition::from_f32_xy(
+                end_handle_center_x,
+                self.base.component_height.to_f32() / 2.0,
             ),
         }
     }
@@ -345,5 +318,118 @@ pub(super) fn range_slider_layout(
             component_width,
             args.thumb_diameter.to_px(),
         ),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn collapsed_and_narrow_sliders_keep_a_finite_center_without_reversed_clamps() {
+        for handle_width in [2, 3, 4, 6, 8] {
+            for width in 0..64 {
+                let base = slider_layout_from_parts(
+                    SliderSize::ExtraSmall,
+                    true,
+                    Px(width),
+                    Px(handle_width),
+                );
+                for value in [0.0, 0.2, 0.5, 0.8, 1.0] {
+                    let center = base.handle_center(value);
+                    assert!(center.x.is_finite() && center.y.is_finite());
+                    assert!((0.0..=width as f32).contains(&center.x));
+                    if base.track_total_width == Px::ZERO {
+                        assert_eq!(center.x, width as f32 / 2.0);
+                    }
+                    let centered = CenteredSliderLayout { base }.segments(value);
+                    assert!(centered.left_inactive.1 >= Px::ZERO);
+                    assert!(centered.active.1 >= Px::ZERO);
+                    assert!(centered.right_inactive.1 >= Px::ZERO);
+                    let range = RangeSliderLayout { base }.segments(
+                        0.2,
+                        0.8,
+                        Px(handle_width),
+                        Px(handle_width),
+                    );
+                    if base.track_total_width == Px::ZERO {
+                        assert_eq!(range.start_handle_center, center);
+                        assert_eq!(range.end_handle_center, center);
+                        assert_eq!(range.active.1, Px::ZERO);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn centered_tracks_preserve_both_handle_gaps_at_and_near_the_midpoint() {
+        for width in [279, 280, 281, 350, 420, 560] {
+            for handle_width in [2, 3, 4, 5, 6, 8] {
+                let layout = CenteredSliderLayout {
+                    base: slider_layout_from_parts(
+                        SliderSize::ExtraSmall,
+                        true,
+                        Px(width),
+                        Px(handle_width),
+                    ),
+                };
+                let gap = layout.base.handle_gap.to_f32();
+                for value in [0.0, 0.2, 0.49, 0.499, 0.5, 0.501, 0.51, 0.8, 1.0] {
+                    let segments = layout.segments(value);
+                    let left = segments.handle_center.x - handle_width as f32 / 2.0;
+                    let right = left + handle_width as f32;
+                    let left_end = (segments.left_inactive.0 + segments.left_inactive.1).to_f32();
+                    let right_start = segments.right_inactive.0.to_f32();
+                    assert!(
+                        left - left_end >= gap,
+                        "left gap at {width}/{handle_width}/{value}"
+                    );
+                    assert!(
+                        right_start - right >= gap,
+                        "right gap at {width}/{handle_width}/{value}"
+                    );
+                    if value == 0.5 {
+                        assert_eq!(left - left_end, gap);
+                        assert_eq!(right_start - right, gap);
+                        assert_eq!(segments.active.1, Px::ZERO);
+                        assert!((segments.handle_center.x - width as f32 / 2.0).abs() <= 0.5);
+                    }
+                    if segments.active.1 > Px::ZERO {
+                        let active_start = segments.active.0.to_f32();
+                        let active_end = (segments.active.0 + segments.active.1).to_f32();
+                        assert!(active_end <= left - gap || active_start >= right + gap);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn range_tracks_preserve_gaps_with_odd_and_different_handle_widths() {
+        for width in [279, 280, 281, 350, 420] {
+            for (start_width, end_width) in [(3, 3), (3, 6), (6, 3), (4, 4)] {
+                let layout = RangeSliderLayout {
+                    base: slider_layout_from_parts(SliderSize::ExtraSmall, true, Px(width), Px(6)),
+                };
+                let segments = layout.segments(0.2, 0.8, Px(start_width), Px(end_width));
+                let gap = layout.base.handle_gap.to_f32();
+                let start_left = segments.start_handle_center.x - start_width as f32 / 2.0;
+                let end_left = segments.end_handle_center.x - end_width as f32 / 2.0;
+                assert_eq!(start_left - segments.left_inactive.1.to_f32(), gap);
+                assert_eq!(
+                    segments.active.0.to_f32() - start_left - start_width as f32,
+                    gap
+                );
+                assert_eq!(
+                    end_left - (segments.active.0 + segments.active.1).to_f32(),
+                    gap
+                );
+                assert_eq!(
+                    segments.right_inactive.0.to_f32() - end_left - end_width as f32,
+                    gap
+                );
+            }
+        }
     }
 }

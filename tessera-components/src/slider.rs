@@ -22,8 +22,9 @@ use crate::{
 };
 
 use interaction::{
-    RangeSliderHandleWidths, apply_range_slider_semantics, apply_slider_semantics,
-    handle_range_slider_state, handle_slider_state, snap_fraction,
+    RangeSliderHandleWidths, SliderKeyboardModel, SliderKeyboardModifierNode,
+    apply_range_slider_semantics, apply_slider_semantics, handle_range_slider_state,
+    handle_slider_state, snap_fraction,
 };
 use layout::{
     CenteredSliderLayout, RangeSliderLayout, SliderLayout, fallback_component_width,
@@ -64,6 +65,7 @@ struct RangeThumbAccessibility {
     value: f32,
     min: f32,
     max: f32,
+    keyboard_model: SliderKeyboardModel,
     on_change: CallbackWith<f32>,
 }
 
@@ -74,6 +76,22 @@ struct RangeSliderThumbProps {
     colors: SliderColors,
     focus: FocusRequester,
     accessibility: RangeThumbAccessibility,
+}
+
+fn range_thumb_label(args: &RangeSliderConfig, start: bool) -> String {
+    let override_label = if start {
+        &args.start_accessibility_label
+    } else {
+        &args.end_accessibility_label
+    };
+    if let Some(label) = override_label {
+        return label.clone();
+    }
+    let edge = if start { "start" } else { "end" };
+    match &args.accessibility_label {
+        Some(label) => format!("{label} {edge}"),
+        None => format!("Range {edge}"),
+    }
 }
 
 fn apply_range_thumb_semantics(
@@ -122,7 +140,9 @@ fn apply_range_thumb_semantics(
             _ => return,
         };
         let next = snap_fraction(next, steps).clamp(min, max);
-        on_change.call(next);
+        if (next - value).abs() > f32::EPSILON {
+            on_change.call(next);
+        }
     }));
 }
 
@@ -139,6 +159,8 @@ fn range_slider_thumb(
     let colors = colors.expect("range_slider_thumb requires colors to be set");
     let focus = focus.expect("range_slider_thumb requires focus to be set");
     let accessibility = accessibility.expect("range_slider_thumb requires accessibility to be set");
+    #[cfg(test)]
+    tests::record_thumb(accessibility.clone());
     let modifier = apply_range_thumb_pointer_modifier(
         Modifier::new()
             .focus_requester(focus)
@@ -196,7 +218,13 @@ fn apply_range_thumb_pointer_modifier(
     base: Modifier,
     accessibility: RangeThumbAccessibility,
 ) -> Modifier {
-    base.push_semantics(RangeSliderThumbSemanticsModifierNode { accessibility })
+    base.push_keyboard_input(SliderKeyboardModifierNode {
+        model: accessibility.keyboard_model,
+        steps: accessibility.steps,
+        disabled: accessibility.disabled,
+        on_change: accessibility.on_change,
+    })
+    .push_semantics(RangeSliderThumbSemanticsModifierNode { accessibility })
 }
 
 struct SliderPointerModifierNode {
@@ -259,6 +287,7 @@ fn apply_slider_pointer_modifier(
     tap_recognizer: State<TapRecognizer>,
     drag_recognizer: State<DragRecognizer>,
     clamped_value: f32,
+    keyboard_value: State<f32>,
 ) -> Modifier {
     let modifier = if !args.disabled {
         base.hover_cursor_icon(tessera_ui::winit::window::CursorIcon::Pointer)
@@ -266,6 +295,12 @@ fn apply_slider_pointer_modifier(
         base
     };
     modifier
+        .push_keyboard_input(SliderKeyboardModifierNode {
+            model: SliderKeyboardModel::Single(keyboard_value),
+            steps: args.steps,
+            disabled: args.disabled,
+            on_change: args.on_change,
+        })
         .push_semantics(SliderSemanticsModifierNode {
             args: args.clone(),
             clamped_value,
@@ -322,6 +357,7 @@ fn apply_centered_slider_pointer_modifier(
     tap_recognizer: State<TapRecognizer>,
     drag_recognizer: State<DragRecognizer>,
     clamped_value: f32,
+    keyboard_value: State<f32>,
 ) -> Modifier {
     let modifier = if !args.disabled {
         base.hover_cursor_icon(tessera_ui::winit::window::CursorIcon::Pointer)
@@ -329,6 +365,12 @@ fn apply_centered_slider_pointer_modifier(
         base
     };
     modifier
+        .push_keyboard_input(SliderKeyboardModifierNode {
+            model: SliderKeyboardModel::Single(keyboard_value),
+            steps: args.steps,
+            disabled: args.disabled,
+            on_change: args.on_change,
+        })
         .push_semantics(SliderSemanticsModifierNode {
             args: args.clone(),
             clamped_value,
@@ -735,6 +777,10 @@ struct RangeSliderConfig {
     /// When this is `None`, `range_slider` creates and owns an internal
     /// controller.
     pub controller: Option<State<RangeSliderController>>,
+    /// Accessible name for the lower handle.
+    pub start_accessibility_label: Option<String>,
+    /// Accessible name for the upper handle.
+    pub end_accessibility_label: Option<String>,
 }
 
 impl Default for RangeSliderConfig {
@@ -754,6 +800,8 @@ impl Default for RangeSliderConfig {
             show_stop_indicator: true,
             steps: 0,
             controller: None,
+            start_accessibility_label: None,
+            end_accessibility_label: None,
         }
     }
 }
@@ -779,16 +827,6 @@ struct SliderParams {
     controller: Option<State<SliderController>>,
 }
 
-/// Returns the active [`MaterialColorScheme`].
-///
-/// Falls back to the default Material theme when no theme is provided in the
-/// current context, mirroring the behavior of other themed components.
-fn current_color_scheme() -> MaterialColorScheme {
-    use_context::<MaterialTheme>()
-        .map(|theme| theme.get().color_scheme)
-        .unwrap_or_else(|| MaterialTheme::default().color_scheme)
-}
-
 /// Slider colors derived from the active Material color scheme.
 #[derive(Clone, Copy)]
 struct SliderThemeColors {
@@ -798,8 +836,7 @@ struct SliderThemeColors {
 }
 
 /// Resolves the default slider colors from the active Material theme.
-fn slider_theme_colors() -> SliderThemeColors {
-    let scheme = current_color_scheme();
+fn slider_theme_colors(scheme: &MaterialColorScheme) -> SliderThemeColors {
     SliderThemeColors {
         active_track: scheme.primary,
         inactive_track: scheme.surface_variant,
@@ -845,6 +882,8 @@ struct RangeSliderParams {
     show_stop_indicator: Option<bool>,
     steps: usize,
     controller: Option<State<RangeSliderController>>,
+    start_accessibility_label: Option<String>,
+    end_accessibility_label: Option<String>,
 }
 
 fn range_slider_config_from_params(
@@ -869,6 +908,8 @@ fn range_slider_config_from_params(
             .unwrap_or(defaults.show_stop_indicator),
         steps: params.steps,
         controller: params.controller,
+        start_accessibility_label: params.start_accessibility_label,
+        end_accessibility_label: params.end_accessibility_label,
     }
 }
 
@@ -943,11 +984,10 @@ fn measure_slider(
     handle.measure(input, &handle_constraint)?;
 
     let handle_center = layout.handle_center(clamped_value);
-    let handle_offset = layout.center_child_offset(handle_width);
     result.place_child(
         handle,
         PxPosition::from_f32_xy(
-            handle_center.x - handle_offset.0 as f32,
+            handle_center.x - handle_width.to_f32() / 2.0,
             layout.handle_y.0 as f32,
         ),
     );
@@ -1021,9 +1061,8 @@ struct SliderColors {
     thumb: Color,
 }
 
-fn slider_colors(args: &SliderConfig) -> SliderColors {
+fn slider_colors(args: &SliderConfig, scheme: &MaterialColorScheme) -> SliderColors {
     if args.disabled {
-        let scheme = current_color_scheme();
         let disabled_thumb = scheme
             .surface
             .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
@@ -1045,9 +1084,8 @@ fn slider_colors(args: &SliderConfig) -> SliderColors {
     }
 }
 
-fn range_slider_colors(args: &RangeSliderConfig) -> SliderColors {
+fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -> SliderColors {
     if args.disabled {
-        let scheme = current_color_scheme();
         let disabled_thumb = scheme
             .surface
             .blend_over(scheme.on_surface, MaterialAlpha::DISABLED_CONTENT);
@@ -1071,19 +1109,32 @@ fn range_slider_colors(args: &RangeSliderConfig) -> SliderColors {
 
 /// # slider
 ///
-/// Renders an interactive slider with a bar-style handle for selecting a value
-/// between 0.0 and 1.0.
+/// Select a fractional value for settings with pointer and keyboard input.
 ///
 /// ## Usage
 ///
 /// Use for settings like volume or brightness, or for any user-adjustable
 /// value.
 ///
+/// Arrow keys move one step. Home and End select the allowed bounds, and
+/// PageUp and PageDown move up to ten steps. Continuous sliders use 1% keyboard
+/// steps.
+///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and callbacks through
-///   the component's builder parameters.
-/// - `controller` — optional; use [`slider`] to provide your own controller.
+/// - `modifier` — slider placement and size constraints.
+/// - `value`, `on_change` — controlled fraction and change callback.
+/// - `size`, `thumb_diameter` — track size and handle width.
+/// - `active_track_color`, `inactive_track_color`, `thumb_color` — optional
+///   colors.
+/// - `disabled` — whether pointer, keyboard, and accessibility input are
+///   disabled.
+/// - `accessibility_label`, `accessibility_description` — accessible control
+///   name and details.
+/// - `show_stop_indicator`, `steps` — end stops and the number of intermediate
+///   steps.
+/// - `inset_icon` — optional leading icon for larger size variants.
+/// - `controller` — optional shared focus and drag state.
 ///
 /// ## Examples
 ///
@@ -1127,6 +1178,9 @@ pub fn slider(
     #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
 ) {
+    let scheme = use_context::<MaterialTheme>()
+        .map(|theme| theme.get().color_scheme)
+        .unwrap_or_else(|| MaterialTheme::default().color_scheme);
     let defaults = SliderConfig::default();
     let value = value.unwrap_or(defaults.value);
     let size = size.unwrap_or(defaults.size);
@@ -1150,11 +1204,13 @@ pub fn slider(
             inset_icon,
             controller,
         },
-        slider_theme_colors(),
+        slider_theme_colors(&scheme),
     );
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(SliderController::new));
+    let controller = if let Some(controller) = args.controller {
+        controller
+    } else {
+        remember(SliderController::new)
+    };
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
     let mut resolved_args = args;
@@ -1180,6 +1236,10 @@ fn slider_content(
         .expect("slider_content requires controller to be set");
     let initial_width = fallback_component_width(&args);
     let clamped_value = args.value.clamp(0.0, 1.0);
+    let keyboard_value = remember(|| clamped_value);
+    if keyboard_value.get() != clamped_value {
+        keyboard_value.set(clamped_value);
+    }
     let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
     let base_handle_width = args.thumb_diameter.to_px();
     let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1201,8 +1261,14 @@ fn slider_content(
         tap_recognizer,
         drag_recognizer,
         clamped_value,
+        keyboard_value,
     );
 
+    let next = (args.clone(), initial_width, clamped_value, handle_width);
+    let render_data = remember(|| next.clone());
+    if render_data.with(|current| current != &next) {
+        render_data.set(next);
+    }
     layout()
         .modifier(modifier)
         .policy(Slider {
@@ -1212,8 +1278,12 @@ fn slider_content(
             has_inset_icon: args.inset_icon.is_some(),
         })
         .child(move || {
+            let (args, initial_width, clamped_value, handle_width) = render_data.get();
             let slider_layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
-            let colors = slider_colors(&args);
+            let scheme = use_context::<MaterialTheme>()
+                .map(|theme| theme.get().color_scheme)
+                .unwrap_or_else(|| MaterialTheme::default().color_scheme);
+            let colors = slider_colors(&args, &scheme);
 
             active_segment().layout(slider_layout).colors(colors);
             inactive_segment().layout(slider_layout).colors(colors);
@@ -1333,7 +1403,6 @@ fn measure_centered_slider(
     );
 
     // 4. Handle
-    let handle_offset = layout.base.center_child_offset(handle_width);
     handle.measure(
         input,
         &Constraint::new(
@@ -1344,7 +1413,7 @@ fn measure_centered_slider(
     result.place_child(
         handle,
         PxPosition::from_f32_xy(
-            segments.handle_center.x - handle_offset.0 as f32,
+            segments.handle_center.x - handle_width.to_f32() / 2.0,
             layout.base.handle_y.0 as f32,
         ),
     );
@@ -1420,21 +1489,32 @@ fn measure_centered_slider(
 
 /// # centered_slider
 ///
-/// Renders an interactive slider that originates from the center (0.5),
-/// allowing selection of a value between 0.0 and 1.0. The active track extends
-/// from the center to the handle, while inactive tracks fill the remaining
-/// space.
+/// Adjust a value around a neutral midpoint for balance and deviation settings.
 ///
 /// ## Usage
 ///
 /// Use for adjustments that have a neutral midpoint, such as balance controls
 /// or deviation settings.
 ///
+/// Arrow keys move one step. Home and End select the allowed bounds, and
+/// PageUp and PageDown move up to ten steps. Continuous sliders use 1% keyboard
+/// steps.
+///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's value, appearance, and callbacks through
-///   the component's builder parameters.
-/// - `controller` — optional controller; use [`centered_slider`] to supply one.
+/// - `modifier` — slider placement and size constraints.
+/// - `value`, `on_change` — controlled fraction and change callback.
+/// - `size`, `thumb_diameter` — track size and handle width.
+/// - `active_track_color`, `inactive_track_color`, `thumb_color` — optional
+///   colors.
+/// - `disabled` — whether pointer, keyboard, and accessibility input are
+///   disabled.
+/// - `accessibility_label`, `accessibility_description` — accessible control
+///   name and details.
+/// - `show_stop_indicator`, `steps` — end stops and the number of intermediate
+///   steps.
+/// - `inset_icon` — optional leading icon for larger size variants.
+/// - `controller` — optional shared focus and drag state.
 ///
 /// ## Examples
 ///
@@ -1449,7 +1529,6 @@ fn measure_centered_slider(
 ///
 /// let current_value = remember(|| 0.5f32);
 ///
-/// // Simulate a value change
 /// current_value.set(0.75);
 /// assert_eq!(current_value.get(), 0.75);
 ///
@@ -1487,6 +1566,9 @@ pub fn centered_slider(
     #[prop(into)] inset_icon: Option<Painter>,
     controller: Option<State<SliderController>>,
 ) {
+    let scheme = use_context::<MaterialTheme>()
+        .map(|theme| theme.get().color_scheme)
+        .unwrap_or_else(|| MaterialTheme::default().color_scheme);
     let defaults = SliderConfig::default();
     let value = value.unwrap_or(defaults.value);
     let size = size.unwrap_or(defaults.size);
@@ -1510,11 +1592,13 @@ pub fn centered_slider(
             inset_icon,
             controller,
         },
-        slider_theme_colors(),
+        slider_theme_colors(&scheme),
     );
-    let controller = args
-        .controller
-        .unwrap_or_else(|| remember(SliderController::new));
+    let controller = if let Some(controller) = args.controller {
+        controller
+    } else {
+        remember(SliderController::new)
+    };
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
     let mut resolved_args = args;
@@ -1541,6 +1625,10 @@ fn centered_slider_content(
         .expect("centered_slider_content requires controller to be set");
     let initial_width = fallback_component_width(&args);
     let clamped_value = args.value.clamp(0.0, 1.0);
+    let keyboard_value = remember(|| clamped_value);
+    if keyboard_value.get() != clamped_value {
+        keyboard_value.set(clamped_value);
+    }
     let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
     let base_handle_width = args.thumb_diameter.to_px();
     let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1562,8 +1650,14 @@ fn centered_slider_content(
         tap_recognizer,
         drag_recognizer,
         clamped_value,
+        keyboard_value,
     );
 
+    let next = (args.clone(), initial_width, clamped_value, handle_width);
+    let render_data = remember(|| next.clone());
+    if render_data.with(|current| current != &next) {
+        render_data.set(next);
+    }
     layout()
         .modifier(modifier)
         .policy(CenteredSlider {
@@ -1572,10 +1666,14 @@ fn centered_slider_content(
             handle_width,
         })
         .child(move || {
+            let (args, initial_width, clamped_value, handle_width) = render_data.get();
             let centered_layout = CenteredSliderLayout {
                 base: slider_layout_with_handle_width(&args, initial_width, handle_width),
             };
-            let colors = slider_colors(&args);
+            let scheme = use_context::<MaterialTheme>()
+                .map(|theme| theme.get().color_scheme)
+                .unwrap_or_else(|| MaterialTheme::default().color_scheme);
+            let colors = slider_colors(&args, &scheme);
 
             centered_tracks().layout(centered_layout).colors(colors);
             if args.steps > 0 {
@@ -1682,14 +1780,12 @@ fn measure_range_slider(
         AxisConstraint::exact(args.end_handle_width),
         AxisConstraint::exact(layout.base.handle_height),
     );
-    let start_handle_offset = layout.base.center_child_offset(args.start_handle_width);
-    let end_handle_offset = layout.base.center_child_offset(args.end_handle_width);
 
     handle_start.measure(input, &start_handle_constraint)?;
     result.place_child(
         handle_start,
         PxPosition::from_f32_xy(
-            segments.start_handle_center.x - start_handle_offset.0 as f32,
+            segments.start_handle_center.x - args.start_handle_width.to_f32() / 2.0,
             layout.base.handle_y.0 as f32,
         ),
     );
@@ -1698,7 +1794,7 @@ fn measure_range_slider(
     result.place_child(
         handle_end,
         PxPosition::from_f32_xy(
-            segments.end_handle_center.x - end_handle_offset.0 as f32,
+            segments.end_handle_center.x - args.end_handle_width.to_f32() / 2.0,
             layout.base.handle_y.0 as f32,
         ),
     );
@@ -1778,19 +1874,34 @@ fn measure_range_slider(
 
 /// # range_slider
 ///
-/// Renders an interactive slider with two handles, allowing selection of a
-/// range (start, end) between 0.0 and 1.0.
+/// Select interval endpoints using two independently focusable handles.
 ///
 /// ## Usage
 ///
 /// Use for filtering by range, setting minimum and maximum values, or defining
 /// an interval.
 ///
+/// Arrow keys move one step. Home and End select the allowed bounds, and
+/// PageUp and PageDown move up to ten steps. Continuous sliders use 1% keyboard
+/// steps. Tab keeps a fixed start-then-end handle order; handles cannot cross
+/// their neighbor.
+///
 /// ## Parameters
 ///
-/// - `args` — configures the slider's range, appearance, and callbacks through
-///   the component's builder parameters.
-/// - `controller` — optional controller; use [`range_slider`] to supply one.
+/// - `modifier` — slider placement and size constraints.
+/// - `value`, `on_change` — controlled interval and change callback.
+/// - `size`, `thumb_diameter` — track size and handle width.
+/// - `active_track_color`, `inactive_track_color`, `thumb_color` — optional
+///   colors.
+/// - `disabled` — whether pointer, keyboard, and accessibility input are
+///   disabled.
+/// - `accessibility_label`, `accessibility_description` — accessible control
+///   name and details.
+/// - `show_stop_indicator`, `steps` — end stops and the number of intermediate
+///   steps.
+/// - `controller` — optional shared focus and drag state.
+/// - `start_accessibility_label`, `end_accessibility_label` — optional names
+///   for each handle.
 ///
 /// ## Examples
 ///
@@ -1834,7 +1945,12 @@ pub fn range_slider(
     show_stop_indicator: Option<bool>,
     steps: Option<usize>,
     controller: Option<State<RangeSliderController>>,
+    #[prop(into)] start_accessibility_label: Option<String>,
+    #[prop(into)] end_accessibility_label: Option<String>,
 ) {
+    let scheme = use_context::<MaterialTheme>()
+        .map(|theme| theme.get().color_scheme)
+        .unwrap_or_else(|| MaterialTheme::default().color_scheme);
     let defaults = RangeSliderConfig::default();
     let value = value.unwrap_or(defaults.value);
     let size = size.unwrap_or(defaults.size);
@@ -1856,12 +1972,16 @@ pub fn range_slider(
             show_stop_indicator,
             steps,
             controller,
+            start_accessibility_label,
+            end_accessibility_label,
         },
-        slider_theme_colors(),
+        slider_theme_colors(&scheme),
     );
-    let state = args
-        .controller
-        .unwrap_or_else(|| remember(RangeSliderController::new));
+    let state = if let Some(controller) = args.controller {
+        controller
+    } else {
+        remember(RangeSliderController::new)
+    };
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
     let mut resolved_args = args;
@@ -1897,6 +2017,10 @@ fn range_slider_content(
 
     let start = args.value.0.clamp(0.0, 1.0);
     let end = args.value.1.clamp(start, 1.0);
+    let keyboard_values = remember(|| (start, end));
+    if keyboard_values.get() != (start, end) {
+        keyboard_values.set((start, end));
+    }
 
     let base_handle_width = args.thumb_diameter.to_px();
     let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
@@ -1927,6 +2051,18 @@ fn range_slider_content(
         end,
     );
 
+    let next = (
+        args.clone(),
+        range_layout,
+        start,
+        end,
+        start_handle_width,
+        end_handle_width,
+    );
+    let render_data = remember(|| next.clone());
+    if render_data.with(|current| current != &next) {
+        render_data.set(next);
+    }
     layout()
         .modifier(modifier)
         .policy(RangeSlider {
@@ -1938,7 +2074,13 @@ fn range_slider_content(
             end_handle_width,
         })
         .child(move || {
-            let colors = range_slider_colors(&args);
+            let (args, range_layout, start, end, start_handle_width, end_handle_width) =
+                render_data.get();
+            let state = args.controller.expect("range slider controller");
+            let scheme = use_context::<MaterialTheme>()
+                .map(|theme| theme.get().color_scheme)
+                .unwrap_or_else(|| MaterialTheme::default().color_scheme);
+            let colors = range_slider_colors(&args, &scheme);
 
             range_tracks().layout(range_layout).colors(colors);
             if args.steps > 0 {
@@ -1965,7 +2107,7 @@ fn range_slider_content(
                 focus: state.with(|s| s.focus_start),
                 accessibility: RangeThumbAccessibility {
                     key: "range_slider_start_thumb",
-                    label: args.accessibility_label.clone(),
+                    label: Some(range_thumb_label(&args, true)),
                     description: args.accessibility_description.clone(),
                     fallback_description: "range start",
                     steps: args.steps,
@@ -1973,9 +2115,13 @@ fn range_slider_content(
                     value: start,
                     min: 0.0,
                     max: end,
-                    on_change: CallbackWith::new({
-                        let on_change = args.on_change;
-                        move |new_start| on_change.call((new_start, end))
+                    keyboard_model: SliderKeyboardModel::Start(keyboard_values),
+                    on_change: CallbackWith::new(move |new_start: f32| {
+                        let on_change = render_data.with(|(args, ..)| args.on_change);
+                        if keyboard_values.get().0 != new_start {
+                            keyboard_values.with_mut(|value| value.0 = new_start.min(value.1));
+                        }
+                        on_change.call(keyboard_values.get());
                     }),
                 },
             };
@@ -1993,7 +2139,7 @@ fn range_slider_content(
                 focus: state.with(|s| s.focus_end),
                 accessibility: RangeThumbAccessibility {
                     key: "range_slider_end_thumb",
-                    label: args.accessibility_label.clone(),
+                    label: Some(range_thumb_label(&args, false)),
                     description: args.accessibility_description.clone(),
                     fallback_description: "range end",
                     steps: args.steps,
@@ -2001,9 +2147,13 @@ fn range_slider_content(
                     value: end,
                     min: start,
                     max: 1.0,
-                    on_change: CallbackWith::new({
-                        let on_change = args.on_change;
-                        move |new_end| on_change.call((start, new_end))
+                    keyboard_model: SliderKeyboardModel::End(keyboard_values),
+                    on_change: CallbackWith::new(move |new_end: f32| {
+                        let on_change = render_data.with(|(args, ..)| args.on_change);
+                        if keyboard_values.get().1 != new_end {
+                            keyboard_values.with_mut(|value| value.1 = new_end.max(value.0));
+                        }
+                        on_change.call(keyboard_values.get());
                     }),
                 },
             };
@@ -2014,4 +2164,303 @@ fn range_slider_content(
                 .focus(end_thumb_args.focus)
                 .accessibility(end_thumb_args.accessibility);
         });
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::{Cell, RefCell};
+
+    use tessera_ui::{
+        HeadlessConfig, HeadlessRenderer,
+        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+    };
+
+    use crate::{column::column, modifier::ModifierExt as _, theme::material_theme};
+
+    use super::*;
+
+    #[derive(Clone, Default)]
+    struct Settings {
+        steps: usize,
+        disabled: bool,
+        width: Option<f64>,
+    }
+
+    thread_local! {
+        static RANGE: Cell<Option<State<(f32, f32)>>> = const { Cell::new(None) };
+        static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
+        static THUMBS: RefCell<[Option<RangeThumbAccessibility>; 2]> = const { RefCell::new([None, None]) };
+    }
+
+    pub(super) fn record_thumb(thumb: RangeThumbAccessibility) {
+        let index = usize::from(thumb.key == "range_slider_end_thumb");
+        THUMBS.with(|thumbs| thumbs.borrow_mut()[index] = Some(thumb));
+    }
+
+    fn thumb(index: usize) -> RangeThumbAccessibility {
+        THUMBS.with(|thumbs| thumbs.borrow()[index].clone().expect("range handle"))
+    }
+
+    struct SliderTestTag(&'static str);
+
+    impl SemanticsModifierNode for SliderTestTag {
+        fn apply(
+            &self,
+            accessibility: &mut AccessibilityNode,
+            _handler: &mut Option<AccessibilityActionHandler>,
+        ) {
+            accessibility.key = Some(self.0.to_string());
+        }
+    }
+
+    #[tessera]
+    fn fixture() {
+        let settings = remember(Settings::default);
+        let range = remember(|| (0.2_f32, 0.8_f32));
+        let single = remember(|| 0.5_f32);
+        let centered = remember(|| 0.5_f32);
+        SETTINGS.set(Some(settings));
+        RANGE.set(Some(range));
+        material_theme().child(move || {
+            column().children(move || {
+                slider()
+                    .modifier(
+                        Modifier::new()
+                            .width(Dp(settings.with(|settings| settings.width.unwrap_or(280.0))))
+                            .push_semantics(SliderTestTag("slider")),
+                    )
+                    .value(single.get())
+                    .on_change(move |value| single.set(value))
+                    .steps(settings.with(|settings| settings.steps))
+                    .disabled(settings.with(|settings| settings.disabled))
+                    .accessibility_label("Volume");
+                centered_slider()
+                    .modifier(
+                        Modifier::new()
+                            .width(Dp(settings.with(|settings| settings.width.unwrap_or(280.0))))
+                            .push_semantics(SliderTestTag("centered_slider")),
+                    )
+                    .value(centered.get())
+                    .on_change(move |value| centered.set(value))
+                    .steps(settings.with(|settings| settings.steps))
+                    .disabled(settings.with(|settings| settings.disabled))
+                    .accessibility_label("Balance");
+                range_slider()
+                    .modifier(
+                        Modifier::new()
+                            .width(Dp(settings.with(|settings| settings.width.unwrap_or(280.0))))
+                            .push_semantics(SliderTestTag("range_slider")),
+                    )
+                    .value(range.get())
+                    .on_change(move |value| range.set(value))
+                    .steps(settings.with(|settings| settings.steps))
+                    .disabled(settings.with(|settings| settings.disabled))
+                    .accessibility_label("Price interval")
+                    .start_accessibility_label("Minimum price")
+                    .end_accessibility_label("Maximum price");
+            });
+        });
+    }
+
+    #[test]
+    fn sliders_survive_zero_width_and_restore_their_values_and_bounds() {
+        let mut session = start_layout_test_session(layout_test(|| {
+            fixture();
+        }));
+        pump_layout_test_session(&mut session, 0);
+        for (frame, width) in [0.0, 1.0, 3.0, 5.0, 280.0].into_iter().enumerate() {
+            SETTINGS
+                .get()
+                .unwrap()
+                .with_mut(|settings| settings.width = Some(width));
+            let snapshot = pump_layout_test_session(&mut session, (frame as u64 + 1) * 16_666_667);
+            for selector in ["slider", "centered_slider", "range_slider"] {
+                assert_eq!(snapshot.node(selector).bounds().width, Dp(width).to_px());
+            }
+            assert_eq!(RANGE.get().unwrap().get(), (0.2, 0.8));
+        }
+    }
+
+    #[test]
+    fn retained_range_callbacks_preserve_the_latest_other_endpoint() {
+        let mut session = start_layout_test_session(layout_test(|| {
+            fixture();
+        }));
+        pump_layout_test_session(&mut session, 0);
+        let start = thumb(0).on_change;
+        let end = thumb(1).on_change;
+        RANGE.get().unwrap().set((0.3, 0.6));
+        pump_layout_test_session(&mut session, 16_666_667);
+        start.call(0.4);
+        assert_eq!(RANGE.get().unwrap().get(), (0.4, 0.6));
+        pump_layout_test_session(&mut session, 33_333_334);
+        end.call(0.9);
+        assert_eq!(RANGE.get().unwrap().get(), (0.4, 0.9));
+        pump_layout_test_session(&mut session, 50_000_001);
+        assert_eq!(thumb(0).max, 0.9);
+        assert_eq!(thumb(1).min, 0.4);
+    }
+
+    #[test]
+    fn changing_steps_rebuilds_ticks_and_disabling_removes_thumb_actions() {
+        let mut session = start_layout_test_session(layout_test(|| {
+            fixture();
+        }));
+        pump_layout_test_session(&mut session, 0);
+        SETTINGS
+            .get()
+            .unwrap()
+            .with_mut(|settings| settings.steps = 3);
+        pump_layout_test_session(&mut session, 16_666_667);
+        assert_eq!(thumb(0).steps, 3);
+        assert_eq!(thumb(1).steps, 3);
+        SETTINGS.get().unwrap().with_mut(|settings| {
+            settings.steps = 0;
+            settings.disabled = true;
+        });
+        pump_layout_test_session(&mut session, 33_333_334);
+        for index in 0..2 {
+            let mut semantics = AccessibilityNode::default();
+            let mut handler = None;
+            apply_range_thumb_semantics(&mut semantics, &mut handler, &thumb(index));
+            assert!(semantics.disabled);
+            assert!(!semantics.focusable);
+            assert!(semantics.actions.is_empty());
+            assert!(handler.is_none());
+        }
+    }
+
+    fn check_centered_slider_gaps(samples: u32) {
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(|| {
+                fixture();
+            }),
+            vec![Box::new(crate::TesseraComponents)],
+            HeadlessConfig {
+                width: 400,
+                height: 300,
+                sample_count: samples,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        for frames in [2, 12] {
+            renderer.render_frames(frames);
+            let pixels = renderer.read_pixels().unwrap();
+            let pixel = |x: usize, y: usize| &pixels[(y * 400 + x) * 4..(y * 400 + x + 1) * 4];
+            let background = pixel(300, 72);
+            for y in 65..79 {
+                for (left, right) in [(135, 144), (136, 143)] {
+                    assert_eq!(
+                        pixel(left, y),
+                        background,
+                        "left gap, MSAA {samples}, {frames} frames"
+                    );
+                    assert_eq!(
+                        pixel(right, y),
+                        background,
+                        "right gap, MSAA {samples}, {frames} frames"
+                    );
+                }
+                assert_ne!(pixel(140, y), background, "vertical handle remains visible");
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn centered_slider_gaps_before_and_after_caching_msaa1() {
+        check_centered_slider_gaps(1);
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn centered_slider_gaps_before_and_after_caching_msaa4() {
+        check_centered_slider_gaps(4);
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn published_slider_semantics_keep_distinct_handles_and_current_limits() {
+        fn control<'a>(
+            tree: &'a tessera_ui::accesskit::TreeUpdate,
+            label: &str,
+        ) -> (
+            tessera_ui::accesskit::NodeId,
+            &'a tessera_ui::accesskit::Node,
+        ) {
+            let (id, node) = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some(label))
+                .expect("named control");
+            (*id, node)
+        }
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(|| {
+                fixture();
+            }),
+            vec![Box::new(crate::TesseraComponents)],
+            HeadlessConfig {
+                width: 400,
+                height: 300,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(2);
+        let before = renderer.accessibility_snapshot().unwrap();
+        assert_eq!(
+            before
+                .nodes
+                .iter()
+                .filter(|(_, node)| node.role() == Role::Slider)
+                .count(),
+            4
+        );
+        let (start_id, start) = control(&before, "Minimum price");
+        let (end_id, end) = control(&before, "Maximum price");
+        assert_eq!(start.max_numeric_value(), Some(0.8_f32 as f64));
+        assert_eq!(end.min_numeric_value(), Some(0.2_f32 as f64));
+        let (_, group) = control(&before, "Price interval");
+        assert_eq!(group.role(), Role::Group);
+        assert!(!group.is_hidden());
+        assert!(group.children().contains(&start_id) && group.children().contains(&end_id));
+        RANGE.get().unwrap().set((0.3, 0.6));
+        renderer.render_frames(2);
+        let after = renderer.accessibility_snapshot().unwrap();
+        let (id, start) = control(&after, "Minimum price");
+        assert_eq!(id, start_id);
+        assert_eq!(start.max_numeric_value(), Some(0.6_f32 as f64));
+        let (id, end) = control(&after, "Maximum price");
+        assert_eq!(id, end_id);
+        assert_eq!(end.min_numeric_value(), Some(0.3_f32 as f64));
+        SETTINGS
+            .get()
+            .unwrap()
+            .with_mut(|settings| settings.steps = 3);
+        renderer.render_frames(2);
+        let stepped = renderer.accessibility_snapshot().unwrap();
+        assert_eq!(control(&stepped, "Minimum price").0, start_id);
+        assert_eq!(control(&stepped, "Maximum price").0, end_id);
+        assert_eq!(
+            control(&stepped, "Price interval").1.children(),
+            &[start_id, end_id]
+        );
+        SETTINGS
+            .get()
+            .unwrap()
+            .with_mut(|settings| settings.disabled = true);
+        renderer.render_frames(2);
+        let disabled = renderer.accessibility_snapshot().unwrap();
+        for (_, node) in disabled
+            .nodes
+            .iter()
+            .filter(|(_, node)| node.role() == Role::Slider)
+        {
+            assert!(node.is_disabled());
+            assert!(!node.supports_action(Action::Focus));
+            assert!(!node.supports_action(Action::Increment));
+        }
+    }
 }
