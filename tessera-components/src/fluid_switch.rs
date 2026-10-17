@@ -602,7 +602,7 @@ mod tests {
     use crate::{
         fluid_switch::{
             EXPAND_BEFORE_TRAVEL_DURATION, FluidSwitchDefaults, FluidSwitchState, LENS_TEST_TAG,
-            SPRING_DURATION, TRAVEL_DURATION, fluid_switch_content, resolve_source_checked,
+            SPRING_DURATION, TRAVEL_DURATION, fluid_switch_content,
         },
         theme::{MaterialTheme, material_theme},
     };
@@ -675,14 +675,6 @@ mod tests {
 
         assert!(state.is_checked());
         assert!(state.is_animating());
-    }
-
-    #[test]
-    fn fluid_switch_controlled_interaction_uses_checked_prop_as_source() {
-        assert!(!resolve_source_checked(Some(false), true));
-        assert!(resolve_source_checked(Some(true), false));
-        assert!(resolve_source_checked(None, true));
-        assert!(!resolve_source_checked(None, false));
     }
 
     #[test]

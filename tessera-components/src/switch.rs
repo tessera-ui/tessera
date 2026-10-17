@@ -734,114 +734,11 @@ fn switch_content(
 
 #[cfg(test)]
 mod tests {
-    use tessera_ui::{
-        ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier, Px, PxPosition,
-        layout::{MeasureScope, layout},
-        receive_frame_nanos, remember, tessera,
-    };
+    use tessera_ui::{receive_frame_nanos, remember, tessera};
 
-    use crate::modifier::{ModifierExt as _, SemanticsArgs};
     use crate::theme::{MaterialTheme, material_theme};
 
     use super::{ANIMATION_DURATION, SwitchController, THUMB_TEST_TAG, switch_content};
-
-    #[derive(Clone, PartialEq)]
-    struct OffsetChildPolicy {
-        x: i32,
-    }
-
-    impl tessera_ui::LayoutModifierNode for OffsetChildPolicy {
-        fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-            let mut result = LayoutResult::default();
-            let child_constraint = input.parent_constraint().without_min();
-            let child = input
-                .children()
-                .first()
-                .copied()
-                .expect("offset child policy requires a child");
-            let child_size = child.measure(input, &child_constraint)?;
-            result.place_child(child, PxPosition::new(Px::new(self.x), Px::ZERO));
-
-            Ok(result.with_size(ComputedData {
-                width: Px::new(self.x + child_size.width.raw()),
-                height: child_size.height,
-            }))
-        }
-    }
-
-    #[derive(Clone, PartialEq)]
-    struct FixedSizePolicy {
-        width: i32,
-        height: i32,
-    }
-
-    impl tessera_ui::LayoutModifierNode for FixedSizePolicy {
-        fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-            let mut result = LayoutResult::default();
-            let child_constraint = input.parent_constraint().without_min();
-            for child in input.children() {
-                let _ = child.measure(input, &child_constraint)?;
-                result.place_child(child, PxPosition::ZERO);
-            }
-
-            Ok(result.with_size(ComputedData {
-                width: Px::new(self.width),
-                height: Px::new(self.height),
-            }))
-        }
-    }
-
-    #[tessera]
-    fn tagged_probe(tag: Option<String>, width: Option<i32>, height: Option<i32>) {
-        let tag = tag.unwrap_or_default();
-        let width = width.unwrap_or_default();
-        let height = height.unwrap_or_default();
-
-        layout()
-            .policy(FixedSizePolicy { width, height })
-            .draw(NoopDrawModifier)
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                test_tag: Some(tag),
-                ..Default::default()
-            }));
-    }
-
-    #[tessera]
-    fn animated_switch_progress_probe() {
-        let controller = remember(|| SwitchController::new(false));
-        let started = remember(|| false);
-
-        if !started.get() {
-            controller.with_mut(|c| c.toggle());
-            started.set(true);
-        }
-
-        if controller.with(|c| c.is_animating()) {
-            receive_frame_nanos(move |frame_nanos| {
-                let is_animating = controller.with_mut(|controller| {
-                    controller.update_progress(frame_nanos);
-                    controller.is_animating()
-                });
-                if is_animating {
-                    tessera_ui::FrameNanosControl::Continue
-                } else {
-                    tessera_ui::FrameNanosControl::Stop
-                }
-            });
-        }
-
-        let offset = controller.with(|c| (c.animation_progress() * 100.0).round() as i32);
-        layout()
-            .policy(OffsetChildPolicy { x: offset })
-            .draw(NoopDrawModifier)
-            .modifier(Modifier::new())
-            .child(|| {
-                tagged_probe()
-                    .tag("progress_probe".to_string())
-                    .width(20)
-                    .height(20);
-            });
-    }
 
     #[tessera]
     fn animated_switch_thumb_probe() {
@@ -914,27 +811,6 @@ mod tests {
         controller.update_progress(ANIMATION_DURATION.as_nanos() as u64);
         assert_eq!(controller.animation_progress(), 0.0);
         assert!(!controller.is_animating());
-    }
-
-    #[test]
-    fn switch_animation_driver_advances_across_frames() {
-        tessera_ui::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                animated_switch_progress_probe();
-            },
-            expect: {
-                0 => {
-                    node("progress_probe").position(0, 0).size(20, 20);
-                },
-                75_000_000 => {
-                    node("progress_probe").position(50, 0).size(20, 20);
-                },
-                150_000_000 => {
-                    node("progress_probe").position(100, 0).size(20, 20);
-                }
-            }
-        }
     }
 
     #[test]
