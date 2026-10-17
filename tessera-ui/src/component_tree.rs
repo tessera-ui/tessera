@@ -1,17 +1,19 @@
 mod constraint;
 mod node;
 
-use std::{num::NonZero, sync::Arc};
+use std::{collections::VecDeque, num::NonZero, sync::Arc};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
+use smallvec::SmallVec;
 use tracing::{debug, warn};
 
 use crate::{
     ComputeResourceManager, NodeId, Px, PxRect,
-    cursor::{CursorEventContent, PointerChange},
+    cursor::{CursorEventContent, MOUSE_POINTER_ID, PointerChange},
     focus::{
         FocusDirection, FocusHandleId, FocusOwner, PendingFocusCallbackInvocation, bind_focus_owner,
     },
+    keyboard_state::QueuedKeyEvent,
     layout::{LayoutResult, RenderInput},
     modifier::{
         DrawModifierContent, DrawModifierContext, ImeInputModifierNode, KeyboardInputModifierNode,
@@ -47,6 +49,7 @@ pub(crate) struct LayoutSnapshotEntry {
     pub layout_result: LayoutResult,
     pub child_constraints: Vec<Constraint>,
     pub child_sizes: Vec<ComputedData>,
+    pub intrinsic_dependencies: bool,
 }
 
 #[derive(Default)]
@@ -133,6 +136,7 @@ pub(crate) fn flush_pending_globally_positioned_callbacks() {
     for (handler, rect) in invocations {
         handler.call(rect);
     }
+    TesseraRuntime::with_mut(|runtime| runtime.component_tree.focus_owner_mut().finish_layout());
 }
 
 #[derive(Clone, Copy)]
@@ -142,6 +146,7 @@ pub(crate) struct LayoutContext<'a> {
     pub placement_self_nodes: &'a HashSet<u64>,
     pub dirty_effective_nodes: &'a HashSet<u64>,
     diagnostics: *mut LayoutDiagnosticsCollector,
+    pub intrinsic: bool,
 }
 
 #[cfg_attr(not(feature = "profiling"), allow(dead_code))]
@@ -217,6 +222,23 @@ impl LayoutContext<'_> {
             placement_self_nodes,
             dirty_effective_nodes,
             diagnostics,
+            intrinsic: false,
+        }
+    }
+
+    pub(crate) fn intrinsic_probe<'a>(
+        snapshots: &'a mut LayoutSnapshotMap,
+        empty: &'a HashSet<u64>,
+        diagnostics: &'a mut LayoutDiagnosticsCollector,
+        parent: Option<&'a LayoutContext<'_>>,
+    ) -> LayoutContext<'a> {
+        LayoutContext {
+            snapshots,
+            measure_self_nodes: empty,
+            placement_self_nodes: empty,
+            dirty_effective_nodes: empty,
+            diagnostics: parent.map_or(diagnostics, |parent| parent.diagnostics),
+            intrinsic: true,
         }
     }
 
@@ -317,7 +339,7 @@ pub(crate) struct ComputeParams<'a> {
     pub screen_size: PxSize,
     pub cursor_position: Option<PxPosition>,
     pub pointer_changes: Vec<PointerChange>,
-    pub keyboard_events: Vec<winit::event::KeyEvent>,
+    pub keyboard_events: Vec<QueuedKeyEvent>,
     pub ime_events: Vec<winit::event::Ime>,
     pub retry_focus_move: Option<FocusDirection>,
     pub retry_focus_reveal: bool,
@@ -335,6 +357,11 @@ pub(crate) enum ComputeMode<'a> {
     LayoutOnly,
 }
 
+struct GlobalPositionSnapshot {
+    rect: PxRect,
+    handlers: SmallVec<[GloballyPositionedHandler; 2]>,
+}
+
 /// Respents a component tree
 pub struct ComponentTree {
     /// We use indextree as the tree structure
@@ -342,6 +369,7 @@ pub struct ComponentTree {
     /// Components' metadatas
     metadatas: ComponentNodeMetaDatas,
     layout_snapshots: LayoutSnapshotMap,
+    scale_factor_bits: u64,
     /// Used to remember the current node
     node_queue: Vec<indextree::NodeId>,
     /// Detached old-subtree nodes keyed by instance key during replay replace.
@@ -349,11 +377,14 @@ pub struct ComponentTree {
     /// Active pointer hit paths keyed by pointer id.
     /// Each path stores node instance keys from root to leaf.
     active_pointer_paths: HashMap<u64, Vec<u64>>,
+    active_pointer_positions: HashMap<u64, Option<PxPosition>>,
     /// Per-tree focus owner used for keyboard and IME routing.
     focus_owner: FocusOwner,
+    pending_keyboard_events: VecDeque<QueuedKeyEvent>,
+    pending_ime_events: Vec<winit::event::Ime>,
     /// Last reported window-space bounds for nodes with globally positioned
     /// callbacks, keyed by instance key.
-    last_global_rects: HashMap<u64, PxRect>,
+    last_global_rects: HashMap<u64, GlobalPositionSnapshot>,
     /// Globally positioned callbacks collected during compute and invoked
     /// after the runtime borrow is released.
     pending_globally_positioned_invocations: Vec<(GloballyPositionedHandler, PxRect)>,
@@ -403,9 +434,13 @@ impl ComponentTree {
             node_queue,
             metadatas,
             layout_snapshots: LayoutSnapshotMap::default(),
+            scale_factor_bits: crate::dp::scale_factor().to_bits(),
             replay_reuse_candidates: HashMap::default(),
             active_pointer_paths: HashMap::default(),
+            active_pointer_positions: HashMap::default(),
             focus_owner: FocusOwner::new(),
+            pending_keyboard_events: VecDeque::new(),
+            pending_ime_events: Vec::new(),
             last_global_rects: HashMap::default(),
             pending_globally_positioned_invocations: Vec::new(),
         }
@@ -418,7 +453,6 @@ impl ComponentTree {
         self.layout_snapshots.clear();
         self.node_queue.clear();
         self.replay_reuse_candidates.clear();
-        self.active_pointer_paths.clear();
         self.last_global_rects.clear();
         self.pending_globally_positioned_invocations.clear();
     }
@@ -426,7 +460,18 @@ impl ComponentTree {
     /// Reset the entire component tree, including focus ownership state.
     pub fn reset(&mut self) {
         self.clear();
+        self.active_pointer_paths.clear();
+        self.active_pointer_positions.clear();
         self.focus_owner.reset();
+        self.pending_keyboard_events.clear();
+        self.pending_ime_events.clear();
+    }
+
+    pub(crate) fn refresh_scale_factor(&mut self) -> bool {
+        let current = crate::dp::scale_factor().to_bits();
+        let changed = self.scale_factor_bits != current;
+        self.scale_factor_bits = current;
+        changed
     }
 
     /// Get node by NodeId
@@ -787,14 +832,21 @@ impl ComponentTree {
                 width: size.width,
                 height: size.height,
             };
-            if self.last_global_rects.get(&node.instance_key) != Some(&rect) {
-                invocations.extend(
-                    node.globally_positioned_handlers
-                        .iter()
-                        .map(|handler| (*handler, rect)),
-                );
+            let previous = self.last_global_rects.get(&node.instance_key);
+            for handler in &node.globally_positioned_handlers {
+                if previous.is_none_or(|previous| {
+                    previous.rect != rect || !previous.handlers.contains(handler)
+                }) {
+                    invocations.push((*handler, rect));
+                }
             }
-            next_rects.insert(node.instance_key, rect);
+            next_rects.insert(
+                node.instance_key,
+                GlobalPositionSnapshot {
+                    rect,
+                    handlers: node.globally_positioned_handlers.iter().copied().collect(),
+                },
+            );
         }
         self.last_global_rects = next_rects;
         self.pending_globally_positioned_invocations
@@ -896,8 +948,98 @@ impl ComponentTree {
         modifiers: winit::keyboard::ModifiersState,
     ) -> WindowRequests {
         let mut window_requests = WindowRequests::default();
-        let node_ids_preorder = layout_node_ids_preorder(root_node, &self.tree);
-        let node_ids_postorder = layout_node_ids_postorder(root_node, &self.tree);
+        let mut node_ids_preorder = layout_node_ids_preorder(root_node, &self.tree);
+        let mut node_ids_postorder = layout_node_ids_postorder(root_node, &self.tree);
+        if !self.active_pointer_paths.is_empty() {
+            let live: HashSet<_> = node_ids_preorder
+                .iter()
+                .filter_map(|id| self.tree.get(*id).map(|node| node.get().instance_key))
+                .collect();
+            self.active_pointer_paths
+                .retain(|_, path| path.last().is_some_and(|key| live.contains(key)));
+            self.active_pointer_positions
+                .retain(|pointer, _| self.active_pointer_paths.contains_key(pointer));
+        }
+        let pointer_nodes: HashMap<_, _> = node_ids_preorder
+            .iter()
+            .copied()
+            .filter_map(|id| {
+                let node = self.tree.get(id)?.get();
+                let actions: Vec<_> = node
+                    .modifier
+                    .ordered_actions()
+                    .into_iter()
+                    .filter(|action| {
+                        matches!(
+                            action,
+                            OrderedModifierAction::Placement(_)
+                                | OrderedModifierAction::PointerPreviewInput(_)
+                                | OrderedModifierAction::PointerInput(_)
+                                | OrderedModifierAction::PointerFinalInput(_)
+                        )
+                    })
+                    .collect();
+                let handles_input = !node.pointer_preview_handlers.is_empty()
+                    || !node.pointer_handlers.is_empty()
+                    || !node.pointer_final_handlers.is_empty()
+                    || actions
+                        .iter()
+                        .any(|action| !matches!(action, OrderedModifierAction::Placement(_)));
+                if !handles_input {
+                    return None;
+                }
+                let context = resolve_node_input_context(&self.tree, &self.metadatas, id)?;
+                Some((id, PointerNodePlan { context, actions }))
+            })
+            .collect();
+        node_ids_preorder.retain(|id| pointer_nodes.contains_key(id));
+        node_ids_postorder.retain(|id| pointer_nodes.contains_key(id));
+        let plan = PointerDispatchPlan {
+            preorder: node_ids_preorder,
+            postorder: node_ids_postorder,
+            nodes: pointer_nodes,
+        };
+        let final_position = *cursor_position;
+        window_requests.cursor_icon =
+            resolve_hover_cursor_icon(root_node, &self.tree, &self.metadatas, final_position)
+                .unwrap_or_default();
+        let mut last_position = None;
+        for change in pointer_changes {
+            let mut position = change.resolved_position(final_position);
+            last_position = Some(position);
+            self.dispatch_pointer_sample(
+                root_node,
+                std::slice::from_mut(change),
+                &mut position,
+                modifiers,
+                &plan,
+                &mut window_requests,
+            );
+        }
+        if last_position != Some(final_position) {
+            self.dispatch_pointer_sample(
+                root_node,
+                &mut [],
+                cursor_position,
+                modifiers,
+                &plan,
+                &mut window_requests,
+            );
+        }
+        window_requests
+    }
+
+    fn dispatch_pointer_sample(
+        &mut self,
+        root_node: indextree::NodeId,
+        pointer_changes: &mut [PointerChange],
+        cursor_position: &mut Option<PxPosition>,
+        modifiers: winit::keyboard::ModifiersState,
+        plan: &PointerDispatchPlan,
+        window_requests: &mut WindowRequests,
+    ) {
+        let node_ids_preorder = &plan.preorder;
+        let node_ids_postorder = &plan.postorder;
         let pointer_change_paths = build_pointer_change_paths(
             root_node,
             &self.tree,
@@ -906,9 +1048,16 @@ impl ComponentTree {
             *cursor_position,
             &mut self.active_pointer_paths,
         );
-        window_requests.cursor_icon =
-            resolve_hover_cursor_icon(root_node, &self.tree, &self.metadatas, *cursor_position)
-                .unwrap_or_default();
+        for change in pointer_changes.iter() {
+            if self.active_pointer_paths.contains_key(&change.pointer_id) {
+                self.active_pointer_positions.insert(
+                    change.pointer_id,
+                    change.resolved_position(*cursor_position),
+                );
+            } else {
+                self.active_pointer_positions.remove(&change.pointer_id);
+            }
+        }
 
         for node_id in node_ids_preorder.iter().copied() {
             let Some(node) = self.tree.get(node_id).map(|n| n.get()) else {
@@ -920,8 +1069,11 @@ impl ComponentTree {
                 cursor_position: &mut *cursor_position,
                 pointer_changes: &mut *pointer_changes,
                 pointer_change_paths: &pointer_change_paths,
+                nodes: &plan.nodes,
+                active_pointer_paths: &self.active_pointer_paths,
+                active_pointer_positions: &self.active_pointer_positions,
                 modifiers,
-                window_requests: &mut window_requests,
+                window_requests: &mut *window_requests,
                 focus_owner: &mut self.focus_owner,
             };
             dispatch_pointer_modifiers_for_node_pass(
@@ -937,8 +1089,11 @@ impl ComponentTree {
                     cursor_position: &mut *cursor_position,
                     pointer_changes: &mut *pointer_changes,
                     pointer_change_paths: &pointer_change_paths,
+                    nodes: &plan.nodes,
+                    active_pointer_paths: &self.active_pointer_paths,
+                    active_pointer_positions: &self.active_pointer_positions,
                     modifiers,
-                    window_requests: &mut window_requests,
+                    window_requests: &mut *window_requests,
                     focus_owner: &mut self.focus_owner,
                 };
                 run_pointer_handler_for_node(
@@ -960,8 +1115,11 @@ impl ComponentTree {
                 cursor_position: &mut *cursor_position,
                 pointer_changes: &mut *pointer_changes,
                 pointer_change_paths: &pointer_change_paths,
+                nodes: &plan.nodes,
+                active_pointer_paths: &self.active_pointer_paths,
+                active_pointer_positions: &self.active_pointer_positions,
                 modifiers,
-                window_requests: &mut window_requests,
+                window_requests: &mut *window_requests,
                 focus_owner: &mut self.focus_owner,
             };
             dispatch_pointer_modifiers_for_node_pass(
@@ -977,8 +1135,11 @@ impl ComponentTree {
                     cursor_position: &mut *cursor_position,
                     pointer_changes: &mut *pointer_changes,
                     pointer_change_paths: &pointer_change_paths,
+                    nodes: &plan.nodes,
+                    active_pointer_paths: &self.active_pointer_paths,
+                    active_pointer_positions: &self.active_pointer_positions,
                     modifiers,
-                    window_requests: &mut window_requests,
+                    window_requests: &mut *window_requests,
                     focus_owner: &mut self.focus_owner,
                 };
                 run_pointer_handler_for_node(
@@ -1000,8 +1161,11 @@ impl ComponentTree {
                 cursor_position: &mut *cursor_position,
                 pointer_changes: &mut *pointer_changes,
                 pointer_change_paths: &pointer_change_paths,
+                nodes: &plan.nodes,
+                active_pointer_paths: &self.active_pointer_paths,
+                active_pointer_positions: &self.active_pointer_positions,
                 modifiers,
-                window_requests: &mut window_requests,
+                window_requests: &mut *window_requests,
                 focus_owner: &mut self.focus_owner,
             };
             dispatch_pointer_modifiers_for_node_pass(
@@ -1017,8 +1181,11 @@ impl ComponentTree {
                     cursor_position: &mut *cursor_position,
                     pointer_changes: &mut *pointer_changes,
                     pointer_change_paths: &pointer_change_paths,
+                    nodes: &plan.nodes,
+                    active_pointer_paths: &self.active_pointer_paths,
+                    active_pointer_positions: &self.active_pointer_positions,
                     modifiers,
-                    window_requests: &mut window_requests,
+                    window_requests: &mut *window_requests,
                     focus_owner: &mut self.focus_owner,
                 };
                 run_pointer_handler_for_node(
@@ -1029,8 +1196,126 @@ impl ComponentTree {
                 );
             }
         }
+    }
 
-        window_requests
+    fn dispatch_keyboard_event(
+        &mut self,
+        root_node: NodeId,
+        queued: QueuedKeyEvent,
+        window_requests: &mut WindowRequests,
+    ) -> Option<FocusDirection> {
+        let path = collect_focus_chain_node_ids(root_node, &self.tree, &self.focus_owner);
+        let mut events = vec![queued.event];
+        let mut context = KeyboardInputDispatchContext {
+            tree: &self.tree,
+            metadatas: &self.metadatas,
+            keyboard_events: &mut events,
+            modifiers: queued.modifiers,
+            window_requests,
+            focus_owner: &mut self.focus_owner,
+        };
+        for node_id in path.iter().copied() {
+            let Some(node) = context.tree.get(node_id).map(|node| node.get()) else {
+                continue;
+            };
+            for action in node.modifier.ordered_actions() {
+                if let OrderedModifierAction::KeyboardPreviewInput(modifier) = action {
+                    run_keyboard_modifier_for_node(&mut context, node_id, modifier.as_ref());
+                }
+            }
+            for handler in &node.keyboard_preview_handlers {
+                run_keyboard_handler_for_node(&mut context, node_id, handler.as_ref());
+            }
+        }
+        for node_id in path.iter().rev().copied() {
+            let Some(node) = context.tree.get(node_id).map(|node| node.get()) else {
+                continue;
+            };
+            for action in node.modifier.ordered_actions() {
+                if let OrderedModifierAction::KeyboardInput(modifier) = action {
+                    run_keyboard_modifier_for_node(&mut context, node_id, modifier.as_ref());
+                }
+            }
+            for handler in &node.keyboard_handlers {
+                run_keyboard_handler_for_node(&mut context, node_id, handler.as_ref());
+            }
+        }
+        dispatch_default_focus_keyboard_navigation(
+            context.tree,
+            context.keyboard_events,
+            context.modifiers,
+            context.focus_owner,
+        )
+    }
+
+    fn dispatch_ime_input(
+        &mut self,
+        root_node: NodeId,
+        events: &mut Vec<winit::event::Ime>,
+        window_requests: &mut WindowRequests,
+    ) {
+        if events.is_empty() {
+            return;
+        }
+        let path = collect_focus_chain_node_ids(root_node, &self.tree, &self.focus_owner);
+        for node_id in path.iter().copied() {
+            let Some(node) = self.tree.get(node_id).map(|node| node.get()) else {
+                continue;
+            };
+            for action in node.modifier.ordered_actions() {
+                if let OrderedModifierAction::ImePreviewInput(modifier) = action {
+                    run_ime_modifier_for_node(
+                        &self.tree,
+                        &self.metadatas,
+                        node_id,
+                        modifier.as_ref(),
+                        events,
+                        window_requests,
+                        &mut self.focus_owner,
+                    );
+                }
+            }
+            for handler in &node.ime_preview_handlers {
+                run_ime_handler_for_node(
+                    &self.tree,
+                    &self.metadatas,
+                    node_id,
+                    handler.as_ref(),
+                    events,
+                    window_requests,
+                    &mut self.focus_owner,
+                );
+            }
+        }
+        for node_id in path.iter().rev().copied() {
+            let Some(node) = self.tree.get(node_id).map(|node| node.get()) else {
+                continue;
+            };
+            for action in node.modifier.ordered_actions() {
+                if let OrderedModifierAction::ImeInput(modifier) = action {
+                    run_ime_modifier_for_node(
+                        &self.tree,
+                        &self.metadatas,
+                        node_id,
+                        modifier.as_ref(),
+                        events,
+                        window_requests,
+                        &mut self.focus_owner,
+                    );
+                }
+            }
+            for handler in &node.ime_handlers {
+                run_ime_handler_for_node(
+                    &self.tree,
+                    &self.metadatas,
+                    node_id,
+                    handler.as_ref(),
+                    events,
+                    window_requests,
+                    &mut self.focus_owner,
+                );
+            }
+        }
     }
 
     /// Compute the ComponentTree into a render graph
@@ -1055,13 +1340,15 @@ impl ComponentTree {
         std::time::Duration,
         Option<FocusDirection>,
         bool,
+        bool,
     ) {
+        self.focus_owner.begin_layout();
         let ComputeParams {
             screen_size,
             mut cursor_position,
             mut pointer_changes,
-            mut keyboard_events,
-            mut ime_events,
+            keyboard_events,
+            ime_events,
             retry_focus_move,
             retry_focus_reveal,
             modifiers,
@@ -1077,6 +1364,7 @@ impl ComponentTree {
                 LayoutFrameDiagnostics::default(),
                 std::time::Duration::ZERO,
                 None,
+                false,
                 false,
             );
         };
@@ -1171,6 +1459,7 @@ impl ComponentTree {
                     std::time::Duration::ZERO,
                     None,
                     false,
+                    false,
                 );
             }
         };
@@ -1209,138 +1498,49 @@ impl ComponentTree {
         );
 
         self.focus_owner.commit_pending();
-        let pending_focus_move_retry = retry_focus_move.and_then(|direction| {
+        let requested_move = self
+            .focus_owner
+            .take_pending_navigation()
+            .or(retry_focus_move);
+        let pending_focus_move_retry = requested_move.and_then(|direction| {
             match try_dispatch_focus_move_request(&self.tree, direction, &mut self.focus_owner) {
                 FocusMoveRequestResult::Retry(direction) => Some(direction),
                 FocusMoveRequestResult::Moved | FocusMoveRequestResult::NotHandled => None,
             }
         });
-        let focus_chain_node_ids =
-            collect_focus_chain_node_ids(root_node, &self.tree, &self.focus_owner);
-
-        let pending_focus_move_retry = if pending_focus_move_retry.is_none() {
-            let mut keyboard_dispatch_ctx = KeyboardInputDispatchContext {
-                tree: &self.tree,
-                metadatas: &self.metadatas,
-                keyboard_events: &mut keyboard_events,
-                modifiers,
-                window_requests: &mut window_requests,
-                focus_owner: &mut self.focus_owner,
+        self.pending_keyboard_events.extend(keyboard_events);
+        self.pending_ime_events.extend(ime_events);
+        let mut queued_events = std::mem::take(&mut self.pending_keyboard_events);
+        let pending_focus_move_retry = pending_focus_move_retry.or_else(|| {
+            if self.focus_owner.keyboard_is_deferred() {
+                return None;
+            }
+            drain_pending_keyboard_events(&mut queued_events, |queued| {
+                let retry = self.dispatch_keyboard_event(root_node, queued, &mut window_requests);
+                self.focus_owner.commit_pending();
+                (retry, self.focus_owner.keyboard_is_deferred())
+            })
+        });
+        self.pending_keyboard_events = queued_events;
+        self.focus_owner
+            .retain_navigation_retry(pending_focus_move_retry);
+        let pending_keyboard_retry = self.focus_owner.keyboard_is_deferred()
+            && (!self.pending_keyboard_events.is_empty() || !self.pending_ime_events.is_empty());
+        if pending_focus_move_retry.is_none() && !self.focus_owner.keyboard_is_deferred() {
+            let mut ime_events = std::mem::take(&mut self.pending_ime_events);
+            self.dispatch_ime_input(root_node, &mut ime_events, &mut window_requests);
+        }
+        let pending_focus_reveal_retry =
+            if pending_focus_move_retry.is_none() && !self.focus_owner.keyboard_is_deferred() {
+                dispatch_pending_focus_reveal_request(
+                    &self.tree,
+                    &self.metadatas,
+                    &mut self.focus_owner,
+                    retry_focus_reveal,
+                )
+            } else {
+                false
             };
-
-            for node_id in focus_chain_node_ids.iter().copied() {
-                let Some(node) = keyboard_dispatch_ctx.tree.get(node_id).map(|n| n.get()) else {
-                    continue;
-                };
-                for action in node.modifier.ordered_actions() {
-                    match action {
-                        OrderedModifierAction::KeyboardPreviewInput(modifier) => {
-                            run_keyboard_modifier_for_node(
-                                &mut keyboard_dispatch_ctx,
-                                node_id,
-                                modifier.as_ref(),
-                            );
-                        }
-                        OrderedModifierAction::ImePreviewInput(modifier) => {
-                            run_ime_modifier_for_node(
-                                keyboard_dispatch_ctx.tree,
-                                keyboard_dispatch_ctx.metadatas,
-                                node_id,
-                                modifier.as_ref(),
-                                &mut ime_events,
-                                keyboard_dispatch_ctx.window_requests,
-                                keyboard_dispatch_ctx.focus_owner,
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-                for handler in &node.keyboard_preview_handlers {
-                    run_keyboard_handler_for_node(
-                        &mut keyboard_dispatch_ctx,
-                        node_id,
-                        handler.as_ref(),
-                    );
-                }
-                for handler in &node.ime_preview_handlers {
-                    run_ime_handler_for_node(
-                        keyboard_dispatch_ctx.tree,
-                        keyboard_dispatch_ctx.metadatas,
-                        node_id,
-                        handler.as_ref(),
-                        &mut ime_events,
-                        keyboard_dispatch_ctx.window_requests,
-                        keyboard_dispatch_ctx.focus_owner,
-                    );
-                }
-            }
-
-            for node_id in focus_chain_node_ids.iter().rev().copied() {
-                let Some(node) = keyboard_dispatch_ctx.tree.get(node_id).map(|n| n.get()) else {
-                    continue;
-                };
-                for action in node.modifier.ordered_actions() {
-                    match action {
-                        OrderedModifierAction::KeyboardInput(modifier) => {
-                            run_keyboard_modifier_for_node(
-                                &mut keyboard_dispatch_ctx,
-                                node_id,
-                                modifier.as_ref(),
-                            );
-                        }
-                        OrderedModifierAction::ImeInput(modifier) => {
-                            run_ime_modifier_for_node(
-                                keyboard_dispatch_ctx.tree,
-                                keyboard_dispatch_ctx.metadatas,
-                                node_id,
-                                modifier.as_ref(),
-                                &mut ime_events,
-                                keyboard_dispatch_ctx.window_requests,
-                                keyboard_dispatch_ctx.focus_owner,
-                            );
-                        }
-                        _ => {}
-                    }
-                }
-                for handler in &node.keyboard_handlers {
-                    run_keyboard_handler_for_node(
-                        &mut keyboard_dispatch_ctx,
-                        node_id,
-                        handler.as_ref(),
-                    );
-                }
-                for handler in &node.ime_handlers {
-                    run_ime_handler_for_node(
-                        keyboard_dispatch_ctx.tree,
-                        keyboard_dispatch_ctx.metadatas,
-                        node_id,
-                        handler.as_ref(),
-                        &mut ime_events,
-                        keyboard_dispatch_ctx.window_requests,
-                        keyboard_dispatch_ctx.focus_owner,
-                    );
-                }
-            }
-
-            dispatch_default_focus_keyboard_navigation(
-                keyboard_dispatch_ctx.tree,
-                keyboard_dispatch_ctx.keyboard_events,
-                keyboard_dispatch_ctx.modifiers,
-                keyboard_dispatch_ctx.focus_owner,
-            )
-        } else {
-            pending_focus_move_retry
-        };
-        let pending_focus_reveal_retry = if pending_focus_move_retry.is_none() {
-            dispatch_pending_focus_reveal_request(
-                &self.tree,
-                &self.metadatas,
-                &mut self.focus_owner,
-                retry_focus_reveal,
-            )
-        } else {
-            false
-        };
 
         debug!(
             "Typed input dispatch executed in {:?}",
@@ -1353,8 +1553,25 @@ impl ComponentTree {
             record_cost,
             pending_focus_move_retry,
             pending_focus_reveal_retry,
+            pending_keyboard_retry,
         )
     }
+}
+
+fn drain_pending_keyboard_events<E>(
+    queue: &mut VecDeque<E>,
+    mut dispatch: impl FnMut(E) -> (Option<FocusDirection>, bool),
+) -> Option<FocusDirection> {
+    while let Some(event) = queue.pop_front() {
+        let (retry, defer) = dispatch(event);
+        if let Some(direction) = retry {
+            return Some(direction);
+        }
+        if defer {
+            return None;
+        }
+    }
+    None
 }
 
 struct NodeInputContext {
@@ -1499,6 +1716,30 @@ fn hit_path_node_ids(
     collect_hit_path(root_node, tree, metadatas, position).unwrap_or_default()
 }
 
+fn inside_shape_clips(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    node_id: indextree::NodeId,
+    position: PxPosition,
+) -> bool {
+    if !metadatas
+        .get(&node_id)
+        .is_some_and(|metadata| metadata.has_shape_clipping)
+    {
+        return true;
+    }
+    node_id.ancestors(tree).all(|ancestor| {
+        let Some(metadata) = metadatas.get(&ancestor) else {
+            return true;
+        };
+        let (Some(mut region), Some(origin)) = (metadata.clip_region, metadata.abs_position) else {
+            return true;
+        };
+        region.position = region.position + origin;
+        region.contains(position)
+    })
+}
+
 fn bounds_hit_path(
     node_id: indextree::NodeId,
     tree: &ComponentNodeTree,
@@ -1519,6 +1760,9 @@ fn bounds_hit_path(
     if let Some(clip_rect) = metadata.event_clip_rect
         && !clip_rect.contains(position)
     {
+        return None;
+    }
+    if !inside_shape_clips(tree, metadatas, node_id, position) {
         return None;
     }
     let bounds = PxRect::from_position_size(abs_pos, PxSize::new(size.width, size.height));
@@ -1626,10 +1870,7 @@ fn build_pointer_change_paths(
 ) -> Vec<Vec<u64>> {
     let mut paths = Vec::with_capacity(pointer_changes.len());
     for change in pointer_changes {
-        let debug_position = match &change.content {
-            CursorEventContent::Moved(position) => Some(*position),
-            _ => cursor_position,
-        };
+        let debug_position = change.resolved_position(cursor_position);
         let path = match &change.content {
             CursorEventContent::Pressed(_) => {
                 let computed_path =
@@ -1716,12 +1957,26 @@ fn collect_focus_chain_node_ids(
     chain
 }
 
+struct PointerNodePlan {
+    context: NodeInputContext,
+    actions: Vec<OrderedModifierAction>,
+}
+
+struct PointerDispatchPlan {
+    preorder: Vec<indextree::NodeId>,
+    postorder: Vec<indextree::NodeId>,
+    nodes: HashMap<indextree::NodeId, PointerNodePlan>,
+}
+
 struct PointerInputDispatchContext<'a> {
     tree: &'a ComponentNodeTree,
     metadatas: &'a ComponentNodeMetaDatas,
     cursor_position: &'a mut Option<PxPosition>,
     pointer_changes: &'a mut [PointerChange],
     pointer_change_paths: &'a [Vec<u64>],
+    nodes: &'a HashMap<indextree::NodeId, PointerNodePlan>,
+    active_pointer_paths: &'a HashMap<u64, Vec<u64>>,
+    active_pointer_positions: &'a HashMap<u64, Option<PxPosition>>,
     modifiers: winit::keyboard::ModifiersState,
     window_requests: &'a mut WindowRequests,
     focus_owner: &'a mut FocusOwner,
@@ -1732,17 +1987,12 @@ fn dispatch_pointer_modifiers_for_node_pass(
     node_id: indextree::NodeId,
     pass: PointerEventPass,
 ) {
-    let Some(NodeInputContext { base_abs_pos, .. }) =
-        resolve_node_input_context(dispatch_ctx.tree, dispatch_ctx.metadatas, node_id)
-    else {
+    let nodes = dispatch_ctx.nodes;
+    let Some(plan) = nodes.get(&node_id) else {
         return;
     };
-    let Some(node_ref) = dispatch_ctx.tree.get(node_id) else {
-        return;
-    };
-
-    let mut current_abs_pos = base_abs_pos;
-    for action in node_ref.get().modifier.ordered_actions() {
+    let mut current_abs_pos = plan.context.base_abs_pos;
+    for action in &plan.actions {
         match action {
             OrderedModifierAction::Placement(placement) => {
                 current_abs_pos = placement.node().transform_position(current_abs_pos);
@@ -1789,8 +2039,10 @@ fn run_pointer_handler_for_node(
     pass: PointerEventPass,
     pointer_handler: &PointerInputHandlerFn,
 ) {
-    let Some(NodeInputContext { abs_pos, .. }) =
-        resolve_node_input_context(dispatch_ctx.tree, dispatch_ctx.metadatas, node_id)
+    let Some(abs_pos) = dispatch_ctx
+        .nodes
+        .get(&node_id)
+        .map(|node| node.context.abs_pos)
     else {
         return;
     };
@@ -1818,6 +2070,7 @@ fn run_pointer_input_for_node<F>(
 ) where
     F: FnOnce(PointerInput<'_>),
 {
+    let nodes = dispatch_ctx.nodes;
     let Some(NodeInputContext {
         base_abs_pos: _,
         abs_pos: _,
@@ -1827,19 +2080,56 @@ fn run_pointer_input_for_node<F>(
         instance_key,
         fn_name,
         parent_id,
-    }) = resolve_node_input_context(dispatch_ctx.tree, dispatch_ctx.metadatas, node_id)
+    }) = nodes.get(&node_id).map(|node| &node.context)
     else {
         return;
     };
+    let event_clip_rect = *event_clip_rect;
+    let node_computed_data = *node_computed_data;
+    let instance_logic_id = *instance_logic_id;
+    let instance_key = *instance_key;
+    let parent_id = *parent_id;
     #[cfg(not(feature = "profiling"))]
     let _ = parent_id;
 
     let abs_pos = abs_pos_override;
 
-    let mut cursor_position_ref = &mut *dispatch_ctx.cursor_position;
+    let owns_sample = dispatch_ctx
+        .pointer_change_paths
+        .iter()
+        .any(|path| path.contains(&instance_key));
+    let captured_position = if owns_sample {
+        None
+    } else {
+        dispatch_ctx
+            .active_pointer_paths
+            .iter()
+            .filter_map(|(&pointer_id, path)| {
+                if pointer_id == MOUSE_POINTER_ID || !path.contains(&instance_key) {
+                    return None;
+                }
+                dispatch_ctx
+                    .active_pointer_positions
+                    .get(&pointer_id)
+                    .map(|position| (pointer_id, *position))
+            })
+            .min_by_key(|(pointer_id, _)| *pointer_id)
+            .map(|(_, position)| position)
+    };
+    let mut captured_cursor_position = captured_position.flatten();
+    let mut cursor_position_ref = if captured_position.is_some() {
+        &mut captured_cursor_position
+    } else {
+        &mut *dispatch_ctx.cursor_position
+    };
     let mut dummy_cursor_position = None;
     if let (Some(cursor_pos), Some(clip_rect)) = (*cursor_position_ref, event_clip_rect)
         && !clip_rect.contains(cursor_pos)
+    {
+        cursor_position_ref = &mut dummy_cursor_position;
+    }
+    if let Some(position) = *cursor_position_ref
+        && !inside_shape_clips(dispatch_ctx.tree, dispatch_ctx.metadatas, node_id, position)
     {
         cursor_position_ref = &mut dummy_cursor_position;
     }
@@ -2161,6 +2451,9 @@ fn try_dispatch_focus_move_request(
     direction: FocusDirection,
     focus_owner: &mut FocusOwner,
 ) -> FocusMoveRequestResult {
+    if !focus_owner.allows_navigation() {
+        return FocusMoveRequestResult::NotHandled;
+    }
     if focus_owner.move_focus(direction) {
         return FocusMoveRequestResult::Moved;
     }
@@ -2385,6 +2678,14 @@ fn record_layout_commands(
                 Some(node.get().fn_name.as_str()),
             ))
         };
+        // Recording also runs on layout cache hits, so visual state must be
+        // reset independently of measurement invalidation.
+        if let Some(metadata) = metadatas.get_mut(&node_id) {
+            metadata.fragment = Default::default();
+            metadata.clips_children = false;
+            metadata.clip_region = None;
+            metadata.opacity = 1.0;
+        }
         let mut input = RenderInput::new(node_id, metadatas, compute_resource_manager, gpu);
         let node_ref = node.get();
         let draw_nodes: Vec<_> = node_ref
@@ -2409,8 +2710,8 @@ fn record_layout_commands(
 struct PreparedLayoutMetadata {
     self_position: PxPosition,
     size: PxSize,
-    node_rect: PxRect,
     clips_children: bool,
+    clip_region: Option<crate::ClipRegion>,
     child_clip_rect: Option<PxRect>,
     cumulative_opacity: f32,
 }
@@ -2424,7 +2725,13 @@ fn prepare_layout_metadata_for_node(
     parent_clip_rect: Option<PxRect>,
     current_opacity: f32,
 ) -> Option<PreparedLayoutMetadata> {
+    let parent_has_shape_clipping = tree
+        .get(node_id)
+        .and_then(|node| node.parent())
+        .and_then(|parent| metadatas.get(&parent))
+        .is_some_and(|metadata| metadata.has_shape_clipping);
     let metadata = metadatas.get_mut(&node_id)?;
+    metadata.has_shape_clipping = parent_has_shape_clipping || metadata.clip_region.is_some();
     let rel_pos = match metadata.rel_position {
         Some(pos) => pos,
         None if is_root => PxPosition::ZERO,
@@ -2462,10 +2769,17 @@ fn prepare_layout_metadata_for_node(
         height: size.height,
     };
     let clips_children = metadata.clips_children;
+    let clip_region = metadata.clip_region.map(|mut region| {
+        region.position = region.position + self_position;
+        region
+    });
+    let node_rect = clip_region
+        .map(|region| region.bounds())
+        .unwrap_or(node_rect);
     let child_clip_rect = if clips_children {
         Some(
             parent_clip_rect
-                .and_then(|existing| existing.intersection(&node_rect))
+                .map(|existing| existing.intersection(&node_rect).unwrap_or(PxRect::ZERO))
                 .unwrap_or(node_rect),
         )
     } else {
@@ -2475,8 +2789,8 @@ fn prepare_layout_metadata_for_node(
     Some(PreparedLayoutMetadata {
         self_position,
         size,
-        node_rect,
         clips_children,
+        clip_region,
         child_clip_rect,
         cumulative_opacity,
     })
@@ -2601,9 +2915,13 @@ fn build_render_graph_inner(
     };
 
     if prepared.clips_children {
-        context
-            .builder
-            .push_clip_push(prepared.child_clip_rect.unwrap_or(PxRect::ZERO));
+        if let Some(region) = prepared.clip_region {
+            context.builder.push_shape_clip_push(region);
+        } else {
+            context
+                .builder
+                .push_clip_push(prepared.child_clip_rect.unwrap_or(PxRect::ZERO));
+        }
     }
 
     let fragment = match context.metadatas.get_mut(&node_id) {
@@ -2616,7 +2934,8 @@ fn build_render_graph_inner(
 
     if prepared.size.width.0 > 0
         && prepared.size.height.0 > 0
-        && !prepared.node_rect.is_orthogonal(&context.screen_rect)
+        && !PxRect::enclosing(prepared.self_position, prepared.size)
+            .is_orthogonal(&context.screen_rect)
     {
         context.builder.append_fragment(
             fragment,
@@ -2689,6 +3008,540 @@ mod tests {
 
     fn node(name: &str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
         node_with_role(name, NodeRole::Layout, instance_logic_id, instance_key)
+    }
+
+    #[test]
+    fn pointer_samples_route_at_their_own_positions_and_complete_passes_in_order() {
+        use crate::cursor::{GestureState, MOUSE_POINTER_ID, PressKeyEventType};
+
+        let log = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let origin = Instant::now();
+        for index in 0..2 {
+            let mut target = node("target", index + 2, index + 2);
+            for pass in [
+                PointerEventPass::Initial,
+                PointerEventPass::Main,
+                PointerEventPass::Final,
+            ] {
+                let log = Arc::clone(&log);
+                let handler: Box<PointerInputHandlerFn> = Box::new(move |input| {
+                    for change in input.pointer_changes.iter() {
+                        log.lock().unwrap().push((
+                            index,
+                            pass,
+                            change.timestamp.duration_since(origin).as_nanos(),
+                            input.cursor_position_rel,
+                        ));
+                    }
+                });
+                match pass {
+                    PointerEventPass::Initial => target.pointer_preview_handlers.push(handler),
+                    PointerEventPass::Main => target.pointer_handlers.push(handler),
+                    PointerEventPass::Final => target.pointer_final_handlers.push(handler),
+                }
+            }
+            let id = tree.add_node(target);
+            let metadata = tree.metadatas.get_mut(&id).unwrap();
+            let position = PxPosition::new(Px(index as i32 * 200), Px::ZERO);
+            metadata.base_abs_position = Some(position);
+            metadata.abs_position = Some(position);
+            metadata.computed_data = Some(ComputedData {
+                width: Px(100),
+                height: Px(100),
+            });
+            tree.pop_node();
+        }
+        tree.pop_node();
+        let metadata = tree.metadatas.get_mut(&root).unwrap();
+        metadata.base_abs_position = Some(PxPosition::ZERO);
+        metadata.abs_position = Some(PxPosition::ZERO);
+        metadata.computed_data = Some(ComputedData {
+            width: Px(400),
+            height: Px(100),
+        });
+        let left = PxPosition::new(Px(20), Px(20));
+        let right = PxPosition::new(Px(220), Px(20));
+        let outside = PxPosition::new(Px(500), Px(20));
+        let mut events: Vec<_> = [
+            (
+                CursorEventContent::Pressed(PressKeyEventType::Left),
+                Some(left),
+            ),
+            (
+                CursorEventContent::Released(PressKeyEventType::Left),
+                Some(left),
+            ),
+            (CursorEventContent::Moved(outside), Some(outside)),
+            (
+                CursorEventContent::Pressed(PressKeyEventType::Left),
+                Some(right),
+            ),
+            (
+                CursorEventContent::Released(PressKeyEventType::Left),
+                Some(right),
+            ),
+            (CursorEventContent::Moved(outside), Some(outside)),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, (content, position))| {
+            PointerChange::new(
+                origin + std::time::Duration::from_nanos(index as u64),
+                MOUSE_POINTER_ID,
+                content,
+                GestureState::TapCandidate,
+            )
+            .with_position(position)
+        })
+        .collect();
+        tree.dispatch_pointer_input(
+            root,
+            &mut events,
+            &mut Some(outside),
+            winit::keyboard::ModifiersState::empty(),
+        );
+        let expected: Vec<_> = [(0, 0), (0, 1), (1, 3), (1, 4)]
+            .into_iter()
+            .flat_map(|(index, sample)| {
+                [
+                    PointerEventPass::Initial,
+                    PointerEventPass::Main,
+                    PointerEventPass::Final,
+                ]
+                .map(|pass| (index, pass, sample, Some(left)))
+            })
+            .collect();
+        assert_eq!(*log.lock().unwrap(), expected);
+        assert!(tree.active_pointer_paths.is_empty());
+        log.lock().unwrap().clear();
+        let mut captured: Vec<_> = [
+            (
+                CursorEventContent::Pressed(PressKeyEventType::Left),
+                Some(left),
+            ),
+            (CursorEventContent::Moved(outside), Some(outside)),
+            (CursorEventContent::Released(PressKeyEventType::Left), None),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(|(index, (content, position))| {
+            PointerChange::new(
+                origin + std::time::Duration::from_nanos(index as u64),
+                MOUSE_POINTER_ID,
+                content,
+                GestureState::TapCandidate,
+            )
+            .with_position(position)
+        })
+        .collect();
+        tree.dispatch_pointer_input(
+            root,
+            &mut captured,
+            &mut Some(right),
+            winit::keyboard::ModifiersState::empty(),
+        );
+        let expected: Vec<_> = [Some(left), Some(outside), None]
+            .into_iter()
+            .enumerate()
+            .flat_map(|(sample, position)| {
+                [
+                    PointerEventPass::Initial,
+                    PointerEventPass::Main,
+                    PointerEventPass::Final,
+                ]
+                .map(|pass| (0, pass, sample as u128, position))
+            })
+            .collect();
+        assert_eq!(
+            *log.lock().unwrap(),
+            expected,
+            "capture delivers outside movement and an unavailable-position release to the original target"
+        );
+        assert!(tree.active_pointer_paths.is_empty());
+    }
+
+    #[test]
+    fn recomposition_preserves_pointer_capture_but_runtime_reset_discards_it() {
+        let mut tree = ComponentTree::new();
+        tree.active_pointer_paths.insert(7, vec![1, 2]);
+        tree.active_pointer_positions
+            .insert(7, Some(PxPosition::ZERO));
+        tree.clear();
+        assert_eq!(tree.active_pointer_paths.get(&7), Some(&vec![1, 2]));
+        assert_eq!(
+            tree.active_pointer_positions.get(&7),
+            Some(&Some(PxPosition::ZERO))
+        );
+        tree.reset();
+        assert!(tree.active_pointer_paths.is_empty());
+        assert!(tree.active_pointer_positions.is_empty());
+    }
+
+    fn focus_targets(attach: bool) -> (ComponentTree, Vec<(NodeId, FocusHandleId)>) {
+        use crate::focus::{FocusNode, FocusRegistration};
+
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let mut targets = Vec::new();
+        for index in 0..2 {
+            let registration = FocusRegistration::target(FocusNode::new());
+            let mut target = node("target", index + 2, index + 2);
+            target.focus_registration = Some(registration);
+            let node_id = tree.add_node(target);
+            targets.push((node_id, registration.id));
+            tree.pop_node();
+        }
+        tree.pop_node();
+        if attach {
+            tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        }
+        (tree, targets)
+    }
+
+    #[test]
+    fn repeated_focus_request_does_not_replay_after_action_restores_another_target() {
+        let (mut tree, targets) = focus_targets(true);
+        let [(action, action_handle), (anchor, anchor_handle)] = targets.as_slice() else {
+            unreachable!();
+        };
+        tree.focus_owner.request_focus(*action_handle);
+        assert_eq!(tree.focus_owner.active_component_node_id(), Some(*action));
+        tree.focus_owner.request_focus(*action_handle);
+        tree.focus_owner.request_focus(*anchor_handle);
+        tree.focus_owner.commit_pending();
+        assert_eq!(tree.focus_owner.active_component_node_id(), Some(*anchor));
+        tree.focus_owner.commit_pending();
+        assert_eq!(tree.focus_owner.active_component_node_id(), Some(*anchor));
+    }
+
+    #[test]
+    fn clearing_an_unfocused_attached_target_does_not_clear_its_future_focus() {
+        let (mut tree, targets) = focus_targets(true);
+        tree.focus_owner.request_focus(targets[1].1);
+        tree.focus_owner.clear_focus(targets[0].1);
+        tree.focus_owner.request_focus(targets[0].1);
+        tree.focus_owner.commit_pending();
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(targets[0].0)
+        );
+    }
+
+    #[test]
+    fn rejected_capture_does_not_capture_a_later_focus_request() {
+        let (mut tree, targets) = focus_targets(true);
+        tree.focus_owner.request_focus(targets[1].1);
+        tree.focus_owner.capture_focus(targets[0].1);
+        tree.focus_owner.request_focus(targets[0].1);
+        tree.focus_owner.commit_pending();
+        tree.focus_owner.request_focus(targets[1].1);
+        tree.focus_owner.commit_pending();
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(targets[1].0)
+        );
+    }
+
+    #[test]
+    fn redundant_free_does_not_release_a_later_capture() {
+        let (mut tree, targets) = focus_targets(true);
+        tree.focus_owner.request_focus(targets[0].1);
+        tree.focus_owner.free_focus(targets[0].1);
+        tree.focus_owner.capture_focus(targets[0].1);
+        tree.focus_owner.commit_pending();
+        tree.focus_owner.request_focus(targets[1].1);
+        tree.focus_owner.commit_pending();
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(targets[0].0)
+        );
+    }
+
+    #[test]
+    fn requests_before_attachment_are_consumed_once_the_target_is_attached() {
+        let (mut tree, targets) = focus_targets(false);
+        tree.focus_owner.request_focus(targets[0].1);
+        tree.focus_owner.request_focus(targets[0].1);
+        let root = tree.tree.get(targets[0].0).unwrap().parent().unwrap();
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner.commit_pending();
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(targets[0].0)
+        );
+        tree.focus_owner.request_focus(targets[1].1);
+        tree.focus_owner.commit_pending();
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(targets[1].0)
+        );
+    }
+
+    #[test]
+    fn deferred_request_rejected_after_attachment_does_not_activate_on_enable() {
+        let (mut tree, targets) = focus_targets(false);
+        tree.focus_owner.request_focus(targets[0].1);
+        let root = tree.tree.get(targets[0].0).unwrap().parent().unwrap();
+        tree.tree
+            .get_mut(targets[0].0)
+            .unwrap()
+            .get_mut()
+            .focus_registration
+            .as_mut()
+            .unwrap()
+            .properties
+            .can_focus = false;
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner.commit_pending();
+        assert_eq!(tree.focus_owner.active_component_node_id(), None);
+        tree.tree
+            .get_mut(targets[0].0)
+            .unwrap()
+            .get_mut()
+            .focus_registration
+            .as_mut()
+            .unwrap()
+            .properties
+            .can_focus = true;
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner.commit_pending();
+        assert_eq!(tree.focus_owner.active_component_node_id(), None);
+    }
+
+    #[test]
+    fn queued_navigation_routes_activation_to_the_new_focus_chain() {
+        use crate::focus::{FocusNode, FocusRegistration};
+
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let mut trigger = node("trigger", 2, 2);
+        trigger.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
+        let trigger = tree.add_node(trigger);
+        tree.pop_node();
+        let popup = tree.add_node(node("popup", 3, 3));
+        let mut action = node("action", 4, 4);
+        action.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
+        let action = tree.add_node(action);
+        tree.pop_node();
+        tree.pop_node();
+        tree.pop_node();
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        assert!(tree.focus_owner.move_focus(FocusDirection::Next));
+        let mut events = VecDeque::from(["Tab", "Enter", "Shift+Tab", "Enter"]);
+        let mut activations = Vec::new();
+        let retry = drain_pending_keyboard_events(&mut events, |event| {
+            match event {
+                "Tab" => assert!(tree.focus_owner.move_focus(FocusDirection::Next)),
+                "Shift+Tab" => assert!(tree.focus_owner.move_focus(FocusDirection::Previous)),
+                "Enter" => activations.push(collect_focus_chain_node_ids(
+                    root,
+                    &tree.tree,
+                    &tree.focus_owner,
+                )),
+                _ => unreachable!(),
+            }
+            tree.focus_owner.commit_pending();
+            (None, false)
+        });
+        assert_eq!(retry, None);
+        assert!(events.is_empty());
+        assert_eq!(
+            activations,
+            [vec![root, popup, action], vec![root, trigger]]
+        );
+    }
+
+    #[test]
+    fn redundant_scope_restore_does_not_pull_focus_back_from_another_scope() {
+        use crate::focus::{FocusNode, FocusRegistration, FocusScopeNode};
+
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let scope = FocusRegistration::scope(FocusScopeNode::new());
+        let mut container = node("scope", 2, 2);
+        container.focus_registration = Some(scope);
+        tree.add_node(container);
+        let inside = FocusRegistration::target(FocusNode::new());
+        let mut target = node("inside", 3, 3);
+        target.focus_registration = Some(inside);
+        tree.add_node(target);
+        tree.pop_node();
+        tree.pop_node();
+        let outside = FocusRegistration::target(FocusNode::new());
+        let mut target = node("outside", 4, 4);
+        target.focus_registration = Some(outside);
+        let outside_node = tree.add_node(target);
+        tree.pop_node();
+        tree.pop_node();
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner.request_focus(inside.id);
+        tree.focus_owner.restore_focus(scope.id);
+        tree.focus_owner.request_focus(outside.id);
+        tree.focus_owner.commit_pending();
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(outside_node)
+        );
+    }
+
+    #[test]
+    fn focus_retry_keeps_later_keys_before_newly_received_input() {
+        let mut events = VecDeque::from(["Tab into lazy content", "Enter", "Shift+Tab"]);
+        let mut dispatched = Vec::new();
+        let retry = drain_pending_keyboard_events(&mut events, |event| {
+            dispatched.push(event);
+            (Some(FocusDirection::Next), false)
+        });
+        assert_eq!(retry, Some(FocusDirection::Next));
+        assert_eq!(dispatched, ["Tab into lazy content"]);
+        events.push_back("new input");
+        assert_eq!(
+            drain_pending_keyboard_events(&mut events, |event| {
+                dispatched.push(event);
+                (None, false)
+            }),
+            None
+        );
+        assert_eq!(
+            dispatched,
+            ["Tab into lazy content", "Enter", "Shift+Tab", "new input"]
+        );
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn keyboard_barrier_preserves_order_until_a_subsequent_layout_finishes() {
+        use crate::focus::{FocusManager, bind_focus_owner};
+
+        let mut owner = FocusOwner::new();
+        let mut events = VecDeque::from(["close popup", "Enter", "Tab"]);
+        let mut delivered = Vec::new();
+        assert_eq!(
+            drain_pending_keyboard_events(&mut events, |event| {
+                delivered.push(event);
+                {
+                    let _binding = bind_focus_owner(&mut owner);
+                    FocusManager::current().defer_keyboard_until_layout();
+                }
+                (None, owner.keyboard_is_deferred())
+            }),
+            None
+        );
+        assert_eq!(delivered, ["close popup"]);
+        assert_eq!(events, ["Enter", "Tab"]);
+        owner.finish_layout();
+        assert!(
+            owner.keyboard_is_deferred(),
+            "the old layout cannot release the barrier"
+        );
+        owner.begin_layout();
+        assert!(
+            owner.keyboard_is_deferred(),
+            "focus callbacks still have to finish"
+        );
+        {
+            let _binding = bind_focus_owner(&mut owner);
+            FocusManager::current().defer_keyboard_until_layout();
+        }
+        owner.finish_layout();
+        assert!(
+            owner.keyboard_is_deferred(),
+            "a new transition survives the old layout callback"
+        );
+        owner.begin_layout();
+        owner.finish_layout();
+        assert!(!owner.keyboard_is_deferred());
+        events.push_back("new input");
+        drain_pending_keyboard_events(&mut events, |event| {
+            delivered.push(event);
+            (None, owner.keyboard_is_deferred())
+        });
+        assert_eq!(delivered, ["close popup", "Enter", "Tab", "new input"]);
+        assert!(events.is_empty());
+    }
+
+    #[test]
+    fn recomposition_retains_deferred_input_but_runtime_reset_discards_it() {
+        use crate::focus::{FocusManager, bind_focus_owner};
+
+        let mut tree = ComponentTree::new();
+        {
+            let _binding = bind_focus_owner(&mut tree.focus_owner);
+            FocusManager::current().defer_keyboard_until_layout();
+            assert!(FocusManager::current().request_move_focus(FocusDirection::Previous));
+            assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+        }
+        assert_eq!(
+            tree.focus_owner.take_pending_navigation(),
+            Some(FocusDirection::Next)
+        );
+        tree.focus_owner
+            .retain_navigation_retry(Some(FocusDirection::Next));
+        tree.pending_ime_events
+            .push(winit::event::Ime::Commit("pending text".into()));
+        tree.clear();
+        assert!(tree.focus_owner.has_pending_navigation());
+        assert!(tree.focus_owner.keyboard_is_deferred());
+        assert!(matches!(
+            tree.pending_ime_events.as_slice(),
+            [winit::event::Ime::Commit(text)] if text == "pending text"
+        ));
+        tree.focus_owner.set_owner_focused(false);
+        assert!(!tree.focus_owner.has_pending_navigation());
+        {
+            let _binding = bind_focus_owner(&mut tree.focus_owner);
+            assert!(!FocusManager::current().request_move_focus(FocusDirection::Previous));
+        }
+        tree.focus_owner.set_owner_focused(true);
+        {
+            let _binding = bind_focus_owner(&mut tree.focus_owner);
+            assert!(FocusManager::current().request_move_focus(FocusDirection::Previous));
+        }
+        tree.reset();
+        assert!(!tree.focus_owner.has_pending_navigation());
+        assert!(!tree.focus_owner.keyboard_is_deferred());
+        assert!(tree.pending_ime_events.is_empty());
+    }
+
+    #[test]
+    fn ime_commit_is_delivered_once_to_the_final_focused_control() {
+        use crate::focus::{FocusNode, FocusRegistration};
+
+        let delivered = Arc::new(std::sync::Mutex::new(Vec::new()));
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        for index in 0..2 {
+            let mut input = node("input", index + 2, index + 2);
+            input.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
+            let delivered = Arc::clone(&delivered);
+            input.ime_handlers.push(Box::new(move |input| {
+                for event in input.ime_events.drain(..) {
+                    if let winit::event::Ime::Commit(text) = event {
+                        delivered.lock().unwrap().push((index, text));
+                    }
+                }
+            }));
+            let id = tree.add_node(input);
+            let metadata = tree.metadatas.get_mut(&id).unwrap();
+            metadata.base_abs_position = Some(PxPosition::ZERO);
+            metadata.abs_position = Some(PxPosition::ZERO);
+            metadata.computed_data = Some(ComputedData {
+                width: Px(100),
+                height: Px(40),
+            });
+            tree.pop_node();
+        }
+        tree.pop_node();
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        assert!(tree.focus_owner.move_focus(FocusDirection::Next));
+        assert!(tree.focus_owner.move_focus(FocusDirection::Next));
+        let mut events = vec![winit::event::Ime::Commit("composed text".into())];
+        let mut requests = WindowRequests::default();
+        tree.dispatch_ime_input(root, &mut events, &mut requests);
+        tree.dispatch_ime_input(root, &mut events, &mut requests);
+        assert_eq!(*delivered.lock().unwrap(), [(1, "composed text".into())]);
     }
 
     #[test]

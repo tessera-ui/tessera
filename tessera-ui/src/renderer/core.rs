@@ -21,6 +21,7 @@ use crate::{
 
 use super::{compute::ComputePipelineRegistry, drawer::Drawer};
 
+mod clip;
 mod frame;
 #[cfg(all(
     feature = "profiling",
@@ -31,6 +32,7 @@ mod gpu_timing;
 mod init;
 
 struct RenderPipelines {
+    clipper: clip::ShapeClipper,
     drawer: Drawer,
     compute_registry: ComputePipelineRegistry,
     composite_registry: CompositePipelineRegistry,
@@ -93,6 +95,7 @@ struct ComputeState {
 
 struct BlitState {
     pipeline: wgpu::RenderPipeline,
+    present_pipeline: wgpu::RenderPipeline,
     pipeline_rgba: wgpu::RenderPipeline,
     bind_group_layout: wgpu::BindGroupLayout,
     sampler: wgpu::Sampler,

@@ -313,6 +313,22 @@ impl RenderGraphBuilder {
         self.sequence_index += 1;
     }
 
+    /// Pushes a shape clip op into the graph.
+    pub(crate) fn push_shape_clip_push(&mut self, region: crate::ClipRegion) {
+        self.ops.push(RenderGraphOp {
+            command: Command::ShapeClipPush(region),
+            type_id: TypeId::of::<Command>(),
+            read: None,
+            write: None,
+            deps: SmallVec::new(),
+            size: PxSize::ZERO,
+            position: PxPosition::ZERO,
+            opacity: 1.0,
+            sequence_index: self.sequence_index,
+        });
+        self.sequence_index += 1;
+    }
+
     /// Pushes a clip pop op into the graph.
     pub(crate) fn push_clip_pop(&mut self) {
         self.ops.push(RenderGraphOp {
@@ -569,7 +585,9 @@ impl OpInfo {
             }
             Command::Compute(_) => OpCategory::Compute,
             Command::Composite(_) => OpCategory::StateChange,
-            Command::ClipPush(_) | Command::ClipPop => OpCategory::StateChange,
+            Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => {
+                OpCategory::StateChange
+            }
         };
 
         Self {
@@ -710,7 +728,7 @@ fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
             Some(sample_region_rect(command.barrier(), op.position, op.size))
         }
         Command::Composite(_) => None,
-        Command::ClipPush(_) | Command::ClipPop => None,
+        Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => None,
     }
 }
 
@@ -726,7 +744,7 @@ fn scene_write_rect(op: &RenderGraphOp) -> Option<PxRect> {
         ),
         Command::Compute(_) => Some(PxRect::from_position_size(op.position, op.size)),
         Command::Composite(_) => None,
-        Command::ClipPush(_) | Command::ClipPop => None,
+        Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => None,
     }
 }
 
@@ -758,7 +776,7 @@ fn padded_rect(position: PxPosition, size: PxSize, padding: crate::PaddingRect) 
 fn is_state_change(op: &RenderGraphOp) -> bool {
     matches!(
         op.command,
-        Command::Composite(_) | Command::ClipPush(_) | Command::ClipPop
+        Command::Composite(_) | Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop
     )
 }
 
@@ -786,7 +804,7 @@ fn clip_intervals(ops: &[RenderGraphOp], by_sequence: &[usize]) -> Option<Vec<Cl
 
     for (cursor, &idx) in by_sequence.iter().enumerate() {
         match &ops[idx].command {
-            Command::ClipPush(_) => {
+            Command::ClipPush(_) | Command::ShapeClipPush(_) => {
                 close_open_span(&mut intervals, &stack_start, &stack_pred, cursor);
                 stack_start.push(cursor + 1);
                 stack_pred.push(Some(idx));

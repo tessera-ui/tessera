@@ -327,6 +327,33 @@ impl ShapePipeline {
             label: Some("Shape Cache Encoder"),
         });
 
+        let stencil = gpu
+            .create_texture(&wgpu::TextureDescriptor {
+                label: Some("Shape Cache Stencil"),
+                size: wgpu::Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: self.sample_count,
+                dimension: wgpu::TextureDimension::D2,
+                format: wgpu::TextureFormat::Stencil8,
+                usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
+                view_formats: &[],
+            })
+            .create_view(&Default::default());
+        let stencil_attachment = || {
+            Some(wgpu::RenderPassDepthStencilAttachment {
+                view: &stencil,
+                depth_ops: None,
+                stencil_ops: Some(wgpu::Operations {
+                    load: wgpu::LoadOp::Clear(0),
+                    store: wgpu::StoreOp::Discard,
+                }),
+            })
+        };
+
         let run_pass = |pass: &mut wgpu::RenderPass<'_>| {
             pass.set_pipeline(&self.pipeline);
             pass.set_bind_group(0, &bind_group, &[]);
@@ -355,6 +382,7 @@ impl ShapePipeline {
             {
                 let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                     label: Some("Shape Cache Pass"),
+                    depth_stencil_attachment: stencil_attachment(),
                     color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                         view: &msaa_view,
                         resolve_target: Some(&cache_view),
@@ -371,6 +399,7 @@ impl ShapePipeline {
         } else {
             let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
                 label: Some("Shape Cache Pass"),
+                depth_stencil_attachment: stencil_attachment(),
                 color_attachments: &[Some(wgpu::RenderPassColorAttachment {
                     view: &cache_view,
                     resolve_target: None,

@@ -261,7 +261,7 @@ impl RaymarchPipeline {
                 compilation_options: Default::default(),
             }),
             primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
+            depth_stencil: tessera_ui::ui_stencil_state(),
             multisample: wgpu::MultisampleState {
                 count: sample_count,
                 mask: !0,

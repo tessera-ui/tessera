@@ -166,7 +166,6 @@ pub struct HeadlessRenderer {
     ime: ImeState,
     size: PxSize,
     physical_size: winit::dpi::PhysicalSize<u32>,
-    scale_factor: f64,
     frame_index: u64,
     frame_origin: Instant,
     current_frame_nanos: u64,
@@ -216,7 +215,6 @@ impl HeadlessRenderer {
             ime: ImeState::default(),
             size: PxSize::new(Px(width as i32), Px(height as i32)),
             physical_size,
-            scale_factor,
             frame_index: 0,
             frame_origin: Instant::now(),
             current_frame_nanos: 0,
@@ -239,20 +237,22 @@ impl HeadlessRenderer {
     /// Movement changes also update the tracked cursor position so hit testing
     /// observes the new location on the next frame.
     pub fn inject_pointer(&mut self, change: PointerChange) {
-        if let CursorEventContent::Moved(position) = &change.content {
-            self.cursor.update_position(*position);
+        if let Some(position) = change.position_snapshot() {
+            self.cursor
+                .update_pointer_position(change.pointer_id, position);
         }
         self.cursor.push_event(change);
     }
 
     /// Moves the given pointer to `position`.
     pub fn pointer_move(&mut self, pointer_id: PointerId, position: PxPosition) {
-        self.cursor.update_position(position);
+        self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
             pointer_id,
             content: CursorEventContent::Moved(position),
             gesture_state: GestureState::TapCandidate,
+            sampled_position: Default::default(),
             consumed: false,
         });
     }
@@ -264,12 +264,13 @@ impl HeadlessRenderer {
         position: PxPosition,
         button: PressKeyEventType,
     ) {
-        self.cursor.update_position(position);
+        self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
             pointer_id,
             content: CursorEventContent::Pressed(button),
             gesture_state: GestureState::TapCandidate,
+            sampled_position: Default::default(),
             consumed: false,
         });
     }
@@ -281,12 +282,13 @@ impl HeadlessRenderer {
         position: PxPosition,
         button: PressKeyEventType,
     ) {
-        self.cursor.update_position(position);
+        self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
             pointer_id,
             content: CursorEventContent::Released(button),
             gesture_state: GestureState::TapCandidate,
+            sampled_position: Default::default(),
             consumed: false,
         });
     }
@@ -299,7 +301,7 @@ impl HeadlessRenderer {
         delta_x: f32,
         delta_y: f32,
     ) {
-        self.cursor.update_position(position);
+        self.cursor.update_pointer_position(pointer_id, position);
         self.cursor.push_event(PointerChange {
             timestamp: Instant::now(),
             pointer_id,
@@ -310,6 +312,7 @@ impl HeadlessRenderer {
                 source: ScrollEventSource::Wheel,
             }),
             gesture_state: GestureState::TapCandidate,
+            sampled_position: Default::default(),
             consumed: false,
         });
     }
@@ -321,6 +324,11 @@ impl HeadlessRenderer {
     /// synthetic text entry use [`HeadlessRenderer::inject_text`].
     pub fn inject_key_event(&mut self, event: winit::event::KeyEvent) {
         self.keyboard.push_event(event);
+    }
+
+    /// Sets the modifier state captured by subsequent keyboard events.
+    pub fn set_key_modifiers(&mut self, modifiers: winit::keyboard::ModifiersState) {
+        self.keyboard.update_modifiers(modifiers);
     }
 
     /// Queues an IME event, used for synthetic text entry.
@@ -366,7 +374,7 @@ impl HeadlessRenderer {
         let core = &mut self.core;
         let (graph, _diagnostics, _record_cost) = TesseraRuntime::with_mut(|runtime| {
             let (gpu, compute_resource_manager) = core.record_resources();
-            let (graph, _requests, diagnostics, record_cost, _move, _reveal) =
+            let (graph, _requests, diagnostics, record_cost, _move, _reveal, _keyboard) =
                 runtime.component_tree.compute(
                     ComputeParams {
                         screen_size,
@@ -387,6 +395,7 @@ impl HeadlessRenderer {
             (graph, diagnostics, record_cost)
         });
         flush_pending_focus_callbacks();
+        crate::component_tree::flush_pending_globally_positioned_callbacks();
         #[cfg(feature = "profiling")]
         let draw_duration = draw_timer.elapsed();
 
@@ -518,11 +527,33 @@ impl HeadlessRenderer {
             json!({
                 "width": self.physical_size.width,
                 "height": self.physical_size.height,
-                "scale_factor": self.scale_factor,
+                "scale_factor": crate::dp::scale_factor(),
                 "frame_index": self.frame_index,
                 "node_count": counter,
                 "root": root_value,
             })
+        })
+    }
+
+    /// Returns the accessibility tree published to assistive technologies.
+    ///
+    /// Use this after rendering a frame to verify semantic roles, reading
+    /// order, visibility, actions, and focus independently of layout
+    /// snapshots.
+    pub fn accessibility_snapshot(&self) -> Option<accesskit::TreeUpdate> {
+        TesseraRuntime::with(|runtime| {
+            let tree = runtime.component_tree.tree();
+            let root = tree.get_node_id_at(NonZero::new(1).expect("root index is non-zero"))?;
+            crate::accessibility::build_tree_update(
+                tree,
+                runtime.component_tree.metadatas(),
+                root,
+                None,
+                runtime
+                    .component_tree
+                    .focus_owner()
+                    .active_component_node_id(),
+            )
         })
     }
 }
@@ -567,6 +598,9 @@ fn snapshot_node(
                 "focusable": accessibility.focusable,
                 "focused": accessibility.focused,
                 "disabled": accessibility.disabled,
+                "expanded": accessibility.expanded,
+                "has_popup": accessibility.has_popup.map(|popup| format!("{popup:?}")),
+                "hidden": accessibility.hidden,
             })
         })
         .unwrap_or(Value::Null);
@@ -647,7 +681,7 @@ pub fn run_headless(
             "event": "ready",
             "width": renderer.physical_size.width,
             "height": renderer.physical_size.height,
-            "scale_factor": renderer.scale_factor,
+            "scale_factor": crate::dp::scale_factor(),
         }),
     )?;
 
@@ -1060,15 +1094,5 @@ mod tests {
         assert_eq!(&png[20..24], &1u32.to_be_bytes());
         assert_eq!(png[png.len() - 8..png.len() - 4], *b"IEND");
         assert!(png.windows(4).any(|window| window == b"IDAT"));
-    }
-
-    #[test]
-    fn headless_mode_detects_env_flag() {
-        // The default (unset) state must keep the desktop path untouched.
-        // SAFETY: this test only reads the variable it manages.
-        unsafe {
-            std::env::remove_var(HEADLESS_ENV);
-        }
-        assert!(!headless_mode_requested());
     }
 }

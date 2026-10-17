@@ -20,6 +20,10 @@ struct CollectedNodes {
     focus: Option<AccessKitNodeId>,
 }
 
+fn stable_accessibility_id(tree: &ComponentNodeTree, node_id: ComponentNodeId) -> AccessibilityId {
+    AccessibilityId::new(tree[node_id].get().instance_key)
+}
+
 /// Builds an accessibility update with semantic groups, bounds, actions, and
 /// focus. Nodes without semantics preserve their descendants' reading order;
 /// a window root is supplied when the root has no explicit semantics.
@@ -30,6 +34,7 @@ struct CollectedNodes {
 /// * `metadatas` - Component metadata including accessibility information
 /// * `root_node_id` - The root node of the component tree
 /// * `root_label` - Optional label used when synthesizing a root window node
+/// * `focused_node` - Current keyboard focus, when available
 ///
 /// # Returns
 ///
@@ -40,12 +45,13 @@ pub fn build_tree_update(
     metadatas: &ComponentNodeMetaDatas,
     root_node_id: ComponentNodeId,
     root_label: Option<&str>,
+    focused_node: Option<ComponentNodeId>,
 ) -> Option<TreeUpdate> {
     let mut collected = CollectedNodes::default();
     let mut root_children = Vec::new();
 
     // Convert root node ID
-    let root_accesskit_id = AccessibilityId::from_component_node_id(root_node_id);
+    let root_accesskit_id = stable_accessibility_id(tree, root_node_id);
 
     // Traverse the tree and collect accessibility nodes
     let has_nodes = traverse_and_collect(
@@ -56,6 +62,7 @@ pub fn build_tree_update(
         &mut root_children,
         true,
         root_label,
+        None,
     );
 
     // If no nodes were collected anywhere in the tree, don't create an update
@@ -66,12 +73,23 @@ pub fn build_tree_update(
     // Create the tree structure
     let tree_struct = Tree::new(root_accesskit_id.to_accesskit_id());
 
+    let runtime_focus = focused_node.and_then(|focused| {
+        tree.get(focused).filter(|node| !node.is_removed())?;
+        focused.ancestors(tree).find_map(|id| {
+            let candidate = stable_accessibility_id(tree, id).to_accesskit_id();
+            collected
+                .nodes
+                .iter()
+                .any(|(id, node)| *id == candidate && !node.is_hidden())
+                .then_some(candidate)
+        })
+    });
     Some(TreeUpdate {
         nodes: collected.nodes,
         tree: Some(tree_struct),
         tree_id: TreeId::ROOT,
-        focus: collected
-            .focus
+        focus: runtime_focus
+            .or(collected.focus)
             .unwrap_or_else(|| root_accesskit_id.to_accesskit_id()),
     })
 }
@@ -88,6 +106,7 @@ fn traverse_and_collect(
     parent_children: &mut Vec<AccessKitNodeId>,
     is_root: bool,
     root_label: Option<&str>,
+    inherited_tooltip: Option<&str>,
 ) -> bool {
     // Get metadata for this node
     let metadata = match metadatas.get(&node_id) {
@@ -96,6 +115,10 @@ fn traverse_and_collect(
     };
 
     let accessibility_node = metadata.accessibility.clone();
+    let inherited_tooltip = accessibility_node
+        .as_ref()
+        .and_then(|node| node.tooltip.as_deref())
+        .or(inherited_tooltip);
     let abs_position = metadata.abs_position;
     let computed_data = metadata.computed_data;
 
@@ -113,6 +136,7 @@ fn traverse_and_collect(
                 parent_children,
                 false,
                 root_label,
+                inherited_tooltip,
             );
         }
         return has_accessible_descendants;
@@ -136,13 +160,19 @@ fn traverse_and_collect(
                 &mut accessible_children,
                 false,
                 root_label,
+                inherited_tooltip,
             );
         }
     }
 
     // Check if this node has accessibility information
+    let tooltip_description = accessibility_node.as_ref().and_then(|node| {
+        (node.focusable && node.description.is_none())
+            .then(|| inherited_tooltip.map(str::to_owned))
+            .flatten()
+    });
     if let Some(accessibility_node) = accessibility_node {
-        let accesskit_id = AccessibilityId::from_component_node_id(node_id);
+        let accesskit_id = stable_accessibility_id(tree, node_id);
 
         // Build AccessKit Node
         let mut node = Node::new(accessibility_node.role.unwrap_or_else(|| {
@@ -159,7 +189,7 @@ fn traverse_and_collect(
         }
 
         // Set description
-        if let Some(description) = accessibility_node.description {
+        if let Some(description) = accessibility_node.description.or(tooltip_description) {
             node.set_description(description);
         }
 
@@ -191,6 +221,14 @@ fn traverse_and_collect(
         // Set numeric value
         if let Some(numeric_value) = accessibility_node.numeric_value {
             node.set_numeric_value(numeric_value);
+        }
+
+        if let Some(min) = accessibility_node.min_numeric_value {
+            node.set_min_numeric_value(min);
+        }
+
+        if let Some(max) = accessibility_node.max_numeric_value {
+            node.set_max_numeric_value(max);
         }
 
         if let Some(step) = accessibility_node.numeric_value_step {
@@ -251,6 +289,12 @@ fn traverse_and_collect(
         if let Some(toggled) = accessibility_node.toggled {
             node.set_toggled(toggled);
         }
+        if let Some(expanded) = accessibility_node.expanded {
+            node.set_expanded(expanded);
+        }
+        if let Some(popup) = accessibility_node.has_popup {
+            node.set_has_popup(popup);
+        }
 
         // Set disabled
         if accessibility_node.disabled {
@@ -278,7 +322,7 @@ fn traverse_and_collect(
         };
 
         if let Some(bounds) = bounds {
-            node.set_bounds(bounds);
+            node.set_bounds(clipped_shape_bounds(bounds, node_id, tree, metadatas));
         }
 
         // Add to collection
@@ -287,7 +331,7 @@ fn traverse_and_collect(
 
         true
     } else if is_root {
-        let accesskit_id = AccessibilityId::from_component_node_id(node_id);
+        let accesskit_id = stable_accessibility_id(tree, node_id);
         let mut node = Node::new(accesskit::Role::Window);
         if let Some(label) = root_label {
             node.set_label(label.to_string());
@@ -322,6 +366,60 @@ fn rect_from_geometry(
     let y1 = y0 + size.height.0 as f64;
 
     Some(Rect { x0, y0, x1, y1 })
+}
+
+fn clipped_shape_bounds(
+    mut bounds: Rect,
+    node_id: ComponentNodeId,
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+) -> Rect {
+    let Some(metadata) = metadatas
+        .get(&node_id)
+        .filter(|metadata| metadata.has_shape_clipping)
+    else {
+        return bounds;
+    };
+    let intersect = |bounds: Rect, clip: Rect| {
+        let x0 = bounds.x0.max(clip.x0);
+        let y0 = bounds.y0.max(clip.y0);
+        Rect {
+            x0,
+            y0,
+            x1: bounds.x1.min(clip.x1).max(x0),
+            y1: bounds.y1.min(clip.y1).max(y0),
+        }
+    };
+    if let Some(clip) = metadata.event_clip_rect {
+        bounds = intersect(
+            bounds,
+            Rect {
+                x0: clip.x.to_f32() as f64,
+                y0: clip.y.to_f32() as f64,
+                x1: (clip.x + clip.width).to_f32() as f64,
+                y1: (clip.y + clip.height).to_f32() as f64,
+            },
+        );
+    }
+    for ancestor in node_id.ancestors(tree) {
+        let Some(metadata) = metadatas.get(&ancestor) else {
+            continue;
+        };
+        let (Some(clip), Some(origin)) = (metadata.clip_region, metadata.abs_position) else {
+            continue;
+        };
+        let origin = origin + clip.position;
+        bounds = intersect(
+            bounds,
+            Rect {
+                x0: origin.x as f64,
+                y0: origin.y as f64,
+                x1: (origin.x + clip.size[0]) as f64,
+                y1: (origin.y + clip.size[1]) as f64,
+            },
+        );
+    }
+    bounds
 }
 
 fn rect_from_geometry_with_padding(
@@ -362,17 +460,16 @@ pub fn dispatch_action(
     focus_owner: &mut FocusOwner,
     action_request: accesskit::ActionRequest,
 ) -> bool {
-    // Convert AccessKit NodeId back to AccessibilityId
     if action_request.target_tree != TreeId::ROOT {
         return false;
     }
 
     let accessibility_id = AccessibilityId::from_accesskit_id(action_request.target_node);
 
-    // Convert to component NodeId using get_node_id_at
-    // The AccessibilityId stores the 1-based index from indextree
-    let index = std::num::NonZero::new(accessibility_id.0 as usize);
-    let component_node_id = index.and_then(|idx| tree.get_node_id_at(idx));
+    let component_node_id = tree
+        .iter()
+        .find(|node| !node.is_removed() && node.get().instance_key == accessibility_id.0)
+        .and_then(|node| tree.get_node_id(node));
 
     // Look up the component's metadata and call handler
     if let Some(node_id) = component_node_id
@@ -390,6 +487,11 @@ pub fn dispatch_action(
 
 #[cfg(test)]
 mod tests {
+    use std::sync::{
+        Arc,
+        atomic::{AtomicUsize, Ordering},
+    };
+
     use accesskit::{Action, Role};
 
     use crate::{
@@ -434,6 +536,7 @@ mod tests {
             replay: None,
             props_unchanged_from_previous: false,
         });
+        tree[id].get_mut().instance_key = usize::from(id) as u64;
         if let Some(parent) = parent {
             parent.append(id, tree);
         }
@@ -446,6 +549,53 @@ mod tests {
         });
         metadatas.insert(id, metadata);
         id
+    }
+
+    #[test]
+    fn fractional_shape_masks_clip_semantic_bounds_without_removing_controls() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
+        let child = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(wrapper),
+            Some(
+                AccessibilityNode::new()
+                    .with_role(Role::Button)
+                    .with_label("Masked action")
+                    .with_action(Action::Click)
+                    .focusable()
+                    .focused(),
+            ),
+        );
+        let metadata = metadatas.get_mut(&wrapper).expect("wrapper metadata");
+        metadata.clip_region = Some(crate::ClipRegion {
+            position: PxPosition::from_f32_xy(5.0, 3.0),
+            size: [10.25, 12.5],
+            shape: crate::ClipShape::Ellipse,
+        });
+        metadata.has_shape_clipping = true;
+        metadatas
+            .get_mut(&child)
+            .expect("child metadata")
+            .has_shape_clipping = true;
+        let update =
+            build_tree_update(&tree, &metadatas, root, Some("Fixture"), None).expect("tree update");
+        assert_eq!(update.nodes.len(), 2);
+        assert_eq!(
+            node(&update, child).bounds(),
+            Some(Rect {
+                x0: 15.0,
+                y0: 23.0,
+                x1: 25.25,
+                y1: 35.5
+            })
+        );
+        assert!(node(&update, child).supports_action(Action::Click));
+        assert!(node(&update, child).supports_action(Action::Focus));
+        assert_eq!(update.focus, accesskit_id(child));
     }
 
     fn accesskit_id(id: ComponentNodeId) -> AccessKitNodeId {
@@ -503,7 +653,7 @@ mod tests {
             Some(AccessibilityNode::new().with_role(Role::Button)),
         );
 
-        let update = build_tree_update(&tree, &metadatas, root, Some("Calendar"))
+        let update = build_tree_update(&tree, &metadatas, root, Some("Calendar"), None)
             .expect("valid tree must produce an accessibility update");
         assert_eq!(update.nodes.len(), 5);
         assert_eq!(node(&update, root).role(), Role::Window);
@@ -548,12 +698,192 @@ mod tests {
             Some(AccessibilityNode::new().with_role(Role::Label).focused()),
         );
 
-        let update = build_tree_update(&tree, &metadatas, root, None)
+        let update = build_tree_update(&tree, &metadatas, root, None, None)
             .expect("valid tree must produce an accessibility update");
         assert_eq!(update.nodes.len(), 2);
         assert_eq!(node(&update, root).children(), &[accesskit_id(button)]);
         assert!(node(&update, button).children().is_empty());
         assert_eq!(update.focus, accesskit_id(root));
+    }
+
+    #[test]
+    fn rebuilt_controls_keep_identity_and_receive_actions_at_their_new_arena_index() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let slider = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode::new().with_role(Role::Slider).focused()),
+        );
+        tree[slider].get_mut().instance_key = 700;
+        let before = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
+        let target = before.focus;
+        assert_eq!(target, AccessKitNodeId(700));
+
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let decoration = append_node(&mut tree, &mut metadatas, Some(root), None);
+        let slider = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode::new().with_role(Role::Slider).focused()),
+        );
+        tree[slider].get_mut().instance_key = 700;
+        let after = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
+        assert_eq!(after.focus, target);
+        assert_eq!(
+            after
+                .nodes
+                .iter()
+                .find(|(id, _)| *id == target)
+                .unwrap()
+                .1
+                .role(),
+            Role::Slider
+        );
+
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&calls);
+        metadatas
+            .get_mut(&slider)
+            .unwrap()
+            .accessibility_action_handler = Some(Box::new(move |action| {
+            assert_eq!(action, Action::Increment);
+            observed.fetch_add(1, Ordering::Relaxed);
+        }));
+        metadatas
+            .get_mut(&decoration)
+            .unwrap()
+            .accessibility_action_handler = Some(Box::new(|_| {
+            panic!("an arena index must not receive another control's action")
+        }));
+        let mut focus_owner = FocusOwner::new();
+        let request = || accesskit::ActionRequest {
+            action: Action::Increment,
+            target_tree: TreeId::ROOT,
+            target_node: target,
+            data: None,
+        };
+        assert!(dispatch_action(
+            &tree,
+            &metadatas,
+            &mut focus_owner,
+            request()
+        ));
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        tree[slider].get_mut().instance_key = 701;
+        assert!(!dispatch_action(
+            &tree,
+            &metadatas,
+            &mut focus_owner,
+            request()
+        ));
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+    }
+
+    #[test]
+    fn contextual_help_describes_focusable_descendants_without_overriding_explicit_descriptions() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let mut help = AccessibilityNode::new().with_role(Role::Group);
+        help.tooltip = Some("Contextual help".to_string());
+        let anchor = append_node(&mut tree, &mut metadatas, Some(root), Some(help));
+        let wrapper = append_node(&mut tree, &mut metadatas, Some(anchor), None);
+        let button = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(wrapper),
+            Some(
+                AccessibilityNode::new()
+                    .with_role(Role::Button)
+                    .with_label("Action")
+                    .focusable(),
+            ),
+        );
+        let mut custom = AccessibilityNode::new().with_role(Role::Button).focusable();
+        custom.description = Some("Explicit description".to_string());
+        let explicit = append_node(&mut tree, &mut metadatas, Some(anchor), Some(custom));
+        let update = build_tree_update(&tree, &metadatas, root, None, None).expect("tree");
+        assert_eq!(node(&update, button).label(), Some("Action"));
+        assert_eq!(node(&update, button).description(), Some("Contextual help"));
+        assert_eq!(
+            node(&update, explicit).description(),
+            Some("Explicit description")
+        );
+    }
+
+    #[test]
+    fn runtime_focus_overrides_stale_semantic_focus_and_survives_layout_wrappers() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let stale = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode::new().with_role(Role::Button).focused()),
+        );
+        let current = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(
+                AccessibilityNode::new()
+                    .with_role(Role::Button)
+                    .with_label("Current")
+                    .focusable(),
+            ),
+        );
+        let wrapper = append_node(&mut tree, &mut metadatas, Some(current), None);
+        let update = build_tree_update(&tree, &metadatas, root, None, Some(wrapper)).expect("tree");
+        assert_eq!(update.focus, accesskit_id(current));
+        assert_ne!(update.focus, accesskit_id(stale));
+    }
+
+    #[test]
+    fn numeric_controls_publish_current_value_bounds_and_steps() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let mut semantics = AccessibilityNode::new().with_role(Role::Slider);
+        semantics.numeric_value = Some(0.4);
+        semantics.min_numeric_value = Some(0.2);
+        semantics.max_numeric_value = Some(0.8);
+        semantics.numeric_value_step = Some(0.01);
+        semantics.numeric_value_jump = Some(0.1);
+        let slider = append_node(&mut tree, &mut metadatas, Some(root), Some(semantics));
+
+        let update = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
+        let slider = node(&update, slider);
+        assert_eq!(slider.numeric_value(), Some(0.4));
+        assert_eq!(slider.min_numeric_value(), Some(0.2));
+        assert_eq!(slider.max_numeric_value(), Some(0.8));
+        assert_eq!(slider.numeric_value_step(), Some(0.01));
+        assert_eq!(slider.numeric_value_jump(), Some(0.1));
+    }
+
+    #[test]
+    fn menu_trigger_publishes_expanded_and_popup_type() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let mut semantics = AccessibilityNode::new()
+            .with_role(Role::Button)
+            .with_label("Create");
+        semantics.expanded = Some(true);
+        semantics.has_popup = Some(accesskit::HasPopup::Menu);
+        let trigger = append_node(&mut tree, &mut metadatas, Some(root), Some(semantics));
+        let update = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
+        assert_eq!(node(&update, trigger).is_expanded(), Some(true));
+        assert_eq!(
+            node(&update, trigger).has_popup(),
+            Some(accesskit::HasPopup::Menu)
+        );
     }
 
     #[test]
@@ -564,7 +894,7 @@ mod tests {
         let wrapper = append_node(&mut tree, &mut metadatas, Some(root), None);
         append_node(&mut tree, &mut metadatas, Some(wrapper), None);
 
-        let update = build_tree_update(&tree, &metadatas, root, Some("Empty"))
+        let update = build_tree_update(&tree, &metadatas, root, Some("Empty"), None)
             .expect("valid tree must produce an accessibility update");
         assert_eq!(update.nodes.len(), 1);
         assert_eq!(node(&update, root).role(), Role::Window);

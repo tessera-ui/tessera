@@ -488,12 +488,17 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
         BuildTreeResult::root_recompose(build_tree_cost)
     };
 
-    let tree_is_empty = TesseraRuntime::with(|rt| rt.component_tree.tree().is_empty());
+    let (tree_is_empty, density_changed) = TesseraRuntime::with_mut(|runtime| {
+        let density_changed = runtime.component_tree.refresh_scale_factor();
+        (runtime.component_tree.tree().is_empty(), density_changed)
+    });
     let invalidations = take_build_invalidations();
     #[cfg(feature = "debug-dirty-overlay")]
     let had_invalidations = !invalidations.dirty_instance_keys.is_empty();
     with_build_dirty_instance_keys(&invalidations.dirty_instance_keys, || {
-        if tree_is_empty {
+        // Density affects values resolved during build as well as cached
+        // measurements.
+        if tree_is_empty || density_changed {
             let result = run_root_recompose();
             #[cfg(feature = "debug-dirty-overlay")]
             let result = result.with_dirty_replay_info(had_invalidations, Vec::new());

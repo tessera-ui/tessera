@@ -102,6 +102,8 @@ pub enum Command {
     Composite(Box<dyn CompositeCommand>),
     /// A command to push a clipping rectangle onto the stack.
     ClipPush(PxRect),
+    /// Pushes a shape clip for this subtree.
+    ShapeClipPush(crate::ClipRegion),
     /// A command to pop the most recent clipping rectangle from the stack.
     ClipPop,
 }
@@ -126,7 +128,7 @@ impl Command {
             // Currently, compute can only be used for after effects,
             Self::Compute(command) => Some(command.barrier()),
             Self::Composite(_) => None,
-            Self::ClipPush(_) | Self::ClipPop => None, // Clipping commands do not require barriers
+            Self::ClipPush(_) | Self::ShapeClipPush(_) | Self::ClipPop => None, /* Clipping commands do not require barriers */
         }
     }
 }
@@ -138,6 +140,7 @@ impl Clone for Command {
             Self::Compute(cmd) => Self::Compute(cmd.clone()),
             Self::Composite(cmd) => Self::Composite(cmd.clone()),
             Self::ClipPush(rect) => Self::ClipPush(*rect),
+            Self::ShapeClipPush(region) => Self::ShapeClipPush(*region),
             Self::ClipPop => Self::ClipPop,
         }
     }

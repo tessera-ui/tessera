@@ -218,7 +218,7 @@ impl CheckmarkPipeline {
                 polygon_mode: wgpu::PolygonMode::Fill,
                 conservative: false,
             },
-            depth_stencil: None,
+            depth_stencil: tessera_ui::ui_stencil_state(),
             multisample: wgpu::MultisampleState {
                 count: sample_count,
                 mask: !0,

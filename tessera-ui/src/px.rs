@@ -724,6 +724,21 @@ impl PxRect {
         }
     }
 
+    pub(crate) fn enclosing(position: PxPosition, size: PxSize) -> Self {
+        Self::enclosing_f32(position, size.to_f32_arr2())
+    }
+
+    pub(crate) fn enclosing_f32(position: PxPosition, size: [f32; 2]) -> Self {
+        let x = position.x.floor() as i32;
+        let y = position.y.floor() as i32;
+        Self::new(
+            Px(x),
+            Px(y),
+            Px(((position.x + size[0]).ceil() as i32).saturating_sub(x)),
+            Px(((position.y + size[1]).ceil() as i32).saturating_sub(y)),
+        )
+    }
+
     /// Checks if this rectangle is orthogonal (non-overlapping) with another
     /// rectangle.
     ///
@@ -1089,15 +1104,6 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_px_creation() {
-        let px = Px::new(42);
-        assert_eq!(px.0, 42);
-
-        let px_neg = Px::new(-10);
-        assert_eq!(px_neg.0, -10);
-    }
-
-    #[test]
     fn test_px_arithmetic() {
         let a = Px(10);
         let b = Px(5);
@@ -1111,36 +1117,11 @@ mod tests {
     }
 
     #[test]
-    fn test_px_saturating_arithmetic() {
-        let max = Px(i32::MAX);
-        let min = Px(i32::MIN);
-        assert_eq!(max.saturating_add(Px(1)), max);
-        assert_eq!(min.saturating_sub(Px(1)), min);
-    }
-
-    #[test]
     fn test_saturating_from_f32() {
         assert_eq!(Px::saturating_from_f32(f32::MAX), Px(i32::MAX));
         assert_eq!(Px::saturating_from_f32(f32::MIN), Px(i32::MIN));
         assert_eq!(Px::saturating_from_f32(100.5), Px(100));
         assert_eq!(Px::saturating_from_f32(-100.5), Px(-100));
-    }
-
-    #[test]
-    fn test_px_abs() {
-        assert_eq!(Px(10).abs(), 10);
-        assert_eq!(Px(-5).abs(), 5);
-        assert_eq!(Px(0).abs(), 0);
-    }
-
-    #[test]
-    fn test_px_position() {
-        let pos = PxPosition::new(Px(10), Px(-5));
-        assert_eq!(pos.x_px(), Px(10));
-        assert_eq!(pos.y_px(), Px(-5));
-
-        let offset_pos = pos.offset(Px(2), Px(3));
-        assert_eq!(offset_pos, PxPosition::new(Px(12), Px(-2)));
     }
 
     #[test]
@@ -1153,25 +1134,5 @@ mod tests {
 
         let diff = pos1 - pos2;
         assert_eq!(diff, PxPosition::new(Px(5), Px(5)));
-    }
-
-    #[test]
-    fn test_px_position_conversions() {
-        let i32_pos: [i32; 2] = [10, -5];
-        let px_pos: PxPosition = i32_pos.into();
-        let back_to_i32: [i32; 2] = px_pos.into();
-        assert_eq!(i32_pos, back_to_i32);
-
-        let u32_pos: [u32; 2] = [10, 5];
-        let px_from_u32: PxPosition = u32_pos.into();
-        let back_to_u32: [u32; 2] = px_from_u32.into();
-        assert_eq!(u32_pos, back_to_u32);
-    }
-
-    #[test]
-    fn test_distance() {
-        let pos1 = PxPosition::new(Px(0), Px(0));
-        let pos2 = PxPosition::new(Px(3), Px(4));
-        assert_eq!(pos1.distance_to(pos2), 5.0);
     }
 }

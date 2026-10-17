@@ -538,8 +538,8 @@ pub trait FocusModifierExt {
     where
         F: Into<CallbackWith<FocusRevealRequest, bool>>;
 
-    /// Registers a callback invoked with this node's window rectangle when it
-    /// changes.
+    /// Registers a callback invoked with this node's window rectangle after
+    /// attachment and whenever the rectangle changes.
     fn on_globally_positioned<F>(self, handler: F) -> Modifier
     where
         F: Into<CallbackWith<crate::PxRect>>;

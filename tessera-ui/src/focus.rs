@@ -23,7 +23,8 @@ use crate::{
     runtime::{
         TesseraRuntime, focus_read_subscribers, focus_requester_read_subscribers,
         has_persistent_focus_handle, record_replay_boundary_invalidation_for_instance_key,
-        track_focus_read_dependency, track_focus_requester_read_dependency,
+        schedule_runtime_redraw, track_focus_read_dependency,
+        track_focus_requester_read_dependency,
     },
 };
 
@@ -790,6 +791,14 @@ impl FocusManager {
         Self
     }
 
+    /// Defers queued keys until the next layout and its focus updates finish.
+    ///
+    /// Use when opening or closing focusable content so subsequent keys reach
+    /// the resulting focus target.
+    pub fn defer_keyboard_until_layout(self) {
+        with_focus_owner_mut(|owner| owner.keyboard_barrier = KeyboardLayoutBarrier::Requested);
+    }
+
     /// Clears the current focus. Set `force` to `true` to break captured focus.
     pub fn clear_focus(self, force: bool) {
         with_focus_owner_mut(|owner| {
@@ -799,7 +808,32 @@ impl FocusManager {
 
     /// Moves focus in the requested direction.
     pub fn move_focus(self, direction: FocusDirection) -> bool {
-        with_focus_owner_mut(|owner| owner.move_focus(direction))
+        with_focus_owner_mut(|owner| {
+            owner.pending_navigation = None;
+            owner.move_focus(direction)
+        })
+    }
+
+    /// Queues traversal after the next layout, revealing lazy content as
+    /// needed.
+    ///
+    /// Later requests replace an earlier queued direction. Returns `false` when
+    /// the window is unfocused or focus is captured. Following keyboard input
+    /// waits for the requested traversal and its layout updates.
+    /// Explicit focus requests, focus capture, and window blur cancel it.
+    pub fn request_move_focus(self, direction: FocusDirection) -> bool {
+        let accepted = with_focus_owner_mut(|owner| {
+            if !owner.owner_focused || owner.captured.is_some() {
+                return false;
+            }
+            owner.pending_navigation = Some(direction);
+            owner.keyboard_barrier = KeyboardLayoutBarrier::Requested;
+            true
+        });
+        if accepted {
+            schedule_runtime_redraw();
+        }
+        accepted
     }
 }
 
@@ -908,6 +942,14 @@ enum FocusCommand {
     Restore(FocusHandleId),
 }
 
+#[derive(Clone, Copy, Default, PartialEq, Eq)]
+enum KeyboardLayoutBarrier {
+    #[default]
+    None,
+    Requested,
+    Layout,
+}
+
 /// Per-component-tree focus owner.
 #[derive(Default)]
 pub(crate) struct FocusOwner {
@@ -922,6 +964,8 @@ pub(crate) struct FocusOwner {
     pending: Vec<FocusCommand>,
     pending_notifications: Vec<FocusNotification>,
     pending_reveal: Option<FocusHandleId>,
+    pending_navigation: Option<FocusDirection>,
+    keyboard_barrier: KeyboardLayoutBarrier,
 }
 
 impl FocusOwner {
@@ -940,11 +984,49 @@ impl FocusOwner {
             pending: Vec::new(),
             pending_notifications: Vec::new(),
             pending_reveal: None,
+            pending_navigation: None,
+            keyboard_barrier: KeyboardLayoutBarrier::None,
         }
     }
 
     pub(crate) fn reset(&mut self) {
         *self = Self::new();
+    }
+
+    pub(crate) fn begin_layout(&mut self) {
+        if self.keyboard_barrier == KeyboardLayoutBarrier::Requested {
+            self.keyboard_barrier = KeyboardLayoutBarrier::Layout;
+        }
+    }
+
+    pub(crate) fn finish_layout(&mut self) {
+        if self.keyboard_barrier == KeyboardLayoutBarrier::Layout {
+            self.keyboard_barrier = KeyboardLayoutBarrier::None;
+        }
+    }
+
+    pub(crate) fn keyboard_is_deferred(&self) -> bool {
+        self.keyboard_barrier != KeyboardLayoutBarrier::None
+    }
+
+    pub(crate) fn take_pending_navigation(&mut self) -> Option<FocusDirection> {
+        self.pending_navigation
+            .take()
+            .filter(|_| self.owner_focused && self.captured.is_none())
+    }
+
+    pub(crate) fn retain_navigation_retry(&mut self, direction: Option<FocusDirection>) {
+        if self.pending_navigation.is_none() {
+            self.pending_navigation = direction;
+        }
+    }
+
+    pub(crate) fn has_pending_navigation(&self) -> bool {
+        self.pending_navigation.is_some()
+    }
+
+    pub(crate) fn allows_navigation(&self) -> bool {
+        self.owner_focused && self.captured.is_none()
     }
 
     pub(crate) fn state_of(&self, id: FocusHandleId) -> FocusState {
@@ -1011,33 +1093,23 @@ impl FocusOwner {
     }
 
     pub(crate) fn request_focus(&mut self, id: FocusHandleId) {
-        if !self.apply_command(FocusCommand::Request(id)) {
-            self.pending.push(FocusCommand::Request(id));
-        }
+        self.execute_or_defer(FocusCommand::Request(id));
     }
 
     pub(crate) fn clear_focus(&mut self, id: FocusHandleId) {
-        if !self.apply_command(FocusCommand::Clear(id)) {
-            self.pending.push(FocusCommand::Clear(id));
-        }
+        self.execute_or_defer(FocusCommand::Clear(id));
     }
 
     pub(crate) fn capture_focus(&mut self, id: FocusHandleId) {
-        if !self.apply_command(FocusCommand::Capture(id)) {
-            self.pending.push(FocusCommand::Capture(id));
-        }
+        self.execute_or_defer(FocusCommand::Capture(id));
     }
 
     pub(crate) fn free_focus(&mut self, id: FocusHandleId) {
-        if !self.apply_command(FocusCommand::Free(id)) {
-            self.pending.push(FocusCommand::Free(id));
-        }
+        self.execute_or_defer(FocusCommand::Free(id));
     }
 
     pub(crate) fn restore_focus(&mut self, id: FocusHandleId) {
-        if !self.apply_command(FocusCommand::Restore(id)) {
-            self.pending.push(FocusCommand::Restore(id));
-        }
+        self.execute_or_defer(FocusCommand::Restore(id));
     }
 
     pub(crate) fn set_owner_focused(&mut self, focused: bool) {
@@ -1047,6 +1119,9 @@ impl FocusOwner {
 
         let previous_states = self.snapshot_live_states();
         self.owner_focused = focused;
+        if !focused {
+            self.pending_navigation = None;
+        }
         if focused {
             if let Some(suspended) = self.suspended.take() {
                 if let Some(target) = self.resolve_request_target(suspended) {
@@ -1146,7 +1221,7 @@ impl FocusOwner {
         let previous_states = self.snapshot_live_states();
         let commands = std::mem::take(&mut self.pending);
         for command in commands {
-            if !self.apply_command_inner(command) {
+            if !self.apply_command_inner(command) && self.should_defer_command(command) {
                 self.pending.push(command);
             }
         }
@@ -1159,6 +1234,9 @@ impl FocusOwner {
     }
 
     pub(crate) fn clear_focus_global(&mut self, force: bool) -> bool {
+        if force || self.captured.is_none() {
+            self.pending_navigation = None;
+        }
         let previous_states = self.snapshot_live_states();
         let cleared = if self.active.is_some() && (force || self.captured.is_none()) {
             self.active = None;
@@ -1551,6 +1629,27 @@ impl FocusOwner {
         self.recompute_states();
         self.notify_state_changes(previous_states);
         self.notify_requester_binding_changes(previous_requester_bindings);
+    }
+
+    fn execute_or_defer(&mut self, command: FocusCommand) {
+        self.pending_navigation = None;
+        if !self.apply_command(command) && self.should_defer_command(command) {
+            self.pending.push(command);
+        }
+    }
+
+    fn should_defer_command(&self, command: FocusCommand) -> bool {
+        let id = match command {
+            FocusCommand::Request(id)
+            | FocusCommand::Clear(id)
+            | FocusCommand::Capture(id)
+            | FocusCommand::Free(id)
+            | FocusCommand::Restore(id) => id,
+        };
+        // Attached targets treat commands as immediate intents. Replaying a
+        // no-op or rejected command after another event can steal or clear
+        // focus.
+        !self.nodes.get(&id).is_some_and(|node| node.is_attached())
     }
 
     fn apply_command(&mut self, command: FocusCommand) -> bool {

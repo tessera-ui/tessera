@@ -142,7 +142,7 @@ where
     );
 
     let diagnostics = TesseraRuntime::with_mut(|runtime| {
-        let (_graph, _requests, diagnostics, _record_cost, _move, _reveal) =
+        let (_graph, _requests, diagnostics, _record_cost, _move, _reveal, _keyboard) =
             runtime.component_tree.compute(
                 ComputeParams {
                     screen_size,
@@ -161,6 +161,7 @@ where
     });
     LAST_LAYOUT_FRAME_DIAGNOSTICS.with(|cell| cell.set(Some(diagnostics)));
     flush_pending_focus_callbacks();
+    crate::component_tree::flush_pending_globally_positioned_callbacks();
 
     LayoutSnapshot::capture()
 }
@@ -659,28 +660,259 @@ macro_rules! assert_layout {
 
 #[cfg(test)]
 mod tests {
-    use std::num::NonZero;
-
-    use super::{
-        last_layout_frame_diagnostics, layout_test, pump_layout_test_session,
-        reset_runtime_for_layout_test, start_layout_test_session,
+    use std::{
+        cell::Cell,
+        num::NonZero,
+        sync::{
+            Arc,
+            atomic::{AtomicUsize, Ordering},
+        },
     };
 
     use crate::{
         AccessibilityActionHandler, AccessibilityNode, AxisConstraint, ComputedData, Constraint,
         FrameNanosControl, LayoutModifierChild, LayoutModifierInput, LayoutModifierNode,
         LayoutResult, Modifier, NoopDrawModifier, PlacementModifierNode, Px, PxPosition,
-        RenderSlot, SemanticsModifierNode,
+        RenderSlot, SemanticsModifierNode, State,
         component_tree::{NodeRole, direct_layout_children},
         layout::MeasureScope,
         receive_frame_nanos, remember,
         runtime::TesseraRuntime,
         tessera,
     };
+
+    use super::{
+        last_layout_frame_diagnostics, layout_test, pump_layout_test_session,
+        reset_runtime_for_layout_test, start_layout_test_session,
+    };
+
+    thread_local! { static MEASURE_ONLY_WIDTH: Cell<Option<State<i32>>> = const { Cell::new(None) }; }
+
+    #[derive(Clone, PartialEq)]
+    struct MeasureOnlyWidthPolicy {
+        width: State<i32>,
+    }
+
+    impl LayoutModifierNode for MeasureOnlyWidthPolicy {
+        fn measure(
+            &self,
+            _input: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            Ok(LayoutResult::new(ComputedData {
+                width: Px(self.width.get()),
+                height: Px(20),
+            }))
+        }
+    }
+
+    #[tessera(crate)]
+    fn measure_only_width_fixture() {
+        let width = remember(|| 40);
+        MEASURE_ONLY_WIDTH.set(Some(width));
+        crate::layout::layout()
+            .policy(MeasureOnlyWidthPolicy { width })
+            .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+                tag: "measure-only".into(),
+            }));
+    }
+
+    #[test]
+    fn layout_state_updates_apply_when_component_build_is_skipped() {
+        let mut session = start_layout_test_session(
+            layout_test(|| {
+                measure_only_width_fixture();
+            })
+            .viewport_px(200, 100),
+        );
+        pump_layout_test_session(&mut session, 0)
+            .node("measure-only")
+            .width(40);
+        let width = MEASURE_ONLY_WIDTH.get().expect("width state");
+        width.set(80);
+        assert!(!crate::runtime::has_pending_build_invalidations());
+        pump_layout_test_session(&mut session, 16_666_667)
+            .node("measure-only")
+            .width(80);
+        width.set(120);
+        pump_layout_test_session(&mut session, 33_333_334)
+            .node("measure-only")
+            .width(120);
+    }
     #[derive(Clone, PartialEq)]
     struct FixedSizePolicy {
         width: i32,
         height: i32,
+    }
+
+    thread_local! {
+        static POSITION_ATTACHED: Cell<Option<State<bool>>> = const { Cell::new(None) };
+        static POSITION_COUNTS: Cell<Option<State<(u32, u32)>>> = const { Cell::new(None) };
+        static POSITION_WIDTH: Cell<Option<State<i32>>> = const { Cell::new(None) };
+    }
+
+    #[tessera(crate)]
+    fn position_handler_fixture() {
+        use crate::modifier::FocusModifierExt as _;
+
+        let attached = remember(|| false);
+        let counts = remember(|| (0_u32, 0_u32));
+        let width = remember(|| 40);
+        POSITION_ATTACHED.set(Some(attached));
+        POSITION_COUNTS.set(Some(counts));
+        POSITION_WIDTH.set(Some(width));
+        let mut modifier = Modifier::new().on_globally_positioned(move |_| {
+            counts.with_mut(|counts| counts.0 += 1);
+        });
+        if attached.get() {
+            modifier = modifier.on_globally_positioned(move |_| {
+                counts.with_mut(|counts| counts.1 += 1);
+            });
+        }
+        crate::layout::layout()
+            .modifier(modifier)
+            .policy(FixedSizePolicy {
+                width: width.get(),
+                height: 20,
+            });
+    }
+
+    #[test]
+    fn newly_attached_position_handlers_receive_unchanged_bounds_once() {
+        let mut session = start_layout_test_session(
+            layout_test(|| {
+                position_handler_fixture();
+            })
+            .viewport_px(200, 100),
+        );
+        pump_layout_test_session(&mut session, 0);
+        let counts = POSITION_COUNTS.get().expect("counts");
+        let attached = POSITION_ATTACHED.get().expect("attachment");
+        assert_eq!(counts.get(), (1, 0));
+        attached.set(true);
+        pump_layout_test_session(&mut session, 16_666_667);
+        assert_eq!(
+            counts.get(),
+            (1, 1),
+            "only the newly attached handler receives the unchanged rectangle"
+        );
+        pump_layout_test_session(&mut session, 33_333_334);
+        assert_eq!(counts.get(), (1, 1), "idle layouts do not repeat callbacks");
+        attached.set(false);
+        pump_layout_test_session(&mut session, 50_000_001);
+        attached.set(true);
+        pump_layout_test_session(&mut session, 66_666_668);
+        assert_eq!(
+            counts.get(),
+            (1, 2),
+            "reattachment receives an initial rectangle"
+        );
+        POSITION_WIDTH.get().expect("width").set(80);
+        pump_layout_test_session(&mut session, 83_333_335);
+        assert_eq!(
+            counts.get(),
+            (2, 3),
+            "changed bounds notify both attached handlers"
+        );
+        pump_layout_test_session(&mut session, 100_000_002);
+        assert_eq!(counts.get(), (2, 3));
+    }
+
+    struct ResourceLease {
+        owner: State<u32>,
+        drops: Arc<AtomicUsize>,
+    }
+
+    impl Drop for ResourceLease {
+        fn drop(&mut self) {
+            self.drops.fetch_add(1, Ordering::SeqCst);
+            if self.owner.is_alive() {
+                self.owner.with_mut(|value| *value += 1);
+            }
+        }
+    }
+
+    thread_local! {
+        static RESOURCE_OWNER: Cell<Option<State<u32>>> = const { Cell::new(None) };
+        static RESOURCE_LOCAL: Cell<Option<State<bool>>> = const { Cell::new(None) };
+        static RESOURCE_CHILD: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    }
+
+    #[tessera(crate)]
+    fn remembered_resource_child(owner: State<u32>, drops: Arc<AtomicUsize>) {
+        let _lease = remember(|| ResourceLease { owner, drops });
+        crate::layout::layout();
+    }
+
+    #[tessera(crate)]
+    fn remembered_resource_fixture(drops: Arc<AtomicUsize>) {
+        let owner = remember(|| 0_u32);
+        let local = remember(|| true);
+        let child = remember(|| true);
+        RESOURCE_OWNER.set(Some(owner));
+        RESOURCE_LOCAL.set(Some(local));
+        RESOURCE_CHILD.set(Some(child));
+        crate::layout::layout().child(move || {
+            if local.get() {
+                let drops = drops.clone();
+                let _lease = remember(|| ResourceLease { owner, drops });
+            }
+            if child.get() {
+                remembered_resource_child(owner, drops.clone());
+            }
+        });
+    }
+
+    #[test]
+    fn remembered_resource_destructors_update_owners_after_unmount_and_handle_shutdown() {
+        let drops = Arc::new(AtomicUsize::new(0));
+        let initial = drops.clone();
+        let mut session = start_layout_test_session(
+            layout_test(move || {
+                remembered_resource_fixture(initial.clone());
+            })
+            .viewport_px(20, 20),
+        );
+        pump_layout_test_session(&mut session, 0);
+        let owner = RESOURCE_OWNER.get().expect("owner");
+        RESOURCE_LOCAL.get().expect("local resource").set(false);
+        pump_layout_test_session(&mut session, 16_666_667);
+        assert_eq!(
+            owner.get(),
+            1,
+            "conditional remembered resources can update their owner during recycling"
+        );
+        RESOURCE_CHILD.get().expect("child resource").set(false);
+        pump_layout_test_session(&mut session, 33_333_334);
+        assert_eq!(
+            owner.get(),
+            2,
+            "removed child components release resources outside the slot-table borrow"
+        );
+        assert_eq!(drops.load(Ordering::SeqCst), 2);
+        RESOURCE_LOCAL.get().expect("local resource").set(true);
+        RESOURCE_CHILD.get().expect("child resource").set(true);
+        pump_layout_test_session(&mut session, 50_000_001);
+        reset_runtime_for_layout_test((20, 20));
+        assert!(!owner.is_alive());
+        assert_eq!(
+            drops.load(Ordering::SeqCst),
+            4,
+            "runtime reset invalidates owners before resource destruction"
+        );
+
+        let thread_drops = drops.clone();
+        std::thread::spawn(move || {
+            let mut session = start_layout_test_session(
+                layout_test(move || {
+                    remembered_resource_fixture(thread_drops.clone());
+                })
+                .viewport_px(20, 20),
+            );
+            pump_layout_test_session(&mut session, 0);
+        })
+        .join()
+        .expect("thread-local resource teardown must permit liveness checks");
+        assert_eq!(drops.load(Ordering::SeqCst), 6);
     }
 
     impl crate::modifier::LayoutModifierNode for FixedSizePolicy {
@@ -1093,6 +1325,110 @@ mod tests {
                 node("title").x(0).y(0).size(200, 40);
                 node("button").below("title").align_start_with("title").size(120, 32);
             }
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    struct IntrinsicAwarePolicy;
+
+    impl LayoutModifierNode for IntrinsicAwarePolicy {
+        fn measure(
+            &self,
+            scope: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            let offset = if scope.is_intrinsic() { 0 } else { 20 };
+            Ok(LayoutResult::new(ComputedData {
+                width: Px(10 + offset),
+                height: Px(14 + offset),
+            }))
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    struct IntrinsicProbePolicy {
+        intrinsic_first: bool,
+    }
+
+    impl LayoutModifierNode for IntrinsicProbePolicy {
+        fn measure(
+            &self,
+            scope: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            let child = scope.children()[0];
+            let constraint = scope.parent_constraint().without_min();
+            if !self.intrinsic_first {
+                assert_eq!(
+                    child.measure(scope, &constraint)?.size(),
+                    ComputedData {
+                        width: Px(38),
+                        height: Px(42)
+                    }
+                );
+            }
+            assert_eq!(
+                child.probe_intrinsic(scope, &constraint)?.size(),
+                ComputedData {
+                    width: Px(18),
+                    height: Px(22)
+                }
+            );
+            assert!(!scope.is_intrinsic());
+            let normal = child.measure(scope, &constraint)?;
+            assert_eq!(
+                normal.size(),
+                ComputedData {
+                    width: Px(38),
+                    height: Px(42)
+                }
+            );
+            let mut result = LayoutResult::new(normal.size());
+            result.place_child(child, PxPosition::new(Px(7), Px(9)));
+            Ok(result)
+        }
+    }
+
+    #[tessera(crate)]
+    fn intrinsic_probe_fixture(intrinsic_first: bool) {
+        crate::layout::layout()
+            .policy(IntrinsicProbePolicy { intrinsic_first })
+            .child(|| {
+                crate::layout::layout()
+                    .policy(IntrinsicAwarePolicy)
+                    .modifier(
+                        Modifier::new()
+                            .push_layout(TestPaddingModifierNode { padding: 4 })
+                            .push_semantics(TestTagSemanticsModifier {
+                                tag: "intrinsic-child".to_string(),
+                            }),
+                    );
+            });
+    }
+
+    #[test]
+    fn intrinsic_probes_preserve_normal_measurement_cache_and_placements() {
+        for intrinsic_first in [false, true] {
+            let mut session = start_layout_test_session(
+                layout_test(move || {
+                    intrinsic_probe_fixture(intrinsic_first);
+                })
+                .viewport_px(200, 200),
+            );
+            for now in [0, 16_666_667, 33_333_334] {
+                let snapshot = pump_layout_test_session(&mut session, now);
+                snapshot.node("intrinsic-child").size(38, 42).position(7, 9);
+            }
+            assert!(
+                last_layout_frame_diagnostics()
+                    .expect("diagnostics")
+                    .cache_hits_direct
+                    > 0
+            );
+            assert_eq!(
+                last_layout_frame_diagnostics()
+                    .expect("diagnostics")
+                    .cache_store_count,
+                0
+            );
         }
     }
 

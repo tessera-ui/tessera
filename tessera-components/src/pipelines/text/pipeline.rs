@@ -265,7 +265,8 @@ impl GlyphonTextRender {
             mask: !0,
             alpha_to_coverage_enabled: false,
         };
-        let renderer = glyphon::TextRenderer::new(&mut atlas, gpu, msaa, None);
+        let renderer =
+            glyphon::TextRenderer::new(&mut atlas, gpu, msaa, tessera_ui::ui_stencil_state());
 
         Self {
             atlas,
@@ -304,7 +305,7 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
                     &mut self.atlas,
                     context.device,
                     self.msaa,
-                    None,
+                    tessera_ui::ui_stencil_state(),
                 ),
                 viewport: glyphon::Viewport::new(context.device, &self.cache),
             });

@@ -46,9 +46,10 @@ use crate::{
     render_module::RenderModule,
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
-        has_pending_build_invalidations, has_pending_frame_nanos_receivers, install_redraw_waker,
-        reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
-        reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
+        has_pending_build_invalidations, has_pending_frame_nanos_receivers,
+        has_pending_layout_invalidations, install_redraw_waker, reset_build_invalidations,
+        reset_component_replay_tracking, reset_focus_read_dependencies, reset_frame_clock,
+        reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
         reset_state_read_dependencies, retain_persistent_focus_handles, take_layout_dirty_nodes,
         tick_frame_nanos_receivers,
     },
@@ -122,23 +123,25 @@ type RenderComputationOutput = (
     std::time::Duration,
     Option<FocusDirection>,
     bool,
+    bool,
 );
 
 #[derive(Clone, Copy, Debug, Default)]
 struct RuntimePendingWork {
     invalidation_pending: bool,
+    layout_pending: bool,
     frame_receiver_pending: bool,
 }
 
 impl RuntimePendingWork {
     fn requires_redraw(self) -> bool {
-        self.invalidation_pending || self.frame_receiver_pending
+        self.invalidation_pending || self.layout_pending || self.frame_receiver_pending
     }
 
     #[cfg(feature = "profiling")]
     fn redraw_reasons(self) -> Vec<RedrawReason> {
         let mut reasons = Vec::new();
-        if self.invalidation_pending {
+        if self.invalidation_pending || self.layout_pending {
             reasons.push(RedrawReason::RuntimeInvalidation);
         }
         if self.frame_receiver_pending {
@@ -1101,11 +1104,12 @@ Fps: {:.2}
         frame_idx: u64,
         retry_focus_move: Option<FocusDirection>,
         retry_focus_reveal: bool,
+        retry_keyboard: bool,
     ) -> RenderComputationOutput {
         let draw_timer = Instant::now();
         debug!("Computing draw commands...");
         let cursor_position = args.cursor_state.position();
-        let is_retry = retry_focus_move.is_some() || retry_focus_reveal;
+        let is_retry = retry_focus_move.is_some() || retry_focus_reveal || retry_keyboard;
         let pointer_changes = if is_retry {
             Vec::new()
         } else {
@@ -1133,6 +1137,7 @@ Fps: {:.2}
             record_cost,
             pending_focus_move_retry,
             pending_focus_reveal_retry,
+            pending_keyboard_retry,
         ) = TesseraRuntime::with_mut(|rt| {
             let component_tree = &mut rt.component_tree;
             let (gpu, compute_resource_manager) = args.app.record_resources();
@@ -1167,6 +1172,7 @@ Fps: {:.2}
             record_cost,
             pending_focus_move_retry,
             pending_focus_reveal_retry,
+            pending_keyboard_retry,
         )
     }
 
@@ -1322,11 +1328,15 @@ Fps: {:.2}
             mut record_cost,
             mut pending_focus_move_retry,
             mut pending_focus_reveal_retry,
-        ) = Self::compute_draw_commands(args, screen_size, frame_idx, None, false);
+            mut pending_keyboard_retry,
+        ) = Self::compute_draw_commands(args, screen_size, frame_idx, None, false, false);
         let mut beyond_bounds_retry_count = 0usize;
-        while pending_focus_move_retry.is_some() || pending_focus_reveal_retry {
+        while pending_focus_move_retry.is_some()
+            || pending_focus_reveal_retry
+            || pending_keyboard_retry
+        {
             if beyond_bounds_retry_count >= Self::MAX_FOCUS_BEYOND_BOUNDS_RETRIES
-                || !has_pending_build_invalidations()
+                || (!pending_keyboard_retry && !has_pending_build_invalidations())
             {
                 break;
             }
@@ -1343,20 +1353,26 @@ Fps: {:.2}
                 retry_record_cost,
                 next_focus_move_retry,
                 next_focus_reveal_retry,
+                next_keyboard_retry,
             ) = Self::compute_draw_commands(
                 args,
                 screen_size,
                 frame_idx,
                 pending_focus_move_retry,
                 pending_focus_reveal_retry,
+                pending_keyboard_retry,
             );
             new_graph = retry_graph;
+            let request_window_drag =
+                window_requests.request_window_drag || retry_window_requests.request_window_drag;
             window_requests = retry_window_requests;
+            window_requests.request_window_drag = request_window_drag;
             draw_cost += retry_draw_cost;
             layout_diagnostics = retry_layout_diagnostics;
             record_cost += retry_record_cost;
             pending_focus_move_retry = next_focus_move_retry;
             pending_focus_reveal_retry = next_focus_reveal_retry;
+            pending_keyboard_retry = next_keyboard_retry;
         }
         let final_frame_instance_keys =
             TesseraRuntime::with(|runtime| runtime.component_tree.live_instance_keys());
@@ -1527,7 +1543,15 @@ Fps: {:.2}
         args.cursor_state.frame_cleanup();
 
         let runtime_pending_work = RuntimePendingWork {
-            invalidation_pending: has_pending_build_invalidations(),
+            invalidation_pending: has_pending_build_invalidations()
+                || pending_keyboard_retry
+                || TesseraRuntime::with(|runtime| {
+                    runtime
+                        .component_tree
+                        .focus_owner()
+                        .has_pending_navigation()
+                }),
+            layout_pending: has_pending_layout_invalidations(),
             frame_receiver_pending: has_pending_frame_nanos_receivers(),
         };
 
@@ -1734,9 +1758,7 @@ impl<F: Fn()> Renderer<F> {
         let Some(size) = size else {
             return;
         };
-        if let Some(app) = self.app.as_mut() {
-            app.resize(size);
-        }
+        self.handle_resized(size);
     }
 
     fn handle_resized(&mut self, size: winit::dpi::PhysicalSize<u32>) {
@@ -1754,6 +1776,12 @@ impl<F: Fn()> Renderer<F> {
             }
         };
         let window = app.window_arc();
+        #[cfg(target_family = "wasm")]
+        let size = if size.width > 0 && size.height > 0 {
+            web_canvas_physical_size(&window).unwrap_or(size)
+        } else {
+            size
+        };
 
         if size.width == 0 || size.height == 0 {
             TesseraRuntime::with_mut(|rt| {
@@ -1784,6 +1812,7 @@ impl<F: Fn()> Renderer<F> {
             pointer_id: MOUSE_POINTER_ID,
             content: CursorEventContent::Moved(px_position),
             gesture_state: GestureState::TapCandidate,
+            sampled_position: Default::default(),
             consumed: false,
         });
         debug!("Cursor moved to: {}, {}", position.x, position.y);
@@ -1820,6 +1849,10 @@ impl<F: Fn()> Renderer<F> {
                 metadatas,
                 root_node_id,
                 Some(window_label),
+                runtime
+                    .component_tree
+                    .focus_owner()
+                    .active_component_node_id(),
             )
         })
     }
@@ -1872,6 +1905,7 @@ impl<F: Fn()> Renderer<F> {
             pointer_id: MOUSE_POINTER_ID,
             content: event_content,
             gesture_state: GestureState::TapCandidate,
+            sampled_position: Default::default(),
             consumed: false,
         };
         self.cursor_state.push_event(event);
@@ -1888,6 +1922,7 @@ impl<F: Fn()> Renderer<F> {
             pointer_id: MOUSE_POINTER_ID,
             content: event_content,
             gesture_state: GestureState::Dragged,
+            sampled_position: Default::default(),
             consumed: false,
         };
         self.cursor_state.push_event(event);
@@ -2020,19 +2055,56 @@ impl<F: Fn()> Renderer<F> {
     }
 }
 
-/// Implementation of winit's `ApplicationHandler` trait for the Tessera
-/// renderer.
-///
-/// This implementation handles the application lifecycle events from winit,
-/// including window creation, suspension/resumption, and various window events.
-/// It bridges the gap between winit's event system and Tessera's
-/// component-based UI framework.
-/// Picks the window size to apply once the render core is installed.
-///
-/// Resize events can arrive while the core is still being created, because the
-/// web event loop builds it asynchronously. The size recorded during that
-/// window is preferred unless it is empty, in which case the live window size
-/// wins.
+#[cfg(target_family = "wasm")]
+fn web_canvas_physical_size(window: &Window) -> Option<winit::dpi::PhysicalSize<u32>> {
+    use winit::platform::web::WindowExtWebSys;
+
+    let canvas = window.canvas()?;
+    let style = web_sys::window()?.get_computed_style(&canvas).ok()??;
+    let pixels = |property: &str| -> Option<f64> {
+        style
+            .get_property_value(property)
+            .ok()?
+            .strip_suffix("px")?
+            .parse()
+            .ok()
+    };
+    let mut width = pixels("width")?;
+    let mut height = pixels("height")?;
+    if style.get_property_value("box-sizing").ok()? == "border-box" {
+        width -= pixels("padding-left")?
+            + pixels("padding-right")?
+            + pixels("border-left-width")?
+            + pixels("border-right-width")?;
+        height -= pixels("padding-top")?
+            + pixels("padding-bottom")?
+            + pixels("border-top-width")?
+            + pixels("border-bottom-width")?;
+    }
+    // Device-pixel content boxes can disagree with emulated DPI. Use the same
+    // density as pointer coordinates so the canvas and input stay aligned.
+    canvas_physical_size([width, height], window.scale_factor())
+}
+
+#[cfg(any(target_family = "wasm", test))]
+fn canvas_physical_size(logical: [f64; 2], density: f64) -> Option<winit::dpi::PhysicalSize<u32>> {
+    if !density.is_finite() || density <= 0.0 {
+        return None;
+    }
+    let physical = logical.map(|size| size * density);
+    if physical
+        .iter()
+        .any(|size| !size.is_finite() || *size <= 0.0 || *size > u32::MAX as f64)
+    {
+        return None;
+    }
+    Some(winit::dpi::PhysicalSize::new(
+        physical[0].round().max(1.0) as u32,
+        physical[1].round().max(1.0) as u32,
+    ))
+}
+
+// Resize events may arrive before the asynchronous web render core is ready.
 fn resolve_startup_window_size(
     pending: Option<winit::dpi::PhysicalSize<u32>>,
     live: Option<winit::dpi::PhysicalSize<u32>>,
@@ -2047,6 +2119,7 @@ fn resolve_startup_window_size(
     }
 }
 
+/// Handle application lifecycle and window events.
 impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
     /// Called when the application is resumed or started.
     ///
@@ -2311,6 +2384,10 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
             }
             WindowEvent::ScaleFactorChanged { scale_factor, .. } => {
                 set_scale_factor(scale_factor);
+                #[cfg(target_family = "wasm")]
+                if let Some(size) = self.app.as_ref().map(|app| app.window().inner_size()) {
+                    self.handle_resized(size);
+                }
                 if let Some(app) = self.app.as_ref() {
                     self.update_native_window_shape(app.window());
                 }
@@ -2427,8 +2504,30 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
 
 #[cfg(test)]
 mod tests {
-    use super::{RendererImeBridgeState, RendererImeBridgeUpdate, resolve_startup_window_size};
     use winit::dpi::PhysicalSize;
+
+    use super::{
+        RendererImeBridgeState, RendererImeBridgeUpdate, canvas_physical_size,
+        resolve_startup_window_size,
+    };
+
+    #[test]
+    fn web_canvas_size_tracks_css_density_and_fractional_dimensions() {
+        assert_eq!(
+            canvas_physical_size([390.0, 780.0], 1.0000000298023224),
+            Some(PhysicalSize::new(390, 780))
+        );
+        assert_eq!(
+            canvas_physical_size([877.333374, 871.333374], 1.5),
+            Some(PhysicalSize::new(1316, 1307))
+        );
+        assert_eq!(
+            canvas_physical_size([390.0, 780.0], 2.0),
+            Some(PhysicalSize::new(780, 1560))
+        );
+        assert_eq!(canvas_physical_size([0.0, 780.0], 1.0), None);
+        assert_eq!(canvas_physical_size([390.0, 780.0], f64::NAN), None);
+    }
 
     #[test]
     fn startup_window_size_prefers_recorded_size_over_live_size() {

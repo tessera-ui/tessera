@@ -1,4 +1,8 @@
 //! Layout policies and measurement.
+//!
+//! ## Usage
+//!
+//! Measure and align content while reserving independent interaction bounds.
 
 use std::{
     any::{Any, TypeId},
@@ -11,7 +15,7 @@ use crate::{
     RenderSlot,
     component_tree::{
         ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, LayoutContext,
-        measure_node,
+        LayoutDiagnosticsCollector, LayoutSnapshotMap, measure_node,
     },
     modifier::{
         DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutModifierNode, Modifier,
@@ -44,6 +48,7 @@ pub struct LayoutInput<'a> {
     layout_ctx: Option<&'a LayoutContext<'a>>,
     measured_children: HashMap<crate::NodeId, ChildMeasure>,
     probes: HashMap<crate::NodeId, ChildProbe>,
+    intrinsic_dependencies: bool,
 }
 
 /// A direct child layout node available during a measure pass.
@@ -93,6 +98,46 @@ impl LayoutChild {
         constraint: &Constraint,
     ) -> Result<MeasuredChild, MeasurementError> {
         scope.measure_child(self.index, constraint, false)
+    }
+
+    /// Probes natural content dimensions without publishing layout or
+    /// placements.
+    ///
+    /// Minimum interactive-size padding is excluded. Other layout constraints
+    /// and content padding still apply. Use this to choose shared visual
+    /// dimensions before measuring the children normally for interaction.
+    /// Results and metadata are isolated from the normal layout cache.
+    pub fn probe_intrinsic(
+        &self,
+        scope: &mut MeasureScope<'_>,
+        constraint: &Constraint,
+    ) -> Result<MeasuredChild, MeasurementError> {
+        *scope.intrinsic_dependencies = true;
+        if scope.is_intrinsic() {
+            return scope.measure_child(self.index, constraint, false);
+        }
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let mut snapshots = LayoutSnapshotMap::default();
+        let mut diagnostics = LayoutDiagnosticsCollector::default();
+        let empty = Default::default();
+        let context = LayoutContext::intrinsic_probe(
+            &mut snapshots,
+            &empty,
+            &mut diagnostics,
+            scope.layout_ctx,
+        );
+        let size = measure_node(
+            self.node_id,
+            constraint,
+            scope.tree,
+            &mut metadatas,
+            Some(&context),
+        )?;
+        Ok(MeasuredChild {
+            instance_key: self.instance_key,
+            width: size.width,
+            height: size.height,
+        })
     }
 
     /// Reads a typed parent-data payload from this direct child layout node.
@@ -183,6 +228,7 @@ pub struct MeasureScope<'a> {
     layout_ctx: Option<&'a LayoutContext<'a>>,
     measured_children: &'a mut HashMap<crate::NodeId, ChildMeasure>,
     probes: &'a mut HashMap<crate::NodeId, ChildProbe>,
+    intrinsic_dependencies: &'a mut bool,
     parent_constraint: ParentConstraint<'a>,
     children_ids: &'a [crate::NodeId],
 }
@@ -194,6 +240,7 @@ impl<'a> MeasureScope<'a> {
         layout_ctx: Option<&'a LayoutContext<'a>>,
         measured_children: &'a mut HashMap<crate::NodeId, ChildMeasure>,
         probes: &'a mut HashMap<crate::NodeId, ChildProbe>,
+        intrinsic_dependencies: &'a mut bool,
         parent_constraint: ParentConstraint<'a>,
         children_ids: &'a [crate::NodeId],
     ) -> Self {
@@ -203,6 +250,7 @@ impl<'a> MeasureScope<'a> {
             layout_ctx,
             measured_children,
             probes,
+            intrinsic_dependencies,
             parent_constraint,
             children_ids,
         }
@@ -211,6 +259,11 @@ impl<'a> MeasureScope<'a> {
     /// Returns the inherited constraint.
     pub const fn parent_constraint(&self) -> ParentConstraint<'a> {
         self.parent_constraint
+    }
+
+    /// Returns whether this pass is probing natural content dimensions.
+    pub fn is_intrinsic(&self) -> bool {
+        self.layout_ctx.is_some_and(|context| context.intrinsic)
     }
 
     /// Returns copyable child identities. Measurement borrows this scope by
@@ -397,6 +450,7 @@ impl<'a> LayoutInput<'a> {
             layout_ctx,
             measured_children: HashMap::new(),
             probes: HashMap::new(),
+            intrinsic_dependencies: false,
         }
     }
 
@@ -405,8 +459,17 @@ impl<'a> LayoutInput<'a> {
         self.parent_constraint
     }
 
+    /// Returns whether minimum interactive-size padding should be excluded.
+    pub fn is_intrinsic(&self) -> bool {
+        self.layout_ctx.is_some_and(|context| context.intrinsic)
+    }
+
     pub(crate) fn take_measured_children(&mut self) -> HashMap<crate::NodeId, ChildMeasure> {
         std::mem::take(&mut self.measured_children)
+    }
+
+    pub(crate) fn has_intrinsic_dependencies(&self) -> bool {
+        self.intrinsic_dependencies
     }
 
     pub(crate) fn extend_measured_children(
@@ -438,6 +501,7 @@ impl<'a> LayoutInput<'a> {
             self.layout_ctx,
             &mut self.measured_children,
             &mut self.probes,
+            &mut self.intrinsic_dependencies,
             self.parent_constraint,
             self.children_ids,
         )
@@ -649,6 +713,26 @@ impl RenderMetadataMut<'_> {
     /// Enables or disables child clipping for the current node.
     pub fn set_clips_children(&mut self, clips_children: bool) {
         self.metadata.clips_children = clips_children;
+    }
+
+    /// Clips the node and its descendants to a shape within its bounds.
+    pub fn set_clip_shape(&mut self, shape: crate::ClipShape) {
+        self.metadata.clips_children = true;
+        let size = self
+            .metadata
+            .computed_data
+            .expect("shape clipping requires measured bounds");
+        self.metadata.clip_region = Some(crate::ClipRegion {
+            position: crate::PxPosition::ZERO,
+            size: [size.width.to_f32(), size.height.to_f32()],
+            shape,
+        });
+    }
+
+    /// Clips content to a fractional shape relative to this node's origin.
+    pub fn set_clip_region(&mut self, region: crate::ClipRegion) {
+        self.metadata.clips_children = true;
+        self.metadata.clip_region = Some(region);
     }
 
     /// Multiplies the current node opacity by the provided factor.

@@ -33,6 +33,10 @@ pub struct SemanticsArgs {
     pub focused: bool,
     /// Optional toggled state.
     pub toggled: Option<Toggled>,
+    /// Whether a disclosure control is expanded.
+    pub expanded: Option<bool>,
+    /// Kind of popup opened by this control.
+    pub has_popup: Option<tessera_ui::accesskit::HasPopup>,
     /// Whether the node is disabled.
     pub disabled: bool,
     /// Whether the node is hidden from accessibility.
@@ -100,6 +104,8 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
             focusable,
             focused,
             toggled,
+            expanded,
+            has_popup,
             disabled,
             hidden,
             actions,
@@ -129,6 +135,8 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
         accessibility.focusable = *focusable;
         accessibility.focused = *focused;
         accessibility.toggled = *toggled;
+        accessibility.expanded = *expanded;
+        accessibility.has_popup = *has_popup;
         accessibility.disabled = *disabled;
         accessibility.hidden = *hidden;
         accessibility.actions = actions.clone();

@@ -127,13 +127,22 @@ impl RenderPassGraph {
                 Command::Composite(_) => {
                     panic!("Composite commands must be expanded before render pass planning");
                 }
-                Command::ClipPush(rect) => {
+                Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => {
                     flush_compute_pass(&mut passes, &mut compute_builder);
-                    draw_builder.push_clip(ClipOps::Push(rect));
-                }
-                Command::ClipPop => {
-                    flush_compute_pass(&mut passes, &mut compute_builder);
-                    draw_builder.push_clip(ClipOps::Pop);
+                    if draw_builder
+                        .write_resource
+                        .is_some_and(|resource| resource != RenderResourceId::SceneColor)
+                    {
+                        flush_draw_pass(&mut passes, &mut draw_builder);
+                    }
+                    draw_builder.write_resource = Some(RenderResourceId::SceneColor);
+                    let clip = match command {
+                        Command::ClipPush(rect) => ClipOps::Push(rect),
+                        Command::ShapeClipPush(region) => ClipOps::ShapePush { region, index: 0 },
+                        Command::ClipPop => ClipOps::Pop,
+                        _ => unreachable!(),
+                    };
+                    draw_builder.push_clip(clip);
                 }
             }
         }
@@ -289,6 +298,10 @@ pub(crate) enum DrawOrClip {
 /// Clip stack operations for a render pass.
 pub(crate) enum ClipOps {
     Push(PxRect),
+    ShapePush {
+        region: crate::ClipRegion,
+        index: u32,
+    },
     Pop,
 }
 
@@ -342,33 +355,34 @@ fn compute_padded_rect(
     left: Px,
     texture_size: wgpu::Extent3d,
 ) -> PxRect {
-    let padded_x = (start_pos.x_px() - left).max(Px(0));
-    let padded_y = (start_pos.y_px() - top).max(Px(0));
-    let padded_width = (size.width + left + right).min(Px(texture_size.width as i32 - padded_x.0));
-    let padded_height =
-        (size.height + top + bottom).min(Px(texture_size.height as i32 - padded_y.0));
-    PxRect {
-        x: padded_x,
-        y: padded_y,
-        width: padded_width,
-        height: padded_height,
-    }
+    let x = (start_pos.x - left.to_f32())
+        .floor()
+        .clamp(0.0, texture_size.width as f32);
+    let y = (start_pos.y - top.to_f32())
+        .floor()
+        .clamp(0.0, texture_size.height as f32);
+    let end_x = (start_pos.x + size.width.to_f32() + right.to_f32())
+        .ceil()
+        .clamp(0.0, texture_size.width as f32);
+    let end_y = (start_pos.y + size.height.to_f32() + bottom.to_f32())
+        .ceil()
+        .clamp(0.0, texture_size.height as f32);
+    PxRect::new(
+        Px(x as i32),
+        Px(y as i32),
+        Px((end_x - x).max(0.0) as i32),
+        Px((end_y - y).max(0.0) as i32),
+    )
 }
 
-fn clamp_rect_to_texture(mut rect: PxRect, texture_size: wgpu::Extent3d) -> PxRect {
-    rect.x = rect.x.positive().min(texture_size.width).into();
-    rect.y = rect.y.positive().min(texture_size.height).into();
-    rect.width = rect
-        .width
-        .positive()
-        .min(texture_size.width - rect.x.positive())
-        .into();
-    rect.height = rect
-        .height
-        .positive()
-        .min(texture_size.height - rect.y.positive())
-        .into();
-    rect
+fn clamp_rect_to_texture(rect: PxRect, texture_size: wgpu::Extent3d) -> PxRect {
+    rect.intersection(&PxRect::new(
+        Px::ZERO,
+        Px::ZERO,
+        Px(texture_size.width as i32),
+        Px(texture_size.height as i32),
+    ))
+    .unwrap_or(PxRect::ZERO)
 }
 
 fn extract_sampling_rect(
@@ -429,15 +443,157 @@ fn extract_target_rect(
     start_pos: PxPosition,
     texture_size: wgpu::Extent3d,
 ) -> PxRect {
-    let x = start_pos.x_px().positive().min(texture_size.width);
-    let y = start_pos.y_px().positive().min(texture_size.height);
-    let width = size.width.positive().min(texture_size.width - x);
-    let height = size.height.positive().min(texture_size.height - y);
-    PxRect {
-        x: Px::from(x),
-        y: Px::from(y),
-        width: Px::from(width),
-        height: Px::from(height),
+    compute_padded_rect(
+        size,
+        start_pos,
+        Px::ZERO,
+        Px::ZERO,
+        Px::ZERO,
+        Px::ZERO,
+        texture_size,
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[derive(Clone)]
+    struct ProbeDraw(bool);
+
+    impl DrawCommand for ProbeDraw {
+        fn sample_region(&self) -> Option<SampleRegion> {
+            self.0
+                .then_some(SampleRegion::PaddedLocal(crate::PaddingRect::ZERO))
+        }
+        fn apply_opacity(&mut self, _: f32) {}
+    }
+
+    fn op(command: Command, sequence_index: usize, x: i32) -> RenderGraphOp {
+        RenderGraphOp {
+            command,
+            type_id: std::any::TypeId::of::<ProbeDraw>(),
+            read: None,
+            write: Some(RenderResourceId::SceneColor),
+            deps: SmallVec::new(),
+            size: PxSize::new(Px(10), Px(10)),
+            position: PxPosition::new(Px(x), Px(0)),
+            opacity: 1.0,
+            sequence_index,
+        }
+    }
+
+    #[test]
+    fn clip_state_preserves_sampled_draw_batching() {
+        let target = wgpu::Extent3d {
+            width: 100,
+            height: 100,
+            depth_or_array_layers: 1,
+        };
+        let ops = vec![
+            op(Command::Draw(Box::new(ProbeDraw(true))), 0, 0),
+            op(
+                Command::ClipPush(PxRect::new(Px(0), Px(0), Px(100), Px(100))),
+                1,
+                0,
+            ),
+            op(Command::ClipPop, 2, 0),
+            op(Command::Draw(Box::new(ProbeDraw(true))), 3, 50),
+        ];
+        let passes = RenderPassGraph::build(ops, &[], &[], target).into_passes();
+        assert_eq!(
+            passes.len(),
+            1,
+            "clip state must not split nonoverlapping scene samples"
+        );
+        assert_eq!(passes[0].draws.len(), 4);
+    }
+
+    #[test]
+    fn clip_state_after_local_work_targets_the_scene() {
+        let target = wgpu::Extent3d {
+            width: 100,
+            height: 100,
+            depth_or_array_layers: 1,
+        };
+        let mut local = op(Command::Draw(Box::new(ProbeDraw(false))), 0, 0);
+        local.write = Some(RenderResourceId::Local(0));
+        let passes = RenderPassGraph::build(
+            vec![
+                local,
+                op(
+                    Command::ClipPush(PxRect::new(Px(0), Px(0), Px(10), Px(10))),
+                    1,
+                    0,
+                ),
+                op(Command::ClipPop, 2, 0),
+            ],
+            &[RenderResource::Texture(
+                crate::render_graph::RenderTextureDesc {
+                    size: PxSize::new(Px(10), Px(10)),
+                    format: wgpu::TextureFormat::Rgba8Unorm,
+                },
+            )],
+            &[],
+            target,
+        )
+        .into_passes();
+        assert_eq!(passes.len(), 2);
+        assert_eq!(passes[0].write_resource, RenderResourceId::Local(0));
+        assert_eq!(passes[1].write_resource, RenderResourceId::SceneColor);
+        assert_eq!(passes[1].draws.len(), 2);
+    }
+
+    #[test]
+    fn fractional_draw_and_sample_bounds_round_outwards() {
+        let size = PxSize::new(Px(20), Px(10));
+        let position = PxPosition::from_f32_xy(10.25, 10.75);
+        let target = wgpu::Extent3d {
+            width: 100,
+            height: 100,
+            depth_or_array_layers: 1,
+        };
+        let expected = PxRect::new(Px(10), Px(10), Px(21), Px(11));
+        assert_eq!(
+            extract_draw_rect(
+                DrawRegion::PaddedLocal(crate::PaddingRect::ZERO),
+                size,
+                position,
+                target
+            ),
+            expected
+        );
+        assert_eq!(
+            extract_sampling_rect(
+                Some(SampleRegion::PaddedLocal(crate::PaddingRect::ZERO)),
+                size,
+                position,
+                target
+            ),
+            expected
+        );
+        assert_eq!(extract_target_rect(size, position, target), expected);
+    }
+
+    #[test]
+    fn negative_bounds_do_not_extend_the_opposite_edge() {
+        let target = wgpu::Extent3d {
+            width: 100,
+            height: 100,
+            depth_or_array_layers: 1,
+        };
+        assert_eq!(
+            extract_target_rect(
+                PxSize::new(Px(20), Px(10)),
+                PxPosition::from_f32_xy(-3.25, -2.5),
+                target
+            ),
+            PxRect::new(Px(0), Px(0), Px(17), Px(8))
+        );
+        assert_eq!(
+            clamp_rect_to_texture(PxRect::new(Px(-5), Px(-2), Px(20), Px(10)), target),
+            PxRect::new(Px(0), Px(0), Px(15), Px(8))
+        );
     }
 }
 

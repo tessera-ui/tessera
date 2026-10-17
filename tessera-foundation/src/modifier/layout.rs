@@ -350,6 +350,10 @@ impl LayoutModifierNode for MinimumInteractiveModifierNode {
             input.layout_input.parent_constraint().height(),
         );
         let child_size = child.measure(&parent_constraint)?;
+        if input.layout_input.is_intrinsic() {
+            child.place(PxPosition::ZERO);
+            return Ok(LayoutResult::new(child_size));
+        }
         let min_px: Px = MIN_SIZE.into();
         let width = parent_constraint.width.clamp(child_size.width.max(min_px));
         let height = parent_constraint

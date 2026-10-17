@@ -29,3 +29,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
     // Sample the source texture at the given UV coordinate and return its color.
     return textureSample(t_source, s_source, in.uv);
 }
+
+fn linear_to_srgb(color: vec3<f32>) -> vec3<f32> {
+    return select(
+        1.055 * pow(max(color, vec3<f32>(0.0)), vec3<f32>(1.0 / 2.4)) - 0.055,
+        color * 12.92,
+        color <= vec3<f32>(0.0031308),
+    );
+}
+
+@fragment
+fn fs_main_srgb(in: VertexOutput) -> @location(0) vec4<f32> {
+    let color = textureSample(t_source, s_source, in.uv);
+    // UNORM canvas targets require explicit encoding at presentation only.
+    let alpha = color.a;
+    let straight = color.rgb / max(alpha, 0.000001);
+    return vec4<f32>(linear_to_srgb(straight) * alpha, alpha);
+}

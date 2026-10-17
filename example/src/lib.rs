@@ -19,6 +19,7 @@ use wasm_bindgen::{JsValue, prelude::wasm_bindgen};
 pub fn run() -> EntryPoint {
     EntryPoint::new(app)
         .config(TesseraConfig {
+            sample_count: 4,
             window: WindowConfig {
                 decorations: false,
                 ..Default::default()

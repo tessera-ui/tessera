@@ -45,6 +45,8 @@ fn compute_last_use_passes(passes: &[RenderPassPlan], local_count: usize) -> Vec
 
 struct RenderPassParams<'a, 'b> {
     msaa_view: Option<wgpu::TextureView>,
+    stencil_view: wgpu::TextureView,
+    clipper: &'a mut super::clip::ShapeClipper,
     clear_target: bool,
     encoder: &'a mut wgpu::CommandEncoder,
     write_target: wgpu::TextureView,
@@ -505,6 +507,12 @@ impl RenderCore {
         let build_start = Instant::now();
         let graph = RenderPassGraph::build(ops, &resources, &external_resources, texture_size);
         let mut passes = graph.into_passes();
+        self.pipelines.clipper.prepare(
+            &self.device,
+            &self.queue,
+            &mut passes,
+            [self.config.width as f32, self.config.height as f32],
+        );
         let last_use_passes = compute_last_use_passes(&passes, resources.len());
         let build_passes = build_start.elapsed();
 
@@ -616,7 +624,11 @@ impl RenderCore {
             target: output_view,
             bind_group_layout: &blit.bind_group_layout,
             sampler: &blit.sampler,
-            pipeline: &blit.pipeline,
+            pipeline: if self.surface.is_some() {
+                &blit.present_pipeline
+            } else {
+                &blit.pipeline
+            },
             target_size,
             scissor_rect: None,
         });
@@ -976,8 +988,19 @@ impl RenderCore {
                 }
                 let clear_target = clear_state.should_clear(write_resource);
 
+                let samples = msaa_view
+                    .as_ref()
+                    .map(|view| view.texture().sample_count())
+                    .unwrap_or(1);
+                let stencil_view =
+                    state
+                        .pipelines
+                        .clipper
+                        .stencil(state.device, target_size, samples);
                 render_current_pass(RenderPassParams {
                     msaa_view,
+                    stencil_view,
+                    clipper: &mut state.pipelines.clipper,
                     clear_target,
                     encoder,
                     write_target: write_target.clone(),
@@ -1239,6 +1262,8 @@ fn rects_overlap(a: PxRect, b: PxRect) -> bool {
 fn render_current_pass(params: RenderPassParams<'_, '_>) {
     let RenderPassParams {
         msaa_view,
+        stencil_view,
+        clipper,
         clear_target,
         encoder,
         write_target,
@@ -1269,6 +1294,14 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     let timing = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
     let mut rpass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
         label: Some("Render Pass"),
+        depth_stencil_attachment: Some(wgpu::RenderPassDepthStencilAttachment {
+            view: &stencil_view,
+            depth_ops: None,
+            stencil_ops: Some(wgpu::Operations {
+                load: wgpu::LoadOp::Clear(0),
+                store: wgpu::StoreOp::Discard,
+            }),
+        }),
         color_attachments: &[Some(wgpu::RenderPassColorAttachment {
             view,
             depth_slice: None,
@@ -1289,6 +1322,8 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
         &mut rpass,
         &scene_texture_view,
     );
+
+    clipper.restore(&mut rpass, target_size, apply_clip);
 
     // Prepare buffered submission state
     let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> = Vec::new();
@@ -1334,9 +1369,15 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
                 match clip_ops {
                     ClipOps::Push(rect) => {
                         clip_stack.push(rect);
+                        clipper.push(&mut rpass, target_size, None);
+                    }
+                    ClipOps::ShapePush { region, index } => {
+                        clip_stack.push(region.bounds());
+                        clipper.push(&mut rpass, target_size, Some(index));
                     }
                     ClipOps::Pop => {
                         clip_stack.pop();
+                        clipper.pop(&mut rpass, target_size);
                     }
                 }
                 // continue to next command
@@ -1627,6 +1668,62 @@ fn scene_sampling_rect(commands: &[DrawOrClip], target_size: PxSize) -> Option<P
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(all(feature = "headless", not(target_family = "wasm")))]
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn unorm_presentation_encodes_srgb_without_changing_internal_copies() {
+        let core = pollster::block_on(RenderCore::new_offscreen(
+            winit::dpi::PhysicalSize::new(1, 1),
+            wgpu::TextureFormat::Rgba8Unorm,
+            1,
+        ));
+        for (pipeline, expected) in [
+            (&core.blit.pipeline, 55_u8),
+            (&core.blit.present_pipeline, 128),
+        ] {
+            let mut encoder = core.device.create_command_encoder(&Default::default());
+            {
+                let _pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                    color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                        view: &core.targets.offscreen,
+                        resolve_target: None,
+                        depth_slice: None,
+                        ops: wgpu::Operations {
+                            load: wgpu::LoadOp::Clear(wgpu::Color {
+                                r: 0.21404114,
+                                g: 0.21404114,
+                                b: 0.21404114,
+                                a: 1.0,
+                            }),
+                            store: wgpu::StoreOp::Store,
+                        },
+                    })],
+                    ..Default::default()
+                });
+            }
+            RenderCore::blit_to_view(BlitParams {
+                encoder: &mut encoder,
+                device: &core.device,
+                source: &core.targets.offscreen,
+                target: &core.targets.offscreen_copy,
+                bind_group_layout: &core.blit.bind_group_layout,
+                sampler: &core.blit.sampler,
+                pipeline,
+                target_size: PxSize::new(Px(1), Px(1)),
+                scissor_rect: None,
+            });
+            core.queue.submit(Some(encoder.finish()));
+            let pixels = core.read_offscreen_rgba().expect("GPU pixels");
+            for channel in &pixels[..3] {
+                assert!(
+                    channel.abs_diff(expected) <= 1,
+                    "{pixels:?}, expected {expected}"
+                );
+            }
+            assert_eq!(pixels[3], 255);
+        }
+    }
 
     #[derive(Clone)]
     struct SampleCommand(Option<SampleRegion>);

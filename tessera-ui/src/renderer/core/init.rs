@@ -287,8 +287,8 @@ impl RenderCore {
                     usage: wgpu::TextureUsages::RENDER_ATTACHMENT,
                     format: caps.formats[0],
                     color_space: wgpu::SurfaceColorSpace::Auto,
-                    width: size.width,
-                    height: size.height,
+                    width: size.width.max(1),
+                    height: size.height.max(1),
                     present_mode,
                     alpha_mode,
                     view_formats: vec![],
@@ -371,48 +371,44 @@ impl RenderCore {
             immediate_size: 0,
         });
 
-        let blit_pipeline = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Blit Pipeline"),
-            layout: Some(&blit_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &blit_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
+        let create_blit_pipeline = |label, format, entry_point| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some(label),
+                layout: Some(&blit_pipeline_layout),
+                vertex: wgpu::VertexState {
+                    module: &blit_shader,
+                    entry_point: Some("vs_main"),
+                    buffers: &[],
+                    compilation_options: Default::default(),
+                },
+                fragment: Some(wgpu::FragmentState {
+                    module: &blit_shader,
+                    entry_point: Some(entry_point),
+                    targets: &[Some(wgpu::ColorTargetState::from(format))],
+                    compilation_options: Default::default(),
+                }),
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                multiview_mask: None,
+                cache: pipeline_cache.as_ref(),
+            })
+        };
+        let blit_pipeline = create_blit_pipeline("Blit Pipeline", config.format, "fs_main");
+        let blit_pipeline_rgba = create_blit_pipeline(
+            "Blit Pipeline Rgba8",
+            wgpu::TextureFormat::Rgba8Unorm,
+            "fs_main",
+        );
+        let present_pipeline = create_blit_pipeline(
+            "Present Pipeline",
+            config.format,
+            if config.format.is_srgb() {
+                "fs_main"
+            } else {
+                "fs_main_srgb"
             },
-            fragment: Some(wgpu::FragmentState {
-                module: &blit_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(config.format.into())],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: pipeline_cache.as_ref(),
-        });
-        let blit_pipeline_rgba = device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
-            label: Some("Blit Pipeline Rgba8"),
-            layout: Some(&blit_pipeline_layout),
-            vertex: wgpu::VertexState {
-                module: &blit_shader,
-                entry_point: Some("vs_main"),
-                buffers: &[],
-                compilation_options: Default::default(),
-            },
-            fragment: Some(wgpu::FragmentState {
-                module: &blit_shader,
-                entry_point: Some("fs_main"),
-                targets: &[Some(wgpu::TextureFormat::Rgba8Unorm.into())],
-                compilation_options: Default::default(),
-            }),
-            primitive: wgpu::PrimitiveState::default(),
-            depth_stencil: None,
-            multisample: wgpu::MultisampleState::default(),
-            multiview_mask: None,
-            cache: pipeline_cache.as_ref(),
-        });
+        );
         #[cfg(feature = "debug-dirty-overlay")]
         let dirty_overlay_shader =
             device.create_shader_module(wgpu::include_wgsl!("../shaders/dirty_overlay.wgsl"));
@@ -463,6 +459,7 @@ impl RenderCore {
             });
 
         let pipelines = RenderPipelines {
+            clipper: super::clip::ShapeClipper::new(&device, config.format, sample_count),
             drawer,
             compute_registry: ComputePipelineRegistry::new(),
             composite_registry: CompositePipelineRegistry::new(),
@@ -485,6 +482,7 @@ impl RenderCore {
 
         let blit = BlitState {
             pipeline: blit_pipeline,
+            present_pipeline,
             pipeline_rgba: blit_pipeline_rgba,
             bind_group_layout: blit_bind_group_layout,
             sampler: blit_sampler,
@@ -644,6 +642,7 @@ impl RenderCore {
 
     pub(crate) fn rebuild_pass_targets(&mut self) {
         self.local_textures.clear();
+        self.pipelines.clipper.reset_targets();
         self.targets.offscreen.texture().destroy();
         self.targets.offscreen_copy.texture().destroy();
         self.targets.scene_sample.texture().destroy();

@@ -36,7 +36,7 @@ material-color-utilities = "1.0.0-dev.18"
 tessera-build = { path = "../tessera-build" }
 
 [dev-dependencies]
-tessera-ui = { path = "../tessera-ui", features = ["testing"] }
+tessera-ui = { path = "../tessera-ui", features = ["testing", "headless"] }
 
 [target.'cfg(target_os = "android")'.dependencies]
 include-bytes-zstd = "0.1.0"

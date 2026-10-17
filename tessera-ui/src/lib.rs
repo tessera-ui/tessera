@@ -284,6 +284,7 @@ pub mod accessibility;
 pub mod android;
 pub mod asset;
 mod build_tree;
+pub mod clip;
 pub mod color;
 mod component_tree;
 pub mod context;
@@ -327,6 +328,7 @@ pub use winit;
 pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
     asset::AssetExt,
+    clip::{ClipRegion, ClipShape, ui_stencil_state},
     color::Color,
     component_tree::{
         AxisConstraint, ComponentTree, ComputedData, Constraint, ImeInput, ImeInputHandlerFn,

@@ -58,6 +58,9 @@ pub trait ModifierExt {
     /// Clips descendants to this modifier's bounds.
     fn clip_to_bounds(self) -> Modifier;
 
+    /// Clips this node and its descendants to a shape without resizing content.
+    fn clip_shape(self, shape: Shape) -> Modifier;
+
     /// Makes this node a vertical scroll viewport driven by `controller`.
     fn vertical_scroll(self, controller: State<ScrollableController>) -> Modifier;
 
@@ -214,6 +217,10 @@ impl ModifierExt for Modifier {
 
     fn clip_to_bounds(self) -> Modifier {
         self.push_draw(ClipModifierNode)
+    }
+
+    fn clip_shape(self, shape: Shape) -> Modifier {
+        self.push_draw(visual::ShapeClipModifierNode { shape })
     }
 
     fn vertical_scroll(self, controller: State<ScrollableController>) -> Modifier {

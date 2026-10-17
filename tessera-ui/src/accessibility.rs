@@ -21,9 +21,8 @@ pub(crate) use tree_builder::{build_tree_update, dispatch_action};
 
 /// A stable identifier for accessibility nodes.
 ///
-/// This ID is generated based on the component's position in the tree and
-/// optional user-provided keys. It remains stable across frames as long as the
-/// UI structure doesn't change.
+/// Published nodes use their stable component instance identity, preserving
+/// focus and action targets across value updates and local rebuilds.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub struct AccessibilityId(pub u64);
 
@@ -43,22 +42,10 @@ impl AccessibilityId {
         Self(id.0)
     }
 
-    /// Generates a stable ID from an indextree NodeId.
+    /// Converts an arena node index into a frame-local identifier.
     ///
-    /// indextree uses an arena-based implementation where NodeIds contain:
-    /// - A 1-based index into the arena
-    /// - A stamp for detecting node reuse
-    ///
-    /// In Tessera's immediate-mode model, the component tree is cleared and
-    /// rebuilt each frame, so there's no node reuse within a frame. This
-    /// makes the index stable for the current tree state, which is exactly
-    /// what AccessKit requires (IDs only need to be stable within the current
-    /// tree).
-    ///
-    /// # Stability Guarantee
-    ///
-    /// The ID is stable within a single frame as long as the UI structure
-    /// doesn't change. This matches AccessKit's requirement perfectly.
+    /// This conversion does not preserve identity across tree rebuilds. Use
+    /// identifiers from the published accessibility tree for action requests.
     pub fn from_component_node_id(node_id: indextree::NodeId) -> Self {
         // NodeId implements Into<usize>, giving us the 1-based index
         let index: usize = node_id.into();
@@ -117,6 +104,10 @@ pub struct AccessibilityNode {
     pub focused: bool,
     /// Toggled/checked state (for checkboxes, switches, radio buttons)
     pub toggled: Option<Toggled>,
+    /// Whether a disclosure control is expanded.
+    pub expanded: Option<bool>,
+    /// Kind of popup opened by this control.
+    pub has_popup: Option<accesskit::HasPopup>,
     /// Whether this node is disabled
     pub disabled: bool,
     /// Whether this node is hidden from accessibility
@@ -135,7 +126,8 @@ pub struct AccessibilityNode {
     pub state_description: Option<String>,
     /// Optional custom role description for custom controls.
     pub role_description: Option<String>,
-    /// Optional tooltip text exposed as a name override.
+    /// Optional contextual help, inherited as a description by focusable
+    /// descendants that do not supply their own description.
     pub tooltip: Option<String>,
     /// Live region politeness.
     pub live: Option<accesskit::Live>,
@@ -244,7 +236,7 @@ impl AccessibilityNode {
         self
     }
 
-    /// Sets a custom accessibility key for stable ID generation.
+    /// Sets an application-defined semantic key for snapshots and inspection.
     pub fn with_key(mut self, key: impl Into<String>) -> Self {
         self.key = Some(key.into());
         self
@@ -264,6 +256,8 @@ impl Default for AccessibilityNode {
             focusable: false,
             focused: false,
             toggled: None,
+            expanded: None,
+            has_popup: None,
             disabled: false,
             hidden: false,
             actions: Vec::new(),

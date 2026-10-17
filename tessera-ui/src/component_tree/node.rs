@@ -137,6 +137,9 @@ pub(crate) struct ComponentNodeMetaData {
     pub(crate) fragment: RenderFragment,
     /// Whether this node clips its children.
     pub clips_children: bool,
+    /// Optional shape used to clip the node and its descendants.
+    pub clip_region: Option<crate::ClipRegion>,
+    pub(crate) has_shape_clipping: bool,
     /// Opacity multiplier applied to this node and its descendants.
     pub opacity: f32,
     /// Accessibility information for this node.
@@ -158,6 +161,8 @@ impl ComponentNodeMetaData {
             event_clip_rect: None,
             fragment: RenderFragment::default(),
             clips_children: false,
+            clip_region: None,
+            has_shape_clipping: false,
             opacity: 1.0,
             accessibility: None,
             accessibility_action_handler: None,
@@ -214,6 +219,8 @@ fn reset_frame_metadata(node_id: NodeId, component_node_metadatas: &mut Componen
     metadata.event_clip_rect = None;
     metadata.fragment = RenderFragment::default();
     metadata.clips_children = false;
+    metadata.clip_region = None;
+    metadata.has_shape_clipping = false;
     metadata.opacity = 1.0;
 }
 
@@ -329,7 +336,7 @@ pub struct PointerInput<'a> {
     pub cursor_position_rel: Option<PxPosition>,
     /// Absolute cursor position in window coordinates.
     pub(crate) cursor_position_abs: &'a mut Option<PxPosition>,
-    /// Pointer changes from the event loop, if any.
+    /// The current pointer sample, or an empty list during hover updates.
     pub pointer_changes: &'a mut Vec<PointerChange>,
     /// The current state of the keyboard modifiers at the time of the event.
     pub key_modifiers: winit::keyboard::ModifiersState,
@@ -363,7 +370,7 @@ impl PointerInput<'_> {
     /// Blocks pointer input to other components.
     ///
     /// Scroll events are never consumed, so the cursor is only hidden from
-    /// ancestors when this frame also carries non-scroll pointer changes.
+    /// ancestors when this dispatch carries non-scroll pointer changes.
     /// This keeps wheel events reaching ancestor scroll containers.
     pub fn block_cursor(&mut self) {
         let blocks_non_scroll = self.pointer_changes.iter().any(|change| {
@@ -639,6 +646,7 @@ struct MeasuredNodeLayout {
     size: ComputedData,
     placements: Vec<(u64, PxPosition)>,
     measured_children: HashMap<NodeId, crate::layout::ChildMeasure>,
+    intrinsic_dependencies: bool,
 }
 
 struct MeasureLayoutContext<'a, 'ctx> {
@@ -666,6 +674,7 @@ fn measure_base_layout(
     Ok(MeasuredNodeLayout {
         size: layout_result.size,
         placements: layout_result.placements,
+        intrinsic_dependencies: input.has_intrinsic_dependencies(),
         measured_children: input.take_measured_children(),
     })
 }
@@ -735,6 +744,11 @@ fn measure_with_layout_modifiers(
     Ok(MeasuredNodeLayout {
         size,
         placements: child.placements,
+        intrinsic_dependencies: input.has_intrinsic_dependencies()
+            || child
+                .last
+                .as_ref()
+                .is_some_and(|measured| measured.intrinsic_dependencies),
         measured_children: input.take_measured_children(),
     })
 }
@@ -846,6 +860,7 @@ pub(crate) fn measure_node(
             let has_all_child_sizes = entry.child_sizes.len() == children.len();
             let can_try_reuse = same_constraint
                 && !node_self_measure_dirty
+                && (!node_effective_dirty || !entry.intrinsic_dependencies)
                 && has_all_child_constraints
                 && (!node_effective_dirty || has_all_child_sizes);
             if can_try_reuse {
@@ -977,6 +992,7 @@ pub(crate) fn measure_node(
                                         },
                                         child_constraints: cached_child_constraints,
                                         child_sizes: cached_child_sizes,
+                                        intrinsic_dependencies: entry.intrinsic_dependencies,
                                     },
                                 );
                             }
@@ -1052,6 +1068,7 @@ pub(crate) fn measure_node(
                     layout_result,
                     child_constraints,
                     child_sizes,
+                    intrinsic_dependencies: measured.intrinsic_dependencies,
                 },
             );
             layout_ctx.inc_cache_store_count();

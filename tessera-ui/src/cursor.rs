@@ -1,9 +1,9 @@
-//! # Cursor management
+//! Cursor and touch input queues.
 //!
-//! This module provides comprehensive cursor and touch event handling for the
-//! Tessera UI framework. It manages cursor position tracking, event queuing,
-//! touch gesture recognition, and scroll event generation for smooth user
-//! interactions.
+//! ## Usage
+//!
+//! Track pointer positions and preserve ordered mouse, touch, and scroll
+//! events.
 
 use std::collections::{HashMap, VecDeque};
 
@@ -25,6 +25,7 @@ const KEEP_EVENTS_COUNT: usize = 128;
 /// determine when to trigger scrolling.
 #[derive(Debug, Clone)]
 struct TouchPointState {
+    pointer_id: PointerId,
     /// The last recorded position of this touch point.
     last_position: PxPosition,
     /// Initial position used for cumulative touch slop.
@@ -70,9 +71,11 @@ impl Default for TouchScrollConfig {
 /// change queuing, and multi-touch support for touch gestures.
 #[derive(Default)]
 pub struct CursorState {
+    next_touch_pointer_id: PointerId,
     /// Current cursor position, if any cursor is active.
     position: Option<PxPosition>,
-    /// Bounded queue of pointer changes awaiting processing.
+    pointer_positions: HashMap<PointerId, Option<PxPosition>>,
+    /// Pointer changes awaiting dispatch.
     events: VecDeque<PointerChange>,
     /// Active touch points mapped by their unique touch IDs.
     touch_points: HashMap<u64, TouchPointState>,
@@ -86,20 +89,36 @@ impl CursorState {
     /// Cleans up the cursor state at the end of a frame.
     pub(crate) fn frame_cleanup(&mut self) {
         if self.clear_position_on_next_frame {
-            self.update_position(None);
+            self.position = None;
             self.clear_position_on_next_frame = false;
         }
     }
 
     /// Adds a pointer change to the processing queue.
     ///
-    /// Motion samples are compacted above a soft queue limit. Scroll deltas
-    /// and gesture boundaries are retained even during a long frame.
+    /// Each sample retains its pointer's position when queued. Motion samples
+    /// are compacted above a soft queue limit; scroll deltas and gesture
+    /// boundaries remain available even during a long frame.
     ///
     /// # Arguments
     ///
     /// * `event` - The pointer change to add to the queue
-    pub fn push_event(&mut self, event: PointerChange) {
+    pub fn push_event(&mut self, mut event: PointerChange) {
+        if event.position_snapshot().is_none() {
+            let position = self
+                .pointer_positions
+                .get(&event.pointer_id)
+                .copied()
+                .unwrap_or_else(|| {
+                    if event.pointer_id == MOUSE_POINTER_ID {
+                        None
+                    } else {
+                        self.position
+                    }
+                });
+            event = event.with_position(position);
+            self.position = position;
+        }
         self.events.push_back(event);
         while self.events.len() > KEEP_EVENTS_COUNT {
             let redundant = self.events.iter().enumerate().find_map(|(index, queued)| {
@@ -121,8 +140,9 @@ impl CursorState {
         }
     }
 
-    /// Updates the current cursor position.
+    /// Updates the mouse position and current cursor position.
     ///
+    /// For another pointer, use [`Self::update_pointer_position`].
     /// This method accepts any type that can be converted into
     /// `Option<PxPosition>`, allowing for flexible position updates
     /// including clearing the position by passing `None`.
@@ -131,7 +151,20 @@ impl CursorState {
     ///
     /// * `position` - New cursor position or `None` to clear the position
     pub fn update_position(&mut self, position: impl Into<Option<PxPosition>>) {
-        self.position = position.into();
+        self.update_pointer_position(MOUSE_POINTER_ID, position);
+    }
+
+    /// Updates one pointer's tracked position and the current cursor position.
+    ///
+    /// Use distinct identifiers for independent synthetic input streams.
+    pub fn update_pointer_position(
+        &mut self,
+        pointer_id: PointerId,
+        position: impl Into<Option<PxPosition>>,
+    ) {
+        let position = position.into();
+        self.pointer_positions.insert(pointer_id, position);
+        self.position = position;
     }
 
     /// Retrieves and clears all pending pointer changes.
@@ -161,7 +194,8 @@ impl CursorState {
     /// focus changes.
     pub fn clear(&mut self) {
         self.events.clear();
-        self.update_position(None);
+        self.pointer_positions.clear();
+        self.position = None;
         self.touch_points.clear();
         self.clear_position_on_next_frame = false;
     }
@@ -191,22 +225,34 @@ impl CursorState {
     pub fn handle_touch_start(&mut self, touch_id: u64, position: PxPosition) {
         self.clear_position_on_next_frame = false;
         let now = Instant::now();
+        let mut pointer_id = self.next_touch_pointer_id.wrapping_add(1);
+        while pointer_id == MOUSE_POINTER_ID
+            || self
+                .touch_points
+                .values()
+                .any(|touch| touch.pointer_id == pointer_id)
+        {
+            pointer_id = pointer_id.wrapping_add(1);
+        }
+        self.next_touch_pointer_id = pointer_id;
 
         self.touch_points.insert(
             touch_id,
             TouchPointState {
+                pointer_id,
                 last_position: position,
                 start_position: position,
                 last_update_time: now,
                 generated_scroll_event: false,
             },
         );
-        self.update_position(position);
+        self.update_pointer_position(pointer_id, position);
         let press_event = PointerChange {
             timestamp: now,
-            pointer_id: touch_id,
+            pointer_id,
             content: CursorEventContent::Pressed(PressKeyEventType::Left),
             gesture_state: GestureState::TapCandidate,
+            sampled_position: Default::default(),
             consumed: false,
         };
         self.push_event(press_event);
@@ -234,6 +280,7 @@ impl CursorState {
     ) -> Option<PointerChange> {
         let now = Instant::now();
         let touch_state = self.touch_points.get_mut(&touch_id)?;
+        let pointer_id = touch_state.pointer_id;
         let mut delta_x = current_position.x - touch_state.last_position.x;
         let mut delta_y = current_position.y - touch_state.last_position.y;
         let cumulative_x = current_position.x - touch_state.start_position.x;
@@ -256,17 +303,18 @@ impl CursorState {
         } else {
             GestureState::TapCandidate
         };
-        self.update_position(current_position);
+        self.update_pointer_position(pointer_id, current_position);
         self.push_event(PointerChange {
             timestamp: now,
-            pointer_id: touch_id,
+            pointer_id,
             content: CursorEventContent::Moved(current_position),
             gesture_state,
+            sampled_position: Default::default(),
             consumed: false,
         });
         (self.touch_scroll_config.enabled && dragging).then_some(PointerChange {
             timestamp: now,
-            pointer_id: touch_id,
+            pointer_id,
             content: CursorEventContent::Scroll(ScrollEventContent {
                 delta_x,
                 delta_y,
@@ -274,6 +322,7 @@ impl CursorState {
                 source: ScrollEventSource::Touch,
             }),
             gesture_state,
+            sampled_position: PointerPosition::At(current_position),
             consumed: false,
         })
     }
@@ -295,10 +344,10 @@ impl CursorState {
             None => return,
         };
         let was_drag = touch_state.generated_scroll_event;
-        self.update_position(touch_state.last_position);
+        self.update_pointer_position(touch_state.pointer_id, touch_state.last_position);
         self.push_event(PointerChange {
             timestamp: now,
-            pointer_id: touch_id,
+            pointer_id: touch_state.pointer_id,
             content: if cancelled {
                 CursorEventContent::Cancelled(PressKeyEventType::Left)
             } else {
@@ -309,12 +358,22 @@ impl CursorState {
             } else {
                 GestureState::TapCandidate
             },
+            sampled_position: Default::default(),
             consumed: false,
         });
+        self.pointer_positions.remove(&touch_state.pointer_id);
         if self.touch_points.is_empty() {
             self.clear_position_on_next_frame = true;
         }
     }
+}
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) enum PointerPosition {
+    #[default]
+    Unspecified,
+    At(PxPosition),
+    Unavailable,
 }
 
 /// Represents a single pointer change with timing information.
@@ -338,6 +397,7 @@ pub struct PointerChange {
     pub gesture_state: GestureState,
     /// Whether this change has been consumed by a handler.
     pub(crate) consumed: bool,
+    pub(crate) sampled_position: PointerPosition,
 }
 
 impl PointerChange {
@@ -353,8 +413,58 @@ impl PointerChange {
             pointer_id,
             content,
             gesture_state,
+            sampled_position: Default::default(),
             consumed: false,
         }
+    }
+
+    /// Associates the sample with its absolute position at the time of input.
+    ///
+    /// Passing `None` records an unavailable position rather than using a later
+    /// cursor location. Movement events always use their own coordinates.
+    ///
+    /// ```
+    /// use tessera_ui::{
+    ///     CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PressKeyEventType,
+    ///     PxPosition, time::Instant,
+    /// };
+    /// let position = PxPosition::from_f32_xy(20.0, 40.0);
+    /// let sample = PointerChange::new(
+    ///     Instant::now(),
+    ///     MOUSE_POINTER_ID,
+    ///     CursorEventContent::Pressed(PressKeyEventType::Left),
+    ///     GestureState::TapCandidate,
+    /// )
+    /// .with_position(position);
+    /// assert_eq!(sample.position(), Some(position));
+    /// assert_eq!(sample.with_position(None).position(), None);
+    /// ```
+    pub fn with_position(mut self, position: impl Into<Option<PxPosition>>) -> Self {
+        self.sampled_position = match position.into() {
+            Some(position) => PointerPosition::At(position),
+            None => PointerPosition::Unavailable,
+        };
+        self
+    }
+
+    /// Returns the sample's recorded absolute position, when available.
+    pub fn position(&self) -> Option<PxPosition> {
+        self.position_snapshot().flatten()
+    }
+
+    pub(crate) fn position_snapshot(&self) -> Option<Option<PxPosition>> {
+        if let CursorEventContent::Moved(position) = self.content {
+            return Some(Some(position));
+        }
+        match self.sampled_position {
+            PointerPosition::Unspecified => None,
+            PointerPosition::At(position) => Some(Some(position)),
+            PointerPosition::Unavailable => Some(None),
+        }
+    }
+
+    pub(crate) fn resolved_position(&self, fallback: Option<PxPosition>) -> Option<PxPosition> {
+        self.position_snapshot().unwrap_or(fallback)
     }
 
     /// Marks this change as consumed.
@@ -548,6 +658,94 @@ mod tests {
 
     fn position(x: i32) -> PxPosition {
         PxPosition::new(Px::new(x), Px::ZERO)
+    }
+
+    #[test]
+    fn queued_samples_keep_their_original_positions_including_unavailable_positions() {
+        let mut cursor = CursorState::default();
+        let sample = |content| {
+            super::PointerChange::new(
+                crate::time::Instant::now(),
+                super::MOUSE_POINTER_ID,
+                content,
+                GestureState::TapCandidate,
+            )
+        };
+        cursor.update_position(position(10));
+        cursor.push_event(sample(CursorEventContent::Pressed(
+            super::PressKeyEventType::Left,
+        )));
+        cursor.update_position(position(20));
+        cursor.push_event(sample(CursorEventContent::Released(
+            super::PressKeyEventType::Left,
+        )));
+        cursor.update_position(None);
+        cursor.push_event(sample(CursorEventContent::Pressed(
+            super::PressKeyEventType::Left,
+        )));
+        cursor.update_position(position(30));
+        let events = cursor.take_events();
+        assert_eq!(
+            events
+                .iter()
+                .map(super::PointerChange::position)
+                .collect::<Vec<_>>(),
+            [Some(position(10)), Some(position(20)), None]
+        );
+        assert_eq!(events[2].resolved_position(Some(position(30))), None);
+        let legacy = sample(CursorEventContent::Pressed(super::PressKeyEventType::Left));
+        assert_eq!(
+            legacy.resolved_position(Some(position(30))),
+            Some(position(30))
+        );
+    }
+
+    #[test]
+    fn independent_pointers_and_delayed_touch_scroll_keep_their_own_positions() {
+        let mut cursor = CursorState::default();
+        cursor.update_position(position(100));
+        cursor.handle_touch_start(1, position(0));
+        cursor.handle_touch_start(2, position(20));
+        let scroll = cursor.handle_touch_move(1, position(10)).unwrap();
+        cursor.handle_touch_move(2, position(50));
+        cursor.push_event(scroll);
+        cursor.handle_touch_end(1);
+        cursor.push_event(super::PointerChange::new(
+            crate::time::Instant::now(),
+            super::MOUSE_POINTER_ID,
+            CursorEventContent::Pressed(super::PressKeyEventType::Left),
+            GestureState::TapCandidate,
+        ));
+        let events = cursor.take_events();
+        assert_eq!(events[0].position(), Some(position(0)));
+        assert_eq!(events[1].position(), Some(position(20)));
+        assert_eq!(events[4].position(), Some(position(10)));
+        assert_eq!(events[5].position(), Some(position(10)));
+        assert_eq!(events[6].position(), Some(position(100)));
+    }
+
+    #[test]
+    fn platform_touch_identifiers_never_alias_mouse_and_keep_their_pointer_identity() {
+        let mut cursor = CursorState::default();
+        cursor.handle_touch_start(0, position(0));
+        cursor.handle_touch_start(u64::MAX, position(10));
+        let start = cursor.take_events();
+        let first = start[0].pointer_id;
+        let second = start[1].pointer_id;
+        assert_ne!(first, super::MOUSE_POINTER_ID);
+        assert_ne!(second, super::MOUSE_POINTER_ID);
+        assert_ne!(first, second);
+        cursor.handle_touch_move(0, position(2));
+        cursor.handle_touch_end(0);
+        cursor.handle_touch_cancel(u64::MAX);
+        let end = cursor.take_events();
+        assert_eq!(end[0].pointer_id, first);
+        assert_eq!(end[1].pointer_id, first);
+        assert_eq!(end[2].pointer_id, second);
+
+        cursor.next_touch_pointer_id = u64::MAX;
+        cursor.handle_touch_start(5, position(0));
+        assert_ne!(cursor.take_events()[0].pointer_id, super::MOUSE_POINTER_ID);
     }
 
     #[test]
