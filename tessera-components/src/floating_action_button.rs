@@ -4,12 +4,13 @@
 //!
 //! Emphasize a primary action with a prominent floating button.
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, RenderSlot, State, accesskit::Role, provide_context, remember,
-    tessera, use_context,
+    Callback, Color, Dp, FrameNanosControl, Modifier, RenderSlot, State, accesskit::Role,
+    current_frame_nanos, provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
+    animation::Animatable,
     modifier::{InteractionState, ModifierExt as _},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
@@ -27,6 +28,8 @@ pub enum FloatingActionButtonSize {
     /// Standard floating action button (56dp).
     #[default]
     Standard,
+    /// Medium floating action button (80dp).
+    Medium,
     /// Large floating action button (96dp).
     Large,
 }
@@ -36,6 +39,7 @@ impl FloatingActionButtonSize {
         match self {
             FloatingActionButtonSize::Small => FloatingActionButtonDefaults::SMALL_SIZE,
             FloatingActionButtonSize::Standard => FloatingActionButtonDefaults::STANDARD_SIZE,
+            FloatingActionButtonSize::Medium => FloatingActionButtonDefaults::MEDIUM_SIZE,
             FloatingActionButtonSize::Large => FloatingActionButtonDefaults::LARGE_SIZE,
         }
     }
@@ -44,6 +48,7 @@ impl FloatingActionButtonSize {
         match self {
             FloatingActionButtonSize::Small => FloatingActionButtonDefaults::SMALL_ICON_SIZE,
             FloatingActionButtonSize::Standard => FloatingActionButtonDefaults::STANDARD_ICON_SIZE,
+            FloatingActionButtonSize::Medium => FloatingActionButtonDefaults::MEDIUM_ICON_SIZE,
             FloatingActionButtonSize::Large => FloatingActionButtonDefaults::LARGE_ICON_SIZE,
         }
     }
@@ -105,6 +110,28 @@ impl FloatingActionButtonElevation {
     }
 }
 
+struct ElevationMotion {
+    motion: Animatable,
+    frame_nanos: u64,
+}
+
+impl ElevationMotion {
+    fn new(elevation: Dp, frame_nanos: u64) -> Self {
+        Self {
+            motion: Animatable::spring(elevation.0 as f32, 3800.0_f32.sqrt(), 1.0),
+            frame_nanos,
+        }
+    }
+
+    fn advance(&mut self, frame_nanos: u64) {
+        if frame_nanos > self.frame_nanos {
+            self.motion
+                .tick((frame_nanos - self.frame_nanos) as f32 / 1_000_000_000.0);
+            self.frame_nanos = frame_nanos;
+        }
+    }
+}
+
 /// Material Design defaults for [`floating_action_button`].
 pub struct FloatingActionButtonDefaults;
 
@@ -113,12 +140,16 @@ impl FloatingActionButtonDefaults {
     pub const STANDARD_SIZE: Dp = Dp(56.0);
     /// Container size for a small floating action button.
     pub const SMALL_SIZE: Dp = Dp(40.0);
+    /// Container size for a medium floating action button.
+    pub const MEDIUM_SIZE: Dp = Dp(80.0);
     /// Container size for a large floating action button.
     pub const LARGE_SIZE: Dp = Dp(96.0);
     /// Recommended icon size for a standard floating action button.
     pub const STANDARD_ICON_SIZE: Dp = Dp(24.0);
     /// Recommended icon size for a small floating action button.
     pub const SMALL_ICON_SIZE: Dp = Dp(24.0);
+    /// Recommended icon size for a medium floating action button.
+    pub const MEDIUM_ICON_SIZE: Dp = Dp(28.0);
     /// Recommended icon size for a large floating action button.
     pub const LARGE_ICON_SIZE: Dp = Dp(36.0);
     /// Default resting elevation for floating action buttons.
@@ -333,7 +364,26 @@ pub fn floating_action_button(
         args.interaction_state
     };
 
-    let shadow_elevation = elevation.shadow_elevation(args.enabled, interaction_state);
+    let target_elevation = elevation.shadow_elevation(args.enabled, interaction_state);
+    let frame = current_frame_nanos();
+    let elevation_motion = remember(|| ElevationMotion::new(target_elevation, frame));
+    if elevation_motion.with(|motion| motion.motion.target()) != target_elevation.0 as f32 {
+        elevation_motion.with_mut(|motion| {
+            motion.advance(frame);
+            motion.motion.set_target(target_elevation.0 as f32);
+        });
+    }
+    if !elevation_motion.with(|motion| motion.motion.is_idle()) {
+        receive_frame_nanos(move |frame| {
+            elevation_motion.with_mut(|motion| motion.advance(frame));
+            if elevation_motion.with(|motion| motion.motion.is_idle()) {
+                FrameNanosControl::Stop
+            } else {
+                FrameNanosControl::Continue
+            }
+        });
+    }
+    let shadow_elevation = Dp(elevation_motion.with(|motion| motion.motion.value()) as f64);
     let tonal_elevation = elevation.tonal_elevation();
 
     surface()
@@ -349,7 +399,7 @@ pub fn floating_action_button(
         .elevation(shadow_elevation)
         .tonal_elevation(tonal_elevation)
         .accessibility_role(Role::Button)
-        .accessibility_focusable(true)
+        .accessibility_focusable(args.enabled)
         .interaction_state_optional(interaction_state)
         .on_click_optional(args.on_click)
         .accessibility_label_optional(args.accessibility_label)
@@ -385,12 +435,67 @@ impl FloatingActionButtonBuilder {
         self.on_click(on_click)
             .size(FloatingActionButtonSize::Large)
     }
+
+    /// Applies the medium floating action button preset.
+    pub fn medium(self, on_click: impl Fn() + Send + Sync + 'static) -> Self {
+        self.on_click(on_click)
+            .size(FloatingActionButtonSize::Medium)
+    }
 }
 
 fn shape_from_size(size: FloatingActionButtonSize, shapes: &MaterialShapes) -> Shape {
     match size {
         FloatingActionButtonSize::Small => shapes.medium,
         FloatingActionButtonSize::Standard => shapes.large,
+        FloatingActionButtonSize::Medium => shapes.large_increased,
         FloatingActionButtonSize::Large => shapes.extra_large,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{Px, PxSize};
+
+    use crate::shape_def::ResolvedShape;
+
+    use super::*;
+
+    #[test]
+    fn medium_fab_uses_an_80dp_container_28dp_icon_and_20dp_corners() {
+        assert_eq!(
+            FloatingActionButtonDefaults::container_size(FloatingActionButtonSize::Medium),
+            Dp(80.0)
+        );
+        assert_eq!(
+            FloatingActionButtonDefaults::icon_size(FloatingActionButtonSize::Medium),
+            Dp(28.0)
+        );
+        let ResolvedShape::Rounded {
+            corner_radii,
+            corner_g2,
+        } = FloatingActionButtonDefaults::shape(FloatingActionButtonSize::Medium)
+            .resolve_for_size(PxSize::new(Px::new(80), Px::new(80)))
+        else {
+            panic!("expected rounded rectangle");
+        };
+        assert_eq!(corner_radii, [20.0; 4]);
+        assert_eq!(corner_g2, [2.0; 4]);
+    }
+
+    #[test]
+    fn elevation_effect_retargets_continuously_and_settles_without_overshoot() {
+        let mut motion = ElevationMotion::new(Dp(6.0), 0);
+        motion.motion.set_target(8.0);
+        motion.advance(16_666_667);
+        let initial = motion.motion.value();
+        assert!(initial > 6.0 && initial < 8.0);
+        motion.motion.set_target(6.0);
+        assert_eq!(motion.motion.value(), initial);
+        for frame in 2..120 {
+            motion.advance(frame * 16_666_667);
+            assert!(motion.motion.value() >= 6.0 && motion.motion.value() <= 8.0);
+        }
+        assert!(motion.motion.is_idle());
+        assert_eq!(motion.motion.value(), 6.0);
     }
 }
