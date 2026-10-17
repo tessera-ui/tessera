@@ -24,11 +24,8 @@ use crate::{
     text_edit_core::{
         ClickType, ImeEditResult, PlannedImeEvent, RectDef, TextSelection, text_edit_core,
     },
-    theme::{MaterialColorScheme, MaterialShapes, MaterialTheme, TextSelectionColors},
+    theme::{MaterialColorScheme, MaterialShapes, MaterialTheme, TextSelectionColors, TextStyle},
 };
-
-#[cfg(test)]
-use glyphon::Edit;
 
 /// State structure for the text input, managing text content, cursor,
 /// selection, and editing logic.
@@ -183,6 +180,8 @@ pub(crate) struct TextInputProps {
     pub font_size: Dp,
     /// Line height in Dp. Defaults to None (1.2x font size).
     pub line_height: Option<Dp>,
+    /// Optional typography override for editable text.
+    pub style: Option<TextStyle>,
     /// Whether the editor behaves as a single-line field.
     ///
     /// When `true`, text does not wrap and the internal text buffer uses
@@ -226,6 +225,7 @@ impl Default for TextInputProps {
             initial_text: None,
             font_size: Dp(16.0),
             line_height: Some(Dp(24.0)),
+            style: None,
             single_line: false,
             input_transform: None,
             display_transform: None,
@@ -314,6 +314,7 @@ impl TextInputBuilder {
 /// - `accessibility_description` — optional accessibility description.
 /// - `initial_text` — optional initial text content.
 /// - `font_size` — font size in Dp.
+/// - `style` — typography override, including weight and letter spacing.
 /// - `line_height` — optional line height in Dp.
 /// - `single_line` — whether the editor behaves as a single-line field.
 /// - `input_transform` — optional transform applied to text changes before
@@ -365,6 +366,7 @@ pub fn text_input(
     #[prop(into)] initial_text: Option<String>,
     font_size: Option<Dp>,
     line_height: Option<Dp>,
+    style: Option<TextStyle>,
     single_line: Option<bool>,
     input_transform: Option<CallbackWith<String, String>>,
     display_transform: Option<DisplayTransform>,
@@ -401,8 +403,9 @@ pub fn text_input(
     } else {
         scheme.primary
     }));
-    let font_size = font_size.unwrap_or(props_default.font_size);
-    let line_height = line_height.or(props_default.line_height);
+    let style = style.unwrap_or(theme.typography.body_large);
+    let font_size = font_size.unwrap_or(style.font_size);
+    let line_height = line_height.or(style.line_height);
     let single_line = single_line.unwrap_or(false);
     let args = TextInputProps {
         enabled,
@@ -429,6 +432,11 @@ pub fn text_input(
         initial_text,
         font_size,
         line_height,
+        style: Some(TextStyle {
+            font_size,
+            line_height,
+            ..style
+        }),
         single_line,
         input_transform,
         display_transform,
@@ -539,6 +547,12 @@ pub(crate) fn text_input_core(args: &TextInputProps, controller: State<TextInput
 }
 
 fn sync_text_input_controller(controller: &State<TextInputController>, args: &TextInputProps) {
+    if let Some(style) = args.style
+        && controller.with(|c| c.text_style()) != style
+    {
+        controller.with_mut(|c| c.set_text_style(style));
+    }
+
     if let Some(selection_color) = args.selection_color {
         let needs_update = controller.with(|c| c.selection_color() != selection_color);
         if needs_update {
@@ -1212,63 +1226,6 @@ impl SemanticsModifierNode for TextInputSemanticsModifierNode {
     }
 }
 
-#[cfg(test)]
-fn editor_selection(editor: &glyphon::Editor<'_>) -> TextSelection {
-    match editor.selection() {
-        glyphon::cosmic_text::Selection::None => {
-            let cursor = editor.cursor();
-            let offset = get_text_offset(editor, cursor);
-            TextSelection::collapsed(offset)
-        }
-        glyphon::cosmic_text::Selection::Normal(anchor)
-        | glyphon::cosmic_text::Selection::Line(anchor)
-        | glyphon::cosmic_text::Selection::Word(anchor) => TextSelection {
-            start: get_text_offset(editor, anchor),
-            end: get_text_offset(editor, editor.cursor()),
-        },
-    }
-}
-
-#[cfg(test)]
-fn get_text_offset(editor: &glyphon::Editor<'_>, cursor: glyphon::Cursor) -> usize {
-    editor.with_buffer(|buffer| {
-        let mut offset = 0usize;
-        for (line_index, line) in buffer.lines.iter().enumerate() {
-            let line_len = line.text().len();
-            if line_index == cursor.line {
-                return offset + cursor.index.min(line_len);
-            }
-            offset += line_len + line.ending().as_str().len();
-        }
-        offset
-    })
-}
-
-#[cfg(test)]
-fn rebase_selection(before: &str, after: &str, selection: TextSelection) -> TextSelection {
-    TextSelection {
-        start: rebase_offset(before, after, selection.start),
-        end: rebase_offset(before, after, selection.end),
-    }
-}
-
-#[cfg(test)]
-fn rebase_range(
-    before: &str,
-    after: &str,
-    range: std::ops::Range<usize>,
-) -> std::ops::Range<usize> {
-    let start = rebase_offset(before, after, range.start);
-    let end = rebase_offset(before, after, range.end);
-    start.min(end)..start.max(end)
-}
-
-#[cfg(test)]
-fn rebase_offset(before: &str, after: &str, offset: usize) -> usize {
-    DisplayTransformText::from_strings(before, after.to_string())
-        .map_from_raw(offset.min(before.len()))
-}
-
 fn is_editing_action(action: &GlyphonAction) -> bool {
     matches!(
         action,
@@ -1615,38 +1572,11 @@ mod tests {
         ClipboardShortcutBehavior, DISABLED_FILL_ALPHA, DISABLED_OUTLINE_ALPHA,
         DragSelectionPointerPosition, FieldVisualState, SingleLineKeyBehavior, build_ime_request,
         clipboard_shortcut_for_key, default_fill_color, default_outline_color,
-        deletion_motion_for_key, drag_selection_pointer_position_with_scroll, editor_selection,
-        rebase_offset, rebase_range, rebase_selection, resolve_border_width,
+        deletion_motion_for_key, drag_selection_pointer_position_with_scroll, resolve_border_width,
         should_expose_submit_accessibility_action, single_line_key_behavior,
         text_content_origin_from_values, text_input_accessibility_role,
         text_viewport_size_from_origin,
     };
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    struct SimulatedImeState {
-        text: String,
-        selection: TextSelection,
-        composition: Option<ImeComposition>,
-    }
-
-    #[derive(Clone, Debug, PartialEq, Eq)]
-    struct SimulatedTextInputSession {
-        text: String,
-        selection: TextSelection,
-        composition: Option<ImeComposition>,
-        single_line: bool,
-        submit_count: usize,
-        clipboard: String,
-    }
-
-    #[derive(Clone, Copy, Default)]
-    struct SimulatedKeyboardPipeline {
-        is_ctrl: bool,
-        is_shift: bool,
-        read_only: bool,
-        input_transform: Option<fn(String) -> String>,
-        on_change: Option<fn(String) -> String>,
-    }
 
     fn plan_ime_event_for_state(
         selection: TextSelection,
@@ -1664,394 +1594,6 @@ mod tests {
         controller.set_text_and_selection(&"x".repeat(text_len), selection);
         controller.set_composition(composition);
         controller.plan_ime_event(single_line, event)
-    }
-
-    fn apply_ime_event(
-        state: &mut SimulatedImeState,
-        event: winit::event::Ime,
-        input_transform: Option<fn(String) -> String>,
-        on_change: Option<fn(String) -> String>,
-    ) {
-        let PlannedImeEvent::Edit(plan) = plan_ime_event_for_state(
-            state.selection.clone(),
-            state.composition.clone(),
-            false,
-            &event,
-        )
-        .expect("test sequence should only use supported ime events") else {
-            panic!("ime sequence should not submit in non single-line simulation");
-        };
-        let start = plan.replacement_range.start.min(state.text.len());
-        let end = plan.replacement_range.end.min(state.text.len()).max(start);
-        let mut raw_content_after_replace = state.text.clone();
-        raw_content_after_replace.replace_range(start..end, &plan.replacement_text);
-        let raw_replaced_range = start..(start + plan.replacement_text.len());
-
-        let transformed_content = if let Some(transform) = input_transform {
-            transform(raw_content_after_replace.clone())
-        } else {
-            raw_content_after_replace.clone()
-        };
-        let transformed_selection = rebase_selection(
-            &raw_content_after_replace,
-            &transformed_content,
-            plan.selection,
-        );
-        let transformed_replaced_range = rebase_range(
-            &raw_content_after_replace,
-            &transformed_content,
-            raw_replaced_range,
-        );
-
-        let (final_content, final_selection, final_replaced_range) =
-            if let Some(on_change) = on_change {
-                let new_content = on_change(transformed_content.clone());
-                (
-                    new_content.clone(),
-                    rebase_selection(&transformed_content, &new_content, transformed_selection),
-                    rebase_range(
-                        &transformed_content,
-                        &new_content,
-                        transformed_replaced_range,
-                    ),
-                )
-            } else {
-                (
-                    transformed_content,
-                    transformed_selection,
-                    transformed_replaced_range,
-                )
-            };
-
-        state.text = final_content;
-        state.selection = final_selection.clone();
-        state.composition = plan.composition_range.map(|_| ImeComposition {
-            range: final_replaced_range,
-            selection: final_selection,
-        });
-    }
-
-    fn apply_text_input_ime_event(
-        state: &mut SimulatedTextInputSession,
-        event: winit::event::Ime,
-        input_transform: Option<fn(String) -> String>,
-        on_change: Option<fn(String) -> String>,
-    ) {
-        let plan = plan_ime_event_for_state(
-            state.selection.clone(),
-            state.composition.clone(),
-            state.single_line,
-            &event,
-        )
-        .expect("test sequence should only use supported ime events");
-        let PlannedImeEvent::Edit(plan) = plan else {
-            state.composition = None;
-            state.submit_count += 1;
-            return;
-        };
-        let start = plan.replacement_range.start.min(state.text.len());
-        let end = plan.replacement_range.end.min(state.text.len()).max(start);
-        let mut raw_content_after_replace = state.text.clone();
-        raw_content_after_replace.replace_range(start..end, &plan.replacement_text);
-        let raw_replaced_range = start..(start + plan.replacement_text.len());
-
-        let transformed_content = if let Some(transform) = input_transform {
-            transform(raw_content_after_replace.clone())
-        } else {
-            raw_content_after_replace.clone()
-        };
-        let transformed_selection = rebase_selection(
-            &raw_content_after_replace,
-            &transformed_content,
-            plan.selection,
-        );
-        let transformed_replaced_range = rebase_range(
-            &raw_content_after_replace,
-            &transformed_content,
-            raw_replaced_range,
-        );
-
-        let (final_content, final_selection, final_replaced_range) =
-            if let Some(on_change) = on_change {
-                let new_content = on_change(transformed_content.clone());
-                (
-                    new_content.clone(),
-                    rebase_selection(&transformed_content, &new_content, transformed_selection),
-                    rebase_range(
-                        &transformed_content,
-                        &new_content,
-                        transformed_replaced_range,
-                    ),
-                )
-            } else {
-                (
-                    transformed_content,
-                    transformed_selection,
-                    transformed_replaced_range,
-                )
-            };
-
-        state.text = final_content;
-        state.selection = final_selection.clone();
-        state.composition = plan.composition_range.map(|_| ImeComposition {
-            range: final_replaced_range,
-            selection: final_selection,
-        });
-    }
-
-    fn replace_text_range_in_text_input_session(
-        state: &mut SimulatedTextInputSession,
-        range: std::ops::Range<usize>,
-        replacement: &str,
-        input_transform: Option<fn(String) -> String>,
-        on_change: Option<fn(String) -> String>,
-    ) {
-        let start = range.start.min(state.text.len());
-        let end = range.end.min(state.text.len()).max(start);
-        let mut raw_content_after_replace = state.text.clone();
-        raw_content_after_replace.replace_range(start..end, replacement);
-
-        let replacement_selection = TextSelection::collapsed(start + replacement.len());
-        let transformed_content = if let Some(transform) = input_transform {
-            transform(raw_content_after_replace.clone())
-        } else {
-            raw_content_after_replace.clone()
-        };
-        let transformed_selection = rebase_selection(
-            &raw_content_after_replace,
-            &transformed_content,
-            replacement_selection,
-        );
-        let final_content = if let Some(on_change) = on_change {
-            on_change(transformed_content.clone())
-        } else {
-            transformed_content.clone()
-        };
-        let final_selection = if final_content != transformed_content {
-            rebase_selection(&transformed_content, &final_content, transformed_selection)
-        } else {
-            transformed_selection
-        };
-
-        state.text = final_content;
-        state.selection = final_selection;
-        state.composition = None;
-    }
-
-    fn replace_selected_text_in_text_input_session(
-        state: &mut SimulatedTextInputSession,
-        replacement: &str,
-        input_transform: Option<fn(String) -> String>,
-        on_change: Option<fn(String) -> String>,
-    ) {
-        replace_text_range_in_text_input_session(
-            state,
-            state.selection.ordered_range(),
-            replacement,
-            input_transform,
-            on_change,
-        );
-    }
-
-    fn selected_text_in_text_input_session(state: &SimulatedTextInputSession) -> Option<String> {
-        let selection = state.selection.ordered_range();
-        if selection.is_empty() {
-            None
-        } else {
-            Some(state.text[selection].to_string())
-        }
-    }
-
-    fn deletion_range_in_text_input_session(
-        state: &SimulatedTextInputSession,
-        motion: glyphon::cosmic_text::Motion,
-    ) -> Option<std::ops::Range<usize>> {
-        let mut controller = TextEditorController::new(tessera_ui::Dp(14.0), None);
-        controller.set_single_line(state.single_line);
-        controller.set_text_and_selection(&state.text, state.selection.clone());
-        controller.deletion_range_for_motion(motion)
-    }
-
-    fn apply_text_input_keyboard_event(
-        state: &mut SimulatedTextInputSession,
-        key_state: winit::event::ElementState,
-        logical_key: winit::keyboard::Key,
-        pipeline: SimulatedKeyboardPipeline,
-    ) {
-        if let Some(behavior) = single_line_key_behavior(state.single_line, key_state, &logical_key)
-        {
-            match behavior {
-                SingleLineKeyBehavior::Submit => {
-                    state.submit_count += 1;
-                }
-                SingleLineKeyBehavior::Propagate => {}
-            }
-            return;
-        }
-
-        if let Some(behavior) =
-            clipboard_shortcut_for_key(pipeline.is_ctrl, pipeline.is_shift, key_state, &logical_key)
-        {
-            match behavior {
-                ClipboardShortcutBehavior::Copy => {
-                    if let Some(text) = selected_text_in_text_input_session(state) {
-                        state.clipboard = text;
-                    }
-                }
-                ClipboardShortcutBehavior::Cut => {
-                    if !pipeline.read_only
-                        && let Some(text) = selected_text_in_text_input_session(state)
-                    {
-                        state.clipboard = text;
-                        replace_selected_text_in_text_input_session(
-                            state,
-                            "",
-                            pipeline.input_transform,
-                            pipeline.on_change,
-                        );
-                    }
-                }
-                ClipboardShortcutBehavior::Paste => {
-                    if !pipeline.read_only {
-                        let text = state.clipboard.clone();
-                        replace_selected_text_in_text_input_session(
-                            state,
-                            &text,
-                            pipeline.input_transform,
-                            pipeline.on_change,
-                        );
-                    }
-                }
-            }
-            return;
-        }
-
-        if let Some(motion) = deletion_motion_for_key(pipeline.is_ctrl, key_state, &logical_key) {
-            if !pipeline.read_only
-                && let Some(range) = deletion_range_in_text_input_session(state, motion)
-            {
-                replace_text_range_in_text_input_session(
-                    state,
-                    range,
-                    "",
-                    pipeline.input_transform,
-                    pipeline.on_change,
-                );
-            }
-            return;
-        }
-
-        let shortcut = if let winit::keyboard::Key::Character(text) = &logical_key {
-            if pipeline.is_ctrl && key_state == winit::event::ElementState::Pressed {
-                Some(text.to_lowercase())
-            } else {
-                None
-            }
-        } else {
-            None
-        };
-
-        match shortcut.as_deref() {
-            Some("a") => {
-                state.selection = TextSelection {
-                    start: 0,
-                    end: state.text.len(),
-                };
-                return;
-            }
-            Some("c") => {
-                if let Some(text) = selected_text_in_text_input_session(state) {
-                    state.clipboard = text;
-                }
-                return;
-            }
-            Some("x") => {
-                if !pipeline.read_only
-                    && let Some(text) = selected_text_in_text_input_session(state)
-                {
-                    state.clipboard = text;
-                    replace_selected_text_in_text_input_session(
-                        state,
-                        "",
-                        pipeline.input_transform,
-                        pipeline.on_change,
-                    );
-                }
-                return;
-            }
-            Some("v") => {
-                if !pipeline.read_only {
-                    let text = state.clipboard.clone();
-                    replace_selected_text_in_text_input_session(
-                        state,
-                        &text,
-                        pipeline.input_transform,
-                        pipeline.on_change,
-                    );
-                }
-                return;
-            }
-            _ => {}
-        }
-
-        if key_state != winit::event::ElementState::Pressed {
-            return;
-        }
-
-        match logical_key {
-            winit::keyboard::Key::Character(text) if !pipeline.is_ctrl && !pipeline.read_only => {
-                replace_selected_text_in_text_input_session(
-                    state,
-                    text.as_ref(),
-                    pipeline.input_transform,
-                    pipeline.on_change,
-                );
-            }
-            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Enter)
-                if !state.single_line && !pipeline.read_only =>
-            {
-                replace_selected_text_in_text_input_session(
-                    state,
-                    "\n",
-                    pipeline.input_transform,
-                    pipeline.on_change,
-                );
-            }
-            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Tab)
-                if !state.single_line && !pipeline.read_only =>
-            {
-                replace_selected_text_in_text_input_session(
-                    state,
-                    "\t",
-                    pipeline.input_transform,
-                    pipeline.on_change,
-                );
-            }
-            _ => {}
-        }
-    }
-
-    fn group_digits(value: String) -> String {
-        let digits: Vec<char> = value
-            .chars()
-            .filter(|character| character.is_ascii_digit())
-            .collect();
-        let mut formatted = String::new();
-        for (index, digit) in digits.into_iter().enumerate() {
-            if index > 0 && index % 3 == 0 {
-                formatted.push(' ');
-            }
-            formatted.push(digit);
-        }
-        formatted
-    }
-
-    fn keep_prompt_prefix(value: String) -> String {
-        if value.starts_with('>') {
-            value
-        } else {
-            format!(">{value}")
-        }
     }
 
     fn pointer_position_for_offset(text: &str, offset: usize) -> PxPosition {
@@ -2148,46 +1690,6 @@ mod tests {
 
         assert_eq!(viewport.width, Px(102));
         assert_eq!(viewport.height, Px(22));
-    }
-
-    #[test]
-    fn rebase_offset_shifts_cursor_after_inserted_formatting_prefix() {
-        assert_eq!(rebase_offset("1234", "123 4", 4), 5);
-    }
-
-    #[test]
-    fn rebase_selection_preserves_tail_selection_through_inserted_formatting() {
-        assert_eq!(
-            rebase_selection("1234", "123 4", TextSelection { start: 3, end: 4 },),
-            TextSelection { start: 4, end: 5 }
-        );
-    }
-
-    #[test]
-    fn rebase_selection_collapses_inside_rewritten_region() {
-        assert_eq!(
-            rebase_selection("abcdef", "abXYef", TextSelection { start: 2, end: 4 },),
-            TextSelection { start: 2, end: 4 }
-        );
-    }
-
-    #[test]
-    fn rebase_selection_preserves_backward_direction_through_inserted_formatting() {
-        assert_eq!(
-            rebase_selection("1234", "123 4", TextSelection { start: 4, end: 3 },),
-            TextSelection { start: 5, end: 4 }
-        );
-    }
-
-    #[test]
-    fn editor_selection_preserves_backward_anchor_and_cursor() {
-        let mut controller = TextEditorController::new(tessera_ui::Dp(14.0), None);
-        controller.set_text_and_selection("hello", TextSelection { start: 4, end: 1 });
-
-        assert_eq!(
-            editor_selection(controller.editor()),
-            TextSelection { start: 4, end: 1 }
-        );
     }
 
     #[test]
@@ -2316,485 +1818,6 @@ mod tests {
                 composition_range: Some(1..5),
             }))
         );
-    }
-
-    #[test]
-    fn ime_sequence_preedit_preedit_commit_tracks_latest_composition_range() {
-        let mut state = SimulatedImeState {
-            text: String::new(),
-            selection: TextSelection::collapsed(0),
-            composition: None,
-        };
-
-        apply_ime_event(
-            &mut state,
-            winit::event::Ime::Preedit("abcd".to_string(), Some((2, 2))),
-            None,
-            None,
-        );
-        assert_eq!(state.text, "abcd");
-        assert_eq!(state.selection, TextSelection::collapsed(2));
-        assert_eq!(
-            state.composition,
-            Some(ImeComposition {
-                range: 0..4,
-                selection: TextSelection::collapsed(2),
-            })
-        );
-
-        apply_ime_event(
-            &mut state,
-            winit::event::Ime::Preedit("abXcd".to_string(), Some((3, 3))),
-            None,
-            None,
-        );
-        assert_eq!(state.text, "abXcd");
-        assert_eq!(state.selection, TextSelection::collapsed(3));
-        assert_eq!(
-            state.composition,
-            Some(ImeComposition {
-                range: 0..5,
-                selection: TextSelection::collapsed(3),
-            })
-        );
-
-        apply_ime_event(
-            &mut state,
-            winit::event::Ime::Commit("done".to_string()),
-            None,
-            None,
-        );
-        assert_eq!(state.text, "done");
-        assert_eq!(state.selection, TextSelection::collapsed(4));
-        assert_eq!(state.composition, None);
-    }
-
-    #[test]
-    fn ime_sequence_rebases_composition_range_through_formatter() {
-        let mut state = SimulatedImeState {
-            text: String::new(),
-            selection: TextSelection::collapsed(0),
-            composition: None,
-        };
-
-        apply_ime_event(
-            &mut state,
-            winit::event::Ime::Preedit("123456".to_string(), Some((6, 6))),
-            Some(group_digits),
-            None,
-        );
-        assert_eq!(state.text, "123 456");
-        assert_eq!(state.selection, TextSelection::collapsed(7));
-        assert_eq!(
-            state.composition,
-            Some(ImeComposition {
-                range: 0..7,
-                selection: TextSelection::collapsed(7),
-            })
-        );
-
-        apply_ime_event(
-            &mut state,
-            winit::event::Ime::Preedit("1234567890".to_string(), Some((10, 10))),
-            Some(group_digits),
-            None,
-        );
-        assert_eq!(state.text, "123 456 789 0");
-        assert_eq!(state.selection, TextSelection::collapsed(13));
-        assert_eq!(
-            state.composition,
-            Some(ImeComposition {
-                range: 0..13,
-                selection: TextSelection::collapsed(13),
-            })
-        );
-    }
-
-    #[test]
-    fn ime_sequence_rebases_composition_range_through_on_change() {
-        let mut state = SimulatedImeState {
-            text: String::new(),
-            selection: TextSelection::collapsed(0),
-            composition: None,
-        };
-
-        apply_ime_event(
-            &mut state,
-            winit::event::Ime::Preedit("abcd".to_string(), Some((2, 2))),
-            None,
-            Some(keep_prompt_prefix),
-        );
-        assert_eq!(state.text, ">abcd");
-        assert_eq!(state.selection, TextSelection::collapsed(3));
-        assert_eq!(
-            state.composition,
-            Some(ImeComposition {
-                range: 1..5,
-                selection: TextSelection::collapsed(3),
-            })
-        );
-
-        apply_ime_event(
-            &mut state,
-            winit::event::Ime::Commit("xy".to_string()),
-            None,
-            Some(keep_prompt_prefix),
-        );
-        assert_eq!(state.text, ">xy");
-        assert_eq!(state.selection, TextSelection::collapsed(3));
-        assert_eq!(state.composition, None);
-    }
-
-    #[test]
-    fn text_input_ime_sequence_single_line_newline_submit_clears_composition_without_inserting_newline()
-     {
-        let mut state = SimulatedTextInputSession {
-            text: String::new(),
-            selection: TextSelection::collapsed(0),
-            composition: None,
-            single_line: true,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_ime_event(
-            &mut state,
-            winit::event::Ime::Preedit("abcd".to_string(), Some((2, 2))),
-            None,
-            None,
-        );
-        assert_eq!(state.text, "abcd");
-        assert_eq!(
-            state.composition,
-            Some(ImeComposition {
-                range: 0..4,
-                selection: TextSelection::collapsed(2),
-            })
-        );
-
-        apply_text_input_ime_event(
-            &mut state,
-            winit::event::Ime::Commit("\n".to_string()),
-            None,
-            None,
-        );
-        assert_eq!(state.text, "abcd");
-        assert_eq!(state.selection, TextSelection::collapsed(2));
-        assert_eq!(state.composition, None);
-        assert_eq!(state.submit_count, 1);
-    }
-
-    #[test]
-    fn text_input_ime_sequence_multi_line_newline_commit_keeps_editing_path() {
-        let mut state = SimulatedTextInputSession {
-            text: String::new(),
-            selection: TextSelection::collapsed(0),
-            composition: None,
-            single_line: false,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_ime_event(
-            &mut state,
-            winit::event::Ime::Preedit("abcd".to_string(), Some((2, 2))),
-            None,
-            None,
-        );
-        apply_text_input_ime_event(
-            &mut state,
-            winit::event::Ime::Commit("\n".to_string()),
-            None,
-            None,
-        );
-        assert_eq!(state.text, "\n");
-        assert_eq!(state.selection, TextSelection::collapsed(1));
-        assert_eq!(state.composition, None);
-        assert_eq!(state.submit_count, 0);
-    }
-
-    #[test]
-    fn text_input_ime_sequence_single_line_newline_submit_preserves_formatted_text() {
-        let mut state = SimulatedTextInputSession {
-            text: String::new(),
-            selection: TextSelection::collapsed(0),
-            composition: None,
-            single_line: true,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_ime_event(
-            &mut state,
-            winit::event::Ime::Preedit("123456".to_string(), Some((6, 6))),
-            Some(group_digits),
-            None,
-        );
-        assert_eq!(state.text, "123 456");
-        assert_eq!(
-            state.composition,
-            Some(ImeComposition {
-                range: 0..7,
-                selection: TextSelection::collapsed(7),
-            })
-        );
-
-        apply_text_input_ime_event(
-            &mut state,
-            winit::event::Ime::Commit("\r\n".to_string()),
-            Some(group_digits),
-            None,
-        );
-        assert_eq!(state.text, "123 456");
-        assert_eq!(state.selection, TextSelection::collapsed(7));
-        assert_eq!(state.composition, None);
-        assert_eq!(state.submit_count, 1);
-    }
-
-    #[test]
-    fn text_input_keyboard_sequence_single_line_enter_submits_without_editing_text() {
-        let mut state = SimulatedTextInputSession {
-            text: "hello".to_string(),
-            selection: TextSelection::collapsed(5),
-            composition: Some(ImeComposition {
-                range: 0..5,
-                selection: TextSelection::collapsed(5),
-            }),
-            single_line: true,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Enter),
-            SimulatedKeyboardPipeline::default(),
-        );
-        assert_eq!(state.text, "hello");
-        assert_eq!(state.selection, TextSelection::collapsed(5));
-        assert_eq!(
-            state.composition,
-            Some(ImeComposition {
-                range: 0..5,
-                selection: TextSelection::collapsed(5),
-            })
-        );
-        assert_eq!(state.submit_count, 1);
-    }
-
-    #[test]
-    fn text_input_keyboard_sequence_ctrl_backspace_deletes_previous_word() {
-        let mut state = SimulatedTextInputSession {
-            text: "hello world".to_string(),
-            selection: TextSelection::collapsed(11),
-            composition: None,
-            single_line: false,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Backspace),
-            SimulatedKeyboardPipeline {
-                is_ctrl: true,
-                ..Default::default()
-            },
-        );
-        assert_eq!(state.text, "hello ");
-        assert_eq!(state.selection, TextSelection::collapsed(6));
-        assert_eq!(state.clipboard, "");
-    }
-
-    #[test]
-    fn text_input_keyboard_sequence_ctrl_delete_reformats_grouped_digits() {
-        let mut state = SimulatedTextInputSession {
-            text: "123 456 789".to_string(),
-            selection: TextSelection::collapsed(4),
-            composition: None,
-            single_line: false,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Delete),
-            SimulatedKeyboardPipeline {
-                is_ctrl: true,
-                input_transform: Some(group_digits),
-                ..Default::default()
-            },
-        );
-        assert_eq!(state.text, "123 789");
-        assert_eq!(state.selection, TextSelection::collapsed(4));
-    }
-
-    #[test]
-    fn text_input_keyboard_sequence_shift_delete_cuts_selection_and_ctrl_v_pastes_it_back() {
-        let mut state = SimulatedTextInputSession {
-            text: "hello world".to_string(),
-            selection: TextSelection { start: 6, end: 11 },
-            composition: None,
-            single_line: false,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Delete),
-            SimulatedKeyboardPipeline {
-                is_shift: true,
-                ..Default::default()
-            },
-        );
-        assert_eq!(state.text, "hello ");
-        assert_eq!(state.selection, TextSelection::collapsed(6));
-        assert_eq!(state.clipboard, "world");
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Character("v".into()),
-            SimulatedKeyboardPipeline {
-                is_ctrl: true,
-                ..Default::default()
-            },
-        );
-        assert_eq!(state.text, "hello world");
-        assert_eq!(state.selection, TextSelection::collapsed(11));
-        assert_eq!(state.clipboard, "world");
-    }
-
-    #[test]
-    fn text_input_keyboard_sequence_character_insert_rebases_through_on_change() {
-        let mut state = SimulatedTextInputSession {
-            text: "abc".to_string(),
-            selection: TextSelection::collapsed(3),
-            composition: None,
-            single_line: false,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Character("x".into()),
-            SimulatedKeyboardPipeline {
-                on_change: Some(keep_prompt_prefix),
-                ..Default::default()
-            },
-        );
-        assert_eq!(state.text, ">abcx");
-        assert_eq!(state.selection, TextSelection::collapsed(5));
-    }
-
-    #[test]
-    fn text_input_keyboard_sequence_multi_line_tab_inserts_tab_character() {
-        let mut state = SimulatedTextInputSession {
-            text: String::new(),
-            selection: TextSelection::collapsed(0),
-            composition: None,
-            single_line: false,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Named(winit::keyboard::NamedKey::Tab),
-            SimulatedKeyboardPipeline::default(),
-        );
-        assert_eq!(state.text, "\t");
-        assert_eq!(state.selection, TextSelection::collapsed(1));
-    }
-
-    #[test]
-    fn text_input_keyboard_sequence_ctrl_a_then_ctrl_c_copies_full_selection() {
-        let mut state = SimulatedTextInputSession {
-            text: "hello world".to_string(),
-            selection: TextSelection::collapsed(5),
-            composition: None,
-            single_line: false,
-            submit_count: 0,
-            clipboard: String::new(),
-        };
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Character("a".into()),
-            SimulatedKeyboardPipeline {
-                is_ctrl: true,
-                ..Default::default()
-            },
-        );
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Character("c".into()),
-            SimulatedKeyboardPipeline {
-                is_ctrl: true,
-                ..Default::default()
-            },
-        );
-        assert_eq!(
-            state.selection,
-            TextSelection {
-                start: 0,
-                end: "hello world".len(),
-            }
-        );
-        assert_eq!(state.clipboard, "hello world");
-    }
-
-    #[test]
-    fn text_input_keyboard_sequence_read_only_paste_does_not_mutate_text() {
-        let mut state = SimulatedTextInputSession {
-            text: "hello".to_string(),
-            selection: TextSelection::collapsed(5),
-            composition: None,
-            single_line: false,
-            submit_count: 0,
-            clipboard: " world".to_string(),
-        };
-
-        apply_text_input_keyboard_event(
-            &mut state,
-            winit::event::ElementState::Pressed,
-            winit::keyboard::Key::Character("v".into()),
-            SimulatedKeyboardPipeline {
-                is_ctrl: true,
-                read_only: true,
-                ..Default::default()
-            },
-        );
-        assert_eq!(state.text, "hello");
-        assert_eq!(state.selection, TextSelection::collapsed(5));
-        assert_eq!(state.clipboard, " world");
-    }
-
-    #[test]
-    fn text_input_pointer_sequence_shift_click_extends_selection_from_existing_cursor() {
-        let text = "hello world";
-        let mut controller = TextEditorController::new(tessera_ui::Dp(14.0), None);
-        controller.set_text_and_selection(text, TextSelection::collapsed(1));
-        let target_position = pointer_position_for_offset(text, 5);
-        let click_time = Instant::now();
-
-        let click_type = controller.handle_click(target_position, click_time);
-        assert!(matches!(click_type, ClickType::Single));
-        controller.extend_selection_to_point(target_position);
-
-        assert_eq!(controller.selection(), TextSelection { start: 1, end: 5 });
-        assert_eq!(controller.cursor_offset(), 5);
     }
 
     #[test]
@@ -3003,24 +2026,6 @@ mod tests {
     }
 
     #[test]
-    fn single_line_submit_plan_clears_existing_composition_via_controller_state() {
-        let composition = ImeComposition {
-            range: 1..4,
-            selection: TextSelection::collapsed(3),
-        };
-
-        assert_eq!(
-            plan_ime_event_for_state(
-                TextSelection::collapsed(3),
-                Some(composition),
-                true,
-                &winit::event::Ime::Commit("\n".to_string()),
-            ),
-            Some(PlannedImeEvent::Submit)
-        );
-    }
-
-    #[test]
     fn non_submit_single_line_commit_keeps_edit_plan_instead_of_submit_plan() {
         assert!(matches!(
             plan_ime_event_for_state(
@@ -3178,7 +2183,6 @@ mod tests {
 
         assert_eq!(ime_request.local_position, PxPosition::ZERO);
         assert_eq!(ime_request.size, PxSize::new(Px(120), Px(40)));
-        assert_eq!(ime_request.selection_range, Some(2..6));
         assert_eq!(ime_request.selection_range, Some(2..6));
         assert_eq!(ime_request.composition_range, None);
     }

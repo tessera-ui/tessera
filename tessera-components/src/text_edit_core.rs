@@ -36,12 +36,15 @@ use tessera_ui::{
 };
 use winit::keyboard::NamedKey;
 
-use crate::pipelines::{
-    shape::command::ShapeCommand,
-    text::{
-        command::{TextCommand, TextConstraint},
-        pipeline::{TextData, write_font_system},
+use crate::{
+    pipelines::{
+        shape::command::ShapeCommand,
+        text::{
+            command::{TextCommand, TextConstraint},
+            pipeline::{TextData, color_to_glyphon, write_font_system},
+        },
     },
+    theme::TextStyle,
 };
 
 /// Width of the caret drawn by the text editor in device-independent pixels.
@@ -495,6 +498,7 @@ struct TextEditState {
     display_transform: Option<DisplayTransform>,
     text_color: Color,
     cursor_color: Color,
+    style: TextStyle,
     single_line: bool,
     pending_preview: Option<PendingPreview>,
 }
@@ -833,19 +837,13 @@ impl TextEditState {
 
     fn set_text_and_selection(&mut self, text: &str, selection: TextSelection) {
         self.editor.with_buffer_mut(|buffer| {
-            let color = glyphon::Color::rgba(
-                (self.text_color.r * 255.0) as u8,
-                (self.text_color.g * 255.0) as u8,
-                (self.text_color.b * 255.0) as u8,
-                (self.text_color.a * 255.0) as u8,
-            );
+            let color = color_to_glyphon(self.text_color);
+            let alignment = buffer.lines.first().and_then(|line| line.align());
             buffer.set_text(
                 text,
-                &glyphon::Attrs::new()
-                    .family(glyphon::fontdb::Family::SansSerif)
-                    .color(color),
+                &editor_font_attrs(self.style).color(color),
                 glyphon::Shaping::Advanced,
-                None,
+                alignment,
             );
             buffer.set_redraw(true);
         });
@@ -1020,20 +1018,6 @@ impl TextSelectionState {
         (next_offset != anchor_offset).then_some(TextSelection {
             start: anchor_offset,
             end: next_offset,
-        })
-    }
-
-    #[cfg(test)]
-    fn selection_cursor_range(
-        &self,
-        selection: TextSelection,
-        edit_state: &TextEditState,
-    ) -> Option<(Cursor, Cursor)> {
-        (!selection.is_collapsed()).then(|| {
-            (
-                edit_state.text_offset_to_cursor(selection.start),
-                edit_state.text_offset_to_cursor(selection.end),
-            )
         })
     }
 
@@ -1982,6 +1966,11 @@ impl TextEditorController {
                 display_transform: None,
                 text_color,
                 cursor_color,
+                style: TextStyle {
+                    font_size: size,
+                    line_height: Some(final_line_height),
+                    ..Default::default()
+                },
                 single_line: false,
                 pending_preview: None,
             },
@@ -2034,6 +2023,7 @@ impl TextEditorController {
                         &constraint,
                         self.wrap_mode(),
                         scroll,
+                        Some(self.edit_state.style),
                     );
                     (Some(text_buffer), Some(transformed))
                 }
@@ -2131,6 +2121,32 @@ impl TextEditorController {
         let current_text = self.text();
         let selection = self.selection();
         self.set_text_and_selection(&current_text, selection);
+    }
+
+    /// Returns the typography used by editable text.
+    pub fn text_style(&self) -> TextStyle {
+        self.edit_state.style
+    }
+
+    /// Sets typography while preserving text and selection.
+    pub fn set_text_style(&mut self, style: TextStyle) {
+        if self.edit_state.style == style {
+            return;
+        }
+        self.edit_state.style = style;
+        self.line_height = style
+            .line_height
+            .unwrap_or(Dp(style.font_size.0 * 1.2))
+            .to_px();
+        self.edit_state.editor.with_buffer_mut(|buffer| {
+            buffer.set_metrics(glyphon::Metrics::new(
+                style.font_size.to_pixels_f32(),
+                self.line_height.to_f32(),
+            ));
+        });
+        let text = self.text();
+        let selection = self.selection();
+        self.set_text_and_selection(&text, selection);
     }
 
     /// Returns the cursor color.
@@ -2692,12 +2708,6 @@ impl TextEditorController {
         self.edit_state.selection()
     }
 
-    #[cfg(test)]
-    fn selection_cursor_range(&self) -> Option<(Cursor, Cursor)> {
-        self.selection_state
-            .selection_cursor_range(self.selection(), &self.edit_state)
-    }
-
     pub(crate) fn composition(&self) -> Option<&ImeComposition> {
         self.ime_state.composition()
     }
@@ -2916,11 +2926,6 @@ impl TextEditorController {
         self.ensure_cursor_visible();
         self.ime_state.clear();
         self.invalidate_text_layout();
-    }
-
-    #[cfg(test)]
-    fn cursor_to_text_offset(&self, cursor: Cursor) -> usize {
-        self.edit_state.cursor_to_text_offset(cursor)
     }
 
     fn text_offset_to_cursor(&self, offset: usize) -> Cursor {
@@ -3223,12 +3228,21 @@ fn rebase_offset(before: &str, after: &str, offset: usize) -> usize {
 }
 
 fn glyphon_color(color: Color) -> glyphon::Color {
-    glyphon::Color::rgba(
-        (color.r * 255.0) as u8,
-        (color.g * 255.0) as u8,
-        (color.b * 255.0) as u8,
-        (color.a * 255.0) as u8,
-    )
+    color_to_glyphon(color)
+}
+
+fn editor_font_attrs(style: TextStyle) -> glyphon::Attrs<'static> {
+    glyphon::Attrs::new()
+        .family(style.font_family.map_or(
+            glyphon::fontdb::Family::SansSerif,
+            glyphon::fontdb::Family::Name,
+        ))
+        .weight(glyphon::Weight(style.font_weight.clamp(1, 1000)))
+        .letter_spacing(if style.font_size.0 > 0.0 {
+            (style.letter_spacing.0 / style.font_size.0) as f32
+        } else {
+            0.0
+        })
 }
 
 fn build_display_buffer(
@@ -3239,6 +3253,7 @@ fn build_display_buffer(
     constraint: &TextConstraint,
     wrap: glyphon::Wrap,
     scroll: glyphon::cosmic_text::Scroll,
+    style: Option<TextStyle>,
 ) -> glyphon::Buffer {
     let mut buffer = glyphon::Buffer::new(
         &mut write_font_system(),
@@ -3248,9 +3263,7 @@ fn build_display_buffer(
     buffer.set_size(constraint.max_width, constraint.max_height);
     buffer.set_text(
         text,
-        &glyphon::Attrs::new()
-            .family(glyphon::fontdb::Family::SansSerif)
-            .color(glyphon_color(color)),
+        &editor_font_attrs(style.unwrap_or_default()).color(glyphon_color(color)),
         glyphon::Shaping::Advanced,
         None,
     );
@@ -3593,6 +3606,7 @@ mod tests {
             &constraint,
             controller.wrap_mode(),
             scroll,
+            Some(controller.text_style()),
         );
         controller.set_layout_snapshot_buffer(buffer, Some(transformed.clone()));
         transformed
@@ -3771,19 +3785,6 @@ mod tests {
             controller.scroll_state().as_scroll(),
             controller.editor().with_buffer(|buffer| buffer.scroll())
         );
-    }
-
-    #[test]
-    fn selection_cursor_range_preserves_backward_selection_direction() {
-        let mut controller = controller_with_text("hello");
-        controller.set_text_and_selection("hello", TextSelection { start: 4, end: 1 });
-
-        let (anchor, cursor) = controller
-            .selection_cursor_range()
-            .expect("selection cursor range should exist");
-
-        assert_eq!(controller.cursor_to_text_offset(anchor), 4);
-        assert_eq!(controller.cursor_to_text_offset(cursor), 1);
     }
 
     #[test]
@@ -4600,6 +4601,7 @@ mod tests {
             &constraint,
             controller.wrap_mode(),
             scroll,
+            Some(controller.text_style()),
         );
         controller.set_layout_snapshot_buffer(buffer.clone(), Some(transformed.clone()));
 
@@ -4731,6 +4733,7 @@ mod tests {
             &constraint,
             controller.wrap_mode(),
             scroll,
+            Some(controller.text_style()),
         );
         controller.set_layout_snapshot_buffer(buffer, Some(transformed));
         controller.set_text_and_selection("123456\nabcdef", TextSelection::collapsed(4));
@@ -4886,6 +4889,7 @@ mod tests {
             &constraint,
             glyphon::Wrap::None,
             glyphon::cosmic_text::Scroll::default(),
+            None,
         );
         let expected_start = text_offset_to_cursor_in_buffer(&buffer, transformed.map_from_raw(3));
         let expected_x = build_display_editor(buffer.clone(), expected_start, None)
@@ -4952,5 +4956,31 @@ mod tests {
                 height: tessera_ui::Px(18),
             })
         );
+    }
+    #[test]
+    fn typography_changes_preserve_selection_and_apply_to_subsequent_edits() {
+        let mut controller = TextEditorController::new(Dp(16.0), Some(Dp(24.0)));
+        let selection = TextSelection { start: 2, end: 8 };
+        controller.set_text_and_selection("Material typography", selection.clone());
+        let constraint = TextConstraint {
+            max_width: Some(1000.0),
+            max_height: None,
+        };
+        let before = controller.text_data(constraint.clone());
+        let style = crate::theme::TextStyle {
+            font_weight: 700,
+            letter_spacing: Dp(1.0),
+            ..crate::theme::MaterialTypography::default().body_large
+        };
+        controller.set_text_style(style);
+        assert_eq!(controller.selection(), selection);
+        assert_eq!(controller.text(), "Material typography");
+        assert!(controller.text_data(constraint.clone()).size[0] > before.size[0]);
+        controller.set_text("Roboto");
+        let _ = controller.text_data(constraint);
+        let buffer = controller.editor().with_buffer(Clone::clone);
+        let glyph = &buffer.layout_runs().next().unwrap().glyphs[0];
+        let system = crate::pipelines::text::pipeline::read_font_system();
+        assert_eq!(system.db().face(glyph.font_id).unwrap().weight.0, 700);
     }
 }

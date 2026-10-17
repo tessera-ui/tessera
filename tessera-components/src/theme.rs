@@ -10,7 +10,7 @@ use material_color_utilities::{
 };
 use tessera_ui::{CallbackWith, Color, Dp, RenderSlot, provide_context, tessera};
 
-use crate::shape_def::Shape;
+use crate::shape_def::{RoundedCorner, Shape};
 
 const DEFAULT_COLOR: Color = Color::from_rgb(0.4039, 0.3137, 0.6431); // #6750A4
 
@@ -76,14 +76,19 @@ pub fn content_color_for(background: Color, scheme: &MaterialColorScheme) -> Opt
     scheme.content_color_for(background)
 }
 
-/// A simple text style used by components to derive default font size and line
-/// height.
+/// Font family, metrics, weight, and tracking for a single text style.
 #[derive(Clone, PartialEq, Copy, Debug)]
 pub struct TextStyle {
     /// Font size in density-independent pixels (dp).
     pub font_size: Dp,
     /// Optional line height override in density-independent pixels (dp).
     pub line_height: Option<Dp>,
+    /// CSS-compatible font weight, from 1 to 1000.
+    pub font_weight: u16,
+    /// Extra spacing between letters in density-independent pixels.
+    pub letter_spacing: Dp,
+    /// Optional named font family; `None` uses the default sans-serif family.
+    pub font_family: Option<&'static str>,
 }
 
 impl Default for TextStyle {
@@ -91,6 +96,9 @@ impl Default for TextStyle {
         Self {
             font_size: Dp(16.0),
             line_height: Some(Dp(24.0)),
+            font_weight: 400,
+            letter_spacing: Dp(0.0),
+            font_family: None,
         }
     }
 }
@@ -136,64 +144,144 @@ impl Default for MaterialTypography {
             display_large: TextStyle {
                 font_size: Dp(57.0),
                 line_height: Some(Dp(64.0)),
+                font_weight: 400,
+                letter_spacing: Dp(-0.2),
+                font_family: None,
             },
             display_medium: TextStyle {
                 font_size: Dp(45.0),
                 line_height: Some(Dp(52.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.0),
+                font_family: None,
             },
             display_small: TextStyle {
                 font_size: Dp(36.0),
                 line_height: Some(Dp(44.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.0),
+                font_family: None,
             },
             headline_large: TextStyle {
                 font_size: Dp(32.0),
                 line_height: Some(Dp(40.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.0),
+                font_family: None,
             },
             headline_medium: TextStyle {
                 font_size: Dp(28.0),
                 line_height: Some(Dp(36.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.0),
+                font_family: None,
             },
             headline_small: TextStyle {
                 font_size: Dp(24.0),
                 line_height: Some(Dp(32.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.0),
+                font_family: None,
             },
             title_large: TextStyle {
                 font_size: Dp(22.0),
                 line_height: Some(Dp(28.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.0),
+                font_family: None,
             },
             title_medium: TextStyle {
                 font_size: Dp(16.0),
                 line_height: Some(Dp(24.0)),
+                font_weight: 500,
+                letter_spacing: Dp(0.2),
+                font_family: None,
             },
             title_small: TextStyle {
                 font_size: Dp(14.0),
                 line_height: Some(Dp(20.0)),
+                font_weight: 500,
+                letter_spacing: Dp(0.1),
+                font_family: None,
             },
             body_large: TextStyle {
                 font_size: Dp(16.0),
                 line_height: Some(Dp(24.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.5),
+                font_family: None,
             },
             body_medium: TextStyle {
                 font_size: Dp(14.0),
                 line_height: Some(Dp(20.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.2),
+                font_family: None,
             },
             body_small: TextStyle {
                 font_size: Dp(12.0),
                 line_height: Some(Dp(16.0)),
+                font_weight: 400,
+                letter_spacing: Dp(0.4),
+                font_family: None,
             },
             label_large: TextStyle {
                 font_size: Dp(14.0),
                 line_height: Some(Dp(20.0)),
+                font_weight: 500,
+                letter_spacing: Dp(0.1),
+                font_family: None,
             },
             label_medium: TextStyle {
                 font_size: Dp(12.0),
                 line_height: Some(Dp(16.0)),
+                font_weight: 500,
+                letter_spacing: Dp(0.5),
+                font_family: None,
             },
             label_small: TextStyle {
                 font_size: Dp(11.0),
                 line_height: Some(Dp(16.0)),
+                font_weight: 500,
+                letter_spacing: Dp(0.5),
+                font_family: None,
             },
         }
+    }
+}
+
+impl MaterialTypography {
+    /// Returns the emphasized type scale with stronger weights and tracking.
+    pub fn emphasized(&self) -> Self {
+        let mut scale = *self;
+        for style in [
+            &mut scale.display_large,
+            &mut scale.display_medium,
+            &mut scale.display_small,
+            &mut scale.headline_large,
+            &mut scale.headline_medium,
+            &mut scale.headline_small,
+            &mut scale.title_large,
+            &mut scale.body_large,
+            &mut scale.body_medium,
+            &mut scale.body_small,
+        ] {
+            style.font_weight = 500;
+        }
+        for style in [
+            &mut scale.title_medium,
+            &mut scale.title_small,
+            &mut scale.label_large,
+            &mut scale.label_medium,
+            &mut scale.label_small,
+        ] {
+            style.font_weight = 700;
+        }
+        scale.display_large.letter_spacing = Dp(0.0);
+        scale.body_large.letter_spacing = Dp(0.15);
+        scale.body_medium.letter_spacing = Dp(0.25);
+        scale.title_medium.letter_spacing = Dp(0.15);
+        scale
     }
 }
 
@@ -208,18 +296,30 @@ pub struct MaterialShapes {
     pub medium: Shape,
     /// Large container shape.
     pub large: Shape,
+    /// Increased large container shape for prominent medium-sized controls.
+    pub large_increased: Shape,
     /// Extra large container shape.
     pub extra_large: Shape,
 }
 
 impl Default for MaterialShapes {
     fn default() -> Self {
+        let rounded = |radius| {
+            let corner = RoundedCorner::manual(Dp(radius), 2.0);
+            Shape::RoundedRectangle {
+                top_left: corner,
+                top_right: corner,
+                bottom_left: corner,
+                bottom_right: corner,
+            }
+        };
         Self {
-            extra_small: Shape::rounded_rectangle(Dp(4.0)),
-            small: Shape::rounded_rectangle(Dp(8.0)),
-            medium: Shape::rounded_rectangle(Dp(12.0)),
-            large: Shape::rounded_rectangle(Dp(16.0)),
-            extra_large: Shape::rounded_rectangle(Dp(28.0)),
+            extra_small: rounded(4.0),
+            small: rounded(8.0),
+            medium: rounded(12.0),
+            large: rounded(16.0),
+            large_increased: rounded(20.0),
+            extra_large: rounded(28.0),
         }
     }
 }

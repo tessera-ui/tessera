@@ -183,6 +183,8 @@ struct TextFieldProps {
     pub font_size: Dp,
     /// Line height in Dp.
     pub line_height: Option<Dp>,
+    /// Optional typography override for editable text.
+    pub style: Option<TextStyle>,
     /// Optional label text shown inside the field and floated when focused or
     /// non-empty.
     pub label: Option<String>,
@@ -276,6 +278,7 @@ impl Default for TextFieldProps {
             initial_text: None,
             font_size: Dp(16.0),
             line_height: Some(Dp(24.0)),
+            style: None,
             label: None,
             placeholder: None,
             leading_icon: None,
@@ -378,6 +381,7 @@ fn build_editor_args(
         initial_text: args.initial_text.clone(),
         font_size: args.font_size,
         line_height: args.line_height,
+        style: args.style,
         single_line: matches!(args.line_limit, TextFieldLineLimit::SingleLine),
         input_transform,
         display_transform,
@@ -593,6 +597,7 @@ fn outlined_floating_label(
     notch_padding: Option<Dp>,
     notch_vertical_padding: Option<Dp>,
 ) {
+    let typography = use_context::<MaterialTheme>().unwrap().get().typography;
     let label_text = label_text.unwrap_or_default();
     let label_color = label_color.unwrap_or(Color::TRANSPARENT);
     let label_font_size = label_font_size.unwrap_or(Dp(0.0));
@@ -616,6 +621,7 @@ fn outlined_floating_label(
                 .style(TextStyle {
                     font_size: label_font_size,
                     line_height: Some(label_line_height),
+                    ..typography.body_small
                 });
         });
 }
@@ -653,6 +659,7 @@ fn text_field_content(
         TextStyle {
             font_size: style.font_size,
             line_height: Some(style.line_height.unwrap_or(Dp(style.font_size.0 * 1.2))),
+            ..style
         }
     };
     let label_resting_style = {
@@ -660,6 +667,7 @@ fn text_field_content(
         TextStyle {
             font_size: style.font_size,
             line_height: Some(style.line_height.unwrap_or(Dp(style.font_size.0 * 1.2))),
+            ..style
         }
     };
     let placeholder_style = placeholder_text_style(&theme);
@@ -1069,6 +1077,7 @@ fn text_field_menu_content(
 /// - `accessibility_description` — optional accessibility description.
 /// - `initial_text` — optional initial text content.
 /// - `font_size` — font size in Dp.
+/// - `style` — typography override, including weight and letter spacing.
 /// - `line_height` — optional line height in Dp.
 /// - `label` — optional label text.
 /// - `placeholder` — optional placeholder text.
@@ -1129,6 +1138,7 @@ pub fn text_field(
     #[prop(into)] initial_text: Option<String>,
     font_size: Option<Dp>,
     line_height: Option<Dp>,
+    style: Option<TextStyle>,
     #[prop(into)] label: Option<String>,
     #[prop(into)] placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
@@ -1143,10 +1153,10 @@ pub fn text_field(
     #[prop(skip_setter)] display_transform: Option<DisplayTransform>,
     controller: Option<State<TextInputController>>,
 ) {
-    let scheme = use_context::<MaterialTheme>()
+    let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+        .get();
+    let scheme = theme.color_scheme;
     let selection_colors = TextSelectionColors::from_scheme(&scheme);
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
@@ -1156,15 +1166,22 @@ pub fn text_field(
     let min_height = min_height.or(Some(TextFieldDefaults::MIN_HEIGHT));
     let background_color = background_color.or(Some(scheme.surface_container_highest));
     let border_width = border_width.unwrap_or(TextFieldProps::default().border_width);
-    let shape = shape.unwrap_or(TextFieldProps::default().shape);
+    let shape = shape.unwrap_or_else(|| {
+        if border_width.0 > 0.0 {
+            theme.shapes.extra_small
+        } else {
+            filled_container_shape(&theme.shapes)
+        }
+    });
     let padding = padding.unwrap_or(TextFieldProps::default().padding);
     let focus_border_color = focus_border_color.or(Some(scheme.primary));
     let focus_background_color = focus_background_color.or(Some(scheme.surface_container_highest));
     let selection_color = selection_color.or(Some(selection_colors.background));
     let text_color = text_color.or(Some(scheme.on_surface));
     let cursor_color = cursor_color.or(Some(scheme.primary));
-    let font_size = font_size.unwrap_or(TextFieldProps::default().font_size);
-    let line_height = line_height.or(TextFieldProps::default().line_height);
+    let style = style.unwrap_or(theme.typography.body_large);
+    let font_size = font_size.unwrap_or(style.font_size);
+    let line_height = line_height.or(style.line_height);
     let show_indicator = show_indicator.unwrap_or(true);
     let line_limit = line_limit.unwrap_or(TextFieldProps::default().line_limit);
     let context_menu = context_menu.unwrap_or(TextFieldProps::default().context_menu);
@@ -1193,6 +1210,11 @@ pub fn text_field(
         initial_text,
         font_size,
         line_height,
+        style: Some(TextStyle {
+            font_size,
+            line_height,
+            ..style
+        }),
         label,
         placeholder,
         leading_icon,
@@ -1475,6 +1497,71 @@ mod tests {
                     .with_alpha(crate::text_input::DISABLED_CONTENT_ALPHA),
                 TextFieldDefaults::INDICATOR_THICKNESS
             )
+        );
+    }
+    thread_local! {
+        static FIELD_CONTROLLER: std::cell::Cell<Option<tessera_ui::State<crate::text_input::TextInputController>>> = const { std::cell::Cell::new(None) };
+    }
+
+    #[tessera_ui::tessera]
+    fn pointer_focus_fixture() {
+        let controller = tessera_ui::remember(|| {
+            crate::text_input::TextInputController::new(
+                tessera_ui::Dp(16.0),
+                Some(tessera_ui::Dp(24.0)),
+            )
+        });
+        FIELD_CONTROLLER.set(Some(controller));
+        crate::theme::material_theme().child(move || {
+            crate::column::column().children(move || {
+                super::TextFieldBuilder::outlined()
+                    .label("Date")
+                    .controller(controller);
+            });
+        });
+    }
+
+    #[test]
+    fn clicking_an_empty_outlined_field_focuses_its_editor() {
+        use tessera_ui::{
+            CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition,
+            testing::{
+                layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
+                start_layout_test_session,
+            },
+        };
+        let mut session = start_layout_test_session(
+            layout_test(|| {
+                pointer_focus_fixture();
+            })
+            .viewport_px(400, 200),
+        );
+        pump_layout_test_session(&mut session, 0);
+        for (index, content) in [
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            CursorEventContent::Released(PressKeyEventType::Left),
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            pump_layout_test_session_with_input(
+                &mut session,
+                (index as u64 + 1) * 16_666_667,
+                vec![PointerChange::new(
+                    tessera_ui::time::Instant::now(),
+                    1,
+                    content,
+                    GestureState::TapCandidate,
+                )],
+                Some(PxPosition::from_f32_xy(100.0, 28.0)),
+            );
+        }
+        pump_layout_test_session(&mut session, 50_000_001);
+        assert!(
+            FIELD_CONTROLLER
+                .get()
+                .unwrap()
+                .with(|c| c.focus_handler().is_focused())
         );
     }
 }

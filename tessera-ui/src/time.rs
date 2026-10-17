@@ -1,12 +1,11 @@
-//! Cross-platform monotonic time helpers.
+//! Cross-platform clocks for elapsed time and calendar dates.
 //!
 //! ## Usage
 //!
-//! Use `Instant` for frame timing and animations on both native and web
-//! targets.
+//! Use `Instant` for animations and `SystemTime` for calendar features.
 
 #[cfg(not(target_family = "wasm"))]
-pub use std::time::Instant;
+pub use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 #[cfg(target_family = "wasm")]
-pub use web_time::Instant;
+pub use web_time::{Instant, SystemTime, UNIX_EPOCH};

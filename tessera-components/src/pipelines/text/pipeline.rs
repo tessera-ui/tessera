@@ -24,6 +24,8 @@ use tessera_ui::{
     wgpu,
 };
 
+use crate::theme::TextStyle;
+
 use super::command::{TextCommand, TextConstraint};
 
 #[cfg(target_family = "wasm")]
@@ -52,7 +54,7 @@ fn linear_to_srgb_channel(value: f32) -> f32 {
     }
 }
 
-fn color_to_glyphon(color: Color) -> glyphon::Color {
+pub(crate) fn color_to_glyphon(color: Color) -> glyphon::Color {
     let r = (linear_to_srgb_channel(color.r) * 255.0 + 0.5) as u8;
     let g = (linear_to_srgb_channel(color.g) * 255.0 + 0.5) as u8;
     let b = (linear_to_srgb_channel(color.b) * 255.0 + 0.5) as u8;
@@ -66,6 +68,14 @@ struct LruKey {
     line_height: f32,
     /// The final computed bounds, used as the cache key instead of constraint.
     bounds: [u32; 2],
+    font: TextFont,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+struct TextFont {
+    weight: u16,
+    tracking: f32,
+    family: Option<&'static str>,
 }
 
 impl PartialEq for LruKey {
@@ -74,6 +84,7 @@ impl PartialEq for LruKey {
             && self.font_size.to_bits() == other.font_size.to_bits()
             && self.line_height.to_bits() == other.line_height.to_bits()
             && self.bounds == other.bounds
+            && self.font == other.font
     }
 }
 
@@ -85,6 +96,9 @@ impl std::hash::Hash for LruKey {
         self.font_size.to_bits().hash(state);
         self.line_height.to_bits().hash(state);
         self.bounds.hash(state);
+        self.font.weight.hash(state);
+        self.font.tracking.to_bits().hash(state);
+        self.font.family.hash(state);
     }
 }
 
@@ -96,6 +110,36 @@ fn write_lru_cache() -> RwLockWriteGuard<'static, lru::LruCache<LruKey, TextData
             ))
         })
         .write()
+}
+
+fn load_material_fonts(db: &mut fontdb::Database) {
+    let existing: Vec<_> = db
+        .faces()
+        .filter(|face| face.families.iter().any(|(name, _)| name == "Roboto"))
+        .map(|face| face.id)
+        .collect();
+    for id in existing {
+        db.remove_face(id);
+    }
+    #[cfg(not(target_family = "wasm"))]
+    for bytes in [
+        include_bytes!("../../../assets/Roboto-Regular.ttf").as_slice(),
+        include_bytes!("../../../assets/Roboto-Medium.ttf").as_slice(),
+        include_bytes!("../../../assets/Roboto-Bold.ttf").as_slice(),
+    ] {
+        db.load_font_data(bytes.to_vec());
+    }
+    #[cfg(target_family = "wasm")]
+    for asset in [
+        res::ROBOTO_REGULAR_TTF,
+        res::ROBOTO_MEDIUM_TTF,
+        res::ROBOTO_BOLD_TTF,
+    ] {
+        if let Err(err) = load_asset_font_data(db, asset) {
+            eprintln!("wasm fontdb: failed to load Roboto asset: {err}");
+        }
+    }
+    db.set_sans_serif_family("Roboto");
 }
 
 #[cfg(target_os = "android")]
@@ -157,6 +201,7 @@ fn init_font_system() -> RwLock<glyphon::FontSystem> {
         let db = font_system.db_mut();
         db.load_fonts_dir("/system/fonts");
         ensure_android_emoji_font(db);
+        load_material_fonts(db);
         db.set_sans_serif_family("Roboto");
         db.set_serif_family("Noto Serif");
         db.set_monospace_family("Droid Sans Mono");
@@ -187,7 +232,7 @@ fn init_font_system() -> RwLock<glyphon::FontSystem> {
         if let Err(err) = load_asset_font_data(db, res::NOTOCOLOREMOJI_COLRV0_TTF) {
             eprintln!("wasm fontdb: failed to load emoji font asset: {err}");
         }
-        db.set_sans_serif_family("Noto Sans SC");
+        load_material_fonts(db);
         db.set_serif_family("Noto Sans SC");
         db.set_monospace_family("Noto Sans SC");
         db.set_cursive_family("Noto Sans SC");
@@ -200,7 +245,9 @@ fn init_font_system() -> RwLock<glyphon::FontSystem> {
 #[cfg(not(target_os = "android"))]
 #[cfg(not(target_family = "wasm"))]
 fn init_font_system() -> RwLock<glyphon::FontSystem> {
-    RwLock::new(glyphon::FontSystem::new())
+    let mut font_system = glyphon::FontSystem::new();
+    load_material_fonts(font_system.db_mut());
+    RwLock::new(font_system)
 }
 
 /// It costs a lot to create a glyphon font system, so we use a static one
@@ -357,6 +404,7 @@ pub struct TextData {
     text: String,
     font_size: f32,
     line_height: f32,
+    font: TextFont,
 }
 
 /// Measurement result returned by `TextData::measure()`.
@@ -384,6 +432,7 @@ impl PartialEq for TextData {
             && self.text == other.text
             && self.font_size == other.font_size
             && self.line_height == other.line_height
+            && self.font == other.font
     }
 }
 
@@ -392,17 +441,28 @@ impl TextData {
     pub(crate) fn shape(
         text: String,
         color: Color,
-        font_size: f32,
-        line_height: f32,
+        style: TextStyle,
         constraint: TextConstraint,
     ) -> Self {
+        let font_size = style.font_size.to_pixels_f32();
+        let line_height = style.line_height.unwrap_or(style.font_size).to_pixels_f32();
+        let font = TextFont {
+            weight: style.font_weight.clamp(1, 1000),
+            tracking: if font_size > 0.0 {
+                style.letter_spacing.to_pixels_f32() / font_size
+            } else {
+                0.0
+            },
+            family: style.font_family,
+        };
         let (text_buffer, bounds, first_baseline, last_baseline, line_count) =
-            Self::build_buffer(&text, font_size, line_height, &constraint);
+            Self::build_buffer(&text, font_size, line_height, font, &constraint);
         let key = LruKey {
             text: text.clone(),
             font_size,
             line_height,
             bounds,
+            font,
         };
         let data = Self {
             text_buffer,
@@ -415,6 +475,7 @@ impl TextData {
             text,
             font_size,
             line_height,
+            font,
         };
         write_lru_cache().put(key, data.clone());
         data
@@ -422,7 +483,6 @@ impl TextData {
 
     /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
-        // Calculate total height including descender for the last line
         let metrics = text_buffer.metrics();
         // Calculate text bounds
         let mut run_width: f32 = 0.0;
@@ -438,8 +498,19 @@ impl TextData {
             last_baseline = run.line_y;
             line_count += 1;
         }
-        let descent_amount = (metrics.line_height - metrics.font_size).max(0.0);
-        let total_height = line_count as f32 * metrics.line_height + descent_amount;
+        if text_buffer.lines.iter().any(|line| {
+            matches!(
+                line.align(),
+                Some(
+                    glyphon::cosmic_text::Align::Center
+                        | glyphon::cosmic_text::Align::Right
+                        | glyphon::cosmic_text::Align::End
+                )
+            )
+        }) {
+            run_width = text_buffer.size().0.unwrap_or(run_width);
+        }
+        let total_height = line_count as f32 * metrics.line_height;
         // build text data
         Self {
             text_buffer,
@@ -452,6 +523,11 @@ impl TextData {
             text: String::new(),
             font_size: metrics.font_size,
             line_height: metrics.line_height,
+            font: TextFont {
+                weight: 400,
+                tracking: 0.0,
+                family: None,
+            },
         }
     }
 
@@ -478,17 +554,25 @@ impl TextData {
         text: &str,
         size: f32,
         line_height: f32,
+        font: TextFont,
         constraint: &TextConstraint,
     ) -> (glyphon::Buffer, [u32; 2], f32, f32, u32) {
         let mut text_buffer = glyphon::Buffer::new(
             &mut write_font_system(),
             glyphon::Metrics::new(size, line_height),
         );
-        text_buffer.set_wrap(glyphon::Wrap::Glyph);
+        text_buffer.set_wrap(glyphon::Wrap::WordOrGlyph);
         text_buffer.set_size(constraint.max_width, constraint.max_height);
         text_buffer.set_text(
             text,
-            &glyphon::Attrs::new().family(fontdb::Family::SansSerif),
+            &glyphon::Attrs::new()
+                .family(
+                    font.family
+                        .map(fontdb::Family::Name)
+                        .unwrap_or(fontdb::Family::SansSerif),
+                )
+                .weight(glyphon::Weight(font.weight))
+                .letter_spacing(font.tracking),
             glyphon::Shaping::Advanced,
             None,
         );
@@ -507,8 +591,7 @@ impl TextData {
             last_baseline = run.line_y;
             line_count += 1;
         }
-        let descent_amount = (metrics.line_height - metrics.font_size).max(0.0);
-        let total_height = line_count as f32 * metrics.line_height + descent_amount;
+        let total_height = line_count as f32 * metrics.line_height;
         (
             text_buffer,
             [run_width.ceil() as u32, total_height.ceil() as u32],
@@ -544,5 +627,98 @@ impl TextData {
         }
 
         self.current_color = target_color;
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::{Color, Dp};
+
+    use crate::theme::MaterialTypography;
+
+    use super::{TextConstraint, TextData, read_font_system};
+
+    #[test]
+    fn wrapping_keeps_words_intact_and_falls_back_for_words_wider_than_the_line() {
+        let style = MaterialTypography::default().body_medium;
+        let alpha = TextData::shape(
+            "alpha ".to_string(),
+            Color::BLACK,
+            style,
+            TextConstraint {
+                max_width: None,
+                max_height: None,
+            },
+        );
+        let beta = TextData::shape(
+            "beta".to_string(),
+            Color::BLACK,
+            style,
+            TextConstraint {
+                max_width: None,
+                max_height: None,
+            },
+        );
+        let width = alpha.size[0] as f32 + beta.size[0] as f32 / 2.0;
+        let phrase = TextData::shape(
+            "alpha beta".to_string(),
+            Color::BLACK,
+            style,
+            TextConstraint {
+                max_width: Some(width),
+                max_height: None,
+            },
+        );
+        let runs: Vec<_> = phrase.text_buffer.layout_runs().collect();
+        assert_eq!(runs.len(), 2);
+        assert!(runs[0].glyphs.iter().all(|glyph| glyph.end <= 6));
+        assert_eq!(runs[1].glyphs[0].start, 6);
+        let long = TextData::shape(
+            "supercalifragilisticexpialidocious".to_string(),
+            Color::BLACK,
+            style,
+            TextConstraint {
+                max_width: Some(width),
+                max_height: None,
+            },
+        );
+        let runs: Vec<_> = long.text_buffer.layout_runs().collect();
+        assert!(runs.len() > 1);
+        assert!(runs.iter().all(|run| run.line_w <= width + 1.0));
+    }
+
+    #[test]
+    fn material_text_uses_bundled_weight_and_tracking_with_exact_line_height() {
+        let typography = MaterialTypography::default();
+        let shape = |style| {
+            TextData::shape(
+                "Material typography".to_owned(),
+                Color::BLACK,
+                style,
+                TextConstraint {
+                    max_width: None,
+                    max_height: None,
+                },
+            )
+        };
+        let regular = shape(typography.body_large);
+        let medium = shape(crate::theme::TextStyle {
+            font_weight: 500,
+            ..typography.body_large
+        });
+        let untracked = shape(crate::theme::TextStyle {
+            letter_spacing: Dp(0.0),
+            ..typography.body_large
+        });
+        assert_eq!(regular.size[1], Dp(24.0).to_pixels_f32().ceil() as u32);
+        assert!(regular.first_baseline > 0.0 && regular.first_baseline < regular.size[1] as f32);
+        assert!(regular.size[0] > untracked.size[0]);
+        let font_system = read_font_system();
+        for (data, weight) in [(&regular, 400), (&medium, 500)] {
+            let glyph = &data.text_buffer.layout_runs().next().unwrap().glyphs[0];
+            let face = font_system.db().face(glyph.font_id).unwrap();
+            assert_eq!(face.weight.0, weight);
+            assert!(face.families.iter().any(|(family, _)| family == "Roboto"));
+        }
     }
 }

@@ -3,11 +3,14 @@
 //! ## Usage
 //!
 //! Display labels, headings, and other text content.
+use std::sync::Arc;
+
+use parking_lot::Mutex;
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     accesskit::Role,
     layout::{MeasureScope, layout},
-    tessera, use_context,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -55,6 +58,7 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 ///         .style(tessera_components::theme::TextStyle {
 ///             font_size: Dp(32.0),
 ///             line_height: Some(Dp(40.0)),
+///             ..Default::default()
 ///         });
 /// }
 ///
@@ -100,9 +104,14 @@ pub fn text(
     let policy = TextLayout {
         text: content.clone(),
         color,
-        size,
-        line_height,
-        shaped: std::sync::Arc::new(std::sync::OnceLock::new()),
+        style: TextStyle {
+            font_size: size,
+            line_height: Some(line_height),
+            ..resolved_style
+        },
+        // A draw-only rebuild can reuse measurement, so its glyph buffer must
+        // survive independently of the newly constructed layout policy.
+        shaped: remember(|| Arc::new(Mutex::new(None))).get(),
     };
     layout()
         .modifier(modifier.semantics(semantics))
@@ -114,34 +123,43 @@ pub fn text(
 struct TextLayout {
     text: String,
     color: Color,
-    size: Dp,
-    line_height: Dp,
-    shaped: std::sync::Arc<std::sync::OnceLock<TextData>>,
+    style: TextStyle,
+    shaped: Arc<Mutex<Option<CachedText>>>,
+}
+
+struct CachedText {
+    text: String,
+    style: TextStyle,
+    font_size_px: f32,
+    constraint: TextConstraint,
+    data: TextData,
 }
 
 impl PartialEq for TextLayout {
     fn eq(&self, other: &Self) -> bool {
-        self.text == other.text
-            && self.color == other.color
-            && self.size == other.size
-            && self.line_height == other.line_height
+        self.text == other.text && self.color == other.color && self.style == other.style
     }
 }
 
 impl TextLayout {
     fn shaped_text(&self, constraint: TextConstraint) -> TextData {
-        let mut data = self
-            .shaped
-            .get_or_init(|| {
-                TextData::shape(
-                    self.text.clone(),
-                    self.color,
-                    self.size.to_pixels_f32(),
-                    self.line_height.to_pixels_f32(),
-                    constraint,
-                )
-            })
-            .clone();
+        let mut cache = self.shaped.lock();
+        let font_size_px = self.style.font_size.to_pixels_f32();
+        if cache.as_ref().is_none_or(|cached| {
+            cached.text != self.text
+                || cached.style != self.style
+                || cached.font_size_px != font_size_px
+                || cached.constraint != constraint
+        }) {
+            *cache = Some(CachedText {
+                text: self.text.clone(),
+                style: self.style,
+                font_size_px,
+                constraint: constraint.clone(),
+                data: TextData::shape(self.text.clone(), self.color, self.style, constraint),
+            });
+        }
+        let mut data = cache.as_ref().expect("text must be shaped").data.clone();
         data.set_color(self.color);
         data
     }
@@ -173,7 +191,12 @@ impl tessera_ui::DrawModifierNode for TextLayout {
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
         let input = &mut *ctx.render_input;
-        let Some(mut text_data) = self.shaped.get().cloned() else {
+        let Some(mut text_data) = self
+            .shaped
+            .lock()
+            .as_ref()
+            .map(|cached| cached.data.clone())
+        else {
             return;
         };
         text_data.set_color(self.color);
@@ -187,5 +210,98 @@ impl tessera_ui::DrawModifierNode for TextLayout {
             .fragment_mut()
             .push_draw_command(drawable);
         content.draw(input);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::Cell;
+
+    use tessera_ui::{
+        State,
+        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+    };
+
+    use crate::{boxed::boxed, column::column, theme::material_theme};
+
+    use super::*;
+
+    thread_local! { static WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) }; }
+
+    #[tessera]
+    fn reflow_fixture() {
+        let width = remember(|| Dp(120.0));
+        WIDTH.set(Some(width));
+        material_theme().child(move || {
+            column().children(move || {
+                boxed()
+                    .modifier(Modifier::new().width(width.get()).semantics(SemanticsArgs {
+                        test_tag: Some("wrapped-text".into()),
+                        ..Default::default()
+                    }))
+                    .children(|| {
+                        text()
+                            .content("Material labels stay readable when their containers resize.");
+                    });
+            });
+        });
+    }
+
+    #[test]
+    fn density_changes_remeasure_retained_content_without_state_writes() {
+        crate::test_utils::run_isolated_test(
+            "text::tests::density_changes_remeasure_retained_content_without_state_writes",
+            || {
+                tessera_ui::dp::set_scale_factor(1.0);
+                let mut session = start_layout_test_session(
+                    layout_test(|| {
+                        reflow_fixture();
+                    })
+                    .viewport_px(500, 400),
+                );
+                let original = pump_layout_test_session(&mut session, 0)
+                    .node("wrapped-text")
+                    .bounds();
+                let width = WIDTH.get().expect("fixture state");
+                tessera_ui::dp::set_scale_factor(1.5);
+                let scaled = pump_layout_test_session(&mut session, 16_666_667)
+                    .node("wrapped-text")
+                    .bounds();
+                assert_eq!(scaled.width, Px::new(180));
+                assert!(scaled.height > original.height);
+                assert!(WIDTH.get() == Some(width));
+                assert_eq!(width.get(), Dp(120.0));
+                tessera_ui::dp::set_scale_factor(1.0);
+                let restored = pump_layout_test_session(&mut session, 33_333_333)
+                    .node("wrapped-text")
+                    .bounds();
+                assert_eq!(restored, original);
+            },
+        );
+    }
+
+    #[test]
+    fn retained_text_reflows_when_its_parent_changes_width() {
+        let mut session = start_layout_test_session(
+            layout_test(|| {
+                reflow_fixture();
+            })
+            .viewport_px(500, 400),
+        );
+        let narrow = pump_layout_test_session(&mut session, 0)
+            .node("wrapped-text")
+            .bounds();
+        WIDTH.get().expect("fixture state").set(Dp(280.0));
+        let wide = pump_layout_test_session(&mut session, 16_666_667)
+            .node("wrapped-text")
+            .bounds();
+        assert_eq!(narrow.width, Px::new(120));
+        assert_eq!(wide.width, Px::new(280));
+        assert!(wide.height < narrow.height);
+        WIDTH.get().expect("fixture state").set(Dp(120.0));
+        let restored = pump_layout_test_session(&mut session, 33_333_333)
+            .node("wrapped-text")
+            .bounds();
+        assert_eq!(restored.height, narrow.height);
     }
 }

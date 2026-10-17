@@ -137,6 +137,9 @@ pub mod text_input;
 pub mod theme;
 pub mod time_picker;
 
+#[cfg(test)]
+mod test_utils;
+
 use tessera_platform::PlatformPackage;
 use tessera_ui::{EntryRegistry, PipelineContext, RenderModule, TesseraPackage};
 
