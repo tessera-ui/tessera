@@ -2,15 +2,15 @@
 //!
 //! ## Usage
 //!
-//! Describe rounded rectangles and ellipses for surfaces, outlines, and effect
-//! pipelines.
+//! Describe rounded rectangles and ellipses for surfaces, outlines, and
+//! effects.
 
 use tessera_ui::{PxSize, dp::Dp};
 
 /// Capsule shapes use a constant `g2_k_value` to maintain circular ends.
 pub const CAPSULE_G2_K_VALUE: f32 = 2.0;
 
-/// Corner definition: capsule or manual radius with per-corner G2.
+/// A fixed or size-relative corner radius with per-corner curvature.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum RoundedCorner {
     /// Capsule radius derived from `min(width, height) / 2.0`, with
@@ -20,6 +20,15 @@ pub enum RoundedCorner {
     Manual {
         /// Corner radius in device-independent pixels.
         radius: Dp,
+        /// Corner G2 value (2.0 yields circular curvature).
+        g2_k_value: f32,
+    },
+    /// A fraction of the shortest edge plus a fixed offset, clamped to fit.
+    Relative {
+        /// Fraction of the shortest measured edge.
+        fraction: f32,
+        /// Additional radius in device-independent pixels.
+        offset: Dp,
         /// Corner G2 value (2.0 yields circular curvature).
         g2_k_value: f32,
     },
@@ -46,6 +55,18 @@ impl RoundedCorner {
         Self::Manual { radius, g2_k_value }
     }
 
+    /// Creates a corner that responds to the actual measured size.
+    ///
+    /// The final radius is limited to half the shortest edge. Non-finite
+    /// fractions and offsets contribute zero to the radius.
+    pub const fn relative(fraction: f32, offset: Dp, g2_k_value: f32) -> Self {
+        Self::Relative {
+            fraction,
+            offset,
+            g2_k_value,
+        }
+    }
+
     /// Resolves into `(radius_px, g2)` using the provided size.
     pub fn resolve(self, size: PxSize) -> (f32, f32) {
         match self {
@@ -54,6 +75,20 @@ impl RoundedCorner {
                 CAPSULE_G2_K_VALUE,
             ),
             RoundedCorner::Manual { radius, g2_k_value } => (radius.to_pixels_f32(), g2_k_value),
+            RoundedCorner::Relative {
+                fraction,
+                offset,
+                g2_k_value,
+            } => {
+                let edge = size.width.to_f32().min(size.height.to_f32()).max(0.0);
+                let fraction = if fraction.is_finite() { fraction } else { 0.0 };
+                let offset = offset.to_pixels_f32();
+                let offset = if offset.is_finite() { offset } else { 0.0 };
+                (
+                    (edge * fraction + offset).clamp(0.0, edge / 2.0),
+                    g2_k_value,
+                )
+            }
         }
     }
 }
@@ -75,7 +110,7 @@ pub enum ResolvedShape {
 /// Shape definitions for UI components.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub enum Shape {
-    /// Rounded rectangle with per-corner capsule or manual radius + G2.
+    /// Rounded rectangle with independent fixed or size-relative corners.
     RoundedRectangle {
         /// Top-left corner definition.
         top_left: RoundedCorner,
@@ -170,5 +205,57 @@ impl Shape {
             }
             Shape::Ellipse => ResolvedShape::Ellipse,
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::Px;
+
+    use super::*;
+
+    #[test]
+    fn relative_corners_follow_measured_bounds_and_clamp_after_interpolation() {
+        for (width, height) in [(260, 32), (260, 136), (20, 200), (0, 0)] {
+            let size = PxSize::new(Px(width), Px(height));
+            let half = width.min(height) as f32 / 2.0;
+            assert_eq!(
+                RoundedCorner::relative(0.5, Dp(0.0), 2.0).resolve(size),
+                (half, 2.0)
+            );
+            let fixed = Dp(12.0).to_pixels_f32();
+            assert_eq!(
+                RoundedCorner::relative(0.0, Dp(12.0), 2.0).resolve(size).0,
+                fixed.min(half)
+            );
+            let interpolated = RoundedCorner::relative(0.25, Dp(6.0), 2.0).resolve(size).0;
+            assert_eq!(
+                interpolated,
+                (half / 2.0 + Dp(6.0).to_pixels_f32()).min(half)
+            );
+            assert_eq!(
+                RoundedCorner::relative(-0.5, Dp(-12.0), 2.0)
+                    .resolve(size)
+                    .0,
+                0.0
+            );
+            assert_eq!(
+                RoundedCorner::relative(1.0, Dp(12.0), 2.0).resolve(size).0,
+                half
+            );
+        }
+        let size = PxSize::new(Px(100), Px(100));
+        assert_eq!(
+            RoundedCorner::relative(f32::NAN, Dp(10.0), 2.0)
+                .resolve(size)
+                .0,
+            Dp(10.0).to_pixels_f32().min(50.0)
+        );
+        assert_eq!(
+            RoundedCorner::relative(0.5, Dp(f64::INFINITY), 2.0)
+                .resolve(size)
+                .0,
+            50.0
+        );
     }
 }

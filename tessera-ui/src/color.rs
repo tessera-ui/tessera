@@ -283,8 +283,11 @@ impl Color {
         }
     }
 
-    /// Blends `overlay` over this base color with the given alpha for the
-    /// overlay.
+    /// Composites `overlay` over this base color using straight RGBA values.
+    ///
+    /// `overlay_alpha` scales the overlay's own alpha. Transparent colors do
+    /// not darken the result, and a fully transparent result returns
+    /// transparent black.
     ///
     /// # Parameters
     ///
@@ -297,12 +300,18 @@ impl Color {
     #[inline]
     #[must_use]
     pub fn blend_over(self, overlay: Color, overlay_alpha: f32) -> Self {
-        let alpha = overlay_alpha.clamp(0.0, 1.0);
-        let r = overlay.r.mul_add(alpha, self.r * (1.0 - alpha));
-        let g = overlay.g.mul_add(alpha, self.g * (1.0 - alpha));
-        let b = overlay.b.mul_add(alpha, self.b * (1.0 - alpha));
-        let a = overlay.a.mul_add(alpha, self.a * (1.0 - alpha));
-        Self::new(r, g, b, a)
+        let source_alpha = overlay.a * overlay_alpha.clamp(0.0, 1.0);
+        let destination_alpha = self.a * (1.0 - source_alpha);
+        let alpha = source_alpha + destination_alpha;
+        if alpha <= 0.0 {
+            return Self::TRANSPARENT;
+        }
+        Self::new(
+            overlay.r.mul_add(source_alpha, self.r * destination_alpha) / alpha,
+            overlay.g.mul_add(source_alpha, self.g * destination_alpha) / alpha,
+            overlay.b.mul_add(source_alpha, self.b * destination_alpha) / alpha,
+            alpha,
+        )
     }
     /// Linearly interpolates between two colors.
     ///
@@ -452,5 +461,58 @@ impl From<[u8; 3]> for Color {
     #[inline]
     fn from([r, g, b]: [u8; 3]) -> Self {
         Self::from_rgb_u8(r, g, b)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Color;
+
+    fn assert_color(actual: Color, expected: Color) {
+        for (actual, expected) in actual.to_array().into_iter().zip(expected.to_array()) {
+            assert!(
+                (actual - expected).abs() <= 1.0e-6,
+                "{actual} != {expected}"
+            );
+        }
+    }
+
+    #[test]
+    fn state_layer_over_a_transparent_container_keeps_its_rgb() {
+        let layer = Color::new(0.2, 0.4, 0.8, 1.0);
+        assert_color(
+            Color::TRANSPARENT.blend_over(layer, 0.1),
+            layer.with_alpha(0.1),
+        );
+        assert_color(
+            Color::new(1.0, 0.0, 0.0, 0.0).blend_over(layer, 0.1),
+            layer.with_alpha(0.1),
+        );
+    }
+
+    #[test]
+    fn source_over_combines_both_alphas_instead_of_interpolating_them() {
+        assert_color(
+            Color::RED
+                .with_alpha(0.5)
+                .blend_over(Color::BLUE.with_alpha(0.5), 0.5),
+            Color::new(0.6, 0.0, 0.4, 0.625),
+        );
+        assert_color(
+            Color::RED.blend_over(Color::BLUE.with_alpha(0.5), 0.5),
+            Color::new(0.75, 0.0, 0.25, 1.0),
+        );
+    }
+
+    #[test]
+    fn transparent_and_opaque_source_endpoints_are_preserved() {
+        let base = Color::RED.with_alpha(0.4);
+        assert_color(base.blend_over(Color::BLUE, 0.0), base);
+        assert_color(base.blend_over(Color::BLUE.with_alpha(0.0), 1.0), base);
+        assert_color(base.blend_over(Color::BLUE, 1.0), Color::BLUE);
+        assert_color(
+            Color::TRANSPARENT.blend_over(Color::TRANSPARENT, 1.0),
+            Color::TRANSPARENT,
+        );
     }
 }

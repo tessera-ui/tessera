@@ -179,6 +179,12 @@ fn navigation_rail_item_view_content(
                         current: icon_color,
                     },
                     || {
+                        let color = use_context::<ContentColor>().unwrap();
+                        if color.with(|value| value.current) != icon_color {
+                            color.set(ContentColor {
+                                current: icon_color,
+                            });
+                        }
                         draw_icon.render();
                     },
                 );

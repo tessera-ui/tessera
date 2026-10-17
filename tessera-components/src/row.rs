@@ -180,7 +180,8 @@ fn measure_weighted_row(
             weighted_indices: &weighted_indices,
             children_sizes: &mut children_sizes,
             max_child_height: &mut max_child_height,
-            remaining_width: available_width_for_children - total_width_of_unweighted_children,
+            remaining_width: (available_width_for_children - total_width_of_unweighted_children)
+                .max(Px::ZERO),
             total_weight,
             row_parent_constraint,
             child_weights,
@@ -229,12 +230,17 @@ fn measure_unweighted_row(
     let mut total_children_measured_width = Px(0);
     let mut max_child_height = Px(0);
 
-    let parent_offered_constraint_for_child = Constraint::new(
-        row_parent_constraint.width.without_min(),
-        cross_axis_child_constraint(row_parent_constraint.height, cross_axis_alignment),
-    );
-
     for (i, child_id) in children.iter().enumerate() {
+        let parent_offered_constraint_for_child = Constraint::new(
+            AxisConstraint::new(
+                Px::ZERO,
+                row_parent_constraint
+                    .width
+                    .resolve_max()
+                    .map(|max| (max - total_children_measured_width).max(Px::ZERO)),
+            ),
+            cross_axis_child_constraint(row_parent_constraint.height, cross_axis_alignment),
+        );
         let child_result = child_id.measure(input, &parent_offered_constraint_for_child)?;
         children_sizes[i] = Some(child_result.size());
         total_children_measured_width += child_result.width;
@@ -280,12 +286,17 @@ fn measure_unweighted_children(
 ) -> Result<Px, MeasurementError> {
     let mut total_width = Px(0);
 
-    let parent_offered_constraint_for_child = Constraint::new(
-        row_parent_constraint.width.without_min(),
-        cross_axis_child_constraint(row_parent_constraint.height, cross_axis_alignment),
-    );
-
     for &child_idx in unweighted_indices {
+        let parent_offered_constraint_for_child = Constraint::new(
+            AxisConstraint::new(
+                Px::ZERO,
+                row_parent_constraint
+                    .width
+                    .resolve_max()
+                    .map(|max| (max - total_width).max(Px::ZERO)),
+            ),
+            cross_axis_child_constraint(row_parent_constraint.height, cross_axis_alignment),
+        );
         let child_id = input.children()[child_idx];
         let child_result = child_id.measure(input, &parent_offered_constraint_for_child)?;
         children_sizes[child_idx] = Some(child_result.size());
@@ -554,6 +565,58 @@ mod tests {
             expect: {
                 node("row_center_first").position(35, 20).size(20, 10);
                 node("row_center_second").position(55, 18).size(10, 12);
+            }
+        }
+    }
+
+    #[tessera]
+    fn constrained_unweighted_case(weighted: bool) {
+        row()
+            .modifier(Modifier::new().constrain(Some(AxisConstraint::exact(Px(100))), None))
+            .children(move || {
+                fixed_test_box()
+                    .tag("reserved".to_string())
+                    .width(20)
+                    .height(10);
+                fill_width_test_box()
+                    .tag("remaining".to_string())
+                    .height(10);
+                if weighted {
+                    layout().modifier(Modifier::new().weight(1.0)).child(|| {
+                        fill_width_test_box()
+                            .tag("exhausted".to_string())
+                            .height(10);
+                    });
+                } else {
+                    fill_width_test_box()
+                        .tag("exhausted".to_string())
+                        .height(10);
+                }
+            });
+    }
+
+    #[test]
+    fn unweighted_children_receive_only_the_remaining_row_width() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 60),
+            content: { constrained_unweighted_case(false); },
+            expect: {
+                node("reserved").position(0, 0).size(20, 10);
+                node("remaining").position(20, 0).size(80, 10);
+                node("exhausted").position(100, 0).size(0, 10);
+            }
+        }
+    }
+
+    #[test]
+    fn unweighted_children_cannot_overallocate_before_weighted_children() {
+        tessera_ui::assert_layout! {
+            viewport: (120, 60),
+            content: { constrained_unweighted_case(true); },
+            expect: {
+                node("reserved").position(0, 0).size(20, 10);
+                node("remaining").position(20, 0).size(80, 10);
+                node("exhausted").position(100, 0).size(0, 10);
             }
         }
     }

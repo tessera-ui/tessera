@@ -3,12 +3,12 @@
 //! ## Usage
 //!
 //! Use as a base for buttons, cards, or any styled and interactive region.
-use tessera_foundation::gesture::{LongPressRecognizer, TapRecognizer};
+use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusRequester, LayoutResult,
-    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize,
-    RenderSlot, State,
-    accesskit::Role,
+    AccessibilityActionHandler, AccessibilityNode, Callback, Color, ComputedData, Constraint, Dp,
+    FocusProperties, FocusRequester, LayoutResult, MeasurementError, Modifier, PointerInput,
+    PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot, SemanticsModifierNode, State,
+    accesskit::{Role, Toggled},
     current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::ModifierCapabilityExt as _,
@@ -18,10 +18,7 @@ use tessera_ui::{
 use crate::{
     RippleProps,
     alignment::Alignment,
-    modifier::{
-        ClickableArgs, InteractionState, ModifierExt, PointerEventContext, SemanticsArgs,
-        ShadowArgs,
-    },
+    modifier::{ClickableArgs, InteractionState, ModifierExt, PointerEventContext, ShadowArgs},
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_inside_bounds,
     ripple_state::{RippleSpec, RippleState},
@@ -142,9 +139,9 @@ struct SurfaceResolvedArgs {
     ripple_state: Option<State<RippleState>>,
     block_input: bool,
     accessibility_role: Option<Role>,
+    accessibility_toggled: Option<Toggled>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
-    accessibility_focusable: bool,
     focus_requester: Option<FocusRequester>,
     focus_properties: Option<FocusProperties>,
     child: Option<RenderSlot>,
@@ -461,7 +458,7 @@ fn try_build_simple_rect_command(
             let zero_eps = 0.0001;
             if corners.iter().all(|corner| match corner {
                 RoundedCorner::Manual { radius, .. } => radius.to_pixels_f32().abs() <= zero_eps,
-                RoundedCorner::Capsule => false,
+                RoundedCorner::Capsule | RoundedCorner::Relative { .. } => false,
             }) {
                 Some(SimpleRectCommand { color })
             } else {
@@ -690,8 +687,22 @@ fn surface_content(
     }
 
     let layout_args = surface.clone();
-    let modifier =
+    let mut modifier =
         apply_surface_block_input_modifier(Modifier::new(), !interactive && surface.block_input);
+    if let Some(elevation) = surface.elevation
+        && elevation.0 > 0.0
+    {
+        modifier = modifier.shadow(
+            &scheme,
+            &ShadowArgs {
+                elevation,
+                shape: surface.shape,
+                clip: false,
+                ..Default::default()
+            },
+        );
+    }
+
     let policy = SurfaceLayout {
         args: layout_args,
         interaction_state,
@@ -709,11 +720,23 @@ fn surface_content(
                     current: absolute_tonal_elevation,
                 },
                 || {
+                    let elevation = use_context::<AbsoluteTonalElevation>().unwrap();
+                    if elevation.with(|value| value.current) != absolute_tonal_elevation {
+                        elevation.set(AbsoluteTonalElevation {
+                            current: absolute_tonal_elevation,
+                        });
+                    }
                     provide_context(
                         || ContentColor {
                             current: content_color,
                         },
                         || {
+                            let color = use_context::<ContentColor>().unwrap();
+                            if color.with(|value| value.current) != content_color {
+                                color.set(ContentColor {
+                                    current: content_color,
+                                });
+                            }
                             if let Some(child) = child.as_ref() {
                                 child.render();
                             }
@@ -752,6 +775,7 @@ fn surface_content(
 /// - `show_ripple` — optional ripple visibility flag.
 /// - `ripple_state` — optional shared ripple state.
 /// - `block_input` — optional input-blocking flag.
+/// - `accessibility_toggled` — optional selection state for toggle controls.
 /// - `accessibility_role` — optional accessibility role.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
@@ -808,6 +832,7 @@ pub fn surface(
     ripple_state: Option<State<RippleState>>,
     block_input: Option<bool>,
     accessibility_role: Option<Role>,
+    accessibility_toggled: Option<Toggled>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
     accessibility_focusable: Option<bool>,
@@ -843,9 +868,9 @@ pub fn surface(
         ripple_state,
         block_input: block_input.unwrap_or(false),
         accessibility_role,
+        accessibility_toggled,
         accessibility_label,
         accessibility_description,
-        accessibility_focusable: accessibility_focusable.unwrap_or(false),
         focus_requester,
         focus_properties,
         child,
@@ -859,7 +884,6 @@ pub fn surface(
         .interaction_state
         .or_else(|| interactive.then(|| remember(InteractionState::new)));
     let tap_recognizer = interactive.then(|| remember(TapRecognizer::default));
-    let long_press_recognizer = interactive.then(|| remember(LongPressRecognizer::default));
     let ripple_state = if resolved.show_ripple {
         resolved
             .ripple_state
@@ -867,10 +891,11 @@ pub fn surface(
     } else {
         None
     };
-    let has_semantics = resolved.accessibility_role.is_some()
+    let has_semantics = resolved.accessibility_toggled.is_some()
+        || resolved.accessibility_role.is_some()
         || resolved.accessibility_label.is_some()
         || resolved.accessibility_description.is_some()
-        || resolved.accessibility_focusable;
+        || accessibility_focusable.is_some();
 
     if clickable {
         modifier = modifier.minimum_interactive_component_size();
@@ -906,7 +931,7 @@ pub fn surface(
             focus_requester: Some(bound_focus_requester),
             focus_properties: resolved.focus_properties,
             tap_recognizer,
-            long_press_recognizer,
+            long_press_recognizer: None,
         };
 
         modifier = modifier.clickable_with(clickable_args);
@@ -915,29 +940,19 @@ pub fn surface(
     }
 
     if !interactive && has_semantics {
-        let semantics = SemanticsArgs {
+        let semantics = SurfaceSemantics {
             role: resolved.accessibility_role,
             label: resolved.accessibility_label.clone(),
             description: resolved.accessibility_description.clone(),
-            focusable: resolved.accessibility_focusable,
+            focusable: accessibility_focusable,
             disabled: !resolved.enabled,
-            ..Default::default()
+            toggled: resolved.accessibility_toggled,
         };
-        modifier = modifier.semantics(semantics);
+        modifier = modifier.push_semantics(semantics);
     }
 
-    if let Some(elevation) = resolved.elevation
-        && elevation.0 > 0.0
-    {
-        modifier = modifier.shadow(
-            &scheme,
-            &ShadowArgs {
-                elevation,
-                shape: resolved.shape,
-                clip: false,
-                ..Default::default()
-            },
-        );
+    if interactive && resolved.accessibility_toggled.is_some() {
+        modifier = modifier.push_semantics(SurfaceToggleSemantics(resolved.accessibility_toggled));
     }
 
     layout().modifier(modifier).child(move || {
@@ -948,13 +963,113 @@ pub fn surface(
     });
 }
 
+struct SurfaceToggleSemantics(Option<Toggled>);
+
+struct SurfaceSemantics {
+    role: Option<Role>,
+    label: Option<String>,
+    description: Option<String>,
+    focusable: Option<bool>,
+    disabled: bool,
+    toggled: Option<Toggled>,
+}
+
+impl SemanticsModifierNode for SurfaceSemantics {
+    fn apply(
+        &self,
+        node: &mut AccessibilityNode,
+        handler: &mut Option<AccessibilityActionHandler>,
+    ) {
+        if let Some(role) = self.role {
+            node.role = Some(role);
+        }
+        if let Some(label) = &self.label {
+            node.label = Some(label.clone());
+        }
+        if let Some(description) = &self.description {
+            node.description = Some(description.clone());
+        }
+        if let Some(focusable) = self.focusable {
+            node.focusable = focusable;
+        }
+        if let Some(toggled) = self.toggled {
+            node.toggled = Some(toggled);
+        }
+        node.disabled = self.disabled;
+        if self.disabled {
+            node.actions.clear();
+            *handler = None;
+        }
+    }
+}
+
+impl SemanticsModifierNode for SurfaceToggleSemantics {
+    fn apply(
+        &self,
+        accessibility: &mut AccessibilityNode,
+        _action_handler: &mut Option<AccessibilityActionHandler>,
+    ) {
+        accessibility.toggled = self.0;
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use tessera_ui::{Color, Dp};
+    use std::cell::Cell;
 
-    use crate::theme::MaterialColorScheme;
+    use tessera_ui::{Color, Dp, Modifier, State, remember, tessera, use_context};
+
+    use crate::{
+        boxed::boxed,
+        button::button,
+        column::column,
+        modifier::{InteractionState, ModifierExt as _},
+        row::row,
+        spacer::spacer,
+        theme::{ContentColor, MaterialColorScheme, material_theme},
+    };
 
     use super::{SurfaceLayout, SurfaceResolvedArgs, SurfaceStyle};
+
+    thread_local! {
+        static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
+        static CONTENT_COLOR: Cell<Color> = const { Cell::new(Color::BLACK) };
+    }
+
+    #[tessera]
+    fn content_color_probe() {
+        CONTENT_COLOR.set(use_context::<ContentColor>().unwrap().get().current);
+    }
+
+    #[tessera]
+    fn changing_button_fixture() {
+        let enabled = remember(|| false);
+        ENABLED.set(Some(enabled));
+        material_theme().child(move || {
+            button().text().enabled(enabled.get()).child(|| {
+                content_color_probe();
+            });
+        });
+    }
+
+    #[test]
+    fn enabling_a_button_updates_inherited_content_color() {
+        use tessera_ui::testing::{
+            layout_test, pump_layout_test_session, start_layout_test_session,
+        };
+
+        let mut session = start_layout_test_session(layout_test(|| {
+            changing_button_fixture();
+        }));
+        pump_layout_test_session(&mut session, 0);
+        let disabled = CONTENT_COLOR.get();
+        ENABLED.get().unwrap().set(true);
+        for frame in 1..4 {
+            pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        assert_ne!(CONTENT_COLOR.get(), disabled);
+        assert_eq!(CONTENT_COLOR.get(), MaterialColorScheme::default().primary);
+    }
 
     fn layout_with_style(style: SurfaceStyle) -> SurfaceLayout {
         SurfaceLayout {
@@ -986,5 +1101,103 @@ mod tests {
 
         assert!(outlined != filled);
         assert!(outlined == layout_with_style(outlined_track()));
+    }
+
+    #[tessera]
+    fn transparent_state_layer_pair(style: SurfaceStyle, reference: SurfaceStyle) {
+        let interaction = remember(|| {
+            let mut state = InteractionState::new();
+            state.set_hovered(true);
+            state
+        });
+        row().children(move || {
+            super::surface()
+                .modifier(Modifier::new().required_size(Dp(64.0), Dp(64.0)))
+                .style(style.clone())
+                .shape(crate::shape_def::Shape::RECTANGLE)
+                .ripple_color(Color::BLUE)
+                .interaction_state(interaction)
+                .show_ripple(false);
+            spacer().modifier(Modifier::new().width(Dp(8.0)));
+            super::surface()
+                .modifier(Modifier::new().required_size(Dp(64.0), Dp(64.0)))
+                .style(reference.clone())
+                .shape(crate::shape_def::Shape::RECTANGLE)
+                .show_state_layer(false)
+                .show_ripple(false);
+        });
+    }
+
+    #[tessera]
+    fn transparent_state_layers_fixture() {
+        material_theme().child(|| {
+            boxed()
+                .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
+                .children(|| {
+                    column().children(|| {
+                        for style in 0..3 {
+                            let fill = |color| match style {
+                                0 => SurfaceStyle::Filled { color },
+                                _ => SurfaceStyle::FilledOutlined {
+                                    fill_color: color,
+                                    border_color: Color::RED,
+                                    border_width: Dp(1.0),
+                                },
+                            };
+                            let base = if style == 1 {
+                                SurfaceStyle::Outlined {
+                                    color: Color::RED,
+                                    width: Dp(1.0),
+                                }
+                            } else {
+                                fill(Color::TRANSPARENT)
+                            };
+                            transparent_state_layer_pair(base, fill(Color::BLUE.with_alpha(0.08)));
+                            spacer().modifier(Modifier::new().height(Dp(8.0)));
+                        }
+                    });
+                });
+        });
+    }
+
+    fn check_transparent_state_layers(samples: u32) {
+        let mut renderer = tessera_ui::HeadlessRenderer::new(
+            Box::new(|| {
+                transparent_state_layers_fixture();
+            }),
+            vec![Box::new(crate::TesseraComponents)],
+            tessera_ui::HeadlessConfig {
+                width: 200,
+                height: 240,
+                sample_count: samples,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        for frames in [2, 8] {
+            renderer.render_frames(frames);
+            let pixels = renderer.read_pixels().unwrap();
+            for y in [32usize, 104, 176] {
+                let actual = (y * 200 + 32) * 4;
+                let reference = (y * 200 + 104) * 4;
+                assert_eq!(
+                    &pixels[actual..actual + 4],
+                    &pixels[reference..reference + 4],
+                    "transparent state layer, MSAA {samples}, y={y}, frames={frames}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn transparent_state_layers_match_direct_alpha_rendering_msaa1() {
+        check_transparent_state_layers(1);
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn transparent_state_layers_match_direct_alpha_rendering_msaa4() {
+        check_transparent_state_layers(4);
     }
 }

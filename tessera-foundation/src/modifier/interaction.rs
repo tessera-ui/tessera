@@ -52,8 +52,8 @@ pub struct ClickableArgs {
     pub focus_properties: Option<FocusProperties>,
     /// Optional persistent tap recognizer state for component-owned gestures.
     pub tap_recognizer: Option<State<TapRecognizer>>,
-    /// Optional persistent long-press recognizer state for component-owned
-    /// gestures.
+    /// Optional component-owned long-press recognizer. When supplied, a
+    /// recognized long press suppresses the ordinary click.
     pub long_press_recognizer: Option<State<LongPressRecognizer>>,
 }
 

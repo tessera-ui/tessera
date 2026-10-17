@@ -139,25 +139,9 @@ impl TapRecognizerHandle {
     }
 }
 
-enum LongPressRecognizerHandle {
-    State(State<LongPressRecognizer>),
-}
-
-impl LongPressRecognizerHandle {
-    fn new(state: Option<State<LongPressRecognizer>>) -> Self {
-        Self::State(state.unwrap_or_else(|| remember(LongPressRecognizer::default)))
-    }
-
-    fn with_mut<R>(&self, f: impl FnOnce(&mut LongPressRecognizer) -> R) -> R {
-        match self {
-            Self::State(state) => state.with_mut(f),
-        }
-    }
-}
-
 struct ClickablePointerModifierNode {
     tap_recognizer: TapRecognizerHandle,
-    long_press_recognizer: LongPressRecognizerHandle,
+    long_press_recognizer: Option<State<LongPressRecognizer>>,
     on_click: Callback,
     enabled: bool,
     block_input: bool,
@@ -188,14 +172,18 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
                 within_bounds,
             )
         });
-        let long_press_result = self.long_press_recognizer.with_mut(|recognizer| {
-            recognizer.update(
-                input.pass,
-                input.pointer_changes.as_mut_slice(),
-                within_bounds,
-            )
+        let long_press_triggered = self.long_press_recognizer.is_some_and(|state| {
+            state.with_mut(|recognizer| {
+                recognizer
+                    .update(
+                        input.pass,
+                        input.pointer_changes.as_mut_slice(),
+                        within_bounds,
+                    )
+                    .triggered
+            })
         });
-        let tapped = tap_result.tapped && !long_press_result.triggered;
+        let tapped = tap_result.tapped && !long_press_triggered;
 
         let Some(interaction_state) = self.interaction_state else {
             if !self.enabled {
@@ -724,7 +712,6 @@ pub(crate) fn apply_clickable_modifier(base: Modifier, args: ClickableArgs) -> M
         long_press_recognizer,
     } = args;
     let tap_recognizer = TapRecognizerHandle::new(tap_recognizer);
-    let long_press_recognizer = LongPressRecognizerHandle::new(long_press_recognizer);
     let focus_requester = focus_requester.unwrap_or_else(FocusRequester::new);
     let participates_in_focus =
         enabled && (role.is_some() || label.is_some() || description.is_some());
