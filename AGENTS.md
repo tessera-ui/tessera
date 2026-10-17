@@ -30,6 +30,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 ### Component Model & #[tessera] Macro
 
 - Components are stateless Rust functions annotated with `#[tessera]`. Persistent UI state is created with `remember` (returned as `State<T>`) and can be passed around as `State<T>`.
+- Remembered resource destructors may update other still-live state. Slot cleanup must remove entries and release the slot-table borrow before dropping their values. Resource cleanup must check `State::is_alive` before accessing an owner that may already have been removed; liveness checks return false during runtime thread teardown.
 - Inside the component function:
   - Compose child components to build the complete component tree
   - Use `Modifier` chains for node-local behavior such as layout modifiers, input, semantics, drawing, and focus
@@ -89,6 +90,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 - The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.
 - Accessibility updates flatten layout and composition nodes without semantics. Preserve explicit semantic nodes, their order, bounds, actions, and focus; synthesize only the root window node.
+- Newly attached global-position observers must receive the first valid window rectangle even if another observer already watched the same unchanged node. Existing observers should run only when the rectangle changes.
 
 ---
 
@@ -96,6 +98,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 - Use `Constraint` and interval-based `AxisConstraint` to describe size constraints.
 - Layout policies measure direct child layout nodes through handle-based APIs such as `MeasureScope`, `LayoutChild`, and `LayoutResult`.
+- `LayoutChild::probe_intrinsic` probes natural content dimensions in isolated metadata and caches. It excludes minimum interactive-size padding while preserving visual sizing and content padding. Use normal `measure` to publish final layout and retain interaction bounds; intrinsic probes must not replace normal measurement.
 - `place_node` is used to position child nodes.
 - Default layout: If no layout policy is attached to the current node, `DefaultLayoutPolicy` stacks children at (0,0), and the container size is the minimal bounding rectangle.
 
@@ -109,6 +112,22 @@ This document defines how You should assist in the Tessera project to ensure cod
   - **PipelineRegistry**: Registers all pipelines at startup
 - Components set draw/compute commands through `RenderInput`, `RenderMetadataMut`, and render policies
 - The basic components crate provides common pipelines, which must be registered at entry (e.g., `register_pipelines`)
+
+### Shape clipping
+
+- UI draw pipelines must set `depth_stencil: tessera_ui::ui_stencil_state()`.
+  The renderer supplies a `Stencil8` attachment and manages its reference value.
+  Independent atlas or texture-generation passes may use their own attachments.
+- Resolve animated size-relative corners through shared shape definitions so
+  fills, outlines, shadows, and clipping use the same measured geometry.
+- `Modifier::clip_shape` clips the node and its descendants without changing
+  measurement. Shape masks preserve fractional placement; integer scissor bounds
+  round outwards. Pointer hit testing must honor the same ancestor shapes.
+- Shape masks are uploaded once per frame into a reusable buffer. Stencil targets
+  are pooled by dimensions and sample count, and active masks are restored after
+  scene-pass boundaries without constraining declared background sampling regions.
+- Shape clipping supports up to 255 nested shape masks. `clip_to_bounds` clips do
+  not consume stencil levels.
 
 ### Barrier System & Performance Optimization
 
@@ -134,7 +153,14 @@ This document defines how You should assist in the Tessera project to ensure cod
 - The typed input contexts are `PointerInput`, `KeyboardInput`, and `ImeInput`.
 - Treat input contexts as event/consumption surfaces, not generic renderer request bags. Cursor changes, semantics, IME publication, and window-side effects must use their dedicated modifier/controller/session APIs.
 - Mouse, keyboard, and IME events are processed via event queues and must be consumed promptly.
+- Use `FocusManager::request_move_focus` when traversal may need lazy content to be revealed, including Tab exit after popup focus restoration. This traversal is queued after layout and precedes following keys; explicit focus requests, capture, and window blur cancel it. `move_focus` remains an immediate operation on attached targets.
+- Preserve each pointer sample's position when queuing it. Dispatch each sample's
+  Initial, Main, and Final passes in order before processing the next sample.
+  Captured paths use stable instance identities and survive recomposition;
+  runtime reset clears captures. Independent held pointers retain their own
+  positions during unrelated events and idle frames.
 - Event handlers should be lightweight to avoid blocking the main loop.
+- When opening or closing focusable content, use `FocusManager::defer_keyboard_until_layout` to preserve subsequent keys until the new layout and focus callbacks finish. Ordinary text-input updates must not introduce a layout barrier.
 
 ---
 
@@ -166,6 +192,106 @@ This document defines how You should assist in the Tessera project to ensure cod
   - Documentation comments (`//!`, `///`) are written for end users. Describe purpose, behavior, and usage. Do **not** include implementation details, internal architecture notes, or references to upstream/source code (e.g., “ported from Compose”, file paths, commit hashes).
   - Non-documentation comments (`//`, `/* */`) are allowed only when necessary to explain *why* a piece of code is written a certain way (non-obvious tradeoffs, invariants, safety/performance constraints). Do **not** restate what the code does.
   - Any other commentary-style comments are not allowed.
+
+---
+
+## Unit Test Standards
+
+### What a test must protect
+
+- Every test must identify a concrete failure in Tessera-owned behavior. Its
+  assertions must fail when that behavior breaks, even if the test fixture still
+  works. Test names must describe what is actually exercised and observed.
+- Prioritize layout constraints and placement, density and fractional geometry,
+  state lifetime and recomposition, input consumption and focus, text editing and
+  IME, accessibility, clipping and sampling, and generated component APIs.
+- Test pure algorithms directly when their rules matter: interval arithmetic,
+  animation convergence, text offset mapping, color conversion, checksums, and
+  allocation limits are valid unit-test subjects, including private functions.
+- Small tests and exact numeric assertions are valid when they express a real
+  contract. Do not delete tests merely because they are short, use private APIs,
+  or inspect internal state needed to verify a runtime invariant.
+
+### Choose the right boundary
+
+- Use the smallest production entrypoint that exercises the claimed behavior.
+  Test component wiring, event routing, callbacks, and retained updates through
+  actual components and the layout/headless runtime. Test an isolated decision
+  function directly only when the claim is limited to that decision.
+- Fixtures may construct inputs and observe outputs. They must not duplicate
+  production event dispatch, editing, formatting, state transitions, or clipboard
+  logic and then assert results produced by that duplicate implementation.
+- Mock external boundaries when necessary, such as platform clipboard access;
+  keep the Tessera logic under test real. A fake dependency is acceptable; a
+  second implementation of the behavior being tested is not.
+- A test of an IME edit plan does not prove that the plan is applied, composition
+  is cleared, a callback runs, or an input event is consumed. Those claims require
+  invoking the corresponding production path and observing its effects.
+- Test-only accessors may expose production state for observation or arrange a
+  fixture. Do not retain obsolete algorithms behind `#[cfg(test)]` solely to keep
+  their tests passing, or test transformations implemented only in such helpers.
+- Do not supply the behavior the test claims to verify: a fixture that registers
+  an animation driver cannot prove the component registers it, and assigning a
+  nested animation target cannot prove its owner handles a requested transition.
+
+### Tests that must not be added or retained
+
+- Tests that only verify Rust or dependency behavior, trivial field assignment,
+  transparent getters/constructors, or derived traits without a Tessera contract.
+- Duplicate tests that exercise the same behavior and cases already covered by
+  a stronger test or runnable rustdoc example. Keep distinct boundary cases and
+  supported platforms; overlapping coverage alone is not sufficient for removal.
+- Tests that search repository source text for identifiers, cfg spellings,
+  function names, or code fragments as a substitute for compilation or behavior.
+  Generated text may be asserted when it is the tool's actual output contract;
+  validate syntax or compilation when the claim concerns usable generated code.
+- Tests that lock incidental private representation, container order, helper
+  call counts, or intermediate values without a correctness or performance
+  requirement. Cache invalidation, ordering, resource bounds, and avoiding work
+  at rest remain valid requirements when the test exercises the relevant path.
+- Tests that claim a runtime effect but only inspect a constant, an enum result,
+  or state changed by the test itself. Do not encode unsupported behavior such as
+  callback closure hot-swapping as a public contract.
+- Negative tests with multiple unrelated invalid preconditions that accept any
+  panic or error. Set up all unrelated preconditions correctly and identify the
+  intended failure; an earlier guard must not make the test pass accidentally.
+- Self-confirming expected values computed by repeating the same algorithm or
+  calling the same implementation used to produce the actual result. For mapping
+  claims, assert an independently known one-way result; a round trip alone can
+  hide matching mistakes in both directions. Round-trip properties remain useful
+  when reversibility itself is the contract.
+- Timing printouts and assertion-free demos disguised as unit tests. Put measured
+  performance in benchmarks and interactive demonstrations in examples.
+
+### UI assertions and deterministic execution
+
+- Assert externally meaningful layout, pixels, actions, semantics, and state
+  transitions. Exact dimensions, theme-state precedence, and Material tokens are
+  appropriate when they are intentional component contracts.
+- Use explicit frame timestamps for animation and gesture thresholds. Avoid
+  wall-clock speed assertions, arbitrary sleeps, and dependence on installed
+  fonts, local devices, network services, or the developer's desktop.
+- Keep GPU and platform integration tests separate in execution requirements;
+  document required adapters or platforms and use explicit opt-in where needed.
+  Do not remove rendering coverage simply because it cannot run on every host.
+- Do not mutate process environment variables in a multithreaded unit-test
+  process. Use a child process with its own environment for environment-dependent
+  behavior. Isolate and restore other shared runtime state using test guards.
+- Run tests that change process-global density in isolated child processes so
+  parallel layout tests cannot observe temporary scale factors.
+
+### Review and verification
+
+- Before adding a test, state the regression it catches and inspect existing
+  coverage. Prefer extending an existing scenario over adding another equivalent
+  test. Do not add a test solely to increase the test count or coverage percentage.
+- Before deleting a test, read the assertion and production path; identify why it
+  lacks value or which retained test covers the same cases. Remove unused fixtures
+  and imports with it. Do not delete a failing test to conceal a production bug.
+- Run affected crate tests and relevant feature/platform checks after cleanup.
+  Keep `cargo test --workspace --doc` in CI; runnable API examples are part of the
+  supported test suite. Report failures caused by unavailable tooling or existing
+  work separately from regressions introduced by the cleanup.
 
 ---
 
