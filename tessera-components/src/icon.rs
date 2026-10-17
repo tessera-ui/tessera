@@ -22,6 +22,12 @@ use crate::{
     theme::{ContentColor, MaterialTheme},
 };
 
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct IconSize(pub Dp);
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct IconRotation(pub f32);
+
 fn placeholder_raster_data() -> Arc<ImageData> {
     static PLACEHOLDER: OnceLock<Arc<ImageData>> = OnceLock::new();
     PLACEHOLDER
@@ -128,12 +134,14 @@ impl tessera_ui::LayoutModifierNode for IconLayout {
 
         let preferred_width = self.width.unwrap_or(AxisConstraint::exact(size_px));
         let preferred_height = self.height.unwrap_or(AxisConstraint::exact(size_px));
-        let width = preferred_width
-            .intersect(input.parent_constraint().width())
-            .clamp(intrinsic_width);
-        let height = preferred_height
-            .intersect(input.parent_constraint().height())
-            .clamp(intrinsic_height);
+        let width = input
+            .parent_constraint()
+            .width()
+            .clamp(preferred_width.clamp(intrinsic_width));
+        let height = input
+            .parent_constraint()
+            .height()
+            .clamp(preferred_height.clamp(intrinsic_height));
 
         Ok(LayoutResult::new(ComputedData { width, height }))
     }
@@ -184,8 +192,8 @@ impl tessera_ui::DrawModifierNode for IconLayout {
 /// - `size` - optional preferred square size.
 /// - `width` / `height` - optional explicit layout dimensions.
 /// - `tint` - optional tint override for vector icons.
-/// - `tint_mode` - tint blending mode for vector icons.
-/// - `rotation` - clockwise rotation in degrees.
+/// - `tint_mode` - vector tint blending mode, defaulting to solid recoloring.
+/// - `rotation` - clockwise degrees, inheriting control motion when omitted.
 ///
 /// ## Examples
 ///
@@ -213,7 +221,10 @@ pub fn icon(
     rotation: Option<f32>,
 ) {
     let content = content.unwrap_or_else(|| Painter::Raster((*placeholder_raster_data()).clone()));
-    let size = size.unwrap_or(Dp(24.0));
+    let default_size = use_context::<IconSize>()
+        .map(|size| size.get().0)
+        .unwrap_or(Dp(24.0));
+    let size = size.unwrap_or(default_size);
     let tint = tint.unwrap_or_else(|| {
         let theme = use_context::<MaterialTheme>();
         use_context::<ContentColor>()
@@ -221,8 +232,11 @@ pub fn icon(
             .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
             .unwrap_or_else(|| ContentColor::default().current)
     });
-    let tint_mode = tint_mode.unwrap_or_default();
-    let rotation = rotation.unwrap_or(0.0);
+    let tint_mode = tint_mode.unwrap_or(TintMode::Solid);
+    let inherited_rotation = use_context::<IconRotation>()
+        .map(|value| value.get().0)
+        .unwrap_or(0.0);
+    let rotation = rotation.unwrap_or(inherited_rotation);
     let policy = IconLayout {
         content,
         size,

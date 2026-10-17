@@ -13,62 +13,14 @@ pub(crate) fn easing(progress: f32) -> f32 {
     }
 }
 
-/// Calculates the spring animation value based on physics parameters.
-///
-/// # Parameters
-///
-/// - `progress`: Linear time progress in [0.0, 1.0].
-/// - `stiffness`: Controls speed. Try **15.0** for UI.
-/// - `damping`: Controls bounciness [0.0, 1.0). Try **0.5**.
-///   - Lower (0.2) = Very bouncy (oscillation).
-///   - Higher (0.9) = Little to no bounce.
-///
-/// # Returns
-///
-/// A value that starts at 0.0, overshoots 1.0, and settles at 1.0.
-#[cfg(test)]
-pub fn spring(progress: f32, stiffness: f32, damping: f32) -> f32 {
-    let t = progress.clamp(0.0, 1.0);
-
-    // Boundary checks to avoid expensive math at start/end
-    if t <= 0.0 {
-        return 0.0;
-    }
-    if t >= 1.0 {
-        return 1.0;
-    }
-
-    // Ensure damping is < 1.0 to guarantee the "bounce" math works.
-    // If it is >= 1.0, it becomes critically damped (no overshoot),
-    // which requires a different formula. We clamp to 0.999 here.
-    let zeta = damping.clamp(0.0, 0.999);
-
-    // Natural Angular Frequency (Speed)
-    let omega = stiffness;
-
-    // Damped Angular Frequency
-    // ωd = ωn * sqrt(1 - ζ^2)
-    let omega_d = omega * (1.0 - zeta * zeta).sqrt();
-
-    // Decay constant
-    // decay = ζ * ωn
-    let decay = zeta * omega;
-
-    // Calculate oscillation
-    // f(t) = 1 - e^(-decay * t) * (cos(ωd * t) + (sin(ωd * t) * decay / ωd))
-    let oscillation = (omega_d * t).cos() + (omega_d * t).sin() * (decay / omega_d);
-
-    1.0 - (-decay * t).exp() * oscillation
-}
-
 /// Motion model used by [`Animatable`].
 ///
-/// Spring motion is a velocity-preserving underdamped oscillator. Easing motion
+/// Spring motion is a velocity-preserving oscillator. Easing motion
 /// approaches its target over a finite duration and does not inherit velocity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) enum AnimationSpec {
-    /// Underdamped spring. `stiffness` is the natural frequency ω (rad/s).
-    /// `damping` is the damping ratio ζ in `[0.0, 0.999]`.
+    /// Spring. `stiffness` is the natural frequency ω (rad/s).
+    /// `damping` is the damping ratio ζ in `[0.0, 1.0]`.
     Spring { stiffness: f32, damping: f32 },
     /// Finite-duration cubic ease-in-out toward the target. Velocity is not
     /// carried.
@@ -77,10 +29,8 @@ pub(crate) enum AnimationSpec {
 
 /// Interruptible scalar animation.
 ///
-/// Unlike [`spring`] and [`easing`], which map a clamped `[0, 1]` progress,
-/// this integrates from the previous value. Changing the target keeps the
-/// current velocity for spring specs and restarts the remaining ease without
-/// inheriting it.
+/// Changing the target preserves spring velocity and restarts easing from the
+/// current value without inheriting velocity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Animatable {
     value: f32,
@@ -136,7 +86,6 @@ impl Animatable {
     }
 
     /// Value the animation is moving toward.
-    #[cfg(test)]
     pub(crate) fn target(&self) -> f32 {
         self.target
     }
@@ -185,7 +134,7 @@ impl Animatable {
 
     fn integrate_spring(&mut self, dt: f32, stiffness: f32, damping: f32) {
         let omega = stiffness.max(0.0);
-        let zeta = damping.clamp(0.0, 0.999);
+        let zeta = damping.clamp(0.0, 1.0);
         if omega == 0.0 {
             self.value = self.target;
             self.velocity = 0.0;
@@ -243,21 +192,15 @@ impl Animatable {
 
 #[cfg(test)]
 mod tests {
-    use super::{Animatable, easing, spring};
+    use super::{Animatable, easing};
 
     #[test]
-    fn legacy_easing_and_spring_stay_clamped_progress_maps() {
+    fn easing_clamps_progress_at_endpoints() {
         assert_eq!(easing(0.0), 0.0);
         assert_eq!(easing(1.0), 1.0);
         assert!((easing(0.5) - 0.5).abs() < 1.0e-6);
         assert_eq!(easing(-1.0), 0.0);
         assert_eq!(easing(2.0), 1.0);
-
-        assert_eq!(spring(0.0, 15.0, 0.35), 0.0);
-        assert_eq!(spring(1.0, 15.0, 0.35), 1.0);
-        let overshoot = spring(0.2, 15.0, 0.35);
-        assert!(overshoot.is_finite());
-        assert!(overshoot > 1.0, "expected overshoot, got {overshoot}");
     }
 
     #[test]

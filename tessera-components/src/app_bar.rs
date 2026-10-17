@@ -174,6 +174,7 @@ impl TopAppBarBuilder {
     pub fn window_control_minimize(self) -> Self {
         self.action(|| {
             icon_button()
+                .standard()
                 .icon(filled::MINIMIZE_SVG)
                 .on_click(tessera_platform::window::minimize);
         })
@@ -183,6 +184,7 @@ impl TopAppBarBuilder {
     pub fn window_control_toggle_maximize(self) -> Self {
         self.action(|| {
             icon_button()
+                .standard()
                 .icon(filled::FULLSCREEN_SVG)
                 .on_click(tessera_platform::window::toggle_maximize);
         })
@@ -192,6 +194,7 @@ impl TopAppBarBuilder {
     pub fn window_control_close(self) -> Self {
         self.action(|| {
             icon_button()
+                .standard()
                 .icon(filled::CLOSE_SVG)
                 .on_click(tessera_platform::window::close);
         })

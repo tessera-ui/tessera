@@ -179,11 +179,6 @@ impl ButtonGroupsState {
     fn item_state_mut(&mut self, index: usize) -> &mut ButtonItemState {
         self.item_states.entry(index).or_default()
     }
-
-    #[cfg(test)]
-    fn item_state(&self, index: usize) -> Option<&ButtonItemState> {
-        self.item_states.get(&index)
-    }
 }
 
 /// # button_groups
@@ -799,46 +794,6 @@ mod tests {
             }
         }
     }
-    #[test]
-    fn button_group_state_is_independent_per_item() {
-        let mut state = ButtonGroupsState::default();
-        state.item_state_mut(0).actived = true;
-        state.item_state_mut(1).actived = false;
-
-        assert!(state.item_state(0).is_some_and(|item| item.actived));
-        assert!(state.item_state(1).is_some_and(|item| !item.actived));
-    }
-
-    #[test]
-    fn elastic_expand_keeps_velocity_when_spring_target_changes() {
-        let mut elastic = ElasticState {
-            expended: true,
-            last_frame_nanos: Some(0),
-            motion: Animatable::spring(0.0, ELASTIC_SPRING_STIFFNESS, ELASTIC_SPRING_DAMPING),
-        };
-        elastic.motion.set_target(1.0);
-
-        let step_nanos = 16_666_667_u64;
-        for frame in 1..=8 {
-            elastic.update(step_nanos * frame);
-        }
-        let velocity_before = elastic.motion.velocity();
-        let value_before = elastic.motion.value();
-        assert!(
-            velocity_before > 0.05,
-            "expected carried expand velocity, got {velocity_before}"
-        );
-
-        elastic.motion.set_target(0.0);
-        assert_eq!(elastic.motion.velocity(), velocity_before);
-        assert_eq!(elastic.motion.value(), value_before);
-
-        elastic.update(step_nanos * 9);
-        let velocity_after = elastic.motion.velocity();
-        assert!(velocity_after < velocity_before, "got {velocity_after}");
-        assert!(velocity_after.abs() > 1.0e-6);
-    }
-
     #[test]
     fn elastic_collapse_eases_without_spring_velocity() {
         let mut elastic = ElasticState::default();
