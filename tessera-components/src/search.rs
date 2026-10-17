@@ -4,16 +4,16 @@
 //!
 //! Use to collect search queries and show suggestions or results as the user
 //! types.
-use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    CallbackWith, Color, Dp, Modifier, RenderSlot, State, layout::layout, remember, tessera,
-    use_context, winit,
+    CallbackWith, Color, CursorEventContent, Dp, KeyboardInput, KeyboardInputModifierNode,
+    Modifier, PointerInput, PointerInputModifierNode, PressKeyEventType, RenderSlot, State,
+    layout::layout, modifier::ModifierCapabilityExt as _, remember, tessera, use_context, winit,
 };
 
 use crate::{
     column::column,
     divider::horizontal_divider,
-    modifier::{ModifierExt as _, with_keyboard_input, with_pointer_input},
+    modifier::ModifierExt as _,
     pos_misc::is_position_inside_bounds,
     shape_def::Shape,
     spacer::spacer,
@@ -87,7 +87,7 @@ struct SearchBarProps {
     modifier: Modifier,
     enabled: bool,
     read_only: bool,
-    is_active: bool,
+    is_active: Option<bool>,
     placeholder: Option<String>,
     leading_icon: Option<RenderSlot>,
     trailing_icon: Option<RenderSlot>,
@@ -111,7 +111,7 @@ impl Default for SearchBarProps {
             modifier: Modifier::new(),
             enabled: true,
             read_only: false,
-            is_active: false,
+            is_active: None,
             placeholder: None,
             leading_icon: None,
             trailing_icon: None,
@@ -308,7 +308,6 @@ fn resolve_search_bar(
     let modifier = modifier.unwrap_or_default();
     let enabled = enabled.unwrap_or(true);
     let read_only = read_only.unwrap_or(false);
-    let is_active = is_active.unwrap_or(false);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -323,7 +322,8 @@ fn resolve_search_bar(
     let dropdown_shape = dropdown_shape.unwrap_or(defaults.dropdown_shape);
     let dropdown_gap = dropdown_gap.unwrap_or(defaults.dropdown_gap);
     let content_padding = content_padding.unwrap_or(defaults.content_padding);
-    let controller = controller.unwrap_or_else(|| remember(|| SearchBarController::new(is_active)));
+    let controller = controller
+        .unwrap_or_else(|| remember(|| SearchBarController::new(is_active.unwrap_or(false))));
     mount_search_bar(
         SearchBarProps {
             modifier,
@@ -456,8 +456,10 @@ fn build_search_bar_props(args: SearchBarProps, kind: SearchBarLayoutKind) -> Se
     let controller = args
         .controller
         .expect("build_search_bar_props requires controller to be set");
-    if args.is_active != controller.with(|c| c.is_active()) {
-        if args.is_active {
+    if let Some(is_active) = args.is_active
+        && is_active != controller.with(|c| c.is_active())
+    {
+        if is_active {
             controller.with_mut(|c| c.open());
         } else {
             controller.with_mut(|c| c.close());
@@ -524,6 +526,69 @@ struct SearchResultsSurfaceArgs {
     content: RenderSlot,
 }
 
+#[derive(Clone, Copy)]
+struct SearchInteractionModifier {
+    enabled: bool,
+    controller: State<SearchBarController>,
+    on_active_change: CallbackWith<bool>,
+    on_search: CallbackWith<String>,
+}
+
+impl PointerInputModifierNode for SearchInteractionModifier {
+    fn on_pointer_input(&self, input: PointerInput<'_>) {
+        let within_bounds = input
+            .cursor_position_rel
+            .map(|pos| is_position_inside_bounds(input.computed_data, pos))
+            .unwrap_or(false);
+        if self.enabled
+            && within_bounds
+            && input.pointer_changes.iter().any(|change| {
+                !change.is_consumed()
+                    && matches!(
+                        change.content,
+                        CursorEventContent::Pressed(PressKeyEventType::Left)
+                    )
+            })
+            && !self.controller.with(SearchBarController::is_active)
+        {
+            self.controller.with_mut(SearchBarController::open);
+            self.on_active_change.call(true);
+        }
+    }
+}
+
+impl KeyboardInputModifierNode for SearchInteractionModifier {
+    fn on_keyboard_input(&self, mut input: KeyboardInput<'_>) {
+        if !self.enabled || !self.controller.with(SearchBarController::is_active) {
+            return;
+        }
+        let mut handled = false;
+        for event in input.keyboard_events.iter() {
+            if event.state != winit::event::ElementState::Pressed {
+                continue;
+            }
+            match event.physical_key {
+                winit::keyboard::PhysicalKey::Code(winit::keyboard::KeyCode::Escape) => {
+                    self.controller.with_mut(SearchBarController::close);
+                    self.on_active_change.call(false);
+                    handled = true;
+                }
+                winit::keyboard::PhysicalKey::Code(
+                    winit::keyboard::KeyCode::Enter | winit::keyboard::KeyCode::NumpadEnter,
+                ) => {
+                    self.on_search
+                        .call(self.controller.with(|c| c.query().to_owned()));
+                    handled = true;
+                }
+                _ => {}
+            }
+        }
+        if handled {
+            input.block_keyboard();
+        }
+    }
+}
+
 #[tessera]
 fn search_bar_inner(
     kind: Option<SearchBarLayoutKind>,
@@ -571,63 +636,15 @@ fn search_bar_inner(
 
     sync_query(&controller, &input_controller, &synced_query);
 
-    let tap_recognizer = remember(TapRecognizer::default);
-    let modifier = with_keyboard_input(
-        with_pointer_input(Modifier::new(), {
-            move |input| {
-                if !enabled {
-                    return;
-                }
-                let is_active = controller.with(|c| c.is_active());
-                let cursor_pos = input.cursor_position_rel;
-                let within_bounds = cursor_pos
-                    .map(|pos| is_position_inside_bounds(input.computed_data, pos))
-                    .unwrap_or(false);
-                let tap_result = tap_recognizer.with_mut(|recognizer| {
-                    recognizer.update(
-                        input.pass,
-                        input.pointer_changes.as_mut_slice(),
-                        within_bounds,
-                    )
-                });
-
-                if tap_result.pressed && within_bounds && !is_active {
-                    controller.with_mut(|c| c.open());
-                    on_active_change.call(true);
-                }
-            }
-        }),
-        move |mut input| {
-            if !enabled {
-                return;
-            }
-            let is_active = controller.with(|c| c.is_active());
-            for event in input.keyboard_events.iter() {
-                if event.state == winit::event::ElementState::Pressed
-                    && let winit::keyboard::PhysicalKey::Code(code) = event.physical_key
-                {
-                    match code {
-                        winit::keyboard::KeyCode::Escape => {
-                            if is_active {
-                                controller.with_mut(|c| c.close());
-                                on_active_change.call(false);
-                            }
-                        }
-                        winit::keyboard::KeyCode::Enter | winit::keyboard::KeyCode::NumpadEnter => {
-                            if is_active {
-                                let query = controller.with(|c| c.query().to_string());
-                                on_search.call(query);
-                            }
-                        }
-                        _ => {}
-                    }
-                }
-            }
-            if is_active {
-                input.block_keyboard();
-            }
-        },
-    );
+    let interaction = SearchInteractionModifier {
+        enabled,
+        controller,
+        on_active_change,
+        on_search,
+    };
+    let modifier = Modifier::new()
+        .push_pointer_preview_input(interaction)
+        .push_keyboard_preview_input(interaction);
 
     let results_surface_args = SearchResultsSurfaceArgs {
         kind,
@@ -770,5 +787,82 @@ fn sync_query(
         let query = controller.with(|c| c.query().to_owned());
         input.with_mut(|c| c.set_text(&query));
         synced_query.set(query);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::cell::RefCell;
+
+    use tessera_ui::{
+        CursorEventContent, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
+        PxPosition, State, remember, tessera,
+        testing::{
+            layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
+            start_layout_test_session,
+        },
+    };
+
+    use crate::{modifier::ModifierExt as _, spacer::spacer, theme::material_theme};
+
+    use super::{SearchBarController, docked_search_bar};
+
+    thread_local! {
+        static CONTROLLER: RefCell<Option<State<SearchBarController>>> = const { RefCell::new(None) };
+    }
+
+    #[tessera]
+    fn search_fixture(active: Option<bool>) {
+        let controller = remember(SearchBarController::default);
+        CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+        material_theme().child(move || {
+            docked_search_bar()
+                .controller(controller)
+                .is_active_optional(active)
+                .content(|| {
+                    spacer().modifier(Modifier::new().height(tessera_ui::Dp(40.0)));
+                });
+        });
+    }
+
+    #[test]
+    fn clicking_search_field_opens_uncontrolled_results_and_preserves_controlled_state() {
+        for (active, expected) in [(None, true), (Some(false), false), (Some(true), true)] {
+            let mut session = start_layout_test_session(
+                layout_test(|| {
+                    search_fixture().active_optional(active);
+                })
+                .viewport_px(400, 300),
+            );
+            let _ = pump_layout_test_session(&mut session, 0);
+            let now = tessera_ui::time::Instant::now();
+            let cursor = Some(PxPosition::new(Px(100), Px(28)));
+            for (index, content) in [
+                CursorEventContent::Pressed(PressKeyEventType::Left),
+                CursorEventContent::Released(PressKeyEventType::Left),
+            ]
+            .into_iter()
+            .enumerate()
+            {
+                let _ = pump_layout_test_session_with_input(
+                    &mut session,
+                    16_666_667 * (index as u64 + 1),
+                    vec![PointerChange::new(
+                        now,
+                        1,
+                        content,
+                        GestureState::TapCandidate,
+                    )],
+                    cursor,
+                );
+            }
+            let _ = pump_layout_test_session(&mut session, 50_000_001);
+            let controller = CONTROLLER.with(|slot| slot.borrow().unwrap());
+            assert_eq!(
+                controller.with(SearchBarController::is_active),
+                expected,
+                "active={active:?}"
+            );
+        }
     }
 }
