@@ -621,9 +621,11 @@ fn lazy_list_view(
     let plan = LazySlotPlan::new(slots.clone());
     let total_count = plan.total_count();
 
-    let item_count_changed = controller.with(|c| c.cache.total_items != total_count);
-    if item_count_changed {
-        controller.with_mut(|c| c.cache.set_item_count(total_count));
+    let cache_config_changed = controller.with(|c| {
+        c.cache.total_items != total_count || c.cache.estimated_main != estimated_item_main
+    });
+    if cache_config_changed {
+        controller.with_mut(|c| c.cache.configure(total_count, estimated_item_main));
     }
 
     let scroll_offset = axis.scroll_offset(scroll_controller.with(|s| s.child_position()));
@@ -793,14 +795,20 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
             measured_entries.push((*item_index, *child, child_size, measured_main));
         }
 
-        let has_cache_updates = self.controller.with(|c| {
-            measured_entries
-                .iter()
-                .any(|(item_index, _, _, measured_main)| {
-                    c.cache.measured_main.get(*item_index).copied().flatten()
-                        != Some(*measured_main)
-                })
-        });
+        let cross_limit = match self.axis {
+            LazyListAxis::Vertical => child_constraint.width.resolve_max(),
+            LazyListAxis::Horizontal => child_constraint.height.resolve_max(),
+        };
+        // Collapsed viewports can wrap text into misleading main-axis sizes.
+        let has_cache_updates = cross_limit.is_none_or(|size| size > Px::ZERO)
+            && self.controller.with(|c| {
+                measured_entries
+                    .iter()
+                    .any(|(item_index, _, _, measured_main)| {
+                        c.cache.measured_main.get(*item_index).copied().flatten()
+                            != Some(*measured_main)
+                    })
+            });
         if has_cache_updates {
             self.controller.with_mut(|c| {
                 for (item_index, _, _, measured_main) in &measured_entries {
@@ -1414,18 +1422,27 @@ struct VisibleChild {
 #[derive(PartialEq, Default)]
 struct LazyListCache {
     total_items: usize,
+    estimated_main: Px,
     measured_main: Vec<Option<Px>>,
     fenwick: FenwickTree,
 }
 
 impl LazyListCache {
-    fn set_item_count(&mut self, count: usize) {
-        if self.total_items == count {
-            return;
+    fn configure(&mut self, count: usize, estimated: Px) {
+        if self.total_items != count {
+            self.total_items = count;
+            self.measured_main = vec![None; count];
+            self.fenwick.resize(count);
         }
-        self.total_items = count;
-        self.measured_main = vec![None; count];
-        self.fenwick.resize(count);
+        if self.estimated_main != estimated {
+            self.estimated_main = estimated;
+            self.fenwick.resize(count);
+            for (index, actual) in self.measured_main.iter().enumerate() {
+                if let Some(actual) = actual {
+                    self.fenwick.update(index, *actual - estimated);
+                }
+            }
+        }
     }
 
     fn record_measurement(&mut self, index: usize, actual: Px, estimated: Px) {
@@ -1573,11 +1590,14 @@ fn saturating_sub_px(lhs: Px, rhs: Px) -> Px {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::{
+        cell::Cell,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
 
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
-        Px, PxPosition,
+        AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
+        NoopDrawModifier, Px, PxPosition, State,
         layout::{MeasureScope, layout},
         receive_frame_nanos, remember, tessera,
     };
@@ -1585,10 +1605,145 @@ mod tests {
     use crate::{
         alignment::CrossAxisAlignment,
         modifier::{ModifierExt as _, SemanticsArgs},
+        text::text,
         theme::{MaterialTheme, material_theme},
     };
 
-    use super::{LazyListController, lazy_column, lazy_row};
+    use super::{LazyListCache, LazyListController, lazy_column, lazy_row};
+
+    thread_local! { static ESTIMATE: Cell<Option<State<Dp>>> = const { Cell::new(None) }; }
+    thread_local! {
+        static COLLAPSED_WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) };
+        static COLLAPSED_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
+    }
+
+    #[tessera]
+    fn collapsed_viewport_fixture() {
+        let width = remember(|| Dp(300.0));
+        let controller = remember(LazyListController::new);
+        COLLAPSED_WIDTH.set(Some(width));
+        COLLAPSED_LIST.set(Some(controller));
+        material_theme().child(move || {
+            lazy_column()
+                .modifier(Modifier::new().width(width.get()).height(Dp(240.0)))
+                .controller(controller)
+                .estimated_item_size(Dp(60.0))
+                .items(3, |_| {
+                    text().content("A responsive list retains measured geometry while its viewport is temporarily collapsed.");
+                });
+        });
+    }
+
+    #[test]
+    fn collapsed_cross_axis_preserves_usable_measurements() {
+        let mut session = tessera_ui::testing::start_layout_test_session(
+            tessera_ui::testing::layout_test(|| {
+                collapsed_viewport_fixture();
+            })
+            .viewport_px(300, 240),
+        );
+        for frame in 0..8 {
+            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        let controller = COLLAPSED_LIST.get().expect("list controller");
+        let before = controller.with(|state| state.cache.measured_main.clone());
+        assert!(before.iter().all(Option::is_some));
+        let width = COLLAPSED_WIDTH.get().expect("viewport width");
+        width.set(Dp(0.0));
+        for frame in 8..12 {
+            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        assert_eq!(
+            controller.with(|state| state.cache.measured_main.clone()),
+            before
+        );
+        width.set(Dp(300.0));
+        for frame in 12..16 {
+            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        assert_eq!(
+            controller.with(|state| state.cache.measured_main.clone()),
+            before
+        );
+    }
+
+    #[test]
+    fn estimate_changes_rebase_measured_and_unmeasured_offsets() {
+        let mut cache = LazyListCache::default();
+        cache.configure(5, Px(100));
+        for (index, size) in [(0, 40), (1, 60), (3, 80)] {
+            cache.record_measurement(index, Px(size), Px(100));
+        }
+        assert_eq!(cache.total_main_size(Px(100), Px(8)), Px(412));
+        cache.configure(5, Px(20));
+        assert_eq!(cache.total_main_size(Px(20), Px(8)), Px(252));
+        assert_eq!(cache.offset_for(2, Px(20), Px(8)), Px(116));
+        assert_eq!(cache.offset_for(4, Px(20), Px(8)), Px(232));
+        assert_eq!(cache.index_for_offset(Px(115), Px(20), Px(8)), 1);
+        assert_eq!(cache.index_for_offset(Px(116), Px(20), Px(8)), 2);
+        cache.record_measurement(1, Px(75), Px(20));
+        cache.configure(5, Px(100));
+        assert_eq!(cache.total_main_size(Px(100), Px(8)), Px(427));
+        cache.configure(0, Px(20));
+        assert_eq!(cache.total_main_size(Px(20), Px(8)), Px::ZERO);
+        cache.configure(3, Px(100));
+        assert_eq!(cache.total_main_size(Px(100), Px(8)), Px(316));
+    }
+
+    #[tessera]
+    fn changing_estimate_fixture() {
+        let estimate = remember(|| Dp(100.0));
+        ESTIMATE.set(Some(estimate));
+        material_theme().child(move || {
+            lazy_column()
+                .modifier(Modifier::new().fill_max_size())
+                .cross_axis_alignment(CrossAxisAlignment::Start)
+                .estimated_item_size(estimate.get())
+                .item_spacing(Dp(8.0))
+                .overscan(10)
+                .items(4, |index| {
+                    fixed_test_box()
+                        .tag(format!("estimate_{index}"))
+                        .width(20)
+                        .height(40);
+                });
+        });
+    }
+
+    #[test]
+    fn changing_estimates_and_density_keep_items_separated() {
+        crate::test_utils::run_isolated_test(
+            "lazy_list::tests::changing_estimates_and_density_keep_items_separated",
+            || {
+                tessera_ui::dp::set_scale_factor(1.0);
+                let mut session = tessera_ui::testing::start_layout_test_session(
+                    tessera_ui::testing::layout_test(|| {
+                        changing_estimate_fixture();
+                    })
+                    .viewport_px(200, 240),
+                );
+                let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+                let estimate = ESTIMATE.get().expect("estimate state");
+                for (frame, (density, value)) in [(1.0, 20.0), (1.5, 140.0), (1.0, 60.0)]
+                    .into_iter()
+                    .enumerate()
+                {
+                    tessera_ui::dp::set_scale_factor(density);
+                    estimate.set(Dp(value));
+                    let snapshot = tessera_ui::testing::pump_layout_test_session(
+                        &mut session,
+                        (frame as u64 + 1) * 16_666_667,
+                    );
+                    for index in 0..4 {
+                        snapshot
+                            .node(&format!("estimate_{index}"))
+                            .position(0, index * (40 + (8.0 * density) as i32));
+                    }
+                }
+                tessera_ui::dp::set_scale_factor(1.0);
+            },
+        );
+    }
 
     static LAZY_LIST_VISIBLE_ITEM_BUILD_COUNT: AtomicUsize = AtomicUsize::new(0);
 

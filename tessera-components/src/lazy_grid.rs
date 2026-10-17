@@ -220,13 +220,32 @@ impl tessera_ui::LayoutModifierNode for LazyGridLayout {
             });
         }
 
-        let (placements, total_main) = self.controller.with_mut(|c| {
-            for (offset, line_main) in line_max.iter().enumerate() {
-                let line_index = self.line_range.start + offset;
-                c.cache
-                    .record_line_measurement(line_index, *line_main, self.estimated_line_main);
-            }
+        // Preserve usable line measurements while the cross axis is collapsed.
+        let measurements_changed = self.slots.sizes.iter().all(|size| *size > Px::ZERO)
+            && self.controller.with(|c| {
+                line_max.iter().enumerate().any(|(offset, size)| {
+                    c.cache
+                        .measured_line_main
+                        .get(self.line_range.start + offset)
+                        .copied()
+                        .flatten()
+                        != Some(*size)
+                })
+            });
+        if measurements_changed {
+            self.controller.with_mut(|c| {
+                for (offset, line_main) in line_max.iter().enumerate() {
+                    let line_index = self.line_range.start + offset;
+                    c.cache.record_line_measurement(
+                        line_index,
+                        *line_main,
+                        self.estimated_line_main,
+                    );
+                }
+            });
+        }
 
+        let (placements, total_main) = self.controller.with(|c| {
             let mut placements = Vec::with_capacity(measured_items.len());
             for item in &measured_items {
                 let line_offset = c.cache.offset_for_line(
@@ -271,8 +290,10 @@ impl tessera_ui::LayoutModifierNode for LazyGridLayout {
         let size = self
             .axis
             .pack_size(total_main_with_padding, cross_with_padding);
-        self.scroll_controller
-            .with_mut(|c| c.override_child_size(size));
+        if self.scroll_controller.with(|c| c.child_size() != size) {
+            self.scroll_controller
+                .with_mut(|c| c.override_child_size(size));
+        }
 
         let reported_main = clamp_reported_main(
             total_main_with_padding,
@@ -953,16 +974,27 @@ fn lazy_grid_view(
     );
     let slots_per_line = grid_slots.len();
 
-    controller.with_mut(|c| c.cache.set_item_count(total_count, slots_per_line));
+    let cache_config_changed = controller.with(|c| {
+        c.cache.total_items != total_count
+            || c.cache.slots_per_line != slots_per_line.max(1)
+            || c.cache.estimated_main != estimated_line_main
+    });
+    if cache_config_changed {
+        controller.with_mut(|c| {
+            c.cache
+                .configure(total_count, slots_per_line, estimated_line_main)
+        });
+    }
     let total_main = controller.with(|c| {
         c.cache
             .total_main_size(estimated_line_main, main_axis_spacing)
     });
     let total_main_with_padding = total_main + padding_main + padding_main;
     let cross_with_padding = grid_slots.cross_size + padding_cross + padding_cross;
-    scroll_controller.with_mut(|c| {
-        c.override_child_size(axis.pack_size(total_main_with_padding, cross_with_padding));
-    });
+    let child_size = axis.pack_size(total_main_with_padding, cross_with_padding);
+    if scroll_controller.with(|c| c.child_size() != child_size) {
+        scroll_controller.with_mut(|c| c.override_child_size(child_size));
+    }
 
     let scroll_offset = axis.scroll_offset(scroll_controller.with(|s| s.child_position()));
     let viewport_span = resolve_viewport_span(
@@ -1524,20 +1556,30 @@ fn lazy_grid_focus_beyond_bounds_modifier(args: LazyGridFocusArgs) -> Modifier {
 struct LazyGridCache {
     total_items: usize,
     slots_per_line: usize,
+    estimated_main: Px,
     measured_line_main: Vec<Option<Px>>,
     fenwick: FenwickTree,
 }
 
 impl LazyGridCache {
-    fn set_item_count(&mut self, count: usize, slots_per_line: usize) {
-        if self.total_items == count && self.slots_per_line == slots_per_line {
-            return;
+    fn configure(&mut self, count: usize, slots_per_line: usize, estimated: Px) {
+        let slots_per_line = slots_per_line.max(1);
+        if self.total_items != count || self.slots_per_line != slots_per_line {
+            self.total_items = count;
+            self.slots_per_line = slots_per_line;
+            let lines = line_count(count, self.slots_per_line);
+            self.measured_line_main = vec![None; lines];
+            self.fenwick.resize(lines);
         }
-        self.total_items = count;
-        self.slots_per_line = slots_per_line.max(1);
-        let lines = line_count(count, self.slots_per_line);
-        self.measured_line_main = vec![None; lines];
-        self.fenwick.resize(lines);
+        if self.estimated_main != estimated {
+            self.estimated_main = estimated;
+            self.fenwick.resize(self.measured_line_main.len());
+            for (index, actual) in self.measured_line_main.iter().enumerate() {
+                if let Some(actual) = actual {
+                    self.fenwick.update(index, *actual - estimated);
+                }
+            }
+        }
     }
 
     fn line_count(&self) -> usize {
@@ -1686,11 +1728,14 @@ fn sanitize_spacing(px: Px) -> Px {
 
 #[cfg(test)]
 mod tests {
-    use std::sync::atomic::{AtomicUsize, Ordering};
+    use std::{
+        cell::Cell,
+        sync::atomic::{AtomicUsize, Ordering},
+    };
 
     use tessera_ui::{
-        AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, NoopDrawModifier,
-        Px, PxPosition,
+        AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
+        NoopDrawModifier, Px, PxPosition, State,
         layout::{MeasureScope, layout},
         receive_frame_nanos, remember, tessera,
     };
@@ -1699,10 +1744,89 @@ mod tests {
         alignment::{CrossAxisAlignment, MainAxisAlignment},
         modifier::{ModifierExt as _, SemanticsArgs},
         scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
+        text::text,
         theme::{MaterialTheme, material_theme},
     };
 
-    use super::{GridCells, LazyGridAxis, LazyGridController, lazy_grid_view};
+    use super::{
+        GridCells, LazyGridAxis, LazyGridCache, LazyGridController, lazy_grid_view,
+        lazy_vertical_grid,
+    };
+
+    thread_local! {
+        static COLLAPSED_WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) };
+        static COLLAPSED_GRID: Cell<Option<State<LazyGridController>>> = const { Cell::new(None) };
+    }
+
+    #[tessera]
+    fn collapsed_viewport_fixture() {
+        let width = remember(|| Dp(300.0));
+        let controller = remember(LazyGridController::new);
+        COLLAPSED_WIDTH.set(Some(width));
+        COLLAPSED_GRID.set(Some(controller));
+        material_theme().child(move || {
+            lazy_vertical_grid()
+                .columns(GridCells::fixed(2))
+                .modifier(Modifier::new().width(width.get()).height(Dp(240.0)))
+                .controller(controller)
+                .cross_axis_spacing(Dp(8.0))
+                .estimated_item_size(Dp(60.0))
+                .items(4, |_| {
+                    text().content(
+                        "Keep measured grid geometry when the viewport temporarily collapses.",
+                    );
+                });
+        });
+    }
+
+    #[test]
+    fn collapsed_cells_preserve_measurements_even_with_nonzero_spacing() {
+        let mut session = tessera_ui::testing::start_layout_test_session(
+            tessera_ui::testing::layout_test(|| {
+                collapsed_viewport_fixture();
+            })
+            .viewport_px(300, 240),
+        );
+        for frame in 0..8 {
+            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        let controller = COLLAPSED_GRID.get().expect("grid controller");
+        let before = controller.with(|state| state.cache.measured_line_main.clone());
+        assert!(before.iter().all(Option::is_some));
+        let width = COLLAPSED_WIDTH.get().expect("viewport width");
+        width.set(Dp(0.0));
+        for frame in 8..12 {
+            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        assert_eq!(
+            controller.with(|state| state.cache.measured_line_main.clone()),
+            before
+        );
+        width.set(Dp(300.0));
+        for frame in 12..16 {
+            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
+        }
+        assert_eq!(
+            controller.with(|state| state.cache.measured_line_main.clone()),
+            before
+        );
+    }
+
+    #[test]
+    fn estimate_changes_rebase_line_offsets_and_column_changes_clear_measurements() {
+        let mut cache = LazyGridCache::default();
+        cache.configure(10, 2, Px(100));
+        for (index, size) in [(0, 40), (1, 60), (3, 80)] {
+            cache.record_line_measurement(index, Px(size), Px(100));
+        }
+        assert_eq!(cache.total_main_size(Px(100), Px(8)), Px(412));
+        cache.configure(10, 2, Px(20));
+        assert_eq!(cache.total_main_size(Px(20), Px(8)), Px(252));
+        assert_eq!(cache.offset_for_line(2, Px(20), Px(8)), Px(116));
+        assert_eq!(cache.line_index_for_offset(Px(116), Px(20), Px(8)), 2);
+        cache.configure(10, 3, Px(20));
+        assert_eq!(cache.total_main_size(Px(20), Px(8)), Px(104));
+    }
 
     static LAZY_GRID_VISIBLE_ITEM_BUILD_COUNT: AtomicUsize = AtomicUsize::new(0);
 
