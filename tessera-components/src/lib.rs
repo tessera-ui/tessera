@@ -73,6 +73,7 @@ pub mod boxed;
 pub mod button;
 pub mod button_groups;
 pub mod card;
+pub mod carousel;
 pub mod checkbox;
 mod checkmark;
 pub mod chip;

@@ -5,10 +5,9 @@ struct VertexOutput {
 
 struct Uniforms {
     rect: vec4<f32>,
-    is_bgra: u32,
     opacity: f32,
 };
-@group(0) @binding(2)
+@group(0) @binding(0)
 var<uniform> uniforms: Uniforms;
 
 @vertex
@@ -24,17 +23,14 @@ fn vs_main(@location(0) position: vec2<f32>) -> VertexOutput {
     return out;
 }
 
-@group(0) @binding(0)
+@group(1) @binding(0)
 var t_diffuse: texture_2d<f32>;
-@group(0) @binding(1)
+@group(1) @binding(1)
 var s_diffuse: sampler;
 
 @fragment
 fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
-    var color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
-    if uniforms.is_bgra == 1u {
-        color = color.bgra;
-    }
+    let color = textureSample(t_diffuse, s_diffuse, in.tex_coords);
     let alpha = color.a * uniforms.opacity;
     let rgb = color.rgb * uniforms.opacity;
     return vec4<f32>(rgb, alpha);

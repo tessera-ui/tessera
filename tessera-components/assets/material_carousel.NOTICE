@@ -1,0 +1,14 @@
+Carousel arrangement, keyline, shifting, and snap algorithms
+Copyright 2023 The Android Open Source Project
+Copyright 2024 The Android Open Source Project
+
+Adapted from Arrangement.kt, Keylines.kt, KeylineList.kt, Strategy.kt, and
+KeylineSnapPosition.kt in AndroidX Material 3. Geometry regression cases also
+use the corresponding AndroidX carousel host tests. Adapted to Rust for
+Tessera's retained layout, clipping, input, and state model on 2026-10-17.
+
+https://github.com/androidx/androidx/tree/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/carousel
+https://github.com/androidx/androidx/tree/androidx-main/compose/material3/material3/src/androidHostTest/kotlin/androidx/compose/material3/carousel
+
+Licensed under the Apache License, Version 2.0.
+See material_carousel.LICENSE for the complete license.
