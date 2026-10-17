@@ -436,7 +436,7 @@ fn build_package(package: &str, release: bool, profiling: bool) -> Result<()> {
 }
 
 fn resolve_binary(package: &str, release: bool) -> Result<PathBuf> {
-    let metadata = MetadataCommand::new().exec()?;
+    let metadata = MetadataCommand::new().no_deps().exec()?;
     let pkg = metadata
         .packages
         .iter()

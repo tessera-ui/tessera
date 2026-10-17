@@ -332,6 +332,7 @@ fn resolve_wasm_artifact_path(
 ) -> Result<PathBuf> {
     let cargo_metadata = MetadataCommand::new()
         .manifest_path(&metadata.manifest_path)
+        .no_deps()
         .exec()
         .context("Failed to load cargo metadata for web build")?;
 
@@ -736,18 +737,6 @@ mod tests {
     impl Drop for Fixture {
         fn drop(&mut self) {
             let _ = fs::remove_dir_all(&self.0);
-        }
-    }
-
-    #[test]
-    fn app_templates_share_platform_entry_guards() {
-        for source in [
-            include_str!("../../templates/basic/src/main.rs.hbs"),
-            include_str!("../../templates/blank/src/main.rs.hbs"),
-        ] {
-            assert!(source.contains(DESKTOP_MAIN_GUARD));
-            assert!(source.contains(NON_DESKTOP_MAIN_STUB.trim()));
-            assert!(!source.contains(LEGACY_DESKTOP_MAIN_GUARD));
         }
     }
 

@@ -28,6 +28,11 @@ pub(crate) fn load_workspace(options: &CheckOptions<'_>) -> Result<LoadedWorkspa
     if let Some(package) = options.package {
         cargo_config.extra_args.push("--package".to_string());
         cargo_config.extra_args.push(package.to_string());
+        // The default command also checks every workspace member, whose host
+        // dependencies may be absent from the selected target's metadata.
+        if options.target.is_some() {
+            cargo_config.run_build_script_command = Some(build_script_command(options, package));
+        }
     }
 
     let load_config = LoadCargoConfig {
@@ -47,6 +52,52 @@ pub(crate) fn load_workspace(options: &CheckOptions<'_>) -> Result<LoadedWorkspa
         host: AnalysisHost::with_database(db),
         vfs,
     })
+}
+
+fn build_script_command(options: &CheckOptions<'_>, package: &str) -> Vec<String> {
+    let mut command = vec![
+        "cargo".to_string(),
+        "check".to_string(),
+        "--quiet".to_string(),
+        "--message-format=json".to_string(),
+        "--keep-going".to_string(),
+        "--package".to_string(),
+        package.to_string(),
+    ];
+    if let Some(target) = options.target {
+        command.extend(["--target".to_string(), target.to_string()]);
+    }
+    if options.target_selection.all_targets {
+        command.push("--all-targets".to_string());
+    } else {
+        let selection = &options.target_selection;
+        for (selected, flag) in [
+            (selection.lib, "--lib"),
+            (selection.bins, "--bins"),
+            (selection.examples, "--examples"),
+            (selection.tests, "--tests"),
+            (selection.benches, "--benches"),
+        ] {
+            if selected {
+                command.push(flag.to_string());
+            }
+        }
+    }
+    match &options.features {
+        FeatureSelection::All => command.push("--all-features".to_string()),
+        FeatureSelection::Selected {
+            features,
+            no_default_features,
+        } => {
+            if *no_default_features {
+                command.push("--no-default-features".to_string());
+            }
+            if !features.is_empty() {
+                command.extend(["--features".to_string(), features.join(",")]);
+            }
+        }
+    }
+    command
 }
 
 pub(crate) fn selected_local_files(
@@ -272,12 +323,79 @@ mod tests {
     use std::{
         fs,
         path::{Path, PathBuf},
+        process::Command,
         sync::atomic::{AtomicU64, Ordering},
     };
 
     use super::*;
 
     static NEXT_FIXTURE_ID: AtomicU64 = AtomicU64::new(0);
+
+    #[test]
+    fn build_script_check_ignores_unselected_workspace_members() {
+        let fixture = FixtureWorkspace::new();
+        let unselected = fixture.root.join("unselected");
+        fs::create_dir_all(unselected.join("src")).expect("unselected source directory");
+        fs::write(
+            fixture.root.join("Cargo.toml"),
+            "[workspace]\nmembers = [\"member\", \"unselected\"]\nresolver = \"3\"\n",
+        )
+        .expect("workspace manifest");
+        fs::write(
+            unselected.join("Cargo.toml"),
+            "[package]\nname = \"unselected\"\nversion = \"0.0.0\"\nedition = \"2024\"\n",
+        )
+        .expect("unselected manifest");
+        fs::write(
+            unselected.join("src/lib.rs"),
+            "compile_error!(\"the unselected package must not be checked\");\n",
+        )
+        .expect("unselected source");
+
+        let command = build_script_command(&CheckOptions::new(Some("member"), None), "member");
+        let output = Command::new(&command[0])
+            .args(&command[1..])
+            .current_dir(&fixture.root)
+            .output()
+            .expect("selected package check should run");
+        assert!(
+            output.status.success(),
+            "selected package check failed: {}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let messages = String::from_utf8(output.stdout).expect("Cargo messages should be UTF-8");
+        assert!(messages.contains("\"name\":\"member\""));
+        assert!(!messages.contains("\"name\":\"unselected\""));
+    }
+
+    #[test]
+    fn build_script_check_preserves_cross_target_feature_selection() {
+        let features = vec!["member/extra".to_string(), "member/other".to_string()];
+        let mut options = CheckOptions::new(Some("member"), Some("wasm32-unknown-unknown"));
+        options.target_selection = TargetSelection::lib_only();
+        options.features = FeatureSelection::Selected {
+            features: &features,
+            no_default_features: true,
+        };
+        let command = build_script_command(&options, "member");
+        assert!(
+            command
+                .windows(2)
+                .any(|args| args == ["--target", "wasm32-unknown-unknown"])
+        );
+        assert!(
+            command
+                .windows(2)
+                .any(|args| args == ["--features", "member/extra,member/other"])
+        );
+        assert!(command.iter().any(|arg| arg == "--lib"));
+        assert!(command.iter().any(|arg| arg == "--no-default-features"));
+        assert!(
+            !command
+                .iter()
+                .any(|arg| arg == "--workspace" || arg == "--all-targets")
+        );
+    }
 
     #[test]
     fn selected_target_roots_finds_workspace_member_manifest() {
