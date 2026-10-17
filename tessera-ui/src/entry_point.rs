@@ -91,6 +91,7 @@ impl EntryPoint {
     /// Runs the entry point on web platforms.
     #[cfg(target_family = "wasm")]
     pub fn run_web(self) -> Result<(), winit::error::EventLoopError> {
+        init_web_panic_hook();
         init_tracing();
         Renderer::run_web_with_config(self.entry, self.registry.finish(), self.config)
     }
@@ -102,6 +103,18 @@ impl EntryPoint {
         init_deadlock_detection();
         Renderer::run_with_config(self.entry, self.registry.finish(), android_app, self.config)
     }
+}
+
+#[cfg(target_family = "wasm")]
+fn init_web_panic_hook() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        let previous = std::panic::take_hook();
+        std::panic::set_hook(Box::new(move |info| {
+            web_sys::console::error_1(&info.to_string().into());
+            previous(info);
+        }));
+    });
 }
 
 #[cfg(all(debug_assertions, not(target_family = "wasm")))]
@@ -136,6 +149,8 @@ fn init_tracing() {
     {
         let _ = tracing_subscriber::fmt()
             .with_max_level(tracing::Level::INFO)
+            .with_writer(WebConsoleMakeWriter)
+            .with_ansi(false)
             .without_time()
             .try_init();
     }
@@ -163,5 +178,63 @@ fn init_tracing() {
             .with_env_filter(filter)
             .with_span_events(tracing_subscriber::fmt::format::FmtSpan::CLOSE)
             .try_init();
+    }
+}
+
+#[cfg(target_family = "wasm")]
+struct WebConsoleMakeWriter;
+
+#[cfg(target_family = "wasm")]
+impl<'a> tracing_subscriber::fmt::MakeWriter<'a> for WebConsoleMakeWriter {
+    type Writer = WebConsoleWriter;
+
+    fn make_writer(&'a self) -> Self::Writer {
+        WebConsoleWriter {
+            level: tracing::Level::INFO,
+            buffer: Vec::new(),
+        }
+    }
+
+    fn make_writer_for(&'a self, metadata: &tracing::Metadata<'_>) -> Self::Writer {
+        WebConsoleWriter {
+            level: *metadata.level(),
+            buffer: Vec::new(),
+        }
+    }
+}
+
+#[cfg(target_family = "wasm")]
+struct WebConsoleWriter {
+    level: tracing::Level,
+    buffer: Vec<u8>,
+}
+
+#[cfg(target_family = "wasm")]
+impl std::io::Write for WebConsoleWriter {
+    fn write(&mut self, buffer: &[u8]) -> std::io::Result<usize> {
+        self.buffer.extend_from_slice(buffer);
+        Ok(buffer.len())
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        if !self.buffer.is_empty() {
+            let message = String::from_utf8_lossy(&self.buffer);
+            let message = message.trim_end_matches(['\r', '\n']).into();
+            match self.level {
+                tracing::Level::ERROR => web_sys::console::error_1(&message),
+                tracing::Level::WARN => web_sys::console::warn_1(&message),
+                tracing::Level::INFO => web_sys::console::info_1(&message),
+                _ => web_sys::console::debug_1(&message),
+            }
+            self.buffer.clear();
+        }
+        Ok(())
+    }
+}
+
+#[cfg(target_family = "wasm")]
+impl Drop for WebConsoleWriter {
+    fn drop(&mut self) {
+        let _ = std::io::Write::flush(self);
     }
 }
