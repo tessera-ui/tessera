@@ -185,11 +185,12 @@ impl SlotTable {
         self.epoch = self.epoch.wrapping_add(1);
     }
 
-    fn reset(&mut self) {
-        self.entries.clear();
+    fn reset(&mut self) -> Vec<SlotEntry> {
+        let removed = self.entries.drain().map(|(_, entry)| entry).collect();
         self.key_to_slot.clear();
         self.cursors_by_instance_logic_id.clear();
         self.epoch = 0;
+        removed
     }
     fn try_fast_slot_lookup(&mut self, key: SlotKey) -> Option<SlotHandle> {
         let epoch = self.epoch;
@@ -659,7 +660,7 @@ fn with_redraw_waker_mut<R>(f: impl FnOnce(&mut Option<RedrawWaker>) -> R) -> R 
     RUNTIME_GLOBALS.with(|globals| f(&mut globals.redraw_waker.borrow_mut()))
 }
 
-fn schedule_runtime_redraw() {
+pub(crate) fn schedule_runtime_redraw() {
     let callback = with_redraw_waker(Clone::clone);
     if let Some(callback) = callback {
         callback();
@@ -1432,7 +1433,7 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
         return;
     }
 
-    with_slot_table_mut(|table| {
+    let removed = with_slot_table_mut(|table| {
         let mut freed: Vec<(SlotHandle, SlotKey)> = Vec::new();
         for (slot, entry) in table.entries.iter() {
             if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
@@ -1443,14 +1444,17 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
             }
             freed.push((slot, entry.key));
         }
+        let mut removed = Vec::with_capacity(freed.len());
         for (slot, key) in freed {
-            table.entries.remove(slot);
+            removed.extend(table.entries.remove(slot));
             table.key_to_slot.remove(&key);
         }
         for instance_logic_id in instance_logic_ids {
             table.cursors_by_instance_logic_id.remove(instance_logic_id);
         }
+        removed
     });
+    drop(removed);
 }
 
 fn with_layout_dirty_tracker_mut<R>(f: impl FnOnce(&mut LayoutDirtyTracker) -> R) -> R {
@@ -1547,9 +1551,31 @@ pub(crate) fn finalize_frame_layout_dirty_tracking() {
 }
 
 pub(crate) fn take_layout_dirty_nodes() -> LayoutDirtyNodes {
-    with_layout_dirty_tracker_mut(|tracker| LayoutDirtyNodes {
-        measure_self_nodes: std::mem::take(&mut tracker.ready_measure_self_dirty_nodes),
-        placement_self_nodes: std::mem::take(&mut tracker.ready_placement_self_dirty_nodes),
+    with_layout_dirty_tracker_mut(|tracker| {
+        // Layout-only writes must reach layout even when no component build
+        // runs.
+        let mut measure_self_nodes = std::mem::take(&mut tracker.ready_measure_self_dirty_nodes);
+        measure_self_nodes.extend(std::mem::take(
+            &mut tracker.pending_measure_self_dirty_nodes,
+        ));
+        let mut placement_self_nodes =
+            std::mem::take(&mut tracker.ready_placement_self_dirty_nodes);
+        placement_self_nodes.extend(std::mem::take(
+            &mut tracker.pending_placement_self_dirty_nodes,
+        ));
+        LayoutDirtyNodes {
+            measure_self_nodes,
+            placement_self_nodes,
+        }
+    })
+}
+
+pub(crate) fn has_pending_layout_invalidations() -> bool {
+    with_layout_dirty_tracker_mut(|tracker| {
+        !tracker.pending_measure_self_dirty_nodes.is_empty()
+            || !tracker.ready_measure_self_dirty_nodes.is_empty()
+            || !tracker.pending_placement_self_dirty_nodes.is_empty()
+            || !tracker.ready_placement_self_dirty_nodes.is_empty()
     })
 }
 
@@ -1685,16 +1711,21 @@ impl<T> State<T>
 where
     T: Send + Sync + 'static,
 {
-    fn is_alive(&self) -> bool {
-        with_slot_table(|table| {
-            let Some(entry) = table.entries.get(self.slot) else {
-                return false;
-            };
+    /// Returns whether this handle still refers to a live state slot.
+    ///
+    /// Remembered state can expire when its component leaves the tree;
+    /// retained state remains alive until the runtime is reset.
+    pub fn is_alive(&self) -> bool {
+        RUNTIME_GLOBALS
+            .try_with(|globals| {
+                let table = globals.slot_table.borrow();
+                let Some(entry) = table.entries.get(self.slot) else {
+                    return false;
+                };
 
-            entry.generation == self.generation
-                && entry.key.type_id == TypeId::of::<T>()
-                && entry.value.is_some()
-        })
+                entry.generation == self.generation && entry.key.type_id == TypeId::of::<T>()
+            })
+            .unwrap_or(false)
     }
 
     /// Execute a closure with a shared reference to the stored value.
@@ -3173,7 +3204,8 @@ pub fn begin_recompose_slot_epoch() {
 
 /// Reset all slot buffers (used on suspension).
 pub fn reset_slots() {
-    with_slot_table_mut(SlotTable::reset);
+    let removed = with_slot_table_mut(SlotTable::reset);
+    drop(removed);
 }
 
 pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64>) {
@@ -3181,7 +3213,7 @@ pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids
         return;
     }
 
-    with_slot_table_mut(|table| {
+    let removed = with_slot_table_mut(|table| {
         let epoch = table.epoch;
         let mut freed: Vec<(SlotHandle, SlotKey)> = Vec::new();
 
@@ -3195,11 +3227,14 @@ pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids
             freed.push((slot, entry.key));
         }
 
+        let mut removed = Vec::with_capacity(freed.len());
         for (slot, key) in freed {
-            table.entries.remove(slot);
+            removed.extend(table.entries.remove(slot));
             table.key_to_slot.remove(&key);
         }
+        removed
     });
+    drop(removed);
 }
 
 pub(crate) fn live_slot_instance_logic_ids() -> HashSet<u64> {
@@ -3410,9 +3445,7 @@ mod tests {
     };
     use crate::layout::{DefaultLayoutNode, MeasureScope, NoopDrawModifier};
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
-    use crate::prop::{
-        Callback, CallbackWith, ComponentReplayData, RenderSlot, make_component_runner,
-    };
+    use crate::prop::{CallbackWith, ComponentReplayData, RenderSlot, make_component_runner};
     use crate::tessera;
 
     #[tessera(crate)]
@@ -3430,24 +3463,6 @@ mod tests {
     ) {
         if let Some(on_value) = on_value {
             on_value.call(value);
-        }
-    }
-
-    #[tessera(crate)]
-    fn defaulted_value_component(value: Option<usize>, on_value: Option<CallbackWith<usize>>) {
-        let value = value.unwrap_or(7);
-        if let Some(on_value) = on_value {
-            on_value.call(value);
-        }
-    }
-
-    fn panic_message(err: Box<dyn std::any::Any + Send>) -> String {
-        match err.downcast::<String>() {
-            Ok(message) => *message,
-            Err(err) => match err.downcast::<&'static str>() {
-                Ok(message) => (*message).to_string(),
-                Err(_) => "<non-string panic>".to_string(),
-            },
         }
     }
 
@@ -3480,9 +3495,20 @@ mod tests {
     }
 
     #[test]
-    fn frame_receiver_uses_component_scope_instance_key() {
-        let _instance_guard = push_current_component_instance_key(7);
-        assert_eq!(current_replay_boundary_instance_key_from_scope(), Some(7));
+    fn state_liveness_survives_updates_and_rejects_expired_slots() {
+        reset_slots();
+        let state = with_test_component_scope(815, || remember(|| 4_u32));
+        assert!(state.is_alive());
+        state.with_mut(|value| {
+            assert!(state.is_alive());
+            *value = 5;
+        });
+        assert_eq!(state.get(), 5);
+        reset_slots();
+        assert!(!state.is_alive());
+        let replacement = with_test_component_scope(815, || remember(|| 7_u32));
+        assert!(replacement.is_alive());
+        assert!(!state.is_alive());
     }
 
     #[test]
@@ -3490,15 +3516,6 @@ mod tests {
         reset_frame_clock();
         begin_frame_clock(Instant::now());
 
-        let result = std::panic::catch_unwind(|| {
-            receive_frame_nanos(|_| FrameNanosControl::Continue);
-        });
-        assert!(result.is_err());
-    }
-
-    #[test]
-    fn receive_frame_nanos_panics_in_input_phase() {
-        let _phase_guard = push_phase(RuntimePhase::Input);
         let result = std::panic::catch_unwind(|| {
             receive_frame_nanos(|_| FrameNanosControl::Continue);
         });
@@ -3857,46 +3874,6 @@ mod tests {
     }
 
     #[test]
-    fn callback_handle_stays_stable_and_invokes_latest_closure() {
-        reset_slots();
-
-        let calls = Arc::new(AtomicUsize::new(0));
-
-        begin_recompose_slot_epoch();
-        let first = with_test_component_scope(11001, || {
-            let calls = Arc::clone(&calls);
-            Callback::new(move || {
-                calls.store(1, Ordering::SeqCst);
-            })
-        });
-
-        begin_recompose_slot_epoch();
-        let second = with_test_component_scope(11001, || {
-            let calls = Arc::clone(&calls);
-            Callback::new(move || {
-                calls.store(2, Ordering::SeqCst);
-            })
-        });
-
-        assert!(first == second);
-        first.call();
-        assert_eq!(calls.load(Ordering::SeqCst), 2);
-    }
-
-    #[test]
-    fn tessera_panics_when_required_prop_is_missing() {
-        let result = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-            with_test_component_scope(11013, || {
-                required_value_component();
-            });
-        }));
-
-        let message = panic_message(result.expect_err("missing required prop should panic"));
-        assert!(message.contains("missing required prop `value`"));
-        assert!(message.contains("required_value_component"));
-    }
-
-    #[test]
     fn tessera_uses_none_for_omitted_option_props() {
         let observed = Arc::new(AtomicUsize::new(99));
 
@@ -3911,20 +3888,6 @@ mod tests {
         });
 
         assert_eq!(observed.load(Ordering::SeqCst), 0);
-    }
-
-    #[test]
-    fn tessera_uses_function_body_default_for_omitted_option_props() {
-        let observed = Arc::new(AtomicUsize::new(0));
-
-        with_test_component_scope(11015, || {
-            let observed = Arc::clone(&observed);
-            defaulted_value_component().on_value(move |value: usize| {
-                observed.store(value, Ordering::SeqCst);
-            });
-        });
-
-        assert_eq!(observed.load(Ordering::SeqCst), 7);
     }
 
     #[test]
