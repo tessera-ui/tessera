@@ -1383,7 +1383,6 @@ impl TextLayoutState {
         self.layout_version
     }
 
-    #[cfg(test)]
     fn text_layout_version(&self) -> u64 {
         self.text_layout_version
     }
@@ -2944,8 +2943,7 @@ impl TextEditorController {
         self.layout_state.layout_version()
     }
 
-    #[cfg(test)]
-    fn text_layout_version(&self) -> u64 {
+    pub(crate) fn text_layout_version(&self) -> u64 {
         self.layout_state.text_layout_version()
     }
 

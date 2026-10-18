@@ -1544,6 +1544,7 @@ Fps: {:.2}
 
         let runtime_pending_work = RuntimePendingWork {
             invalidation_pending: has_pending_build_invalidations()
+                || crate::clipboard::has_pending_requests()
                 || pending_keyboard_retry
                 || TesseraRuntime::with(|runtime| {
                     runtime

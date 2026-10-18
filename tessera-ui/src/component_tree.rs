@@ -9,6 +9,7 @@ use tracing::{debug, warn};
 
 use crate::{
     ComputeResourceManager, NodeId, Px, PxRect,
+    clipboard::{self, ClipboardInput, ClipboardResponse, QueuedClipboardAction},
     cursor::{CursorEventContent, MOUSE_POINTER_ID, PointerChange},
     focus::{
         FocusDirection, FocusHandleId, FocusOwner, PendingFocusCallbackInvocation, bind_focus_owner,
@@ -388,6 +389,20 @@ struct GlobalPositionSnapshot {
     handlers: SmallVec<[GloballyPositionedHandler; 2]>,
 }
 
+enum QueuedFocusedInput {
+    Keyboard(QueuedKeyEvent),
+    Clipboard(QueuedClipboardAction),
+}
+
+impl QueuedFocusedInput {
+    fn sequence(&self) -> u64 {
+        match self {
+            Self::Keyboard(event) => event.sequence,
+            Self::Clipboard(event) => event.sequence,
+        }
+    }
+}
+
 /// Respents a component tree
 pub struct ComponentTree {
     /// We use indextree as the tree structure
@@ -406,7 +421,7 @@ pub struct ComponentTree {
     active_pointer_positions: HashMap<u64, Option<PxPosition>>,
     /// Per-tree focus owner used for keyboard and IME routing.
     focus_owner: FocusOwner,
-    pending_keyboard_events: VecDeque<QueuedKeyEvent>,
+    pending_keyboard_events: VecDeque<QueuedFocusedInput>,
     pending_ime_events: Vec<winit::event::Ime>,
     /// Last reported window-space bounds for nodes with globally positioned
     /// callbacks, keyed by instance key.
@@ -490,6 +505,7 @@ impl ComponentTree {
         self.active_pointer_positions.clear();
         self.focus_owner.reset();
         self.pending_keyboard_events.clear();
+        clipboard::clear_requests();
         self.pending_ime_events.clear();
     }
 
@@ -1274,6 +1290,42 @@ impl ComponentTree {
         )
     }
 
+    fn dispatch_clipboard_action(&mut self, root_node: NodeId, request: QueuedClipboardAction) {
+        let path = collect_focus_chain_node_ids(root_node, &self.tree, &self.focus_owner);
+        let mut response = None;
+        for node_id in path.into_iter().rev() {
+            let Some(context) = resolve_node_input_context(&self.tree, &self.metadatas, node_id)
+            else {
+                continue;
+            };
+            let node = self.tree.get(node_id).expect("focused node").get();
+            for action in node.modifier.ordered_actions() {
+                if let OrderedModifierAction::ClipboardInput(modifier) = action {
+                    let boundary = nearest_replay_boundary_instance_key(node_id, &self.tree);
+                    let _node = push_current_node_with_instance_logic_id(
+                        node_id,
+                        context.instance_logic_id,
+                        &context.fn_name,
+                    );
+                    let _instance = push_current_component_instance_key(boundary);
+                    let _phase = push_phase(RuntimePhase::Input);
+                    let _focus = bind_focus_owner(&mut self.focus_owner);
+                    modifier.on_clipboard_input(ClipboardInput {
+                        action: &request.action,
+                        response: &mut response,
+                    });
+                    if response.is_some() {
+                        break;
+                    }
+                }
+            }
+            if response.is_some() {
+                break;
+            }
+        }
+        (request.reply)(response.unwrap_or(ClipboardResponse::Ignored));
+    }
+
     fn dispatch_ime_input(
         &mut self,
         root_node: NodeId,
@@ -1534,7 +1586,17 @@ impl ComponentTree {
                 FocusMoveRequestResult::Moved | FocusMoveRequestResult::NotHandled => None,
             }
         });
-        self.pending_keyboard_events.extend(keyboard_events);
+        let mut focused_events: Vec<_> = keyboard_events
+            .into_iter()
+            .map(QueuedFocusedInput::Keyboard)
+            .collect();
+        focused_events.extend(
+            clipboard::take_requests()
+                .into_iter()
+                .map(QueuedFocusedInput::Clipboard),
+        );
+        focused_events.sort_by_key(QueuedFocusedInput::sequence);
+        self.pending_keyboard_events.extend(focused_events);
         self.pending_ime_events.extend(ime_events);
         let mut queued_events = std::mem::take(&mut self.pending_keyboard_events);
         let pending_focus_move_retry = pending_focus_move_retry.or_else(|| {
@@ -1542,7 +1604,15 @@ impl ComponentTree {
                 return None;
             }
             drain_pending_keyboard_events(&mut queued_events, |queued| {
-                let retry = self.dispatch_keyboard_event(root_node, queued, &mut window_requests);
+                let retry = match queued {
+                    QueuedFocusedInput::Keyboard(event) => {
+                        self.dispatch_keyboard_event(root_node, event, &mut window_requests)
+                    }
+                    QueuedFocusedInput::Clipboard(request) => {
+                        self.dispatch_clipboard_action(root_node, request);
+                        None
+                    }
+                };
                 self.focus_owner.commit_pending();
                 (retry, self.focus_owner.keyboard_is_deferred())
             })
@@ -3534,7 +3604,17 @@ mod tests {
             .retain_navigation_retry(Some(FocusDirection::Next));
         tree.pending_ime_events
             .push(winit::event::Ime::Commit("pending text".into()));
+        clipboard::request_clipboard_action(
+            crate::clipboard::ClipboardAction::Paste("pending paste".into()),
+            |_| panic!("reset clipboard request must not execute"),
+        );
+        tree.pending_keyboard_events.extend(
+            clipboard::take_requests()
+                .into_iter()
+                .map(QueuedFocusedInput::Clipboard),
+        );
         tree.clear();
+        assert_eq!(tree.pending_keyboard_events.len(), 1);
         assert!(tree.focus_owner.has_pending_navigation());
         assert!(tree.focus_owner.keyboard_is_deferred());
         assert!(matches!(
@@ -3556,6 +3636,7 @@ mod tests {
         assert!(!tree.focus_owner.has_pending_navigation());
         assert!(!tree.focus_owner.keyboard_is_deferred());
         assert!(tree.pending_ime_events.is_empty());
+        assert!(tree.pending_keyboard_events.is_empty());
     }
 
     #[test]

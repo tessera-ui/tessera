@@ -6832,6 +6832,8 @@ dependencies = [
  "parking_lot",
  "tessera-ui",
  "tracing",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]

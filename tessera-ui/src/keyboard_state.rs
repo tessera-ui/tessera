@@ -4,7 +4,10 @@
 //!
 //! Preserve keyboard shortcuts during slow frames.
 
-use std::collections::VecDeque;
+use std::{
+    collections::VecDeque,
+    sync::atomic::{AtomicU64, Ordering},
+};
 
 use winit::keyboard::ModifiersState;
 
@@ -12,6 +15,12 @@ use winit::keyboard::ModifiersState;
 pub(crate) struct QueuedKeyEvent<E = winit::event::KeyEvent> {
     pub event: E,
     pub modifiers: ModifiersState,
+    pub sequence: u64,
+}
+
+pub(crate) fn next_input_sequence() -> u64 {
+    static SEQUENCE: AtomicU64 = AtomicU64::new(0);
+    SEQUENCE.fetch_add(1, Ordering::Relaxed)
 }
 
 #[derive(Debug)]
@@ -36,6 +45,7 @@ impl<E> KeyboardQueue<E> {
         self.events.push_back(QueuedKeyEvent {
             event,
             modifiers: self.modifiers,
+            sequence: next_input_sequence(),
         });
     }
 

@@ -18,6 +18,7 @@ use crate::{
     AccessibilityActionHandler, AccessibilityNode, ComputedData, Constraint, FocusGroupNode,
     FocusProperties, FocusRequester, FocusScopeNode, FocusState, FocusTraversalPolicy, ImeInput,
     KeyboardInput, MeasurementError, PointerInput, PxPosition,
+    clipboard::ClipboardInputModifierNode,
     focus::{FocusDirection, FocusNode, FocusRevealRequest},
     layout::{
         LayoutInput, LayoutResult, MeasureScope, PlacementResult, PlacementScope, RenderInput,
@@ -252,6 +253,11 @@ pub trait ModifierCapabilityExt {
     where
         N: KeyboardInputModifierNode;
 
+    /// Appends a clipboard-input modifier for focused content.
+    fn push_clipboard_input<N>(self, node: N) -> Self
+    where
+        N: ClipboardInputModifierNode;
+
     /// Appends a preview IME-input modifier node to the current modifier chain.
     fn push_ime_preview_input<N>(self, node: N) -> Self
     where
@@ -408,6 +414,7 @@ enum ModifierAction {
     PointerFinalInput(Arc<dyn PointerInputModifierNode>),
     KeyboardPreviewInput(Arc<dyn KeyboardInputModifierNode>),
     KeyboardInput(Arc<dyn KeyboardInputModifierNode>),
+    ClipboardInput(Arc<dyn ClipboardInputModifierNode>),
     ImePreviewInput(Arc<dyn ImeInputModifierNode>),
     ImeInput(Arc<dyn ImeInputModifierNode>),
     Focus(FocusModifierOp),
@@ -426,6 +433,7 @@ pub(crate) enum OrderedModifierAction {
     PointerFinalInput(Arc<dyn PointerInputModifierNode>),
     KeyboardPreviewInput(Arc<dyn KeyboardInputModifierNode>),
     KeyboardInput(Arc<dyn KeyboardInputModifierNode>),
+    ClipboardInput(Arc<dyn ClipboardInputModifierNode>),
     ImePreviewInput(Arc<dyn ImeInputModifierNode>),
     ImeInput(Arc<dyn ImeInputModifierNode>),
 }
@@ -683,6 +691,13 @@ impl Modifier {
         self.push_action(ModifierAction::KeyboardInput(Arc::new(node)))
     }
 
+    pub(crate) fn push_clipboard_input<N>(self, node: N) -> Self
+    where
+        N: ClipboardInputModifierNode,
+    {
+        self.push_action(ModifierAction::ClipboardInput(Arc::new(node)))
+    }
+
     pub(crate) fn push_ime_preview_input<N>(self, node: N) -> Self
     where
         N: ImeInputModifierNode,
@@ -865,6 +880,9 @@ impl Modifier {
                 ModifierAction::KeyboardInput(node) => {
                     Some(OrderedModifierAction::KeyboardInput(node))
                 }
+                ModifierAction::ClipboardInput(node) => {
+                    Some(OrderedModifierAction::ClipboardInput(node))
+                }
                 ModifierAction::ImePreviewInput(node) => {
                     Some(OrderedModifierAction::ImePreviewInput(node))
                 }
@@ -953,6 +971,12 @@ impl Modifier {
 }
 
 impl ModifierCapabilityExt for Modifier {
+    fn push_clipboard_input<N>(self, node: N) -> Self
+    where
+        N: ClipboardInputModifierNode,
+    {
+        Modifier::push_clipboard_input(self, node)
+    }
     fn push_layout<N>(self, node: N) -> Self
     where
         N: LayoutModifierNode + PartialEq,
@@ -1171,6 +1195,9 @@ fn modifier_action_eq(lhs: &ModifierAction, rhs: &ModifierAction) -> bool {
         (ModifierAction::KeyboardInput(lhs), ModifierAction::KeyboardInput(rhs)) => {
             Arc::ptr_eq(lhs, rhs)
         }
+        (ModifierAction::ClipboardInput(lhs), ModifierAction::ClipboardInput(rhs)) => {
+            Arc::ptr_eq(lhs, rhs)
+        }
         (ModifierAction::ImePreviewInput(lhs), ModifierAction::ImePreviewInput(rhs)) => {
             Arc::ptr_eq(lhs, rhs)
         }
@@ -1202,6 +1229,7 @@ fn hash_modifier_action<H: Hasher>(action: &ModifierAction, state: &mut H) {
         ModifierAction::PointerFinalInput(node) => hash_arc(node, state),
         ModifierAction::KeyboardPreviewInput(node) => hash_arc(node, state),
         ModifierAction::KeyboardInput(node) => hash_arc(node, state),
+        ModifierAction::ClipboardInput(node) => hash_arc(node, state),
         ModifierAction::ImePreviewInput(node) => hash_arc(node, state),
         ModifierAction::ImeInput(node) => hash_arc(node, state),
         ModifierAction::Focus(op) => hash_focus_op(op, state),

@@ -8,6 +8,9 @@ use std::sync::{Arc, OnceLock};
 use parking_lot::RwLock;
 use tessera_ui::{Plugin, PluginContext, PluginResult};
 
+#[cfg(target_family = "wasm")]
+mod web;
+
 #[cfg(not(target_family = "wasm"))]
 use tracing::warn;
 
@@ -49,17 +52,24 @@ impl Default for ClipboardPlugin {
 
 impl Plugin for ClipboardPlugin {
     fn on_resumed(&mut self, context: &PluginContext) -> PluginResult {
+        #[cfg(target_family = "wasm")]
+        web::install(context.window_handle())
+            .map_err(|_| "Failed to install browser clipboard events")?;
         let mut state = clipboard_state().write();
         state.clipboard = Clipboard::new(context);
         Ok(())
     }
 
     fn on_suspended(&mut self, _context: &PluginContext) -> PluginResult {
+        #[cfg(target_family = "wasm")]
+        web::clear();
         clipboard_state().write().clipboard = None;
         Ok(())
     }
 
     fn on_shutdown(&mut self, _context: &PluginContext) -> PluginResult {
+        #[cfg(target_family = "wasm")]
+        web::clear();
         clipboard_state().write().clipboard = None;
         Ok(())
     }
@@ -94,7 +104,7 @@ impl Clipboard {
 
     #[cfg(target_family = "wasm")]
     fn new(_context: &PluginContext) -> Option<Self> {
-        None
+        Some(Self {})
     }
 
     /// Sets clipboard text, replacing previous content.
@@ -112,11 +122,13 @@ impl Clipboard {
         }
         #[cfg(target_family = "wasm")]
         {
-            let _ = text;
+            web::write_text(text.to_owned(), |_| {});
         }
     }
 
-    /// Returns clipboard text when available.
+    /// Returns clipboard text when available synchronously.
+    ///
+    /// Browser paste text is delivered through clipboard input events instead.
     pub fn get_text(&mut self) -> Option<String> {
         #[cfg(all(not(target_os = "android"), not(target_family = "wasm")))]
         {
@@ -163,7 +175,9 @@ impl Clipboard {
             }
         }
         #[cfg(target_family = "wasm")]
-        {}
+        {
+            web::write_text(String::new(), |_| {});
+        }
     }
 }
 
@@ -189,7 +203,9 @@ pub fn set_text(text: &str) {
     let _ = with_clipboard_mut(|clipboard| clipboard.set_text(text));
 }
 
-/// Returns clipboard text when clipboard access is available.
+/// Returns clipboard text when synchronous clipboard access is available.
+///
+/// Browser paste text is delivered through clipboard input events instead.
 pub fn get_text() -> Option<String> {
     with_clipboard_mut(|clipboard| clipboard.get_text()).flatten()
 }

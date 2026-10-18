@@ -11,6 +11,7 @@ use tessera_ui::{
     PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, ScrollDeltaUnit,
     SemanticsModifierNode, State,
     accesskit::{Action, Role},
+    clipboard::{ClipboardAction, ClipboardInput, ClipboardInputModifierNode},
     layout::layout,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     normalize_platform_scroll_delta, remember, tessera, use_context, winit,
@@ -84,6 +85,65 @@ struct TextInputImeModifierNode {
     controller: State<TextInputController>,
 }
 
+struct TextInputClipboardModifierNode {
+    args: TextInputProps,
+    controller: State<TextInputController>,
+}
+
+impl ClipboardInputModifierNode for TextInputClipboardModifierNode {
+    fn on_clipboard_input(&self, mut input: ClipboardInput<'_>) {
+        let controller = self.controller;
+        if !self.args.enabled || !controller.with(|c| c.focus_handler().is_focused()) {
+            return;
+        }
+        input.handle();
+        match input.action {
+            ClipboardAction::Paste(text) => {
+                if !self.args.read_only {
+                    controller.with_mut(|c| {
+                        c.replace_selected_text_with_pipeline(
+                            text,
+                            self.args.on_change,
+                            self.args.input_transform,
+                        );
+                    });
+                }
+            }
+            ClipboardAction::Copy | ClipboardAction::Cut => {
+                if self.args.read_only && matches!(input.action, ClipboardAction::Cut) {
+                    return;
+                }
+                let Some(text) = controller.with(|c| c.selected_text()) else {
+                    return;
+                };
+                if matches!(input.action, ClipboardAction::Cut) {
+                    let (version, selection) =
+                        controller.with(|c| (c.text_layout_version(), c.selection()));
+                    let on_change = self.args.on_change;
+                    let input_transform = self.args.input_transform;
+                    input.write_text(text, move || {
+                        if controller.is_alive()
+                            && controller.with(|c| {
+                                c.text_layout_version() == version && c.selection() == selection
+                            })
+                        {
+                            controller.with_mut(|c| {
+                                c.replace_selected_text_with_pipeline(
+                                    "",
+                                    on_change,
+                                    input_transform,
+                                );
+                            });
+                        }
+                    });
+                } else {
+                    input.write_text(text, || {});
+                }
+            }
+        }
+    }
+}
+
 impl ImeInputModifierNode for TextInputImeModifierNode {
     fn on_ime_input(&self, mut input: ImeInput<'_>) {
         handle_text_input_ime(
@@ -120,6 +180,10 @@ fn apply_text_input_input_modifiers(
             scroll_recognizer,
         })
         .push_keyboard_input(TextInputKeyboardModifierNode {
+            args: args.clone(),
+            controller,
+        })
+        .push_clipboard_input(TextInputClipboardModifierNode {
             args: args.clone(),
             controller,
         })
@@ -912,6 +976,7 @@ fn handle_text_input_keyboard(
             clipboard_shortcut_for_key(is_ctrl, is_shift, key_event.state, &key_event.logical_key)
         {
             should_block_keyboard = true;
+            #[cfg(not(target_family = "wasm"))]
             match behavior {
                 ClipboardShortcutBehavior::Copy => {
                     controller.with(|s| {
@@ -933,6 +998,8 @@ fn handle_text_input_keyboard(
                     }
                 }
             }
+            #[cfg(target_family = "wasm")]
+            let _ = behavior;
             continue;
         }
 
@@ -1553,6 +1620,10 @@ fn should_expose_submit_accessibility_action(
 ) -> bool {
     single_line && focused && has_submit_handler
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "text_input/clipboard_tests.rs"]
+mod clipboard_tests;
 
 #[cfg(test)]
 mod tests {

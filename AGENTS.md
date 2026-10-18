@@ -151,7 +151,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 - Components are stateless; persistent state is stored via `remember` as `State<T>` and passed via parameters as needed.
 - Event handling is attached through modifier-based interaction APIs and other node-local capabilities, using typed closures over the framework input contexts.
-- The typed input contexts are `PointerInput`, `KeyboardInput`, and `ImeInput`.
+- The typed input contexts are `PointerInput`, `KeyboardInput`, `ImeInput`, and `ClipboardInput`. Clipboard requests share keyboard ordering and focus/layout deferral; asynchronous cut writes must acknowledge success before deleting unchanged selected text.
 - Treat input contexts as event/consumption surfaces, not generic renderer request bags. Cursor changes, semantics, IME publication, and window-side effects must use their dedicated modifier/controller/session APIs.
 - Mouse, keyboard, and IME events are processed via event queues and must be consumed promptly.
 - Use `FocusManager::request_move_focus` when traversal may need lazy content to be revealed, including Tab exit after popup focus restoration. This traversal is queued after layout and precedes following keys; explicit focus requests, capture, and window blur cancel it. `move_focus` remains an immediate operation on attached targets.

@@ -285,6 +285,7 @@ pub mod android;
 pub mod asset;
 mod build_tree;
 pub mod clip;
+pub mod clipboard;
 pub mod color;
 mod component_tree;
 pub mod context;
@@ -329,6 +330,10 @@ pub use crate::{
     accessibility::{AccessibilityActionHandler, AccessibilityId, AccessibilityNode},
     asset::AssetExt,
     clip::{ClipRegion, ClipShape, ui_stencil_state},
+    clipboard::{
+        ClipboardAction, ClipboardInput, ClipboardInputModifierNode, ClipboardResponse,
+        ClipboardWrite, request_clipboard_action,
+    },
     color::Color,
     component_tree::{
         AxisConstraint, ComponentTree, ComputedData, Constraint, ImeInput, ImeInputHandlerFn,
