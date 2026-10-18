@@ -8,7 +8,7 @@ use material_color_utilities::{
     dynamiccolor::{DynamicSchemeBuilder, MaterialDynamicColors, SpecVersion, Variant},
     hct::Hct,
 };
-use tessera_ui::{CallbackWith, Color, Dp, RenderSlot, provide_context, tessera};
+use tessera_ui::{CallbackWith, Color, Dp, RenderSlot, provide_context, tessera, use_context};
 
 use crate::shape_def::{RoundedCorner, Shape};
 
@@ -360,6 +360,8 @@ impl MaterialTheme {
 /// ## Usage
 ///
 /// Wrap your app (or a subtree) to configure defaults for Material components.
+/// The theme producer reads current state on each rebuild and updates
+/// descendants when its result changes.
 ///
 /// ## Parameters
 ///
@@ -394,9 +396,15 @@ impl MaterialTheme {
 pub fn material_theme(theme: Option<CallbackWith<(), MaterialTheme>>, child: Option<RenderSlot>) {
     let theme = theme.unwrap_or_else(|| CallbackWith::new(|()| MaterialTheme::default()));
     let child = child.unwrap_or_else(RenderSlot::empty);
+    let value = theme.call(());
+    let initial = value.clone();
     provide_context(
-        move || theme.call(()),
+        move || initial,
         move || {
+            let theme = use_context::<MaterialTheme>().expect("Material theme must be provided");
+            if theme.with(|current| current != &value) {
+                theme.set(value);
+            }
             child.render();
         },
     );
