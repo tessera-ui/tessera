@@ -23,7 +23,6 @@ use crate::{
     modifier::{ModifierExt as _, Padding, SemanticsArgs, with_keyboard_input},
     row::row,
     scrollable::ScrollBarBehavior,
-    shape_def::Shape,
     spacer::spacer,
     surface::surface,
     text::text,
@@ -550,10 +549,12 @@ fn range_month(state: State<DateRangePickerState>, month: YearMonth, first_day: 
                                 end: date == end,
                             })
                             .child(move || {
-                                surface()
-                                    .shape(Shape::RECTANGLE)
-                                    .style(theme.color_scheme.secondary_container.into())
-                                    .child(|| {});
+                                if in_range {
+                                    layout().modifier(
+                                        Modifier::new()
+                                            .background(theme.color_scheme.secondary_container),
+                                    );
+                                }
                                 calendar_day(on_select, today)
                                     .cell_optional(date)
                                     .selected(selected)
@@ -604,10 +605,13 @@ impl tessera_ui::LayoutModifierNode for RangeCellLayout {
         } else {
             Px::ZERO
         };
-        children[0].measure(scope, &Constraint::new(fill_width, visual))?;
-        result.place_child(children[0], PxPosition::new(x, (height - visual) / 2));
-        children[1].measure(scope, &Constraint::new(width, height))?;
-        result.place_child(children[1], PxPosition::ZERO);
+        if self.fill {
+            children[0].measure(scope, &Constraint::new(fill_width, visual))?;
+            result.place_child(children[0], PxPosition::new(x, (height - visual) / 2));
+        }
+        let day = *children.last().expect("calendar day");
+        day.measure(scope, &Constraint::new(width, height))?;
+        result.place_child(day, PxPosition::ZERO);
         Ok(result)
     }
 }

@@ -22,7 +22,7 @@ use crate::{
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{InteractionState, ModifierExt as _, Padding, SemanticsArgs},
+    modifier::{ClickableArgs, InteractionState, ModifierExt as _, Padding, SemanticsArgs},
     ripple_state::RippleState,
     row::row,
     scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
@@ -958,26 +958,26 @@ fn calendar_day(
         } else {
             Color::TRANSPARENT.into()
         };
-        surface()
-            .style(Color::TRANSPARENT.into())
-            .modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE))
-            .shape(Shape::Ellipse)
-            .content_alignment(Alignment::Center)
-            .interaction_state(interaction)
-            .ripple_state(ripple)
-            .show_state_layer(false)
-            .show_ripple(false)
-            .enabled(enabled)
-            .accessibility_description_optional(description)
-            .accessibility_label(format!(
-                "{} {}, {}",
-                format_month_name(date.month()),
-                date.day(),
-                date.year()
-            ))
-            .on_click(move || {
-                on_select.call(date);
-            })
+        layout()
+            .modifier(
+                Modifier::new()
+                    .size(DATE_CELL_SIZE, DATE_CELL_SIZE)
+                    .clickable_with(ClickableArgs {
+                        on_click: tessera_ui::Callback::new(move || on_select.call(date)),
+                        enabled,
+                        block_input: false,
+                        interaction_state: Some(interaction),
+                        description,
+                        label: Some(format!(
+                            "{} {}, {}",
+                            format_month_name(date.month()),
+                            date.day(),
+                            date.year()
+                        )),
+                        ..Default::default()
+                    }),
+            )
+            .policy(CalendarDayLayout)
             .child(move || {
                 surface()
                     .modifier(Modifier::new().size(DATE_VISUAL_SIZE, DATE_VISUAL_SIZE))
@@ -996,6 +996,31 @@ fn calendar_day(
             });
     } else {
         spacer().modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE));
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct CalendarDayLayout;
+
+impl tessera_ui::LayoutModifierNode for CalendarDayLayout {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let width = scope
+            .parent_constraint()
+            .width()
+            .clamp(DATE_CELL_SIZE.to_px());
+        let height = scope
+            .parent_constraint()
+            .height()
+            .clamp(DATE_CELL_SIZE.to_px());
+        let mut result = LayoutResult::new(ComputedData { width, height });
+        for child in scope.children() {
+            let size = child.measure(scope, &scope.parent_constraint().without_min())?;
+            result.place_child(
+                child,
+                PxPosition::new((width - size.width) / 2, (height - size.height) / 2),
+            );
+        }
+        Ok(result)
     }
 }
 

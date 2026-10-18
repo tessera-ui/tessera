@@ -258,7 +258,19 @@ fn check_range(samples: u32) {
     assert!(blocked.is_disabled());
     click(&mut renderer, "July 13, 2026");
     assert_eq!(state.with(DateRangePickerState::selected_start_date), None);
-    click(&mut renderer, "July 29, 2026");
+    let start = bounds(&renderer, "July 29, 2026");
+    let corner = Rect::new(
+        start.x0 + 1.0,
+        start.y0 + 1.0,
+        start.x0 + 3.0,
+        start.y0 + 3.0,
+    );
+    click_bounds(&mut renderer, corner);
+    assert_eq!(
+        state.with(DateRangePickerState::selected_start_date),
+        Some(date(7, 29)),
+        "the 48dp target includes the area outside the 40dp visual circle"
+    );
     click(&mut renderer, "July 31, 2026");
     assert_eq!(
         state.with(DateRangePickerState::selected_start_date),
