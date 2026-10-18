@@ -1,11 +1,11 @@
 use std::cell::Cell;
 
 use tessera_ui::{
-    Color, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
+    Color, Context, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, Modifier,
     PlacementModifierNode, PressKeyEventType, PxPosition, State,
     accesskit::{Orientation, Rect, Role},
     modifier::ModifierCapabilityExt as _,
-    remember, tessera,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -88,6 +88,7 @@ thread_local! {
     static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
     static VALUE: Cell<Option<State<f32>>> = const { Cell::new(None) };
     static RANGE: Cell<Option<State<(f32, f32)>>> = const { Cell::new(None) };
+    static THEME: Cell<Option<Context<MaterialTheme>>> = const { Cell::new(None) };
 }
 
 #[tessera]
@@ -106,6 +107,7 @@ fn fixture() {
                     settings.with(|settings| settings.background.unwrap_or(Color::WHITE)),
                 ))
                 .children(move || {
+                    THEME.set(use_context::<MaterialTheme>());
                     let settings = settings.get();
                     let modifier = if let Some((x, y)) = settings.origin {
                         Modifier::new().push_placement(FractionalOrigin(PxPosition::from_f32_xy(
@@ -612,7 +614,7 @@ fn check_color_states_and_markers(renderer: &mut HeadlessRenderer, settings: Sta
                                 ..Default::default()
                             });
                             FocusManager::current().clear_focus(true);
-                            renderer.render_frames(2);
+                            renderer.step_frame();
                             let rect = control(
                                 renderer,
                                 if matches!(kind, Kind::Range) {
@@ -759,6 +761,37 @@ fn check_color_states_and_markers(renderer: &mut HeadlessRenderer, settings: Sta
             }
         }
     }
+    settings.set(Settings {
+        size: SliderSize::Medium,
+        ..Default::default()
+    });
+    VALUE.get().unwrap().set(0.75);
+    FocusManager::current().clear_focus(true);
+    renderer.render_frames(2);
+    THEME.get().unwrap().set(Palette::Contrast.theme());
+    renderer.render_frames(2);
+    assert_eq!(
+        pixel(&renderer.read_pixels().unwrap(), 160, 87),
+        [255, 0, 0, 255]
+    );
+    settings.with_mut(|settings| settings.reversed = true);
+    renderer.render_frames(2);
+    assert_eq!(
+        pixel(&renderer.read_pixels().unwrap(), 379, 87),
+        [255, 0, 0, 255],
+        "an unchanged producer must preserve explicit context updates"
+    );
+    settings.with_mut(|settings| {
+        settings.palette = Palette::Dark;
+        settings.references = true;
+    });
+    renderer.step_frame();
+    let changed = renderer.read_pixels().unwrap();
+    assert_eq!(
+        pixel(&changed, 379, 87),
+        pixel(&changed, 307, 307),
+        "a changed producer replaces the previous explicit context value"
+    );
 }
 
 fn check_controlled_steps(renderer: &mut HeadlessRenderer, settings: State<Settings>) {

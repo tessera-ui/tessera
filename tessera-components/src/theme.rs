@@ -8,7 +8,9 @@ use material_color_utilities::{
     dynamiccolor::{DynamicSchemeBuilder, MaterialDynamicColors, SpecVersion, Variant},
     hct::Hct,
 };
-use tessera_ui::{CallbackWith, Color, Dp, RenderSlot, provide_context, tessera, use_context};
+use tessera_ui::{
+    CallbackWith, Color, Dp, RenderSlot, provide_context, remember, tessera, use_context,
+};
 
 use crate::shape_def::{RoundedCorner, Shape};
 
@@ -397,17 +399,28 @@ pub fn material_theme(theme: Option<CallbackWith<(), MaterialTheme>>, child: Opt
     let theme = theme.unwrap_or_else(|| CallbackWith::new(|()| MaterialTheme::default()));
     let child = child.unwrap_or_else(RenderSlot::empty);
     let value = theme.call(());
-    let initial = value.clone();
-    provide_context(
-        move || initial,
-        move || {
-            let theme = use_context::<MaterialTheme>().expect("Material theme must be provided");
-            if theme.with(|current| current != &value) {
-                theme.set(value);
-            }
-            child.render();
-        },
-    );
+    let next = (value.clone(), child);
+    let data = remember(|| next.clone());
+    let pending = remember(|| None::<MaterialTheme>);
+    if data.with(|current| current.0 != next.0) {
+        pending.set(Some(next.0.clone()));
+    }
+    if data.with(|current| current != &next) {
+        data.set(next);
+    }
+    let content = RenderSlot::new(move || {
+        if pending.with(Option::is_some) {
+            let value = pending
+                .with_mut(Option::take)
+                .expect("pending theme update");
+            use_context::<MaterialTheme>()
+                .expect("Material theme must be provided")
+                .set(value);
+        }
+        let child = data.with(|(_, child)| *child);
+        child.render();
+    });
+    provide_context(move || value, move || content.render());
 }
 
 /// A Material Design color scheme, which can be light or dark,
