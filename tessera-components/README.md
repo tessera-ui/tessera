@@ -107,12 +107,39 @@ frame requests. Its default size is 48dp. Shape geometry is shared, and animatio
 updates reuse GPU instance buffers. Shapes, colors, size, and progress semantics
 work on native and WebAssembly targets.
 
+`wavy_progress::linear_wavy_progress_indicator()` shows ongoing work, or known
+completion with `.progress(value)`. Its default container is 240×10dp with 4dp
+strokes. Use `.paused(true)` to freeze all motion, `.wave_speed(Dp::ZERO)` to
+stop only wave travel, and `.amplitude(0.0)` to flatten the active stroke.
+Appearance changes still apply immediately while paused.
+
+`wavy_progress::circular_wavy_progress_indicator()` provides the same progress
+and motion controls in a 48dp circular container. It uses rounded star/circle
+morphs with a preferred 15dp wavelength. An 8dp stroke in a 52dp container gives
+the thick circular variant; the default stroke is 4dp.
+Active and inactive strokes have independent widths and caps. The 8dp thick
+example uses a 14dp container, retaining the default 40dp determinate wavelength,
+4dp gap, and 4dp stop. `.stop_size(Dp::ZERO)` hides that stop, and
+`.reverse_direction(true)` reverses flow. Known progress publishes a clamped
+numeric value; ongoing work omits it. Screen-reader bounds extend vertically
+without increasing the layout footprint.
+
 `slider`, `centered_slider`, and both `range_slider` handles support arrow keys,
 Home/End, and PageUp/PageDown. Continuous keyboard adjustments use 1% steps;
 discrete adjustments follow the configured ticks. Range handles keep a fixed
 Tab order and cannot cross. Use `.start_accessibility_label(...)` and
 `.end_accessibility_label(...)` for distinct localized handle names; the group
 retains `.accessibility_label(...)`.
+
+`slider_value_indicator_provider().child(...)` hosts optional floating slider
+labels for a page. Use `.value_indicator(SliderValueIndicatorVisibility::OnInteraction)`
+on a slider to show its label while focused or dragged, or `Always` to keep
+all enabled handle labels visible. `Hidden` is the default. Standard and centered
+sliders accept `.value_label(...)`; range sliders accept `.start_value_label(...)`
+and `.end_value_label(...)`. These formatted strings are also announced by screen
+readers. Default visual labels show rounded percentages without a percent sign;
+screen readers receive the percent unit. Keep room around sliders for floating
+labels and place their provider outside the page's scrolling/clipping container.
 
 `tooltip_provider("Help text")` hosts a plain tooltip above page content; put
 its trigger inside `tooltip_anchor().child(...)`. Share `TooltipController`

@@ -28,7 +28,7 @@ headless layout assertions. Animation and font rasterization need their own chec
 | Date pickers | `date_picker` | Single-date layout/input/year grid tested; range state, continuous virtualized months, inclusive endpoints, restricted dates, and joint manual input implemented; 1×/4× GPU tests cover range bands, published date semantics, cross-month selection, dynamic years, programmatic month requests, draft clearing, and narrow/collapsed resize recovery; implement docked variants and complete modal integration, normalized reference states, and keyboard audits |
 | Time pickers | `time_picker` | Dial/input interaction tested; add/audit landscape layout; complete state screenshots |
 | Loading indicator | `loading_indicator` (new) | Official cubic morph data and spring timing verified; 48 GPU comparisons across eight sequences and 1×/4× sampling meet a 2.5% normalized coverage-error limit; animation/paused frames reuse buffers; native progress semantics and WASM pause/resume plus 0/50/100% progress verified; complete reference-theme screenshots and custom-size/container comparisons |
-| Progress indicators | `progress` | Audit current wave, gap, stop, determinate/indeterminate variants |
+| Progress indicators | `progress`, `wavy_progress` (new) | Straight and wavy linear/circular determinate/indeterminate variants present; wavy variants include independent stroke styles, adaptive gaps, reverse flow, frame-clock motion, and pause/resume; circle/star morph geometry checked against the independent Graphics Shapes library; complete normalized state, custom geometry, and straight-motion audits |
 | Navigation bar | `navigation_bar` | Flexible top/start arrangement tested; complete state/responsive screenshots |
 | Navigation drawer | `navigation_drawer` (new) | 336×56dp destinations, selection and disabled input tested; destination switching verified in WASM; complete modal overlay integration, transitions, and full state screenshots |
 | Navigation rail | `navigation_rail` | Audit collapsed/expanded/modal modes and current tokens |
@@ -46,13 +46,125 @@ headless layout assertions. Animation and font rasterization need their own chec
 | Menus | `menus` | Current/saved anchors, reflow, gap-aware side fallback, exact-fit resize, and outside dismissal GPU-tested; trigger focus restoration, explicit fallback, disabled trigger recovery, and forward/reverse Tab exit passed native GPU regression; WASM selection, Escape, Enter/Space reopening, Tab exit, narrow-window recovery, and lazy-list retention checked; queued close/navigation barrier covered by native core/order regressions and WASM rapid keyboard sequences; Expressive group surfaces, standard/vibrant colors, position-specific corners, selected menu-radio semantics, trailing-space reservation, and scrolling implemented; shared cascading overlays, branch/chain dismissal, source removal/disable cleanup, and virtualized Tab-exit navigation implemented; shadow overflow, rounded content clipping, scrolling shadow input bounds, container morphing, and delayed mouse-hover branch switching GPU-tested; normalized group/state snapshots, compact adaptive layout, and remaining focus audits |
 | Radio button | `radio_button` | Audit selection, disabled state, group keyboard behavior, and transitions |
 | Search | `search` | Focus, typing, submit/dismiss fixed; audit expanded/full-screen layouts and state screenshots |
-| Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; vertical orientation and direction reversal share layout, pointer coordinates, corner mapping, and keyboard behavior across all three variants; website color roles, independent tick colors, theme updates, marker gaps, and end-stop visibility implemented; implement optional value indicators and complete normalized reference state comparisons |
+| Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; vertical orientation and direction reversal share layout, pointer coordinates, corner mapping, and keyboard behavior across all three variants; website color roles, independent tick colors, theme updates, marker gaps, and end-stop visibility implemented; optional floating value indicators, formatted screen-reader values, focus/drag visibility, and window-edge placement implemented; complete nested-viewport occlusion, fractional-anchor precision, range-label collision, focus-ring, and normalized reference state comparisons |
 | Snackbar | `snackbar` | Audit action/dismiss variants, timing, focus, and live announcement |
 | Switch | `switch` | Audit thumb/icon, checked/unchecked/disabled states, and transitions |
 | Tabs | `tabs` | Audit primary/secondary, fixed/scrolling, indicator, and keyboard navigation |
 | Text fields | `text_field` | Shared typography and outline fixes verified; focused clipboard input, accepted/rejected/stale cut completion, and edit/policy pipelines tested natively; WASM full-date paste, copy readback, cut, rapid replacement, cross-field Tab routing, keyboard save, and read-only policy verified; complete delayed-write/lifecycle/cross-browser audits and error, supporting text, counters, icons, multiline comparisons |
 | Toolbars | `toolbar` (new) | Floating horizontal/vertical and collapsed layouts tested; docked 64dp height and 4–32dp spacing tested at 132/140/320/800px widths; pointer/keyboard activation and docked actions verified in WASM; complete transitions, FAB combination, scroll behavior, and full state screenshots |
 | Tooltips | `tooltip` (new) | Plain/rich page-level overlays, placement fallback, delayed hover, focus, touch hold, Escape/outside dismissal, and custom actions implemented; native GPU tests verify focus, descriptions, content/variant updates, pixel restoration, release cancellation, later clicks, and scroll cancellation; WASM rendering, word wrapping, pointer actions, repeated forward/reverse Tab, action activation, dismissal, and trigger re-entry verified; complete reference state snapshots, short-viewport/lifecycle/host coordination, caret and motion audits |
+
+## Expressive linear wavy progress
+
+`linear_wavy_progress_indicator` adds determinate and indeterminate linear waves
+using the current [website measurements](https://m3.material.io/components/progress-indicators/specs)
+and [AndroidX waveform implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/internal/LinearWavyProgressModifiers.kt).
+The default 240×10dp container uses 4dp active/track strokes, a 4dp gap, and a
+4dp stop. Determinate and indeterminate wavelengths are 40dp and 20dp. The
+website's thick example uses 8dp strokes in a 14dp container, retaining the 3dp
+amplitude, 40dp determinate wavelength, 4dp gap, and 4dp stop inset by 2dp.
+The example's controls use these measurements and retain the selected completion
+while changing mode, thickness, shape, stop visibility, and direction.
+
+The active path consists of alternating quadratic curves. Its endpoints follow
+arc length on the full-amplitude path before vertical amplitude scaling, while
+track gaps use the nominal progress endpoints and both stroke caps. Empty and
+overlapping inactive intervals merge before drawing so translucent tracks are
+painted once. The stop shrinks as completion reaches it and follows the track
+cap independently of the active cap. Primary and secondary-container roles match
+the website's current color figure.
+
+Amplitude defaults to zero through 10% and from 95% completion; intermediate
+progress uses full amplitude. Changes use the current 500ms long-duration token
+with standard easing for expansion and emphasized acceleration for flattening.
+The indeterminate head/tail sequence repeats every 1750ms. Motion uses explicit
+frame timestamps, preserves phase across pauses, and stops frame requests when
+settled. Invisible wave travel is recovered from timestamps when the waveform
+returns, rather than requesting frames while flat. Wave travel defaults to one
+wavelength per second and can be stopped
+independently of the indeterminate sequence. Screen-reader bounds extend 10dp
+above and below the visual container without altering measurement.
+
+The shader measures quadratic stroke distance, handles independently clipped
+endpoints and both cap types, and restricts each quad to the stroke bounds.
+GPU instance buffers are pooled per batch and updated with queue writes. All
+draws participate in normal stencil clipping and opacity.
+
+Native scenarios cover 1×/4× sampling at 1.5 density, default role pixels,
+transparent initial tracks, reversal, gaps, stop shapes, independent stroke
+styles, the website's thick measurements, progress semantics, pause/resume,
+buffer reuse, zero/one-sized constraints, and complete visual recovery.
+Interior wave coverage is compared against an independently subdivided
+quadratic reference with 8×8 subpixel sampling and a 3.5% normalized error limit.
+Fixed head/tail timestamps protect easing and delays, and clock checks protect
+the 500ms amplitude duration and paused time exclusion.
+
+The combined native run passes 332 component tests and 126 core tests, plus all
+198 component/core doctests. Browser checks then exposed a paused appearance
+change that updated its control label without changing the wave. Explicit
+amplitude changes now apply immediately while paused, with exact pixel
+restoration when the previous appearance is restored. All five related native
+tests and the component's runnable documentation example pass after that fix.
+The final release WASM build and call-color check pass. Browser checks cover
+known/ongoing modes, reverse flow, both thicknesses, stop visibility, Home/End
+completion endpoints, and keyboard recovery to 50%. A fresh build verifies
+paused flat/wavy changes immediately, then retains 50% through a 390×844px
+viewport and restoration to the normal 877×871px canvas view. The physical
+canvas returns to 1316×1307px at 1.5 density, with no error-level browser logs.
+
+## Expressive circular wavy progress
+
+`circular_wavy_progress_indicator` uses the current
+[website measurements](https://m3.material.io/components/progress-indicators/specs)
+and [AndroidX circular wave implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/internal/CircularWavyProgressModifiers.kt).
+The default container is 48dp square with 4dp strokes and a 4dp gap. The thick
+example uses a 52dp container and 8dp strokes. Both prefer a 15dp wavelength.
+The wave count is the rounded centerline circumference divided by wavelength,
+with a minimum of five. Tessera limits it to 1024 for bounded allocation.
+
+The runtime constructs normalized rounded circles and stars and matches their
+corner features before interpolating cubic curves. Independent Graphics Shapes
+1.1.0 output covers five wave counts and five amplitudes. Bidirectional sampled
+outline distance and the starting point agree within 0.00015 normalized units.
+The generator, pinned dependencies, fixture format, and attribution are recorded
+in `tools/material-shapes/README.md` and `wavy_progress/shapes.NOTICE`.
+The fixture is test-only; requested sizes use runtime geometry.
+
+Paths start at twelve o'clock, scale by the measured container minus the active
+stroke width, and center using their control bounds. Progress and track endpoints
+follow their respective arc lengths. Wave motion shifts the active path before
+counter-rotation; indeterminate motion adds the six-second sweep and rotation
+sequence. Circular waves stop offset travel when flat. Ordinary circular
+progress also now executes all four additional rotation steps instead of
+returning the first step indefinitely. Keyframe easing belongs to the outgoing
+interval, as documented by the
+[animation API](https://developer.android.com/reference/kotlin/androidx/compose/animation/core/KeyframesSpec.KeyframesSpecConfig).
+
+Cubic subdivision limits physical chord error to 0.01px. Disjoint 8px rendering
+tiles union their candidate stroke segments before blending, preserving uniform
+translucent strokes at joins and tile boundaries. GPU buffers are retained and
+updated with queue writes. Both stroke caps, independent widths, normal clipping,
+and opacity are supported.
+
+Native 1×/4× tests at 1.5 density cover published numeric semantics, mirrored
+pixels, half-alpha closed rings, fractional placement and restoration, independent
+track widths and butt caps, pause/resume, indeterminate motion with wave travel
+stopped, pooled-buffer reuse, zero bounds, and recovery to the thick 52dp variant.
+A new butt-cap scenario exposed neighboring segments extending past a path end.
+Endpoint clipping now follows the closest point on the full centerline before
+stroke coverage is evaluated, so neighboring segment coverage cannot refill the
+cut. All ten wave-related tests pass after this fix. All 126 core tests and 199
+component/core documentation tests also pass.
+The final complete component run passes all 337 tests, including the opt-in
+native GPU scenarios. The final release WASM build and call-color check pass.
+
+Browser checks show both wave types, immediate paused appearance changes,
+standard/thick presets, and retention at 50% through a 390px viewport and normal
+size restoration. Complete normalized reference state comparisons are pending.
+
+Cross-browser reference states, rectangular custom containers, extreme stroke
+and wavelength combinations, dark themes, and complete motion comparisons remain
+open. The catalog is not yet fully aligned.
 
 ## Slider axes and retained semantics
 
@@ -107,12 +219,86 @@ labels on one line and align their track origins. The refreshed WASM preview
 has no error-level logs; this is not a complete normalized reference comparison
 or a performance-equivalence result.
 
-Value indicators remain unimplemented. The
-[Expressive specification](https://m3.material.io/components/sliders/specs)
-requires an optional 48x44dp label container. Its placement, clipping, overlay
-order, formatting, interaction visibility, and range-label collisions still
-need implementation and verification. The existing centered-slider inset-icon
-prop also needs an API/behavior audit against the standard-only icon variant.
+## Slider value indicators
+
+`slider`, `centered_slider`, and `range_slider` now accept
+`SliderValueIndicatorVisibility::{Hidden, OnInteraction, Always}`. Hidden is the
+[website default](https://m3.material.io/components/sliders/specs). A page-level
+`slider_value_indicator_provider` draws labels above the page's scrolling and
+clipping content. The outer provider fills the available bounds by default;
+nested providers share its label collection while retaining their own modifiers.
+
+The optional label uses a minimum 48x44dp capsule, 16dp horizontal and 12dp
+vertical padding, Label Large typography, inverse-surface fill, and
+inverse-on-surface text. The preferred gap from the handle is 4dp. Horizontal
+labels prefer above, vertical labels prefer before, and opposite-side fallback
+plus an 8dp page margin keeps labels within the available area. Labels follow
+actual handle bounds for both directions and all slider variants. A focused
+range handle's label draws last when labels overlap.
+
+OnInteraction shows labels for focused or dragged handles; hover alone leaves
+them hidden. Disabled handles hide their labels. Explicit `value_label`,
+`start_value_label`, and `end_value_label` strings update both the visual label
+and the published screen-reader value. Default visual labels are percentages
+rounded halfway upward without a percent sign; screen readers receive the
+percent unit alongside the normalized numeric range. Label props never write
+back to caller state or invoke `on_change`.
+
+The reveal uses the current Material 400ms enter and 150ms exit durations,
+emphasized enter and emphasized-accelerate exit easing, and a pivot beyond the
+handle-facing edge. Retargeting preserves the current reveal value. Explicit
+frame timestamps drive the transition and frame requests stop at rest. Retained
+closures read current label, style, and color data. Resource cleanup unregisters
+removed handles and checks host liveness during teardown.
+
+New native 1x/4x scenarios at 1.5 density exercise real slider focus, hidden
+hover labels, minimum bounds, the handle gap, text/theme updates, clipping
+independence, programmatic movement, window-edge fallback, reversed vertical
+placement, centered/range labels, formatted accessibility values, disabled
+visibility, unmount/remount, and exact image restoration. An idle-build check
+protects settled labels from repeated rebuilds. The reveal's known Bezier point,
+interruption, duration, and exact settling are also checked.
+The complete native run passes 340 component tests and 126 core tests, including
+opt-in GPU cases. All 200 component/core doctests and the release WASM build with
+call-color checking pass. Additional label scenarios verify exact recovery after
+collapsing the page to 1x1px and restoring its original size.
+
+The official JavaScript color utility (0.4.0, seed `#6750A4`, tonal spot,
+2025 phone specification, contrast zero) independently resolves the inverse
+roles to `#0F0D12`/`#A09BA1` in light mode and `#FDF7FE`/`#575459` in dark mode.
+The nearly black light-theme capsule follows these current roles; the lighter
+capsule in older website illustrations requires matching the reference's color
+specification before comparing pixels.
+
+Browser resizing exposed a record-pass crash when a newly registered label's
+handle was outside the page. Its layout correctly omitted the label, but the
+record pass still called its unmeasured surface. Recording now skips unmeasured
+or unplaced layout subtrees, matching render-graph and input visibility. Both
+native sampling scenarios now begin with an offscreen handle and compare the
+complete frame with hidden and always-visible indicators before moving the
+handle into view. This case reproduced the browser's surface-size panic before
+the record-pass fix.
+
+The rebuilt release WASM exercises Home/End, pointer dragging, Tab traversal
+through both range handles, arrow-key updates, disable/re-enable, and the
+always-visible mode. Vertical reversed XS/XL controls retain their values.
+Resizing the XL case to 390x844px, scrolling all labeled controls out of view,
+scrolling back, and restoring the default viewport no longer crashes or leaves
+floating label pixels behind. Horizontal controls also wrap at 390px with their
+labels visible. No new error-level console messages follow the fixed build's
+reload. Adjacent vertical XL controls can overlap their always-visible labels
+at matching values; this remains open alongside close range-handle labels.
+The same browser session also opens all three grouped menu levels. Their
+rounded shadow falloff remains continuous after the record-pass visibility fix.
+
+Complete normalized reference screenshots, independently clipped nested scroll
+viewports, fractional anchor coordinates, tight label collisions, focused
+handle rings, extreme label lengths, and full motion geometry comparisons remain
+open. The existing centered-slider inset-icon prop also needs an API/behavior
+audit against the standard-only icon variant.
+
+## Controlled slider values
+
 Controlled values now use the same nearest-tick normalization as pointer and
 keyboard input. All three variants clamp values to 0–1, resolve NaN to zero,
 and round halfway positions upward. The range end cannot fall below the
@@ -199,18 +385,30 @@ application's direct context changes. Native coverage switches through light,
 dark, and deliberately contrasting themes, then exercises direct context updates
 and subsequent producer changes.
 
-These checks establish role selection, not absolute baseline-palette parity.
-The default purple seed's linear/sRGB encoding still needs an audit before
-claiming that every default role matches the current reference palette.
-Its authored linear channels currently encode to sRGB `#AA98D2`, although the
-constant is annotated as `#6750A4`; this discrepancy is separate from role selection.
+The default purple seed was incorrectly authored with sRGB channel values in a
+linear `Color`, making the generator receive `#AA98D2` instead of `#6750A4`.
+It is now stored as ARGB and decoded before entering the existing linear-color
+API. The generated default primary changes from `#665789` to `#655789`, and
+secondary-container changes from `#E9DEF8` to `#E8DEF8`.
 
-The optional value indicator remains unimplemented. Its roles are
+Two regressions compare twelve light and twelve dark roles against fixed linear
+values generated independently with Google's
+[`@material/material-color-utilities` 0.4.0](https://www.npmjs.com/package/@material/material-color-utilities/v/0.4.0),
+using seed `#6750A4`, `TONAL_SPOT`, spec `2025`, phone, and contrast zero.
+Expected values do not call Tessera's color conversion or palette generator.
+This establishes parity with those palette settings; the reference site's
+illustrations still require identical theme settings before pixel comparisons.
+A fresh release WASM load verifies default colors, tertiary overrides, and
+restoration without changing the three slider values or the separate progress
+value. The three-level menu retains smooth corner shadows. Canvas dimensions
+remain consistent with 1.5 density, and the browser reports no error-level logs.
+
+At this checkpoint the optional value indicator was not yet implemented. Its roles are
 `inverse_surface`, `inverse_on_surface`, and `label_large`; the
 [current token source](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/SliderTokens.kt)
 specifies 12dp of bottom spacing above the active handle.
 
-The final native rerun passes 325 component tests and 126 core tests, including
+The final native rerun passes 327 component tests and 126 core tests, including
 the opt-in GPU scenarios, plus all 197 component/core doctests. The expanded
 slider matrix covers 216 combinations per sampling mode at 1.5 density: three
 themes, three override configurations, three variants, both axes/directions,
@@ -225,7 +423,7 @@ endpoint dot. Tertiary overrides, disabled roles, default-color recovery, and
 capture showed a scaled scene and black lower band; a fresh geometry observation
 and screenshot restored the normal canvas, and later controlled color clicks
 left the separate progress slider unchanged. Resize/input interleavings remain
-an audit, alongside absolute baseline colors, value indicators, normalized
+an audit, alongside reference-theme parity, value indicators, normalized
 reference snapshots, and the remaining catalog entries.
 
 ## Date range selection and long-list scrolling
