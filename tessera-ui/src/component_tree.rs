@@ -2779,6 +2779,14 @@ fn record_layout_commands(
         let Some(node) = tree.get(node_id) else {
             continue;
         };
+        if node.get().role == NodeRole::Layout
+            && metadatas.get(&node_id).is_none_or(|metadata| {
+                metadata.computed_data.is_none()
+                    || (node_id != root_node && metadata.rel_position.is_none())
+            })
+        {
+            continue;
+        }
         #[cfg(feature = "profiling")]
         let _record_profiler_guard = {
             let parent_id = node.parent();
