@@ -343,7 +343,7 @@ fn cubic_bezier(t: f32, a: f32, b: f32, c: f32, d: f32) -> f32 {
     (u * u * u * a) + (3.0 * u * u * t * b) + (3.0 * u * t * t * c) + (t * t * t * d)
 }
 
-fn cubic_bezier_easing(progress: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
+pub(crate) fn cubic_bezier_easing(progress: f32, x1: f32, y1: f32, x2: f32, y2: f32) -> f32 {
     let x = progress.clamp(0.0, 1.0);
     let mut lo = 0.0;
     let mut hi = 1.0;
@@ -394,10 +394,6 @@ fn keyframe_0_to_1(
 
 fn emphasized_accelerate(progress: f32) -> f32 {
     cubic_bezier_easing(progress, 0.3, 0.0, 0.8, 0.15)
-}
-
-fn emphasized_decelerate(progress: f32) -> f32 {
-    cubic_bezier_easing(progress, 0.05, 0.7, 0.1, 1.0)
 }
 
 fn standard_easing(progress: f32) -> f32 {
@@ -665,52 +661,20 @@ fn circular_gap_sweep_degrees(diameter: Dp, stroke_width: Dp, gap_size: Dp, is_b
     (gap_dp / circumference) * 360.0
 }
 
-fn circular_additional_rotation_degrees(cycle_ms: f32) -> f32 {
-    fn segment(t: f32, start_ms: f32, end_ms: f32, from: f32, to: f32) -> Option<f32> {
-        if t < start_ms {
-            None
-        } else if t >= end_ms {
-            Some(to)
-        } else {
-            let local = (t - start_ms) / (end_ms - start_ms);
-            Some(lerp(from, to, emphasized_decelerate(local)))
-        }
-    }
-
-    let t = cycle_ms;
-    if let Some(v) = segment(t, 0.0, 300.0, 0.0, 90.0) {
-        return v;
-    }
-    if t < 1500.0 {
-        return 90.0;
-    }
-    if let Some(v) = segment(t, 1500.0, 1800.0, 90.0, 180.0) {
-        return v;
-    }
-    if t < 3000.0 {
-        return 180.0;
-    }
-    if let Some(v) = segment(t, 3000.0, 3300.0, 180.0, 270.0) {
-        return v;
-    }
-    if t < 4500.0 {
-        return 270.0;
-    }
-    if let Some(v) = segment(t, 4500.0, 4800.0, 270.0, 360.0) {
-        return v;
-    }
-    360.0
+pub(crate) fn circular_additional_rotation_degrees(cycle_ms: f32) -> f32 {
+    let quarter = (cycle_ms / 1500.0).floor().clamp(0.0, 3.0);
+    quarter * 90.0 + ((cycle_ms - quarter * 1500.0) / 300.0).clamp(0.0, 1.0) * 90.0
 }
 
-fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
+pub(crate) fn circular_indeterminate_progress(cycle_ms: f32) -> f32 {
     const MIN_PROGRESS: f32 = 0.1;
     const MAX_PROGRESS: f32 = 0.87;
     if cycle_ms <= 3000.0 {
         let t = (cycle_ms / 3000.0).clamp(0.0, 1.0);
-        lerp(MIN_PROGRESS, MAX_PROGRESS, standard_easing(t))
+        lerp(MIN_PROGRESS, MAX_PROGRESS, t)
     } else {
         let t = ((cycle_ms - 3000.0) / 3000.0).clamp(0.0, 1.0);
-        lerp(MAX_PROGRESS, MIN_PROGRESS, t)
+        lerp(MAX_PROGRESS, MIN_PROGRESS, standard_easing(t))
     }
 }
 

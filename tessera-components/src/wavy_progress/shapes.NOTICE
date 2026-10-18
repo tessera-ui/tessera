@@ -1,0 +1,16 @@
+Circular wavy progress geometry
+Copyright 2022-2025 The Android Open Source Project
+
+The Rust files in shapes.rs and shapes/ adapt the rounded polygon, cubic,
+length measurement, feature mapping, and morph algorithms from AndroidX
+Graphics Shapes 1.1.0. Tessera restricts the private shape constructors to the
+circle and rounded star used by circular progress indicators.
+
+https://android.googlesource.com/platform/frameworks/support/+/androidx-main/graphics/graphics-shapes/
+
+Licensed under the Apache License, Version 2.0.
+See ../../assets/material_loading_shapes.LICENSE for the complete license.
+
+The independent test fixture in assets/circular_wave_reference.bin is generated
+by tools/material-shapes/GenerateCircularWaveReference.java using the official
+Graphics Shapes 1.1.0 library. It is only included in test builds.

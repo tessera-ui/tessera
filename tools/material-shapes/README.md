@@ -51,3 +51,29 @@ each draw batch to preserve queued writes.
 
 See [the asset notice](../../tessera-components/assets/material_loading_shapes.NOTICE)
 and [Apache 2.0 license](../../tessera-components/assets/material_loading_shapes.LICENSE).
+
+## Circular wave regression reference
+
+`GenerateCircularWaveReference.java` uses the same pinned dependencies to generate
+an independent test fixture for the runtime Rust circle-to-star morph. It covers
+5, 6, 9, 12, and 24 vertices at amplitudes 0, 0.25, 0.5, 0.75, and 1. The runtime
+constructs geometry for the requested size and wavelength; it does not use this
+fixture as a lookup table.
+
+```sh
+java -cp "/external/dependencies/*" tools/material-shapes/GenerateCircularWaveReference.java tessera-components/assets/circular_wave_reference.bin
+```
+
+The little-endian file starts with `MCW1` and a 32-bit case count. Each case
+contains a 32-bit vertex count, the circle outline, and five morph outlines.
+Each outline has a 32-bit cubic count followed by eight floats per cubic in
+anchor/control/control/anchor order. Tests compare both directions of the
+sampled outline distance and the starting point, allowing different equivalent
+cubic subdivisions. The normalized outline error must remain below 0.00015.
+
+The fixture's SHA-256 is
+`2f3f39249b5ca45deaa4683f46c29411f21a8e592d3a047a63418918418881c3`.
+Regeneration with the pinned dependencies must reproduce it byte for byte.
+
+The Rust port's attribution is in
+[shapes.NOTICE](../../tessera-components/src/wavy_progress/shapes.NOTICE).

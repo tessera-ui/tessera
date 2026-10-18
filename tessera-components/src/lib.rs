@@ -143,6 +143,7 @@ pub mod theme;
 pub mod time_picker;
 pub mod toolbar;
 pub mod tooltip;
+pub mod wavy_progress;
 
 #[cfg(test)]
 mod test_utils;
