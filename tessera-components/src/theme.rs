@@ -14,7 +14,7 @@ use tessera_ui::{
 
 use crate::shape_def::{RoundedCorner, Shape};
 
-const DEFAULT_COLOR: Color = Color::from_rgb(0.4039, 0.3137, 0.6431); // #6750A4
+const DEFAULT_SEED_ARGB: u32 = 0xFF6750A4;
 
 /// Ambient content color used by text and icons when no explicit tint is
 /// provided.
@@ -348,7 +348,7 @@ impl MaterialTheme {
         }
     }
 
-    /// Create a theme from a seed color.
+    /// Create a theme from a linear sRGB seed color.
     pub fn from_seed(seed: Color, is_dark: bool) -> Self {
         Self::from_color_scheme(scheme_from_seed(seed, is_dark))
     }
@@ -425,6 +425,9 @@ pub fn material_theme(theme: Option<CallbackWith<(), MaterialTheme>>, child: Opt
 
 /// A Material Design color scheme, which can be light or dark,
 /// produced from a seed color.
+///
+/// The default is a light Tonal Spot scheme using the 2025 color specification
+/// and the sRGB seed `#6750A4`.
 #[derive(Clone, PartialEq, Debug)]
 pub struct MaterialColorScheme {
     /// Indicates if the scheme is dark mode (`true`) or light mode (`false`).
@@ -536,12 +539,12 @@ pub struct MaterialColorScheme {
 }
 
 impl MaterialColorScheme {
-    /// Generates a light color scheme derived from the provided seed color.
+    /// Generates a light color scheme derived from a linear sRGB seed color.
     pub fn light_from_seed(seed: Color) -> Self {
         scheme_from_seed(seed, false)
     }
 
-    /// Generates a dark color scheme derived from the provided seed color.
+    /// Generates a dark color scheme derived from a linear sRGB seed color.
     pub fn dark_from_seed(seed: Color) -> Self {
         scheme_from_seed(seed, true)
     }
@@ -618,7 +621,7 @@ impl MaterialColorScheme {
 
 impl Default for MaterialColorScheme {
     fn default() -> Self {
-        MaterialColorScheme::light_from_seed(DEFAULT_COLOR)
+        MaterialColorScheme::light_from_seed(argb_to_color(DEFAULT_SEED_ARGB))
     }
 }
 
@@ -744,4 +747,83 @@ fn argb_to_color(argb: u32) -> Color {
         srgb_to_linear_channel(b_srgb),
         a,
     )
+}
+
+#[cfg(test)]
+mod tests {
+    use tessera_ui::Color;
+
+    use super::MaterialColorScheme;
+
+    fn assert_reference_roles(scheme: MaterialColorScheme, expected: [[f32; 3]; 12]) {
+        let actual = [
+            ("primary", scheme.primary),
+            ("on_primary", scheme.on_primary),
+            ("primary_container", scheme.primary_container),
+            ("on_primary_container", scheme.on_primary_container),
+            ("secondary", scheme.secondary),
+            ("secondary_container", scheme.secondary_container),
+            ("on_secondary_container", scheme.on_secondary_container),
+            ("tertiary", scheme.tertiary),
+            ("surface", scheme.surface),
+            ("surface_container_low", scheme.surface_container_low),
+            ("on_surface", scheme.on_surface),
+            ("outline", scheme.outline),
+        ];
+        for ((role, actual), expected) in actual.into_iter().zip(expected) {
+            for (actual, expected) in [actual.r, actual.g, actual.b].into_iter().zip(expected) {
+                assert!(
+                    (actual - expected).abs() < 0.000_001,
+                    "{role}: expected {expected}, got {actual}"
+                );
+            }
+            assert_eq!(actual.a, 1.0, "{role} must be opaque");
+        }
+    }
+
+    #[test]
+    fn default_light_roles_match_material_2025_reference() {
+        assert_reference_roles(
+            MaterialColorScheme::default(),
+            [
+                [0.130136477, 0.095307467, 0.250158285],
+                [0.982250550, 0.930110858, 1.000000000],
+                [0.658374817, 0.545724461, 0.982250550],
+                [0.066625939, 0.045186204, 0.149959790],
+                [0.122138772, 0.107023103, 0.165132195],
+                [0.806952258, 0.730460740, 0.938685728],
+                [0.090841711, 0.078187422, 0.124771818],
+                [0.198069320, 0.084376212, 0.162029376],
+                [0.982250550, 0.930110858, 0.991102097],
+                [0.938685728, 0.879622397, 0.955973353],
+                [0.034339807, 0.030713444, 0.042311411],
+                [0.205078736, 0.191201683, 0.226965874],
+            ],
+        );
+    }
+
+    #[test]
+    fn seeded_dark_roles_match_material_2025_reference() {
+        assert_reference_roles(
+            MaterialColorScheme::dark_from_seed(Color::from_rgb(
+                0.135633335,
+                0.080219820,
+                0.371237695,
+            )),
+            [
+                [0.610495571, 0.527115126, 0.838799012],
+                [0.057805430, 0.042311411, 0.114435374],
+                [0.095307467, 0.074213568, 0.168269400],
+                [0.814846572, 0.730460740, 1.000000000],
+                [0.597201788, 0.539479489, 0.708375780],
+                [0.048171824, 0.039546235, 0.072271851],
+                [0.552011402, 0.496932995, 0.658374817],
+                [1.000000000, 0.623960392, 0.863157213],
+                [0.004776953, 0.004024717, 0.006048833],
+                [0.006995410, 0.006048833, 0.009134059],
+                [0.822785754, 0.768151147, 0.863157213],
+                [0.187820772, 0.171441101, 0.208636870],
+            ],
+        );
+    }
 }
