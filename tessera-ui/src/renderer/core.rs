@@ -187,11 +187,9 @@ impl LocalTexturePool {
             return index;
         }
 
-        if self.slots.len() >= Self::MAX_SLOTS
-            && let Some(index) = self.lru_unused_index()
-        {
-            self.slots.swap_remove(index);
-        }
+        let replacement = (self.slots.len() >= Self::MAX_SLOTS)
+            .then(|| self.lru_unused_index())
+            .flatten();
 
         let front = create_local_texture(device, desc, "Local Front");
         let back = create_local_texture(device, desc, "Local Back");
@@ -209,8 +207,15 @@ impl LocalTexturePool {
             in_use: true,
             last_used_frame: current_frame,
         };
-        self.slots.push(slot);
-        self.slots.len() - 1
+        if let Some(index) = replacement {
+            // Frame resources retain indices into this pool until their last
+            // pass, so eviction must not move another live slot.
+            self.slots[index] = slot;
+            index
+        } else {
+            self.slots.push(slot);
+            self.slots.len() - 1
+        }
     }
 
     fn lru_unused_index(&self) -> Option<usize> {
@@ -498,5 +503,47 @@ impl RenderCore {
             save_cache(cache, &self.adapter_info)?;
         }
         Ok(())
+    }
+}
+
+#[cfg(all(test, feature = "headless", not(target_family = "wasm")))]
+mod tests {
+    use crate::{Px, PxSize, render_graph::RenderTextureDesc};
+
+    use super::{LocalTexturePool, RenderCore};
+
+    #[test]
+    #[ignore = "requires a GPU adapter"]
+    fn evicting_an_unused_texture_preserves_live_slot_indices() {
+        let core = pollster::block_on(RenderCore::new_offscreen(
+            winit::dpi::PhysicalSize::new(1, 1),
+            wgpu::TextureFormat::Rgba8Unorm,
+            1,
+        ));
+        let mut pool = LocalTexturePool::new();
+        let texture = |width| RenderTextureDesc {
+            size: PxSize::new(Px(width), Px(8)),
+            format: wgpu::TextureFormat::Rgba8Unorm,
+        };
+        let mut last = None;
+        for index in 0..LocalTexturePool::MAX_SLOTS {
+            let desc = texture(16 + index as i32);
+            pool.allocate(&core.device, &desc, 1, 1);
+            last = Some(desc);
+        }
+        pool.begin_frame(2);
+        let desc = last.unwrap();
+        let live = pool.allocate(&core.device, &desc, 1, 2);
+        let front = pool.slot(live).unwrap().front_view().clone();
+        let replacement = pool.allocate(&core.device, &texture(128), 1, 2);
+        assert_ne!(replacement, live);
+        let slot = pool
+            .slot(live)
+            .expect("the reserved slot must remain attached");
+        assert!(slot.in_use);
+        assert_eq!(slot.desc.size, desc.size);
+        assert_eq!(slot.front_view(), &front);
+        assert_eq!(pool.slot(replacement).unwrap().desc.size, texture(128).size);
+        assert_eq!(pool.slots.len(), LocalTexturePool::MAX_SLOTS);
     }
 }
