@@ -1,8 +1,8 @@
-//! Date picker components for selecting calendar dates.
+//! Date picker components for selecting dates and inclusive ranges.
 //!
 //! ## Usage
 //!
-//! Use to let users choose a calendar date in scheduling or form flows.
+//! Choose calendar dates or booking intervals in scheduling and form flows.
 use std::ops::RangeInclusive;
 
 use tessera_ui::{
@@ -34,6 +34,10 @@ use crate::{
     text_input::TextInputController,
     theme::{ContentColor, MaterialAlpha, MaterialTheme},
 };
+
+pub use range::{DateRangePickerState, date_range_picker};
+
+mod range;
 
 const DATE_COLUMNS: usize = 7;
 const DATE_ROWS: usize = 6;
@@ -851,6 +855,9 @@ fn date_grid(state: State<DatePickerState>, first_day_of_week: Weekday) {
     let snapshot = state.with(DatePickerState::snapshot);
     let today = CalendarDate::today();
     let grid = build_month_grid(snapshot.displayed_month, first_day_of_week);
+    let on_select = CallbackWith::new(move |date| {
+        state.with_mut(|state| state.set_selected_date(date));
+    });
     layout()
         .policy(DateGridLayout {
             columns: DATE_COLUMNS,
@@ -861,7 +868,18 @@ fn date_grid(state: State<DatePickerState>, first_day_of_week: Weekday) {
         }))
         .child(move || {
             for cell in grid.iter().copied() {
-                date_cell(snapshot.clone(), state, today).cell_optional(cell);
+                let enabled = cell.is_some_and(|date| {
+                    is_date_selectable(
+                        date,
+                        &snapshot.year_range,
+                        snapshot.is_selectable_date.as_ref(),
+                        snapshot.is_selectable_year.as_ref(),
+                    )
+                });
+                calendar_day(on_select, today)
+                    .cell_optional(cell)
+                    .selected(cell.is_some() && snapshot.selected_date == cell)
+                    .enabled(enabled);
             }
         });
 }
@@ -899,10 +917,13 @@ impl tessera_ui::LayoutModifierNode for DateGridLayout {
 }
 
 #[tessera]
-fn date_cell(
+fn calendar_day(
     cell: Option<CalendarDate>,
-    snapshot: DatePickerSnapshot,
-    state: State<DatePickerState>,
+    selected: Option<bool>,
+    enabled: Option<bool>,
+    in_range: Option<bool>,
+    #[prop(into)] description: Option<String>,
+    on_select: CallbackWith<CalendarDate>,
     today: CalendarDate,
 ) {
     let theme = use_context::<MaterialTheme>().unwrap().get();
@@ -910,16 +931,13 @@ fn date_cell(
     if let Some(date) = cell {
         let interaction = remember(InteractionState::new);
         let ripple = remember(RippleState::new);
-        let selected = snapshot.selected_date == Some(date);
+        let selected = selected.unwrap_or(false);
+        let enabled = enabled.unwrap_or(true);
         let is_today = date == today;
-        let enabled = is_date_selectable(
-            date,
-            &snapshot.year_range,
-            snapshot.is_selectable_date.as_ref(),
-            snapshot.is_selectable_year.as_ref(),
-        );
         let color = if selected {
             scheme.on_primary
+        } else if in_range.unwrap_or(false) {
+            scheme.on_secondary_container
         } else if is_today {
             scheme.primary
         } else {
@@ -950,6 +968,7 @@ fn date_cell(
             .show_state_layer(false)
             .show_ripple(false)
             .enabled(enabled)
+            .accessibility_description_optional(description)
             .accessibility_label(format!(
                 "{} {}, {}",
                 format_month_name(date.month()),
@@ -957,7 +976,7 @@ fn date_cell(
                 date.year()
             ))
             .on_click(move || {
-                state.with_mut(|s| s.set_selected_date(date));
+                on_select.call(date);
             })
             .child(move || {
                 surface()
@@ -1483,6 +1502,7 @@ mod tests {
 
     #[test]
     fn calendar_uses_48dp_targets_and_selects_the_date_under_the_pointer() {
+        tessera_ui::dp::set_scale_factor(1.0);
         let mut session = start_layout_test_session(
             layout_test(|| {
                 calendar_fixture();
@@ -1523,6 +1543,7 @@ mod tests {
     }
     #[test]
     fn selecting_a_year_returns_to_the_calendar_without_selecting_a_date() {
+        tessera_ui::dp::set_scale_factor(1.0);
         let mut session = start_layout_test_session(
             layout_test(|| {
                 calendar_fixture();
@@ -1564,6 +1585,7 @@ mod tests {
     }
     #[test]
     fn narrow_calendars_preserve_seven_columns() {
+        tessera_ui::dp::set_scale_factor(1.0);
         let mut session = start_layout_test_session(
             layout_test(|| {
                 calendar_fixture();
@@ -1603,6 +1625,7 @@ mod tests {
     }
     #[test]
     fn edit_button_switches_calendar_to_input_mode() {
+        tessera_ui::dp::set_scale_factor(1.0);
         let mut session = start_layout_test_session(
             layout_test(|| {
                 calendar_fixture();
