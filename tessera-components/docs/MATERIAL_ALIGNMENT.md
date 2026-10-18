@@ -46,7 +46,7 @@ headless layout assertions. Animation and font rasterization need their own chec
 | Menus | `menus` | Current/saved anchors, reflow, gap-aware side fallback, exact-fit resize, and outside dismissal GPU-tested; trigger focus restoration, explicit fallback, disabled trigger recovery, and forward/reverse Tab exit passed native GPU regression; WASM selection, Escape, Enter/Space reopening, Tab exit, narrow-window recovery, and lazy-list retention checked; queued close/navigation barrier covered by native core/order regressions and WASM rapid keyboard sequences; Expressive group surfaces, standard/vibrant colors, position-specific corners, selected menu-radio semantics, trailing-space reservation, and scrolling implemented; shared cascading overlays, branch/chain dismissal, source removal/disable cleanup, and virtualized Tab-exit navigation implemented; shadow overflow, rounded content clipping, scrolling shadow input bounds, container morphing, and delayed mouse-hover branch switching GPU-tested; normalized group/state snapshots, compact adaptive layout, and remaining focus audits |
 | Radio button | `radio_button` | Audit selection, disabled state, group keyboard behavior, and transitions |
 | Search | `search` | Focus, typing, submit/dismiss fixed; audit expanded/full-screen layouts and state screenshots |
-| Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; vertical orientation and direction reversal now share layout, pointer coordinates, corner mapping, and keyboard behavior across all three variants; implement optional value indicators and complete normalized reference state comparisons |
+| Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; vertical orientation and direction reversal share layout, pointer coordinates, corner mapping, and keyboard behavior across all three variants; website color roles, independent tick colors, theme updates, marker gaps, and end-stop visibility implemented; implement optional value indicators and complete normalized reference state comparisons |
 | Snackbar | `snackbar` | Audit action/dismiss variants, timing, focus, and live announcement |
 | Switch | `switch` | Audit thumb/icon, checked/unchecked/disabled states, and transitions |
 | Tabs | `tabs` | Audit primary/secondary, fixed/scrolling, indicator, and keyboard navigation |
@@ -146,14 +146,87 @@ exercise keyboard quarter steps and coincident range limits, and reset to valid
 discrete endpoints without browser errors. The restored preview also confirms
 all three menu levels with the corrected rounded shadows.
 
-The color audit also identifies remaining token work: the current default
-inactive track still uses `surface_variant`, while the
-[current slider tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/SliderTokens.kt)
-specify `secondary_container`. Active/inactive tick foregrounds and disabled
-handle compositing require a coordinated native/WASM comparison before this
-component's color states can be considered aligned. The optional value indicator
-uses `inverse_surface`, `inverse_on_surface`, and `label_large`; the same source
+The enabled palette follows the current website's
+[slider color illustration](https://m3.material.io/components/sliders/specs):
+
+| Element | Default role |
+| --- | --- |
+| Active track and handles | `primary` |
+| Inactive track | `secondary_container` |
+| Active ticks | `on_primary` |
+| Inactive ticks and end stops | `on_secondary_container` |
+
+This corrects the former `surface_variant` inactive track and separates marker
+foregrounds from track fills. All three sliders accept `active_tick_color` and
+`inactive_tick_color`; the latter also colors the end stops. Track overrides do
+not implicitly replace marker foregrounds. The example provides tertiary colors
+and end-stop visibility controls for all three variants.
+
+The website's enabled marker roles differ from the swapped track colors in
+the current AndroidX implementation, so the current website determines the
+enabled palette. Disabled active/inactive tracks retain on-surface alpha 0.38/0.12,
+with alpha 0.12/0.38 for their ticks. The disabled handle retains the
+[Material surface composite](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Slider.kt),
+including when a slider is placed over another background color. Enabled color
+overrides do not replace these disabled roles.
+
+Measurement omits markers that do not fit within a visible track segment.
+Endpoint ticks are omitted when an end stop occupies that endpoint, while
+hiding end stops retains the endpoint ticks. This prevents double-compositing
+and duplicate dots, removes ticks from focused handle gaps and the centered
+track gap, and hides stops when their inactive track collapses at an endpoint.
+All child components still build and measure; omitted markers remain unplaced.
+
+The browser uncovered a second placement bug after the marker change: an
+unplaced marker's descendants still drew at the slider origin, and toggling
+stops restored stale tick positions from the layout cache. Unplaced layout nodes
+now prune their whole subtree from geometry projection and render-graph
+collection; composition nodes retain transparent traversal. Geometry is cleared
+for the hidden descendants, and placement application/cache restoration clear
+omitted relative positions and ordering. The core regression covers a placed,
+hidden, and restored nested subtree, its draw operations, and input eligibility.
+The slider GPU scenarios also assert that the origin's empty corner stays clear,
+including after stop visibility and value changes.
+
+The light/dark matrix exposed an independent theme-provider bug: its producer
+was evaluated only when the context slot was initialized, leaving components
+with the original colors after the producer's state changed. `material_theme`
+now evaluates its producer during rebuilding and publishes changed values before
+rendering its child. Stable render slots read the latest producer/child data.
+An unchanged producer preserves explicit context updates; a changed producer
+replaces them. This distinction prevents default values from undoing an
+application's direct context changes. Native coverage switches through light,
+dark, and deliberately contrasting themes, then exercises direct context updates
+and subsequent producer changes.
+
+These checks establish role selection, not absolute baseline-palette parity.
+The default purple seed's linear/sRGB encoding still needs an audit before
+claiming that every default role matches the current reference palette.
+Its authored linear channels currently encode to sRGB `#AA98D2`, although the
+constant is annotated as `#6750A4`; this discrepancy is separate from role selection.
+
+The optional value indicator remains unimplemented. Its roles are
+`inverse_surface`, `inverse_on_surface`, and `label_large`; the
+[current token source](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/SliderTokens.kt)
 specifies 12dp of bottom spacing above the active handle.
+
+The final native rerun passes 325 component tests and 126 core tests, including
+the opt-in GPU scenarios, plus all 197 component/core doctests. The expanded
+slider matrix covers 216 combinations per sampling mode at 1.5 density: three
+themes, three override configurations, three variants, both axes/directions,
+and enabled/disabled states. Color probes compare independent layered reference
+surfaces within two channel values; theme changes are checked on their first
+frame. Formatting, affected-file imports, release WASM, and call-color checks pass.
+
+The rebuilt browser preview has no error-level logs. Fresh medium-size discrete
+sliders have no origin residual; toggling stops off and on retains a single
+endpoint dot. Tertiary overrides, disabled roles, default-color recovery, and
+390px wrapping/restoration retain the selected values. A transient automation
+capture showed a scaled scene and black lower band; a fresh geometry observation
+and screenshot restored the normal canvas, and later controlled color clicks
+left the separate progress slider unchanged. Resize/input interleavings remain
+an audit, alongside absolute baseline colors, value indicators, normalized
+reference snapshots, and the remaining catalog entries.
 
 ## Date range selection and long-list scrolling
 
