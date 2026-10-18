@@ -49,33 +49,15 @@ impl SurfaceDefaults {
         scheme.on_surface
     }
 
-    /// Synthesize ambient and spot shadow layers for the given elevation.
+    /// Returns the ambient and directional shadow profiles for an elevation.
+    ///
+    /// Elevations interpolate between the standard 0–12dp levels. Use the
+    /// shadow modifier to draw these profiles with the ambient spread.
     pub fn synthesize_shadow_layers(
         elevation: Dp,
         scheme: &MaterialColorScheme,
     ) -> crate::shadow::ShadowLayers {
-        use crate::shadow::{ShadowLayer, ShadowLayers};
-        let elevation_px = elevation.to_pixels_f32();
-        let spot_offset_y = (elevation_px * 0.5).clamp(1.0, 12.0);
-        let spot_smoothness = (elevation_px * 0.75).clamp(2.0, 24.0);
-        let ambient_smoothness = (elevation_px * 1.0).clamp(4.0, 36.0);
-
-        let spot = ShadowLayer {
-            color: scheme.shadow.with_alpha(0.25),
-            offset: [0.0, spot_offset_y],
-            smoothness: spot_smoothness,
-        };
-
-        let ambient = ShadowLayer {
-            color: scheme.shadow.with_alpha(0.14),
-            offset: [0.0, 0.0],
-            smoothness: ambient_smoothness,
-        };
-
-        ShadowLayers {
-            ambient: Some(ambient),
-            spot: Some(spot),
-        }
+        crate::shadow::material_shadow(elevation, scheme).0
     }
 }
 
