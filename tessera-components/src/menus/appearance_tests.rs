@@ -176,13 +176,20 @@ fn check_appearance(samples: u32) {
     .expect("renderer");
     renderer.render_frames(4);
     let settings = SETTINGS.get().expect("settings");
-    let initial = renderer.read_pixels().expect("pixels");
     let first = node(&renderer, "Primary group", Role::Group)
         .bounds()
         .expect("bounds");
     let last = node(&renderer, "Other group", Role::Group)
         .bounds()
         .expect("bounds");
+    renderer.pointer_move(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy((last.x0 + 8.0) as f32, (last.y0 + 8.0) as f32),
+    );
+    renderer.step_frame();
+    renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(480.0, 580.0));
+    renderer.render_frames(90);
+    let initial = renderer.read_pixels().expect("pixels");
     assert!(
         (last.y0 - first.y1 - 2.0 * scale).abs() <= 1.0,
         "group gap: {first:?}, {last:?}"
@@ -273,7 +280,10 @@ fn check_appearance(samples: u32) {
     );
     settings.set(Settings::default());
     renderer.render_frames(90);
-    assert_eq!(renderer.read_pixels().expect("restored pixels"), initial);
+    assert!(
+        renderer.read_pixels().expect("restored pixels") == initial,
+        "restoring content and interaction state restores every pixel"
+    );
     click(&mut renderer, bounds);
     assert!(
         settings.get().selected,

@@ -5,8 +5,12 @@
 //! Organize contextual actions into distinct groups with optional selection.
 
 use tessera_ui::{
-    Color, Dp, Modifier, RenderSlot, accesskit::Role, layout::layout, provide_context, tessera,
-    use_context,
+    Color, Dp, FocusScopeNode, Modifier, RenderSlot, State,
+    accesskit::Role,
+    current_frame_nanos,
+    layout::layout,
+    modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -16,6 +20,11 @@ use crate::{
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
     theme::{MaterialColorScheme, MaterialTheme},
+};
+
+use super::{
+    MenuController, MenuHost,
+    motion::{MenuShapeHover, MenuShapeMotion, advance},
 };
 
 /// Color emphasis for vertical menus and their items.
@@ -129,7 +138,8 @@ fn corners(top: f64, bottom: f64) -> Shape {
 /// ## Parameters
 ///
 /// - `position` — outside corners; middle and last groups include a 2dp gap
-///   above.
+///   above. Default corners contract when an activated group loses hover and
+///   keyboard focus.
 /// - `color_style` — color emphasis; inherits the enclosing menu by default.
 /// - `modifier` — optional layout and semantics modifiers.
 /// - `shape` — optional fixed shape override.
@@ -185,7 +195,24 @@ pub fn menu_group(
         .color_scheme;
     let children = children.unwrap_or_else(RenderSlot::empty);
     let modifier = modifier.unwrap_or_default();
-    let shape = shape.unwrap_or_else(|| MenuDefaults::group_shape(position));
+    let focus_scope = remember(FocusScopeNode::new).get();
+    let frame = current_frame_nanos();
+    let motion = remember(|| MenuShapeMotion::new(position, frame));
+    let focused = focus_scope.has_focus();
+    if shape.is_none() && motion.with(|motion| motion.needs_update(position, focused)) {
+        motion.with_mut(|motion| motion.update(position, focused, frame));
+    }
+    if shape.is_none() && !motion.with(MenuShapeMotion::is_idle) {
+        receive_frame_nanos(move |frame| advance(motion, frame));
+    }
+    let mut modifier = modifier.focus_scope_with(focus_scope);
+    if shape.is_none() {
+        modifier = modifier.push_pointer_preview_input(MenuShapeHover {
+            motion,
+            host: use_context::<MenuHost>().map(|host| host.get()),
+            controller: use_context::<State<MenuController>>().map(|controller| controller.get()),
+        });
+    }
     layout()
         .modifier(Modifier::new().padding(Padding::top(
             if matches!(position, MenuPosition::Middle | MenuPosition::Last) {
@@ -197,7 +224,7 @@ pub fn menu_group(
         .child(move || {
             surface()
                 .modifier(modifier.clone().fill_max_width())
-                .shape(shape)
+                .shape(shape.unwrap_or_else(|| motion.with(MenuShapeMotion::shape)))
                 .style(SurfaceStyle::Filled {
                     color: container_color.unwrap_or_else(|| color_style.container(&scheme)),
                 })
@@ -216,7 +243,11 @@ pub fn menu_group(
                                 .modifier(
                                     Modifier::new()
                                         .fill_max_width()
-                                        .clip_shape(shape)
+                                        .clip_shape(
+                                            shape.unwrap_or_else(|| {
+                                                motion.with(MenuShapeMotion::shape)
+                                            }),
+                                        )
                                         .padding_symmetric(Dp::ZERO, Dp(2.0)),
                                 )
                                 .cross_axis_alignment(CrossAxisAlignment::Start)

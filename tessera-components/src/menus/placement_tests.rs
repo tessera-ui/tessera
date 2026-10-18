@@ -119,7 +119,18 @@ fn check_placement(samples: u32) {
         "current anchor overrides the controller snapshot"
     );
     assert_eq!(first.y0, (24.0 + 80.0 + 40.0 + 8.0) * 1.5);
-    let focus = renderer.accessibility_snapshot().expect("tree").focus;
+    let tree = renderer.accessibility_snapshot().expect("tree");
+    let focus = tree.focus;
+    assert_eq!(
+        tree.nodes
+            .iter()
+            .find(|(id, _)| *id == focus)
+            .expect("focused menu action")
+            .1
+            .label(),
+        Some("First action"),
+        "opening the menu focuses its first action"
+    );
     settings.with_mut(|settings| {
         settings.anchor = Some(MenuAnchor::from_dp(
             (Dp(250.0), Dp(240.0)),

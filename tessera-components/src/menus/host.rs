@@ -49,6 +49,59 @@ impl PartialEq for MenuHost {
 }
 
 impl MenuHost {
+    pub fn has_descendants(&self, parent: State<MenuController>) -> bool {
+        self.entries
+            .get()
+            .iter()
+            .any(|request| request.is_alive() && request.get().parent == parent)
+    }
+
+    pub fn apply_hover(
+        &self,
+        parent: State<MenuController>,
+        request: Option<State<MenuPopupRequest>>,
+    ) {
+        if let Some(request) = request {
+            self.open(request);
+        } else if let Some(request) = self
+            .entries
+            .get()
+            .into_iter()
+            .find(|request| request.is_alive() && request.get().parent == parent)
+        {
+            self.remove_branch(request);
+        }
+    }
+
+    pub fn allows_hover(
+        &self,
+        controller: State<MenuController>,
+        point: Option<PxPosition>,
+    ) -> bool {
+        let origin = self.origin.get();
+        let point = point.map(|point| point - PxPosition::new(origin.x, origin.y));
+        let mut hit = self
+            .bounds
+            .read()
+            .filter(|bounds| {
+                self.root.with(MenuController::is_open)
+                    && !is_click_outside_menu(point, Some(*bounds))
+            })
+            .map(|_| self.root);
+        for request in self.entries.get() {
+            if request.is_alive() {
+                let request = request.get();
+                if request.controller.with(MenuController::is_open)
+                    && request.bounds.read().is_some()
+                    && !is_click_outside_menu(point, *request.bounds.read())
+                {
+                    hit = Some(request.controller);
+                }
+            }
+        }
+        point.is_some() && hit == Some(controller)
+    }
+
     pub fn close_disabled_branch(&self, request: State<MenuPopupRequest>) {
         if self.entries.get().contains(&request) {
             if self.popup_has_focus() {

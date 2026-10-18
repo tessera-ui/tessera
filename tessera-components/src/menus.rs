@@ -7,15 +7,17 @@ use std::sync::Arc;
 
 use parking_lot::RwLock;
 use tessera_ui::{
-    AxisConstraint, Callback, ClipRegion, ClipShape, Color, ComputedData, Dp, DrawModifierContent,
-    DrawModifierContext, DrawModifierNode, FocusDirection, FocusManager, FocusRequester,
-    FocusScopeNode, FocusTraversalPolicy, KeyboardInput, KeyboardInputModifierNode, LayoutResult,
-    MeasurementError, Modifier, ParentConstraint, PointerInput, PointerInputModifierNode, Px,
-    PxPosition, PxRect, PxSize, RenderSlot, State,
+    AxisConstraint, Callback, ClipRegion, ClipShape, Color, ComputedData, CursorEventContent, Dp,
+    DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusDirection, FocusManager,
+    FocusRequester, FocusScopeNode, FocusTraversalPolicy, FrameNanosControl, KeyboardInput,
+    KeyboardInputModifierNode, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
+    ParentConstraint, PointerInput, PointerInputModifierNode, Px, PxPosition, PxRect, PxSize,
+    RenderSlot, State,
     accesskit::{HasPopup, Role, Toggled},
+    current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
-    provide_context, remember, tessera, use_context, winit,
+    provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
 use crate::{
@@ -39,9 +41,11 @@ use crate::{
 pub use appearance::{MenuColorStyle, MenuDefaults, MenuPosition, menu_group};
 
 use host::{MenuHost, MenuPopupLease, MenuPopupRequest, menu_host};
+use motion::{MenuShapeHover, MenuShapeMotion};
 
 mod appearance;
 mod host;
+mod motion;
 
 const MENU_MIN_WIDTH: Dp = Dp(112.0);
 const MENU_MAX_WIDTH: Dp = Dp(280.0);
@@ -51,6 +55,7 @@ const MENU_HORIZONTAL_PADDING: Dp = Dp(12.0);
 const MENU_LEADING_SIZE: Dp = Dp(20.0);
 const MENU_ITEM_HEIGHT: Dp = MenuDefaults::ITEM_HEIGHT;
 const MENU_TRAILING_SPACING: Dp = Dp(12.0);
+const MENU_HOVER_DELAY_NANOS: u64 = 150_000_000;
 
 fn default_menu_width() -> AxisConstraint {
     AxisConstraint::new(Px::from(MENU_MIN_WIDTH), Some(Px::from(MENU_MAX_WIDTH)))
@@ -136,6 +141,9 @@ impl MenuController {
     }
 
     /// Opens the menu at the provided anchor rectangle.
+    ///
+    /// An explicit `anchor` prop on the provider takes precedence over this
+    /// saved rectangle.
     pub fn open_at(&mut self, anchor: MenuAnchor) {
         self.anchor = Some(anchor);
         self.is_open = true;
@@ -195,6 +203,7 @@ struct MenuProviderConfig {
     pub modifier: Modifier,
     pub max_height: Option<Px>,
     pub shape: Shape,
+    pub animate_shape: bool,
     pub elevation: Dp,
     pub container_color: Color,
     pub scrim_color: Color,
@@ -222,6 +231,7 @@ impl Default for MenuProviderConfig {
             modifier: default_menu_modifier(),
             max_height: default_max_height(),
             shape: default_menu_shape(),
+            animate_shape: true,
             elevation: Dp(3.0),
             container_color: default_menu_color(),
             scrim_color: default_scrim_color(),
@@ -499,7 +509,8 @@ impl PointerInputModifierNode for MenuKeyboardBoundary {
 ///   shift on the other axis
 /// - `modifier` — extra layout modifiers for the menu container
 /// - `max_height` — optional maximum menu height before scrolling
-/// - `shape` — shape of the surfaced menu panel
+/// - `shape` — optional fixed panel shape; default corners respond to hover and
+///   keyboard focus
 /// - `elevation` — menu elevation level
 /// - `container_color` — background color of the menu panel
 /// - `scrim_color` — background color behind the menu
@@ -590,6 +601,7 @@ pub fn menu_provider(
         offset: offset.unwrap_or([Dp(0.0), MENU_VERTICAL_GAP]),
         modifier: modifier.unwrap_or_else(default_menu_modifier),
         max_height: max_height.or_else(default_max_height),
+        animate_shape: shape.is_none(),
         shape: shape.unwrap_or_else(default_menu_shape),
         elevation: elevation.unwrap_or(Dp(3.0)),
         container_color: container_color.unwrap_or_else(|| {
@@ -814,6 +826,22 @@ fn menu_panel(
     let color_style = provider.color_style;
     let grouped = provider.grouped;
     let host = use_context::<MenuHost>().expect("menu host").get();
+    let frame = current_frame_nanos();
+    let motion = remember(|| MenuShapeMotion::new(MenuPosition::Standalone, frame));
+    let focused = focus_scope.has_focus();
+    if !grouped && provider.animate_shape {
+        if motion.with(|motion| motion.needs_update(MenuPosition::Standalone, focused)) {
+            motion.with_mut(|motion| motion.update(MenuPosition::Standalone, focused, frame));
+        }
+        if !motion.with(MenuShapeMotion::is_idle) {
+            receive_frame_nanos(move |frame| motion::advance(motion, frame));
+        }
+    }
+    let hover = MenuShapeHover {
+        motion,
+        host: Some(host.clone()),
+        controller: Some(controller),
+    };
 
     let mut modifier = with_keyboard_input(
         Modifier::new()
@@ -870,6 +898,9 @@ fn menu_panel(
             }
         });
     }
+    if !grouped && provider.animate_shape {
+        modifier = modifier.push_pointer_preview_input(hover);
+    }
 
     layout().modifier(modifier).child(move || {
         let menu_content = menu_content;
@@ -879,6 +910,8 @@ fn menu_panel(
             })
             .shape(if grouped {
                 Shape::RECTANGLE
+            } else if provider.animate_shape {
+                motion.with(MenuShapeMotion::shape)
             } else {
                 provider.shape
             })
@@ -911,15 +944,18 @@ fn menu_panel(
                                 if inherited.get() != color_style {
                                     inherited.set(color_style);
                                 }
-                                let modifier =
-                                    Modifier::new().fill_max_width().vertical_scroll(scroll);
+                                let modifier = Modifier::new().fill_max_width();
                                 let modifier = if grouped {
                                     modifier.push_draw(MenuScrollClip { controller: scroll })
                                 } else {
-                                    modifier.clip_shape(provider.shape)
+                                    modifier.clip_shape(if provider.animate_shape {
+                                        motion.with(MenuShapeMotion::shape)
+                                    } else {
+                                        provider.shape
+                                    })
                                 };
                                 column()
-                                    .modifier(modifier.padding_symmetric(
+                                    .modifier(modifier.vertical_scroll(scroll).padding_symmetric(
                                         Dp::ZERO,
                                         if grouped { Dp::ZERO } else { Dp(2.0) },
                                     ))
@@ -1003,7 +1039,7 @@ impl Default for MenuItemConfig {
 /// - `trailing_text` — optional trailing text such as a shortcut hint
 /// - `leading_icon` — optional icon shown on the leading side
 /// - `trailing_icon` — optional icon shown on the trailing side
-/// - `submenu_content` — optional submenu content opened from this item
+/// - `submenu_content` — optional submenu opened by activation or mouse dwell
 /// - `submenu_placement` — optional submenu placement override
 /// - `selected` — whether the item renders as selected
 /// - `position` — item position within its group, controlling corner shapes
@@ -1143,6 +1179,37 @@ fn menu_item_surface(
     let item = item.unwrap_or_default();
     let enabled = item.enabled && (item.on_click.is_some() || item.submenu_content.is_some());
     let has_submenu = item.submenu_content.is_some();
+    let focus_requester = if let Some(requester) = focus_requester {
+        requester
+    } else {
+        remember(FocusRequester::new).get()
+    };
+    let hover = remember(MenuHoverIntent::default);
+    let host = use_context::<MenuHost>().map(|host| host.get());
+    let parent = use_context::<State<MenuController>>().map(|controller| controller.get());
+    if enabled && hover.with(|hover| hover.deadline.is_some()) {
+        let host = host.clone();
+        receive_frame_nanos(move |frame| {
+            let Some(deadline) = hover.with(|hover| hover.deadline) else {
+                return FrameNanosControl::Stop;
+            };
+            if !hover.with(|hover| hover.inside)
+                || !focus_requester.is_focused()
+                || parent.is_none_or(|parent| !parent.with(MenuController::is_open))
+            {
+                hover.with_mut(|hover| hover.deadline = None);
+                return FrameNanosControl::Stop;
+            }
+            if frame < deadline {
+                return FrameNanosControl::Continue;
+            }
+            hover.with_mut(|hover| hover.deadline = None);
+            if let Some((host, parent)) = host.as_ref().zip(parent) {
+                host.apply_hover(parent, submenu_request);
+            }
+            FrameNanosControl::Stop
+        });
+    }
     let modifier = if let Some(request) = submenu_request {
         with_keyboard_input(Modifier::new(), move |mut input| {
             if input.key_modifiers.control_key()
@@ -1215,6 +1282,14 @@ fn menu_item_surface(
                     .fill_max_width()
                     .padding_symmetric(Dp(4.0), Dp::ZERO)
                     .minimum_interactive_component_size()
+                    .push_pointer_preview_input(MenuItemHoverFocus {
+                        enabled,
+                        requester: focus_requester,
+                        host: host.clone(),
+                        controller: parent,
+                        request: submenu_request,
+                        hover,
+                    })
                     .push_semantics(MenuItemDisclosure(expanded)),
             )
             .accessibility_role(if selection.is_some() && !has_submenu {
@@ -1226,7 +1301,7 @@ fn menu_item_surface(
             .accessibility_label(item.label.clone())
             .block_input(true)
             .ripple_color(label_color)
-            .focus_requester_optional(focus_requester)
+            .focus_requester(focus_requester)
             .on_click_optional(on_click)
             .accessibility_description_optional(item.supporting_text.clone())
             .child({
@@ -1301,6 +1376,84 @@ fn menu_item_surface(
                 }
             });
     });
+}
+
+struct MenuItemHoverFocus {
+    enabled: bool,
+    requester: FocusRequester,
+    host: Option<MenuHost>,
+    controller: Option<State<MenuController>>,
+    request: Option<State<MenuPopupRequest>>,
+    hover: State<MenuHoverIntent>,
+}
+
+#[derive(Default)]
+struct MenuHoverIntent {
+    inside: bool,
+    mouse: bool,
+    deadline: Option<u64>,
+}
+
+impl PointerInputModifierNode for MenuItemHoverFocus {
+    fn on_pointer_input(&self, input: PointerInput<'_>) {
+        let moved = input.pointer_changes.iter().any(|change| {
+            change.pointer_id == MOUSE_POINTER_ID
+                && matches!(change.content, CursorEventContent::Moved(_))
+        });
+        let mouse = input
+            .pointer_changes
+            .last()
+            .map(|change| change.pointer_id == MOUSE_POINTER_ID)
+            .unwrap_or_else(|| self.hover.with(|hover| hover.mouse));
+        let inside = self.enabled
+            && mouse
+            && input.cursor_position_rel.is_some_and(|point| {
+                point.x >= 0.0
+                    && point.y >= 0.0
+                    && point.x < input.computed_data.width.to_f32()
+                    && point.y < input.computed_data.height.to_f32()
+            })
+            && self
+                .host
+                .as_ref()
+                .zip(self.controller)
+                .is_none_or(|(host, controller)| {
+                    host.allows_hover(controller, input.cursor_position_abs())
+                });
+        let schedule = inside
+            && moved
+            && self.hover.with(|hover| hover.deadline.is_none())
+            && self
+                .host
+                .as_ref()
+                .zip(self.controller)
+                .is_some_and(|(host, parent)| {
+                    if let Some(request) = self.request {
+                        !request.get().controller.with(MenuController::is_open)
+                    } else {
+                        host.has_descendants(parent)
+                    }
+                });
+        if schedule
+            || self
+                .hover
+                .with(|hover| hover.inside != inside || hover.mouse != mouse)
+        {
+            self.hover.with_mut(|hover| {
+                hover.inside = inside;
+                hover.mouse = mouse;
+                if !inside {
+                    hover.deadline = None;
+                } else if schedule {
+                    hover.deadline =
+                        Some(current_frame_nanos().saturating_add(MENU_HOVER_DELAY_NANOS));
+                }
+            });
+        }
+        if inside && moved {
+            self.requester.request_focus();
+        }
+    }
 }
 
 struct MenuItemDisclosure(Option<bool>);
@@ -1559,3 +1712,7 @@ mod shadow_tests;
 #[cfg(test)]
 #[path = "menus/placement_tests.rs"]
 mod placement_tests;
+
+#[cfg(test)]
+#[path = "menus/motion_tests.rs"]
+mod motion_tests;
