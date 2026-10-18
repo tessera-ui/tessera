@@ -335,6 +335,10 @@ pub(super) fn apply_slider_semantics(
     accessibility.label = args.accessibility_label.clone();
     accessibility.description = args.accessibility_description.clone();
     accessibility.numeric_value = Some(current_value as f64);
+    accessibility.value = args.value_label.clone().or_else(|| {
+        (args.value_indicator != super::SliderValueIndicatorVisibility::Hidden)
+            .then(|| format!("{}%", super::default_value_label(current_value)))
+    });
     accessibility.min_numeric_value = Some(0.0);
     accessibility.max_numeric_value = Some(1.0);
     accessibility.focusable = !args.disabled;

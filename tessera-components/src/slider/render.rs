@@ -1,4 +1,7 @@
-use tessera_ui::{AxisConstraint, Color, Constraint, Modifier, Px, tessera};
+use tessera_ui::{
+    AxisConstraint, Color, Constraint, Modifier, Px, PxRect, State,
+    modifier::FocusModifierExt as _, tessera,
+};
 
 use crate::{
     modifier::ModifierExt,
@@ -45,6 +48,7 @@ pub(super) fn slider_handle(
     layout: Option<SliderLayout>,
     width: Option<tessera_ui::Px>,
     colors: Option<SliderColors>,
+    indicator_anchor: Option<State<PxRect>>,
 ) {
     let layout = layout.expect("slider_handle requires layout");
     let width = width.expect("slider_handle requires width");
@@ -53,8 +57,18 @@ pub(super) fn slider_handle(
         AxisConstraint::exact(width),
         AxisConstraint::exact(layout.handle_height),
     ));
+    let modifier = Modifier::new().constrain(Some(constraint.width), Some(constraint.height));
+    let modifier = if let Some(anchor) = indicator_anchor {
+        modifier.on_globally_positioned(move |rect| {
+            if anchor.get() != rect {
+                anchor.set(rect);
+            }
+        })
+    } else {
+        modifier
+    };
     surface()
-        .modifier(Modifier::new().constrain(Some(constraint.width), Some(constraint.height)))
+        .modifier(modifier)
         .style(colors.thumb.into())
         .shape(Shape::CAPSULE)
         .child(|| {});

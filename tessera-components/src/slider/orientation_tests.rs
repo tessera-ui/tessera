@@ -82,6 +82,12 @@ struct Settings {
     override_ticks: bool,
     references: bool,
     stops: Option<bool>,
+    indicator: super::SliderValueIndicatorVisibility,
+    value_label: Option<&'static str>,
+    start_value_label: Option<&'static str>,
+    end_value_label: Option<&'static str>,
+    removed: bool,
+    clip_slider: bool,
 }
 
 thread_local! {
@@ -102,177 +108,217 @@ fn fixture() {
     material_theme()
         .theme(move || settings.with(|settings| settings.palette.theme()))
         .child(move || {
-            boxed()
-                .modifier(Modifier::new().fill_max_size().background(
-                    settings.with(|settings| settings.background.unwrap_or(Color::WHITE)),
-                ))
-                .children(move || {
-                    THEME.set(use_context::<MaterialTheme>());
-                    let settings = settings.get();
-                    let modifier = if let Some((x, y)) = settings.origin {
-                        Modifier::new().push_placement(FractionalOrigin(PxPosition::from_f32_xy(
-                            super::Dp(x).to_pixels_f32(),
-                            super::Dp(y).to_pixels_f32(),
-                        )))
-                    } else {
-                        Modifier::new().offset(super::Dp(40.0), super::Dp(40.0))
-                    };
-                    let modifier = match settings.orientation {
-                        SliderOrientation::Horizontal => {
-                            modifier.width(super::Dp(settings.length.unwrap_or(280.0)))
-                        }
-                        SliderOrientation::Vertical => {
-                            modifier.height(super::Dp(settings.length.unwrap_or(280.0)))
-                        }
-                    };
-                    match settings.kind {
-                        Kind::Single => {
-                            slider()
-                                .modifier(modifier)
-                                .value(value.get())
-                                .on_change(move |next| value.set(next))
-                                .size(settings.size)
-                                .inset_icon_optional(settings.inset_icon.then(|| {
-                                    crate::material_icons::filled::ARROW_UPWARD_SVG.into()
-                                }))
-                                .orientation(settings.orientation)
-                                .reverse_direction(settings.reversed)
-                                .disabled(settings.disabled)
-                                .steps(settings.steps)
-                                .active_track_color_optional(
-                                    settings.overrides.then_some(OVERRIDE_ACTIVE),
-                                )
-                                .inactive_track_color_optional(
-                                    settings.overrides.then_some(OVERRIDE_INACTIVE),
-                                )
-                                .thumb_color_optional(settings.overrides.then_some(OVERRIDE_THUMB))
-                                .active_tick_color_optional(
-                                    settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
-                                )
-                                .inactive_tick_color_optional(
-                                    settings.override_ticks.then_some(OVERRIDE_INACTIVE_TICK),
-                                )
-                                .show_stop_indicator_optional(settings.stops)
-                                .accessibility_label("Value");
-                        }
-                        Kind::Centered => {
-                            centered_slider()
-                                .modifier(modifier)
-                                .value(value.get())
-                                .on_change(move |next| value.set(next))
-                                .size(settings.size)
-                                .orientation(settings.orientation)
-                                .reverse_direction(settings.reversed)
-                                .disabled(settings.disabled)
-                                .steps(settings.steps)
-                                .active_track_color_optional(
-                                    settings.overrides.then_some(OVERRIDE_ACTIVE),
-                                )
-                                .inactive_track_color_optional(
-                                    settings.overrides.then_some(OVERRIDE_INACTIVE),
-                                )
-                                .thumb_color_optional(settings.overrides.then_some(OVERRIDE_THUMB))
-                                .active_tick_color_optional(
-                                    settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
-                                )
-                                .inactive_tick_color_optional(
-                                    settings.override_ticks.then_some(OVERRIDE_INACTIVE_TICK),
-                                )
-                                .show_stop_indicator_optional(settings.stops)
-                                .accessibility_label("Value");
-                        }
-                        Kind::Range => {
-                            range_slider()
-                                .modifier(modifier)
-                                .value(range.get())
-                                .on_change(move |next| range.set(next))
-                                .size(settings.size)
-                                .orientation(settings.orientation)
-                                .reverse_direction(settings.reversed)
-                                .disabled(settings.disabled)
-                                .steps(settings.steps)
-                                .active_track_color_optional(
-                                    settings.overrides.then_some(OVERRIDE_ACTIVE),
-                                )
-                                .inactive_track_color_optional(
-                                    settings.overrides.then_some(OVERRIDE_INACTIVE),
-                                )
-                                .thumb_color_optional(settings.overrides.then_some(OVERRIDE_THUMB))
-                                .active_tick_color_optional(
-                                    settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
-                                )
-                                .inactive_tick_color_optional(
-                                    settings.override_ticks.then_some(OVERRIDE_INACTIVE_TICK),
-                                )
-                                .show_stop_indicator_optional(settings.stops)
-                                .accessibility_label("Interval");
-                        }
-                    }
-                    if settings.references {
-                        let scheme = settings.palette.theme().color_scheme;
-                        let active = if settings.overrides {
-                            OVERRIDE_ACTIVE
+            super::slider_value_indicator_provider().child(move || {
+                boxed()
+                    .modifier(Modifier::new().fill_max_size().background(
+                        settings.with(|settings| settings.background.unwrap_or(Color::WHITE)),
+                    ))
+                    .children(move || {
+                        THEME.set(use_context::<MaterialTheme>());
+                        let settings = settings.get();
+                        let modifier = if let Some((x, y)) = settings.origin {
+                            Modifier::new().push_placement(FractionalOrigin(
+                                PxPosition::from_f32_xy(
+                                    super::Dp(x).to_pixels_f32(),
+                                    super::Dp(y).to_pixels_f32(),
+                                ),
+                            ))
                         } else {
-                            scheme.primary
+                            Modifier::new().offset(super::Dp(40.0), super::Dp(40.0))
                         };
-                        let inactive = if settings.overrides {
-                            OVERRIDE_INACTIVE
+                        let modifier = match settings.orientation {
+                            SliderOrientation::Horizontal => {
+                                modifier.width(super::Dp(settings.length.unwrap_or(280.0)))
+                            }
+                            SliderOrientation::Vertical => {
+                                modifier.height(super::Dp(settings.length.unwrap_or(280.0)))
+                            }
+                        };
+                        let modifier = if settings.clip_slider {
+                            modifier.clip_to_bounds()
                         } else {
-                            scheme.secondary_container
+                            modifier
                         };
-                        let thumb = if settings.overrides {
-                            OVERRIDE_THUMB
-                        } else {
-                            scheme.primary
-                        };
-                        for (index, layers) in [
-                            vec![active],
-                            vec![inactive],
-                            vec![thumb],
-                            vec![if settings.override_ticks {
-                                OVERRIDE_ACTIVE_TICK
-                            } else {
-                                scheme.on_primary
-                            }],
-                            vec![if settings.override_ticks {
-                                OVERRIDE_INACTIVE_TICK
-                            } else {
-                                scheme.on_secondary_container
-                            }],
-                            vec![scheme.on_surface.with_alpha(0.38)],
-                            vec![scheme.on_surface.with_alpha(0.12)],
-                            vec![scheme.surface, scheme.on_surface.with_alpha(0.38)],
-                            vec![
-                                scheme.on_surface.with_alpha(0.38),
-                                scheme.on_surface.with_alpha(0.12),
-                            ],
-                            vec![
-                                scheme.on_surface.with_alpha(0.12),
-                                scheme.on_surface.with_alpha(0.38),
-                            ],
-                        ]
-                        .into_iter()
-                        .enumerate()
-                        {
-                            boxed()
-                                .modifier(
-                                    Modifier::new()
-                                        .offset(
-                                            super::Dp(200.0 + (index % 5) as f64 * 20.0),
-                                            super::Dp(200.0 + (index / 5) as f64 * 20.0),
+                        if !settings.removed {
+                            match settings.kind {
+                                Kind::Single => {
+                                    slider()
+                                        .modifier(modifier)
+                                        .value(value.get())
+                                        .on_change(move |next| value.set(next))
+                                        .size(settings.size)
+                                        .inset_icon_optional(settings.inset_icon.then(|| {
+                                            crate::material_icons::filled::ARROW_UPWARD_SVG.into()
+                                        }))
+                                        .orientation(settings.orientation)
+                                        .reverse_direction(settings.reversed)
+                                        .disabled(settings.disabled)
+                                        .steps(settings.steps)
+                                        .active_track_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_ACTIVE),
                                         )
-                                        .size(super::Dp(10.0), super::Dp(10.0)),
-                                )
-                                .children(move || {
-                                    for color in &layers {
-                                        boxed().modifier(
-                                            Modifier::new().fill_max_size().background(*color),
-                                        );
-                                    }
-                                });
+                                        .inactive_track_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_INACTIVE),
+                                        )
+                                        .thumb_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_THUMB),
+                                        )
+                                        .active_tick_color_optional(
+                                            settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
+                                        )
+                                        .inactive_tick_color_optional(
+                                            settings
+                                                .override_ticks
+                                                .then_some(OVERRIDE_INACTIVE_TICK),
+                                        )
+                                        .show_stop_indicator_optional(settings.stops)
+                                        .value_indicator(settings.indicator)
+                                        .value_label_optional(
+                                            settings.value_label.map(str::to_string),
+                                        )
+                                        .accessibility_label("Value");
+                                }
+                                Kind::Centered => {
+                                    centered_slider()
+                                        .modifier(modifier)
+                                        .value(value.get())
+                                        .on_change(move |next| value.set(next))
+                                        .size(settings.size)
+                                        .orientation(settings.orientation)
+                                        .reverse_direction(settings.reversed)
+                                        .disabled(settings.disabled)
+                                        .steps(settings.steps)
+                                        .active_track_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_ACTIVE),
+                                        )
+                                        .inactive_track_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_INACTIVE),
+                                        )
+                                        .thumb_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_THUMB),
+                                        )
+                                        .active_tick_color_optional(
+                                            settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
+                                        )
+                                        .inactive_tick_color_optional(
+                                            settings
+                                                .override_ticks
+                                                .then_some(OVERRIDE_INACTIVE_TICK),
+                                        )
+                                        .show_stop_indicator_optional(settings.stops)
+                                        .value_indicator(settings.indicator)
+                                        .value_label_optional(
+                                            settings.value_label.map(str::to_string),
+                                        )
+                                        .accessibility_label("Value");
+                                }
+                                Kind::Range => {
+                                    range_slider()
+                                        .modifier(modifier)
+                                        .value(range.get())
+                                        .on_change(move |next| range.set(next))
+                                        .size(settings.size)
+                                        .orientation(settings.orientation)
+                                        .reverse_direction(settings.reversed)
+                                        .disabled(settings.disabled)
+                                        .steps(settings.steps)
+                                        .active_track_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_ACTIVE),
+                                        )
+                                        .inactive_track_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_INACTIVE),
+                                        )
+                                        .thumb_color_optional(
+                                            settings.overrides.then_some(OVERRIDE_THUMB),
+                                        )
+                                        .active_tick_color_optional(
+                                            settings.override_ticks.then_some(OVERRIDE_ACTIVE_TICK),
+                                        )
+                                        .inactive_tick_color_optional(
+                                            settings
+                                                .override_ticks
+                                                .then_some(OVERRIDE_INACTIVE_TICK),
+                                        )
+                                        .show_stop_indicator_optional(settings.stops)
+                                        .value_indicator(settings.indicator)
+                                        .start_value_label_optional(
+                                            settings.start_value_label.map(str::to_string),
+                                        )
+                                        .end_value_label_optional(
+                                            settings.end_value_label.map(str::to_string),
+                                        )
+                                        .accessibility_label("Interval");
+                                }
+                            }
                         }
-                    }
-                });
+                        if settings.references {
+                            let scheme = settings.palette.theme().color_scheme;
+                            let active = if settings.overrides {
+                                OVERRIDE_ACTIVE
+                            } else {
+                                scheme.primary
+                            };
+                            let inactive = if settings.overrides {
+                                OVERRIDE_INACTIVE
+                            } else {
+                                scheme.secondary_container
+                            };
+                            let thumb = if settings.overrides {
+                                OVERRIDE_THUMB
+                            } else {
+                                scheme.primary
+                            };
+                            for (index, layers) in [
+                                vec![active],
+                                vec![inactive],
+                                vec![thumb],
+                                vec![if settings.override_ticks {
+                                    OVERRIDE_ACTIVE_TICK
+                                } else {
+                                    scheme.on_primary
+                                }],
+                                vec![if settings.override_ticks {
+                                    OVERRIDE_INACTIVE_TICK
+                                } else {
+                                    scheme.on_secondary_container
+                                }],
+                                vec![scheme.on_surface.with_alpha(0.38)],
+                                vec![scheme.on_surface.with_alpha(0.12)],
+                                vec![scheme.surface, scheme.on_surface.with_alpha(0.38)],
+                                vec![
+                                    scheme.on_surface.with_alpha(0.38),
+                                    scheme.on_surface.with_alpha(0.12),
+                                ],
+                                vec![
+                                    scheme.on_surface.with_alpha(0.12),
+                                    scheme.on_surface.with_alpha(0.38),
+                                ],
+                                vec![scheme.inverse_surface],
+                                vec![scheme.inverse_on_surface],
+                            ]
+                            .into_iter()
+                            .enumerate()
+                            {
+                                boxed()
+                                    .modifier(
+                                        Modifier::new()
+                                            .offset(
+                                                super::Dp(200.0 + (index % 5) as f64 * 20.0),
+                                                super::Dp(200.0 + (index / 5) as f64 * 20.0),
+                                            )
+                                            .size(super::Dp(10.0), super::Dp(10.0)),
+                                    )
+                                    .children(move || {
+                                        for color in &layers {
+                                            boxed().modifier(
+                                                Modifier::new().fill_max_size().background(*color),
+                                            );
+                                        }
+                                    });
+                            }
+                        }
+                    });
+            });
         });
 }
 
@@ -889,5 +935,325 @@ fn vertical_slider_pixels_pointer_semantics_and_length_recovery_msaa4() {
     crate::test_utils::run_isolated_test(
         "slider::orientation_tests::vertical_slider_pixels_pointer_semantics_and_length_recovery_msaa4",
         || check_orientation(4),
+    );
+}
+
+fn check_value_indicators(samples: u32) {
+    use super::{SliderValueIndicatorVisibility as Visibility, indicator::observed_labels};
+
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(|| fixture()),
+        vec![Box::new(crate::TesseraComponents)],
+        HeadlessConfig {
+            width: 500,
+            height: 500,
+            scale_factor: 1.5,
+            sample_count: samples,
+            frame_time: std::time::Duration::from_millis(20),
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    renderer.render_frames(3);
+    let settings = SETTINGS.get().unwrap();
+    let value = VALUE.get().unwrap();
+    let range = RANGE.get().unwrap();
+    assert!(
+        observed_labels().is_empty(),
+        "value indicators are optional and hidden by default"
+    );
+    settings.with_mut(|s| {
+        s.origin = Some((800.0, 800.0));
+    });
+    renderer.render_frames(25);
+    let without_offscreen_label = renderer.read_pixels().unwrap();
+    settings.with_mut(|s| s.indicator = Visibility::Always);
+    renderer.render_frames(25);
+    let offscreen = renderer.read_pixels().unwrap();
+    assert!(
+        offscreen == without_offscreen_label,
+        "an initially offscreen handle does not record an unmeasured label"
+    );
+    settings.with_mut(|s| {
+        s.origin = Some((80.0, 80.0));
+        s.indicator = Visibility::OnInteraction;
+        s.clip_slider = true;
+        s.references = true;
+    });
+    renderer.render_frames(12);
+    assert!(observed_labels().is_empty());
+    let original = renderer.read_pixels().unwrap();
+    renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(230.0, 153.0));
+    renderer.render_frames(25);
+    assert!(
+        observed_labels().is_empty(),
+        "hover alone does not show a value label"
+    );
+    click(&mut renderer, 230.0, 153.0);
+    renderer.render_frames(25);
+    let labels = observed_labels();
+    assert_eq!(
+        labels.len(),
+        1,
+        "pressing the real slider focuses its handle and reveals the label"
+    );
+    let builds = super::indicator::label_build_count();
+    renderer.render_frames(6);
+    assert_eq!(
+        super::indicator::label_build_count(),
+        builds,
+        "settled value labels do not keep rebuilding at rest"
+    );
+    let bounds = labels[0].1;
+    assert!(
+        (72..=74).contains(&bounds.width.0),
+        "48dp minimum label width: {bounds:?}"
+    );
+    assert_eq!(bounds.height.0, 66, "44dp label height");
+    assert_eq!(
+        (bounds.y + bounds.height).0,
+        114,
+        "4dp gap above the handle"
+    );
+    let snapshot = renderer.accessibility_snapshot().unwrap();
+    assert_eq!(
+        snapshot
+            .nodes
+            .iter()
+            .filter(|(_, n)| n.role() == Role::Slider)
+            .count(),
+        1
+    );
+    let visible_default = renderer.read_pixels().unwrap();
+    settings.with_mut(|s| s.value_label = Some("Warm"));
+    renderer.render_frames(3);
+    assert_eq!(
+        observed_labels()[0].0,
+        "Warm",
+        "retained labels read current props"
+    );
+    assert_eq!(control(&renderer, "Value").value(), Some("Warm"));
+    let image = renderer.read_pixels().unwrap();
+    assert!(
+        image != visible_default,
+        "changing a retained label updates its actual glyph pixels"
+    );
+    let pixel = |pixels: &[u8], x: usize, y: usize| -> [u8; 3] {
+        pixels[(y * 500 + x) * 4..(y * 500 + x) * 4 + 3]
+            .try_into()
+            .unwrap()
+    };
+    let rect = observed_labels()[0].1;
+    let has_foreground = |pixels: &[u8], rect: tessera_ui::PxRect, expected: [u8; 3]| {
+        (rect.y.0 as usize..(rect.y + rect.height).0 as usize).any(|y| {
+            (rect.x.0 as usize..(rect.x + rect.width).0 as usize).any(|x| {
+                pixel(pixels, x, y)
+                    .into_iter()
+                    .zip(expected)
+                    .all(|(a, b)| a.abs_diff(b) <= 2)
+            })
+        })
+    };
+    assert_eq!(
+        pixel(
+            &image,
+            (rect.x.0 + 5) as usize,
+            (rect.y.0 + rect.height.0 / 2) as usize
+        ),
+        pixel(&image, 307, 367),
+        "the label uses inverse surface above the slider's own clip"
+    );
+    assert!(
+        has_foreground(&image, rect, pixel(&image, 337, 367)),
+        "the label glyphs use inverse on surface"
+    );
+    settings.with_mut(|s| s.palette = Palette::Dark);
+    renderer.render_frames(4);
+    let dark = renderer.read_pixels().unwrap();
+    let rect = observed_labels()[0].1;
+    assert_eq!(
+        pixel(
+            &dark,
+            (rect.x.0 + 5) as usize,
+            (rect.y.0 + rect.height.0 / 2) as usize
+        ),
+        pixel(&dark, 307, 367),
+        "a retained label follows the current dark theme"
+    );
+    assert!(
+        has_foreground(&dark, rect, pixel(&dark, 337, 367)),
+        "the retained glyphs follow the dark inverse on surface role"
+    );
+    settings.with_mut(|s| s.palette = Palette::Light);
+    renderer.render_frames(4);
+    let custom = renderer.read_pixels().unwrap();
+    assert!(custom != original);
+    value.set(0.8);
+    renderer.render_frames(3);
+    assert!(
+        observed_labels()[0].1.x > bounds.x,
+        "the label follows programmatic value changes"
+    );
+    FocusManager::current().clear_focus(true);
+    renderer.render_frames(12);
+    assert!(
+        observed_labels().is_empty(),
+        "blur settles the hide animation"
+    );
+    settings.with_mut(|s| {
+        s.indicator = Visibility::Always;
+        s.value_label = None;
+    });
+    value.set(0.25);
+    renderer.render_frames(25);
+    assert_eq!(observed_labels()[0].0, "25");
+    assert_eq!(control(&renderer, "Value").value(), Some("25%"));
+    value.set(0.245);
+    renderer.render_frames(3);
+    assert_eq!(
+        observed_labels()[0].0,
+        "25",
+        "percentage labels round halfway upward"
+    );
+    assert_eq!(control(&renderer, "Value").value(), Some("25%"));
+    let before_resize = renderer.read_pixels().unwrap();
+    renderer.resize(1, 1);
+    renderer.render_frames(3);
+    assert!(
+        renderer
+            .read_pixels()
+            .unwrap()
+            .chunks_exact(4)
+            .all(|pixel| pixel[..3] == [255, 255, 255]),
+        "collapsed page bounds do not retain a label"
+    );
+    renderer.resize(500, 500);
+    renderer.render_frames(4);
+    assert!(
+        renderer.read_pixels().unwrap() == before_resize,
+        "value labels recover exactly after collapsed page bounds"
+    );
+
+    settings.with_mut(|s| {
+        s.origin = Some((0.0, 0.0));
+    });
+    value.set(0.0);
+    renderer.render_frames(3);
+    let edge = observed_labels()[0].1;
+    assert!(edge.x.0 >= 12);
+    assert!(
+        edge.y.0 >= 72,
+        "the label flips below a handle at the window top: {edge:?}"
+    );
+    assert!(edge.x + edge.width <= tessera_ui::Px(488));
+    value.set(0.25);
+    settings.with_mut(|s| {
+        s.origin = Some((80.0, 80.0));
+        s.orientation = SliderOrientation::Vertical;
+        s.reversed = true;
+    });
+    renderer.render_frames(3);
+    let vertical = observed_labels()[0].1;
+    assert_eq!(
+        (vertical.x + vertical.width).0,
+        114,
+        "4dp gap beside the vertical handle"
+    );
+    assert!(
+        vertical.y.0 > 380 && (vertical.y + vertical.height).0 <= 488,
+        "the label follows reversed vertical values and remains inside the window: {vertical:?}"
+    );
+    for kind in [Kind::Single, Kind::Centered] {
+        settings.with_mut(|s| {
+            s.kind = kind;
+            s.orientation = SliderOrientation::Horizontal;
+            s.reversed = false;
+            s.origin = Some((80.0, 80.0));
+        });
+        value.set(0.25);
+        renderer.render_frames(25);
+        assert_eq!(observed_labels().len(), 1);
+        assert_eq!(
+            (observed_labels()[0].1.y + observed_labels()[0].1.height).0,
+            114
+        );
+    }
+    settings.with_mut(|s| {
+        s.kind = Kind::Range;
+        s.start_value_label = Some("Low");
+        s.end_value_label = Some("High");
+    });
+    range.set((0.2, 0.8));
+    renderer.render_frames(25);
+    let labels = observed_labels();
+    assert_eq!(labels.len(), 2);
+    assert!(labels.iter().any(|(label, _)| label == "Low"));
+    assert!(labels.iter().any(|(label, _)| label == "High"));
+    assert_eq!(control(&renderer, "Interval start").value(), Some("Low"));
+    assert_eq!(control(&renderer, "Interval end").value(), Some("High"));
+    settings.with_mut(|s| s.disabled = true);
+    renderer.render_frames(12);
+    assert!(
+        observed_labels().is_empty(),
+        "disabled handles hide both labels"
+    );
+    settings.with_mut(|s| {
+        s.disabled = false;
+        s.removed = true;
+    });
+    renderer.render_frames(3);
+    assert!(
+        observed_labels().is_empty(),
+        "removing the owner unregisters its labels"
+    );
+    settings.with_mut(|s| {
+        s.removed = false;
+        s.kind = Kind::Single;
+        s.value_label = Some("Back");
+    });
+    renderer.render_frames(25);
+    assert_eq!(
+        observed_labels()[0].0,
+        "Back",
+        "a newly mounted slider registers without stale resources"
+    );
+    settings.with_mut(|s| s.indicator = Visibility::Hidden);
+    renderer.render_frames(3);
+    assert!(
+        observed_labels().is_empty(),
+        "switching the feature off releases the overlay request"
+    );
+    settings.set(Settings {
+        origin: Some((80.0, 80.0)),
+        indicator: Visibility::OnInteraction,
+        clip_slider: true,
+        references: true,
+        ..Default::default()
+    });
+    value.set(0.25);
+    FocusManager::current().clear_focus(true);
+    renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(490.0, 490.0));
+    renderer.render_frames(25);
+    assert!(
+        renderer.read_pixels().unwrap() == original,
+        "removing value labels restores the complete original image"
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa1() {
+    crate::test_utils::run_isolated_test(
+        "slider::orientation_tests::slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa1",
+        || check_value_indicators(1),
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa4() {
+    crate::test_utils::run_isolated_test(
+        "slider::orientation_tests::slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa4",
+        || check_value_indicators(4),
     );
 }
