@@ -84,6 +84,7 @@ impl EntryPoint {
         }
 
         init_tracing();
+        #[cfg(debug_assertions)]
         init_deadlock_detection();
         Renderer::run_with_config(self.entry, self.registry.finish(), self.config)
     }
@@ -100,6 +101,7 @@ impl EntryPoint {
     #[cfg(target_os = "android")]
     pub fn run_android(self, android_app: AndroidApp) -> Result<(), winit::error::EventLoopError> {
         init_tracing();
+        #[cfg(debug_assertions)]
         init_deadlock_detection();
         Renderer::run_with_config(self.entry, self.registry.finish(), android_app, self.config)
     }
