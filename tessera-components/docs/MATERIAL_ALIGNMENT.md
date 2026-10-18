@@ -1394,3 +1394,119 @@ binary measured 2.68ms and 4.53ms respectively under different host load. Raw
 samples are retained outside the repository as `split-height-baseline-wall.json`
 and `split-height-after-wall.json`. No substantial regression was observed in
 this smoke check; broader performance conclusions need controlled runs.
+
+## Carousel raster cache performance
+
+The example's carousel uses a 2048x2048 logo, with 16MiB of decoded pixels.
+Comparing shared raster props repeatedly scanned that buffer. Separately
+decoding the same logo on the home and Material pages also left the texture
+cache comparing different allocations with identical content on every draw.
+Browser slow-frame records showed 51-57ms of CPU command encoding and about
+28ms of component construction on some frames, while layout/record work was
+about 1-2ms.
+
+Image equality now checks shared storage before comparing bytes. The texture
+cache records verified allocation aliases, including their image dimensions,
+so an independently decoded duplicate only needs one content verification.
+Weak source references prevent allocation-address reuse without retaining
+duplicate pixel buffers. Frame cleanup and texture eviction remove obsolete
+aliases. Content equality and hash-collision checks remain intact.
+
+Returning after the carousel had been unmounted exposed a second cold-path
+stall: browser records showed a 42.5ms build followed by 621.2ms of encoding.
+The decoded painter now belongs to the page, preserving it while lazy sections
+unmount. Raster textures use the existing 64MiB LRU budget without expiring
+solely after 120 unused frames. This preserves inactive assets under budget;
+memory pressure still evicts the oldest texture not used by the current frame.
+
+The existing 1x/4x GPU scenarios now render independently allocated identical
+images, require reuse of the existing texture, and assert no further pixel
+comparisons over settled frames containing forty instances. They also reshape
+shared pixels into different row dimensions and verify the resulting image.
+Direct equality checks cover matching independent buffers, hash collisions,
+and shared pixels with different dimensions. GPU coverage also hides the images
+for 130 frames and requires recovery without uploading again, then uploads
+80MiB of distinct images and requires budget eviction before recovering the
+original pixels. All 342 component tests, including
+GPU cases, pass; the expanded carousel cases and all 200 component/core rustdoc
+examples also pass.
+
+Release headless comparisons use the complete example at 1316x1307 physical
+pixels, 1.5 density, 4x sampling, and an NVIDIA GeForce RTX 4060 Laptop GPU on
+DX12. Each binary runs the same 279 frames: initial navigation and warmup,
+60 idle frames, a 30-step drag and 60 settling frames, then thirty small
+vertical-scroll steps in each direction with twenty settling frames each.
+The following values are mean milliseconds per frame for the named intervals.
+
+| Measurement | Before | Fixed |
+| --- | ---: | ---: |
+| Idle CPU frame | 15.36 | 2.61 |
+| Drag and settling CPU frame | 22.10 | 5.09 |
+| Vertical-scroll CPU frame | 23.50 | 8.72 |
+| Drag CPU command encoding | 14.37 | 1.03 |
+| Drag GPU timestamp | 0.36 | 0.49 |
+
+GPU readback waits are excluded from CPU frame timings. Host load can change
+wall-clock results; these measurements identify CPU image-cache work rather
+than a GPU or layout bottleneck. The idle PNGs before and after the fix are
+byte-identical. Raw traces and the compact summary are in the ignored
+`target/carousel-perf` directory.
+
+The final release WASM passes dragging and scroll-away/return checks in the
+877x871 preview and a separate 1280x720 browser tab. Loading and wave animations
+run while the carousel is offscreen. Returning preserves the current item and
+does not reproduce the cold-upload pause. The isolated target-action intervals
+contain no slow-frame or error-level console records. The browser capture and
+compact timing summary are retained outside the repository.
+
+The native release probe also exposed startup calls to a debug-only deadlock
+helper. Desktop and Android call sites now use the helper's debug-build gate,
+allowing the release example to compile.
+
+## Date range calendar traversal cost
+
+The range calendar's scroll slowdown was CPU work. Every date previously built
+an interactive transparent surface around its visual surface, and every grid
+cell built a range-fill surface even without a selection. Those nodes increased
+composition, layout traversal, draw recording, and command encoding across the
+visible months. The shared day component now uses a centered layout with the
+existing clickable modifier for its 48dp target, retaining the 40dp visual
+surface. Range backgrounds use a lightweight layout background only for dates
+inside a completed range. The single-date picker shares the day improvement.
+
+Release headless comparisons use the complete example at 1316x1307 physical
+pixels, 1.5 density, 4x sampling, and the same DX12 adapter as the carousel probe.
+Both runs navigate through 22 page-scroll steps, settle for 31 frames, then
+scroll the range calendar by 12 physical pixels per frame for 60 frames and
+settle for another 90 frames. Values below are mean milliseconds over the 60
+calendar-scroll frames. CPU frame totals include profiler metadata collection;
+GPU timestamp readback waits are outside those totals. Draw recording is part
+of the layout-and-record interval rather than an additional frame cost.
+
+| Measurement | Before | Fixed |
+| --- | ---: | ---: |
+| CPU frame with profiling | 28.58 | 9.19 |
+| Component construction | 2.74 | 1.08 |
+| Layout, traversal, input, and draw recording | 13.76 | 4.76 |
+| Draw recording | 4.97 | 1.84 |
+| CPU command encoding | 3.50 | 0.64 |
+
+The representative mid-scroll tree shrinks from 13,022 to 7,796 nodes. The
+initial and final-scroll PNGs are byte-identical between runs. The baseline GPU
+timestamp averages 0.22ms, confirming that GPU execution was not the dominant
+cost. Raw traces and the summary are in the ignored `target/date-range-perf`
+directory. These measurements compare this scene and do not guarantee a frame
+rate across all hosts.
+
+The existing 1x/4x GPU scenarios still cover range bands and caps, disabled
+dates, cross-month selection, scrolling, input mode, year restrictions, and
+resize recovery. They now also click outside the 40dp visual circle but inside
+the 48dp target and require the correct selected date. All 342 component tests
+including GPU scenarios and all 110 component rustdoc examples pass.
+
+The release WASM build and Tessera call-color check pass. A separate 1280x720
+browser session verifies forward/backward month scrolling and selecting an
+October 18–22 range with the expected endpoint circles and band. The isolated
+month-scroll interval has no slow-frame or error records. Initial navigation
+through the date sections still records 42–53ms construction frames, down from
+the earlier 94–133ms observations; cold mounting is not eliminated by this fix.
