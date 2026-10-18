@@ -21,6 +21,7 @@ use crate::{
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
+use axis::{SliderAxis, SliderMeasureScope};
 use interaction::{
     RangeSliderHandleWidths, SliderKeyboardModel, SliderKeyboardModifierNode,
     apply_range_slider_semantics, apply_slider_semantics, handle_range_slider_state,
@@ -37,14 +38,27 @@ use render::{
 
 pub use interaction::RangeSliderController;
 
+mod axis;
 mod interaction;
 mod layout;
+#[cfg(test)]
+mod orientation_tests;
 mod render;
 
 const ACCESSIBILITY_STEP: f32 = 0.05;
 const MIN_TOUCH_TARGET: Dp = Dp(40.0);
 const HANDLE_GAP: Dp = Dp(6.0);
 const STOP_INDICATOR_DIAMETER: Dp = Dp(4.0);
+
+/// The physical axis used by a slider.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum SliderOrientation {
+    /// Values increase from left to right unless the direction is reversed.
+    #[default]
+    Horizontal,
+    /// Values increase from top to bottom unless the direction is reversed.
+    Vertical,
+}
 
 fn tick_fractions(steps: usize) -> Vec<f32> {
     if steps == 0 {
@@ -56,6 +70,7 @@ fn tick_fractions(steps: usize) -> Vec<f32> {
 
 #[derive(Clone, PartialEq)]
 struct RangeThumbAccessibility {
+    axis: SliderAxis,
     key: &'static str,
     label: Option<String>,
     description: Option<String>,
@@ -100,6 +115,7 @@ fn apply_range_thumb_semantics(
     args: &RangeThumbAccessibility,
 ) {
     accessibility.role = Some(Role::Slider);
+    accessibility.orientation = Some(args.axis.accessibility_orientation());
     accessibility.key = Some(args.key.to_string());
     accessibility.label = args.label.clone();
     accessibility.description = Some(
@@ -219,6 +235,7 @@ fn apply_range_thumb_pointer_modifier(
     accessibility: RangeThumbAccessibility,
 ) -> Modifier {
     base.push_keyboard_input(SliderKeyboardModifierNode {
+        axis: accessibility.axis,
         model: accessibility.keyboard_model,
         steps: accessibility.steps,
         disabled: accessibility.disabled,
@@ -246,8 +263,11 @@ impl PointerInputModifierNode for SliderPointerModifierNode {
         } else {
             base_handle_width
         };
-        let resolved_layout =
-            slider_layout_with_handle_width(&self.args, input.computed_data.width, handle_width);
+        let resolved_layout = slider_layout_with_handle_width(
+            &self.args,
+            self.args.axis.main_length(input.computed_data),
+            handle_width,
+        );
         handle_slider_state(
             &mut input,
             self.tap_recognizer,
@@ -296,6 +316,7 @@ fn apply_slider_pointer_modifier(
     };
     modifier
         .push_keyboard_input(SliderKeyboardModifierNode {
+            axis: args.axis,
             model: SliderKeyboardModel::Single(keyboard_value),
             steps: args.steps,
             disabled: args.disabled,
@@ -335,7 +356,7 @@ impl PointerInputModifierNode for CenteredSliderPointerModifierNode {
         let resolved_layout = CenteredSliderLayout {
             base: slider_layout_with_handle_width(
                 &self.args,
-                input.computed_data.width,
+                self.args.axis.main_length(input.computed_data),
                 handle_width,
             ),
         };
@@ -366,6 +387,7 @@ fn apply_centered_slider_pointer_modifier(
     };
     modifier
         .push_keyboard_input(SliderKeyboardModifierNode {
+            axis: args.axis,
             model: SliderKeyboardModel::Single(keyboard_value),
             steps: args.steps,
             disabled: args.disabled,
@@ -392,7 +414,8 @@ struct RangeSliderPointerModifierNode {
 
 impl PointerInputModifierNode for RangeSliderPointerModifierNode {
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let resolved_layout = range_slider_layout(&self.args, input.computed_data.width);
+        let resolved_layout =
+            range_slider_layout(&self.args, self.args.axis.main_length(input.computed_data));
         let base_handle_width = self.args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
         let (start_interacting, end_interacting) = self.state.with(|state| {
@@ -496,6 +519,7 @@ struct Slider {
 impl PartialEq for Slider {
     fn eq(&self, other: &Self) -> bool {
         self.args.size == other.args.size
+            && self.args.axis == other.args.axis
             && self.args.show_stop_indicator == other.args.show_stop_indicator
             && self.args.steps == other.args.steps
             && self.clamped_value == other.clamped_value
@@ -510,15 +534,17 @@ impl tessera_ui::LayoutModifierNode for Slider {
         let component_width = resolve_component_width(&self.args, input.parent_constraint());
         let resolved_layout =
             slider_layout_with_handle_width(&self.args, component_width, self.handle_width);
-        measure_slider(
-            input,
+        let mut scope = SliderMeasureScope::new(input, self.args.axis);
+        let result = measure_slider(
+            &mut scope,
             &mut result,
             resolved_layout,
             self.clamped_value,
-            self.has_inset_icon,
+            self.has_inset_icon && resolved_layout.icon_size.is_some(),
             self.handle_width,
             self.args.steps,
-        )
+        )?;
+        Ok(scope.finish(result))
     }
 }
 
@@ -532,6 +558,7 @@ struct CenteredSlider {
 impl PartialEq for CenteredSlider {
     fn eq(&self, other: &Self) -> bool {
         self.args.size == other.args.size
+            && self.args.axis == other.args.axis
             && self.args.show_stop_indicator == other.args.show_stop_indicator
             && self.args.steps == other.args.steps
             && self.clamped_value == other.clamped_value
@@ -546,14 +573,16 @@ impl tessera_ui::LayoutModifierNode for CenteredSlider {
         let resolved_layout = CenteredSliderLayout {
             base: slider_layout_with_handle_width(&self.args, component_width, self.handle_width),
         };
-        measure_centered_slider(
-            input,
+        let mut scope = SliderMeasureScope::new(input, self.args.axis);
+        let result = measure_centered_slider(
+            &mut scope,
             &mut result,
             resolved_layout,
             self.clamped_value,
             self.handle_width,
             self.args.steps,
-        )
+        )?;
+        Ok(scope.finish(result))
     }
 }
 
@@ -570,6 +599,7 @@ struct RangeSlider {
 impl PartialEq for RangeSlider {
     fn eq(&self, other: &Self) -> bool {
         self.args.size == other.args.size
+            && self.args.axis == other.args.axis
             && self.args.show_stop_indicator == other.args.show_stop_indicator
             && self.args.steps == other.args.steps
             && self.start == other.start
@@ -584,8 +614,9 @@ impl tessera_ui::LayoutModifierNode for RangeSlider {
         let mut result = LayoutResult::default();
         let component_width = resolve_component_width(&self.slider, input.parent_constraint());
         let resolved_layout = range_slider_layout(&self.args, component_width);
-        measure_range_slider(
-            input,
+        let mut scope = SliderMeasureScope::new(input, self.args.axis);
+        let result = measure_range_slider(
+            &mut scope,
             &mut result,
             resolved_layout,
             RangeSliderMeasureArgs {
@@ -595,7 +626,8 @@ impl tessera_ui::LayoutModifierNode for RangeSlider {
                 end_handle_width: self.end_handle_width,
                 steps: self.args.steps,
             },
-        )
+        )?;
+        Ok(scope.finish(result))
     }
 }
 
@@ -672,6 +704,7 @@ pub enum SliderSize {
 /// Arguments for the `slider` component.
 #[derive(Clone, PartialEq)]
 struct SliderConfig {
+    axis: SliderAxis,
     /// Modifier chain applied to the slider subtree.
     pub modifier: Modifier,
     /// The current value of the slider, ranging from 0.0 to 1.0.
@@ -684,6 +717,10 @@ struct SliderConfig {
     pub active_track_color: Color,
     /// The color of the inactive part of the track (background).
     pub inactive_track_color: Color,
+    /// Foreground for tick marks on the active track.
+    pub active_tick_color: Color,
+    /// Foreground for inactive tick marks and stop indicators.
+    pub inactive_tick_color: Color,
     /// The thickness of the handle indicator.
     pub thumb_diameter: Dp,
     /// Color of the handle indicator.
@@ -714,12 +751,15 @@ struct SliderConfig {
 impl Default for SliderConfig {
     fn default() -> Self {
         Self {
+            axis: SliderAxis::default(),
             modifier: Modifier::new(),
             value: 0.0,
             on_change: CallbackWith::default_value(),
             size: SliderSize::default(),
             active_track_color: Color::new(0.0, 0.5, 1.0, 1.0),
             inactive_track_color: Color::new(0.85, 0.9, 0.95, 1.0),
+            active_tick_color: Color::WHITE,
+            inactive_tick_color: Color::BLACK,
             thumb_diameter: Dp(4.0),
             thumb_color: Color::new(0.0, 0.5, 1.0, 1.0),
             disabled: false,
@@ -735,6 +775,7 @@ impl Default for SliderConfig {
 /// Arguments for the `range_slider` component.
 #[derive(Clone, PartialEq)]
 struct RangeSliderConfig {
+    axis: SliderAxis,
     /// Modifier chain applied to the range slider subtree.
     pub modifier: Modifier,
     /// The current range values (start, end), each between 0.0 and 1.0.
@@ -751,6 +792,10 @@ struct RangeSliderConfig {
 
     /// The color of the inactive part of the track (background).
     pub inactive_track_color: Color,
+    /// Foreground for tick marks on the active track.
+    pub active_tick_color: Color,
+    /// Foreground for inactive tick marks and stop indicators.
+    pub inactive_tick_color: Color,
 
     /// The thickness of the handle indicators.
     pub thumb_diameter: Dp,
@@ -786,12 +831,15 @@ struct RangeSliderConfig {
 impl Default for RangeSliderConfig {
     fn default() -> Self {
         Self {
+            axis: SliderAxis::default(),
             modifier: Modifier::new(),
             value: (0.0, 1.0),
             on_change: CallbackWith::default_value(),
             size: SliderSize::default(),
             active_track_color: Color::new(0.0, 0.5, 1.0, 1.0),
             inactive_track_color: Color::new(0.85, 0.9, 0.95, 1.0),
+            active_tick_color: Color::WHITE,
+            inactive_tick_color: Color::BLACK,
             thumb_diameter: Dp(4.0),
             thumb_color: Color::new(0.0, 0.5, 1.0, 1.0),
             disabled: false,
@@ -810,12 +858,15 @@ type SliderArgs = SliderConfig;
 type RangeSliderArgs = RangeSliderConfig;
 
 struct SliderParams {
+    axis: SliderAxis,
     modifier: Option<Modifier>,
     value: f32,
     on_change: Option<CallbackWith<f32>>,
     size: SliderSize,
     active_track_color: Option<Color>,
     inactive_track_color: Option<Color>,
+    active_tick_color: Option<Color>,
+    inactive_tick_color: Option<Color>,
     thumb_diameter: Option<Dp>,
     thumb_color: Option<Color>,
     disabled: bool,
@@ -832,6 +883,8 @@ struct SliderParams {
 struct SliderThemeColors {
     active_track: Color,
     inactive_track: Color,
+    active_tick: Color,
+    inactive_tick: Color,
     thumb: Color,
 }
 
@@ -839,7 +892,9 @@ struct SliderThemeColors {
 fn slider_theme_colors(scheme: &MaterialColorScheme) -> SliderThemeColors {
     SliderThemeColors {
         active_track: scheme.primary,
-        inactive_track: scheme.surface_variant,
+        inactive_track: scheme.secondary_container,
+        active_tick: scheme.on_primary,
+        inactive_tick: scheme.on_secondary_container,
         thumb: scheme.primary,
     }
 }
@@ -847,12 +902,15 @@ fn slider_theme_colors(scheme: &MaterialColorScheme) -> SliderThemeColors {
 fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> SliderConfig {
     let defaults = SliderConfig::default();
     SliderConfig {
+        axis: params.axis,
         modifier: params.modifier.unwrap_or(defaults.modifier),
-        value: params.value,
+        value: snap_fraction(params.value, params.steps),
         on_change: params.on_change.unwrap_or_else(CallbackWith::default_value),
         size: params.size,
         active_track_color: params.active_track_color.unwrap_or(theme.active_track),
         inactive_track_color: params.inactive_track_color.unwrap_or(theme.inactive_track),
+        active_tick_color: params.active_tick_color.unwrap_or(theme.active_tick),
+        inactive_tick_color: params.inactive_tick_color.unwrap_or(theme.inactive_tick),
         thumb_diameter: params.thumb_diameter.unwrap_or(defaults.thumb_diameter),
         thumb_color: params.thumb_color.unwrap_or(theme.thumb),
         disabled: params.disabled,
@@ -868,12 +926,15 @@ fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> 
 }
 
 struct RangeSliderParams {
+    axis: SliderAxis,
     modifier: Option<Modifier>,
     value: (f32, f32),
     on_change: Option<CallbackWith<(f32, f32)>>,
     size: SliderSize,
     active_track_color: Option<Color>,
     inactive_track_color: Option<Color>,
+    active_tick_color: Option<Color>,
+    inactive_tick_color: Option<Color>,
     thumb_diameter: Option<Dp>,
     thumb_color: Option<Color>,
     disabled: bool,
@@ -891,13 +952,18 @@ fn range_slider_config_from_params(
     theme: SliderThemeColors,
 ) -> RangeSliderConfig {
     let defaults = RangeSliderConfig::default();
+    let start = snap_fraction(params.value.0, params.steps);
+    let end = snap_fraction(params.value.1, params.steps).max(start);
     RangeSliderConfig {
+        axis: params.axis,
         modifier: params.modifier.unwrap_or(defaults.modifier),
-        value: params.value,
+        value: (start, end),
         on_change: params.on_change.unwrap_or_else(CallbackWith::default_value),
         size: params.size,
         active_track_color: params.active_track_color.unwrap_or(theme.active_track),
         inactive_track_color: params.inactive_track_color.unwrap_or(theme.inactive_track),
+        active_tick_color: params.active_tick_color.unwrap_or(theme.active_tick),
+        inactive_tick_color: params.inactive_tick_color.unwrap_or(theme.inactive_tick),
         thumb_diameter: params.thumb_diameter.unwrap_or(defaults.thumb_diameter),
         thumb_color: params.thumb_color.unwrap_or(theme.thumb),
         disabled: params.disabled,
@@ -914,7 +980,7 @@ fn range_slider_config_from_params(
 }
 
 fn measure_slider(
-    input: &mut MeasureScope<'_>,
+    input: &mut SliderMeasureScope<'_, '_>,
     result: &mut LayoutResult,
     layout: SliderLayout,
     clamped_value: f32,
@@ -1003,10 +1069,12 @@ fn measure_slider(
         let inactive_start = active_width.0 + layout.handle_gap.0 * 2 + handle_width.0;
         let corner = layout.track_corner_radius.to_px();
         let stop_center_x = Px(inactive_start + inactive_width.0 - corner.0);
-        result.place_child(
-            stop,
-            PxPosition::new(Px(stop_center_x.0 - stop_offset.0), layout.stop_indicator_y),
-        );
+        if layout.contains_marker((Px(inactive_start), inactive_width), stop_center_x.to_f32()) {
+            result.place_child(
+                stop,
+                PxPosition::new(Px(stop_center_x.0 - stop_offset.0), layout.stop_indicator_y),
+            );
+        }
     }
 
     if let Some(icon_id) = icon_id
@@ -1037,6 +1105,14 @@ fn measure_slider(
             tick_id.measure(input, &tick_constraint)?;
             let fraction = i as f32 / (steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * layout.track_total_width.to_f32();
+            let inactive_start = active_width + layout.handle_gap * 2 + handle_width;
+            if (layout.show_stop_indicator && i + 1 == tick_count)
+                || ![(Px::ZERO, active_width), (inactive_start, inactive_width)]
+                    .into_iter()
+                    .any(|segment| layout.contains_marker(segment, tick_center_x.round()))
+            {
+                continue;
+            }
             result.place_child(
                 tick_id,
                 PxPosition::new(
@@ -1058,6 +1134,8 @@ fn measure_slider(
 struct SliderColors {
     active_track: Color,
     inactive_track: Color,
+    active_tick: Color,
+    inactive_tick: Color,
     thumb: Color,
 }
 
@@ -1073,6 +1151,12 @@ fn slider_colors(args: &SliderConfig, scheme: &MaterialColorScheme) -> SliderCol
             inactive_track: scheme
                 .on_surface
                 .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            active_tick: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            inactive_tick: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
             thumb: disabled_thumb,
         };
     }
@@ -1080,6 +1164,8 @@ fn slider_colors(args: &SliderConfig, scheme: &MaterialColorScheme) -> SliderCol
     SliderColors {
         active_track: args.active_track_color,
         inactive_track: args.inactive_track_color,
+        active_tick: args.active_tick_color,
+        inactive_tick: args.inactive_tick_color,
         thumb: args.thumb_color,
     }
 }
@@ -1096,6 +1182,12 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
             inactive_track: scheme
                 .on_surface
                 .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            active_tick: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTAINER),
+            inactive_tick: scheme
+                .on_surface
+                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
             thumb: disabled_thumb,
         };
     }
@@ -1103,6 +1195,8 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
     SliderColors {
         active_track: args.active_track_color,
         inactive_track: args.inactive_track_color,
+        active_tick: args.active_tick_color,
+        inactive_tick: args.inactive_tick_color,
         thumb: args.thumb_color,
     }
 }
@@ -1120,13 +1214,21 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// PageUp and PageDown move up to ten steps. Continuous sliders use 1% keyboard
 /// steps.
 ///
+/// Supplied values are clamped to 0–1 and, for discrete sliders, rounded to the
+/// nearest tick. Ties round upward and NaN resolves to zero. This normalization
+/// does not call `on_change` or modify caller-owned state.
+///
 /// ## Parameters
 ///
 /// - `modifier` — slider placement and size constraints.
 /// - `value`, `on_change` — controlled fraction and change callback.
+/// - `orientation`, `reverse_direction` — physical axis and increasing-value
+///   direction.
 /// - `size`, `thumb_diameter` — track size and handle width.
 /// - `active_track_color`, `inactive_track_color`, `thumb_color` — optional
 ///   colors.
+/// - `active_tick_color`, `inactive_tick_color` — optional tick foregrounds;
+///   inactive tick color also applies to end stops.
 /// - `disabled` — whether pointer, keyboard, and accessibility input are
 ///   disabled.
 /// - `accessibility_label`, `accessibility_description` — accessible control
@@ -1166,8 +1268,12 @@ pub fn slider(
     value: Option<f32>,
     on_change: Option<CallbackWith<f32>>,
     size: Option<SliderSize>,
+    orientation: Option<SliderOrientation>,
+    reverse_direction: Option<bool>,
     active_track_color: Option<Color>,
     inactive_track_color: Option<Color>,
+    active_tick_color: Option<Color>,
+    inactive_tick_color: Option<Color>,
     thumb_diameter: Option<Dp>,
     thumb_color: Option<Color>,
     disabled: Option<bool>,
@@ -1188,12 +1294,18 @@ pub fn slider(
     let steps = steps.unwrap_or(defaults.steps);
     let args = slider_config_from_params(
         SliderParams {
+            axis: SliderAxis {
+                orientation: orientation.unwrap_or_default(),
+                reversed: reverse_direction.unwrap_or(false),
+            },
             modifier,
             value,
             on_change,
             size,
             active_track_color,
             inactive_track_color,
+            active_tick_color,
+            inactive_tick_color,
             thumb_diameter,
             thumb_color,
             disabled,
@@ -1314,9 +1426,9 @@ fn slider_content(
                 for fraction in tick_fractions(args.steps) {
                     let is_active = fraction <= clamped_value;
                     let color = if is_active {
-                        colors.inactive_track
+                        colors.active_tick
                     } else {
-                        colors.active_track
+                        colors.inactive_tick
                     };
                     slider_tick()
                         .diameter(slider_layout.stop_indicator_diameter)
@@ -1334,7 +1446,7 @@ fn slider_content(
 }
 
 fn measure_centered_slider(
-    input: &mut MeasureScope<'_>,
+    input: &mut SliderMeasureScope<'_, '_>,
     result: &mut LayoutResult,
     layout: CenteredSliderLayout,
     value: f32,
@@ -1437,25 +1549,35 @@ fn measure_centered_slider(
 
         let left_stop_x = Px(stop_padding.0);
 
-        result.place_child(
-            left_stop_id,
-            PxPosition::new(
-                Px(left_stop_x.0 - stop_offset.0),
-                layout.base.stop_indicator_y,
-            ),
-        );
+        if layout
+            .base
+            .contains_marker(segments.left_inactive, left_stop_x.to_f32())
+        {
+            result.place_child(
+                left_stop_id,
+                PxPosition::new(
+                    Px(left_stop_x.0 - stop_offset.0),
+                    layout.base.stop_indicator_y,
+                ),
+            );
+        }
 
         // 6. Right Stop
         right_stop_id.measure(input, &stop_constraint)?;
         let right_stop_x = Px(self_width.0 - stop_padding.0);
 
-        result.place_child(
-            right_stop_id,
-            PxPosition::new(
-                Px(right_stop_x.0 - stop_offset.0),
-                layout.base.stop_indicator_y,
-            ),
-        );
+        if layout
+            .base
+            .contains_marker(segments.right_inactive, right_stop_x.to_f32())
+        {
+            result.place_child(
+                right_stop_id,
+                PxPosition::new(
+                    Px(right_stop_x.0 - stop_offset.0),
+                    layout.base.stop_indicator_y,
+                ),
+            );
+        }
     }
 
     if steps > 0 {
@@ -1470,6 +1592,17 @@ fn measure_centered_slider(
             tick_id.measure(input, &tick_constraint)?;
             let fraction = i as f32 / (steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * layout.base.track_total_width.to_f32();
+            if (layout.base.show_stop_indicator && (i == 0 || i + 1 == tick_count))
+                || ![
+                    segments.left_inactive,
+                    segments.active,
+                    segments.right_inactive,
+                ]
+                .into_iter()
+                .any(|segment| layout.base.contains_marker(segment, tick_center_x.round()))
+            {
+                continue;
+            }
             result.place_child(
                 tick_id,
                 PxPosition::new(
@@ -1500,13 +1633,21 @@ fn measure_centered_slider(
 /// PageUp and PageDown move up to ten steps. Continuous sliders use 1% keyboard
 /// steps.
 ///
+/// Supplied values are clamped to 0–1 and, for discrete sliders, rounded to the
+/// nearest tick. Ties round upward and NaN resolves to zero. This normalization
+/// does not call `on_change` or modify caller-owned state.
+///
 /// ## Parameters
 ///
 /// - `modifier` — slider placement and size constraints.
 /// - `value`, `on_change` — controlled fraction and change callback.
+/// - `orientation`, `reverse_direction` — physical axis and increasing-value
+///   direction.
 /// - `size`, `thumb_diameter` — track size and handle width.
 /// - `active_track_color`, `inactive_track_color`, `thumb_color` — optional
 ///   colors.
+/// - `active_tick_color`, `inactive_tick_color` — optional tick foregrounds;
+///   inactive tick color also applies to end stops.
 /// - `disabled` — whether pointer, keyboard, and accessibility input are
 ///   disabled.
 /// - `accessibility_label`, `accessibility_description` — accessible control
@@ -1554,8 +1695,12 @@ pub fn centered_slider(
     value: Option<f32>,
     on_change: Option<CallbackWith<f32>>,
     size: Option<SliderSize>,
+    orientation: Option<SliderOrientation>,
+    reverse_direction: Option<bool>,
     active_track_color: Option<Color>,
     inactive_track_color: Option<Color>,
+    active_tick_color: Option<Color>,
+    inactive_tick_color: Option<Color>,
     thumb_diameter: Option<Dp>,
     thumb_color: Option<Color>,
     disabled: Option<bool>,
@@ -1576,12 +1721,18 @@ pub fn centered_slider(
     let steps = steps.unwrap_or(defaults.steps);
     let args = slider_config_from_params(
         SliderParams {
+            axis: SliderAxis {
+                orientation: orientation.unwrap_or_default(),
+                reversed: reverse_direction.unwrap_or(false),
+            },
             modifier,
             value,
             on_change,
             size,
             active_track_color,
             inactive_track_color,
+            active_tick_color,
+            inactive_tick_color,
             thumb_diameter,
             thumb_color,
             disabled,
@@ -1682,9 +1833,9 @@ fn centered_slider_content(
                 for fraction in tick_fractions(args.steps) {
                     let is_active = fraction >= active_start && fraction <= active_end;
                     let color = if is_active {
-                        colors.inactive_track
+                        colors.active_tick
                     } else {
-                        colors.active_track
+                        colors.inactive_tick
                     };
                     slider_tick()
                         .diameter(centered_layout.base.stop_indicator_diameter)
@@ -1702,7 +1853,7 @@ fn centered_slider_content(
 }
 
 fn measure_range_slider(
-    input: &mut MeasureScope<'_>,
+    input: &mut SliderMeasureScope<'_, '_>,
     result: &mut LayoutResult,
     layout: RangeSliderLayout,
     args: RangeSliderMeasureArgs,
@@ -1817,6 +1968,17 @@ fn measure_range_slider(
             tick_id.measure(input, &tick_constraint)?;
             let fraction = i as f32 / (args.steps as f32 + 1.0);
             let tick_center_x = start_x + fraction * track_total;
+            if (layout.base.show_stop_indicator && (i == 0 || i + 1 == tick_count))
+                || ![
+                    segments.left_inactive,
+                    segments.active,
+                    segments.right_inactive,
+                ]
+                .into_iter()
+                .any(|segment| layout.base.contains_marker(segment, tick_center_x.round()))
+            {
+                continue;
+            }
             result.place_child(
                 tick_id,
                 PxPosition::new(
@@ -1845,24 +2007,34 @@ fn measure_range_slider(
         let corner = layout.base.track_corner_radius.to_px();
         let start_stop_x = corner;
 
-        result.place_child(
-            stop_start_id,
-            PxPosition::new(
-                Px(start_stop_x.0 - stop_offset.0),
-                layout.base.stop_indicator_y,
-            ),
-        );
+        if layout
+            .base
+            .contains_marker(segments.left_inactive, start_stop_x.to_f32())
+        {
+            result.place_child(
+                stop_start_id,
+                PxPosition::new(
+                    Px(start_stop_x.0 - stop_offset.0),
+                    layout.base.stop_indicator_y,
+                ),
+            );
+        }
 
         stop_end_id.measure(input, &stop_constraint)?;
         let end_stop_x = Px(self_width.0 - corner.0);
 
-        result.place_child(
-            stop_end_id,
-            PxPosition::new(
-                Px(end_stop_x.0 - stop_offset.0),
-                layout.base.stop_indicator_y,
-            ),
-        );
+        if layout
+            .base
+            .contains_marker(segments.right_inactive, end_stop_x.to_f32())
+        {
+            result.place_child(
+                stop_end_id,
+                PxPosition::new(
+                    Px(end_stop_x.0 - stop_offset.0),
+                    layout.base.stop_indicator_y,
+                ),
+            );
+        }
     }
 
     result.size = ComputedData {
@@ -1886,13 +2058,22 @@ fn measure_range_slider(
 /// steps. Tab keeps a fixed start-then-end handle order; handles cannot cross
 /// their neighbor.
 ///
+/// Supplied endpoints are clamped to 0–1 and rounded to the nearest discrete
+/// ticks. Ties round upward and NaN resolves to zero. An end below the
+/// normalized start is raised to the start. This normalization does not call
+/// `on_change` or modify caller-owned state.
+///
 /// ## Parameters
 ///
 /// - `modifier` — slider placement and size constraints.
 /// - `value`, `on_change` — controlled interval and change callback.
+/// - `orientation`, `reverse_direction` — physical axis and increasing-value
+///   direction.
 /// - `size`, `thumb_diameter` — track size and handle width.
 /// - `active_track_color`, `inactive_track_color`, `thumb_color` — optional
 ///   colors.
+/// - `active_tick_color`, `inactive_tick_color` — optional tick foregrounds;
+///   inactive tick color also applies to end stops.
 /// - `disabled` — whether pointer, keyboard, and accessibility input are
 ///   disabled.
 /// - `accessibility_label`, `accessibility_description` — accessible control
@@ -1910,7 +2091,7 @@ fn measure_range_slider(
 /// # #[tessera]
 /// # fn component() {
 /// use tessera_components::modifier::ModifierExt as _;
-/// use tessera_components::slider::range_slider;
+/// use tessera_components::slider::{SliderOrientation, range_slider};
 /// use tessera_ui::{Dp, Modifier, remember};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// let range_value = remember(|| (0.2f32, 0.8f32));
@@ -1919,7 +2100,9 @@ fn measure_range_slider(
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(move || {
 /// range_slider()
-///     .modifier(Modifier::new().width(Dp(200.0)))
+///     .modifier(Modifier::new().height(Dp(200.0)))
+///     .orientation(SliderOrientation::Vertical)
+///     .reverse_direction(true)
 ///     .value(range_value.get())
 ///     .on_change(move |(start, end)| {
 ///         range_value.set((start, end));
@@ -1935,8 +2118,12 @@ pub fn range_slider(
     value: Option<(f32, f32)>,
     on_change: Option<CallbackWith<(f32, f32)>>,
     size: Option<SliderSize>,
+    orientation: Option<SliderOrientation>,
+    reverse_direction: Option<bool>,
     active_track_color: Option<Color>,
     inactive_track_color: Option<Color>,
+    active_tick_color: Option<Color>,
+    inactive_tick_color: Option<Color>,
     thumb_diameter: Option<Dp>,
     thumb_color: Option<Color>,
     disabled: Option<bool>,
@@ -1958,12 +2145,18 @@ pub fn range_slider(
     let steps = steps.unwrap_or(defaults.steps);
     let args = range_slider_config_from_params(
         RangeSliderParams {
+            axis: SliderAxis {
+                orientation: orientation.unwrap_or_default(),
+                reversed: reverse_direction.unwrap_or(false),
+            },
             modifier,
             value,
             on_change,
             size,
             active_track_color,
             inactive_track_color,
+            active_tick_color,
+            inactive_tick_color,
             thumb_diameter,
             thumb_color,
             disabled,
@@ -2007,6 +2200,7 @@ fn range_slider_content(
         .controller
         .expect("range_slider_content requires controller to be set");
     let dummy_slider_args = SliderConfig {
+        axis: args.axis,
         size: args.size,
         show_stop_indicator: args.show_stop_indicator,
         ..SliderConfig::default()
@@ -2087,9 +2281,9 @@ fn range_slider_content(
                 for fraction in tick_fractions(args.steps) {
                     let is_active = fraction >= start && fraction <= end;
                     let color = if is_active {
-                        colors.inactive_track
+                        colors.active_tick
                     } else {
-                        colors.active_track
+                        colors.inactive_tick
                     };
                     slider_tick()
                         .diameter(range_layout.base.stop_indicator_diameter)
@@ -2107,6 +2301,7 @@ fn range_slider_content(
                 focus: state.with(|s| s.focus_start),
                 accessibility: RangeThumbAccessibility {
                     key: "range_slider_start_thumb",
+                    axis: args.axis,
                     label: Some(range_thumb_label(&args, true)),
                     description: args.accessibility_description.clone(),
                     fallback_description: "range start",
@@ -2139,6 +2334,7 @@ fn range_slider_content(
                 focus: state.with(|s| s.focus_end),
                 accessibility: RangeThumbAccessibility {
                     key: "range_slider_end_thumb",
+                    axis: args.axis,
                     label: Some(range_thumb_label(&args, false)),
                     description: args.accessibility_description.clone(),
                     fallback_description: "range end",

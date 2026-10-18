@@ -98,6 +98,8 @@ pub struct AccessibilityNode {
     pub min_numeric_value: Option<f64>,
     /// Maximum numeric value
     pub max_numeric_value: Option<f64>,
+    /// Physical orientation of a range-based control.
+    pub orientation: Option<accesskit::Orientation>,
     /// Whether this node can receive focus
     pub focusable: bool,
     /// Whether this node is currently focused
@@ -253,6 +255,7 @@ impl Default for AccessibilityNode {
             numeric_value: None,
             min_numeric_value: None,
             max_numeric_value: None,
+            orientation: None,
             focusable: false,
             focused: false,
             toggled: None,

@@ -1,4 +1,4 @@
-use tessera_ui::{AxisConstraint, Color, Modifier, Px, tessera};
+use tessera_ui::{AxisConstraint, Color, Constraint, Modifier, Px, tessera};
 
 use crate::{
     modifier::ModifierExt,
@@ -13,18 +13,14 @@ pub(super) fn active_segment(layout: Option<SliderLayout>, colors: Option<Slider
     let layout = layout.expect("active_segment requires layout");
     let colors = colors.expect("active_segment requires colors");
     surface()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .constrain(None, Some(AxisConstraint::exact(layout.track_height))),
-        )
+        .modifier(layout.axis.track_modifier(layout.track_height))
         .style(colors.active_track.into())
-        .shape(Shape::RoundedRectangle {
+        .shape(layout.axis.shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
             top_right: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
             bottom_right: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
             bottom_left: RoundedCorner::manual(layout.track_corner_radius, 3.0),
-        })
+        }))
         .child(|| {});
 }
 
@@ -33,18 +29,14 @@ pub(super) fn inactive_segment(layout: Option<SliderLayout>, colors: Option<Slid
     let layout = layout.expect("inactive_segment requires layout");
     let colors = colors.expect("inactive_segment requires colors");
     surface()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .constrain(None, Some(AxisConstraint::exact(layout.track_height))),
-        )
+        .modifier(layout.axis.track_modifier(layout.track_height))
         .style(colors.inactive_track.into())
-        .shape(Shape::RoundedRectangle {
+        .shape(layout.axis.shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
             top_right: RoundedCorner::manual(layout.track_corner_radius, 3.0),
             bottom_right: RoundedCorner::manual(layout.track_corner_radius, 3.0),
             bottom_left: RoundedCorner::manual(layout.inner_corner_radius, 3.0),
-        })
+        }))
         .child(|| {});
 }
 
@@ -57,11 +49,12 @@ pub(super) fn slider_handle(
     let layout = layout.expect("slider_handle requires layout");
     let width = width.expect("slider_handle requires width");
     let colors = colors.expect("slider_handle requires colors");
+    let constraint = layout.axis.constraint(Constraint::new(
+        AxisConstraint::exact(width),
+        AxisConstraint::exact(layout.handle_height),
+    ));
     surface()
-        .modifier(Modifier::new().constrain(
-            Some(AxisConstraint::exact(width)),
-            Some(AxisConstraint::exact(layout.handle_height)),
-        ))
+        .modifier(Modifier::new().constrain(Some(constraint.width), Some(constraint.height)))
         .style(colors.thumb.into())
         .shape(Shape::CAPSULE)
         .child(|| {});
@@ -76,7 +69,7 @@ pub(super) fn stop_indicator(layout: Option<SliderLayout>, colors: Option<Slider
             Some(AxisConstraint::exact(layout.stop_indicator_diameter)),
             Some(AxisConstraint::exact(layout.stop_indicator_diameter)),
         ))
-        .style(colors.active_track.into())
+        .style(colors.inactive_tick.into())
         .shape(Shape::Ellipse)
         .child(|| {});
 }
@@ -103,46 +96,34 @@ pub(super) fn centered_tracks(
     let layout = layout.expect("centered_tracks requires layout");
     let colors = colors.expect("centered_tracks requires colors");
     surface()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
-        )
+        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
         .style(colors.inactive_track.into())
-        .shape(Shape::RoundedRectangle {
+        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-        })
+        }))
         .child(|| {});
     surface()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
-        )
+        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
         .style(colors.active_track.into())
-        .shape(Shape::RoundedRectangle {
+        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-        })
+        }))
         .child(|| {});
     surface()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
-        )
+        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
         .style(colors.inactive_track.into())
-        .shape(Shape::RoundedRectangle {
+        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-        })
+        }))
         .child(|| {});
 }
 
@@ -158,7 +139,7 @@ pub(super) fn centered_stops(
             Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
             Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
         ))
-        .style(colors.active_track.into())
+        .style(colors.inactive_tick.into())
         .shape(Shape::Ellipse)
         .child(|| {});
     surface()
@@ -166,7 +147,7 @@ pub(super) fn centered_stops(
             Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
             Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
         ))
-        .style(colors.active_track.into())
+        .style(colors.inactive_tick.into())
         .shape(Shape::Ellipse)
         .child(|| {});
 }
@@ -183,7 +164,7 @@ pub(super) fn range_stops(
             Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
             Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
         ))
-        .style(colors.active_track.into())
+        .style(colors.inactive_tick.into())
         .shape(Shape::Ellipse)
         .child(|| {});
     surface()
@@ -191,7 +172,7 @@ pub(super) fn range_stops(
             Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
             Some(AxisConstraint::exact(layout.base.stop_indicator_diameter)),
         ))
-        .style(colors.active_track.into())
+        .style(colors.inactive_tick.into())
         .shape(Shape::Ellipse)
         .child(|| {});
 }
@@ -204,45 +185,33 @@ pub(super) fn range_tracks(
     let layout = layout.expect("range_tracks requires layout");
     let colors = colors.expect("range_tracks requires colors");
     surface()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
-        )
+        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
         .style(colors.inactive_track.into())
-        .shape(Shape::RoundedRectangle {
+        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             bottom_left: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-        })
+        }))
         .child(|| {});
     surface()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
-        )
+        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
         .style(colors.active_track.into())
-        .shape(Shape::RoundedRectangle {
+        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             top_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             bottom_right: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
-        })
+        }))
         .child(|| {});
     surface()
-        .modifier(
-            Modifier::new()
-                .fill_max_width()
-                .constrain(None, Some(AxisConstraint::exact(layout.base.track_height))),
-        )
+        .modifier(layout.base.axis.track_modifier(layout.base.track_height))
         .style(colors.inactive_track.into())
-        .shape(Shape::RoundedRectangle {
+        .shape(layout.base.axis.shape(Shape::RoundedRectangle {
             top_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             bottom_left: RoundedCorner::manual(layout.base.inner_corner_radius, 3.0),
             top_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
             bottom_right: RoundedCorner::manual(layout.base.track_corner_radius, 3.0),
-        })
+        }))
         .child(|| {});
 }

@@ -222,6 +222,9 @@ fn traverse_and_collect(
         if let Some(numeric_value) = accessibility_node.numeric_value {
             node.set_numeric_value(numeric_value);
         }
+        if let Some(orientation) = accessibility_node.orientation {
+            node.set_orientation(orientation);
+        }
 
         if let Some(min) = accessibility_node.min_numeric_value {
             node.set_min_numeric_value(min);
@@ -856,6 +859,7 @@ mod tests {
         semantics.max_numeric_value = Some(0.8);
         semantics.numeric_value_step = Some(0.01);
         semantics.numeric_value_jump = Some(0.1);
+        semantics.orientation = Some(accesskit::Orientation::Vertical);
         let slider = append_node(&mut tree, &mut metadatas, Some(root), Some(semantics));
 
         let update = build_tree_update(&tree, &metadatas, root, None, None).unwrap();
@@ -865,6 +869,7 @@ mod tests {
         assert_eq!(slider.max_numeric_value(), Some(0.8));
         assert_eq!(slider.numeric_value_step(), Some(0.01));
         assert_eq!(slider.numeric_value_jump(), Some(0.1));
+        assert_eq!(slider.orientation(), Some(accesskit::Orientation::Vertical));
     }
 
     #[test]

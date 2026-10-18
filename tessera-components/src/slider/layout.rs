@@ -1,6 +1,9 @@
 use tessera_ui::{Dp, ParentConstraint, Px, PxPosition};
 
-use super::{HANDLE_GAP, MIN_TOUCH_TARGET, STOP_INDICATOR_DIAMETER, SliderArgs, SliderSize};
+use super::{
+    HANDLE_GAP, MIN_TOUCH_TARGET, STOP_INDICATOR_DIAMETER, SliderArgs, SliderOrientation,
+    SliderSize, axis::SliderAxis,
+};
 
 struct SliderSpecs {
     track_height: Dp,
@@ -48,6 +51,7 @@ const INNER_CORNER_RADIUS: Dp = Dp(2.0);
 
 #[derive(Clone, Copy, PartialEq)]
 pub(super) struct SliderLayout {
+    pub axis: SliderAxis,
     pub component_width: Px,
     pub component_height: Px,
     pub track_total_width: Px,
@@ -66,6 +70,13 @@ pub(super) struct SliderLayout {
 }
 
 impl SliderLayout {
+    pub fn contains_marker(&self, segment: (Px, Px), center: f32) -> bool {
+        let radius = self.stop_indicator_diameter.to_f32() / 2.0;
+        segment.1 > Px::ZERO
+            && center - radius >= segment.0.to_f32()
+            && center + radius <= (segment.0 + segment.1).to_f32()
+    }
+
     pub fn active_width(&self, value: f32) -> Px {
         let clamped = value.clamp(0.0, 1.0);
         Px::saturating_from_f32(self.track_total_width.to_f32() * clamped)
@@ -149,8 +160,11 @@ pub(super) fn resolve_component_width(
     parent_constraint: ParentConstraint<'_>,
 ) -> Px {
     let fallback = Dp(260.0).to_px();
-    let _ = args;
-    parent_constraint.width().clamp(fallback)
+    match args.axis.orientation {
+        SliderOrientation::Horizontal => parent_constraint.width(),
+        SliderOrientation::Vertical => parent_constraint.height(),
+    }
+    .clamp(fallback)
 }
 
 pub(super) fn fallback_component_width(args: &SliderArgs) -> Px {
@@ -182,6 +196,7 @@ fn slider_layout_from_parts(
     let track_y = Px((component_height.0 - track_height.0) / 2);
 
     SliderLayout {
+        axis: SliderAxis::default(),
         component_width,
         component_height,
         track_total_width,
@@ -205,12 +220,14 @@ pub(super) fn slider_layout_with_handle_width(
     component_width: Px,
     handle_width: Px,
 ) -> SliderLayout {
-    slider_layout_from_parts(
+    let mut layout = slider_layout_from_parts(
         args.size,
         args.show_stop_indicator,
         component_width,
         handle_width,
-    )
+    );
+    layout.axis = args.axis;
+    layout
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -311,14 +328,16 @@ pub(super) fn range_slider_layout(
     args: &super::RangeSliderArgs,
     component_width: Px,
 ) -> RangeSliderLayout {
-    RangeSliderLayout {
+    let mut layout = RangeSliderLayout {
         base: slider_layout_from_parts(
             args.size,
             args.show_stop_indicator,
             component_width,
             args.thumb_diameter.to_px(),
         ),
-    }
+    };
+    layout.base.axis = args.axis;
+    layout
 }
 
 #[cfg(test)]
