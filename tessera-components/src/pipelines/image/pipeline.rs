@@ -1,4 +1,9 @@
-use std::{borrow::Cow, collections::HashMap, num::NonZeroU64, sync::Arc};
+use std::{
+    borrow::Cow,
+    collections::HashMap,
+    num::NonZeroU64,
+    sync::{Arc, Weak},
+};
 
 use encase::{ShaderType, UniformBuffer};
 use glam::Vec4;
@@ -31,6 +36,12 @@ struct ImageResources {
     bytes: u64,
 }
 
+struct ImageAlias {
+    // Keep allocation identities unique without retaining duplicate pixel buffers.
+    pixels: Weak<Vec<u8>>,
+    key: ImageData,
+}
+
 /// Pipeline for rendering images in UI components.
 pub struct ImagePipeline {
     pipeline: wgpu::RenderPipeline,
@@ -46,6 +57,7 @@ pub struct ImagePipeline {
     quad_vertex_buffer: Arc<wgpu::Buffer>,
     quad_index_buffer: Arc<wgpu::Buffer>,
     resources: HashMap<ImageData, ImageResources>,
+    aliases: HashMap<(usize, u32, u32), ImageAlias>,
 }
 
 impl ImagePipeline {
@@ -163,6 +175,7 @@ impl ImagePipeline {
             quad_vertex_buffer: Arc::clone(shared_quad.vertex()),
             quad_index_buffer: Arc::clone(shared_quad.index()),
             resources: HashMap::new(),
+            aliases: HashMap::new(),
         }
     }
 
@@ -173,34 +186,55 @@ impl ImagePipeline {
         queue: &wgpu::Queue,
         data: &ImageData,
     ) -> &ImageResources {
-        if !self.resources.contains_key(data) {
-            let bytes = u64::from(data.width) * u64::from(data.height) * 4;
-            while self.cached_bytes.saturating_add(bytes) > 64 * 1024 * 1024 {
-                let oldest = self
-                    .resources
-                    .iter()
-                    .filter(|(_, resource)| resource.last_used != self.frame)
-                    .min_by_key(|(_, resource)| resource.last_used)
-                    .map(|(data, _)| data.clone());
-                let Some(oldest) = oldest else {
-                    break;
-                };
-                if let Some(resource) = self.resources.remove(&oldest) {
-                    self.cached_bytes = self.cached_bytes.saturating_sub(resource.bytes);
+        let identity = (Arc::as_ptr(&data.data) as usize, data.width, data.height);
+        let key = if let Some(alias) = self.aliases.get(&identity) {
+            alias.key.clone()
+        } else {
+            let key = if let Some((key, _)) = self.resources.get_key_value(data) {
+                key.clone()
+            } else {
+                let bytes = u64::from(data.width) * u64::from(data.height) * 4;
+                while self.cached_bytes.saturating_add(bytes) > 64 * 1024 * 1024 {
+                    let oldest = self
+                        .resources
+                        .iter()
+                        .filter(|(_, resource)| resource.last_used != self.frame)
+                        .min_by_key(|(_, resource)| resource.last_used)
+                        .map(|(data, _)| data.clone());
+                    let Some(oldest) = oldest else {
+                        break;
+                    };
+                    if let Some(resource) = self.resources.remove(&oldest) {
+                        self.cached_bytes = self.cached_bytes.saturating_sub(resource.bytes);
+                    }
+                    self.aliases.retain(|_, alias| {
+                        !Arc::ptr_eq(&alias.key.data, &oldest.data)
+                            || alias.key.width != oldest.width
+                            || alias.key.height != oldest.height
+                    });
                 }
-            }
-            let mut resource = Self::create_image_resources(
-                device,
-                queue,
-                &self.bind_group_layout,
-                &self.sampler,
-                data,
+                let mut resource = Self::create_image_resources(
+                    device,
+                    queue,
+                    &self.bind_group_layout,
+                    &self.sampler,
+                    data,
+                );
+                resource.last_used = self.frame;
+                self.cached_bytes = self.cached_bytes.saturating_add(bytes);
+                self.resources.insert(data.clone(), resource);
+                data.clone()
+            };
+            self.aliases.insert(
+                identity,
+                ImageAlias {
+                    pixels: Arc::downgrade(&data.data),
+                    key: key.clone(),
+                },
             );
-            resource.last_used = self.frame;
-            self.cached_bytes = self.cached_bytes.saturating_add(bytes);
-            self.resources.insert(data.clone(), resource);
-        }
-        let resource = self.resources.get_mut(data).expect("cached image");
+            key
+        };
+        let resource = self.resources.get_mut(&key).expect("cached image");
         resource.last_used = self.frame;
         resource
     }
@@ -327,12 +361,8 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
     fn begin_frame(&mut self, _context: &FrameContext<'_>) {
         self.uniform_used = 0;
         self.frame = self.frame.wrapping_add(1);
-        self.resources.retain(|_, resource| {
-            let keep = self.frame.wrapping_sub(resource.last_used) <= 120;
-            if !keep {
-                self.cached_bytes = self.cached_bytes.saturating_sub(resource.bytes);
-            }
-            keep
+        self.aliases.retain(|_, alias| {
+            alias.pixels.strong_count() > 0 && self.resources.contains_key(&alias.key)
         });
     }
 

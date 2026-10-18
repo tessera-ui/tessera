@@ -42,7 +42,7 @@ use tessera_components::{
     navigation_bar::{navigation_bar, navigation_bar_item},
     navigation_drawer::{navigation_drawer, navigation_drawer_item},
     navigation_rail::{navigation_rail, navigation_rail_item},
-    painter::try_painter_asset,
+    painter::{Painter, try_painter_asset},
     radio_button::{RadioGroupOrientation, radio_button, radio_group},
     row::row,
     search::{docked_search_bar, search_bar},
@@ -315,9 +315,9 @@ fn carousel_demo(
     enabled: State<bool>,
     reverse: State<bool>,
     selected: State<String>,
+    painter: State<Painter>,
 ) {
     let theme = use_context::<MaterialTheme>().expect("material theme");
-    let painter = remember(|| try_painter_asset(crate::res::LOGO_PNG).expect("carousel artwork"));
     let aspect_ratios = remember(|| {
         Arc::<[f32]>::from([
             16.0 / 9.0,
@@ -404,6 +404,8 @@ pub fn material_components_page() {
     let carousel_enabled = remember(|| true);
     let carousel_reverse = remember(|| false);
     let carousel_selected = remember(|| "No item activated".to_string());
+    let carousel_artwork =
+        remember(|| try_painter_asset(crate::res::LOGO_PNG).expect("carousel artwork"));
     let icon_variant = remember(|| IconButtonVariant::Filled);
     let icon_width = remember(IconButtonWidth::default);
     let icon_shape = remember(IconButtonShape::default);
@@ -485,7 +487,7 @@ pub fn material_components_page() {
                     text().content("Additional Material 3 components beyond the basic set.");
                 });
             })
-            .item(move || { carousel_demo(carousel_controller, carousel_variant, carousel_enabled, carousel_reverse, carousel_selected); })
+            .item(move || { carousel_demo(carousel_controller, carousel_variant, carousel_enabled, carousel_reverse, carousel_selected, carousel_artwork); })
             .item(move || { icon_button_demo(icon_variant, icon_width, icon_shape, icon_toggle, icon_enabled, icon_selected, icon_actions); })
             .item(move || {
                 column().children(move || {

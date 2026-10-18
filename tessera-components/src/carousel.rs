@@ -1724,6 +1724,14 @@ mod tests {
         let raster = RASTER.get().expect("raster state");
         let original = raster.get();
         settings.with_mut(|settings| settings.dimmed = false);
+        raster.set(ImageData::from_rgba(Arc::clone(&original.data), 8, 16));
+        renderer.render_frames(3);
+        let reshaped = renderer.read_pixels().expect("reshaped raster pixels");
+        assert_eq!(
+            pixel(&reshaped, 93, 100),
+            pixel(&reshaped, 113, 100),
+            "reshaping shared pixels must use a texture with the new row dimensions"
+        );
         raster.set(ImageData::from_rgba(vec![255, 0, 0, 128], 1, 1));
         renderer.render_frames(3);
         let translucent = renderer.read_pixels().expect("translucent image");
@@ -2085,8 +2093,22 @@ mod tests {
         controller.with_mut(|state| state.jump_to_item(0));
         renderer.render_frames(8);
         assert!(renderer.read_pixels().expect("restored density pixels") == initial);
+        let uploads = crate::pipelines::image::pipeline::TEXTURE_UPLOADS
+            .load(std::sync::atomic::Ordering::Relaxed);
+        let original = raster.get();
+        raster.set(ImageData::from_rgba(
+            original.data.as_ref().clone(),
+            original.width,
+            original.height,
+        ));
         settings.with_mut(|settings| settings.stress = true);
         renderer.render_frames(3);
+        assert_eq!(
+            crate::pipelines::image::pipeline::TEXTURE_UPLOADS
+                .load(std::sync::atomic::Ordering::Relaxed),
+            uploads,
+            "independently decoded identical pixels reuse the existing texture"
+        );
         let repeated = renderer.read_pixels().expect("repeated image instances");
         for index in 0..40usize {
             let x = 10 + (index % 8) * 28;
@@ -2102,7 +2124,13 @@ mod tests {
             .load(std::sync::atomic::Ordering::Relaxed);
         let uploads = crate::pipelines::image::pipeline::TEXTURE_UPLOADS
             .load(std::sync::atomic::Ordering::Relaxed);
+        let comparisons = crate::pipelines::image::command::PIXEL_BUFFER_COMPARISONS.get();
         renderer.render_frames(5);
+        assert_eq!(
+            crate::pipelines::image::command::PIXEL_BUFFER_COMPARISONS.get(),
+            comparisons,
+            "rendering shared raster instances must not scan their pixel buffers"
+        );
         assert_eq!(
             crate::pipelines::image::pipeline::INSTANCE_ALLOCATIONS
                 .load(std::sync::atomic::Ordering::Relaxed),
@@ -2113,6 +2141,41 @@ mod tests {
                 .load(std::sync::atomic::Ordering::Relaxed),
             uploads
         );
+        settings.with_mut(|settings| {
+            settings.stress = false;
+            settings.count = 0;
+        });
+        renderer.render_frames(130);
+        settings.with_mut(|settings| settings.stress = true);
+        renderer.render_frames(3);
+        assert_eq!(
+            crate::pipelines::image::pipeline::TEXTURE_UPLOADS
+                .load(std::sync::atomic::Ordering::Relaxed),
+            uploads,
+            "unused textures stay cached while they fit the byte budget"
+        );
+        assert!(renderer.read_pixels().expect("restored cached image") == repeated);
+        let duplicate = raster.get();
+        for shade in 1..=5_u8 {
+            let mut pixels = vec![0; 2048 * 2048 * 4];
+            for pixel in pixels.chunks_exact_mut(4) {
+                pixel.copy_from_slice(&[shade * 31, 0, 0, 255]);
+            }
+            raster.set(ImageData::from_rgba(pixels, 2048, 2048));
+            renderer.render_frames(2);
+        }
+        let pressure_uploads = crate::pipelines::image::pipeline::TEXTURE_UPLOADS
+            .load(std::sync::atomic::Ordering::Relaxed);
+        assert_eq!(pressure_uploads, uploads + 5);
+        raster.set(duplicate);
+        renderer.render_frames(3);
+        assert_eq!(
+            crate::pipelines::image::pipeline::TEXTURE_UPLOADS
+                .load(std::sync::atomic::Ordering::Relaxed),
+            pressure_uploads + 1,
+            "exceeding the byte budget evicts the oldest unused texture"
+        );
+        assert!(renderer.read_pixels().expect("image after cache eviction") == repeated);
         if let Some(directory) = std::env::var_os("TESSERA_CAROUSEL_QA_DIR") {
             let directory = std::path::PathBuf::from(directory);
             std::fs::create_dir_all(&directory).expect("carousel QA directory");

@@ -5,6 +5,11 @@ use std::{
 
 use tessera_ui::DrawCommand;
 
+#[cfg(test)]
+thread_local! {
+    pub(crate) static PIXEL_BUFFER_COMPARISONS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
 /// Image pixel data for rendering.
 ///
 /// # Fields
@@ -13,9 +18,10 @@ use tessera_ui::DrawCommand;
 /// - `width`: Image width in pixels.
 /// - `height`: Image height in pixels.
 ///
-/// Prefer [`ImageData::from_rgba`] so the cached content hash stays consistent
-/// with the pixel buffer. `Hash` only writes that hash plus dimensions; it does
-/// not walk the pixels again.
+/// Prefer [`ImageData::from_rgba`] to construct image content. Cloning shares
+/// pixel storage; hashing and comparisons between shared clones take constant
+/// time. Independently allocated images compare by dimensions and pixel
+/// content.
 #[derive(Debug, Clone)]
 pub struct ImageData {
     /// Raw RGBA pixel buffer.
@@ -64,6 +70,11 @@ impl PartialEq for ImageData {
         {
             return false;
         }
+        if Arc::ptr_eq(&self.data, &other.data) {
+            return true;
+        }
+        #[cfg(test)]
+        PIXEL_BUFFER_COMPARISONS.set(PIXEL_BUFFER_COMPARISONS.get() + 1);
         self.data.as_ref() == other.data.as_ref()
     }
 }
@@ -87,5 +98,30 @@ impl DrawCommand for ImageCommand {
 
     fn apply_opacity(&mut self, opacity: f32) {
         self.opacity = (self.opacity * opacity).clamp(0.0, 1.0);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::sync::Arc;
+
+    use super::ImageData;
+
+    #[test]
+    fn independently_allocated_images_compare_pixels_even_when_hashes_collide() {
+        let first = ImageData::from_rgba(vec![255, 0, 0, 255], 1, 1);
+        let equal = ImageData::from_rgba(vec![255, 0, 0, 255], 1, 1);
+        assert_eq!(first, equal);
+        let mut collision = ImageData::from_rgba(vec![0, 0, 255, 255], 1, 1);
+        collision.content_hash = first.content_hash;
+        assert_ne!(first, collision);
+    }
+
+    #[test]
+    fn shared_pixels_with_different_dimensions_are_distinct_images() {
+        let pixels = Arc::new(vec![255, 0, 0, 255, 0, 0, 255, 255]);
+        let horizontal = ImageData::from_rgba(Arc::clone(&pixels), 2, 1);
+        let vertical = ImageData::from_rgba(pixels, 1, 2);
+        assert_ne!(horizontal, vertical);
     }
 }
