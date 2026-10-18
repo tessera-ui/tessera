@@ -438,6 +438,8 @@ pub fn material_components_page() {
     let slider_orientation = remember(SliderOrientation::default);
     let slider_reversed = remember(|| false);
     let slider_size = remember(SliderSize::default);
+    let slider_custom_colors = remember(|| false);
+    let slider_stop_indicators = remember(|| true);
     let sliders_disabled = remember(|| false);
     let plain_tooltip = remember(TooltipController::new);
     let rich_tooltip = remember(TooltipController::new);
@@ -529,6 +531,12 @@ pub fn material_components_page() {
                             SliderSize::Large => SliderSize::ExtraLarge,
                             SliderSize::ExtraLarge => SliderSize::ExtraSmall,
                         })).child(move || { text().content(format!("Size: {:?}", slider_size.get())); });
+                        button().tonal().on_click(move || slider_custom_colors.set(!slider_custom_colors.get())).child(move || {
+                            text().content(if slider_custom_colors.get() { "Colors: Tertiary" } else { "Colors: Theme" });
+                        });
+                        button().tonal().on_click(move || slider_stop_indicators.set(!slider_stop_indicators.get())).child(move || {
+                            text().content(if slider_stop_indicators.get() { "Hide end stops" } else { "Show end stops" });
+                        });
                         button().text().on_click(move || {
                             keyboard_slider_value.set(0.5);
                             centered_slider_value.set(0.5);
@@ -539,15 +547,21 @@ pub fn material_components_page() {
                     flow_row().item_spacing(Dp(16.0)).line_spacing(Dp(16.0)).children(move || {
                         column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
                             text().content(format!("Single: {:.0}%", keyboard_slider_value.get() * 100.0));
-                            slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value(keyboard_slider_value.get()).on_change(move |value| keyboard_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Single value");
+                            let scheme = theme.with(|theme| theme.color_scheme.clone());
+                            let custom_colors = slider_custom_colors.get();
+                            slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(keyboard_slider_value.get()).on_change(move |value| keyboard_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Single value");
                         });
                         column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
                             text().content(format!("Centered: {:.0}%", centered_slider_value.get() * 100.0));
-                            centered_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value(centered_slider_value.get()).on_change(move |value| centered_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Centered value");
+                            let scheme = theme.with(|theme| theme.color_scheme.clone());
+                            let custom_colors = slider_custom_colors.get();
+                            centered_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(centered_slider_value.get()).on_change(move |value| centered_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Centered value");
                         });
                         column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
                             text().content(format!("Range: {:.0}% - {:.0}%", slider_range.get().0 * 100.0, slider_range.get().1 * 100.0));
-                            range_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value(slider_range.get()).on_change(move |value| slider_range.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Value interval").start_accessibility_label("Minimum value").end_accessibility_label("Maximum value");
+                            let scheme = theme.with(|theme| theme.color_scheme.clone());
+                            let custom_colors = slider_custom_colors.get();
+                            range_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(slider_range.get()).on_change(move |value| slider_range.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Value interval").start_accessibility_label("Minimum value").end_accessibility_label("Maximum value");
                         });
                     });
                 });
