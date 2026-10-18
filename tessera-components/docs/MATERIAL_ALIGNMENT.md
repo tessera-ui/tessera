@@ -25,7 +25,7 @@ headless layout assertions. Animation and font rasterization need their own chec
 | Icon buttons | `icon_button` | Five sizes, three widths, round/square presets, controlled toggles, vibrant/inherited colors, and 48dp targets implemented; native 1×/4× GPU geometry, fractional density, dynamic colors, input, selection semantics, and resize recovery verified; WASM four styles, three widths, pointer/keyboard activation, long press, disabled input, narrow wrapping, and lazy-list state retention verified; complete normalized reference state snapshots, dark themes, custom-shape states, and motion comparisons |
 | Segmented buttons | `segmented_buttons` | Audit single/multiple selection and states |
 | Split buttons | `split_buttons` | Five-size typography and icon contexts, sized outlines, trailing width priority, optical offsets, pressed/hover/focus shapes, controlled menu expansion, and arrow/elevation motion implemented; native 1×/4× GPU and fractional-density geometry, dynamic props, disabled semantics, and width-priority checks passed; full example menus, resizing, and lazy-list retention exercised on native and WASM; mixed-size/wrapped-label visual-height synchronization covered by 1×/4× native pixel readback at 1.5 density and WASM 390px/877px resize recovery; complete normalized state snapshots, dark themes, and motion-curve comparisons |
-| Date pickers | `date_picker` | Single-date layout/input/year grid tested; implement range/docked variants; complete state screenshots |
+| Date pickers | `date_picker` | Single-date layout/input/year grid tested; range state, continuous virtualized months, inclusive endpoints, restricted dates, and joint manual input implemented; 1×/4× GPU tests cover range bands, published date semantics, cross-month selection, dynamic years, programmatic month requests, draft clearing, and narrow/collapsed resize recovery; implement docked variants and complete modal integration, normalized reference states, and keyboard audits |
 | Time pickers | `time_picker` | Dial/input interaction tested; add/audit landscape layout; complete state screenshots |
 | Loading indicator | `loading_indicator` (new) | Official cubic morph data and spring timing verified; 48 GPU comparisons across eight sequences and 1×/4× sampling meet a 2.5% normalized coverage-error limit; animation/paused frames reuse buffers; native progress semantics and WASM pause/resume plus 0/50/100% progress verified; complete reference-theme screenshots and custom-size/container comparisons |
 | Progress indicators | `progress` | Audit current wave, gap, stop, determinate/indeterminate variants |
@@ -43,16 +43,313 @@ headless layout assertions. Animation and font rasterization need their own chec
 | Dialogs | `dialog` | Audit basic/full-screen variants, actions, dismissal, and focus |
 | Divider | `divider` | Audit horizontal/vertical thickness, insets, and colors |
 | Lists | `list_item` | Audit line counts, leading/trailing content, selection, and Expressive grouping |
-| Menus | `menus` | Anchoring and outside dismissal tested; trigger focus restoration, explicit fallback, disabled trigger recovery, and forward/reverse Tab exit passed native GPU regression; WASM selection, Escape, Enter/Space reopening, Tab exit, narrow-window recovery, and lazy-list retention checked; queued close/navigation barrier covered by native core/order regressions and WASM rapid keyboard sequences; Expressive group surfaces, standard/vibrant colors, position-specific corners, selected menu-radio semantics, trailing-space reservation, and scrolling implemented; shared cascading overlays, branch/chain dismissal, source removal/disable cleanup, and virtualized Tab-exit navigation implemented; shadow overflow, rounded content clipping, and scrolling shadow input bounds GPU-tested; normalized group/state snapshots, morphing, hover switching, compact adaptive layout, and remaining focus audits |
+| Menus | `menus` | Current/saved anchors, reflow, gap-aware side fallback, exact-fit resize, and outside dismissal GPU-tested; trigger focus restoration, explicit fallback, disabled trigger recovery, and forward/reverse Tab exit passed native GPU regression; WASM selection, Escape, Enter/Space reopening, Tab exit, narrow-window recovery, and lazy-list retention checked; queued close/navigation barrier covered by native core/order regressions and WASM rapid keyboard sequences; Expressive group surfaces, standard/vibrant colors, position-specific corners, selected menu-radio semantics, trailing-space reservation, and scrolling implemented; shared cascading overlays, branch/chain dismissal, source removal/disable cleanup, and virtualized Tab-exit navigation implemented; shadow overflow, rounded content clipping, scrolling shadow input bounds, container morphing, and delayed mouse-hover branch switching GPU-tested; normalized group/state snapshots, compact adaptive layout, and remaining focus audits |
 | Radio button | `radio_button` | Audit selection, disabled state, group keyboard behavior, and transitions |
 | Search | `search` | Focus, typing, submit/dismiss fixed; audit expanded/full-screen layouts and state screenshots |
-| Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; implement vertical orientation and optional value indicators; complete five-size and reference state comparisons |
+| Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; vertical orientation and direction reversal now share layout, pointer coordinates, corner mapping, and keyboard behavior across all three variants; implement optional value indicators and complete normalized reference state comparisons |
 | Snackbar | `snackbar` | Audit action/dismiss variants, timing, focus, and live announcement |
 | Switch | `switch` | Audit thumb/icon, checked/unchecked/disabled states, and transitions |
 | Tabs | `tabs` | Audit primary/secondary, fixed/scrolling, indicator, and keyboard navigation |
-| Text fields | `text_field` | Shared typography and outline fixes verified; audit error, supporting text, counters, icons, multiline |
+| Text fields | `text_field` | Shared typography and outline fixes verified; focused clipboard input, accepted/rejected/stale cut completion, and edit/policy pipelines tested natively; WASM full-date paste, copy readback, cut, rapid replacement, cross-field Tab routing, keyboard save, and read-only policy verified; complete delayed-write/lifecycle/cross-browser audits and error, supporting text, counters, icons, multiline comparisons |
 | Toolbars | `toolbar` (new) | Floating horizontal/vertical and collapsed layouts tested; docked 64dp height and 4–32dp spacing tested at 132/140/320/800px widths; pointer/keyboard activation and docked actions verified in WASM; complete transitions, FAB combination, scroll behavior, and full state screenshots |
 | Tooltips | `tooltip` (new) | Plain/rich page-level overlays, placement fallback, delayed hover, focus, touch hold, Escape/outside dismissal, and custom actions implemented; native GPU tests verify focus, descriptions, content/variant updates, pixel restoration, release cancellation, later clicks, and scroll cancellation; WASM rendering, word wrapping, pointer actions, repeated forward/reverse Tab, action activation, dismissal, and trigger re-entry verified; complete reference state snapshots, short-viewport/lifecycle/host coordination, caret and motion audits |
+
+## Slider axes and retained semantics
+
+`slider`, `centered_slider`, and `range_slider` accept `orientation` and
+`reverse_direction`. Horizontal remains the default. Vertical values increase
+from top to bottom by default; reversal changes placement and pointer mapping
+without changing the selected values. This follows the current
+[vertical slider direction contract](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Slider.kt).
+
+The same logical measurement and placement rules serve both axes. Tracks,
+handles, ticks, stop dots, and asymmetric end corners transform together;
+inset glyphs remain upright. Unsupported XS/S inset icons do not insert a
+phantom layout child. Vertical Up/Down and PageUp/PageDown follow screen
+direction, Home/End retain numeric endpoints, and range handles retain their
+logical Tab order and current peer limits. Existing horizontal Up/Down
+adjustments remain supported.
+
+Native GPU scenarios compare all five sizes and both directions against the
+horizontal rendering at 1.5 density and 1x/4x sampling, with channel differences
+of at most 3 across all compared pixels. The same scenarios exercise pointer taps,
+continuous drag samples, peer-crossing prevention, disabled input, zero/one-pixel
+lengths and complete pixel recovery. Accessibility updates publish the physical
+orientation and preserve handle identities when direction changes. The existing
+core numeric-control tree regression also covers orientation publication.
+Density-changing scenarios run in isolated processes.
+
+The no-op XS inset-icon check exposed a cold/cache coverage mismatch in a 6px
+tick: 21 edge pixels changed, with a maximum channel difference of 11. Shape
+antialiasing now uses analytic distance gradients instead of screen-aligned
+finite differences, including ellipse, per-corner curvature, outline, and
+ripple coverage. The integer-positioned tick now retains its sample coverage;
+fractional positions use direct evaluation so a mask baked at an integer origin
+is not filtered into a different shape. The regression retains an exact-image
+comparison for unsupported icons and checks that inset glyphs stay upright.
+
+`AccessibilityNode` has an optional `orientation` field initialized to `None` by
+`Default`. Complete struct literals must include that field; literals using
+`..Default::default()` continue to work.
+
+The full native run passes 324 component tests and 125 core tests with headless,
+testing, and profiling enabled, including opt-in GPU cases. All 197 component/core
+doctests, affected-file import checks, nightly formatting, and the release WASM
+build with call-color validation pass. The final isolated GPU rerun also uses
+previously unseen track dimensions at an explicitly verified fractional origin
+to cover cold-to-warm rendering.
+
+Browser checks verify normal and reversed vertical keys, rapid range-handle Tab
+navigation and peer limits, pointer dragging without scrolling the parent page,
+XL sizing, discrete adjustment, disabled clicks, and 390px reflow with value
+retention after restoring the viewport. Wider example columns keep all three
+labels on one line and align their track origins. The refreshed WASM preview
+has no error-level logs; this is not a complete normalized reference comparison
+or a performance-equivalence result.
+
+Value indicators remain unimplemented. The
+[Expressive specification](https://m3.material.io/components/sliders/specs)
+requires an optional 48x44dp label container. Its placement, clipping, overlay
+order, formatting, interaction visibility, and range-label collisions still
+need implementation and verification. The existing centered-slider inset-icon
+prop also needs an API/behavior audit against the standard-only icon variant.
+Controlled values now use the same nearest-tick normalization as pointer and
+keyboard input. All three variants clamp values to 0–1, resolve NaN to zero,
+and round halfway positions upward. The range end cannot fall below the
+normalized start. Geometry, input comparisons, keyboard state, and published
+numeric values share the normalized values. Updating props does not invoke
+`on_change` or write back to the caller's state. Returning to continuous mode
+restores the caller's original fractions. This follows the default snapping
+contract in the
+[current Material slider state](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Slider.kt).
+
+The existing orientation GPU scenarios also compare off-grid controlled values
+with explicitly supplied valid ticks across the three variants, both axes,
+and both directions. They check exact pixels, published numeric values and
+peer limits, unchanged caller state, midpoint ties, non-finite values, reversed
+endpoints, and continuous/discrete pixel recovery. The new assertion failed
+before the correction: a supplied 0.31 still published 0.31 instead of 0.25
+with three intermediate steps. The example commits its values to quarter steps
+when the user enables discrete mode so its external labels remain synchronized.
+Snapping divides a rounded tick index by the interval count, matching track
+placement and preserving the exact 0 and 1 endpoints. A direct algorithm
+regression covers 40 intermediate steps, where multiplying a rounded index by
+the reciprocal previously produced 0.99999994 at the maximum, as well as
+non-power-of-two fractions and invalid inputs.
+
+The final component rerun passes 325 native unit/GPU tests, including explicit
+1x/4x adapter-dependent cases, and all 107 component doctests. Formatting,
+affected-file imports, the release WASM build, and call-color validation pass.
+Fresh browser checks convert 31%/66%/20–80% to 25%/75%/25–75% on enabling
+discrete mode, retain those values through vertical/reversed configuration,
+exercise keyboard quarter steps and coincident range limits, and reset to valid
+discrete endpoints without browser errors. The restored preview also confirms
+all three menu levels with the corrected rounded shadows.
+
+The color audit also identifies remaining token work: the current default
+inactive track still uses `surface_variant`, while the
+[current slider tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/SliderTokens.kt)
+specify `secondary_container`. Active/inactive tick foregrounds and disabled
+handle compositing require a coordinated native/WASM comparison before this
+component's color states can be considered aligned. The optional value indicator
+uses `inverse_surface`, `inverse_on_surface`, and `label_large`; the same source
+specifies 12dp of bottom spacing above the active handle.
+
+## Date range selection and long-list scrolling
+
+`date_range_picker` adds a continuous month calendar and a two-field input mode.
+It shares the existing 48dp date targets and 40dp visual circles with the single
+date picker. Inclusive endpoints use the primary color; the 40dp range band uses
+secondary-container colors. Weekday labels stay above the scrolling months, and
+the default 1900–2100 year range is virtualized. Month headings retain explicit
+date semantics beneath their group node.
+
+Selecting an earlier date restarts an unfinished range. Selecting after a
+completed range starts a new one, and selecting the same date twice completes
+a one-day range. Programmatic invalid ranges leave the existing selection
+unchanged. Restrictions apply to endpoints. Manual input validates both drafts
+together, including entering the end before the start. Explicit clearing also
+clears invalid drafts that have never produced a selection. The example stores
+the range and confirmation status at page scope.
+
+The 360dp body, 68dp minimum header without host actions, title-large headline,
+40dp range fill, and six 48dp date rows follow the current
+[date picker specification](https://m3.material.io/components/date-pickers/specs)
+and [reference range implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/DateRangePicker.kt).
+Full-screen host actions, docked presentation, normalized reference images,
+locale variants, and complete keyboard behavior remain separate audits.
+
+`LazyListController::scroll_to` applies an explicit logical-position request
+once, including after mounting. Both horizontal and vertical layout regressions
+verify jumping and returning to the start. Shared indexed render slots keep month
+contents inside an explicit Tessera carrier and read current year constraints.
+
+The cross-month GPU probe also exposed an interpolation precision failure at
+large virtualized offsets: an f32 position could stop short of its target and
+leave the animation clock pending indefinitely. Interpolation now accumulates
+in f64 while publishing the existing render position. Native regressions verify
+both axes at large offsets with ordinary and slow smoothing, exact arrival, and
+an idle clock. Direct input and inertia keep their existing position behavior.
+The cross-month probe failed before this correction and passes afterward.
+
+Native GPU checks use 1.5 density with 1× and 4× sampling, real pointer scrolling,
+and IME text commits. They cover disabled endpoints, range-band colors and caps,
+same-month and cross-month selection, mutable year limits, repeated month
+requests, two-way input, invalid-draft clearing, and complete pixel recovery
+after narrow and collapsed viewports. Existing single-date layout checks now
+explicitly select 1× density. The complete component binary passes 316 tests;
+all 107 component doctests, formatting/import checks, and the release WASM
+build with Tessera call-color validation pass.
+
+The first browser rendering exposed a narrower month grid caused by an
+alongside scrollbar. Lazy lists now expose scrollbar visibility, and the range
+calendar hides its bar so all seven 48dp columns align with the fixed weekday
+row. GPU checks compare the outer weekday/date centers and target widths.
+Month-heading insets also have explicit layout assertions. An initial heading
+authored with padding directly on text drew at the unpadded origin; the heading
+now uses a padded container. The shared drawing-bounds correction below also
+covers padding authored directly on a drawing node.
+
+Browser checks confirm joint manual input and Tab/Enter confirmation. A Saturday
+Right-arrow sequence initially moved to the mode toggle; range-calendar left
+and right navigation now request previous/next dates in traversal order. The
+rebuilt WASM preview verifies Saturday-to-Sunday navigation, reverse navigation,
+and five queued Right-arrow presses from October 29 followed by Enter selecting
+November 3. A 390px viewport retains the range without horizontal date overflow;
+switching to input mode and saving publishes the confirmed range. A bulk browser typing
+request delivered only its first character, while individual key presses
+delivered the complete date; the input-tool versus web-input boundary remains
+unattributed, and bulk input is not yet verified by this observation.
+
+The final WASM check also exercised Ctrl+V and a browser paste event with a full
+date. Neither inserted text in the earlier build. The platform clipboard backend
+returned `None` when initialized for WASM, and its read/write methods were
+unimplemented on that target. This confirmed missing browser integration, separate from
+the earlier typing-tool observation. Per-key entry of the end before the start,
+joint error recovery, and Tab/Enter confirmation still pass after the drawing
+correction. The browser clipboard was restored after the synthetic-date probe.
+
+## Browser clipboard integration
+
+Clipboard actions now enter a focused input channel and retain their order
+with keyboard events, including navigation/layout deferral. Paste uses the
+plain text carried by a browser clipboard event. The platform plugin allows
+only clipboard keyboard defaults through Winit's canvas cancellation, restores
+the previous default policy after dispatch, and unregisters its listeners on
+suspend or shutdown. Other DOM input targets are left to the browser.
+
+Copy and cut request an asynchronous browser clipboard write. Cut commits only
+after success and only while the original text version and selection remain
+unchanged. A failed write leaves the editor intact. Paste and accepted cuts use
+the existing input-transform/on-change pipeline and clear composition through
+the normal edit path. Read-only fields allow copying but reject edits; disabled
+fields do not accept clipboard requests. Browser text is event-driven rather
+than pretending a synchronous clipboard getter can read it.
+
+The integration uses the [Clipboard Event API](https://www.w3.org/TR/clipboard-apis/)
+for incoming user actions and browser clipboard writes for outgoing text.
+The native GPU scenario exercises backward Unicode selection, accepted and
+rejected writes, stale cut completion after a newer edit, joint transform and
+change callbacks, focused routing, and read-only/disabled policy through real
+text inputs. All 316 component tests, 122 core tests in the combined
+headless/testing configuration, and 197 component/core doctests pass. The release
+WASM build, call-color validation, formatting, and import checks pass.
+
+Fresh-browser checks verify full-date Ctrl+V and paste events, replacing an
+existing date with Ctrl+A/Ctrl+V, copy readback from the actual browser clipboard,
+cut removal and write readback, and copying across fields with Tab. A rapid
+cut/paste sequence restores the selected date even after seeding the clipboard
+with a different date. The edited range saves through Tab/Space. A read-only
+field copies its value and rejects both cut and paste without altering the
+clipboard. There are no error-level or clipboard-warning logs. Clipboard contents
+are restored after each probe. These observations do not force a delayed pending
+write; delayed writes, suspended owners, browser permission differences, and
+cross-browser lifecycle behavior remain audits.
+
+## Modifier drawing bounds
+
+The range-heading audit exposed a framework-wide drawing error: wrapping layout
+modifiers reserved space and moved child nodes, but recording discarded those
+layout layers. A text node with padding drew its glyphs at the outer origin.
+Backgrounds and borders on either side of padding also saw the same outer size.
+
+Measurement now retains the position and size of each wrapped content layer.
+Drawing reads the bounds at its own position in the modifier chain, and emitted
+scene commands receive that layer's local offset and default size. Explicit
+command offsets remain relative to the active layer, while local render targets
+retain their resource coordinates. Clip geometry uses the active layer origin.
+Layout snapshots restore these bounds alongside child placements. A cached
+placement update replays wrappers around the cached policy result so content
+coordinates can change without remeasuring the policy or its child subtree.
+
+The native 1.5-density GPU regression compares the entire image of a text node
+with two padded backgrounds and an outer border against independently nested
+containers. It failed before the correction at both 1× and 4× sampling and
+passes afterward, including repeated cached frames, changed insets and ink, and
+restoration. A separate regression checks placement-only movement, hiding
+unplaced content, exact pixel restoration, and an unchanged policy measure count.
+This probe also exposed that erased wrapping modifiers compared only full
+equality, bypassing their measurement/placement equality methods. They now
+honor those methods independently, while component props retain full equality
+so a placement-only change still reaches the layout node. Fractional-density probes run in isolated
+child processes; the isolated runner explicitly includes GPU tests so an
+ignored child test cannot silently be skipped.
+
+The wider regression caught scrolling clips authored after the content-offset
+layout. Those clips now precede it and use the viewport bounds. Menus likewise
+apply their custom paint-overflow clip before scrolling, retaining lateral
+shadows while cropping long groups at the viewport edges. All 316 component
+tests, 122 core tests in the combined headless/testing configuration, and 197 component/core doctests pass, including the opt-in
+GPU scenarios. The final release WASM build and call-color check pass. A fresh
+browser load verifies three menu levels, a third-level action followed by full
+dismissal, clipped month scrolling, joint date input, and keyboard confirmation,
+with no error-level logs. Browser navigation still produced warning-level frame
+outliers, including 52–64ms encoding and one-off build/record spikes; these have
+not been attributed and are not a performance-equivalence result. Multiple
+clips and drawing before a clip still need a separate ordering audit.
+
+## Shadow falloff and menu corners
+
+The former elevation approximation used narrow blur kernels without ambient
+spread. At menu elevation (3dp), the native 1.5-density capture was already
+white 4dp outside a straight edge. The resulting concentrated shadow looked
+like a border around adjacent rounded groups.
+
+Surface shadows now use the two profiles from
+[Material Web elevation](https://github.com/material-components/material-web/blob/main/elevation/internal/_elevation.scss),
+interpolated across the 0/1/3/6/8/12dp elevation levels. The Gaussian kernel uses
+the [CSS blur standard deviation](https://drafts.csswg.org/css-backgrounds/#shadow-blur).
+The ambient mask expands independently, including its corners, while the
+directional mask retains the surface bounds. Fractional spread preserves a
+centered half-pixel origin. Layout and hit targets do not expand with the shadow.
+
+Native checks compare the eight group corners against independently positioned
+unclipped surfaces at 1.5 density and 1×/4× sampling. The existing overflow,
+scrolling, dismissal, and cached-pixel recovery scenarios also require a visible
+ambient falloff 4dp outside the edge; the previous captures fail that assertion.
+Density-changing checks run in isolated processes. Complete normalized browser
+shadow comparisons, custom shapes, translucent containers, and dark themes
+remain separate audits.
+
+The wider shadow regression also exposed texture-pool eviction moving a live
+slot while frame resources still retained its index. Reusing an idle slot now
+replaces it in place. Previously, animated elevation across differently sized
+buttons could sample another button's mask and draw a broad, detached outline.
+Both existing button GPU scenarios retain their original visual-container
+assertion and pass with the correction. A direct GPU allocation regression
+reserves a slot, evicts an unrelated idle texture at the pool limit, and verifies
+that the reserved texture and its dimensions remain unchanged.
+
+The native regression run passes all 321 component tests and 125 core tests
+with headless, testing, and profiling enabled, including the opt-in GPU cases.
+All 197 component/core doctests, affected-file import checks, the affected
+crates' nightly formatting check, and the release WASM build with call-color
+validation pass. A fresh browser load verifies all three menu levels, a final
+action dismissing the chain, Enter reopening after focus restoration, and
+Escape dismissal without error-level logs. The browser still reports roughly
+50ms encoding frames during navigation and scrolling, plus a first-frame
+startup spike; these measurements have not been attributed and do not establish
+performance equivalence.
 
 ## Icon button size and state verification
 
@@ -336,6 +633,68 @@ visibility check was added.
 The complete native split-button probe also passes after the anchor changes:
 all five sizes, normal and extra-large menu actions, all four styles, disabled
 geometry and input, narrow-window menu selection, and lazy-list state retention.
+
+Browser verification opens a bottom-edge menu above its trigger in a 600px-high
+viewport, then moves the still-open panel below it when the height grows to
+850px. Repeated height changes retain the panel and keyboard focus. Three open
+levels survive a 390px-wide viewport and restoration, after which Enter selects
+the third-level action exactly once. The viewport override is reset afterward.
+The narrow levels still overlap; this is not compact-layout equivalence.
+
+One earlier height-growth observation closed the panel before the later
+repetitions and native height probes passed. A temporary close-call trace was
+verified against Escape but did not capture another unexpected close, and has
+been removed. That isolated continuity observation remains under audit with the
+earlier focus-restoration episode. Browser warning logs also contain slow encode
+frames; those logs alone do not identify a GPU execution-time bottleneck or
+establish a controlled performance regression.
+
+The final clean WASM build repeats upward fallback in the default 877×871
+viewport. Enter selects the first action once and Enter reopens the menu; all
+three levels are then opened above the bottom-edge trigger. No new error or
+temporary probe log is emitted. No viewport override remains enabled.
+
+## Menu hover intent and container motion
+
+Default menu containers retain their positional 16dp/8dp corners until activated.
+After activation, losing both pointer hover and keyboard focus contracts the
+corners to 8dp. Returning restores the positional shape. The fill, shadow, and
+content clip use the same animated geometry, and explicit shape overrides remain
+fixed. Container motion uses a spring with stiffness 800 and damping ratio 0.6,
+matching the current Expressive Fast Spatial reference. See the
+[menu implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Menu.kt)
+and [motion tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/ExpressiveMotionTokens.kt).
+Keyboard focus containment also keeps its active group rounded.
+
+Actual mouse movement focuses enabled items. A 150ms dwell opens a submenu or
+closes obsolete descendants when hovering a leaf. This delay is an interaction
+choice rather than a claimed Material timing token. Leaving the source, moving
+keyboard focus, disabling it, or closing the parent cancels pending intent.
+Idle pointer dispatch cannot steal keyboard focus or reopen a dismissed branch,
+and touch motion cannot create mouse hover. Only the topmost menu at the pointer
+accepts hover, including when narrow-window cascades overlap.
+
+Native GPU scenarios at 1.5 density and both 1× and 4× sampling exercise corner
+pixels, stable layout bounds, focus restoration, delayed opening and cancellation,
+leaf branch switching, quick ancestor crossings, touch exclusion, custom-shape
+overrides, overlap after resize, and one-click action dismissal. Hover invokes no
+actions, settled pixels remain stable, and closing restores the complete page.
+Appearance snapshots now establish the same hover history before comparing
+restored pixels. Full compact-layout equivalence and normalized reference
+snapshots remain pending.
+
+The complete component library passes 305 tests, including native GPU cases,
+and all 106 component doctests pass. Formatting, import ordering, and whitespace
+checks also pass. The release WASM build passes Tessera call-color validation.
+
+The rebuilt WASM example at 877×871 and 1.5 density verifies three simultaneous
+menu levels with continuous shadow falloff. Clicking a submenu source and
+immediately pressing Left keeps the child closed, even with the pointer left on
+that source. Up moves keyboard focus without the stationary pointer reclaiming
+it. Enter on the third-level action increments the count once and closes the
+chain; another Enter reopens the root from its restored trigger. No browser
+errors are reported. Startup and scrolling still produce frame-time warnings;
+this visual check does not establish a performance improvement or GPU duration.
 
 ## Button size and state verification
 
