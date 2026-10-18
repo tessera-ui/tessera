@@ -2859,6 +2859,7 @@ fn prepare_layout_metadata_for_node(
         Some(pos) => pos,
         None if is_root => PxPosition::ZERO,
         _ => {
+            metadata.base_abs_position = None;
             metadata.abs_position = None;
             metadata.event_clip_rect = None;
             return None;
@@ -2942,6 +2943,19 @@ fn populate_layout_metadata(
             clip_rect,
             current_opacity,
         ) else {
+            if tree
+                .get(node_id)
+                .is_some_and(|node| node.get().role == NodeRole::Layout)
+            {
+                for descendant in node_id.descendants(tree) {
+                    if let Some(metadata) = metadatas.get_mut(&descendant) {
+                        metadata.base_abs_position = None;
+                        metadata.abs_position = None;
+                        metadata.event_clip_rect = None;
+                    }
+                }
+                return;
+            }
             for child in node_id.children(tree) {
                 visit(
                     tree,
@@ -3031,6 +3045,13 @@ fn build_render_graph_inner(
         clip_rect,
         current_opacity,
     ) else {
+        if context
+            .tree
+            .get(node_id)
+            .is_some_and(|node| node.get().role == NodeRole::Layout)
+        {
+            return;
+        }
         for child in node_id.children(context.tree) {
             build_render_graph_inner(context, start_pos, false, child, clip_rect, current_opacity);
         }
@@ -3131,6 +3152,62 @@ mod tests {
 
     fn node(name: &str, instance_logic_id: u64, instance_key: u64) -> ComponentNode {
         node_with_role(name, NodeRole::Layout, instance_logic_id, instance_key)
+    }
+
+    #[test]
+    fn unplaced_layout_subtrees_hide_descendant_geometry_input_and_draw_ops() {
+        #[derive(Clone)]
+        struct Marker;
+
+        impl crate::DrawCommand for Marker {
+            fn apply_opacity(&mut self, _opacity: f32) {}
+        }
+
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        tree.add_node(node_with_role("transparent", NodeRole::Composition, 2, 2));
+        let panel = tree.add_node(node("panel", 3, 3));
+        tree.add_node(node_with_role("content", NodeRole::Composition, 4, 4));
+        let leaf = tree.add_node(node("leaf", 5, 5));
+        for _ in 0..5 {
+            tree.pop_node();
+        }
+        for (id, length) in [(root, 200), (panel, 30), (leaf, 6)] {
+            tree.metadatas.entry_or_default(id).computed_data = Some(ComputedData {
+                width: Px(length),
+                height: Px(length),
+            });
+        }
+        tree.metadatas.entry_or_default(leaf).rel_position = Some(PxPosition::new(Px(4), Px(5)));
+        for position in [Some(20), None, Some(40)] {
+            tree.metadatas.entry_or_default(panel).rel_position =
+                position.map(|position| PxPosition::new(Px(position), Px(position)));
+            let metadata = tree.metadatas.entry_or_default(leaf);
+            metadata.fragment = Default::default();
+            metadata.fragment.push_draw_command(Marker);
+            populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+            let graph = build_render_graph(
+                root,
+                &tree.tree,
+                &mut tree.metadatas,
+                PxSize::new(Px(200), Px(200)),
+            );
+            let expected =
+                position.map(|position| PxPosition::new(Px(position + 4), Px(position + 5)));
+            assert_eq!(tree.metadatas.get(&leaf).unwrap().abs_position, expected);
+            assert_eq!(
+                tree.metadatas.get(&leaf).unwrap().base_abs_position,
+                expected
+            );
+            assert_eq!(
+                resolve_node_input_context(&tree.tree, &tree.metadatas, leaf).is_some(),
+                expected.is_some()
+            );
+            assert_eq!(graph.ops().len(), usize::from(expected.is_some()));
+            if let Some(expected) = expected {
+                assert_eq!(graph.ops()[0].position, expected);
+            }
+        }
     }
 
     #[test]

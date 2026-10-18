@@ -556,11 +556,11 @@ fn apply_layout_placements(
     children: &[NodeId],
     component_node_metadatas: &mut ComponentNodeMetaDatas,
 ) {
-    if placements.is_empty() || children.is_empty() {
-        return;
-    }
     let mut child_map = HashMap::new();
     for child_id in children {
+        let metadata = component_node_metadatas.entry_or_default(*child_id);
+        metadata.rel_position = None;
+        metadata.placement_order = None;
         if let Some(child) = tree.get(*child_id) {
             child_map.insert(child.get().instance_key, *child_id);
         }
@@ -600,9 +600,7 @@ fn restore_cached_subtree_metadata(
         metadata.computed_data = Some(size);
         metadata.draw_layout = entry.draw_layout.clone();
         metadata.layout_cache_hit = true;
-        if let Some(position) = rel_position {
-            metadata.rel_position = Some(position);
-        }
+        metadata.rel_position = rel_position;
     }
 
     let mut child_positions = HashMap::new();
@@ -626,11 +624,9 @@ fn restore_cached_subtree_metadata(
             )
         });
         let (child_rel_position, child_placement_order) = child_layout.unwrap_or((None, None));
-        if let Some(placement_order) = child_placement_order {
-            component_node_metadatas
-                .entry_or_default(child_id)
-                .placement_order = Some(placement_order);
-        }
+        component_node_metadatas
+            .entry_or_default(child_id)
+            .placement_order = child_placement_order;
         if !restore_cached_subtree_metadata(
             child_id,
             child_rel_position,

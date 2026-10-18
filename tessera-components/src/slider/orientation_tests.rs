@@ -633,6 +633,15 @@ fn check_color_states_and_markers(renderer: &mut HeadlessRenderer, settings: Sta
                                 (rect.x0 as usize + x, rect.y0 as usize + y)
                             };
                             let pixels = renderer.read_pixels().unwrap();
+                            for y in rect.y0 as usize..rect.y0 as usize + 7 {
+                                for x in rect.x0 as usize..rect.x0 as usize + 7 {
+                                    assert_eq!(
+                                        pixel(&pixels, x, y),
+                                        pixel(&pixels, 250, 250),
+                                        "unplaced markers must not draw at the control origin: {kind:?}, {orientation:?}, reversed={reversed}, disabled={disabled}"
+                                    );
+                                }
+                            }
                             let reference = |index: usize| {
                                 pixel(&pixels, 307 + (index % 5) * 30, 307 + (index / 5) * 30)
                             };

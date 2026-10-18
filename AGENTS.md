@@ -100,6 +100,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Layout policies measure direct child layout nodes through handle-based APIs such as `MeasureScope`, `LayoutChild`, and `LayoutResult`.
 - `LayoutChild::probe_intrinsic` probes natural content dimensions in isolated metadata and caches. It excludes minimum interactive-size padding while preserving visual sizing and content padding. Use normal `measure` to publish final layout and retain interaction bounds; intrinsic probes must not replace normal measurement.
 - `place_node` is used to position child nodes.
+- Measuring a layout child does not place it. An unplaced layout node hides its entire subtree from drawing and input geometry; composition nodes remain transparent to placed descendants. Cached layouts must clear placements that are no longer present.
 - Default layout: If no layout policy is attached to the current node, `DefaultLayoutPolicy` stacks children at (0,0), and the container size is the minimal bounding rectangle.
 
 ---
