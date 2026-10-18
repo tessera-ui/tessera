@@ -22,7 +22,7 @@ use crate::{
     alignment::CrossAxisAlignment,
     layout_flex::cross_axis_child_constraint,
     lazy_shared::clamp_reported_main,
-    scrollable::{ScrollableController, scrollable},
+    scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
 };
 
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
@@ -55,6 +55,7 @@ const DEFAULT_VIEWPORT_ITEMS: usize = 8;
 pub struct LazyListController {
     scroll: ScrollableController,
     cache: LazyListCache,
+    pending_position: Option<PxPosition>,
 }
 
 impl Default for LazyListController {
@@ -70,6 +71,7 @@ impl LazyListController {
         Self {
             scroll: ScrollableController::new(),
             cache: LazyListCache::default(),
+            pending_position: None,
         }
     }
 
@@ -81,6 +83,32 @@ impl LazyListController {
     /// Returns a mutable reference to the underlying scroll controller.
     pub fn scroll_controller_mut(&mut self) -> &mut ScrollableController {
         &mut self.scroll
+    }
+
+    /// Scrolls to content offsets from the start of each axis, in logical
+    /// pixels.
+    ///
+    /// The request is applied once when the list next builds. Subsequent wheel
+    /// and drag input continues from that position.
+    pub fn scroll_to(&mut self, x: Dp, y: Dp) {
+        let position = PxPosition::new(-Dp(x.0.max(0.0)).to_px(), -Dp(y.0.max(0.0)).to_px());
+        self.scroll.set_scroll_position(position);
+        self.pending_position = Some(position);
+    }
+}
+
+fn restore_scroll_position(
+    controller: State<LazyListController>,
+    viewport: State<ScrollableController>,
+) {
+    let request = controller.with(|controller| controller.pending_position);
+    if request.is_some() {
+        controller.with_mut(|controller| controller.pending_position = None);
+    }
+    let saved = controller.with(|controller| controller.scroll.child_position());
+    let restore = saved != PxPosition::ZERO && !viewport.with(|viewport| viewport.is_positioned());
+    if let Some(position) = request.or_else(|| restore.then_some(saved)) {
+        viewport.with_mut(|viewport| viewport.set_scroll_position(position));
     }
 }
 
@@ -128,6 +156,7 @@ impl LazyListContent {
 ///   parents.
 /// - `scroll_smoothing` — fraction of the remaining distance kept per 60Hz
 ///   frame while animating a scroll step; defaults to the scrollable default.
+/// - `scrollbar_behavior` — scrollbar visibility; visible by default.
 /// - `controller` — optional external controller for scroll position and cache.
 /// - item declarations are appended through builder methods like `item`,
 ///   `items`, and `sticky_header`.
@@ -156,6 +185,7 @@ pub fn lazy_column(
     content_padding: Option<Dp>,
     max_viewport_main: Option<Px>,
     scroll_smoothing: Option<f32>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
     controller: Option<State<LazyListController>>,
     #[prop(skip_setter)] content: Option<LazyListContent>,
 ) {
@@ -171,6 +201,7 @@ pub fn lazy_column(
         content_padding: content_padding.unwrap_or(Dp(0.0)),
         max_viewport_main,
         scroll_smoothing: scroll_smoothing.unwrap_or(crate::scrollable::DEFAULT_SCROLL_SMOOTHING),
+        scrollbar_behavior: scrollbar_behavior.unwrap_or_default(),
         controller,
         scroll_controller,
         slots: content.slots,
@@ -187,6 +218,7 @@ struct LazyListSlotsArgs {
     content_padding: Dp,
     max_viewport_main: Option<Px>,
     scroll_smoothing: f32,
+    scrollbar_behavior: ScrollBarBehavior,
     controller: State<LazyListController>,
     scroll_controller: State<ScrollableController>,
     slots: Vec<LazySlot>,
@@ -198,13 +230,8 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
     // that position once, before the viewport has been positioned;
     // comparing every frame would overwrite a newer wheel or drag offset
     // with the previous frame's value.
-    let saved_position = args.controller.with(|c| c.scroll.child_position());
     let scroll_controller = args.scroll_controller;
-    let should_restore_position =
-        saved_position != PxPosition::ZERO && !scroll_controller.with(|sc| sc.is_positioned());
-    if should_restore_position {
-        scroll_controller.with_mut(|sc| sc.set_scroll_position(saved_position));
-    }
+    restore_scroll_position(args.controller, scroll_controller);
 
     let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
     let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
@@ -217,6 +244,7 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
         .horizontal(false)
         .apply_child_offset(false)
         .scroll_smoothing(args.scroll_smoothing)
+        .scrollbar_behavior(args.scrollbar_behavior)
         .controller(scroll_controller)
         .child(move || {
             // Sync scroll position back to controller
@@ -267,6 +295,7 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
 ///   parents.
 /// - `scroll_smoothing` — fraction of the remaining distance kept per 60Hz
 ///   frame while animating a scroll step; defaults to the scrollable default.
+/// - `scrollbar_behavior` — scrollbar visibility; visible by default.
 /// - `controller` — optional external controller for scroll position and cache.
 /// - item declarations are appended through builder methods like `item`,
 ///   `items`, and `sticky_header`.
@@ -295,6 +324,7 @@ pub fn lazy_row(
     content_padding: Option<Dp>,
     max_viewport_main: Option<Px>,
     scroll_smoothing: Option<f32>,
+    scrollbar_behavior: Option<ScrollBarBehavior>,
     controller: Option<State<LazyListController>>,
     #[prop(skip_setter)] content: Option<LazyListContent>,
 ) {
@@ -310,6 +340,7 @@ pub fn lazy_row(
         content_padding: content_padding.unwrap_or(Dp(0.0)),
         max_viewport_main,
         scroll_smoothing: scroll_smoothing.unwrap_or(crate::scrollable::DEFAULT_SCROLL_SMOOTHING),
+        scrollbar_behavior: scrollbar_behavior.unwrap_or_default(),
         controller,
         scroll_controller,
         slots: content.slots,
@@ -361,6 +392,27 @@ macro_rules! impl_lazy_list_builder {
             {
                 let key_provider = CallbackWith::new(move |idx| hash_key(key_provider(idx)));
                 self.push_slot(LazySlot::items(count, builder, Some(key_provider)));
+                self
+            }
+
+            /// Append indexed items with stable keys and a shared render slot.
+            pub fn items_with_key_shared<K, KF>(
+                mut self,
+                count: usize,
+                key_provider: KF,
+                builder: impl Into<RenderSlotWith<usize>>,
+            ) -> Self
+            where
+                K: Hash,
+                KF: Fn(usize) -> K + Send + Sync + 'static,
+            {
+                self.push_slot(LazySlot::Items(LazyItemsSlot {
+                    count,
+                    builder: builder.into(),
+                    key_provider: Some(CallbackWith::new(move |index| {
+                        hash_key(key_provider(index))
+                    })),
+                }));
                 self
             }
 
@@ -549,13 +601,8 @@ fn lazy_row_slots(args: LazyListSlotsArgs) {
     // that position once, before the viewport has been positioned;
     // comparing every frame would overwrite a newer wheel or drag offset
     // with the previous frame's value.
-    let saved_position = args.controller.with(|c| c.scroll.child_position());
     let scroll_controller = args.scroll_controller;
-    let should_restore_position =
-        saved_position != PxPosition::ZERO && !scroll_controller.with(|sc| sc.is_positioned());
-    if should_restore_position {
-        scroll_controller.with_mut(|sc| sc.set_scroll_position(saved_position));
-    }
+    restore_scroll_position(args.controller, scroll_controller);
 
     let item_spacing = sanitize_spacing(Px::from(args.item_spacing));
     let estimated_item_main = ensure_positive_px(Px::from(args.estimated_item_size));
@@ -568,6 +615,7 @@ fn lazy_row_slots(args: LazyListSlotsArgs) {
         .horizontal(true)
         .apply_child_offset(false)
         .scroll_smoothing(args.scroll_smoothing)
+        .scrollbar_behavior(args.scrollbar_behavior)
         .controller(scroll_controller)
         .child(move || {
             // Sync scroll position back to controller
@@ -1597,7 +1645,7 @@ mod tests {
 
     use tessera_ui::{
         AxisConstraint, ComputedData, Dp, LayoutResult, MeasurementError, Modifier,
-        NoopDrawModifier, Px, PxPosition, State,
+        NoopDrawModifier, Px, PxPosition, RenderSlotWith, State,
         layout::{MeasureScope, layout},
         receive_frame_nanos, remember, tessera,
     };
@@ -1615,6 +1663,69 @@ mod tests {
     thread_local! {
         static COLLAPSED_WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) };
         static COLLAPSED_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
+        static PROGRAMMATIC_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
+    }
+
+    #[tessera]
+    fn programmatic_list_fixture(horizontal: bool) {
+        let controller = remember(LazyListController::new);
+        PROGRAMMATIC_LIST.set(Some(controller));
+        let items = RenderSlotWith::new(|index| {
+            fixed_test_box()
+                .tag(format!("programmatic_{index}"))
+                .width(20)
+                .height(20);
+        });
+        material_theme().child(move || {
+            if horizontal {
+                lazy_row()
+                    .modifier(Modifier::new().size(Dp(100.0), Dp(40.0)))
+                    .controller(controller)
+                    .estimated_item_size(Dp(20.0))
+                    .items_with_key_shared(100, |index| index, items);
+            } else {
+                lazy_column()
+                    .modifier(Modifier::new().size(Dp(40.0), Dp(100.0)))
+                    .controller(controller)
+                    .estimated_item_size(Dp(20.0))
+                    .items_with_key_shared(100, |index| index, items);
+            }
+        });
+    }
+
+    fn check_programmatic_position(horizontal: bool) {
+        tessera_ui::dp::set_scale_factor(1.0);
+        let mut session = tessera_ui::testing::start_layout_test_session(
+            tessera_ui::testing::layout_test(move || {
+                programmatic_list_fixture(horizontal);
+            })
+            .viewport_px(120, 120),
+        );
+        tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+        let controller = PROGRAMMATIC_LIST.get().expect("controller");
+        controller.with_mut(|controller| {
+            controller.scroll_to(
+                if horizontal { Dp(80.0) } else { Dp::ZERO },
+                if horizontal { Dp::ZERO } else { Dp(80.0) },
+            )
+        });
+        tessera_ui::testing::pump_layout_test_session(&mut session, 16_666_667);
+        let snapshot = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
+        snapshot.node("programmatic_4").position(0, 0);
+        controller.with_mut(|controller| controller.scroll_to(Dp::ZERO, Dp::ZERO));
+        tessera_ui::testing::pump_layout_test_session(&mut session, 50_000_001);
+        let snapshot = tessera_ui::testing::pump_layout_test_session(&mut session, 66_666_668);
+        snapshot.node("programmatic_0").position(0, 0);
+    }
+
+    #[test]
+    fn lazy_column_applies_programmatic_positions_after_mounting() {
+        check_programmatic_position(false);
+    }
+
+    #[test]
+    fn lazy_row_applies_programmatic_positions_after_mounting() {
+        check_programmatic_position(true);
     }
 
     #[tessera]

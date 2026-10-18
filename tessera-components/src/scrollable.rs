@@ -147,6 +147,8 @@ pub struct ScrollableController {
     /// Floating-point current position retained between rendered pixel
     /// positions.
     child_position_f32: (f32, f32),
+    // Preserve interpolation steps smaller than f32 precision in long virtualized lists.
+    animation_position: (f64, f64),
     /// The child component size
     child_size: ComputedData,
     /// The visible area size
@@ -187,6 +189,7 @@ impl ScrollableController {
             target_position: PxPosition::ZERO,
             target_position_f32: (0.0, 0.0),
             child_position_f32: (0.0, 0.0),
+            animation_position: (0.0, 0.0),
             child_size: ComputedData::ZERO,
             visible_size: ComputedData::ZERO,
             override_child_size: None,
@@ -266,6 +269,7 @@ impl ScrollableController {
         self.child_position = position;
         self.target_position = position;
         self.child_position_f32 = (position.x, position.y);
+        self.animation_position = (position.x as f64, position.y as f64);
         self.target_position_f32 = (position.x, position.y);
     }
 
@@ -280,7 +284,7 @@ impl ScrollableController {
         self.last_frame_nanos = Some(frame_nanos);
         let old = self.child_position;
         let (target_x, target_y) = self.target_position_f32;
-        let (current_x, current_y) = self.child_position_f32;
+        let (current_x, current_y) = self.animation_position;
         let smoothing = smoothing.clamp(0.0, 0.9999);
         let response = if smoothing == 0.0 {
             f32::INFINITY
@@ -292,20 +296,25 @@ impl ScrollableController {
         } else {
             1.0 - (-response * delta_time).exp()
         };
-        self.child_position_f32 = (
-            current_x + (target_x - current_x) * factor,
-            current_y + (target_y - current_y) * factor,
+        self.animation_position = (
+            current_x + (target_x as f64 - current_x) * factor as f64,
+            current_y + (target_y as f64 - current_y) * factor as f64,
         );
-        if (target_x - self.child_position_f32.0).abs() < 0.01 {
-            self.child_position_f32.0 = target_x;
+        if (target_x as f64 - self.animation_position.0).abs() < 0.01 {
+            self.animation_position.0 = target_x as f64;
         }
-        if (target_y - self.child_position_f32.1).abs() < 0.01 {
-            self.child_position_f32.1 = target_y;
+        if (target_y as f64 - self.animation_position.1).abs() < 0.01 {
+            self.animation_position.1 = target_y as f64;
         }
+        self.child_position_f32 = (
+            self.animation_position.0 as f32,
+            self.animation_position.1 as f32,
+        );
         self.child_position =
             PxPosition::from_f32_xy(self.child_position_f32.0, self.child_position_f32.1);
         if !self.has_pending_animation_frame() {
             self.last_frame_nanos = None;
+            self.animation_position = (target_x as f64, target_y as f64);
         }
         if old != self.child_position {
             self.positioned = true;
@@ -344,6 +353,10 @@ impl ScrollableController {
         if immediate {
             self.child_position_f32 = self.target_position_f32;
             self.child_position = self.target_position;
+            self.animation_position = (
+                self.child_position_f32.0 as f64,
+                self.child_position_f32.1 as f64,
+            );
         }
         consumed
     }
@@ -443,6 +456,7 @@ impl ScrollableController {
         self.target_position_f32 = next;
         self.target_position = PxPosition::from_f32_xy(next.0, next.1);
         self.child_position_f32 = next;
+        self.animation_position = (next.0 as f64, next.1 as f64);
         self.child_position = self.target_position;
         if (next.0 - proposed.0).abs() > f32::EPSILON {
             inertia.velocity_x = 0.0;
@@ -668,6 +682,7 @@ pub(crate) fn apply_scroll_modifier(
     let modifier =
         apply_scrollable_focus_reveal_modifier(modifier, controller, vertical, horizontal);
     modifier
+        .clip_to_bounds()
         .push_layout(ScrollLayoutModifierNode {
             controller,
             vertical,
@@ -675,7 +690,6 @@ pub(crate) fn apply_scroll_modifier(
             apply_child_offset: true,
             has_override,
         })
-        .clip_to_bounds()
 }
 
 /// Internal scroll container: a sized viewport with scrollbars around the
@@ -1225,14 +1239,14 @@ fn scrollable_viewport(
         modifier
     };
     let modifier = modifier
+        .clip_to_bounds()
         .push_layout(ScrollLayoutModifierNode {
             controller,
             vertical,
             horizontal,
             apply_child_offset,
             has_override,
-        })
-        .clip_to_bounds();
+        });
     layout().modifier(modifier).child(move || child.render());
 }
 
@@ -1390,6 +1404,21 @@ mod scroll_tests {
         }
         assert!(!controller.has_pending_animation_frame());
         assert_eq!(controller.child_position.y, -100.0);
+    }
+
+    #[test]
+    fn large_virtual_offsets_reach_the_target_and_stop_the_animation_clock() {
+        for smoothing in [0.75, 0.99] {
+            let mut controller = controller();
+            controller.set_scroll_position(PxPosition::from_f32_xy(-765_072.0, -1_250_500.0));
+            let target = PxPosition::from_f32_xy(-765_576.0, -1_251_004.0);
+            controller.set_target_position(target);
+            for frame in 1..2000 {
+                controller.update_scroll_position(frame * 16_666_667, smoothing);
+            }
+            assert_eq!(controller.child_position(), target);
+            assert!(!controller.has_pending_animation_frame());
+        }
     }
 
     #[test]
@@ -1684,9 +1713,7 @@ mod scroll_tests {
 
             let controller = CONTROLLER.with(|slot| (*slot.borrow()).expect("controller"));
             controller.with_mut(|c| {
-                c.child_position_f32 = (0.0, -40.0);
-                c.child_position = PxPosition::new(Px(0), Px(-40));
-                c.target_position_f32 = (0.0, -40.0);
+                c.set_scroll_position(PxPosition::new(Px(0), Px(-40)));
             });
 
             let snapshot = pump_layout_test_session(&mut session, 16_666_667);
