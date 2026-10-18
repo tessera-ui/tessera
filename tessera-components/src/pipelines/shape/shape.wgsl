@@ -69,7 +69,7 @@ fn vs_main(in: VertexInput) -> VertexOutput {
 // b: half-size of the box
 // r: corner radii (tl, tr, br, bl) -> (x, y, z, w)
 // k: exponent for p-norm per corner
-fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: vec4f, k: vec4f) -> f32 {
+fn sample_g2_rounded_box(p: vec2f, b: vec2f, r: vec4f, k: vec4f) -> vec3f {
     // Select radius based on the quadrant p is in.
     // In our local coordinates, p.y is negative for the top half and positive for the bottom half.
     var radius: f32;
@@ -108,30 +108,41 @@ fn sdf_g2_rounded_box(p: vec2f, b: vec2f, r: vec4f, k: vec4f) -> f32 {
         }
     }
 
-    return dist_corner_shape + min(max(q.x, q.y), 0.0) - radius;
+    var gradient: vec2f;
+    if dist_corner_shape > 0.0 {
+        gradient = pow(vec2f(v_x, v_y) / dist_corner_shape, vec2f(corner_k - 1.0));
+    } else if q.x > q.y {
+        gradient = vec2f(1.0, 0.0);
+    } else {
+        gradient = vec2f(0.0, 1.0);
+    }
+    return vec3f(dist_corner_shape + min(max(q.x, q.y), 0.0) - radius, gradient * sign(p));
 }
 
 fn is_ellipse(corner_radii: vec4f) -> bool {
     return corner_radii.x < 0.0;
 }
 
-fn sdf_shape(p: vec2f, half_size: vec2f, corner_radii: vec4f, corner_g2: vec4f) -> f32 {
+fn sample_shape(p: vec2f, half_size: vec2f, corner_radii: vec4f, corner_g2: vec4f) -> vec3f {
     if is_ellipse(corner_radii) {
-        return sdf_ellipse(p, half_size);
+        return sample_ellipse(p, half_size);
     }
-    return sdf_g2_rounded_box(p, half_size, corner_radii, corner_g2);
+    return sample_g2_rounded_box(p, half_size, corner_radii, corner_g2);
 }
 
 // SDF for an ellipse
 // p: point to sample
 // r: radii of the ellipse
-fn sdf_ellipse(p: vec2f, r: vec2f) -> f32 {
+fn sample_ellipse(p: vec2f, r: vec2f) -> vec3f {
     if r.x <= 0.0 || r.y <= 0.0 {
         // Return a large value to prevent rendering if radii are invalid
-        return 1.0e6;
+        return vec3f(1.0e6, 0.0, 0.0);
     }
     // Scales the distance to be in pixel units, which is important for anti-aliasing.
-    return (length(p / r) - 1.0) * min(r.x, r.y);
+    let scaled_length = length(p / r);
+    let scale = min(r.x, r.y);
+    let gradient = scale * p / (r * r * max(scaled_length, EPS_DISCARD));
+    return vec3f((scaled_length - 1.0) * scale, gradient);
 }
 
 fn aa_mask(dist: f32, aa: f32) -> f32 {
@@ -167,8 +178,10 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var final_color: vec4f;
 
-    let dist = sdf_shape(p_object, half_size, instance.corner_radii, instance.corner_g2);
-    let dist_aa = max(fwidth(dist), EPS_DISCARD);
+    let shape_sample = sample_shape(p_object, half_size, instance.corner_radii, instance.corner_g2);
+    let dist = shape_sample.x;
+    // Analytic gradients keep coverage independent of screen derivative-quad alignment.
+    let dist_aa = max(abs(shape_sample.y) + abs(shape_sample.z), EPS_DISCARD);
     let shape_mask = aa_mask(dist, dist_aa);
     let ripple_center = instance.ripple_params.xy;
     let ripple_radius = instance.ripple_params.z;
@@ -179,7 +192,8 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let dist_to_center_pixel = distance(p_pixel, center_pixel);
     let min_dimension = min(size.x, size.y);
     let dist_norm = dist_to_center_pixel / max(min_dimension, 1.0);
-    let aa_ripple = max(fwidth(dist_norm), EPS_DISCARD);
+    let delta = p_pixel - center_pixel;
+    let aa_ripple = max((abs(delta.x) + abs(delta.y)) / (max(dist_to_center_pixel, EPS_DISCARD) * max(min_dimension, 1.0)), EPS_DISCARD);
 
     if mode == MODE_FILL {
         if shape_mask <= EPS_DISCARD {

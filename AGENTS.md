@@ -111,6 +111,7 @@ This document defines how You should assist in the Tessera project to ensure cod
   - **DrawablePipeline**/**ComputablePipeline**: GPU rendering/compute logic
   - **PipelineRegistry**: Registers all pipelines at startup
 - Components set draw/compute commands through `RenderInput`, `RenderMetadataMut`, and render policies
+- Draw commands use the measured bounds at their position in the modifier chain. Layout snapshots must preserve wrapped content bounds, including their local origins, when restoring cached layouts or updating placements.
 - The basic components crate provides common pipelines, which must be registered at entry (e.g., `register_pipelines`)
 
 ### Shape clipping

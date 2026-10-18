@@ -14,8 +14,8 @@ use crate::{
     ComputeResourceManager, ComputedData, Constraint, MeasurementError, ParentConstraint, Px,
     RenderSlot,
     component_tree::{
-        ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, LayoutContext,
-        LayoutDiagnosticsCollector, LayoutSnapshotMap, measure_node,
+        ComponentNodeMetaData, ComponentNodeMetaDatas, ComponentNodeTree, DrawLayoutBounds,
+        LayoutContext, LayoutDiagnosticsCollector, LayoutSnapshotMap, measure_node,
     },
     modifier::{
         DrawModifierContent, DrawModifierContext, DrawModifierNode, LayoutModifierNode, Modifier,
@@ -663,6 +663,7 @@ impl LayoutPlacementTarget for PlacementChild<'_> {
 pub struct RenderInput<'a> {
     current_node_id: crate::NodeId,
     metadatas: &'a mut ComponentNodeMetaDatas,
+    pub(crate) draw_bounds: DrawLayoutBounds,
     /// Mutable GPU compute resources for the current frame.
     pub compute_resource_manager: &'a mut ComputeResourceManager,
     /// GPU device for issuing render-side allocations.
@@ -676,9 +677,17 @@ impl<'a> RenderInput<'a> {
         compute_resource_manager: &'a mut ComputeResourceManager,
         gpu: &'a wgpu::Device,
     ) -> Self {
+        let size = metadatas
+            .get(&current_node_id)
+            .and_then(|metadata| metadata.computed_data)
+            .unwrap_or(ComputedData::ZERO);
         Self {
             current_node_id,
             metadatas,
+            draw_bounds: DrawLayoutBounds {
+                position: PxPosition::ZERO,
+                size,
+            },
             compute_resource_manager,
             gpu,
         }
@@ -690,19 +699,56 @@ impl<'a> RenderInput<'a> {
             .metadatas
             .get_mut(&self.current_node_id)
             .expect("Metadata for current node must exist during record");
-        RenderMetadataMut { metadata }
+        RenderMetadataMut {
+            metadata,
+            draw_bounds: self.draw_bounds,
+        }
+    }
+
+    pub(crate) fn recorded_op_count(&self) -> usize {
+        self.metadatas
+            .get(&self.current_node_id)
+            .expect("record metadata")
+            .fragment
+            .ops()
+            .len()
+    }
+
+    pub(crate) fn draw_layers(&self) -> &[Option<DrawLayoutBounds>] {
+        self.metadatas
+            .get(&self.current_node_id)
+            .expect("record metadata")
+            .draw_layout
+            .layers
+            .as_deref()
+            .unwrap_or_default()
+    }
+
+    pub(crate) fn finish_draw_range(&mut self, start: usize, bounds: DrawLayoutBounds) {
+        let metadata = self
+            .metadatas
+            .get_mut(&self.current_node_id)
+            .expect("record metadata");
+        for op in metadata.fragment.ops_mut().iter_mut().skip(start) {
+            if op.write == Some(crate::render_graph::RenderResourceId::SceneColor) {
+                op.position_override =
+                    Some(bounds.position + op.position_override.unwrap_or(PxPosition::ZERO));
+            }
+            op.size_override.get_or_insert(bounds.size.into());
+        }
     }
 }
 
 /// Mutable render metadata available during the record pass.
 pub struct RenderMetadataMut<'a> {
     metadata: &'a mut ComponentNodeMetaData,
+    draw_bounds: DrawLayoutBounds,
 }
 
 impl RenderMetadataMut<'_> {
-    /// Returns the computed size of the current node.
+    /// Returns the measured size at the current drawing layer.
     pub fn computed_data(&self) -> Option<ComputedData> {
-        self.metadata.computed_data
+        self.metadata.computed_data.map(|_| self.draw_bounds.size)
     }
 
     /// Returns the render fragment for the current node.
@@ -713,25 +759,36 @@ impl RenderMetadataMut<'_> {
     /// Enables or disables child clipping for the current node.
     pub fn set_clips_children(&mut self, clips_children: bool) {
         self.metadata.clips_children = clips_children;
+        if clips_children
+            && self.metadata.clip_region.is_none()
+            && (self.draw_bounds.position != PxPosition::ZERO
+                || self.metadata.computed_data != Some(self.draw_bounds.size))
+        {
+            self.set_clip_shape(crate::ClipShape::RoundedRectangle {
+                radii: [0.0; 4],
+                exponents: [2.0; 4],
+            });
+        }
     }
 
     /// Clips the node and its descendants to a shape within its bounds.
     pub fn set_clip_shape(&mut self, shape: crate::ClipShape) {
         self.metadata.clips_children = true;
         let size = self
-            .metadata
-            .computed_data
+            .computed_data()
             .expect("shape clipping requires measured bounds");
         self.metadata.clip_region = Some(crate::ClipRegion {
-            position: crate::PxPosition::ZERO,
+            position: self.draw_bounds.position,
             size: [size.width.to_f32(), size.height.to_f32()],
             shape,
         });
     }
 
-    /// Clips content to a fractional shape relative to this node's origin.
-    pub fn set_clip_region(&mut self, region: crate::ClipRegion) {
+    /// Clips content to a fractional shape relative to the current drawing
+    /// layer.
+    pub fn set_clip_region(&mut self, mut region: crate::ClipRegion) {
         self.metadata.clips_children = true;
+        region.position = region.position + self.draw_bounds.position;
         self.metadata.clip_region = Some(region);
     }
 

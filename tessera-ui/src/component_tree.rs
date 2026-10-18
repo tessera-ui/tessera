@@ -50,6 +50,32 @@ pub(crate) struct LayoutSnapshotEntry {
     pub child_constraints: Vec<Constraint>,
     pub child_sizes: Vec<ComputedData>,
     pub intrinsic_dependencies: bool,
+    pub draw_layout: NodeDrawLayout,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct DrawLayoutBounds {
+    pub position: PxPosition,
+    pub size: ComputedData,
+}
+
+#[derive(Clone)]
+pub(crate) struct NodeDrawLayout {
+    // Cached frames share immutable layer bounds instead of allocating a copy
+    // for every restored node.
+    pub layers: Option<Arc<[Option<DrawLayoutBounds>]>>,
+    pub base_constraint: Constraint,
+    pub base_size: ComputedData,
+}
+
+impl Default for NodeDrawLayout {
+    fn default() -> Self {
+        Self {
+            layers: None,
+            base_constraint: Constraint::NONE,
+            base_size: ComputedData::ZERO,
+        }
+    }
 }
 
 #[derive(Default)]
@@ -2633,8 +2659,11 @@ fn record_layout_commands(
     gpu: &wgpu::Device,
 ) {
     struct DrawModifierChainContent<'a> {
-        draw_nodes: &'a [Arc<dyn crate::modifier::DrawModifierNode>],
+        draw_nodes: &'a [(Arc<dyn crate::modifier::DrawModifierNode>, DrawLayoutBounds)],
         node_draw: &'a dyn crate::modifier::DrawModifierNode,
+        node_bounds: Option<DrawLayoutBounds>,
+        parent_bounds: DrawLayoutBounds,
+        pending_start: usize,
     }
 
     struct TerminalDrawContent;
@@ -2645,21 +2674,33 @@ fn record_layout_commands(
 
     impl DrawModifierContent for DrawModifierChainContent<'_> {
         fn draw(&mut self, input: &mut RenderInput<'_>) {
-            if let Some((draw_modifier, remaining)) = self.draw_nodes.split_first() {
+            input.finish_draw_range(self.pending_start, self.parent_bounds);
+            if let Some(((draw_modifier, bounds), remaining)) = self.draw_nodes.split_first() {
+                input.draw_bounds = *bounds;
+                let start = input.recorded_op_count();
                 let mut draw_ctx = DrawModifierContext {
                     render_input: input,
                 };
                 let mut next = DrawModifierChainContent {
                     draw_nodes: remaining,
                     node_draw: self.node_draw,
+                    node_bounds: self.node_bounds,
+                    parent_bounds: *bounds,
+                    pending_start: start,
                 };
                 draw_modifier.draw(&mut draw_ctx, &mut next);
-            } else {
+                input.finish_draw_range(next.pending_start, *bounds);
+            } else if let Some(bounds) = self.node_bounds {
+                input.draw_bounds = bounds;
+                let start = input.recorded_op_count();
                 let mut draw_ctx = DrawModifierContext {
                     render_input: input,
                 };
                 self.node_draw.draw(&mut draw_ctx, &mut TerminalDrawContent);
+                input.finish_draw_range(start, bounds);
             }
+            input.draw_bounds = self.parent_bounds;
+            self.pending_start = input.recorded_op_count();
         }
     }
 
@@ -2688,18 +2729,30 @@ fn record_layout_commands(
         }
         let mut input = RenderInput::new(node_id, metadatas, compute_resource_manager, gpu);
         let node_ref = node.get();
-        let draw_nodes: Vec<_> = node_ref
-            .modifier
-            .ordered_actions()
-            .into_iter()
-            .filter_map(|action| match action {
-                OrderedModifierAction::Draw(node) => Some(node),
-                _ => None,
-            })
-            .collect();
+        let mut bounds = Some(input.draw_bounds);
+        let mut layer_index = 0;
+        let mut draw_nodes = Vec::new();
+        let layers = input.draw_layers();
+        for action in node_ref.modifier.ordered_actions() {
+            match action {
+                OrderedModifierAction::Layout(_) => {
+                    bounds = layers.get(layer_index).copied().flatten();
+                    layer_index += 1;
+                }
+                OrderedModifierAction::Draw(node) => {
+                    if let Some(bounds) = bounds {
+                        draw_nodes.push((node, bounds));
+                    }
+                }
+                _ => {}
+            }
+        }
         let mut content = DrawModifierChainContent {
             draw_nodes: &draw_nodes,
             node_draw: node_ref.draw_node.as_ref(),
+            node_bounds: bounds,
+            parent_bounds: input.draw_bounds,
+            pending_start: 0,
         };
         content.draw(&mut input);
         stack.extend(node_id.children(tree));

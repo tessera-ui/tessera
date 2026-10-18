@@ -305,3 +305,7 @@ mod tests {
         assert_eq!(restored.height, narrow.height);
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "text/drawing_tests.rs"]
+mod drawing_tests;

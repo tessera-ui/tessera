@@ -287,9 +287,14 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         });
 
         let mut cache_entries = Vec::with_capacity(context.commands.len());
-        for (command, size, _) in context.commands.iter() {
-            let entry =
-                self.get_or_create_cache_entry(context.device, context.queue, command, *size);
+        for (command, size, position) in context.commands.iter() {
+            // Fractional placement must evaluate coverage at the destination
+            // samples rather than resample a mask baked at an integer origin.
+            let entry = if position.x.fract() == 0.0 && position.y.fract() == 0.0 {
+                self.get_or_create_cache_entry(context.device, context.queue, command, *size)
+            } else {
+                None
+            };
             cache_entries.push(entry);
         }
 

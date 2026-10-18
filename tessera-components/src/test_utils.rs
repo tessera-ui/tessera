@@ -7,7 +7,13 @@ pub(crate) fn run_isolated_test(name: &str, test: impl FnOnce()) {
     }
 
     let output = Command::new(env::current_exe().expect("test executable"))
-        .args(["--exact", name, "--test-threads=1", "--nocapture"])
+        .args([
+            "--exact",
+            name,
+            "--include-ignored",
+            "--test-threads=1",
+            "--nocapture",
+        ])
         .env("TESSERA_ISOLATED_TEST", name)
         .output()
         .expect("isolated test should start");

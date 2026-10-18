@@ -63,8 +63,9 @@ pub struct DrawModifierContext<'a, 'b> {
 /// layout node (the measure policy applied at the innermost layer) and by
 /// wrapping layout modifiers. A node overrides either [`Self::measure`] (pure
 /// measure, applied at the innermost layer) or [`Self::measure_content`]
-/// (wrapping measure), and may override [`Self::place_children`] to participate
-/// in the placement-only relayout pass against cached child sizes.
+/// (wrapping measure). An innermost node may override [`Self::place_children`]
+/// to update placements against cached child sizes. Wrapping modifiers can be
+/// measured again around that cached result to update their content bounds.
 pub trait LayoutModifierNode: Send + Sync + 'static {
     /// Computes layout for this node when it is applied at the innermost layer.
     fn measure(&self, _scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
@@ -102,10 +103,11 @@ pub trait LayoutModifierNode: Send + Sync + 'static {
 
     /// Recomputes child placements from cached child sizes.
     ///
-    /// `inner` holds the placements produced by the wrapped content. A node
-    /// applied at the innermost layer derives placements from the cached child
-    /// sizes in `scope`; a wrapping modifier transforms `inner`. Returning
-    /// `None` means this node cannot place without re-measuring.
+    /// An innermost layout node derives placements from the cached child sizes
+    /// in `scope`. Returning `None` means it cannot place without re-measuring.
+    /// Wrapping modifiers use [`Self::measure_content`] around the cached
+    /// result so drawing receives the same content bounds as child
+    /// placement.
     fn place_children(
         &self,
         _scope: &PlacementScope<'_>,
@@ -125,6 +127,10 @@ pub trait PlacementModifierNode: Send + Sync + 'static {
 /// A node-local draw modifier.
 pub trait DrawModifierNode: Send + Sync + 'static {
     /// Records drawing behavior around the wrapped content.
+    ///
+    /// Drawing uses the content bounds at this position in the modifier chain.
+    /// For example, a background before padding includes that padding, while a
+    /// background after padding covers only the inner content.
     fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent);
 }
 
@@ -283,6 +289,8 @@ enum FocusModifierOp {
 pub(crate) trait ErasedLayoutModifierNode: Send + Sync + 'static {
     fn node(&self) -> Arc<dyn LayoutModifierNode>;
 
+    fn eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
+
     fn measure_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
 
     fn placement_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool;
@@ -317,15 +325,25 @@ where
         self.node.clone()
     }
 
-    fn measure_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
+    fn eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
         other
             .as_any()
             .downcast_ref::<Self>()
             .is_some_and(|other| self.node.as_ref() == other.node.as_ref())
     }
 
+    fn measure_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|other| self.node.measure_eq(other.node.as_ref()))
+    }
+
     fn placement_eq(&self, other: &dyn ErasedLayoutModifierNode) -> bool {
-        self.measure_eq(other)
+        other
+            .as_any()
+            .downcast_ref::<Self>()
+            .is_some_and(|other| self.node.placement_eq(other.node.as_ref()))
     }
 
     fn hash_node(&self, state: &mut dyn Hasher) {
@@ -1131,7 +1149,7 @@ impl fmt::Debug for Modifier {
 
 fn modifier_action_eq(lhs: &ModifierAction, rhs: &ModifierAction) -> bool {
     match (lhs, rhs) {
-        (ModifierAction::Layout(lhs), ModifierAction::Layout(rhs)) => lhs.measure_eq(rhs.as_ref()),
+        (ModifierAction::Layout(lhs), ModifierAction::Layout(rhs)) => lhs.eq(rhs.as_ref()),
         (ModifierAction::Placement(lhs), ModifierAction::Placement(rhs)) => lhs.eq(rhs.as_ref()),
         (ModifierAction::Draw(lhs), ModifierAction::Draw(rhs)) => Arc::ptr_eq(lhs, rhs),
         (ModifierAction::ParentData(lhs), ModifierAction::ParentData(rhs)) => Arc::ptr_eq(lhs, rhs),
