@@ -50,7 +50,10 @@ use tessera_components::{
         SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
         single_choice_segmented_button_row,
     },
-    slider::{SliderOrientation, SliderSize, centered_slider, range_slider, slider},
+    slider::{
+        SliderOrientation, SliderSize, SliderValueIndicatorVisibility, centered_slider,
+        range_slider, slider, slider_value_indicator_provider,
+    },
     snackbar::{SnackbarHostState, SnackbarRequest, snackbar_host},
     spacer::spacer,
     split_buttons::{
@@ -65,6 +68,7 @@ use tessera_components::{
     time_picker::{TimePickerState, time_picker_dialog},
     toolbar::{ToolbarColorStyle, ToolbarOrientation, docked_toolbar, floating_toolbar},
     tooltip::{TooltipController, TooltipVariant, tooltip_anchor, tooltip_provider},
+    wavy_progress::{circular_wavy_progress_indicator, linear_wavy_progress_indicator},
 };
 use tessera_shard::shard;
 use tessera_ui::{
@@ -431,6 +435,13 @@ pub fn material_components_page() {
     let fab_menu_color = remember(|| FloatingActionButtonMenuColor::Primary);
     let loading_paused = remember(|| false);
     let loading_progress = remember(|| 0.5_f32);
+    let wave_progress = remember(|| 0.5_f32);
+    let wave_paused = remember(|| false);
+    let wave_indeterminate = remember(|| false);
+    let wave_reversed = remember(|| false);
+    let wave_thick = remember(|| false);
+    let wave_flat = remember(|| false);
+    let wave_stop = remember(|| true);
     let keyboard_slider_value = remember(|| 0.5_f32);
     let centered_slider_value = remember(|| 0.5_f32);
     let slider_range = remember(|| (0.2_f32, 0.8_f32));
@@ -440,6 +451,7 @@ pub fn material_components_page() {
     let slider_size = remember(SliderSize::default);
     let slider_custom_colors = remember(|| false);
     let slider_stop_indicators = remember(|| true);
+    let slider_labels = remember(SliderValueIndicatorVisibility::default);
     let sliders_disabled = remember(|| false);
     let plain_tooltip = remember(TooltipController::new);
     let rich_tooltip = remember(TooltipController::new);
@@ -537,6 +549,15 @@ pub fn material_components_page() {
                         button().tonal().on_click(move || slider_stop_indicators.set(!slider_stop_indicators.get())).child(move || {
                             text().content(if slider_stop_indicators.get() { "Hide end stops" } else { "Show end stops" });
                         });
+                        button().tonal().on_click(move || slider_labels.set(match slider_labels.get() {
+                            SliderValueIndicatorVisibility::Hidden => SliderValueIndicatorVisibility::OnInteraction,
+                            SliderValueIndicatorVisibility::OnInteraction => SliderValueIndicatorVisibility::Always,
+                            SliderValueIndicatorVisibility::Always => SliderValueIndicatorVisibility::Hidden,
+                        })).child(move || { text().content(match slider_labels.get() {
+                            SliderValueIndicatorVisibility::Hidden => "Labels: Off",
+                            SliderValueIndicatorVisibility::OnInteraction => "Labels: Adjusting",
+                            SliderValueIndicatorVisibility::Always => "Labels: Always",
+                        }); });
                         button().text().on_click(move || {
                             keyboard_slider_value.set(0.5);
                             centered_slider_value.set(0.5);
@@ -547,21 +568,24 @@ pub fn material_components_page() {
                     flow_row().item_spacing(Dp(16.0)).line_spacing(Dp(16.0)).children(move || {
                         column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
                             text().content(format!("Single: {:.0}%", keyboard_slider_value.get() * 100.0));
+                            spacer().modifier(Modifier::new().height(Dp(if slider_labels.get() == SliderValueIndicatorVisibility::Hidden { 0.0 } else { 52.0 })));
                             let scheme = theme.with(|theme| theme.color_scheme.clone());
                             let custom_colors = slider_custom_colors.get();
-                            slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(keyboard_slider_value.get()).on_change(move |value| keyboard_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Single value");
+                            slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value_indicator(slider_labels.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(keyboard_slider_value.get()).on_change(move |value| keyboard_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Single value");
                         });
                         column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
                             text().content(format!("Centered: {:.0}%", centered_slider_value.get() * 100.0));
+                            spacer().modifier(Modifier::new().height(Dp(if slider_labels.get() == SliderValueIndicatorVisibility::Hidden { 0.0 } else { 52.0 })));
                             let scheme = theme.with(|theme| theme.color_scheme.clone());
                             let custom_colors = slider_custom_colors.get();
-                            centered_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(centered_slider_value.get()).on_change(move |value| centered_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Centered value");
+                            centered_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value_indicator(slider_labels.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(centered_slider_value.get()).on_change(move |value| centered_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Centered value");
                         });
                         column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
                             text().content(format!("Range: {:.0}% - {:.0}%", slider_range.get().0 * 100.0, slider_range.get().1 * 100.0));
+                            spacer().modifier(Modifier::new().height(Dp(if slider_labels.get() == SliderValueIndicatorVisibility::Hidden { 0.0 } else { 52.0 })));
                             let scheme = theme.with(|theme| theme.color_scheme.clone());
                             let custom_colors = slider_custom_colors.get();
-                            range_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(slider_range.get()).on_change(move |value| slider_range.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Value interval").start_accessibility_label("Minimum value").end_accessibility_label("Maximum value");
+                            range_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value_indicator(slider_labels.get()).active_track_color_optional(custom_colors.then_some(scheme.tertiary)).inactive_track_color_optional(custom_colors.then_some(scheme.tertiary_container)).thumb_color_optional(custom_colors.then_some(scheme.tertiary)).active_tick_color_optional(custom_colors.then_some(scheme.on_tertiary)).inactive_tick_color_optional(custom_colors.then_some(scheme.on_tertiary_container)).show_stop_indicator(slider_stop_indicators.get()).value(slider_range.get()).on_change(move |value| slider_range.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Value interval").start_accessibility_label("Minimum value").end_accessibility_label("Maximum value");
                         });
                     });
                 });
@@ -582,6 +606,60 @@ pub fn material_components_page() {
                     spacer().modifier(Modifier::new().height(Dp(16.0)));
                     slider().modifier(Modifier::new().width(Dp(240.0))).value(loading_progress.get()).on_change(move |value| loading_progress.set(value)).accessibility_label("Loading progress");
                     text().content(format!("Determinate progress: {:.0}%", loading_progress.get() * 100.0));
+                });
+            })
+            .item(move || {
+                column().children(move || {
+                    section_header("Wavy progress", "Linear and circular waves for known completion or ongoing work, with independent track styling.");
+                    flow_row().item_spacing(Dp(12.0)).line_spacing(Dp(12.0)).children(move || {
+                        button().tonal().on_click(move || wave_indeterminate.set(!wave_indeterminate.get())).child(move || {
+                            text().content(if wave_indeterminate.get() { "Mode: Ongoing" } else { "Mode: Completion" });
+                        });
+                        button().tonal().on_click(move || wave_paused.set(!wave_paused.get())).child(move || {
+                            text().content(if wave_paused.get() { "Resume wave" } else { "Pause wave" });
+                        });
+                        button().tonal().on_click(move || wave_reversed.set(!wave_reversed.get())).child(move || {
+                            text().content(if wave_reversed.get() { "Direction: Reverse" } else { "Direction: Normal" });
+                        });
+                        button().tonal().on_click(move || wave_thick.set(!wave_thick.get())).child(move || {
+                            text().content(if wave_thick.get() { "Stroke: Thick" } else { "Stroke: Standard" });
+                        });
+                        button().tonal().on_click(move || wave_flat.set(!wave_flat.get())).child(move || {
+                            text().content(if wave_flat.get() { "Shape: Flat" } else { "Shape: Wavy" });
+                        });
+                        button().tonal().on_click(move || wave_stop.set(!wave_stop.get())).child(move || {
+                            text().content(if wave_stop.get() { "Hide stop" } else { "Show stop" });
+                        });
+                    });
+                    spacer().modifier(Modifier::new().height(Dp(20.0)));
+                    let stroke = if wave_thick.get() { 8.0 } else { 4.0 };
+                    let height = if wave_thick.get() { 14.0 } else { 10.0 };
+                    let wavelength = if wave_indeterminate.get() { 20.0 } else { 40.0 };
+                    linear_wavy_progress_indicator()
+                        .modifier(Modifier::new().width(Dp(320.0)).height(Dp(height)))
+                        .progress_optional((!wave_indeterminate.get()).then_some(wave_progress.get()))
+                        .paused(wave_paused.get())
+                        .reverse_direction(wave_reversed.get())
+                        .amplitude_optional(wave_flat.get().then_some(0.0))
+                        .stroke_width(Dp(stroke))
+                        .track_stroke_width(Dp(stroke))
+                        .wavelength(Dp(wavelength))
+                        .gap_size(Dp(4.0))
+                        .stop_size(Dp(if wave_stop.get() { 4.0 } else { 0.0 }))
+                        .accessibility_label("File transfer");
+                    spacer().modifier(Modifier::new().height(Dp(20.0)));
+                    circular_wavy_progress_indicator()
+                        .modifier(Modifier::new().size(Dp(if wave_thick.get() { 52.0 } else { 48.0 }), Dp(if wave_thick.get() { 52.0 } else { 48.0 })))
+                        .progress_optional((!wave_indeterminate.get()).then_some(wave_progress.get()))
+                        .paused(wave_paused.get())
+                        .reverse_direction(wave_reversed.get())
+                        .amplitude_optional(wave_flat.get().then_some(0.0))
+                        .stroke_width(Dp(stroke))
+                        .track_stroke_width(Dp(stroke))
+                        .accessibility_label("Circular file transfer");
+                    spacer().modifier(Modifier::new().height(Dp(20.0)));
+                    slider().modifier(Modifier::new().width(Dp(320.0))).value(wave_progress.get()).on_change(move |value| wave_progress.set(value)).accessibility_label("Transfer completion");
+                    text().content(format!("Transfer completion: {:.0}%", wave_progress.get() * 100.0));
                 });
             })
             .item(move || {
@@ -1434,7 +1512,9 @@ pub fn material_components_page() {
                                                 .child(move || {
                                                     tooltip_provider(if tooltip_help.get() { "This updated description wraps across several lines while staying within the tooltip width." } else { "Explain this action" })
                                                         .controller(plain_tooltip)
-                                                        .child_shared(page_content);
+                                                        .child(move || {
+                                                            slider_value_indicator_provider().child_shared(page_content);
+                                                        });
                                                 });
                                             snackbar_host()
                                                 .modifier(
