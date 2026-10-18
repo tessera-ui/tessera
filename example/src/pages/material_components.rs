@@ -73,7 +73,7 @@ use tessera_components::{
 use tessera_shard::shard;
 use tessera_ui::{
     Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State, modifier::FocusModifierExt as _,
-    remember, tessera, use_context,
+    remember, remember_with_key, tessera, use_context,
 };
 
 fn slider_demo_modifier(orientation: SliderOrientation) -> Modifier {
@@ -404,8 +404,14 @@ pub fn material_components_page() {
     let carousel_enabled = remember(|| true);
     let carousel_reverse = remember(|| false);
     let carousel_selected = remember(|| "No item activated".to_string());
-    let carousel_artwork =
-        remember(|| try_painter_asset(crate::res::LOGO_PNG).expect("carousel artwork"));
+    let logo_asset = if theme.with(|theme| theme.color_scheme.is_dark) {
+        crate::res::LOGO_DARK_PNG
+    } else {
+        crate::res::LOGO_PNG
+    };
+    let carousel_artwork = remember_with_key(logo_asset, move || {
+        try_painter_asset(logo_asset).expect("carousel artwork")
+    });
     let icon_variant = remember(|| IconButtonVariant::Filled);
     let icon_width = remember(IconButtonWidth::default);
     let icon_shape = remember(IconButtonShape::default);

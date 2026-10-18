@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Tessera logo</title>
+  <desc id="desc">A custom lowercase t with cut terminals and a detached amber tile.</desc>
+  <path fill="#F5F2EB" d="M202 78H290V166H402L380 242H290V321Q290 356 325 356H371L349 432H309Q202 432 202 326V242H114L136 166H202Z"/>
+  <path fill="#D99831" d="M327 78H397L377 142H307Z"/>
+</svg>

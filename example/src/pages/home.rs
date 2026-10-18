@@ -10,8 +10,13 @@ use crate::res;
 #[shard]
 pub fn home_page() {
     let theme = use_context::<MaterialTheme>().unwrap();
-    let logo_painter = remember_with_key(res::LOGO_PNG, || {
-        try_painter_asset(res::LOGO_PNG).expect("logo painter should decode successfully")
+    let logo_asset = if theme.with(|theme| theme.color_scheme.is_dark) {
+        res::LOGO_DARK_PNG
+    } else {
+        res::LOGO_PNG
+    };
+    let logo_painter = remember_with_key(logo_asset, move || {
+        try_painter_asset(logo_asset).expect("logo painter should decode successfully")
     });
 
     lazy_column()

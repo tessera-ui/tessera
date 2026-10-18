@@ -1,6 +1,9 @@
 <div align="center">
 
-<img src="https://raw.githubusercontent.com/tessera-ui/tessera/refs/heads/main/assets/logo.svg" alt="Tessera Logo" style="width:320px; height:auto;" />
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="../assets/logo-dark.svg" />
+  <img src="../assets/logo.svg" alt="Tessera Logo" width="320" />
+</picture>
 
 # Tessera
 
