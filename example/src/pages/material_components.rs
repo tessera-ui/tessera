@@ -14,7 +14,9 @@ use tessera_components::{
     carousel::{CarouselController, CarouselVariant, carousel},
     chip::chip,
     column::column,
-    date_picker::{DatePickerState, Weekday, date_picker_dialog},
+    date_picker::{
+        DatePickerState, DateRangePickerState, Weekday, date_picker_dialog, date_range_picker,
+    },
     dialog::{basic_dialog, dialog_provider},
     divider::{horizontal_divider, vertical_divider},
     extended_floating_action_button::{
@@ -48,7 +50,7 @@ use tessera_components::{
         SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
         single_choice_segmented_button_row,
     },
-    slider::{centered_slider, range_slider, slider},
+    slider::{SliderOrientation, SliderSize, centered_slider, range_slider, slider},
     snackbar::{SnackbarHostState, SnackbarRequest, snackbar_host},
     spacer::spacer,
     split_buttons::{
@@ -69,6 +71,13 @@ use tessera_ui::{
     Dp, Modifier, PxPosition, PxRect, PxSize, RenderSlot, State, modifier::FocusModifierExt as _,
     remember, tessera, use_context,
 };
+
+fn slider_demo_modifier(orientation: SliderOrientation) -> Modifier {
+    match orientation {
+        SliderOrientation::Horizontal => Modifier::new().width(Dp(320.0)),
+        SliderOrientation::Vertical => Modifier::new().height(Dp(208.0)),
+    }
+}
 
 #[tessera]
 fn section_header(#[prop(into)] title: String, #[prop(into)] description: String) {
@@ -426,6 +435,9 @@ pub fn material_components_page() {
     let centered_slider_value = remember(|| 0.5_f32);
     let slider_range = remember(|| (0.2_f32, 0.8_f32));
     let slider_steps = remember(|| false);
+    let slider_orientation = remember(SliderOrientation::default);
+    let slider_reversed = remember(|| false);
+    let slider_size = remember(SliderSize::default);
     let sliders_disabled = remember(|| false);
     let plain_tooltip = remember(TooltipController::new);
     let rich_tooltip = remember(TooltipController::new);
@@ -434,6 +446,8 @@ pub fn material_components_page() {
     let tooltip_action = remember(|| false);
     let snackbar_host_state = remember(SnackbarHostState::new);
     let date_state = remember(DatePickerState::default);
+    let date_range_state = remember(DateRangePickerState::default);
+    let date_range_status = remember(String::new);
     let time_state = remember(|| TimePickerState::new(10, 8, false, Default::default()));
     let picker_status = remember(String::new);
     let navigation_bar_selected = remember(|| 0_usize);
@@ -484,25 +498,58 @@ pub fn material_components_page() {
                 column().children(move || {
                     section_header("Sliders", "Use arrow keys, Home/End, and PageUp/PageDown. Tab between range handles.");
                     flow_row().item_spacing(Dp(12.0)).line_spacing(Dp(8.0)).children(move || {
-                        button().tonal().on_click(move || slider_steps.set(!slider_steps.get())).child(move || {
+                        button().tonal().on_click(move || {
+                            let discrete = !slider_steps.get();
+                            if discrete {
+                                keyboard_slider_value.set((keyboard_slider_value.get() * 4.0).round() / 4.0);
+                                centered_slider_value.set((centered_slider_value.get() * 4.0).round() / 4.0);
+                                slider_range.with_mut(|range| {
+                                    range.0 = (range.0 * 4.0).round() / 4.0;
+                                    range.1 = (range.1 * 4.0).round() / 4.0;
+                                });
+                            }
+                            slider_steps.set(discrete);
+                        }).child(move || {
                             text().content(if slider_steps.get() { "Use continuous values" } else { "Use discrete steps" });
                         });
                         button().tonal().on_click(move || sliders_disabled.set(!sliders_disabled.get())).child(move || {
                             text().content(if sliders_disabled.get() { "Enable sliders" } else { "Disable sliders" });
                         });
+                        button().tonal().on_click(move || slider_orientation.set(match slider_orientation.get() {
+                            SliderOrientation::Horizontal => SliderOrientation::Vertical,
+                            SliderOrientation::Vertical => SliderOrientation::Horizontal,
+                        })).child(move || { text().content(format!("Orientation: {:?}", slider_orientation.get())); });
+                        button().tonal().on_click(move || slider_reversed.set(!slider_reversed.get())).child(move || {
+                            text().content(if slider_reversed.get() { "Direction: Reversed" } else { "Direction: Normal" });
+                        });
+                        button().tonal().on_click(move || slider_size.set(match slider_size.get() {
+                            SliderSize::ExtraSmall => SliderSize::Small,
+                            SliderSize::Small => SliderSize::Medium,
+                            SliderSize::Medium => SliderSize::Large,
+                            SliderSize::Large => SliderSize::ExtraLarge,
+                            SliderSize::ExtraLarge => SliderSize::ExtraSmall,
+                        })).child(move || { text().content(format!("Size: {:?}", slider_size.get())); });
                         button().text().on_click(move || {
                             keyboard_slider_value.set(0.5);
                             centered_slider_value.set(0.5);
-                            slider_range.set((0.2, 0.8));
+                            slider_range.set(if slider_steps.get() { (0.25, 0.75) } else { (0.2, 0.8) });
                         }).child(|| { text().content("Reset values"); });
                     });
                     spacer().modifier(Modifier::new().height(Dp(16.0)));
-                    text().content(format!("Single: {:.0}%", keyboard_slider_value.get() * 100.0));
-                    slider().modifier(Modifier::new().width(Dp(320.0))).value(keyboard_slider_value.get()).on_change(move |value| keyboard_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Single value");
-                    text().content(format!("Centered: {:.0}%", centered_slider_value.get() * 100.0));
-                    centered_slider().modifier(Modifier::new().width(Dp(320.0))).value(centered_slider_value.get()).on_change(move |value| centered_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Centered value");
-                    text().content(format!("Range: {:.0}% - {:.0}%", slider_range.get().0 * 100.0, slider_range.get().1 * 100.0));
-                    range_slider().modifier(Modifier::new().width(Dp(320.0))).value(slider_range.get()).on_change(move |value| slider_range.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Value interval").start_accessibility_label("Minimum value").end_accessibility_label("Maximum value");
+                    flow_row().item_spacing(Dp(16.0)).line_spacing(Dp(16.0)).children(move || {
+                        column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
+                            text().content(format!("Single: {:.0}%", keyboard_slider_value.get() * 100.0));
+                            slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value(keyboard_slider_value.get()).on_change(move |value| keyboard_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Single value");
+                        });
+                        column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
+                            text().content(format!("Centered: {:.0}%", centered_slider_value.get() * 100.0));
+                            centered_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value(centered_slider_value.get()).on_change(move |value| centered_slider_value.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Centered value");
+                        });
+                        column().modifier(Modifier::new().width(if slider_orientation.get() == SliderOrientation::Vertical { Dp(160.0) } else { Dp(320.0) })).children(move || {
+                            text().content(format!("Range: {:.0}% - {:.0}%", slider_range.get().0 * 100.0, slider_range.get().1 * 100.0));
+                            range_slider().modifier(slider_demo_modifier(slider_orientation.get())).orientation(slider_orientation.get()).reverse_direction(slider_reversed.get()).size(slider_size.get()).value(slider_range.get()).on_change(move |value| slider_range.set(value)).steps(if slider_steps.get() { 3 } else { 0 }).disabled(sliders_disabled.get()).accessibility_label("Value interval").start_accessibility_label("Minimum value").end_accessibility_label("Maximum value");
+                        });
+                    });
                 });
             })
             .item(move || {
@@ -1192,6 +1239,26 @@ pub fn material_components_page() {
                                 });
                         });
                     text().content(picker_status.get());
+                });
+            })
+            .item(move || {
+                column().children(move || {
+                    section_header("Date range picker", "Select a period across calendar months or enter its dates.");
+                    surface()
+                        .style(theme.with(|theme| theme.color_scheme.surface_container_high).into())
+                        .child(move || {
+                            date_range_picker().state(date_range_state).first_day_of_week(Weekday::Sunday);
+                        });
+                    row().children(move || {
+                        button().text().on_click(move || {
+                            date_range_state.with_mut(DateRangePickerState::clear_selection);
+                            date_range_status.set("Date range cleared".to_owned());
+                        }).child(|| { text().content("Clear"); });
+                        button().text().enabled(date_range_state.with(DateRangePickerState::is_complete)).on_click(move || {
+                            date_range_status.set("Date range confirmed".to_owned());
+                        }).child(|| { text().content("Save"); });
+                    });
+                    text().content(date_range_status.get());
                 });
             })
             .item(move || {
