@@ -3,13 +3,12 @@
 //! ## Usage
 //!
 //! Used to show contextual information or actions in a modal sheet.
-use std::time::Duration;
 
 use tessera_foundation::gesture::DragRecognizer;
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusScopeNode, FocusTraversalPolicy,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
-    current_frame_nanos,
+    AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusProperties, FocusScopeNode,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
+    State, current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
@@ -17,21 +16,21 @@ use tessera_ui::{
 
 use crate::{
     alignment::CrossAxisAlignment,
-    animation,
+    animation::visibility_motion::{VisibilityMotion, VisibilitySample},
     column::column,
-    modifier::{ModifierExt, with_keyboard_input, with_pointer_input},
+    modal_focus::{ModalFocusState, modal_focus_modifier},
+    modifier::{ModifierExt, SemanticsArgs, with_keyboard_input, with_pointer_input},
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,
     },
+    overlay_semantics::{dialog_semantics, overlay_background},
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::surface,
     theme::MaterialTheme,
 };
-
-const ANIM_TIME: Duration = Duration::from_millis(300);
 
 /// Controller for [`bottom_sheet_provider`], managing open/closed state.
 ///
@@ -41,7 +40,7 @@ const ANIM_TIME: Duration = Duration::from_millis(300);
 #[derive(Clone, PartialEq)]
 pub struct BottomSheetController {
     is_open: bool,
-    animation_start_frame_nanos: Option<u64>,
+    motion: VisibilityMotion,
     is_dragging: bool,
     drag_offset: f32,
 }
@@ -51,7 +50,7 @@ impl BottomSheetController {
     pub fn new(initial_open: bool) -> Self {
         Self {
             is_open: initial_open,
-            animation_start_frame_nanos: None,
+            motion: VisibilityMotion::new(initial_open, true),
             is_dragging: false,
             drag_offset: 0.0,
         }
@@ -64,19 +63,9 @@ impl BottomSheetController {
     /// its current position.
     pub fn open(&mut self) {
         if !self.is_open {
+            self.motion.retarget(true, current_frame_nanos());
             self.is_open = true;
             self.drag_offset = 0.0;
-            let now_nanos = current_frame_nanos();
-            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
-                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                if elapsed_nanos < animation_nanos {
-                    self.animation_start_frame_nanos =
-                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
-                    return;
-                }
-            }
-            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -87,18 +76,8 @@ impl BottomSheetController {
     /// its current position.
     pub fn close(&mut self) {
         if self.is_open {
+            self.motion.retarget(false, current_frame_nanos());
             self.is_open = false;
-            let now_nanos = current_frame_nanos();
-            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
-                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                if elapsed_nanos < animation_nanos {
-                    self.animation_start_frame_nanos =
-                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
-                    return;
-                }
-            }
-            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -109,19 +88,13 @@ impl BottomSheetController {
 
     /// Returns whether the sheet is currently animating in either direction.
     pub fn is_animating(&self) -> bool {
-        self.animation_start_frame_nanos
-            .map(|start| {
-                let elapsed_nanos = current_frame_nanos().saturating_sub(start);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                elapsed_nanos < animation_nanos
-            })
-            .unwrap_or(false)
+        self.motion.sample(current_frame_nanos()).active
     }
 
-    fn snapshot(&self) -> (bool, Option<u64>, f32) {
+    fn snapshot(&self) -> (bool, VisibilitySample, f32) {
         (
             self.is_open,
-            self.animation_start_frame_nanos,
+            self.motion.sample(current_frame_nanos()),
             self.drag_offset,
         )
     }
@@ -157,32 +130,6 @@ impl Default for BottomSheetController {
     }
 }
 
-/// Compute eased progress from an optional timer reference.
-fn calc_progress_from_timer(animation_start_frame_nanos: Option<u64>) -> f32 {
-    let raw = match animation_start_frame_nanos {
-        None => 1.0,
-        Some(start_frame_nanos) => {
-            let elapsed_nanos = current_frame_nanos().saturating_sub(start_frame_nanos);
-            let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-            if elapsed_nanos >= animation_nanos {
-                1.0
-            } else {
-                elapsed_nanos as f32 / animation_nanos as f32
-            }
-        }
-    };
-    animation::easing(raw)
-}
-
-/// Compute scrim alpha for material style.
-fn scrim_alpha_for(progress: f32, is_open: bool) -> f32 {
-    if is_open {
-        progress * 0.32
-    } else {
-        0.32 * (1.0 - progress)
-    }
-}
-
 /// Compute Y position for bottom sheet placement.
 fn compute_bottom_sheet_y(
     parent_height: Px,
@@ -190,7 +137,7 @@ fn compute_bottom_sheet_y(
     progress: f32,
     is_open: bool,
     drag_offset: f32,
-) -> i32 {
+) -> f32 {
     let parent = parent_height.0 as f32;
     let child = child_height.0 as f32;
     let y = if is_open {
@@ -198,7 +145,7 @@ fn compute_bottom_sheet_y(
     } else {
         parent - child * (1.0 - progress)
     };
-    (y + drag_offset) as i32
+    y + drag_offset
 }
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
@@ -332,7 +279,7 @@ fn place_bottom_sheet_if_present(
         Px(0)
     };
 
-    result.place_child(bottom_sheet, PxPosition::new(x, Px(y)));
+    result.place_child(bottom_sheet, PxPosition::from_f32_xy(x.0 as f32, y));
 }
 #[tessera]
 fn bottom_sheet_drag_handle(
@@ -419,10 +366,12 @@ fn build_bottom_sheet_nested_scroll_connection(
 
 #[tessera]
 fn bottom_sheet_content_wrapper(
+    accessibility_label: Option<String>,
     bottom_sheet_content: Option<RenderSlot>,
     controller: Option<State<BottomSheetController>>,
     on_close: Option<Callback>,
     just_opened: Option<bool>,
+    focus_scope: Option<FocusScopeNode>,
 ) {
     let on_close = on_close.unwrap_or_default();
     let just_opened = just_opened.unwrap_or(false);
@@ -432,19 +381,24 @@ fn bottom_sheet_content_wrapper(
     let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
     let nested_scroll_connection =
         build_bottom_sheet_nested_scroll_connection(controller, on_close, parent_nested_scroll);
-    let focus_scope = remember(FocusScopeNode::new).get();
-    let modifier = with_keyboard_input(
-        Modifier::new()
-            .focus_scope_with(focus_scope)
-            .focus_traversal_policy(
-                FocusTraversalPolicy::linear()
-                    .wrap(true)
-                    .tab_navigation(true),
-            ),
-        make_keyboard_closure(on_close),
+    let focus_scope = focus_scope.expect("modal content requires its focus scope");
+    let modifier = dialog_semantics(
+        with_keyboard_input(
+            Modifier::new()
+                .focus_scope_with(focus_scope)
+                .focus_properties(FocusProperties::new().skip_traversal(true))
+                .focus_traversal_policy(
+                    FocusTraversalPolicy::linear()
+                        .wrap(true)
+                        .tab_navigation(true),
+                ),
+            make_keyboard_closure(on_close),
+        ),
+        accessibility_label,
+        true,
     );
     if just_opened {
-        focus_scope.restore_focus();
+        focus_scope.request_focus();
     }
     layout().modifier(modifier).child(move || {
         let bottom_sheet_content = bottom_sheet_content;
@@ -495,13 +449,14 @@ fn bottom_sheet_content_wrapper(
 ///
 /// Provides a modal bottom sheet for contextual actions or information.
 ///
-/// # Usage
+/// ## Usage
 ///
 /// Show contextual menus, supplemental information, or simple forms without
 /// navigating away from the main screen.
 ///
 /// ## Parameters
 ///
+/// - `accessibility_label` — accessible name describing the dialog or sheet.
 /// - `on_close_request` — optional callback invoked when the sheet requests
 ///   closing.
 /// - `is_open` — declarative open state.
@@ -509,7 +464,7 @@ fn bottom_sheet_content_wrapper(
 /// - `main_content` — optional main content rendered behind the sheet.
 /// - `bottom_sheet_content` — optional content rendered inside the sheet.
 ///
-/// # Examples
+/// ## Examples
 ///
 /// ```
 /// # use tessera_ui::tessera;
@@ -522,6 +477,7 @@ fn bottom_sheet_content_wrapper(
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// bottom_sheet_provider()
+///     .accessibility_label("Additional options")
 ///     .on_close_request(|| {})
 ///     .is_open(true)
 ///     .main_content(|| { /* main content */ })
@@ -532,6 +488,7 @@ fn bottom_sheet_content_wrapper(
 /// ```
 #[tessera]
 pub fn bottom_sheet_provider(
+    #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     is_open: Option<bool>,
     controller: Option<State<BottomSheetController>>,
@@ -560,7 +517,7 @@ pub fn bottom_sheet_provider(
     }
 
     // Snapshot state to minimize locking overhead.
-    let (is_open, timer_opt, drag_offset) = controller.with(|c| c.snapshot());
+    let (is_open, visibility, drag_offset) = controller.with(|c| c.snapshot());
     let is_animating = controller.with(|c| c.is_animating());
     let bottom_sheet_open_state = remember(|| false);
     let mut just_opened = false;
@@ -570,16 +527,8 @@ pub fn bottom_sheet_provider(
     });
     if is_animating {
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller.with_mut(|controller| {
-                let (_, timer_opt, _) = controller.snapshot();
-                if let Some(start_frame_nanos) = timer_opt {
-                    let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-                    let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                    elapsed_nanos < animation_nanos
-                } else {
-                    false
-                }
-            });
+            let is_animating =
+                controller.with(|controller| controller.motion.sample(frame_nanos).active);
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -591,10 +540,19 @@ pub fn bottom_sheet_provider(
     // The sheet overlay is gated by open state, but `main_content` must keep
     // rendering: providers host the rest of the page inside it.
     let show_bottom_sheet = is_open || is_animating;
+    let focus_scope = remember(FocusScopeNode::new).get();
+    let focus_state = remember(ModalFocusState::default);
+    let modifier =
+        modal_focus_modifier(Modifier::new(), focus_state, show_bottom_sheet, focus_scope);
 
-    let progress = calc_progress_from_timer(timer_opt);
+    let progress = if is_open {
+        visibility.position
+    } else {
+        1.0 - visibility.position
+    };
 
     layout()
+        .modifier(modifier)
         .policy(BottomSheetLayout {
             progress,
             is_open,
@@ -602,13 +560,13 @@ pub fn bottom_sheet_provider(
         })
         .child(move || {
             let bottom_sheet_content = bottom_sheet_content;
-            main_content.render();
+            overlay_background(main_content, show_bottom_sheet);
 
             if !show_bottom_sheet {
                 return;
             }
 
-            let scrim_alpha = scrim_alpha_for(progress, is_open);
+            let scrim_alpha = visibility.opacity * 0.32;
             let scrim_color = use_context::<MaterialTheme>()
                 .expect("MaterialTheme must be provided")
                 .get()
@@ -617,11 +575,28 @@ pub fn bottom_sheet_provider(
             surface()
                 .style(scrim_color.with_alpha(scrim_alpha).into())
                 .on_click_shared(on_close_request)
-                .modifier(Modifier::new().fill_max_size())
+                .show_ripple(false)
+                .modifier(
+                    Modifier::new()
+                        .fill_max_size()
+                        .semantics(SemanticsArgs {
+                            hidden: true,
+                            ..Default::default()
+                        })
+                        .focusable()
+                        .focus_properties(
+                            FocusProperties::new()
+                                .can_focus(false)
+                                .can_request_focus(false)
+                                .skip_traversal(true),
+                        ),
+                )
                 .block_input(true)
                 .child(|| {});
 
             bottom_sheet_content_wrapper()
+                .accessibility_label_optional(accessibility_label.clone())
+                .focus_scope(focus_scope)
                 .bottom_sheet_content_shared(bottom_sheet_content)
                 .controller(controller)
                 .on_close_shared(on_close_request)
@@ -660,5 +635,22 @@ impl tessera_ui::LayoutModifierNode for BottomSheetLayout {
         );
 
         Ok(result.with_size(main_content_size.size()))
+    }
+}
+
+#[cfg(test)]
+mod placement_tests {
+    use tessera_ui::Px;
+
+    use super::compute_bottom_sheet_y;
+
+    #[test]
+    fn reversing_directions_keeps_fractional_sheet_placement_and_drag_offsets() {
+        for (open, progress) in [(true, 0.3125), (false, 0.6875)] {
+            assert_eq!(
+                compute_bottom_sheet_y(Px(600), Px(120), progress, open, 4.25),
+                566.75
+            );
+        }
     }
 }

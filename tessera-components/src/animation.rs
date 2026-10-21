@@ -7,6 +7,7 @@
 pub(crate) mod color_motion;
 pub(crate) mod material_motion;
 pub(crate) mod shape_motion;
+pub(crate) mod visibility_motion;
 
 /// Cubic ease-in-out mapping (smooth start and end).
 /// Input: linear progress in [0.0, 1.0].

@@ -2,34 +2,33 @@
 //!
 //! ## Usage
 //!
-//! Show filters, details, or secondary tasks without leaving the current
-//! screen.
-use std::time::Duration;
+//! Show filters, details and secondary tasks beside the main content.
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, Constraint, Dp, FocusScopeNode, FocusTraversalPolicy,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
-    current_frame_nanos,
+    Callback, CallbackWith, Color, Constraint, Dp, FocusProperties, FocusScopeNode,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
+    State, current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
 use crate::{
-    animation,
-    modifier::{ModifierExt, with_keyboard_input},
+    animation::visibility_motion::{VisibilityMotion, VisibilitySample},
+    modal_focus::{ModalFocusState, modal_focus_modifier},
+    modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,
     },
+    overlay_semantics::{dialog_semantics, overlay_background},
     shape_def::{RoundedCorner, Shape},
     surface::surface,
     theme::MaterialTheme,
 };
 
-const ANIM_TIME: Duration = Duration::from_millis(300);
 const SCRIM_ALPHA: f32 = 0.32;
-const MAX_SHEET_WIDTH: Dp = Dp(250.0);
+const MAX_SHEET_WIDTH: Dp = Dp(400.0);
 const CORNER_RADIUS: Dp = Dp(16.0);
 const MODAL_ELEVATION: Dp = Dp(1.0);
 
@@ -75,7 +74,7 @@ pub enum SideSheetPosition {
 #[derive(Clone, PartialEq)]
 pub struct SideSheetController {
     is_open: bool,
-    animation_start_frame_nanos: Option<u64>,
+    motion: VisibilityMotion,
     drag_offset: f32,
 }
 
@@ -84,7 +83,7 @@ impl SideSheetController {
     pub fn new(initial_open: bool) -> Self {
         Self {
             is_open: initial_open,
-            animation_start_frame_nanos: None,
+            motion: VisibilityMotion::new(initial_open, true),
             drag_offset: 0.0,
         }
     }
@@ -96,19 +95,9 @@ impl SideSheetController {
     /// current animated position.
     pub fn open(&mut self) {
         if !self.is_open {
+            self.motion.retarget(true, current_frame_nanos());
             self.is_open = true;
             self.drag_offset = 0.0;
-            let now_nanos = current_frame_nanos();
-            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
-                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                if elapsed_nanos < animation_nanos {
-                    self.animation_start_frame_nanos =
-                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
-                    return;
-                }
-            }
-            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -119,18 +108,8 @@ impl SideSheetController {
     /// current animated position.
     pub fn close(&mut self) {
         if self.is_open {
+            self.motion.retarget(false, current_frame_nanos());
             self.is_open = false;
-            let now_nanos = current_frame_nanos();
-            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
-                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                if elapsed_nanos < animation_nanos {
-                    self.animation_start_frame_nanos =
-                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
-                    return;
-                }
-            }
-            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -141,19 +120,13 @@ impl SideSheetController {
 
     /// Returns whether the side sheet is currently animating.
     pub fn is_animating(&self) -> bool {
-        self.animation_start_frame_nanos
-            .map(|start| {
-                let elapsed_nanos = current_frame_nanos().saturating_sub(start);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                elapsed_nanos < animation_nanos
-            })
-            .unwrap_or(false)
+        self.motion.sample(current_frame_nanos()).active
     }
 
-    fn snapshot(&self) -> (bool, Option<u64>, f32) {
+    fn snapshot(&self) -> (bool, VisibilitySample, f32) {
         (
             self.is_open,
-            self.animation_start_frame_nanos,
+            self.motion.sample(current_frame_nanos()),
             self.drag_offset,
         )
     }
@@ -205,32 +178,6 @@ fn sheet_shape(position: SideSheetPosition) -> Shape {
     }
 }
 
-/// Compute eased progress from an optional timer reference.
-fn calc_progress_from_timer(animation_start_frame_nanos: Option<u64>) -> f32 {
-    let raw = match animation_start_frame_nanos {
-        None => 1.0,
-        Some(start_frame_nanos) => {
-            let elapsed_nanos = current_frame_nanos().saturating_sub(start_frame_nanos);
-            let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-            if elapsed_nanos >= animation_nanos {
-                1.0
-            } else {
-                elapsed_nanos as f32 / animation_nanos as f32
-            }
-        }
-    };
-    animation::easing(raw)
-}
-
-/// Compute scrim alpha for modal style.
-fn scrim_alpha_for(progress: f32, is_open: bool) -> f32 {
-    if is_open {
-        progress * SCRIM_ALPHA
-    } else {
-        SCRIM_ALPHA * (1.0 - progress)
-    }
-}
-
 /// Compute X position for side sheet placement.
 fn compute_side_sheet_x(
     parent_width: Px,
@@ -239,7 +186,7 @@ fn compute_side_sheet_x(
     is_open: bool,
     position: SideSheetPosition,
     drag_offset: f32,
-) -> i32 {
+) -> f32 {
     let parent = parent_width.0 as f32;
     let sheet = sheet_width.0 as f32;
     let (closed_x, open_x) = match position {
@@ -251,7 +198,7 @@ fn compute_side_sheet_x(
     } else {
         open_x + (closed_x - open_x) * progress
     };
-    (x + drag_offset) as i32
+    x + drag_offset
 }
 
 /// Create the keyboard handler closure used to close the sheet on Escape.
@@ -395,7 +342,7 @@ fn place_side_sheet_if_present(
         position,
         drag_offset,
     );
-    result.place_child(side_sheet, PxPosition::new(Px(x), Px(0)));
+    result.place_child(side_sheet, PxPosition::from_f32_xy(x, 0.0));
 }
 
 /// # modal_side_sheet_provider
@@ -408,6 +355,7 @@ fn place_side_sheet_if_present(
 ///
 /// ## Parameters
 ///
+/// - `accessibility_label` — accessible name describing the dialog or sheet.
 /// - `on_close_request` — optional close-request callback.
 /// - `position` — side sheet edge position.
 /// - `is_open` — declarative open state.
@@ -427,6 +375,7 @@ fn place_side_sheet_if_present(
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         modal_side_sheet_provider()
+///             .accessibility_label("Filters")
 ///             .on_close_request(|| {})
 ///             .is_open(true)
 ///             .main_content(|| { /* main content */ })
@@ -437,6 +386,7 @@ fn place_side_sheet_if_present(
 /// ```
 #[tessera]
 pub fn modal_side_sheet_provider(
+    #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
     is_open: Option<bool>,
@@ -447,6 +397,7 @@ pub fn modal_side_sheet_provider(
     let position = position.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
     side_sheet_provider_inner()
+        .accessibility_label_optional(accessibility_label)
         .sheet_type(SideSheetType::Modal)
         .on_close_request_shared(on_close_request.unwrap_or_default())
         .position(position)
@@ -467,6 +418,7 @@ pub fn modal_side_sheet_provider(
 ///
 /// ## Parameters
 ///
+/// - `accessibility_label` — accessible name describing the dialog or sheet.
 /// - `on_close_request` — optional close-request callback.
 /// - `position` — side sheet edge position.
 /// - `is_open` — declarative open state.
@@ -486,6 +438,7 @@ pub fn modal_side_sheet_provider(
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
 ///         standard_side_sheet_provider()
+///             .accessibility_label("Details")
 ///             .on_close_request(|| {})
 ///             .is_open(true)
 ///             .main_content(|| { /* main content */ })
@@ -496,6 +449,7 @@ pub fn modal_side_sheet_provider(
 /// ```
 #[tessera]
 pub fn standard_side_sheet_provider(
+    #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
     is_open: Option<bool>,
@@ -506,6 +460,7 @@ pub fn standard_side_sheet_provider(
     let position = position.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
     side_sheet_provider_inner()
+        .accessibility_label_optional(accessibility_label)
         .sheet_type(SideSheetType::Standard)
         .on_close_request_shared(on_close_request.unwrap_or_default())
         .position(position)
@@ -517,6 +472,7 @@ pub fn standard_side_sheet_provider(
 
 #[tessera]
 fn side_sheet_provider_inner(
+    accessibility_label: Option<String>,
     sheet_type: Option<SideSheetType>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
@@ -546,6 +502,7 @@ fn side_sheet_provider_inner(
     }
 
     side_sheet_provider_render()
+        .accessibility_label_optional(accessibility_label)
         .sheet_type(sheet_type)
         .on_close_request_shared(on_close_request)
         .position(position)
@@ -556,6 +513,7 @@ fn side_sheet_provider_inner(
 
 #[tessera]
 fn side_sheet_provider_render(
+    accessibility_label: Option<String>,
     sheet_type: Option<SideSheetType>,
     on_close_request: Option<Callback>,
     position: Option<SideSheetPosition>,
@@ -570,7 +528,7 @@ fn side_sheet_provider_render(
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = side_sheet_content.unwrap_or_else(RenderSlot::empty);
 
-    let (is_open, timer_opt, drag_offset) = controller.get().snapshot();
+    let (is_open, visibility, drag_offset) = controller.get().snapshot();
     let is_animating = controller.get().is_animating();
     let side_sheet_open_state = remember(|| false);
     let mut just_opened = false;
@@ -579,18 +537,9 @@ fn side_sheet_provider_render(
         *was_open = is_open;
     });
     if is_animating {
-        let controller_for_frame = controller;
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller_for_frame.with_mut(|controller| {
-                let (_, timer_opt, _) = controller.snapshot();
-                if let Some(start_frame_nanos) = timer_opt {
-                    let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-                    let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                    elapsed_nanos < animation_nanos
-                } else {
-                    false
-                }
-            });
+            let is_animating =
+                controller.with(|controller| controller.motion.sample(frame_nanos).active);
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -600,10 +549,18 @@ fn side_sheet_provider_render(
     }
 
     let show_side_sheet = is_open || is_animating;
+    let focus_scope = remember(FocusScopeNode::new).get();
+    let focus_state = remember(ModalFocusState::default);
+    let modifier = modal_focus_modifier(Modifier::new(), focus_state, show_side_sheet, focus_scope);
 
-    let progress = calc_progress_from_timer(timer_opt);
+    let progress = if is_open {
+        visibility.position
+    } else {
+        1.0 - visibility.position
+    };
 
     layout()
+        .modifier(modifier)
         .policy(SideSheetLayout {
             progress,
             is_open,
@@ -612,12 +569,15 @@ fn side_sheet_provider_render(
         })
         .child(move || {
             let side_sheet_content = side_sheet_content;
-            main_content.render();
+            overlay_background(
+                main_content,
+                show_side_sheet && sheet_type == SideSheetType::Modal,
+            );
 
             if show_side_sheet {
                 match sheet_type {
                     SideSheetType::Modal => {
-                        let scrim_alpha = scrim_alpha_for(progress, is_open);
+                        let scrim_alpha = visibility.opacity * SCRIM_ALPHA;
                         let scrim_color = use_context::<MaterialTheme>()
                             .expect("MaterialTheme must be provided")
                             .get()
@@ -626,7 +586,22 @@ fn side_sheet_provider_render(
                         surface()
                             .style(scrim_color.with_alpha(scrim_alpha).into())
                             .on_click_shared(on_close_request)
-                            .modifier(Modifier::new().fill_max_size())
+                            .show_ripple(false)
+                            .modifier(
+                                Modifier::new()
+                                    .fill_max_size()
+                                    .semantics(SemanticsArgs {
+                                        hidden: true,
+                                        ..Default::default()
+                                    })
+                                    .focusable()
+                                    .focus_properties(
+                                        FocusProperties::new()
+                                            .can_focus(false)
+                                            .can_request_focus(false)
+                                            .skip_traversal(true),
+                                    ),
+                            )
                             .block_input(true)
                             .child(|| {});
                     }
@@ -639,6 +614,8 @@ fn side_sheet_provider_render(
                 }
 
                 side_sheet_content_wrapper()
+                    .accessibility_label_optional(accessibility_label.clone())
+                    .focus_scope(focus_scope)
                     .sheet_type(sheet_type)
                     .position(position)
                     .controller(controller)
@@ -651,6 +628,8 @@ fn side_sheet_provider_render(
 
 #[tessera]
 fn side_sheet_content_wrapper(
+    accessibility_label: Option<String>,
+    focus_scope: Option<FocusScopeNode>,
     sheet_type: Option<SideSheetType>,
     position: Option<SideSheetPosition>,
     controller: Option<State<SideSheetController>>,
@@ -675,19 +654,28 @@ fn side_sheet_content_wrapper(
     let is_modal = sheet_type == SideSheetType::Modal;
     let on_close_request_for_keyboard = on_close_request;
 
-    let focus_scope = remember(FocusScopeNode::new).get();
-    let modifier = with_keyboard_input(
-        Modifier::new()
-            .focus_scope_with(focus_scope)
-            .focus_traversal_policy(
-                FocusTraversalPolicy::linear()
-                    .wrap(true)
-                    .tab_navigation(true),
-            ),
-        make_keyboard_closure(on_close_request_for_keyboard),
+    let focus_scope = focus_scope.expect("side sheet content requires its focus scope");
+    let modifier = dialog_semantics(
+        with_keyboard_input(
+            Modifier::new()
+                .focus_scope_with(focus_scope)
+                .focus_properties(FocusProperties::new().skip_traversal(true))
+                .focus_traversal_policy(
+                    FocusTraversalPolicy::linear()
+                        .wrap(is_modal)
+                        .tab_navigation(true),
+                ),
+            make_keyboard_closure(on_close_request_for_keyboard),
+        ),
+        accessibility_label,
+        is_modal,
     );
     if just_opened {
-        focus_scope.restore_focus();
+        if is_modal {
+            focus_scope.request_focus();
+        } else {
+            focus_scope.restore_focus();
+        }
     }
     layout().modifier(modifier).child(move || {
         let content = content;
@@ -709,7 +697,7 @@ fn side_sheet_content_wrapper(
                         parent_nested_scroll,
                     );
                     layout()
-                        .modifier(Modifier::new().padding_all(Dp(16.0)))
+                        .modifier(Modifier::new().padding_all(Dp(24.0)))
                         .child(move || {
                             let content = content;
                             provide_context(
@@ -737,7 +725,7 @@ fn side_sheet_content_wrapper(
                         parent_nested_scroll,
                     );
                     layout()
-                        .modifier(Modifier::new().padding_all(Dp(16.0)))
+                        .modifier(Modifier::new().padding_all(Dp(24.0)))
                         .child(move || {
                             let content = content;
                             provide_context(
@@ -785,5 +773,40 @@ impl tessera_ui::LayoutModifierNode for SideSheetLayout {
         );
 
         Ok(result.with_size(main_content_size.size()))
+    }
+}
+
+#[cfg(test)]
+mod placement_tests {
+    use tessera_ui::Px;
+
+    use super::{SideSheetPosition, compute_side_sheet_x};
+
+    #[test]
+    fn both_edges_and_directions_keep_fractional_sheet_and_drag_placement() {
+        for (open, progress) in [(true, 0.3125), (false, 0.6875)] {
+            assert_eq!(
+                compute_side_sheet_x(
+                    Px(800),
+                    Px(360),
+                    progress,
+                    open,
+                    SideSheetPosition::Start,
+                    -2.25
+                ),
+                -249.75
+            );
+            assert_eq!(
+                compute_side_sheet_x(
+                    Px(800),
+                    Px(360),
+                    progress,
+                    open,
+                    SideSheetPosition::End,
+                    2.25
+                ),
+                689.75
+            );
+        }
     }
 }

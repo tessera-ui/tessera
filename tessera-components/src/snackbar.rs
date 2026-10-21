@@ -7,21 +7,22 @@
 use std::{collections::VecDeque, time::Duration};
 
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, State, current_frame_nanos, layout::layout,
+    Callback, CallbackWith, Color, Dp, FocusManager, FocusRestorationTarget, FocusScopeNode,
+    Modifier, State,
+    accesskit::{Live, Role},
+    current_frame_nanos,
+    layout::layout,
+    modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
-    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    boxed::boxed,
+    alignment::Alignment,
     button::button,
-    column::column,
     icon_button::{IconButtonVariant, icon_button},
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding},
-    row::row,
+    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     shape_def::Shape,
-    spacer::spacer,
     surface::surface,
     text::text,
     theme::MaterialTheme,
@@ -359,14 +360,14 @@ impl SnackbarDefaults {
     pub const MIN_HEIGHT_TWO_LINE: Dp = Dp(68.0);
     /// Default container elevation.
     pub const CONTAINER_ELEVATION: Dp = Dp(6.0);
-    /// Default padding applied to snackbar content.
-    pub const CONTENT_PADDING: Padding = Padding::symmetric(Dp(16.0), Dp(6.0));
+    /// Default padding around snackbar message text.
+    pub const CONTENT_PADDING: Padding = Padding::symmetric(Dp(16.0), Dp(14.0));
     /// Default padding applied when rendering snackbars from host data.
     pub const HOST_PADDING: Padding = Padding::all(Dp(12.0));
     /// Horizontal spacing between text and actions.
     pub const ACTION_SPACING: Dp = Dp(8.0);
-    /// Vertical spacing between text and actions when stacked.
-    pub const ACTION_VERTICAL_SPACING: Dp = Dp(2.0);
+    /// Bottom spacing below actions placed on a separate line.
+    pub const ACTION_VERTICAL_SPACING: Dp = Dp(4.0);
 
     /// Default snackbar shape.
     pub fn shape() -> crate::shape_def::Shape {
@@ -398,12 +399,21 @@ impl SnackbarDefaults {
         Color::new(0.95, 0.95, 0.95, 1.0)
     }
 
-    /// Computes the minimum container height based on content.
+    /// Returns the minimum height for explicit message lines and action
+    /// placement.
+    ///
+    /// Measured wrapping, larger typography and taller actions may require
+    /// more.
     pub fn min_height(message: &str, action_on_new_line: bool) -> Dp {
-        if action_on_new_line || message.contains('\n') {
+        let message_height = if message.contains('\n') {
             Self::MIN_HEIGHT_TWO_LINE
         } else {
             Self::MIN_HEIGHT_ONE_LINE
+        };
+        if action_on_new_line {
+            Dp(message_height.0 + 48.0 + Self::ACTION_VERTICAL_SPACING.0)
+        } else {
+            message_height
         }
     }
 }
@@ -429,7 +439,10 @@ impl SnackbarDefaults {
 /// - `content_color` — optional message color override.
 /// - `action_color` — optional action color override.
 /// - `dismiss_action_color` — optional dismiss action color override.
-/// - `content_padding` — optional content padding override.
+/// - `content_padding` — optional message insets; vertical padding excludes
+///   action controls. Explicit horizontal insets also bound the action row.
+/// - `dismiss_action_label` — accessible close-button name; defaults to
+///   Dismiss.
 /// - `on_action` — optional action callback.
 /// - `on_dismiss` — optional dismiss callback.
 ///
@@ -468,6 +481,7 @@ pub fn snackbar(
     content_color: Option<Color>,
     action_color: Option<Color>,
     dismiss_action_color: Option<Color>,
+    #[prop(into)] dismiss_action_label: Option<String>,
     content_padding: Option<Padding>,
     on_action: Option<Callback>,
     on_dismiss: Option<Callback>,
@@ -486,17 +500,11 @@ pub fn snackbar(
     let content_color = content_color.unwrap_or(scheme.inverse_on_surface);
     let action_color = action_color.unwrap_or(scheme.inverse_primary);
     let dismiss_action_color = dismiss_action_color.unwrap_or(scheme.inverse_on_surface);
-    let content_padding = content_padding.unwrap_or(SnackbarDefaults::CONTENT_PADDING);
+    let dismiss_action_label = dismiss_action_label.unwrap_or_else(|| "Dismiss".into());
     let action_label = action_label.filter(|label| !label.is_empty());
     let has_action = action_label.is_some();
     let action_on_new_line = action_on_new_line && has_action;
-    let min_height = SnackbarDefaults::min_height(&message, action_on_new_line);
-    let modifier = modifier.default_min_size(Dp::ZERO, min_height).size_in(
-        None,
-        Some(SnackbarDefaults::MAX_WIDTH),
-        None,
-        None,
-    );
+    let modifier = modifier.size_in(None, Some(SnackbarDefaults::MAX_WIDTH), None, None);
     let on_action = if has_action {
         Some(on_action.unwrap_or_default())
     } else {
@@ -507,16 +515,6 @@ pub fn snackbar(
         Some(on_dismiss.unwrap_or_default())
     } else {
         None
-    };
-    let row_padding = if show_dismiss_action && !action_on_new_line {
-        Padding::new(
-            content_padding.left,
-            content_padding.top,
-            Dp(0.0),
-            content_padding.bottom,
-        )
-    } else {
-        content_padding
     };
 
     surface()
@@ -534,100 +532,48 @@ pub fn snackbar(
         .child(move || {
             let message = message.clone();
             let action_label = action_label.clone();
-            if action_on_new_line {
-                column()
-                    .modifier(Modifier::new().fill_max_width().padding(content_padding))
-                    .cross_axis_alignment(CrossAxisAlignment::Start)
-                    .children(move || {
-                        provide_context(|| typography.body_medium, {
-                            let message = message.clone();
-                            move || {
-                                text().content(message.clone()).color(content_color);
-                            }
-                        });
-
-                        if action_label.is_some() || on_dismiss.is_some() {
-                            spacer().modifier(
-                                Modifier::new().height(SnackbarDefaults::ACTION_VERTICAL_SPACING),
-                            );
-                            let action_label = action_label.clone();
-                            row()
-                                .modifier(Modifier::new().fill_max_width())
-                                .main_axis_alignment(MainAxisAlignment::End)
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .children(move || {
-                                    if let Some(label) = action_label.clone() {
-                                        let callback = on_action.unwrap_or_default();
-                                        button()
-                                            .text()
-                                            .on_click(move || {
-                                                callback.call();
-                                            })
-                                            .content_color(action_color)
-                                            .ripple_color(action_color)
-                                            .child(move || {
-                                                text().content(label.clone()).color(action_color);
-                                            });
-                                    }
-
-                                    if on_dismiss.is_some() {
-                                        spacer().modifier(
-                                            Modifier::new().width(SnackbarDefaults::ACTION_SPACING),
-                                        );
-                                        icon_button()
-                                            .icon(filled::CLOSE_SVG)
-                                            .variant(IconButtonVariant::Standard)
-                                            .content_color(dismiss_action_color)
-                                            .on_click_shared(on_dismiss.unwrap_or_default());
-                                    }
-                                });
-                        }
-                    });
-            } else {
-                row()
-                    .modifier(Modifier::new().fill_max_width().padding(row_padding))
-                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                    .children(move || {
+            let dismiss_action_label = dismiss_action_label.clone();
+            layout()
+                .policy(snackbar_layout::SnackbarLayout {
+                    stacked: action_on_new_line,
+                    action: has_action,
+                    dismiss: show_dismiss_action,
+                    padding: content_padding,
+                })
+                .child(move || {
+                    provide_context(|| typography.body_medium, {
                         let message = message.clone();
-                        boxed()
-                            .alignment(Alignment::CenterStart)
-                            .modifier(Modifier::new().weight(1.0))
-                            .children(move || {
-                                provide_context(|| typography.body_medium, {
-                                    let message = message.clone();
-                                    move || {
-                                        text().content(message.clone()).color(content_color);
-                                    }
-                                });
-                            });
-
-                        if let Some(label) = action_label.clone() {
-                            spacer()
-                                .modifier(Modifier::new().width(SnackbarDefaults::ACTION_SPACING));
-                            let callback = on_action.unwrap_or_default();
-                            button()
-                                .text()
-                                .on_click(move || {
-                                    callback.call();
-                                })
-                                .content_color(action_color)
-                                .ripple_color(action_color)
-                                .child(move || {
-                                    text().content(label.clone()).color(action_color);
-                                });
-                        }
-
-                        if on_dismiss.is_some() {
-                            spacer()
-                                .modifier(Modifier::new().width(SnackbarDefaults::ACTION_SPACING));
-                            icon_button()
-                                .icon(filled::CLOSE_SVG)
-                                .variant(IconButtonVariant::Standard)
-                                .content_color(dismiss_action_color)
-                                .on_click_shared(on_dismiss.unwrap_or_default());
+                        move || {
+                            text()
+                                .modifier(Modifier::new().semantics(SemanticsArgs {
+                                    role: Some(Role::Status),
+                                    live: Some(Live::Polite),
+                                    ..Default::default()
+                                }))
+                                .content(message.clone())
+                                .color(content_color);
                         }
                     });
-            }
+                    if let Some(label) = action_label.clone() {
+                        button()
+                            .text()
+                            .accessibility_label(label.clone())
+                            .on_click_shared(on_action.unwrap_or_default())
+                            .content_color(action_color)
+                            .ripple_color(action_color)
+                            .child(move || {
+                                text().content(label.clone()).color(action_color);
+                            });
+                    }
+                    if let Some(on_dismiss) = on_dismiss {
+                        icon_button()
+                            .icon(filled::CLOSE_SVG)
+                            .accessibility_label(dismiss_action_label.clone())
+                            .variant(IconButtonVariant::Standard)
+                            .content_color(dismiss_action_color)
+                            .on_click_shared(on_dismiss);
+                    }
+                });
         });
 }
 
@@ -645,6 +591,11 @@ pub fn snackbar(
 /// - `modifier` — modifier chain applied to the host container.
 /// - `state` — state that provides snackbar queue data.
 /// - `snackbar` — optional custom snackbar slot for rendering.
+///
+/// Appearance preserves the current focus. When the final notification closes
+/// while its controls own focus, the host restores the previously focused
+/// target after layout if that target remains available. Focus moved outside
+/// the host is preserved.
 ///
 /// ## Examples
 ///
@@ -702,55 +653,82 @@ pub fn snackbar_host(
             }
         });
     }
-    let Some(record) = record else {
-        return;
-    };
-    let data = SnackbarData::new(record, state);
-
+    let scope = remember(FocusScopeNode::new).get();
+    let showing = remember(|| false);
+    let origin = remember(|| None::<FocusRestorationTarget>);
+    let pending_restore = remember(|| None::<FocusRestorationTarget>);
+    let visible = record.is_some();
+    if visible != showing.get() {
+        if visible {
+            origin.set(FocusManager::current().save_focus());
+        } else {
+            if scope.has_focus() {
+                pending_restore.set(origin.get());
+                FocusManager::current().defer_keyboard_until_layout();
+            }
+            origin.set(None);
+        }
+        showing.set(visible);
+    }
+    let mut modifier = modifier.focus_scope_with(scope);
+    if pending_restore.get().is_some() {
+        modifier = modifier.on_globally_positioned(move |_| {
+            if let Some(target) = pending_restore.with_mut(Option::take) {
+                target.restore();
+            }
+        });
+    }
+    let data = record.map(|record| SnackbarData::new(record, state));
     layout().modifier(modifier).child(move || {
-        let data = data.clone();
+        let Some(data) = data.clone() else {
+            return;
+        };
         if let Some(snackbar_slot) = snackbar_slot {
             snackbar_slot.call(data.clone());
         } else {
             layout()
                 .modifier(Modifier::new().padding(SnackbarDefaults::HOST_PADDING))
                 .child(move || {
-                    snackbar_from_data(data.clone());
+                    snackbar_from_data().data(data.clone());
                 });
         }
     });
 }
 
-fn snackbar_from_data(data: SnackbarData) {
-    let SnackbarData {
-        message,
-        action_label,
-        with_dismiss_action,
-        host_state,
-        id,
-        ..
-    } = data;
-
-    let on_action = action_label.is_some().then(|| {
-        Callback::new(move || {
-            host_state.with_mut(|state| {
-                state.resolve_current(id, SnackbarResult::ActionPerformed);
-            });
-        })
-    });
-
-    let on_dismiss = with_dismiss_action.then(|| {
-        Callback::new(move || {
-            host_state.with_mut(|state| {
-                state.resolve_current(id, SnackbarResult::Dismissed);
-            });
-        })
-    });
-
+#[tessera]
+fn snackbar_from_data(data: Option<SnackbarData>) {
+    let Some(data) = data else {
+        return;
+    };
+    let current = remember(|| data.clone());
+    if current.get() != data {
+        current.set(data.clone());
+    }
+    let on_action = if data.action_label.is_some() {
+        Some(Callback::new(move || current.get().perform_action()))
+    } else {
+        None
+    };
+    let on_dismiss = if data.with_dismiss_action {
+        Some(Callback::new(move || current.get().dismiss()))
+    } else {
+        None
+    };
     snackbar()
-        .message(message)
-        .with_dismiss_action(with_dismiss_action)
-        .action_label_optional(action_label)
+        .message(data.message)
+        .with_dismiss_action(data.with_dismiss_action)
+        .action_label_optional(data.action_label)
         .on_action_optional(on_action)
         .on_dismiss_optional(on_dismiss);
 }
+
+#[cfg(test)]
+mod accessibility_tests;
+
+#[cfg(test)]
+mod host_tests;
+
+mod snackbar_layout;
+
+#[cfg(test)]
+mod geometry_tests;

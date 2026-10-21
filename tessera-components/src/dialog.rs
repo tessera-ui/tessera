@@ -2,14 +2,12 @@
 //!
 //! ## Usage
 //!
-//! Used to show modal dialogs such as alerts, confirmations, wizards and forms;
-//! dialogs block interaction with underlying content while active.
-use std::time::Duration;
+//! Show blocking alerts, confirmations, wizards and forms.
 
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Dp, FocusScopeNode, FocusTraversalPolicy,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot, State,
-    current_frame_nanos,
+    AxisConstraint, Callback, Color, ComputedData, Dp, FocusProperties, FocusScopeNode,
+    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
+    State, current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
@@ -17,10 +15,12 @@ use tessera_ui::{
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    animation,
+    animation::visibility_motion::{VisibilityMotion, VisibilitySample},
     boxed::boxed,
     column::column,
-    modifier::{ModifierExt, with_keyboard_input},
+    modal_focus::{ModalFocusState, modal_focus_modifier},
+    modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
+    overlay_semantics::{dialog_semantics, overlay_background},
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
@@ -29,36 +29,10 @@ use crate::{
     theme::{ContentColor, MaterialTheme},
 };
 
-/// The duration of the full dialog animation.
-const ANIM_TIME: Duration = Duration::from_millis(300);
-
-/// Compute normalized (0..1) linear progress from an optional animation timer.
-/// Placing this here reduces inline complexity inside the component body.
-fn compute_dialog_progress(animation_start_frame_nanos: Option<u64>) -> f32 {
-    animation_start_frame_nanos.map_or(1.0, |start_frame_nanos| {
-        let elapsed_nanos = current_frame_nanos().saturating_sub(start_frame_nanos);
-        let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-        if elapsed_nanos >= animation_nanos {
-            1.0
-        } else {
-            elapsed_nanos as f32 / animation_nanos as f32
-        }
-    })
-}
-
-/// Compute scrim alpha for material style.
-fn scrim_alpha_for(progress: f32, is_open: bool) -> f32 {
-    if is_open {
-        progress * 0.5
-    } else {
-        0.5 * (1.0 - progress)
-    }
-}
-
 /// Controller for [`dialog_provider`], controlling visibility and animation.
 pub struct DialogController {
     is_open: bool,
-    animation_start_frame_nanos: Option<u64>,
+    motion: VisibilityMotion,
 }
 
 impl DialogController {
@@ -66,43 +40,23 @@ impl DialogController {
     pub fn new(initial_open: bool) -> Self {
         Self {
             is_open: initial_open,
-            animation_start_frame_nanos: None,
+            motion: VisibilityMotion::new(initial_open, false),
         }
     }
 
     /// Opens the dialog, starting the animation if necessary.
     pub fn open(&mut self) {
         if !self.is_open {
+            self.motion.retarget(true, current_frame_nanos());
             self.is_open = true;
-            let now_nanos = current_frame_nanos();
-            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
-                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                if elapsed_nanos < animation_nanos {
-                    self.animation_start_frame_nanos =
-                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
-                    return;
-                }
-            }
-            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
     /// Closes the dialog, starting the closing animation if necessary.
     pub fn close(&mut self) {
         if self.is_open {
+            self.motion.retarget(false, current_frame_nanos());
             self.is_open = false;
-            let now_nanos = current_frame_nanos();
-            if let Some(old_start_frame_nanos) = self.animation_start_frame_nanos {
-                let elapsed_nanos = now_nanos.saturating_sub(old_start_frame_nanos);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                if elapsed_nanos < animation_nanos {
-                    self.animation_start_frame_nanos =
-                        Some(now_nanos.saturating_add(animation_nanos - elapsed_nanos));
-                    return;
-                }
-            }
-            self.animation_start_frame_nanos = Some(now_nanos);
         }
     }
 
@@ -112,17 +66,11 @@ impl DialogController {
     }
 
     fn is_animating(&self) -> bool {
-        self.animation_start_frame_nanos
-            .map(|start| {
-                let elapsed_nanos = current_frame_nanos().saturating_sub(start);
-                let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                elapsed_nanos < animation_nanos
-            })
-            .unwrap_or(false)
+        self.motion.sample(current_frame_nanos()).active
     }
 
-    fn snapshot(&self) -> (bool, Option<u64>) {
-        (self.is_open, self.animation_start_frame_nanos)
+    fn snapshot(&self) -> (bool, VisibilitySample) {
+        (self.is_open, self.motion.sample(current_frame_nanos()))
     }
 }
 
@@ -160,80 +108,86 @@ fn make_keyboard_handler(
 
 #[tessera]
 fn dialog_content_wrapper(
+    accessibility_label: Option<String>,
     alpha: Option<f32>,
     padding: Option<Dp>,
     just_opened: Option<bool>,
     on_close_request: Option<Callback>,
     content: Option<RenderSlot>,
+    focus_scope: Option<FocusScopeNode>,
 ) {
     let alpha = alpha.unwrap_or(1.0);
     let padding = padding.unwrap_or(Dp(24.0));
     let just_opened = just_opened.unwrap_or(false);
     let on_close_request = on_close_request.unwrap_or_default();
     let content = content.expect("dialog_content_wrapper requires content");
-    let focus_scope = remember(FocusScopeNode::new).get();
-    let modifier = with_keyboard_input(
-        Modifier::new()
-            .focus_scope_with(focus_scope)
-            .focus_traversal_policy(
-                FocusTraversalPolicy::linear()
-                    .wrap(true)
-                    .tab_navigation(true),
-            ),
-        make_keyboard_handler(on_close_request),
+    let focus_scope = focus_scope.expect("modal content requires its focus scope");
+    let modifier = dialog_semantics(
+        with_keyboard_input(
+            Modifier::new()
+                .focus_scope_with(focus_scope)
+                .focus_properties(FocusProperties::new().skip_traversal(true))
+                .focus_traversal_policy(
+                    FocusTraversalPolicy::linear()
+                        .wrap(true)
+                        .tab_navigation(true),
+                ),
+            make_keyboard_handler(on_close_request),
+        ),
+        accessibility_label,
+        true,
     );
     if just_opened {
-        focus_scope.restore_focus();
+        focus_scope.request_focus();
     }
     let policy = DialogContentLayout { alpha };
-    layout()
-        .modifier(modifier)
-        .policy(policy.clone())
-        .draw(policy)
-        .child(move || {
-            let content = content;
-            boxed()
-                .modifier(Modifier::new().fill_max_size())
-                .alignment(Alignment::Center)
-                .children(move || {
-                    let content = content;
-                    surface()
-                        .style(Color::TRANSPARENT.into())
-                        .modifier(
-                            Modifier::new()
-                                .constrain(Some(AxisConstraint::NONE), Some(AxisConstraint::NONE))
-                                .padding_all(Dp(24.0)),
-                        )
-                        .child(move || {
-                            let content = content;
-                            surface()
-                                .style(
-                                    use_context::<MaterialTheme>()
-                                        .expect("MaterialTheme must be provided")
-                                        .get()
-                                        .color_scheme
-                                        .surface_container_high
-                                        .into(),
-                                )
-                                .elevation(Dp(6.0))
-                                .shape(Shape::RoundedRectangle {
-                                    top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                    top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                    bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                    bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                })
-                                .block_input(true)
-                                .child(move || {
-                                    let content = content;
-                                    layout()
-                                        .modifier(Modifier::new().padding_all(padding))
-                                        .child(move || {
-                                            content.render();
-                                        });
-                                });
-                        });
-                });
-        });
+    layout().policy(policy.clone()).draw(policy).child(move || {
+        let content = content;
+        let modifier = modifier.clone();
+        boxed()
+            .modifier(Modifier::new().fill_max_size())
+            .alignment(Alignment::Center)
+            .children(move || {
+                let content = content;
+                let modifier = modifier.clone();
+                surface()
+                    .style(Color::TRANSPARENT.into())
+                    .modifier(
+                        Modifier::new()
+                            .constrain(Some(AxisConstraint::NONE), Some(AxisConstraint::NONE))
+                            .padding_all(Dp(24.0)),
+                    )
+                    .child(move || {
+                        let content = content;
+                        surface()
+                            .modifier(modifier.clone())
+                            .style(
+                                use_context::<MaterialTheme>()
+                                    .expect("MaterialTheme must be provided")
+                                    .get()
+                                    .color_scheme
+                                    .surface_container_high
+                                    .into(),
+                            )
+                            .elevation(Dp(6.0))
+                            .shape(Shape::RoundedRectangle {
+                                top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                            })
+                            .block_input(true)
+                            .child(move || {
+                                let content = content;
+                                layout()
+                                    .modifier(Modifier::new().padding_all(padding))
+                                    .child(move || {
+                                        content.render();
+                                    });
+                            });
+                    });
+            });
+    });
 }
 
 #[derive(Clone, PartialEq)]
@@ -281,13 +235,14 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 ///
 /// Provide a modal dialog at the top level of an application.
 ///
-/// # Usage
+/// ## Usage
 ///
 /// Show modal content for alerts, confirmation dialogs, multi-step forms, or
 /// onboarding steps that require blocking user interaction with the main UI.
 ///
-/// # Parameters
+/// ## Parameters
 ///
+/// - `accessibility_label` — accessible name describing the dialog or sheet.
 /// - `on_close_request` — optional close-request callback.
 /// - `padding` — padding applied inside the dialog surface.
 /// - `is_open` — declarative open state.
@@ -295,7 +250,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// - `main_content` — optional main content rendered behind the dialog.
 /// - `dialog_content` — optional modal content rendered above the scrim.
 ///
-/// # Examples
+/// ## Examples
 ///
 /// ```
 /// # use tessera_ui::tessera;
@@ -308,6 +263,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// dialog_provider()
+///     .accessibility_label("Dialog Title")
 ///     .on_close_request(|| {})
 ///     .is_open(true)
 ///     .main_content(|| { /* main content */ })
@@ -322,6 +278,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// ```
 #[tessera]
 pub fn dialog_provider(
+    #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
     is_open: Option<bool>,
@@ -351,6 +308,7 @@ pub fn dialog_provider(
         }
     }
     dialog_provider_render()
+        .accessibility_label_optional(accessibility_label)
         .on_close_request_shared(on_close_request)
         .padding(padding)
         .controller(controller)
@@ -360,6 +318,7 @@ pub fn dialog_provider(
 
 #[tessera]
 fn dialog_provider_render(
+    accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
     controller: Option<State<DialogController>>,
@@ -373,12 +332,9 @@ fn dialog_provider_render(
     let dialog_content = dialog_content.unwrap_or_else(RenderSlot::empty);
     let dialog_open_state = remember(|| false);
 
-    // Render the main application content unconditionally.
-    main_content.render();
-
     // If the dialog is open, render the modal overlay.
     // Sample state once to avoid repeated locks and improve readability.
-    let (is_open, timer_opt) = controller.with(|c| c.snapshot());
+    let (is_open, visibility) = controller.with(|c| c.snapshot());
     let mut just_opened = false;
     dialog_open_state.with_mut(|was_open| {
         just_opened = !*was_open && is_open;
@@ -388,16 +344,8 @@ fn dialog_provider_render(
     let is_animating = controller.with(|c| c.is_animating());
     if is_animating {
         receive_frame_nanos(move |frame_nanos| {
-            let is_animating = controller.with_mut(|controller| {
-                let (_, timer_opt) = controller.snapshot();
-                if let Some(start_frame_nanos) = timer_opt {
-                    let elapsed_nanos = frame_nanos.saturating_sub(start_frame_nanos);
-                    let animation_nanos = ANIM_TIME.as_nanos().min(u64::MAX as u128) as u64;
-                    elapsed_nanos < animation_nanos
-                } else {
-                    false
-                }
-            });
+            let is_animating =
+                controller.with(|controller| controller.motion.sample(frame_nanos).active);
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -406,46 +354,63 @@ fn dialog_provider_render(
         });
     }
 
-    if is_open || is_animating {
-        let progress = animation::easing(compute_dialog_progress(timer_opt));
+    let focus_scope = remember(FocusScopeNode::new).get();
+    let focus_state = remember(ModalFocusState::default);
+    let visible = is_open || is_animating;
+    let modifier = modal_focus_modifier(Modifier::new(), focus_state, visible, focus_scope);
+    layout().modifier(modifier).child(move || {
+        overlay_background(main_content, visible);
+        if is_open || is_animating {
+            let content_alpha = visibility.opacity;
+            let alpha = visibility.opacity * 0.32;
+            let scrim_color = use_context::<MaterialTheme>()
+                .expect("MaterialTheme must be provided")
+                .get()
+                .color_scheme
+                .scrim;
+            surface()
+                .style(scrim_color.with_alpha(alpha).into())
+                .on_click_shared(on_close_request)
+                .show_ripple(false)
+                .modifier(
+                    Modifier::new()
+                        .fill_max_size()
+                        .semantics(SemanticsArgs {
+                            hidden: true,
+                            ..Default::default()
+                        })
+                        .focusable()
+                        .focus_properties(
+                            FocusProperties::new()
+                                .can_focus(false)
+                                .can_request_focus(false)
+                                .skip_traversal(true),
+                        ),
+                )
+                .block_input(true)
+                .child(|| {});
 
-        let content_alpha = if is_open {
-            progress * 1.0 // Transition from 0 to 1 alpha
-        } else {
-            1.0 * (1.0 - progress) // Transition from 1 to 0 alpha
-        };
-
-        let alpha = scrim_alpha_for(progress, is_open);
-        let scrim_color = use_context::<MaterialTheme>()
-            .expect("MaterialTheme must be provided")
-            .get()
-            .color_scheme
-            .scrim;
-        surface()
-            .style(scrim_color.with_alpha(alpha).into())
-            .on_click_shared(on_close_request)
-            .modifier(Modifier::new().fill_max_size())
-            .block_input(true)
-            .child(|| {});
-
-        dialog_content_wrapper()
-            .alpha(content_alpha)
-            .padding(padding)
-            .just_opened(just_opened)
-            .on_close_request_shared(on_close_request)
-            .content_shared(dialog_content);
-    }
+            dialog_content_wrapper()
+                .accessibility_label_optional(accessibility_label.clone())
+                .focus_scope(focus_scope)
+                .alpha(content_alpha)
+                .padding(padding)
+                .just_opened(just_opened)
+                .on_close_request_shared(on_close_request)
+                .content_shared(dialog_content);
+        }
+    });
 }
 
 /// # basic_dialog
 ///
 /// A Material Design 3 basic dialog component.
 ///
-/// # Usage
+/// ## Usage
 ///
 /// Use inside the `dialog_content` closure of [`dialog_provider`].
 ///
-/// # Parameters
+/// ## Parameters
 ///
 /// - `icon` — optional icon slot shown above the headline.
 /// - `headline` — optional headline text.
@@ -453,7 +418,7 @@ fn dialog_provider_render(
 /// - `confirm_button` — optional confirm button slot.
 /// - `dismiss_button` — optional dismiss button slot.
 ///
-/// # Examples
+/// ## Examples
 ///
 /// ```
 /// # use tessera_ui::tessera;

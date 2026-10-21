@@ -106,11 +106,13 @@ pub mod list_item;
 pub mod loading_indicator;
 pub mod material_icons;
 pub mod menus;
+mod modal_focus;
 pub mod modifier;
 pub mod navigation_bar;
 pub mod navigation_drawer;
 pub mod navigation_rail;
 mod nested_scroll;
+mod overlay_semantics;
 mod padding_utils;
 pub mod pager;
 pub mod painter;
@@ -184,3 +186,6 @@ impl TesseraPackage for ComponentsPackage {
         registry.add_module(TesseraComponents);
     }
 }
+
+#[cfg(test)]
+mod overlay_motion_tests;
