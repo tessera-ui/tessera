@@ -52,10 +52,29 @@ struct SlotTable {
     entries: Vec<SlotEntry>,
     free_list: Vec<u32>,
     key_to_slot: HashMap<SlotKey, u32>,
+    slots_by_owner: HashMap<u64, HashSet<u32>>,
     epoch: u64,
 }
 
 impl SlotTable {
+    fn index_slot(&mut self, key: SlotKey, slot: u32) {
+        self.key_to_slot.insert(key, slot);
+        self.slots_by_owner
+            .entry(key.instance_logic_id)
+            .or_default()
+            .insert(slot);
+    }
+
+    fn unindex_slot(&mut self, key: SlotKey, slot: u32) {
+        self.key_to_slot.remove(&key);
+        if let Some(slots) = self.slots_by_owner.get_mut(&key.instance_logic_id) {
+            slots.remove(&slot);
+            if slots.is_empty() {
+                self.slots_by_owner.remove(&key.instance_logic_id);
+            }
+        }
+    }
+
     fn begin_epoch(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
     }
@@ -197,8 +216,17 @@ pub(crate) fn reset_component_context_tracking() {
     });
 }
 
-pub(crate) fn previous_component_context_snapshots() -> HashMap<u64, ContextMap> {
-    with_context_snapshot_tracker(|tracker| tracker.previous_by_instance_key.clone())
+pub(crate) fn previous_component_context_snapshots(keys: &[u64]) -> HashMap<u64, ContextMap> {
+    with_context_snapshot_tracker(|tracker| {
+        keys.iter()
+            .filter_map(|key| {
+                tracker
+                    .previous_by_instance_key
+                    .get(key)
+                    .map(|value| (*key, value.clone()))
+            })
+            .collect()
+    })
 }
 
 pub(crate) fn context_from_previous_snapshot_for_instance<T>(
@@ -221,12 +249,10 @@ pub(crate) fn remove_previous_component_context_snapshots(instance_keys: &HashSe
         return;
     }
     with_context_snapshot_tracker_mut(|tracker| {
-        tracker
-            .previous_by_instance_key
-            .retain(|instance_key, _| !instance_keys.contains(instance_key));
-        tracker
-            .current_by_instance_key
-            .retain(|instance_key, _| !instance_keys.contains(instance_key));
+        for key in instance_keys {
+            tracker.previous_by_instance_key.remove(key);
+            tracker.current_by_instance_key.remove(key);
+        }
     });
 }
 
@@ -348,7 +374,13 @@ pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
         let epoch = table.epoch;
         let mut freed: Vec<(u32, SlotKey)> = Vec::new();
         let mut removed = Vec::new();
-        for (slot, entry) in table.entries.iter_mut().enumerate() {
+        let slots: Vec<_> = instance_logic_ids
+            .iter()
+            .flat_map(|id| table.slots_by_owner.get(id).into_iter().flatten())
+            .copied()
+            .collect();
+        for slot in slots {
+            let entry = &mut table.entries[slot as usize];
             if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
                 continue;
             }
@@ -359,14 +391,14 @@ pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
                 continue;
             }
 
-            freed.push((slot as u32, entry.key));
+            freed.push((slot, entry.key));
             removed.push(entry.value.take());
             entry.generation = entry.generation.wrapping_add(1);
             entry.last_alive_epoch = 0;
         }
 
         for (slot, key) in freed {
-            table.key_to_slot.remove(&key);
+            table.unindex_slot(key, slot);
             table.free_list.push(slot);
         }
         removed
@@ -376,14 +408,7 @@ pub(crate) fn recycle_recomposed_context_slots_for_instance_logic_ids(
 }
 
 pub(crate) fn live_context_slot_instance_logic_ids() -> HashSet<u64> {
-    with_slot_table(|table| {
-        table
-            .entries
-            .iter()
-            .filter(|entry| entry.value.is_some())
-            .map(|entry| entry.key.instance_logic_id)
-            .collect()
-    })
+    with_slot_table(|table| table.slots_by_owner.keys().copied().collect())
 }
 
 pub(crate) fn drop_context_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64>) {
@@ -394,21 +419,27 @@ pub(crate) fn drop_context_slots_for_instance_logic_ids(instance_logic_ids: &Has
     let removed = with_slot_table_mut(|table| {
         let mut freed: Vec<(u32, SlotKey)> = Vec::new();
         let mut removed = Vec::new();
-        for (slot, entry) in table.entries.iter_mut().enumerate() {
+        let slots: Vec<_> = instance_logic_ids
+            .iter()
+            .flat_map(|id| table.slots_by_owner.get(id).into_iter().flatten())
+            .copied()
+            .collect();
+        for slot in slots {
+            let entry = &mut table.entries[slot as usize];
             if entry.value.is_none() {
                 continue;
             }
             if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
                 continue;
             }
-            freed.push((slot as u32, entry.key));
+            freed.push((slot, entry.key));
             removed.push(entry.value.take());
             entry.generation = entry.generation.wrapping_add(1);
             entry.last_alive_epoch = 0;
         }
 
         for (slot, key) in freed {
-            table.key_to_slot.remove(&key);
+            table.unindex_slot(key, slot);
             table.free_list.push(slot);
         }
         removed
@@ -665,7 +696,7 @@ where
                 entry.last_alive_epoch = epoch;
 
                 let generation = entry.generation;
-                table.key_to_slot.insert(slot_key, slot);
+                table.index_slot(slot_key, slot);
                 (slot, generation)
             } else {
                 let generation = 0;
@@ -676,7 +707,7 @@ where
                     value: Some(Arc::new(RwLock::new(init()))),
                     last_alive_epoch: epoch,
                 });
-                table.key_to_slot.insert(slot_key, slot);
+                table.index_slot(slot_key, slot);
                 (slot, generation)
             }
         })
@@ -782,7 +813,7 @@ mod tests {
                     value: Some(Arc::new(ReadOnDrop)),
                     last_alive_epoch: 0,
                 });
-                table.key_to_slot.insert(key, 0);
+                table.index_slot(key, 0);
                 table.begin_epoch();
             });
             let instances = super::HashSet::from_iter([42]);
@@ -866,7 +897,7 @@ mod tests {
                     value: Some(Arc::new(RwLock::new(42_u8))),
                     last_alive_epoch: 1,
                 });
-                table.key_to_slot.insert(key, 0);
+                table.index_slot(key, 0);
             });
         }
 
@@ -915,7 +946,7 @@ mod tests {
                     value: Some(Arc::new(RwLock::new(7_u16))),
                     last_alive_epoch: 2,
                 });
-                table.key_to_slot.insert(key, 1);
+                table.index_slot(key, 1);
             });
         }
 

@@ -170,6 +170,7 @@ pub struct HeadlessRenderer {
     frame_origin: Instant,
     current_frame_nanos: u64,
     frame_time: Duration,
+    diagnostics: crate::component_tree::LayoutFrameDiagnostics,
 }
 
 impl HeadlessRenderer {
@@ -219,6 +220,7 @@ impl HeadlessRenderer {
             frame_origin: Instant::now(),
             current_frame_nanos: 0,
             frame_time: config.frame_time.max(Duration::from_nanos(1)),
+            diagnostics: Default::default(),
         })
     }
 
@@ -230,6 +232,11 @@ impl HeadlessRenderer {
     /// Returns the number of frames rendered so far.
     pub fn frame_index(&self) -> u64 {
         self.frame_index
+    }
+
+    /// Returns the work performed by the most recently rendered frame.
+    pub fn diagnostics(&self) -> crate::component_tree::LayoutFrameDiagnostics {
+        self.diagnostics
     }
 
     /// Queues a synthetic pointer change.
@@ -398,6 +405,7 @@ impl HeadlessRenderer {
                 );
             (graph, diagnostics, record_cost)
         });
+        self.diagnostics = _diagnostics;
         flush_pending_focus_callbacks();
         crate::component_tree::flush_pending_globally_positioned_callbacks();
         prune_persistent_focus_handles();
@@ -437,7 +445,7 @@ impl HeadlessRenderer {
         {
             let breakdown = self.core.last_render_breakdown();
             let metadata_timer = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
-            let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
+            let nodes = TesseraRuntime::with_mut(|rt| rt.component_tree.profiler_nodes());
             if let Some(metadata_timer) = metadata_timer {
                 tracing::debug!(
                     frame_index,
@@ -546,20 +554,7 @@ impl HeadlessRenderer {
     /// order, visibility, actions, and focus independently of layout
     /// snapshots.
     pub fn accessibility_snapshot(&self) -> Option<accesskit::TreeUpdate> {
-        TesseraRuntime::with(|runtime| {
-            let tree = runtime.component_tree.tree();
-            let root = tree.get_node_id_at(NonZero::new(1).expect("root index is non-zero"))?;
-            crate::accessibility::build_tree_update(
-                tree,
-                runtime.component_tree.metadatas(),
-                root,
-                None,
-                runtime
-                    .component_tree
-                    .focus_owner()
-                    .active_component_node_id(),
-            )
-        })
+        TesseraRuntime::with_mut(|runtime| runtime.component_tree.accessibility_update(None, true))
     }
 
     /// Dispatches an assistive-technology action to a published node.

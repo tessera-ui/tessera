@@ -4,8 +4,11 @@
 //!
 //! Expose controls, text, and semantic groups to assistive technology.
 
+use std::collections::BTreeMap;
+
 use accesskit::{Node, NodeId as AccessKitNodeId, Rect, Tree, TreeId, TreeUpdate};
 use indextree::NodeId as ComponentNodeId;
+use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
     accessibility::AccessibilityId,
@@ -14,169 +17,341 @@ use crate::{
     px::PxPosition,
 };
 
+#[derive(Clone, Default, PartialEq)]
+struct DescendantContext {
+    semantic: bool,
+    tooltip: Option<String>,
+    traverses: bool,
+}
+
+struct SemanticEntry {
+    parent: Option<AccessKitNodeId>,
+    order: Vec<usize>,
+    children: BTreeMap<Vec<usize>, AccessKitNodeId>,
+    node: Node,
+}
+
 #[derive(Default)]
-struct CollectedNodes {
-    nodes: Vec<(AccessKitNodeId, Node)>,
-    focus: Option<AccessKitNodeId>,
+pub(crate) struct AccessibilityIndex {
+    components: HashMap<ComponentNodeId, (AccessKitNodeId, DescendantContext)>,
+    nodes: HashMap<AccessKitNodeId, SemanticEntry>,
+    focused: BTreeMap<Vec<usize>, AccessKitNodeId>,
+    pending: HashSet<AccessKitNodeId>,
+    root: Option<AccessKitNodeId>,
+    root_label: Option<String>,
+    last_focus: Option<AccessKitNodeId>,
+    changed: HashSet<ComponentNodeId>,
+    removed: HashSet<ComponentNodeId>,
 }
 
-fn stable_accessibility_id(tree: &ComponentNodeTree, node_id: ComponentNodeId) -> AccessibilityId {
-    AccessibilityId::new(tree[node_id].get().instance_key)
-}
-
-/// Builds an accessibility update with semantic groups, bounds, actions, and
-/// focus. Nodes without semantics preserve their descendants' reading order;
-/// a window root is supplied when the root has no explicit semantics.
-///
-/// # Arguments
-///
-/// * `tree` - The component tree structure (indextree::Arena)
-/// * `metadatas` - Component metadata including accessibility information
-/// * `root_node_id` - The root node of the component tree
-/// * `root_label` - Optional label used when synthesizing a root window node
-/// * `focused_node` - Current keyboard focus, when available
-///
-/// # Returns
-///
-/// A `TreeUpdate` ready to be sent to AccessKit, or `None` if there are no
-/// accessibility nodes.
-pub fn build_tree_update(
-    tree: &ComponentNodeTree,
-    metadatas: &ComponentNodeMetaDatas,
-    root_node_id: ComponentNodeId,
-    root_label: Option<&str>,
-    focused_node: Option<ComponentNodeId>,
-) -> Option<TreeUpdate> {
-    let mut collected = CollectedNodes::default();
-    let mut root_children = Vec::new();
-
-    // Convert root node ID
-    let root_accesskit_id = stable_accessibility_id(tree, root_node_id);
-
-    // Traverse the tree and collect accessibility nodes
-    let has_nodes = traverse_and_collect(
-        tree,
-        metadatas,
-        root_node_id,
-        &mut collected,
-        &mut root_children,
-        true,
-        root_label,
-        None,
-    );
-
-    // If no nodes were collected anywhere in the tree, don't create an update
-    if !has_nodes || collected.nodes.is_empty() {
-        return None;
+impl AccessibilityIndex {
+    pub(crate) fn invalidate(
+        &mut self,
+        changed: &HashSet<ComponentNodeId>,
+        removed: &HashSet<ComponentNodeId>,
+    ) {
+        self.changed.extend(changed);
+        self.removed.extend(removed);
     }
 
-    // Create the tree structure
-    let tree_struct = Tree::new(root_accesskit_id.to_accesskit_id());
+    pub(crate) fn update(
+        &mut self,
+        tree: &ComponentNodeTree,
+        metadatas: &ComponentNodeMetaDatas,
+        root: ComponentNodeId,
+        order: &HashMap<ComponentNodeId, usize>,
+    ) -> usize {
+        let mut changed = std::mem::take(&mut self.changed);
+        let mut removed_keys = HashSet::default();
+        for id in std::mem::take(&mut self.removed) {
+            if let Some((key, _)) = self.components.remove(&id) {
+                removed_keys.insert(key);
+            }
+        }
+        let mut contexts = HashMap::default();
+        let mut descendants = Vec::new();
+        for &id in &changed {
+            if tree.get(id).is_none_or(|node| node.is_removed()) {
+                continue;
+            }
+            let semantics = metadatas
+                .get(&id)
+                .and_then(|metadata| metadata.accessibility.as_ref());
+            let context = DescendantContext {
+                semantic: semantics.is_some(),
+                tooltip: semantics.and_then(|semantics| semantics.tooltip.clone()),
+                traverses: semantics.is_none_or(|semantics| semantics.merge_descendants),
+            };
+            if self
+                .components
+                .get(&id)
+                .is_some_and(|(_, previous)| *previous != context)
+            {
+                descendants.extend(id.descendants(tree).skip(1));
+            }
+            contexts.insert(id, context);
+        }
+        changed.extend(descendants);
+        let mut child_changes = HashSet::default();
+        for &id in &changed {
+            let Some(component) = tree.get(id).filter(|node| !node.is_removed()) else {
+                continue;
+            };
+            let key = AccessKitNodeId(component.get().instance_key);
+            removed_keys.remove(&key);
+            let context = contexts.remove(&id).unwrap_or_else(|| {
+                let semantics = metadatas
+                    .get(&id)
+                    .and_then(|metadata| metadata.accessibility.as_ref());
+                DescendantContext {
+                    semantic: semantics.is_some(),
+                    tooltip: semantics.and_then(|node| node.tooltip.clone()),
+                    traverses: semantics.is_none_or(|node| node.merge_descendants),
+                }
+            });
+            self.components.insert(id, (key, context));
+            let mut parent = None;
+            let mut tooltip = None;
+            let mut visible = true;
+            let mut path = Vec::new();
+            for ancestor in id.ancestors(tree) {
+                path.push(order.get(&ancestor).copied().unwrap_or_default());
+                let Some(metadata) = metadatas.get(&ancestor) else {
+                    visible = false;
+                    break;
+                };
+                if ancestor != root
+                    && tree[ancestor].get().role == NodeRole::Layout
+                    && metadata.abs_position.is_none()
+                {
+                    visible = false;
+                }
+                if let Some(semantics) = &metadata.accessibility {
+                    if tooltip.is_none() {
+                        tooltip = semantics.tooltip.as_deref();
+                    }
+                    if ancestor != id {
+                        if !semantics.merge_descendants {
+                            visible = false;
+                        }
+                        if parent.is_none() {
+                            parent = Some(AccessKitNodeId(tree[ancestor].get().instance_key));
+                        }
+                    }
+                }
+            }
+            path.reverse();
+            if id != root && parent.is_none() {
+                parent = Some(AccessKitNodeId(tree[root].get().instance_key));
+            }
+            let built = visible
+                .then(|| {
+                    build_node(
+                        tree,
+                        metadatas,
+                        id,
+                        id == root,
+                        self.root_label.as_deref(),
+                        tooltip,
+                    )
+                })
+                .flatten();
+            let Some((mut node, focused)) = built else {
+                self.remove(key, &mut child_changes);
+                continue;
+            };
+            let mut focus_order = path.clone();
+            focus_order.push(usize::MAX);
+            let previous = self.nodes.get(&key);
+            let relink = previous.is_none_or(|entry| entry.parent != parent || entry.order != path);
+            if relink {
+                if let Some(previous) = previous {
+                    let previous_parent = previous.parent;
+                    let previous_order = previous.order.clone();
+                    if let Some(parent) = previous_parent {
+                        if let Some(entry) = self.nodes.get_mut(&parent) {
+                            entry.children.remove(&previous_order);
+                        }
+                        child_changes.insert(parent);
+                    }
+                    let mut old_focus_order = previous_order;
+                    old_focus_order.push(usize::MAX);
+                    self.focused.remove(&old_focus_order);
+                }
+                if let Some(parent) = parent {
+                    child_changes.insert(parent);
+                }
+            }
+            if focused {
+                self.focused.insert(focus_order, key);
+            } else {
+                self.focused.remove(&focus_order);
+            }
+            let entry = self.nodes.entry(key).or_insert_with(|| SemanticEntry {
+                parent,
+                order: path.clone(),
+                children: BTreeMap::new(),
+                node: Node::default(),
+            });
+            entry.parent = parent;
+            entry.order = path;
+            node.set_children(entry.children.values().copied().collect::<Vec<_>>());
+            if entry.node != node {
+                entry.node = node;
+                self.pending.insert(key);
+            }
+        }
+        for key in removed_keys {
+            self.remove(key, &mut child_changes);
+        }
+        // Parents can be inserted after their children in the change journal.
+        for &id in &changed {
+            let Some((key, _)) = self.components.get(&id) else {
+                continue;
+            };
+            let Some(entry) = self.nodes.get(key) else {
+                continue;
+            };
+            let (parent, path) = (entry.parent, entry.order.clone());
+            if let Some(parent) = parent.filter(|parent| child_changes.contains(parent)) {
+                if let Some(entry) = self.nodes.get_mut(&parent) {
+                    entry.children.insert(path, *key);
+                }
+            }
+        }
+        for parent in child_changes {
+            if let Some(entry) = self.nodes.get_mut(&parent) {
+                let children: Vec<_> = entry.children.values().copied().collect();
+                if entry.node.children() != children.as_slice() {
+                    entry.node.set_children(children);
+                    self.pending.insert(parent);
+                }
+            }
+        }
+        self.root = Some(AccessKitNodeId(tree[root].get().instance_key));
+        changed.len()
+    }
 
-    let runtime_focus = focused_node.and_then(|focused| {
-        tree.get(focused).filter(|node| !node.is_removed())?;
-        focused.ancestors(tree).find_map(|id| {
-            let candidate = stable_accessibility_id(tree, id).to_accesskit_id();
-            collected
-                .nodes
+    fn remove(&mut self, key: AccessKitNodeId, changed: &mut HashSet<AccessKitNodeId>) {
+        if let Some(entry) = self.nodes.remove(&key) {
+            if let Some(parent) = entry.parent {
+                if let Some(parent_entry) = self.nodes.get_mut(&parent) {
+                    parent_entry.children.remove(&entry.order);
+                }
+                changed.insert(parent);
+            }
+            let mut order = entry.order;
+            order.push(usize::MAX);
+            self.focused.remove(&order);
+        }
+        self.pending.remove(&key);
+    }
+
+    pub(crate) fn set_label(&mut self, label: Option<&str>, root: ComponentNodeId) {
+        if self.root_label.as_deref() != label {
+            self.root_label = label.map(str::to_owned);
+            self.changed.insert(root);
+        }
+    }
+
+    pub(crate) fn tree_update(
+        &mut self,
+        tree: &ComponentNodeTree,
+        focused: Option<ComponentNodeId>,
+        full: bool,
+    ) -> Option<TreeUpdate> {
+        let root = self.root?;
+        let focus = focused
+            .and_then(|focused| {
+                tree.get(focused).filter(|node| !node.is_removed())?;
+                focused.ancestors(tree).find_map(|id| {
+                    let key = AccessKitNodeId(tree[id].get().instance_key);
+                    self.nodes
+                        .get(&key)
+                        .filter(|entry| !entry.node.is_hidden())
+                        .map(|_| key)
+                })
+            })
+            .or_else(|| self.focused.last_key_value().map(|(_, key)| *key))
+            .unwrap_or(root);
+        if !full && self.pending.is_empty() && self.last_focus == Some(focus) {
+            return None;
+        }
+        self.last_focus = Some(focus);
+        let keys = if full {
+            self.nodes.keys().copied().collect()
+        } else {
+            std::mem::take(&mut self.pending)
+        };
+        self.pending.clear();
+        let mut nodes: Vec<_> = keys
+            .into_iter()
+            .filter_map(|key| self.nodes.get(&key).map(|entry| (key, entry)))
+            .collect();
+        nodes.sort_unstable_by(|(_, left), (_, right)| {
+            left.order
                 .iter()
-                .any(|(id, node)| *id == candidate && !node.is_hidden())
-                .then_some(candidate)
+                .copied()
+                .chain(std::iter::once(usize::MAX))
+                .cmp(
+                    right
+                        .order
+                        .iter()
+                        .copied()
+                        .chain(std::iter::once(usize::MAX)),
+                )
+        });
+        Some(TreeUpdate {
+            nodes: nodes
+                .into_iter()
+                .map(|(key, entry)| (key, entry.node.clone()))
+                .collect(),
+            tree: Some(Tree::new(root)),
+            tree_id: TreeId::ROOT,
+            focus,
         })
-    });
-    Some(TreeUpdate {
-        nodes: collected.nodes,
-        tree: Some(tree_struct),
-        tree_id: TreeId::ROOT,
-        focus: runtime_focus
-            .or(collected.focus)
-            .unwrap_or_else(|| root_accesskit_id.to_accesskit_id()),
-    })
+    }
 }
 
-/// Recursively traverses the component tree and collects accessibility nodes.
-///
-/// Returns `true` if this subtree produced at least one accessibility node
-/// (real or synthesized root), `false` otherwise.
-fn traverse_and_collect(
+#[cfg(test)]
+pub(crate) fn build_tree_update(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    root: ComponentNodeId,
+    label: Option<&str>,
+    focused: Option<ComponentNodeId>,
+) -> Option<TreeUpdate> {
+    let mut index = AccessibilityIndex::default();
+    let changed = root.descendants(tree).collect();
+    let order = root
+        .descendants(tree)
+        .flat_map(|id| id.children(tree).enumerate().map(|(order, id)| (id, order)))
+        .collect();
+    index.invalidate(&changed, &HashSet::default());
+    index.set_label(label, root);
+    index.update(tree, metadatas, root, &order);
+    index.tree_update(tree, focused, true)
+}
+
+fn build_node(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
     node_id: ComponentNodeId,
-    collected: &mut CollectedNodes,
-    parent_children: &mut Vec<AccessKitNodeId>,
     is_root: bool,
     root_label: Option<&str>,
     inherited_tooltip: Option<&str>,
-) -> bool {
-    // Get metadata for this node
-    let metadata = match metadatas.get(&node_id) {
-        Some(metadata) => metadata,
-        None => return false,
-    };
-    if !is_root && tree[node_id].get().role == NodeRole::Layout && metadata.abs_position.is_none() {
-        return false;
-    }
-
+) -> Option<(Node, bool)> {
+    let metadata = metadatas.get(&node_id)?;
     let accessibility_node = metadata.accessibility.clone();
-    let inherited_tooltip = accessibility_node
-        .as_ref()
-        .and_then(|node| node.tooltip.as_deref())
-        .or(inherited_tooltip);
     let abs_position = metadata.abs_position;
     let computed_data = metadata.computed_data;
-
-    // Layout wrappers have no semantics. Publishing each wrapper makes every
-    // scroll update change many redundant bounds and multiplies platform
-    // events.
-    if accessibility_node.is_none() && !is_root {
-        let mut has_accessible_descendants = false;
-        for child_id in node_id.children(tree) {
-            has_accessible_descendants |= traverse_and_collect(
-                tree,
-                metadatas,
-                child_id,
-                collected,
-                parent_children,
-                false,
-                root_label,
-                inherited_tooltip,
-            );
-        }
-        return has_accessible_descendants;
-    }
-
-    let merge_descendants = accessibility_node
-        .as_ref()
-        .map(|node| node.merge_descendants)
-        .unwrap_or(true);
-
-    // Collect children with accessibility info
-    let mut accessible_children = Vec::new();
-    if merge_descendants {
-        for child_id in node_id.children(tree) {
-            // Recursively process child
-            traverse_and_collect(
-                tree,
-                metadatas,
-                child_id,
-                collected,
-                &mut accessible_children,
-                false,
-                root_label,
-                inherited_tooltip,
-            );
-        }
-    }
-
-    // Check if this node has accessibility information
     let tooltip_description = accessibility_node.as_ref().and_then(|node| {
         (node.focusable && node.description.is_none())
             .then(|| inherited_tooltip.map(str::to_owned))
             .flatten()
     });
+    let mut focused = false;
     if let Some(accessibility_node) = accessibility_node {
-        let accesskit_id = stable_accessibility_id(tree, node_id);
-
         // Build AccessKit Node
         let mut node = Node::new(accessibility_node.role.unwrap_or_else(|| {
             if accessibility_node.heading_level.is_some() {
@@ -288,7 +463,7 @@ fn traverse_and_collect(
 
         // Set focused (and remember for TreeUpdate)
         if accessibility_node.focused {
-            collected.focus = Some(accesskit_id.to_accesskit_id());
+            focused = true;
         }
 
         // Set toggled state
@@ -323,11 +498,6 @@ fn traverse_and_collect(
             node.add_action(action);
         }
 
-        // Set children if any
-        if !accessible_children.is_empty() {
-            node.set_children(accessible_children);
-        }
-
         let bounds = match accessibility_node.bounds_padding {
             Some(padding) => rect_from_geometry_with_padding(abs_position, computed_data, padding),
             None => rect_from_geometry(abs_position, computed_data),
@@ -337,31 +507,20 @@ fn traverse_and_collect(
             node.set_bounds(clipped_shape_bounds(bounds, node_id, tree, metadatas));
         }
 
-        // Add to collection
-        collected.nodes.push((accesskit_id.to_accesskit_id(), node));
-        parent_children.push(accesskit_id.to_accesskit_id());
-
-        true
+        Some((node, focused))
     } else if is_root {
-        let accesskit_id = stable_accessibility_id(tree, node_id);
         let mut node = Node::new(accesskit::Role::Window);
         if let Some(label) = root_label {
             node.set_label(label.to_string());
-        }
-
-        if !accessible_children.is_empty() {
-            node.set_children(accessible_children);
         }
 
         if let Some(bounds) = rect_from_geometry(abs_position, computed_data) {
             node.set_bounds(bounds);
         }
 
-        collected.nodes.push((accesskit_id.to_accesskit_id(), node));
-        parent_children.push(accesskit_id.to_accesskit_id());
-        true
+        Some((node, false))
     } else {
-        false
+        None
     }
 }
 
@@ -580,6 +739,160 @@ mod tests {
         });
         metadatas.insert(id, metadata);
         id
+    }
+
+    #[test]
+    fn semantic_deltas_preserve_siblings_and_refresh_inherited_tooltips() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let parent = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode {
+                tooltip: Some("First hint".into()),
+                ..AccessibilityNode::new()
+            }),
+        );
+        let child = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(parent),
+            Some(AccessibilityNode {
+                label: Some("Control".into()),
+                focusable: true,
+                ..AccessibilityNode::new()
+            }),
+        );
+        let sibling = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode {
+                label: Some("Sibling".into()),
+                ..AccessibilityNode::new()
+            }),
+        );
+        let order = [(parent, 0), (child, 0), (sibling, 1)]
+            .into_iter()
+            .collect();
+        let mut index = AccessibilityIndex::default();
+        index.invalidate(
+            &[root, parent, child, sibling].into_iter().collect(),
+            &HashSet::default(),
+        );
+        index.update(&tree, &metadatas, root, &order);
+        let initial = index.tree_update(&tree, Some(child), true).unwrap();
+        assert_eq!(
+            initial
+                .nodes
+                .iter()
+                .map(|(key, _)| *key)
+                .collect::<Vec<_>>(),
+            [child, parent, sibling, root].map(|id| AccessKitNodeId(tree[id].get().instance_key))
+        );
+        let child_key = AccessKitNodeId(tree[child].get().instance_key);
+        assert_eq!(
+            initial
+                .nodes
+                .iter()
+                .find(|(id, _)| *id == child_key)
+                .unwrap()
+                .1
+                .description(),
+            Some("First hint")
+        );
+        assert_eq!(index.update(&tree, &metadatas, root, &order), 0);
+        assert!(index.tree_update(&tree, Some(child), false).is_none());
+
+        metadatas
+            .get_mut(&parent)
+            .unwrap()
+            .accessibility
+            .as_mut()
+            .unwrap()
+            .tooltip = Some("Updated hint".into());
+        index.invalidate(&[parent].into_iter().collect(), &HashSet::default());
+        assert_eq!(index.update(&tree, &metadatas, root, &order), 2);
+        let delta = index.tree_update(&tree, Some(child), false).unwrap();
+        assert_eq!(delta.nodes.len(), 2);
+        assert_eq!(delta.focus, child_key);
+        assert_eq!(
+            delta
+                .nodes
+                .iter()
+                .find(|(id, _)| *id == child_key)
+                .unwrap()
+                .1
+                .description(),
+            Some("Updated hint")
+        );
+        assert!(
+            !delta
+                .nodes
+                .iter()
+                .any(|(id, _)| *id == AccessKitNodeId(tree[sibling].get().instance_key))
+        );
+    }
+
+    #[test]
+    fn semantic_value_replacement_keeps_parent_children_and_stable_identity() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let old = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode {
+                label: Some("Before".into()),
+                ..AccessibilityNode::new()
+            }),
+        );
+        let key = tree[old].get().instance_key;
+        let mut index = AccessibilityIndex::default();
+        index.invalidate(&[root, old].into_iter().collect(), &HashSet::default());
+        index.update(&tree, &metadatas, root, &[(old, 0)].into_iter().collect());
+        let initial = index.tree_update(&tree, None, true).unwrap();
+        let children = initial
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == AccessKitNodeId(tree[root].get().instance_key))
+            .unwrap()
+            .1
+            .children()
+            .to_vec();
+        old.remove_subtree(&mut tree);
+        metadatas.remove(&old);
+        let new = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode {
+                label: Some("After".into()),
+                ..AccessibilityNode::new()
+            }),
+        );
+        tree[new].get_mut().instance_key = key;
+        index.invalidate(&[new].into_iter().collect(), &[old].into_iter().collect());
+        index.update(&tree, &metadatas, root, &[(new, 0)].into_iter().collect());
+        let delta = index.tree_update(&tree, None, false).unwrap();
+        assert_eq!(delta.nodes.len(), 1);
+        assert_eq!(delta.nodes[0].0, AccessKitNodeId(key));
+        assert_eq!(delta.nodes[0].1.label(), Some("After"));
+        assert_eq!(
+            index
+                .tree_update(&tree, None, true)
+                .unwrap()
+                .nodes
+                .iter()
+                .find(|(id, _)| *id == AccessKitNodeId(tree[root].get().instance_key))
+                .unwrap()
+                .1
+                .children(),
+            children
+        );
     }
 
     #[test]

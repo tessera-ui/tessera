@@ -7,6 +7,7 @@
 
 use std::{
     cell::Cell,
+    collections::BTreeMap,
     ptr::NonNull,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -1016,14 +1017,20 @@ enum KeyboardLayoutBarrier {
     Layout,
 }
 
+type FocusOrderPath = Vec<(u64, usize)>;
+type FocusChildren = BTreeMap<(FocusOrderPath, FocusHandleId), FocusHandleId>;
+
 /// Per-component-tree focus owner.
 #[derive(Default)]
 pub(crate) struct FocusOwner {
     nodes: HashMap<FocusHandleId, FocusTreeNode>,
-    children_by_parent: HashMap<FocusHandleId, Vec<FocusHandleId>>,
+    children_by_parent: HashMap<FocusHandleId, FocusChildren>,
     requester_bindings: HashMap<FocusRequesterId, FocusHandleId>,
     requesters_by_handle: HashMap<FocusHandleId, Vec<FocusRequesterId>>,
     active: Option<FocusHandleId>,
+    stateful_handles: HashSet<FocusHandleId>,
+    handles_by_component: HashMap<NodeId, FocusHandleId>,
+    order_paths: HashMap<FocusHandleId, FocusOrderPath>,
     captured: Option<FocusHandleId>,
     suspended: Option<FocusHandleId>,
     owner_focused: bool,
@@ -1044,6 +1051,9 @@ impl FocusOwner {
             requester_bindings: HashMap::default(),
             requesters_by_handle: HashMap::default(),
             active: None,
+            stateful_handles: HashSet::default(),
+            handles_by_component: HashMap::default(),
+            order_paths: HashMap::default(),
             captured: None,
             suspended: None,
             owner_focused: true,
@@ -1207,76 +1217,181 @@ impl FocusOwner {
         self.notify_state_changes(previous_states);
     }
 
-    pub(crate) fn sync_from_component_tree(&mut self, root_node: NodeId, tree: &ComponentNodeTree) {
-        self.nodes
-            .entry(ROOT_SCOPE_ID)
-            .or_insert_with(FocusTreeNode::new_root_scope);
-
+    pub(crate) fn sync_changes(
+        &mut self,
+        tree: &ComponentNodeTree,
+        composition_order: &HashMap<NodeId, usize>,
+        changed: &HashSet<NodeId>,
+        removed: &HashSet<NodeId>,
+    ) {
+        if changed.is_empty() && removed.is_empty() {
+            return;
+        }
         let previous_states = self.snapshot_live_states();
-        let previous_requester_bindings = self.requester_bindings.clone();
-        for node in self.nodes.values_mut() {
-            let is_root_scope = matches!(
-                node.attachment,
-                Some(FocusAttachment {
-                    host_replay_boundary_key: 0,
-                    ..
-                })
-            );
-            if !is_root_scope {
-                node.attachment = None;
-                node.state = FocusState::Inactive;
+        let mut requesters = HashMap::default();
+        for &node_id in removed.iter().chain(changed.iter()) {
+            let Some(handle) = self.handles_by_component.remove(&node_id) else {
+                continue;
+            };
+            if let Some(node) = self.nodes.get_mut(&handle) {
+                if let Some(attachment) = node.attachment.take() {
+                    if let Some(children) = self.children_by_parent.get_mut(&attachment.parent) {
+                        if let Some(order) = self.order_paths.get(&handle) {
+                            children.remove(&(order.clone(), handle));
+                        }
+                    }
+                }
+            }
+            if let Some(bindings) = self.requesters_by_handle.remove(&handle) {
+                for requester in bindings {
+                    let previous = self.requester_bindings.remove(&requester);
+                    requesters.entry(requester).or_insert(previous);
+                }
             }
         }
-        self.children_by_parent.clear();
-        self.children_by_parent.insert(ROOT_SCOPE_ID, Vec::new());
-        self.requester_bindings.clear();
-        self.requesters_by_handle.clear();
-        if let Some(root) = self.nodes.get_mut(&ROOT_SCOPE_ID) {
-            root.attachment = Some(FocusAttachment::root_scope());
-            root.state = FocusState::Inactive;
+        for &node_id in changed {
+            let Some(node_ref) = tree.get(node_id).filter(|node| !node.is_removed()) else {
+                continue;
+            };
+            let node = node_ref.get();
+            let Some(registration) = node.focus_registration else {
+                continue;
+            };
+            let mut parent = ROOT_SCOPE_ID;
+            let mut scope = ROOT_SCOPE_ID;
+            for ancestor in node_id.ancestors(tree).skip(1) {
+                if let Some(registration) = tree[ancestor].get().focus_registration {
+                    if parent == ROOT_SCOPE_ID {
+                        parent = registration.id;
+                    }
+                    if registration.kind == FocusRegistrationKind::Scope {
+                        scope = registration.id;
+                        break;
+                    }
+                }
+            }
+            let entry = self
+                .nodes
+                .entry(registration.id)
+                .or_insert_with(|| FocusTreeNode::new(registration.kind));
+            entry.kind = registration.kind;
+            entry.last_parent = parent;
+            entry.last_scope_parent = scope;
+            entry.props = registration.properties;
+            entry.traversal_policy = node.focus_traversal_policy;
+            entry.restorer_fallback = (registration.kind == FocusRegistrationKind::Scope)
+                .then(|| {
+                    node.focus_restorer_fallback
+                        .map(|fallback| fallback.requester_id())
+                })
+                .flatten();
+            entry.attachment = Some(FocusAttachment {
+                host_replay_boundary_key: nearest_replay_boundary_instance_key(node_id, tree),
+                live_node_id: Some(node_id),
+                focus_rect: None,
+                traversal_order: None,
+                parent,
+                scope_parent: scope,
+            });
+            self.handles_by_component.insert(node_id, registration.id);
+            let order: Vec<_> = node_id
+                .ancestors(tree)
+                .filter(|id| tree[*id].parent().is_some())
+                .map(|id| {
+                    (
+                        u64::MAX,
+                        composition_order.get(&id).copied().unwrap_or_default(),
+                    )
+                })
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+                .collect();
+            self.order_paths.insert(registration.id, order.clone());
+            self.children_by_parent
+                .entry(parent)
+                .or_default()
+                .insert((order, registration.id), registration.id);
+            self.children_by_parent.entry(registration.id).or_default();
+            if let Some(requester) = node.focus_requester_binding {
+                let requester = requester.requester_id();
+                let previous = self.requester_bindings.insert(requester, registration.id);
+                requesters.entry(requester).or_insert(previous);
+                self.requesters_by_handle
+                    .entry(registration.id)
+                    .or_default()
+                    .push(requester);
+            }
         }
-
-        let mut seen = HashSet::default();
-        self.collect_focus_nodes(root_node, tree, ROOT_SCOPE_ID, ROOT_SCOPE_ID, &mut seen);
-
         self.repair_after_sync();
         self.recompute_states();
         self.notify_state_changes(previous_states);
-        self.notify_requester_binding_changes(previous_requester_bindings);
-    }
-
-    pub(crate) fn sync_layout_from_component_tree(
-        &mut self,
-        root_node: NodeId,
-        tree: &ComponentNodeTree,
-        metadatas: &ComponentNodeMetaDatas,
-    ) {
-        let handles_by_node_id: HashMap<NodeId, FocusHandleId> = self
-            .nodes
-            .iter()
-            .filter_map(|(&handle_id, node)| {
-                node.attachment
-                    .and_then(|attachment| attachment.live_node_id)
-                    .map(|node_id| (node_id, handle_id))
-            })
-            .collect();
-
-        for node in self.nodes.values_mut() {
-            if let Some(attachment) = node.attachment.as_mut() {
-                attachment.focus_rect = None;
-                attachment.traversal_order = None;
+        for (requester, previous) in requesters {
+            if self.requester_bindings.get(&requester).copied() == previous {
+                continue;
+            }
+            for reader in focus_requester_read_subscribers(requester) {
+                record_replay_boundary_invalidation_for_instance_key(reader);
             }
         }
+    }
 
-        let mut next_traversal_order = 0_u64;
-        self.assign_layout_info_for_subtree(
-            root_node,
-            tree,
-            metadatas,
-            &handles_by_node_id,
-            &mut next_traversal_order,
-        );
-        self.sort_children_by_traversal_order();
+    pub(crate) fn sync_geometry_changes(
+        &mut self,
+        tree: &ComponentNodeTree,
+        composition_order: &HashMap<NodeId, usize>,
+        metadatas: &ComponentNodeMetaDatas,
+        changed: &HashSet<NodeId>,
+    ) {
+        if changed.is_empty() {
+            return;
+        }
+        for node_id in changed {
+            let Some(&handle) = self.handles_by_component.get(node_id) else {
+                continue;
+            };
+            let rect = metadatas.get(node_id).and_then(|metadata| {
+                let position = metadata.abs_position?;
+                let size = metadata.computed_data?;
+                let rect =
+                    PxRect::from_position_size(position, PxSize::new(size.width, size.height));
+                Some(metadata.event_clip_rect.map_or(rect, |clip| {
+                    clip.intersection(&rect).unwrap_or(PxRect::ZERO)
+                }))
+            });
+            let order = node_id
+                .ancestors(tree)
+                .filter_map(|id| {
+                    let node = tree.get(id)?;
+                    node.parent()?;
+                    Some((
+                        metadatas
+                            .get(&id)
+                            .and_then(|metadata| metadata.placement_order)
+                            .unwrap_or(u64::MAX),
+                        composition_order.get(&id).copied().unwrap_or(0),
+                    ))
+                })
+                .collect::<Vec<_>>();
+            let order: Vec<_> = order.into_iter().rev().collect();
+            let previous_order = self.order_paths.insert(handle, order.clone());
+            if let Some(attachment) = self
+                .nodes
+                .get_mut(&handle)
+                .and_then(|node| node.attachment.as_mut())
+            {
+                attachment.focus_rect = rect;
+                attachment.traversal_order = Some(0);
+                let children = self
+                    .children_by_parent
+                    .entry(attachment.parent)
+                    .or_default();
+                if let Some(previous) = previous_order {
+                    children.remove(&(previous, handle));
+                }
+                children.insert((order, handle), handle);
+            }
+        }
         if self.active.is_some_and(|id| {
             self.nodes.get(&id).is_some_and(|node| node.is_attached())
                 && !self.can_request_focus(id)
@@ -1293,6 +1408,47 @@ impl FocusOwner {
             self.recompute_states();
             self.notify_state_changes(previous_states);
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sync_from_component_tree(&mut self, root_node: NodeId, tree: &ComponentNodeTree) {
+        let changed = root_node.descendants(tree).collect::<HashSet<_>>();
+        let removed = self
+            .handles_by_component
+            .keys()
+            .copied()
+            .filter(|node| !changed.contains(node))
+            .collect();
+        let order = root_node
+            .descendants(tree)
+            .flat_map(|parent| {
+                parent
+                    .children(tree)
+                    .enumerate()
+                    .map(|(order, id)| (id, order))
+            })
+            .collect();
+        self.sync_changes(tree, &order, &changed, &removed);
+    }
+
+    #[cfg(test)]
+    pub(crate) fn sync_layout_from_component_tree(
+        &mut self,
+        root_node: NodeId,
+        tree: &ComponentNodeTree,
+        metadatas: &ComponentNodeMetaDatas,
+    ) {
+        let changed = self.handles_by_component.keys().copied().collect();
+        let order = root_node
+            .descendants(tree)
+            .flat_map(|parent| {
+                parent
+                    .children(tree)
+                    .enumerate()
+                    .map(|(order, id)| (id, order))
+            })
+            .collect();
+        self.sync_geometry_changes(tree, &order, metadatas, &changed);
     }
 
     pub(crate) fn commit_pending(&mut self) {
@@ -1393,171 +1549,6 @@ impl FocusOwner {
         None
     }
 
-    fn collect_focus_nodes(
-        &mut self,
-        node_id: NodeId,
-        tree: &ComponentNodeTree,
-        parent_focus_id: FocusHandleId,
-        current_scope_id: FocusHandleId,
-        seen: &mut HashSet<FocusHandleId>,
-    ) {
-        let Some(node_ref) = tree.get(node_id) else {
-            return;
-        };
-        let node = node_ref.get();
-
-        let mut next_parent_focus_id = parent_focus_id;
-        let mut next_scope_id = current_scope_id;
-
-        if let Some(registration) = node.focus_registration {
-            if !seen.insert(registration.id) {
-                debug_assert!(
-                    false,
-                    "Focus handle {} was registered on multiple component nodes in the same frame",
-                    registration.id
-                );
-            }
-            let entry = self
-                .nodes
-                .entry(registration.id)
-                .or_insert_with(|| FocusTreeNode::new(registration.kind));
-            let host_replay_boundary_key = nearest_replay_boundary_instance_key(node_id, tree);
-            entry.kind = registration.kind;
-            entry.last_parent = parent_focus_id;
-            entry.last_scope_parent = current_scope_id;
-            entry.attachment = Some(FocusAttachment {
-                host_replay_boundary_key,
-                live_node_id: Some(node_id),
-                focus_rect: None,
-                traversal_order: None,
-                parent: parent_focus_id,
-                scope_parent: current_scope_id,
-            });
-            entry.props = registration.properties;
-            entry.traversal_policy = node.focus_traversal_policy;
-            entry.restorer_fallback = (registration.kind == FocusRegistrationKind::Scope)
-                .then(|| {
-                    node.focus_restorer_fallback
-                        .map(|fallback| fallback.requester_id())
-                })
-                .flatten();
-
-            self.children_by_parent
-                .entry(parent_focus_id)
-                .or_default()
-                .push(registration.id);
-            self.children_by_parent.entry(registration.id).or_default();
-            if let Some(requester) = node.focus_requester_binding {
-                let replaced = self
-                    .requester_bindings
-                    .insert(requester.requester_id(), registration.id);
-                debug_assert!(
-                    replaced.is_none() || replaced == Some(registration.id),
-                    "FocusRequester {} was bound to multiple focus nodes in the same frame",
-                    requester.requester_id()
-                );
-                self.requesters_by_handle
-                    .entry(registration.id)
-                    .or_default()
-                    .push(requester.requester_id());
-            }
-
-            next_parent_focus_id = registration.id;
-            if registration.kind == FocusRegistrationKind::Scope {
-                next_scope_id = registration.id;
-            }
-        } else if node.focus_requester_binding.is_some() {
-            debug_assert!(
-                false,
-                "focus_requester requires focus_target or focus_scope on the same component node"
-            );
-        }
-
-        for child_id in node_id.children(tree) {
-            self.collect_focus_nodes(child_id, tree, next_parent_focus_id, next_scope_id, seen);
-        }
-    }
-
-    fn assign_layout_info_for_subtree(
-        &mut self,
-        node_id: NodeId,
-        tree: &ComponentNodeTree,
-        metadatas: &ComponentNodeMetaDatas,
-        handles_by_node_id: &HashMap<NodeId, FocusHandleId>,
-        next_traversal_order: &mut u64,
-    ) {
-        if let Some(handle_id) = handles_by_node_id.get(&node_id).copied() {
-            let focus_rect = metadatas.get(&node_id).and_then(|metadata| {
-                let abs_position = metadata.abs_position?;
-                let computed_data = metadata.computed_data?;
-                let node_rect = PxRect::from_position_size(
-                    abs_position,
-                    PxSize::new(computed_data.width, computed_data.height),
-                );
-                Some(if let Some(clip_rect) = metadata.event_clip_rect {
-                    clip_rect.intersection(&node_rect).unwrap_or(PxRect::ZERO)
-                } else {
-                    node_rect
-                })
-            });
-            if let Some(node) = self.nodes.get_mut(&handle_id)
-                && let Some(attachment) = node.attachment.as_mut()
-            {
-                attachment.focus_rect = focus_rect;
-                attachment.traversal_order = Some(*next_traversal_order);
-            }
-            *next_traversal_order += 1;
-        }
-
-        let mut children: Vec<_> = node_id.children(tree).enumerate().collect();
-        children.sort_by_key(|(composition_order, child_id)| {
-            let placement_order = metadatas
-                .get(child_id)
-                .and_then(|metadata| metadata.placement_order)
-                .unwrap_or(u64::MAX);
-            (placement_order, *composition_order as u64)
-        });
-
-        for (_, child_id) in children {
-            self.assign_layout_info_for_subtree(
-                child_id,
-                tree,
-                metadatas,
-                handles_by_node_id,
-                next_traversal_order,
-            );
-        }
-    }
-
-    fn sort_children_by_traversal_order(&mut self) {
-        let order_by_handle: HashMap<FocusHandleId, (u64, u64)> = self
-            .nodes
-            .iter()
-            .map(|(&handle_id, node)| {
-                (
-                    handle_id,
-                    (
-                        node.attachment
-                            .and_then(|attachment| attachment.traversal_order)
-                            .unwrap_or(u64::MAX),
-                        node.attachment
-                            .map(|attachment| attachment.host_replay_boundary_key)
-                            .unwrap_or(u64::MAX),
-                    ),
-                )
-            })
-            .collect();
-
-        for children in self.children_by_parent.values_mut() {
-            children.sort_by_key(|child| {
-                order_by_handle
-                    .get(child)
-                    .copied()
-                    .unwrap_or((u64::MAX, u64::MAX))
-            });
-        }
-    }
-
     fn repair_after_sync(&mut self) {
         if self
             .active
@@ -1610,26 +1601,6 @@ impl FocusOwner {
                 self.update_scope_restore_chain(active);
             }
         }
-
-        let live_ids = self
-            .nodes
-            .iter()
-            .filter_map(|(&id, node)| node.is_attached().then_some(id))
-            .collect::<HashSet<_>>();
-        for node in self.nodes.values_mut() {
-            if node
-                .last_focused_descendant
-                .is_some_and(|last| !live_ids.contains(&last))
-            {
-                node.last_focused_descendant = None;
-            }
-            if node
-                .restorer_fallback
-                .is_some_and(|fallback| !self.requester_bindings.contains_key(&fallback))
-            {
-                node.restorer_fallback = None;
-            }
-        }
     }
 
     fn should_wait_for_reattach(&self, id: FocusHandleId) -> bool {
@@ -1660,15 +1631,15 @@ impl FocusOwner {
         }
 
         let previous_states = self.snapshot_live_states();
-        let previous_requester_bindings = self.requester_bindings.clone();
-
+        let mut previous_requester_bindings = HashMap::default();
         for requester_id in removed_requesters {
-            self.requester_bindings.remove(requester_id);
+            if let Some(handle) = self.requester_bindings.remove(requester_id) {
+                previous_requester_bindings.insert(*requester_id, handle);
+                if let Some(requesters) = self.requesters_by_handle.get_mut(&handle) {
+                    requesters.retain(|id| id != requester_id);
+                }
+            }
         }
-        for requesters in self.requesters_by_handle.values_mut() {
-            requesters.retain(|requester_id| !removed_requesters.contains(requester_id));
-        }
-
         // Restore against survivors while retaining scope ancestry until
         // cleanup finishes.
         for handle_id in removed_handles {
@@ -1703,25 +1674,22 @@ impl FocusOwner {
         }
 
         for handle_id in removed_handles {
-            self.nodes.remove(handle_id);
-            self.children_by_parent.remove(handle_id);
-            self.requesters_by_handle.remove(handle_id);
-        }
-        for children in self.children_by_parent.values_mut() {
-            children.retain(|child| !removed_handles.contains(child));
-        }
-        for node in self.nodes.values_mut() {
-            if node
-                .last_focused_descendant
-                .is_some_and(|candidate| removed_handles.contains(&candidate))
-            {
-                node.last_focused_descendant = None;
+            if let Some(node) = self.nodes.remove(handle_id) {
+                if let Some(children) = self.children_by_parent.get_mut(&node.last_parent) {
+                    if let Some(order) = self.order_paths.get(handle_id) {
+                        children.remove(&(order.clone(), *handle_id));
+                    }
+                }
             }
-            if node
-                .restorer_fallback
-                .is_some_and(|requester_id| removed_requesters.contains(&requester_id))
-            {
-                node.restorer_fallback = None;
+            self.children_by_parent.remove(handle_id);
+            self.stateful_handles.remove(handle_id);
+            self.order_paths.remove(handle_id);
+            if let Some(requesters) = self.requesters_by_handle.remove(handle_id) {
+                for requester in requesters {
+                    if let Some(handle) = self.requester_bindings.remove(&requester) {
+                        previous_requester_bindings.insert(requester, handle);
+                    }
+                }
             }
         }
 
@@ -2107,7 +2075,7 @@ impl FocusOwner {
         let Some(children) = self.children_by_parent.get(&parent) else {
             return;
         };
-        for &child in children {
+        for &child in children.values() {
             if self.is_single_tab_stop_group(child) {
                 let target = self
                     .active
@@ -2190,7 +2158,7 @@ impl FocusOwner {
         let Some(children) = self.children_by_parent.get(&parent) else {
             return;
         };
-        for &child in children {
+        for &child in children.values() {
             // A skipped target can hold focus and must retain its position as a
             // traversal anchor.
             if self.is_traversable_focus_handle(child)
@@ -2211,20 +2179,19 @@ impl FocusOwner {
     }
 
     fn first_focusable_descendant(&self, parent: FocusHandleId) -> Option<FocusHandleId> {
-        let mut stack = self
+        let mut stack: Vec<_> = self
             .children_by_parent
             .get(&parent)
-            .cloned()
-            .unwrap_or_default();
-        while let Some(id) = stack.first().copied() {
-            stack.remove(0);
+            .into_iter()
+            .flat_map(|children| children.values().rev())
+            .copied()
+            .collect();
+        while let Some(id) = stack.pop() {
             if self.can_request_focus(id) {
                 return Some(id);
             }
             if let Some(children) = self.children_by_parent.get(&id) {
-                let mut descendants = children.clone();
-                descendants.extend(stack);
-                stack = descendants;
+                stack.extend(children.values().rev().copied());
             }
         }
         None
@@ -2277,9 +2244,14 @@ impl FocusOwner {
     }
 
     fn snapshot_live_states(&self) -> HashMap<FocusHandleId, FocusState> {
-        self.nodes
+        self.stateful_handles
             .iter()
-            .filter_map(|(&id, node)| node.is_attached().then_some((id, node.state)))
+            .filter_map(|&id| {
+                self.nodes
+                    .get(&id)
+                    .filter(|node| node.is_attached())
+                    .map(|node| (id, node.state))
+            })
             .collect()
     }
 
@@ -2291,12 +2263,6 @@ impl FocusOwner {
         for (&requester_id, &previous_handle_id) in &previous_bindings {
             let current = self.requester_bindings.get(&requester_id).copied();
             if current != Some(previous_handle_id) {
-                changed.insert(requester_id);
-            }
-        }
-        for (&requester_id, &current_handle_id) in &self.requester_bindings {
-            let previous = previous_bindings.get(&requester_id).copied();
-            if previous != Some(current_handle_id) {
                 changed.insert(requester_id);
             }
         }
@@ -2335,7 +2301,10 @@ impl FocusOwner {
             }
         }
 
-        for (&id, node) in &self.nodes {
+        for &id in &self.stateful_handles {
+            let Some(node) = self.nodes.get(&id) else {
+                continue;
+            };
             if !node.is_attached() {
                 continue;
             }
@@ -2406,8 +2375,8 @@ impl FocusOwner {
     }
 
     fn recompute_states(&mut self) {
-        for node in self.nodes.values_mut() {
-            if node.is_attached() {
+        for id in self.stateful_handles.drain() {
+            if let Some(node) = self.nodes.get_mut(&id) {
                 node.state = FocusState::Inactive;
             }
         }
@@ -2433,6 +2402,7 @@ impl FocusOwner {
             if let Some(node) = self.nodes.get_mut(&id)
                 && node.is_attached()
             {
+                self.stateful_handles.insert(id);
                 node.state = if first {
                     active_state
                 } else {

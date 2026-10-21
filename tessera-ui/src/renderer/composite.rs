@@ -209,6 +209,9 @@ pub(crate) fn expand_composites(
     context: CompositeContext<'_>,
     registry: &mut CompositePipelineRegistry,
 ) -> RenderGraph {
+    if !scene.has_composites() {
+        return scene;
+    }
     let RenderGraphParts {
         ops,
         resources,

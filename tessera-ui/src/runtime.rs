@@ -177,10 +177,31 @@ impl InstanceSlotCursor {
 struct SlotTable {
     entries: SlotMap<SlotHandle, SlotEntry>,
     key_to_slot: HashMap<SlotKey, SlotHandle>,
+    slots_by_owner: HashMap<u64, HashSet<SlotHandle>>,
     cursors_by_instance_logic_id: HashMap<u64, InstanceSlotCursor>,
     epoch: u64,
 }
 impl SlotTable {
+    fn index_slot(&mut self, key: SlotKey, slot: SlotHandle) {
+        self.key_to_slot.insert(key, slot);
+        self.slots_by_owner
+            .entry(key.instance_logic_id)
+            .or_default()
+            .insert(slot);
+    }
+
+    fn remove_slot(&mut self, slot: SlotHandle) -> Option<SlotEntry> {
+        let entry = self.entries.remove(slot)?;
+        self.key_to_slot.remove(&entry.key);
+        if let Some(slots) = self.slots_by_owner.get_mut(&entry.key.instance_logic_id) {
+            slots.remove(&slot);
+            if slots.is_empty() {
+                self.slots_by_owner.remove(&entry.key.instance_logic_id);
+            }
+        }
+        Some(entry)
+    }
+
     fn begin_epoch(&mut self) {
         self.epoch = self.epoch.wrapping_add(1);
     }
@@ -188,6 +209,7 @@ impl SlotTable {
     fn reset(&mut self) -> Vec<SlotEntry> {
         let removed = self.entries.drain().map(|(_, entry)| entry).collect();
         self.key_to_slot.clear();
+        self.slots_by_owner.clear();
         self.cursors_by_instance_logic_id.clear();
         self.epoch = 0;
         removed
@@ -268,6 +290,9 @@ impl<T: Copy> PersistentFocusHandleEntry<T> {
 
 #[derive(Default)]
 struct PersistentFocusHandleStore {
+    keys_by_owner: HashMap<u64, HashSet<PersistentFocusHandleKey>>,
+    prune_candidates: HashSet<u64>,
+    live_handles: HashSet<FocusHandleId>,
     targets: HashMap<PersistentFocusHandleKey, PersistentFocusHandleEntry<FocusNode>>,
     scopes: HashMap<PersistentFocusHandleKey, PersistentFocusHandleEntry<FocusScopeNode>>,
     groups: HashMap<PersistentFocusHandleKey, PersistentFocusHandleEntry<FocusGroupNode>>,
@@ -281,86 +306,78 @@ pub(crate) struct RemovedPersistentFocusHandles {
 }
 
 impl PersistentFocusHandleStore {
-    fn retain_instance_keys(
+    fn prune_removed(
         &mut self,
-        live_instance_keys: &HashSet<u64>,
+        removed_owners: HashSet<u64>,
+        is_live: impl Fn(u64) -> bool,
     ) -> RemovedPersistentFocusHandles {
+        self.prune_candidates.extend(removed_owners);
         let mut removed = RemovedPersistentFocusHandles::default();
-        self.targets.retain(|key, handle| {
-            if !live_instance_keys.contains(&key.instance_key) {
-                if handle.retain_for_frame() {
-                    true
-                } else {
-                    removed.handle_ids.insert(handle.value.handle_id());
-                    false
+        for owner in std::mem::take(&mut self.prune_candidates) {
+            let live = is_live(owner);
+            let Some(keys) = self.keys_by_owner.get(&owner) else {
+                continue;
+            };
+            let mut retained = false;
+            for &key in keys {
+                if let Some(value) = prune_focus_entry(&mut self.targets, key, live) {
+                    removed.handle_ids.insert(value.handle_id());
                 }
-            } else {
-                handle.mark_live();
-                true
-            }
-        });
-        self.scopes.retain(|key, scope| {
-            if !live_instance_keys.contains(&key.instance_key) {
-                if scope.retain_for_frame() {
-                    true
-                } else {
-                    removed.handle_ids.insert(scope.value.handle_id());
-                    false
+                if let Some(value) = prune_focus_entry(&mut self.scopes, key, live) {
+                    removed.handle_ids.insert(value.handle_id());
                 }
-            } else {
-                scope.mark_live();
-                true
-            }
-        });
-        self.groups.retain(|key, group| {
-            if !live_instance_keys.contains(&key.instance_key) {
-                if group.retain_for_frame() {
-                    true
-                } else {
-                    removed.handle_ids.insert(group.value.handle_id());
-                    false
+                if let Some(value) = prune_focus_entry(&mut self.groups, key, live) {
+                    removed.handle_ids.insert(value.handle_id());
                 }
-            } else {
-                group.mark_live();
-                true
-            }
-        });
-        self.requesters.retain(|key, requester| {
-            if !live_instance_keys.contains(&key.instance_key) {
-                if requester.retain_for_frame() {
-                    true
-                } else {
-                    removed.requester_ids.insert(requester.value.requester_id());
-                    false
+                if let Some(value) = prune_focus_entry(&mut self.requesters, key, live) {
+                    removed.requester_ids.insert(value.requester_id());
                 }
-            } else {
-                requester.mark_live();
-                true
+                retained |= self.targets.contains_key(&key)
+                    || self.scopes.contains_key(&key)
+                    || self.groups.contains_key(&key)
+                    || self.requesters.contains_key(&key);
             }
-        });
+            if !live && retained {
+                self.prune_candidates.insert(owner);
+            } else if !retained {
+                self.keys_by_owner.remove(&owner);
+            }
+        }
+        for handle in &removed.handle_ids {
+            self.live_handles.remove(handle);
+        }
         removed
     }
 
     fn contains_handle(&self, handle_id: FocusHandleId) -> bool {
-        self.targets
-            .values()
-            .any(|entry| entry.value.handle_id() == handle_id)
-            || self
-                .scopes
-                .values()
-                .any(|entry| entry.value.handle_id() == handle_id)
-            || self
-                .groups
-                .values()
-                .any(|entry| entry.value.handle_id() == handle_id)
+        self.live_handles.contains(&handle_id)
     }
 
     fn clear(&mut self) {
+        self.keys_by_owner.clear();
+        self.prune_candidates.clear();
+        self.live_handles.clear();
         self.targets.clear();
         self.scopes.clear();
         self.groups.clear();
         self.requesters.clear();
     }
+}
+
+fn prune_focus_entry<T: Copy>(
+    entries: &mut HashMap<PersistentFocusHandleKey, PersistentFocusHandleEntry<T>>,
+    key: PersistentFocusHandleKey,
+    live: bool,
+) -> Option<T> {
+    let entry = entries.get_mut(&key)?;
+    if live {
+        entry.mark_live();
+        return None;
+    }
+    if entry.retain_for_frame() {
+        return None;
+    }
+    entries.remove(&key).map(|entry| entry.value)
 }
 
 fn with_slot_table<R>(f: impl FnOnce(&SlotTable) -> R) -> R {
@@ -476,12 +493,14 @@ struct LayoutDirtyTracker {
     pending_parent_data_dirty_nodes: HashSet<u64>,
     pending_transform_dirty_nodes: HashSet<u64>,
     pending_paint_dirty_nodes: HashSet<u64>,
+    pending_pointer_dirty_nodes: HashSet<u64>,
     layout_readers_by_state: HashMap<StateReadDependencyKey, HashSet<PhaseReader>>,
     layout_states_by_reader: HashMap<PhaseReader, HashSet<StateReadDependencyKey>>,
 }
 
 #[derive(Clone, Copy, Hash, PartialEq, Eq)]
 pub(crate) enum ReadPhase {
+    Pointer,
     Measure,
     Place,
     Transform,
@@ -564,8 +583,17 @@ pub(crate) fn reset_component_replay_tracking() {
     });
 }
 
-pub(crate) fn previous_component_replay_nodes() -> HashMap<u64, ReplayNodeSnapshot> {
-    with_component_replay_tracker(|tracker| tracker.previous_nodes.clone())
+pub(crate) fn previous_component_replay_nodes(keys: &[u64]) -> HashMap<u64, ReplayNodeSnapshot> {
+    with_component_replay_tracker(|tracker| {
+        keys.iter()
+            .filter_map(|key| {
+                tracker
+                    .previous_nodes
+                    .get(key)
+                    .map(|value| (*key, value.clone()))
+            })
+            .collect()
+    })
 }
 
 pub(crate) fn remove_previous_component_replay_nodes(instance_keys: &HashSet<u64>) {
@@ -573,12 +601,10 @@ pub(crate) fn remove_previous_component_replay_nodes(instance_keys: &HashSet<u64
         return;
     }
     with_component_replay_tracker_mut(|tracker| {
-        tracker
-            .previous_nodes
-            .retain(|instance_key, _| !instance_keys.contains(instance_key));
-        tracker
-            .current_nodes
-            .retain(|instance_key, _| !instance_keys.contains(instance_key));
+        for key in instance_keys {
+            tracker.previous_nodes.remove(key);
+            tracker.current_nodes.remove(key);
+        }
     });
 }
 
@@ -723,36 +749,60 @@ fn current_persistent_focus_handle_key<K: Hash>(slot_key: K) -> PersistentFocusH
 
 pub(crate) fn persistent_focus_target_for_current_instance<K: Hash>(slot_key: K) -> FocusNode {
     let key = current_persistent_focus_handle_key(slot_key);
-    with_persistent_focus_handle_store_mut(|store| match store.targets.entry(key) {
-        std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            let value = FocusNode::new();
-            entry.insert(PersistentFocusHandleEntry::new(value));
-            value
+    with_persistent_focus_handle_store_mut(|store| {
+        store
+            .keys_by_owner
+            .entry(key.instance_key)
+            .or_default()
+            .insert(key);
+        match store.targets.entry(key) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let value = FocusNode::new();
+                store.live_handles.insert(value.handle_id());
+                entry.insert(PersistentFocusHandleEntry::new(value));
+                value
+            }
         }
     })
 }
 
 pub(crate) fn persistent_focus_scope_for_current_instance<K: Hash>(slot_key: K) -> FocusScopeNode {
     let key = current_persistent_focus_handle_key(slot_key);
-    with_persistent_focus_handle_store_mut(|store| match store.scopes.entry(key) {
-        std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            let value = FocusScopeNode::new();
-            entry.insert(PersistentFocusHandleEntry::new(value));
-            value
+    with_persistent_focus_handle_store_mut(|store| {
+        store
+            .keys_by_owner
+            .entry(key.instance_key)
+            .or_default()
+            .insert(key);
+        match store.scopes.entry(key) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let value = FocusScopeNode::new();
+                store.live_handles.insert(value.handle_id());
+                entry.insert(PersistentFocusHandleEntry::new(value));
+                value
+            }
         }
     })
 }
 
 pub(crate) fn persistent_focus_group_for_current_instance<K: Hash>(slot_key: K) -> FocusGroupNode {
     let key = current_persistent_focus_handle_key(slot_key);
-    with_persistent_focus_handle_store_mut(|store| match store.groups.entry(key) {
-        std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
-        std::collections::hash_map::Entry::Vacant(entry) => {
-            let value = FocusGroupNode::new();
-            entry.insert(PersistentFocusHandleEntry::new(value));
-            value
+    with_persistent_focus_handle_store_mut(|store| {
+        store
+            .keys_by_owner
+            .entry(key.instance_key)
+            .or_default()
+            .insert(key);
+        match store.groups.entry(key) {
+            std::collections::hash_map::Entry::Occupied(mut entry) => entry.get_mut().mark_live(),
+            std::collections::hash_map::Entry::Vacant(entry) => {
+                let value = FocusGroupNode::new();
+                store.live_handles.insert(value.handle_id());
+                entry.insert(PersistentFocusHandleEntry::new(value));
+                value
+            }
         }
     })
 }
@@ -761,16 +811,19 @@ pub(crate) fn has_persistent_focus_handle(handle_id: FocusHandleId) -> bool {
     with_persistent_focus_handle_store(|store| store.contains_handle(handle_id))
 }
 
-pub(crate) fn retain_persistent_focus_handles(
-    live_instance_keys: &HashSet<u64>,
-) -> RemovedPersistentFocusHandles {
-    with_persistent_focus_handle_store_mut(|store| store.retain_instance_keys(live_instance_keys))
-}
-
 pub(crate) fn prune_persistent_focus_handles() {
-    let live_instance_keys =
-        TesseraRuntime::with(|runtime| runtime.component_tree.live_instance_keys());
-    let removed = retain_persistent_focus_handles(&live_instance_keys);
+    let removed_owners =
+        TesseraRuntime::with_mut(|runtime| runtime.component_tree.take_removed_focus_owners());
+    let removed = with_persistent_focus_handle_store_mut(|store| {
+        store.prune_removed(removed_owners, |key| {
+            TesseraRuntime::with(|runtime| {
+                runtime
+                    .component_tree
+                    .find_node_id_by_instance_key(key)
+                    .is_some()
+            })
+        })
+    });
     if !removed.handle_ids.is_empty() || !removed.requester_ids.is_empty() {
         TesseraRuntime::with_mut(|runtime| {
             runtime
@@ -894,25 +947,14 @@ pub(crate) fn is_instance_key_build_dirty(instance_key: u64) -> bool {
     })
 }
 
-/// Returns whether the instance key still has an unresolved build invalidation.
-pub(crate) fn is_instance_key_pending_build_invalidation(instance_key: u64) -> bool {
-    with_build_invalidation_tracker(|tracker| {
-        tracker.dirty_instance_keys.contains(&instance_key)
-            || tracker
-                .cross_instance_dirty_instance_keys
-                .contains(&instance_key)
-    })
-}
-
-/// Returns whether the node with `instance_key` still needs a rebuild.
-///
-/// This is the single predicate behind the subtree-reuse precondition: a
-/// subtree may only be reused while no node inside it still needs a rebuild.
-/// Both deferred build invalidations and the current frame's dirty set count
-/// as "needs a rebuild".
-pub(crate) fn instance_key_needs_rebuild(instance_key: u64) -> bool {
-    is_instance_key_build_dirty(instance_key)
-        || is_instance_key_pending_build_invalidation(instance_key)
+pub(crate) fn pending_build_instance_keys() -> HashSet<u64> {
+    let mut keys = with_build_invalidation_tracker(|tracker| tracker.dirty_instance_keys.clone());
+    with_execution_context(|context| {
+        if let Some(dirty) = context.build_dirty_instance_keys_stack.last() {
+            keys.extend(dirty.iter().copied());
+        }
+    });
+    keys
 }
 
 fn consume_pending_build_invalidation(instance_key: u64) -> bool {
@@ -956,8 +998,32 @@ pub(crate) fn defer_build_invalidations(instance_keys: &HashSet<u64>) {
     schedule_runtime_redraw();
 }
 
+thread_local! {
+    static POINTER_STATE_READER: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+pub(crate) fn with_pointer_state_reader<R>(key: u64, run: impl FnOnce() -> R) -> R {
+    struct ReaderGuard(Option<u64>);
+    impl Drop for ReaderGuard {
+        fn drop(&mut self) {
+            POINTER_STATE_READER.with(|reader| reader.set(self.0));
+        }
+    }
+    let _guard = ReaderGuard(POINTER_STATE_READER.with(|reader| reader.replace(Some(key))));
+    run()
+}
+
+pub(crate) fn take_pointer_dirty_nodes() -> HashSet<u64> {
+    with_layout_dirty_tracker_mut(|tracker| {
+        std::mem::take(&mut tracker.pending_pointer_dirty_nodes)
+    })
+}
+
 fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
     let phase = match current_phase() {
+        Some(RuntimePhase::Input) if POINTER_STATE_READER.with(|reader| reader.get().is_some()) => {
+            Some(ReadPhase::Pointer)
+        }
         Some(RuntimePhase::Measure) => Some(ReadPhase::Measure),
         Some(RuntimePhase::Place) if current_measured_node_instance_key().is_some() => {
             Some(ReadPhase::Place)
@@ -1000,7 +1066,9 @@ fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
 }
 
 fn track_layout_state_read_dependency(slot: SlotHandle, generation: u64, phase: ReadPhase) {
-    let Some(reader_instance_key) = current_measured_node_instance_key()
+    let Some(reader_instance_key) = POINTER_STATE_READER
+        .with(|reader| reader.get())
+        .or_else(current_measured_node_instance_key)
         .or_else(current_replay_boundary_instance_key_from_scope)
     else {
         return;
@@ -1050,6 +1118,7 @@ fn mark_layout_state_readers_dirty(slot: SlotHandle, generation: u64) {
                 ReadPhase::Place => &mut tracker.pending_placement_self_dirty_nodes,
                 ReadPhase::Transform => &mut tracker.pending_transform_dirty_nodes,
                 ReadPhase::Paint => &mut tracker.pending_paint_dirty_nodes,
+                ReadPhase::Pointer => &mut tracker.pending_pointer_dirty_nodes,
             };
             target.insert(reader.instance_key);
         }
@@ -1080,6 +1149,7 @@ pub(crate) fn clear_phase_state_reads(instance_key: u64, phase: ReadPhase) {
 pub(crate) fn remove_layout_state_read_dependencies(instance_keys: &HashSet<u64>) {
     for &instance_key in instance_keys {
         for phase in [
+            ReadPhase::Pointer,
             ReadPhase::Measure,
             ReadPhase::Place,
             ReadPhase::Transform,
@@ -1304,12 +1374,10 @@ pub(crate) fn remove_build_invalidations(instance_keys: &HashSet<u64>) {
         return;
     }
     with_build_invalidation_tracker_mut(|tracker| {
-        tracker
-            .dirty_instance_keys
-            .retain(|instance_key| !instance_keys.contains(instance_key));
-        tracker
-            .cross_instance_dirty_instance_keys
-            .retain(|instance_key| !instance_keys.contains(instance_key));
+        for key in instance_keys {
+            tracker.dirty_instance_keys.remove(key);
+            tracker.cross_instance_dirty_instance_keys.remove(key);
+        }
     });
 }
 
@@ -1325,6 +1393,7 @@ struct FrameClockTracker {
     previous_frame_time: Option<Instant>,
     frame_delta: Duration,
     receivers: HashMap<FrameNanosReceiverKey, FrameNanosReceiver>,
+    receivers_by_owner: HashMap<u64, HashSet<FrameNanosReceiverKey>>,
 }
 
 #[derive(Hash, Eq, PartialEq, Clone, Copy)]
@@ -1384,12 +1453,25 @@ pub(crate) fn has_pending_frame_nanos_receivers() -> bool {
 pub(crate) fn tick_frame_nanos_receivers() {
     with_frame_clock_tracker_mut(|tracker| {
         let frame_nanos = tracker.current_frame_nanos;
-        tracker.receivers.retain(|_, receiver| {
-            matches!(
+        let mut stopped = Vec::new();
+        tracker.receivers.retain(|key, receiver| {
+            let active = matches!(
                 (receiver.callback)(frame_nanos),
                 FrameNanosControl::Continue
-            )
+            );
+            if !active {
+                stopped.push((*key, receiver.owner_instance_key));
+            }
+            active
         });
+        for (key, owner) in stopped {
+            if let Some(keys) = tracker.receivers_by_owner.get_mut(&owner) {
+                keys.remove(&key);
+                if keys.is_empty() {
+                    tracker.receivers_by_owner.remove(&owner);
+                }
+            }
+        }
     });
 }
 
@@ -1398,14 +1480,21 @@ pub(crate) fn remove_frame_nanos_receivers(instance_keys: &HashSet<u64>) {
         return;
     }
     with_frame_clock_tracker_mut(|tracker| {
-        tracker
-            .receivers
-            .retain(|_, receiver| !instance_keys.contains(&receiver.owner_instance_key));
+        for owner in instance_keys {
+            if let Some(keys) = tracker.receivers_by_owner.remove(owner) {
+                for key in keys {
+                    tracker.receivers.remove(&key);
+                }
+            }
+        }
     });
 }
 
 pub(crate) fn clear_frame_nanos_receivers() {
-    with_frame_clock_tracker_mut(|tracker| tracker.receivers.clear());
+    with_frame_clock_tracker_mut(|tracker| {
+        tracker.receivers.clear();
+        tracker.receivers_by_owner.clear();
+    });
 }
 
 /// Returns the timestamp of the current frame, if available.
@@ -1485,6 +1574,12 @@ where
                 }),
             }
         });
+        let owner = tracker.receivers[&key].owner_instance_key;
+        tracker
+            .receivers_by_owner
+            .entry(owner)
+            .or_default()
+            .insert(key);
     });
 }
 
@@ -1495,10 +1590,14 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
 
     let removed = with_slot_table_mut(|table| {
         let mut freed: Vec<(SlotHandle, SlotKey)> = Vec::new();
-        for (slot, entry) in table.entries.iter() {
-            if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
+        for slot in instance_logic_ids
+            .iter()
+            .flat_map(|id| table.slots_by_owner.get(id).into_iter().flatten())
+            .copied()
+        {
+            let Some(entry) = table.entries.get(slot) else {
                 continue;
-            }
+            };
             if entry.retained {
                 continue;
             }
@@ -1506,7 +1605,7 @@ pub(crate) fn drop_slots_for_instance_logic_ids(instance_logic_ids: &HashSet<u64
         }
         let mut removed = Vec::with_capacity(freed.len());
         for (slot, key) in freed {
-            removed.extend(table.entries.remove(slot));
+            removed.extend(table.remove_slot(slot));
             table.key_to_slot.remove(&key);
         }
         for instance_logic_id in instance_logic_ids {
@@ -1664,6 +1763,7 @@ pub(crate) fn has_pending_layout_invalidations() -> bool {
             || !tracker.pending_parent_data_dirty_nodes.is_empty()
             || !tracker.pending_transform_dirty_nodes.is_empty()
             || !tracker.pending_paint_dirty_nodes.is_empty()
+            || !tracker.pending_pointer_dirty_nodes.is_empty()
     })
 }
 
@@ -2859,7 +2959,7 @@ where
         last_alive_epoch: epoch,
         retained,
     });
-    table.key_to_slot.insert(key, slot);
+    table.index_slot(key, slot);
     (slot, generation)
 }
 
@@ -3145,7 +3245,7 @@ where
                 retained: false,
             });
 
-            table.key_to_slot.insert(slot_key, slot);
+            table.index_slot(slot_key, slot);
             table.record_slot_usage_slow(instance_logic_id, slot);
 
             let value = downcast_functor_arc::<T>(
@@ -3320,10 +3420,14 @@ pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids
         let epoch = table.epoch;
         let mut freed: Vec<(SlotHandle, SlotKey)> = Vec::new();
 
-        for (slot, entry) in table.entries.iter() {
-            if !instance_logic_ids.contains(&entry.key.instance_logic_id) {
+        for slot in instance_logic_ids
+            .iter()
+            .flat_map(|id| table.slots_by_owner.get(id).into_iter().flatten())
+            .copied()
+        {
+            let Some(entry) = table.entries.get(slot) else {
                 continue;
-            }
+            };
             if entry.last_alive_epoch == epoch || entry.retained {
                 continue;
             }
@@ -3332,7 +3436,7 @@ pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids
 
         let mut removed = Vec::with_capacity(freed.len());
         for (slot, key) in freed {
-            removed.extend(table.entries.remove(slot));
+            removed.extend(table.remove_slot(slot));
             table.key_to_slot.remove(&key);
         }
         removed
@@ -3341,13 +3445,7 @@ pub(crate) fn recycle_recomposed_slots_for_instance_logic_ids(instance_logic_ids
 }
 
 pub(crate) fn live_slot_instance_logic_ids() -> HashSet<u64> {
-    with_slot_table(|table| {
-        table
-            .entries
-            .iter()
-            .map(|(_, entry)| entry.key.instance_logic_id)
-            .collect()
-    })
+    with_slot_table(|table| table.slots_by_owner.keys().copied().collect())
 }
 
 /// Remember a value across frames with an explicit key.
@@ -4266,8 +4364,8 @@ mod tests {
             last_alive_epoch: 0,
             retained: false,
         });
-        table.key_to_slot.insert(keep_key, keep_slot);
-        table.key_to_slot.insert(drop_key, drop_slot);
+        table.index_slot(keep_key, keep_slot);
+        table.index_slot(drop_key, drop_slot);
         with_slot_table_mut(|slot_table| *slot_table = table);
 
         let mut stale = HashSet::default();

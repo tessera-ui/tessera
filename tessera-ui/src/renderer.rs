@@ -1424,7 +1424,7 @@ Fps: {:.2}
             let render_submit_ns = render_breakdown.map(|breakdown| breakdown.submit.as_nanos());
             let render_present_ns = render_breakdown.map(|breakdown| breakdown.present.as_nanos());
             let inter_frame_wait_ns = (frame_idx > 0).then(|| frame_delta().as_nanos());
-            let nodes = TesseraRuntime::with(|rt| rt.component_tree.profiler_nodes());
+            let nodes = TesseraRuntime::with_mut(|rt| rt.component_tree.profiler_nodes());
             FrameMeta {
                 frame_idx,
                 build_mode: build_tree_result.profiler_build_mode(),
@@ -1452,7 +1452,7 @@ Fps: {:.2}
         // Prepare accessibility tree update before clearing the component tree
         // if needed
         let accessibility_update = if accessibility_enabled {
-            Self::build_accessibility_update(window_label)
+            Self::build_accessibility_update(window_label, false)
         } else {
             None
         };
@@ -1821,28 +1821,17 @@ impl<F: Fn()> Renderer<F> {
     }
 
     fn send_accessibility_update(&mut self) {
-        if let Some(tree_update) = Self::build_accessibility_update(&self.config.window_title) {
+        if let Some(tree_update) = Self::build_accessibility_update(&self.config.window_title, true)
+        {
             self.push_accessibility_update(tree_update);
         }
     }
 
-    fn build_accessibility_update(window_label: &str) -> Option<TreeUpdate> {
-        TesseraRuntime::with(|runtime| {
-            let tree = runtime.component_tree.tree();
-            let metadatas = runtime.component_tree.metadatas();
-            let root_node_id = tree.get_node_id_at(
-                std::num::NonZero::new(1).expect("root node index must be non-zero"),
-            )?;
-            crate::accessibility::build_tree_update(
-                tree,
-                metadatas,
-                root_node_id,
-                Some(window_label),
-                runtime
-                    .component_tree
-                    .focus_owner()
-                    .active_component_node_id(),
-            )
+    fn build_accessibility_update(window_label: &str, full: bool) -> Option<TreeUpdate> {
+        TesseraRuntime::with_mut(|runtime| {
+            runtime
+                .component_tree
+                .accessibility_update(Some(window_label), full)
         })
     }
 

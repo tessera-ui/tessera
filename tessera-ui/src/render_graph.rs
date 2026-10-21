@@ -7,6 +7,7 @@
 use std::{
     any::TypeId,
     collections::{BinaryHeap, HashMap},
+    sync::{Arc, OnceLock},
 };
 
 use smallvec::SmallVec;
@@ -205,8 +206,15 @@ pub struct RenderGraphOp {
 }
 
 /// Frame-level render graph.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct RenderGraph {
+    data: Arc<RenderGraphData>,
+}
+
+#[derive(Default)]
+struct RenderGraphData {
+    ordered_ops: OnceLock<Vec<RenderGraphOp>>,
+    has_composites: bool,
     ops: Vec<RenderGraphOp>,
     resources: Vec<RenderResource>,
     external_resources: Vec<ExternalTextureDesc>,
@@ -226,47 +234,70 @@ impl RenderGraph {
     /// Returns ops in the graph.
     #[must_use]
     pub fn ops(&self) -> &[RenderGraphOp] {
-        &self.ops
+        &self.data.ops
     }
 
     /// Returns local resources in the graph.
     #[must_use]
     pub fn resources(&self) -> &[RenderResource] {
-        &self.resources
+        &self.data.resources
     }
 
     /// Returns external resources in the graph.
     #[must_use]
     pub fn external_resources(&self) -> &[ExternalTextureDesc] {
-        &self.external_resources
+        &self.data.external_resources
     }
 
     /// Decomposes the graph into owned parts for graph processing.
     #[must_use]
     pub fn into_parts(self) -> RenderGraphParts {
-        RenderGraphParts {
-            ops: self.ops,
-            resources: self.resources,
-            external_resources: self.external_resources,
+        match Arc::try_unwrap(self.data) {
+            Ok(data) => RenderGraphParts {
+                ops: data.ops,
+                resources: data.resources,
+                external_resources: data.external_resources,
+            },
+            Err(data) => RenderGraphParts {
+                ops: data.ops.clone(),
+                resources: data.resources.clone(),
+                external_resources: data.external_resources.clone(),
+            },
         }
     }
 
     /// Builds a render graph from owned parts.
     #[must_use]
     pub fn from_parts(parts: RenderGraphParts) -> Self {
+        let has_composites = parts
+            .ops
+            .iter()
+            .any(|op| matches!(op.command, Command::Composite(_)));
         Self {
-            ops: parts.ops,
-            resources: parts.resources,
-            external_resources: parts.external_resources,
+            data: Arc::new(RenderGraphData {
+                has_composites,
+                ops: parts.ops,
+                resources: parts.resources,
+                external_resources: parts.external_resources,
+                ordered_ops: OnceLock::new(),
+            }),
         }
+    }
+
+    pub(crate) fn has_composites(&self) -> bool {
+        self.data.has_composites
     }
 
     /// Consumes the graph and returns an execution-ready payload.
     pub(crate) fn into_execution(self) -> RenderGraphExecution {
         RenderGraphExecution {
-            ops: order_ops(self.ops),
-            resources: self.resources,
-            external_resources: self.external_resources,
+            ops: self
+                .data
+                .ordered_ops
+                .get_or_init(|| order_ops(self.data.ops.clone()))
+                .clone(),
+            resources: self.data.resources.clone(),
+            external_resources: self.data.external_resources.clone(),
         }
     }
 }
@@ -406,11 +437,11 @@ impl RenderGraphBuilder {
 
     /// Finishes graph construction.
     pub(crate) fn finish(self) -> RenderGraph {
-        RenderGraph {
+        RenderGraph::from_parts(RenderGraphParts {
             ops: self.ops,
             resources: self.resources,
             external_resources: self.external_resources,
-        }
+        })
     }
 }
 

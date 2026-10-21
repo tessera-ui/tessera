@@ -216,6 +216,7 @@ struct Sample {
 }
 
 /// Metadata about a component node collected after a frame is computed.
+#[derive(Clone)]
 pub struct NodeMeta {
     /// Unique node identifier.
     pub node_id: String,
@@ -660,6 +661,16 @@ struct RuntimeEventRecord {
 #[derive(Serialize, Clone, Copy)]
 struct LayoutDiagnosticsRecord {
     geometry_nodes_updated: u64,
+    geometry_nodes_visited: u64,
+    measure_dirty_children_checked: u64,
+
+    pointer_nodes_updated: u64,
+    pointer_nodes_dispatched: u64,
+    pointer_hit_test_candidates: u64,
+    paint_nodes_recorded: u64,
+    scene_nodes_updated: u64,
+    accessibility_nodes_updated: u64,
+
     dirty_nodes_param: u64,
     dirty_nodes_structural: u64,
     dirty_nodes_with_ancestors: u64,
@@ -679,6 +690,16 @@ impl From<LayoutFrameDiagnostics> for LayoutDiagnosticsRecord {
     fn from(value: LayoutFrameDiagnostics) -> Self {
         Self {
             geometry_nodes_updated: value.geometry_nodes_updated,
+            geometry_nodes_visited: value.geometry_nodes_visited,
+            measure_dirty_children_checked: value.measure_dirty_children_checked,
+
+            pointer_nodes_updated: value.pointer_nodes_updated,
+            pointer_nodes_dispatched: value.pointer_nodes_dispatched,
+            pointer_hit_test_candidates: value.pointer_hit_test_candidates,
+            paint_nodes_recorded: value.paint_nodes_recorded,
+            scene_nodes_updated: value.scene_nodes_updated,
+            accessibility_nodes_updated: value.accessibility_nodes_updated,
+
             dirty_nodes_param: value.dirty_nodes_param,
             dirty_nodes_structural: value.dirty_nodes_structural,
             dirty_nodes_with_ancestors: value.dirty_nodes_with_ancestors,

@@ -531,9 +531,6 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
             return result;
         }
 
-        let replay_snapshots = previous_component_replay_nodes();
-        let context_snapshots = previous_component_context_snapshots();
-
         let tree_timer = Instant::now();
         debug!("Building dirty subtrees with replay...");
         begin_frame_component_replay_tracking();
@@ -581,6 +578,8 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                 fallback_to_root_recompose = true;
                 break;
             }
+            let replay_snapshots = previous_component_replay_nodes(&dirty_roots);
+            let context_snapshots = previous_component_context_snapshots(&dirty_roots);
             if let Some(instance_key) = dirty_roots.iter().copied().find(|instance_key| {
                 !replay_snapshots.contains_key(instance_key)
                     || !context_snapshots.contains_key(instance_key)

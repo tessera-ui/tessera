@@ -17,7 +17,9 @@ use accesskit::{Action, NodeId as AccessKitNodeId, Role, Toggled};
 
 use crate::Px;
 
-pub(crate) use tree_builder::{build_tree_update, dispatch_action};
+#[cfg(test)]
+pub(crate) use tree_builder::build_tree_update;
+pub(crate) use tree_builder::{AccessibilityIndex, dispatch_action};
 
 /// A stable identifier for accessibility nodes.
 ///
