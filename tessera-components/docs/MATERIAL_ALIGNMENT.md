@@ -46,8 +46,8 @@ support; browser publication and assistive-technology actions remain open.
 | Checkbox | `checkbox` | Checked, unchecked, and indeterminate states share one builder and controller; native 1x/4x checks cover density, geometry, light/dark/error/disabled colors, custom overrides, validation semantics, activation, spatial springs, Oklab effects, reversal pixels, and idle-clock shutdown; normalized cross-platform reference comparisons remain |
 | Chips | `chip` | Four variants preserve icon/label edge spacing; selectable semantics, live typography, interaction elevation, focus outlines, and input icon colors verified; input avatars preserve source colors with circular center cropping, disabled opacity, priority, and restored spacing at four densities and 1x/4x sampling; Expressive selection/press shapes and interrupted spring motion verified; icon motion, RTL, tonal variants, and normalized reference images remain |
 | Dialogs | `dialog` | Audit basic/full-screen variants, actions, dismissal, and focus |
-| Divider | `divider` | Parent-constrained thickness, unbounded-axis recovery, modifier-based insets, hairlines, and live outline-variant colors implemented; native 1x/4x GPU checks at four densities and WASM rendering verified; fractional stroke/reference comparisons and the legacy default-color helper remain |
-| Lists | `list_item` | Audit line counts, leading/trailing content, selection, and Expressive grouping |
+| Divider | `divider` | Parent-constrained thickness, unbounded-axis recovery, modifier-based insets, hairlines, and live outline-variant colors implemented; analytic fractional strokes, default-palette helper colors, half-pixel placement, opacity, stencil clipping, forced-size recovery, and stable upload allocation verified at 1x/4x sampling; native checks cover four densities; release WASM and browser rendering verified; complete normalized reference comparisons remain |
+| Lists | `list_item` | 56/72/88dp minimum heights, measured supporting-text wrapping, short/tall automatic alignment and explicit overrides, 20dp icon context, live slot typography/colors, selected semantics and disabled focus/input corrected; native 1x/4x tests at four densities and WASM interaction/reflow verified; segmented positions and FastSpatial state shapes verified by native input/pixel regressions; perceptual color transitions and controlled drag palettes implemented, with rendering verification recorded below; main/overline/supporting render slots implemented with verification recorded below; complete selection modes, nested controls/targets, expansion/swipe/drag behavior, and normalized reference states remain |
 | Menus | `menus` | Current/saved anchors, reflow, gap-aware side fallback, exact-fit resize, and outside dismissal GPU-tested; trigger focus restoration, explicit fallback, disabled trigger recovery, and forward/reverse Tab exit passed native GPU regression; WASM selection, Escape, Enter/Space reopening, Tab exit, narrow-window recovery, and lazy-list retention checked; queued close/navigation barrier covered by native core/order regressions and WASM rapid keyboard sequences; Expressive group surfaces, standard/vibrant colors, position-specific corners, selected menu-radio semantics, trailing-space reservation, and scrolling implemented; shared cascading overlays, branch/chain dismissal, source removal/disable cleanup, and virtualized Tab-exit navigation implemented; shadow overflow, rounded content clipping, scrolling shadow input bounds, container morphing, and delayed mouse-hover branch switching GPU-tested; normalized group/state snapshots, compact adaptive layout, and remaining focus audits |
 | Radio button | `radio_button` | Native 1x/4x GPU checks cover group names/roles/orientation, disabled checked-state semantics, 48dp targets at 1.5 density, directional selection, all four arrows for both orientations, wrapped traversal skipping disabled options, one-stop Tab entry/exit, unselected entry without activation, disabled-focus recovery without value changes, caller traversal exclusions, re-enabling identity, pointer completion/cancellation, interaction colors, custom color retention, internally managed mutual exclusion, independent groups, removal/reinsertion, and controller-driven selection; browser arrows and pointer cancellation verified; horizontal/RTL visual groups, toolbar integration, normalized dark/state snapshots, and motion comparisons remain |
 | Search | `search` | Focus, typing, submit/dismiss fixed; audit expanded/full-screen layouts and state screenshots |
@@ -3006,9 +3006,10 @@ minimum, maximum, and zero constraints, including an inset modifier. GPU
 regressions exercise full-component padding, live theme colors, explicit color
 retention, hairlines, and resize/pixel restoration at four densities and 1x/4x
 sampling. This does not establish fractional subpixel stroke fidelity or full
-reference image parity. The legacy `DividerDefaults::color()` helper still
-returns transparent and remains to be aligned; omitting a component color
-already resolves the active outline-variant role.
+reference image parity. At this initial audit, the legacy
+`DividerDefaults::color()` helper returned transparent; component defaults
+already resolved the active outline-variant role. The follow-up below replaces
+that helper behavior.
 
 
 All three divider scenarios pass, including the two opt-in GPU tests at
@@ -3019,3 +3020,229 @@ shows full-width, middle-inset, hairline, and vertical examples with no console
 errors. The final view is stored externally as `wasm-divider-insets-hairline.png`.
 The density cases verify the current integer layout/padding behavior; they do
 not prove fractional stroke agreement with the reference renderer.
+
+
+The fractional-stroke follow-up preserves the floating physical thickness,
+rounds only the layout dimension to the nearest pixel, and renders analytic
+rectangle coverage. A 1dp stroke therefore retains its quarter- or half-pixel
+edge at densities 1.25 and 1.5. A larger forced layout does not stretch the
+stroke, while a smaller parent maximum still limits it. The dedicated batched
+pipeline uses the shared UI stencil state and reuses paged upload buffers
+across draws and frames. Whole-pixel quads prevent MSAA from multiplying the
+analytic edge coverage a second time.
+
+`DividerDefaults::color()` now returns the default light palette's
+outline-variant color, cached once. Omitting a component color continues to
+read the active theme, including live updates. Native verification extends the
+existing rendering scenarios with independently known quarter/half coverage,
+explicit helper colors, half-pixel placement, opacity, clipping, fixed/minimum
+sizes, zero-size output, and stable GPU-buffer allocation.
+
+
+All three extended divider scenarios pass. Both GPU scenarios now cover the
+known 25%/50% edge coverage at four densities, half-pixel endpoint/side coverage,
+50% component opacity, actual stencil clipping and restoration, forced larger
+and smaller thickness allocations, zero-size output, default-helper colors,
+and upload-buffer reuse after repeated theme changes, resize and idle frames.
+The 307 ordinary component tests and both divider documentation examples pass.
+The two date-range picker rendering/input/resize regressions and two stationary
+no-op ripple regressions also pass with the new pipeline registered. These
+checks verify the stated geometric coverage contracts; normalized official
+reference scenes and a complete cross-platform raster comparison remain open.
+
+
+Final release WASM and call-color checks pass after caching the default helper
+color. At 907x871 CSS pixels the browser displays full-width, middle-inset,
+hairline and vertical strokes through the new pipeline, with no console
+errors. The final view is stored externally as
+`wasm-divider-fractional-strokes.png`. This browser check uses the current
+viewport and does not establish browser coverage at every device scale.
+Nightly formatting and diff whitespace checks pass.
+
+
+## Adaptive list row foundations
+
+The current [list specs](https://m3.material.io/components/lists/specs) recommend
+Expressive styling. The [current layout implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ListItem.kt)
+and [list tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/ListTokens.kt)
+provide the layout/typography reference. The row now measures leading and
+trailing slots before its text, allocates remaining width to main content,
+and derives the three-line minimum from actual supporting-text wrapping.
+Minimum outer heights are 56/72/88dp; padding is no longer subtracted twice.
+Short rows center their content; tall rows top-align it. Authors may explicitly
+choose top, center or bottom alignment. Larger media/text can grow the row,
+while parent constraints still bound it.
+
+Leading/trailing icons inherit 20dp sizing. Slot text inherits title-medium and
+label-small typography respectively, and retained slot contexts update when
+the theme changes. Headline text also updates its explicit style. Selected
+metadata supplements caller semantics rather than replacing them, and disabled
+rows withhold focus/click actions while retaining their selected value.
+Resting and selected shapes use the theme's extra-small and large corners.
+Segmented outer corners, shape transitions, additional selection modes,
+interactive-slot target allocation, and custom main-content slots remain open.
+
+All three list scenarios pass. The layout scenario checks token heights,
+explicit and width-driven supporting-text wrapping, default icon placement,
+and all explicit vertical alignments. Both opt-in native GPU scenarios run at
+1x/4x sampling and densities 1/1.25/1.5/2, checking live typography/color pixels,
+selection and stable identity, actual disabled pointer input, accessibility
+activation, zero-width recovery and window resize. The documentation example,
+release WASM and call-color checks pass. Browser checks at 907x871 CSS pixels
+cover pointer and Tab/Space selection, disabled-state retention, large text,
+narrow wrapping, all alignment choices and normal-size restoration; the console
+contains no errors. Screenshots are stored externally as
+`wasm-list-large-wrapped-selected.png` and `wasm-list-normal-restored.png`.
+These checks do not establish complete official reference image parity or a
+browser screen-reader bridge.
+
+The complete ordinary component suite passes 308 tests (111 GPU/platform tests
+remain opt-in). Nightly formatting and diff whitespace checks pass.
+
+
+## Segmented list positions and state shapes
+
+`list_item` now accepts `position`, a `ListItemShapes` palette and a controlled
+`dragged` shape state. First/last/single rows use the larger outer corners;
+interior corners retain the smaller resting shape. Authors compose rows with
+`ListItemDefaults::SEGMENTED_GAP` (2dp). Defaults follow the theme's 4/12/16dp
+corner sizes for rest/hover/selected-or-pressed-or-focused states. A fixed
+`shape` overrides both grouping and state shapes. The public default-shape
+helper now uses the same circular corners as the Material theme.
+
+The [current shape defaults and priority](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ListItemDefaults.kt)
+and [list interaction motion](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ListItem.kt)
+are the reference. Shape transitions use shared FastSpatial motion with retained
+velocity; frame callbacks stop at rest. Disabled updates snap to the applicable
+resting/selected shape. The controlled drag option only selects the dragged
+shape; gesture handling, drag elevation/color feedback and reordering remain
+open, alongside color transitions, complete selection modes and main slots.
+
+
+All five list scenarios pass after this follow-up. The two added opt-in GPU
+scenarios run at 1x/4x sampling and densities 1/1.5. They compare corners to
+independently authored 4/12/16dp reference surfaces, check 2dp gaps, first/middle/
+last/single/standalone positions, real stationary hover and held/released
+pointer input with a no-op application callback, selected/focused/controlled
+drag states, interrupted motion, position changes, disabling during a press,
+custom pressed palettes and fixed-shape precedence. Production component-entry
+counts stay unchanged once hover, hold and resting motion settle. Restored
+edges use a strict pixel tolerance; comparisons during feedback allow only the
+additional coverage of partially covered ripple/state-layer edge pixels.
+
+The 308 ordinary component tests, list documentation example and both stationary
+no-op ripple regressions pass. Nightly formatting and diff whitespace checks
+pass. Browser checks cover pointer and Tab/Space selection, standard/segmented
+switching with retained selection, and disabling/re-enabling. Full color
+transitions, drag interaction/elevation, selection-role variants, custom main
+slots, target allocation and normalized official reference comparisons remain
+open.
+
+
+Final release WASM and call-color checks pass. Browser verification at 907x871
+CSS pixels confirms pointer/Tab/Space selection and a standard-to-segmented
+round trip without losing selection; no console errors were observed. The final
+view is stored externally as `wasm-segmented-list-state-shapes.png`. The WASM
+build emitted three warnings from the concurrent core work: unused `Px`,
+`ComponentTree::metadatas`, and `is_instance_key_pending_build_invalidation`.
+Those core files were not changed in this component follow-up. Complete official
+reference goldens and the remaining list behaviors above are still unverified.
+
+
+### List color motion and controlled drag palettes
+
+List rows now share the existing Oklab color interpolation with checkbox motion.
+The conversion algorithm and its independent numeric regression moved into the
+shared animation module without changing checkbox timing or snapping behavior.
+List containers and the five content roles use the default effects transition.
+Color and shape motion advance through one frame receiver, including when an
+explicit fixed shape prevents any shape animation.
+
+Current Material defaults prioritize disabled colors, then controlled dragging,
+then selection. Dragged containers use tertiary-container and their content uses
+on-tertiary-container; all six dragged colors can be overridden. These follow the
+current [list defaults](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ListItemDefaults.kt)
+and [reorder list tokens](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/ReorderListTokens.kt).
+The example exposes a first-row drag-color preview. This is an externally
+controlled visual state, not a claim of drag gestures, reordering, or elevation.
+
+The new native rendering scenario fixes the row to a rectangle so shape motion
+cannot supply the color clock. It observes intermediate selection pixels,
+interrupted/reversed transitions, theme and explicit palette changes, drag over
+selection, disabled over both states, live leading/trailing slot ink, restored
+pixels, and no component builds after settling. It runs with 1x/4x MSAA at 1.0
+and 1.5 density. Existing geometry tests use a uniform drag palette to keep their
+shape comparisons independent of the new color transitions. Existing live-theme
+endpoint assertions now wait for the effects transition to finish.
+
+
+All six native list rendering scenarios pass, including the new color-only
+motion tests and the retained shape/input/live-theme scenarios. All 308 ordinary
+component tests pass (116 opt-in scenarios ignored), and both checkbox motion
+GPU regressions pass after moving their shared color interpolation. Targeted
+nightly formatting and diff whitespace checks pass. These checks establish the
+covered state transitions; complete selection roles, rich main-content slots,
+nested controls/target allocation, drag gesture/elevation/reorder behavior, and
+normalized official reference goldens remain open.
+
+
+Release WASM, Tessera call-color checking, and the list runnable documentation
+example pass. Browser checks at 907x871 CSS pixels cover selection, controlled
+drag over selection, disabled feedback and suppressed activation, re-enabling,
+and return from drag preview with selection retained. No browser console errors
+were observed. The drag-color view is stored externally as
+`wasm-list-drag-color-preview.png`. The build emitted one existing core warning
+for `ComponentTree::metadatas`; this component work did not change that method.
+
+
+### List main, overline, and supporting render slots
+
+The public list entrypoint now accepts `content`, `overline_content`, and
+`supporting_content` render slots alongside string conveniences. A supplied slot
+replaces its corresponding string. Main content receives body-large typography,
+overline content label-small, and supporting content body-medium, each with its
+own animated role color. Their wrappers add no leading/trailing spacing. The
+existing layout measures them in the same constrained main column, preserving
+side-slot allocation, automatic short/tall alignment and measured supporting
+content classification. The design follows the current [Material list content
+API](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ListItem.kt).
+
+Automatic accessibility text does not reuse a string hidden by a custom slot;
+callers can supply explicit row labels/descriptions, and slot semantics remain
+in the subtree. This does not add selection-role variants or claim support for
+nested interactive control allocation.
+
+The layout regression composes all three public slots with independent fixed
+sizes and deliberately longer fallback strings. It checks exact main-column
+placement, constrained widths, side-slot bounds, minimum heights, and expansion
+for taller supporting content. The existing four-density native scenario now
+switches all three slots on, changes role typography and theme colors, selects
+the row, then removes the custom slots and checks restored geometry before
+continuing its real input/disabled/resize checks. The example includes custom
+main, overline, and supporting content behind a plain/custom content control.
+
+
+Final verification passes: 310 ordinary component tests (116 opt-in tests
+ignored), all six list GPU scenarios, the updated runnable documentation example,
+release WASM and call-color checking. The actual input scenario clicks inside
+newly added custom-content height after reflow, asserts activation, then clears
+focus before comparing unfocused theme colors. A dedicated Cargo test-profile
+binary suffix avoids Windows executable locks from unrelated running regressions;
+no production cfg or test behavior is changed.
+
+Browser checks at 907x871 CSS pixels and a 1.5 backing-store ratio cover all three
+slots, large typography with a 280dp column, plain/custom content round trips with
+selection retained, Tab/Space activation, and pointer activation inside newly
+added height. No console errors were observed. The final view is stored externally
+as `wasm-list-custom-content-large-narrow.png`. An initial feedback-position
+anomaly following first reflow was observed; later controlled round trips and
+activation checks passed, so that initial transient remains unproven rather than
+being declared fixed. The initial view also needs a deterministic browser
+reproduction. The build retains the existing unused `ComponentTree::metadatas`
+warning.
+
+The wrapping fixture tags a layout wrapper around text: `text` currently replaces
+caller semantics with its built-in semantics, losing a caller's test tag. That
+independent semantic-preservation issue remains open. Complete list selection
+roles, nested interactive targets, drag/elevation/reordering, and normalized
+reference goldens also remain open.
