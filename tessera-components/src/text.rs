@@ -7,14 +7,15 @@ use std::sync::Arc;
 
 use parking_lot::Mutex;
 use tessera_ui::{
-    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    AccessibilityActionHandler, AccessibilityNode, Color, ComputedData, Dp, LayoutResult,
+    MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode,
     accesskit::Role,
     layout::{MeasureScope, layout},
+    modifier::ModifierCapabilityExt as _,
     remember, tessera, use_context,
 };
 
 use crate::{
-    modifier::{ModifierExt as _, SemanticsArgs},
     pipelines::text::{
         command::{TextCommand, TextConstraint},
         pipeline::TextData,
@@ -35,14 +36,18 @@ pub use crate::pipelines::text::pipeline::{read_font_system, write_font_system};
 ///
 /// ## Parameters
 ///
-/// - `modifier` — modifier chain applied to the text node.
+/// - `modifier` — modifier chain applied to the text node; caller semantics
+///   remain intact. The default label is the content and the default role is a
+///   label, unless supplied by the modifier.
 /// - `content` — text content to display.
 /// - `color` — optional text color override.
 /// - `style` — optional text style override for typography presets.
 /// - `size` — optional font size override.
 /// - `line_height` — optional line height override.
-/// - `accessibility_label` — optional accessibility label override.
-/// - `accessibility_description` — optional accessibility description override.
+/// - `accessibility_label` — optional label override, taking precedence over
+///   modifier semantics and displayed content.
+/// - `accessibility_description` — optional description override, taking
+///   precedence over modifier semantics.
 ///
 /// ## Examples
 ///
@@ -88,14 +93,10 @@ pub fn text(
         .or_else(|| theme.map(|t| t.get().color_scheme.on_surface))
         .unwrap_or_else(|| ContentColor::default().current);
     let size = size.unwrap_or(resolved_style.font_size);
-    let accessibility_label = accessibility_label
-        .clone()
-        .or_else(|| (!content.is_empty()).then(|| content.clone()));
-    let semantics = SemanticsArgs {
-        role: Some(Role::Label),
+    let semantics = TextSemantics {
+        content: content.clone(),
         label: accessibility_label,
         description: accessibility_description,
-        ..Default::default()
     };
     let line_height = line_height
         .or(resolved_style.line_height)
@@ -114,9 +115,36 @@ pub fn text(
         shaped: remember(|| Arc::new(Mutex::new(None))).get(),
     };
     layout()
-        .modifier(modifier.semantics(semantics))
+        .modifier(modifier.push_semantics(semantics))
         .policy(policy.clone())
         .draw(policy);
+}
+
+#[derive(Clone)]
+struct TextSemantics {
+    content: String,
+    label: Option<String>,
+    description: Option<String>,
+}
+
+impl SemanticsModifierNode for TextSemantics {
+    fn apply(
+        &self,
+        accessibility: &mut AccessibilityNode,
+        _: &mut Option<AccessibilityActionHandler>,
+    ) {
+        if accessibility.role.is_none() {
+            accessibility.role = Some(Role::Label);
+        }
+        if let Some(label) = &self.label {
+            accessibility.label = Some(label.clone());
+        } else if accessibility.label.is_none() && !self.content.is_empty() {
+            accessibility.label = Some(self.content.clone());
+        }
+        if let Some(description) = &self.description {
+            accessibility.description = Some(description.clone());
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -230,7 +258,12 @@ mod tests {
         testing::{layout_test, pump_layout_test_session, start_layout_test_session},
     };
 
-    use crate::{boxed::boxed, column::column, theme::material_theme};
+    use crate::{
+        boxed::boxed,
+        column::column,
+        modifier::{ModifierExt as _, SemanticsArgs},
+        theme::material_theme,
+    };
 
     use super::*;
 
@@ -355,3 +388,7 @@ mod tests {
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "text/drawing_tests.rs"]
 mod drawing_tests;
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "text/semantics_tests.rs"]
+mod semantics_tests;
