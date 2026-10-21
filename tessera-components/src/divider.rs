@@ -3,19 +3,29 @@
 //! ## Usage
 //!
 //! Separate sections in lists, menus, and settings screens.
+use std::sync::OnceLock;
+
 use tessera_ui::{
     Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px,
     layout::{MeasureScope, layout},
     tessera, use_context,
 };
 
-use crate::{pipelines::simple_rect::command::SimpleRectCommand, theme::MaterialTheme};
+use crate::{
+    pipelines::divider::DividerCommand,
+    theme::{MaterialColorScheme, MaterialTheme},
+};
 
-fn resolve_thickness_px(thickness: Dp) -> Px {
-    if thickness == Dp::ZERO {
-        Px(1)
+fn resolve_thickness_px(thickness: Dp) -> f32 {
+    let thickness = if thickness.0.is_finite() {
+        thickness
     } else {
-        thickness.to_px().max(Px::ZERO)
+        DividerDefaults::THICKNESS
+    };
+    if thickness == Dp::ZERO {
+        1.0
+    } else {
+        thickness.to_pixels_f32().max(0.0)
     }
 }
 
@@ -26,9 +36,12 @@ impl DividerDefaults {
     /// Default divider thickness.
     pub const THICKNESS: Dp = Dp(1.0);
 
-    /// Default divider color.
+    /// Divider color from the default light palette.
+    ///
+    /// Omit the component color to inherit the active Material theme.
     pub fn color() -> Color {
-        Color::new(0.0, 0.0, 0.0, 0.0)
+        static COLOR: OnceLock<Color> = OnceLock::new();
+        *COLOR.get_or_init(|| MaterialColorScheme::default().outline_variant)
     }
 }
 
@@ -40,7 +53,7 @@ enum DividerOrientation {
 
 #[derive(Clone, Copy, PartialEq)]
 struct DividerLayout {
-    thickness: Px,
+    thickness: f32,
     color: Color,
     orientation: DividerOrientation,
 }
@@ -62,10 +75,16 @@ impl tessera_ui::LayoutModifierNode for DividerLayout {
                     .width()
                     .resolve_max()
                     .unwrap_or(input.parent_constraint().width().resolve_min()),
-                input.parent_constraint().height().clamp(self.thickness),
+                input
+                    .parent_constraint()
+                    .height()
+                    .clamp(Px(self.thickness.round() as i32)),
             ),
             DividerOrientation::Vertical => (
-                input.parent_constraint().width().clamp(self.thickness),
+                input
+                    .parent_constraint()
+                    .width()
+                    .clamp(Px(self.thickness.round() as i32)),
                 input
                     .parent_constraint()
                     .height()
@@ -85,10 +104,27 @@ impl tessera_ui::DrawModifierNode for DividerLayout {
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
         let input = &mut *ctx.render_input;
-        input
+        let size = input
             .metadata_mut()
-            .fragment_mut()
-            .push_draw_command(SimpleRectCommand { color: self.color });
+            .computed_data()
+            .expect("divider must be measured");
+        let vertical = self.orientation == DividerOrientation::Vertical;
+        let cross = if vertical { size.width } else { size.height };
+        let stroke = if cross < Px(self.thickness.round() as i32) {
+            self.thickness.min(cross.to_f32())
+        } else {
+            self.thickness
+        };
+        if size.width > Px::ZERO && size.height > Px::ZERO && stroke > 0.0 {
+            input
+                .metadata_mut()
+                .fragment_mut()
+                .push_draw_command(DividerCommand {
+                    color: self.color,
+                    stroke,
+                    vertical,
+                });
+        }
         content.draw(input);
     }
 }
@@ -105,7 +141,7 @@ impl tessera_ui::DrawModifierNode for DividerLayout {
 ///
 /// - `modifier` — sizing, insets, placement, and semantics.
 /// - `thickness` — optional line thickness; zero draws one physical pixel, and
-///   negative values resolve to zero.
+///   negative values resolve to zero. Non-finite values use the default.
 /// - `color` — optional line color override.
 ///
 /// ## Examples
@@ -152,7 +188,7 @@ pub fn horizontal_divider(modifier: Option<Modifier>, thickness: Option<Dp>, col
 ///
 /// - `modifier` — sizing, insets, placement, and semantics.
 /// - `thickness` — optional line thickness; zero draws one physical pixel, and
-///   negative values resolve to zero.
+///   negative values resolve to zero. Non-finite values use the default.
 /// - `color` — optional line color override.
 ///
 /// ## Examples

@@ -8,6 +8,7 @@
 pub(crate) mod blur;
 pub(crate) mod checkmark;
 pub(crate) mod contrast;
+pub(crate) mod divider;
 pub(crate) mod fluid_glass;
 pub(crate) mod image;
 pub(crate) mod image_vector;

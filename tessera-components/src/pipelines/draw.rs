@@ -2,6 +2,7 @@ use tessera_ui::PipelineContext;
 
 use crate::pipelines::{
     checkmark::pipeline::CheckmarkPipeline,
+    divider::DividerPipeline,
     fluid_glass::pipeline::FluidGlassPipeline,
     image::pipeline::ImagePipeline,
     image_vector::pipeline::ImageVectorPipeline,
@@ -17,6 +18,7 @@ use crate::pipelines::{
 
 pub(super) fn register(context: &mut PipelineContext<'_>) {
     register_simple_rect(context);
+    register_divider(context);
     register_shape(context);
     register_shadow(context);
     register_progress_arc(context);
@@ -163,6 +165,17 @@ fn register_image_vector(context: &mut PipelineContext<'_>) {
         resources.device,
         resources.surface_config,
         resources.pipeline_cache,
+        resources.sample_count,
+    );
+    context.register_draw_pipeline(pipeline);
+}
+
+fn register_divider(context: &mut PipelineContext<'_>) {
+    let resources = context.resources();
+    let pipeline = DividerPipeline::new(
+        resources.device,
+        resources.pipeline_cache,
+        resources.surface_config,
         resources.sample_count,
     );
     context.register_draw_pipeline(pipeline);
