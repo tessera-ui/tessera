@@ -5,14 +5,21 @@ use std::sync::Arc;
 
 use tessera_components::{
     alignment::{Alignment, CrossAxisAlignment},
+    app_bar::{
+        AppBarScrollBehavior, AppBarScrollState, AppBarTitleAlignment, TopAppBarVariant,
+        app_bar_scroll_provider, top_app_bar,
+    },
     badge::{badge, badge_with_content, badged_box},
     bottom_sheet::bottom_sheet_provider,
     boxed::boxed,
-    button::button,
-    button_groups::button_groups,
-    card::card,
+    button::{ButtonShape, button},
+    button_groups::{
+        ButtonGroupsSelectionMode, ButtonGroupsSize, ButtonGroupsState, ButtonGroupsStyle,
+        button_groups,
+    },
+    card::{CardVariant, card},
     carousel::{CarouselController, CarouselVariant, carousel},
-    chip::chip,
+    chip::{ChipShapeStyle, ChipStyle, chip},
     column::column,
     date_picker::{
         DatePickerState, DateRangePickerState, Weekday, date_picker_dialog, date_range_picker,
@@ -29,7 +36,8 @@ use tessera_components::{
     flow_row::flow_row,
     icon::icon,
     icon_button::{
-        IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth, icon_button,
+        IconButtonColorStyle, IconButtonShape, IconButtonSize, IconButtonVariant, IconButtonWidth,
+        icon_button,
     },
     lazy_list::lazy_column,
     loading_indicator::loading_indicator,
@@ -38,13 +46,15 @@ use tessera_components::{
         MenuAnchor, MenuController, MenuPlacement, MenuPosition, menu_group, menu_item,
         menu_provider,
     },
-    modifier::ModifierExt,
+    modifier::{ModifierExt, SemanticsArgs},
     navigation_bar::{navigation_bar, navigation_bar_item},
     navigation_drawer::{navigation_drawer, navigation_drawer_item},
     navigation_rail::{navigation_rail, navigation_rail_item},
     painter::{Painter, try_painter_asset},
     radio_button::{RadioGroupOrientation, radio_button, radio_group},
     row::row,
+    scaffold::scaffold,
+    scrollable::ScrollableController,
     search::{docked_search_bar, search_bar},
     segmented_buttons::{
         SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
@@ -60,12 +70,12 @@ use tessera_components::{
         SplitButtonDefaults, SplitButtonSize, SplitButtonVariant, split_button_layout,
         split_leading_button, split_trailing_button,
     },
-    surface::surface,
-    tabs::{tab, tabs},
+    surface::{SurfaceStyle, surface},
+    tabs::{TabActivationMode, TabsVariant, tab, tabs},
     text::text,
     text_field::{TextFieldBuilder, text_field},
-    theme::MaterialTheme,
-    time_picker::{TimePickerState, time_picker_dialog},
+    theme::{MaterialColorScheme, MaterialTheme, material_theme},
+    time_picker::{TimePickerLayout, TimePickerState, time_picker_dialog},
     toolbar::{ToolbarColorStyle, ToolbarOrientation, docked_toolbar, floating_toolbar},
     tooltip::{TooltipController, TooltipVariant, tooltip_anchor, tooltip_provider},
     wavy_progress::{circular_wavy_progress_indicator, linear_wavy_progress_indicator},
@@ -97,6 +107,168 @@ fn section_header(#[prop(into)] title: String, #[prop(into)] description: String
             .content(description.clone())
             .style(theme.with(|t| t.typography.body_medium));
         spacer().modifier(Modifier::new().height(Dp(10.0)));
+    });
+}
+
+#[tessera]
+fn app_bar_demo(
+    variant: State<TopAppBarVariant>,
+    subtitle: State<bool>,
+    centered: State<bool>,
+    status: State<String>,
+    behavior: State<AppBarScrollBehavior>,
+    scroll_state: State<AppBarScrollState>,
+    content: State<ScrollableController>,
+    snap: State<bool>,
+) {
+    column().children(move || {
+        section_header(
+            "App bars",
+            "Small, medium flexible, and large flexible titles with optional subtitles.",
+        );
+        flow_row()
+            .item_spacing(Dp(8.0))
+            .line_spacing(Dp(8.0))
+            .children(move || {
+                button()
+                    .tonal()
+                    .on_click(move || {
+                        variant.set(match variant.get() {
+                            TopAppBarVariant::Small => TopAppBarVariant::MediumFlexible,
+                            TopAppBarVariant::MediumFlexible => TopAppBarVariant::LargeFlexible,
+                            TopAppBarVariant::LargeFlexible => TopAppBarVariant::Small,
+                        });
+                    })
+                    .child(move || {
+                        text().content(match variant.get() {
+                            TopAppBarVariant::Small => "Size: Small",
+                            TopAppBarVariant::MediumFlexible => "Size: Medium flexible",
+                            TopAppBarVariant::LargeFlexible => "Size: Large flexible",
+                        });
+                    });
+                button()
+                    .tonal()
+                    .on_click(move || subtitle.set(!subtitle.get()))
+                    .child(move || {
+                        text().content(if subtitle.get() {
+                            "Hide subtitle"
+                        } else {
+                            "Show subtitle"
+                        });
+                    });
+                button()
+                    .tonal()
+                    .on_click(move || centered.set(!centered.get()))
+                    .child(move || {
+                        text().content(if centered.get() {
+                            "Title: Center"
+                        } else {
+                            "Title: Start"
+                        });
+                    });
+                button()
+                    .tonal()
+                    .on_click(move || {
+                        behavior.set(match behavior.get() {
+                            AppBarScrollBehavior::Pinned => AppBarScrollBehavior::EnterAlways,
+                            AppBarScrollBehavior::EnterAlways => {
+                                AppBarScrollBehavior::ExitUntilCollapsed
+                            }
+                            AppBarScrollBehavior::ExitUntilCollapsed => {
+                                AppBarScrollBehavior::Pinned
+                            }
+                        })
+                    })
+                    .child(move || {
+                        text().content(match behavior.get() {
+                            AppBarScrollBehavior::Pinned => "Scroll: Fixed",
+                            AppBarScrollBehavior::EnterAlways => "Scroll: Enter always",
+                            AppBarScrollBehavior::ExitUntilCollapsed => "Scroll: Expand at start",
+                        });
+                    });
+                button()
+                    .tonal()
+                    .on_click(move || snap.set(!snap.get()))
+                    .child(move || {
+                        text().content(if snap.get() { "Snap: On" } else { "Snap: Off" });
+                    });
+                button()
+                    .text()
+                    .on_click(move || {
+                        scroll_state.with_mut(AppBarScrollState::reset);
+                        content.with_mut(|controller| {
+                            controller.set_scroll_position(tessera_ui::PxPosition::ZERO)
+                        });
+                    })
+                    .child(|| {
+                        text().content("Reset scroll");
+                    });
+            });
+        spacer().modifier(Modifier::new().height(Dp(12.0)));
+        app_bar_scroll_provider()
+            .state(scroll_state)
+            .behavior(behavior.get())
+            .snap(snap.get())
+            .scroll_controller(content)
+            .child(move || {
+                scaffold()
+                    .modifier(Modifier::new().fill_max_width().height(Dp(360.0)))
+                    .top_bar(move || {
+                        top_app_bar()
+                            .variant(variant.get())
+                            .title("Library")
+                            .subtitle_optional(subtitle.get().then(|| "Recently saved".to_owned()))
+                            .title_alignment(if centered.get() {
+                                AppBarTitleAlignment::Center
+                            } else {
+                                AppBarTitleAlignment::Start
+                            })
+                            .navigation_icon(move || {
+                                icon_button()
+                                    .standard()
+                                    .color_style(IconButtonColorStyle::Inherited)
+                                    .icon(filled::ARROW_BACK_SVG)
+                                    .accessibility_label("Library back")
+                                    .on_click(move || status.set("Back selected".to_owned()));
+                            })
+                            .action(move || {
+                                icon_button()
+                                    .standard()
+                                    .color_style(IconButtonColorStyle::Inherited)
+                                    .icon(filled::SEARCH_SVG)
+                                    .accessibility_label("Search library")
+                                    .on_click(move || status.set("Search selected".to_owned()));
+                            })
+                            .action(move || {
+                                icon_button()
+                                    .standard()
+                                    .color_style(IconButtonColorStyle::Inherited)
+                                    .icon(filled::MORE_VERT_SVG)
+                                    .accessibility_label("Library options")
+                                    .on_click(move || status.set("Options selected".to_owned()));
+                            });
+                    })
+                    .content(move || {
+                        column()
+                            .modifier(Modifier::new().fill_max_size().vertical_scroll(content))
+                            .children(|| {
+                                for index in 0..24 {
+                                    row()
+                                        .modifier(
+                                            Modifier::new()
+                                                .fill_max_width()
+                                                .height(Dp(48.0))
+                                                .padding_symmetric(Dp(16.0), Dp::ZERO),
+                                        )
+                                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                                        .children(move || {
+                                            text().content(format!("Saved item {}", index + 1));
+                                        });
+                                }
+                            });
+                    });
+            });
+        text().content(status.get());
     });
 }
 
@@ -420,10 +592,30 @@ pub fn material_components_page() {
     let icon_selected = remember(|| [false; 5]);
     let icon_actions = remember(|| 0_u32);
     let chip_selected = remember(|| false);
+    let chip_enabled = remember(|| true);
+    let chip_elevated = remember(|| false);
+    let chip_avatar = remember(|| false);
+    let chip_expressive = remember(|| true);
+    let card_enabled = remember(|| true);
+    let card_clickable = remember(|| true);
+    let card_artwork = remember(|| false);
+    let card_dark = remember(|| false);
+    let card_actions = remember(|| 0_u32);
+    let card_nested_action = remember(|| false);
+    let card_secondary_actions = remember(|| 0_u32);
     let segmented_index = remember(|| 0_usize);
     let multi_segmented = remember(|| [false, false, false]);
     let tab_selected = remember(|| 0_usize);
+    let tab_variant = remember(TabsVariant::default);
+    let tab_activation = remember(TabActivationMode::default);
+    let tab_scrollable = remember(|| false);
+    let tab_icons = remember(|| false);
+    let tab_middle_enabled = remember(|| true);
+    let tab_actions = remember(|| 0usize);
     let radio_value = remember(|| 0_usize);
+    let radio_middle_enabled = remember(|| true);
+    let radio_actions = remember(|| 0_u32);
+    let local_radio_actions = remember(|| 0_u32);
     let dialog_open = remember(|| false);
     let bottom_sheet_open = remember(|| false);
     let menu_controller = remember(MenuController::new);
@@ -432,6 +624,15 @@ pub fn material_components_page() {
     let menu_trigger_bounds = remember(|| PxRect::ZERO);
     let page_bounds = remember(|| PxRect::ZERO);
     let group_status = remember(|| "No button group action yet".to_string());
+    let group_size = remember(|| ButtonGroupsSize::Small);
+    let group_connected = remember(|| true);
+    let group_selection = remember(ButtonGroupsState::new);
+    let group_shape = remember(ButtonShape::default);
+    let group_expansion = remember(|| true);
+    let group_multiple = remember(|| false);
+    let group_required = remember(|| false);
+    let group_enabled = remember(|| true);
+    let group_middle_enabled = remember(|| true);
     let split_status = remember(|| "No split action yet".to_string());
     let split_variant = remember(SplitButtonVariant::default);
     let split_enabled = remember(|| true);
@@ -471,12 +672,22 @@ pub fn material_components_page() {
     let date_range_state = remember(DateRangePickerState::default);
     let date_range_status = remember(String::new);
     let time_state = remember(|| TimePickerState::new(10, 8, false, Default::default()));
+    let time_status = remember(|| "No time action yet".to_owned());
+    let time_layout = remember(TimePickerLayout::default);
     let picker_status = remember(String::new);
     let navigation_bar_selected = remember(|| 0_usize);
     let navigation_rail_selected = remember(|| 0_usize);
     let drawer_selected = remember(|| 0_usize);
     let toolbar_expanded = remember(|| true);
     let toolbar_status = remember(|| "No toolbar action yet".to_string());
+    let app_bar_variant = remember(|| TopAppBarVariant::MediumFlexible);
+    let app_bar_subtitle = remember(|| true);
+    let app_bar_centered = remember(|| false);
+    let app_bar_status = remember(|| "No app bar action yet".to_owned());
+    let app_bar_behavior = remember(AppBarScrollBehavior::default);
+    let app_bar_scroll = remember(AppBarScrollState::default);
+    let app_bar_content = remember(ScrollableController::new);
+    let app_bar_snap = remember(|| true);
 
     let page_content = RenderSlot::new(move || {
         lazy_column()
@@ -493,6 +704,7 @@ pub fn material_components_page() {
                     text().content("Additional Material 3 components beyond the basic set.");
                 });
             })
+            .item(move || { app_bar_demo(app_bar_variant, app_bar_subtitle, app_bar_centered, app_bar_status, app_bar_behavior, app_bar_scroll, app_bar_content, app_bar_snap); })
             .item(move || { carousel_demo(carousel_controller, carousel_variant, carousel_enabled, carousel_reverse, carousel_selected, carousel_artwork); })
             .item(move || { icon_button_demo(icon_variant, icon_width, icon_shape, icon_toggle, icon_enabled, icon_selected, icon_actions); })
             .item(move || {
@@ -907,26 +1119,7 @@ pub fn material_components_page() {
             })
             .item(move || {
                 column().children(move || {
-                    section_header("Badge", "Show notifications or counts on top of an icon.");
-                    row().children(move || {
-                        badged_box()
-                            .badge(|| {
-                                badge_with_content().content(|| {
-                                    text().content("3");
-                                });
-                            })
-                            .content(|| {
-                                icon().size(Dp(28.0)).painter(filled::HOME_SVG);
-                            });
-                        spacer().modifier(Modifier::new().width(Dp(24.0)));
-                        badged_box()
-                            .badge(|| {
-                                badge();
-                            })
-                            .content(|| {
-                                icon().size(Dp(28.0)).painter(filled::SETTINGS_SVG);
-                            });
-                    });
+                    badge_gallery();
                 });
             })
             .item(move || {
@@ -958,6 +1151,13 @@ pub fn material_components_page() {
                     spacer().modifier(Modifier::new().height(Dp(8.0)));
                     text().content("Below the divider");
                     spacer().modifier(Modifier::new().height(Dp(12.0)));
+                    text().content("Inset divider (16dp)");
+                    horizontal_divider()
+                        .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp(8.0)));
+                    text().content("Hairline divider (one physical pixel)");
+                    horizontal_divider()
+                        .modifier(Modifier::new().padding_symmetric(Dp::ZERO, Dp(8.0)))
+                        .thickness(Dp::ZERO);
                     row()
                         .modifier(Modifier::new().height(Dp(40.0)))
                         .children(|| {
@@ -975,32 +1175,72 @@ pub fn material_components_page() {
             })
             .item(move || {
                 column().children(move || {
-                    section_header("Card", "Group related information into a container.");
-                    card().filled().content(|| {
-                        column()
-                            .modifier(Modifier::new().padding_all(Dp(16.0)))
-                            .children(|| {
-                                text().content("Filled card");
-                                text().content("Supporting text for the card.");
-                            });
+                    section_header("Card", "Group related information and activate the main card action.");
+                    flow_row().item_spacing(Dp(8.0)).line_spacing(Dp(8.0)).children(move || {
+                        button().tonal().on_click(move || {
+                            card_enabled.set(!card_enabled.get());
+                            tessera_ui::FocusManager::current().defer_keyboard_until_layout();
+                        }).child(move || { text().content(if card_enabled.get() { "Disable cards" } else { "Enable cards" }); });
+                        button().tonal().on_click(move || {
+                            card_clickable.set(!card_clickable.get());
+                            tessera_ui::FocusManager::current().defer_keyboard_until_layout();
+                        }).child(move || { text().content(if card_clickable.get() { "Use static cards" } else { "Use clickable cards" }); });
+                        button().tonal().on_click(move || card_artwork.set(!card_artwork.get()))
+                            .child(move || { text().content(if card_artwork.get() { "Hide artwork" } else { "Show artwork" }); });
+                        button().tonal().on_click(move || card_dark.set(!card_dark.get()))
+                            .child(move || { text().content(if card_dark.get() { "Card theme: Dark" } else { "Card theme: Light" }); });
+                        button().tonal().on_click(move || card_nested_action.set(!card_nested_action.get()))
+                            .child(move || { text().content(if card_nested_action.get() { "Hide secondary action" } else { "Show secondary action" }); });
                     });
-                    spacer().modifier(Modifier::new().height(Dp(12.0)));
-                    card().outlined().content(|| {
-                        column()
-                            .modifier(Modifier::new().padding_all(Dp(16.0)))
-                            .children(|| {
-                                text().content("Outlined card");
-                                text().content("Supporting text for the card.");
+                    spacer().modifier(Modifier::new().height(Dp(8.0)));
+                    material_theme().theme(move || {
+                        let mut value = theme.get();
+                        if card_dark.get() {
+                            value.color_scheme = MaterialColorScheme::dark_from_seed(tessera_ui::Color::from_rgb(0.135633335, 0.080219820, 0.371237695));
+                        }
+                        value
+                    }).child(move || {
+                    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+                    column().modifier(Modifier::new().background(scheme.surface).padding_all(Dp(16.0))).children(move || {
+                    for (variant, label) in [(CardVariant::Filled, "Filled card"), (CardVariant::Outlined, "Outlined card"), (CardVariant::Elevated, "Elevated card")] {
+                        let mut item = card().variant(variant).enabled(card_enabled.get())
+                            .modifier(Modifier::new().width(Dp(320.0)))
+                            .accessibility_label(label)
+                            .content(move || {
+                                column().children(move || {
+                                    if card_artwork.get() {
+                                        let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+                                        boxed().alignment(Alignment::Center)
+                                            .modifier(Modifier::new().fill_max_width().height(Dp(96.0)).background(scheme.primary_container))
+                                            .children(move || {
+                                                tessera_components::image::image().painter(carousel_artwork.get())
+                                                    .modifier(Modifier::new().size(Dp(80.0), Dp(80.0)));
+                                            });
+                                    }
+                                    column().modifier(Modifier::new().padding_all(Dp(16.0))).children(move || {
+                                        text().content(label);
+                                        text().content("Supporting text for the card.");
+                                        if card_nested_action.get() {
+                                            spacer().modifier(Modifier::new().height(Dp(8.0)));
+                                            button().outlined().enabled(card_enabled.get())
+                                                .on_click(move || card_secondary_actions.with_mut(|actions| *actions += 1))
+                                                .child(|| { text().content("Secondary action"); });
+                                        }
+                                    });
+                                });
                             });
+                        if card_clickable.get() {
+                            item = item.on_click(move || card_actions.with_mut(|actions| *actions += 1));
+                        }
+                        drop(item);
+                        spacer().modifier(Modifier::new().height(Dp(8.0)));
+                    }
+                    let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+                    text().content(format!("Card actions: {}", card_actions.get())).color(scheme.on_surface);
+                    if card_nested_action.get() {
+                        text().content(format!("Secondary actions: {}", card_secondary_actions.get())).color(scheme.on_surface);
+                    }
                     });
-                    spacer().modifier(Modifier::new().height(Dp(12.0)));
-                    card().elevated().content(|| {
-                        column()
-                            .modifier(Modifier::new().padding_all(Dp(16.0)))
-                            .children(|| {
-                                text().content("Elevated card");
-                                text().content("Supporting text for the card.");
-                            });
                     });
                 });
             })
@@ -1011,15 +1251,58 @@ pub fn material_components_page() {
                         .item_spacing(Dp(8.0))
                         .line_spacing(Dp(8.0))
                         .children(move || {
-                            chip().assist("Assist").on_click(|| {});
-                            chip().suggestion("Suggestion").on_click(|| {});
-                            chip()
-                                .filter("Filter")
-                                .selected(chip_selected.get())
-                                .on_click(move || {
-                                    chip_selected.with_mut(|value| *value = !*value);
+                            button()
+                                .tonal()
+                                .on_click(move || chip_elevated.set(!chip_elevated.get()))
+                                .child(move || {
+                                    text().content(if chip_elevated.get() { "Use flat actions" } else { "Use elevated actions" });
                                 });
-                            chip().input("Input");
+                            button()
+                                .tonal()
+                                .on_click(move || chip_enabled.set(!chip_enabled.get()))
+                                .child(move || {
+                                    text().content(if chip_enabled.get() { "Disable chips" } else { "Enable chips" });
+                                });
+                            button()
+                                .tonal()
+                                .on_click(move || chip_avatar.set(!chip_avatar.get()))
+                                .child(move || {
+                                    text().content(if chip_avatar.get() { "Use input icon" } else { "Use input avatar" });
+                                });
+                            button()
+                                .tonal()
+                                .on_click(move || chip_expressive.set(!chip_expressive.get()))
+                                .child(move || {
+                                    text().content(if chip_expressive.get() { "Use standard shapes" } else { "Use expressive shapes" });
+                                });
+                        });
+                    flow_row()
+                        .item_spacing(Dp(8.0))
+                        .line_spacing(Dp(8.0))
+                        .children(move || {
+                            let style = if chip_elevated.get() { ChipStyle::Elevated } else { ChipStyle::Flat };
+                            let shape_style = if chip_expressive.get() { ChipShapeStyle::Expressive } else { ChipShapeStyle::Standard };
+                            chip().assist("Assist").leading_icon(filled::HOME_SVG)
+                                .style(style).enabled(chip_enabled.get()).on_click(|| {});
+                            chip().suggestion("Suggestion").style(style)
+                                .enabled(chip_enabled.get()).on_click(|| {});
+                            let mut filter = chip()
+                                .filter("Filter")
+                                .shape_style(shape_style)
+                                .style(style)
+                                .enabled(chip_enabled.get())
+                                .selected(chip_selected.get())
+                                .on_click(move || chip_selected.set(!chip_selected.get()));
+                            if chip_selected.get() {
+                                filter = filter.leading_icon(filled::CHECK_SVG);
+                            }
+                            drop(filter);
+                            chip().input("Input").leading_icon(filled::PERSON_SVG)
+                                .shape_style(shape_style)
+                                .avatar_optional(chip_avatar.get().then(|| carousel_artwork.get()))
+                                .enabled(chip_enabled.get())
+                                .selected(chip_selected.get())
+                                .on_click(move || chip_selected.set(!chip_selected.get()));
                         });
                 });
             })
@@ -1027,9 +1310,50 @@ pub fn material_components_page() {
                 column().children(move || {
                     section_header(
                         "Button groups",
-                        "Group related actions with connected behavior.",
+                        "Compare standard and connected groups across five sizes.",
                     );
+                    flow_row().children(move || {
+                        button().tonal().on_click(move || group_connected.set(!group_connected.get())).child(move || {
+                            text().content(if group_connected.get() {"Use standard group"} else {"Use connected group"});
+                        });
+                        for (label,size) in [("XS",ButtonGroupsSize::ExtraSmall),("S",ButtonGroupsSize::Small),("M",ButtonGroupsSize::Medium),("L",ButtonGroupsSize::Large),("XL",ButtonGroupsSize::ExtraLarge)] {
+                            button().tonal().selected(group_size.get()==size).on_click(move || group_size.set(size)).child(move || {text().content(label);});
+                        }
+                        button().text().on_click(move || {
+                            group_selection.with_mut(ButtonGroupsState::clear);
+                            group_status.set(if group_required.get() { "Selection reset" } else { "Selection cleared" }.to_string());
+                        }).child(move || { text().content(if group_required.get() { "Reset selection" } else { "Clear selection" }); });
+                        button().tonal().on_click(move || {
+                            group_shape.set(if group_shape.get() == ButtonShape::Round { ButtonShape::Square } else { ButtonShape::Round });
+                        }).child(move || { text().content(if group_shape.get() == ButtonShape::Round { "Use square shapes" } else { "Use round shapes" }); });
+                    });
+                    flow_row().children(move || {
+                        button().tonal().on_click(move || group_multiple.set(!group_multiple.get())).child(move || {
+                            text().content(if group_multiple.get() { "Use single-select" } else { "Use multi-select" });
+                        });
+                        button().tonal().on_click(move || group_required.set(!group_required.get())).child(move || {
+                            text().content(if group_required.get() { "Allow empty selection" } else { "Require selection" });
+                        });
+                        button().tonal().on_click(move || group_middle_enabled.set(!group_middle_enabled.get())).child(move || {
+                            text().content(if group_middle_enabled.get() { "Disable Two" } else { "Enable Two" });
+                        });
+                        button().tonal().on_click(move || group_enabled.set(!group_enabled.get())).child(move || {
+                            text().content(if group_enabled.get() { "Disable group" } else { "Enable group" });
+                        });
+                        button().tonal().enabled(!group_connected.get()).on_click(move || group_expansion.set(!group_expansion.get())).child(move || {
+                            text().content(if group_expansion.get() { "Disable expansion" } else { "Enable expansion" });
+                        });
+                    });
                     button_groups()
+                        .state(group_selection)
+                        .shape_style(group_shape.get())
+                        .expanded_ratio(if group_expansion.get() { 0.15 } else { 0.0 })
+                        .enabled(group_enabled.get())
+                        .selection_required(group_required.get())
+                        .selection_mode(if group_multiple.get() { ButtonGroupsSelectionMode::Multiple } else { ButtonGroupsSelectionMode::Single })
+                        .disabled_indices(if group_middle_enabled.get() { vec![] } else { vec![1] })
+                        .size(group_size.get())
+                        .style(if group_connected.get() {ButtonGroupsStyle::Connected} else {ButtonGroupsStyle::Standard})
                         .child(
                             || {
                                 text().content("One");
@@ -1079,7 +1403,7 @@ pub fn material_components_page() {
             .item(move || {
                 column().children(move || {
                     section_header(
-                        "Segmented buttons",
+                        "Segmented buttons (standard)",
                         "Switch between views with a connected control.",
                     );
                     single_choice_segmented_button_row().content(move || {
@@ -1146,26 +1470,40 @@ pub fn material_components_page() {
             })
             .item(move || {
                 column().children(move || {
-                    section_header("Tabs", "Organize related destinations into a tab strip.");
-                    tabs().selected(tab_selected).content(move || {
-                        tab()
-                            .label("Flights")
-                            .selected(tab_selected.get() == 0)
-                            .on_click(move || tab_selected.set(0));
-                        tab()
-                            .label("Hotels")
-                            .selected(tab_selected.get() == 1)
-                            .on_click(move || tab_selected.set(1));
-                        tab()
-                            .label("Trains")
-                            .selected(tab_selected.get() == 2)
-                            .on_click(move || tab_selected.set(2));
+                    section_header("Tabs", "Use arrows to move focus and Enter or Space to select a view.");
+                    flow_row().item_spacing(Dp(8.0)).line_spacing(Dp(8.0)).children(move || {
+                        button().tonal().on_click(move || {
+                            tab_variant.set(if tab_variant.get() == TabsVariant::Primary { TabsVariant::Secondary } else { TabsVariant::Primary });
+                        }).child(move || { text().content(if tab_variant.get() == TabsVariant::Primary { "Primary" } else { "Secondary" }); });
+                        button().tonal().on_click(move || {
+                            tab_activation.set(if tab_activation.get() == TabActivationMode::Manual { TabActivationMode::Automatic } else { TabActivationMode::Manual });
+                            tessera_ui::FocusManager::current().defer_keyboard_until_layout();
+                        }).child(move || { text().content(if tab_activation.get() == TabActivationMode::Manual { "Manual activation" } else { "Automatic activation" }); });
+                        button().tonal().on_click(move || {
+                            tab_scrollable.set(!tab_scrollable.get());
+                            if !tab_scrollable.get() && tab_selected.get() >= 3 { tab_selected.set(0); }
+                            tessera_ui::FocusManager::current().defer_keyboard_until_layout();
+                        }).child(move || { text().content(if tab_scrollable.get() { "Scrollable" } else { "Fixed" }); });
+                        button().tonal().on_click(move || { tab_icons.set(!tab_icons.get()); })
+                            .child(move || { text().content(if tab_icons.get() { "Hide icons" } else { "Show icons" }); });
+                        button().tonal().on_click(move || {
+                            tab_middle_enabled.set(!tab_middle_enabled.get());
+                            tessera_ui::FocusManager::current().defer_keyboard_until_layout();
+                        }).child(move || { text().content(if tab_middle_enabled.get() { "Disable Hotels" } else { "Enable Hotels" }); });
                     });
-                    text().content(match tab_selected.get() {
-                        0 => "Flights content",
-                        1 => "Hotels content",
-                        _ => "Trains content",
-                    });
+                    spacer().modifier(Modifier::new().height(Dp(12.0)));
+                    tabs().selected(tab_selected).variant(tab_variant.get())
+                        .activation_mode(tab_activation.get()).scrollable(tab_scrollable.get())
+                        .modifier(Modifier::new().semantics(SemanticsArgs { label: Some("Travel destinations".to_owned()), ..Default::default() }))
+                        .content(move || {
+                            for (index, label) in ["Flights", "Hotels", "Trains", "Buses", "Ferries"].into_iter().take(if tab_scrollable.get() { 5 } else { 3 }).enumerate() {
+                                let mut item = tab().label(label).enabled(index != 1 || tab_middle_enabled.get())
+                                    .on_click(move || tab_actions.set(tab_actions.get() + 1));
+                                if tab_icons.get() { item = item.icon(filled::ADD_SVG); }
+                            }
+                        });
+                    let destination = ["Flights", "Hotels", "Trains", "Buses", "Ferries"][tab_selected.get().min(4)];
+                    text().content(format!("{destination} content · Activations: {}", tab_actions.get()));
                 });
             })
             .item(move || {
@@ -1174,37 +1512,63 @@ pub fn material_components_page() {
             .item(move || {
                 column().children(move || {
                     section_header("Radio button", "Pick a single option from a group.");
+                    button().tonal().on_click(move || {
+                        radio_middle_enabled.set(!radio_middle_enabled.get());
+                        tessera_ui::FocusManager::current().defer_keyboard_until_layout();
+                    }).child(move || {
+                        text().content(if radio_middle_enabled.get() { "Disable Option B" } else { "Enable Option B" });
+                    });
+                    button().text().on_click(move || {
+                        radio_value.set(usize::MAX);
+                    }).child(|| { text().content("Clear selection"); });
                     radio_group()
                         .orientation(RadioGroupOrientation::Vertical)
+                        .accessibility_label("Example choices")
+                        .accessibility_description("Use arrow keys to choose an option")
                         .content(move || {
                             column().children(move || {
-                                row()
-                                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .children(move || {
+                                for (index, label) in ["Option A", "Option B", "Option C"].into_iter().enumerate() {
+                                    row().cross_axis_alignment(CrossAxisAlignment::Center).children(move || {
                                         radio_button()
-                                            .selected(radio_value.get() == 0)
-                                            .on_select(move |_| radio_value.set(0))
-                                            .accessibility_label("Option A");
+                                            .selected(radio_value.get() == index)
+                                            .enabled(index != 1 || radio_middle_enabled.get())
+                                            .on_select(move |_| {
+                                                radio_value.set(index);
+                                                radio_actions.with_mut(|actions| *actions += 1);
+                                            })
+                                            .accessibility_label(label);
                                         spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                        text()
-                                            .content("Option A")
+                                        let color = theme.get().color_scheme.on_surface;
+                                        text().content(label)
+                                            .color(if index != 1 || radio_middle_enabled.get() { color } else { color.with_alpha(0.38) })
                                             .modifier(Modifier::new().offset(Dp(0.0), Dp(3.0)));
                                     });
-                                spacer().modifier(Modifier::new().height(Dp(8.0)));
-                                row()
-                                    .cross_axis_alignment(CrossAxisAlignment::Center)
-                                    .children(move || {
-                                        radio_button()
-                                            .selected(radio_value.get() == 1)
-                                            .on_select(move |_| radio_value.set(1))
-                                            .accessibility_label("Option B");
-                                        spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                        text()
-                                            .content("Option B")
-                                            .modifier(Modifier::new().offset(Dp(0.0), Dp(3.0)));
-                                    });
+                                    if index < 2 {
+                                        spacer().modifier(Modifier::new().height(Dp(8.0)));
+                                    }
+                                }
                             });
                         });
+                    text().content(format!("Selected option: {} · Changes: {}", ["A", "B", "C"].get(radio_value.get()).copied().unwrap_or("None"), radio_actions.get()));
+                    spacer().modifier(Modifier::new().height(Dp(12.0)));
+                    text().content("Internally managed selection");
+                    radio_group()
+                        .orientation(RadioGroupOrientation::Horizontal)
+                        .accessibility_label("Internally managed choices")
+                        .content(move || {
+                            row().children(move || {
+                                for label in ["Local A", "Local B", "Local C"] {
+                                    row().cross_axis_alignment(CrossAxisAlignment::Center).children(move || {
+                                        radio_button().accessibility_label(label).on_select(move |_| {
+                                            local_radio_actions.with_mut(|actions| *actions += 1);
+                                        });
+                                        text().content(label);
+                                        spacer().modifier(Modifier::new().width(Dp(16.0)));
+                                    });
+                                }
+                            });
+                        });
+                    text().content(format!("Local changes: {}", local_radio_actions.get()));
                 });
             })
             .item(move || {
@@ -1363,7 +1727,41 @@ pub fn material_components_page() {
             })
             .item(move || {
                 column().children(move || {
-                    section_header("Time picker", "Select a time with the clock or keyboard.");
+                    section_header("Time picker", "Use arrow keys to focus dial values and Enter or Space to choose one.");
+                    button().tonal().accessibility_label("Toggle 24-hour clock")
+                        .selected(time_state.with(TimePickerState::is_24_hour))
+                        .on_click(move || {
+                            time_state.with_mut(|state| {
+                                state.set_is_24_hour(!state.is_24_hour());
+                            });
+                            tessera_ui::FocusManager::current().defer_keyboard_until_layout();
+                        })
+                        .child(move || {
+                            text().content(if time_state.with(TimePickerState::is_24_hour) {
+                                "Clock: 24 hours"
+                            } else {
+                                "Clock: 12 hours"
+                            });
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(8.0)));
+                    button().tonal().accessibility_label("Toggle time picker layout")
+                        .selected(time_layout.get() == TimePickerLayout::Horizontal)
+                        .on_click(move || {
+                            time_layout.set(if time_layout.get() == TimePickerLayout::Vertical {
+                                TimePickerLayout::Horizontal
+                            } else {
+                                TimePickerLayout::Vertical
+                            });
+                            tessera_ui::FocusManager::current().defer_keyboard_until_layout();
+                        })
+                        .child(move || {
+                            text().content(if time_layout.get() == TimePickerLayout::Horizontal {
+                                "Layout: horizontal"
+                            } else {
+                                "Layout: vertical"
+                            });
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(12.0)));
                     surface()
                         .style(theme.with(|t| t.color_scheme.surface_container_high).into())
                         .shape(theme.with(|t| t.shapes.extra_large))
@@ -1373,11 +1771,12 @@ pub fn material_components_page() {
                                 .children(move || {
                                     time_picker_dialog()
                                         .state(time_state)
+                                        .picker_layout(time_layout.get())
                                         .dismiss_button(move || {
                                             button()
                                                 .text()
                                                 .on_click(move || {
-                                                    picker_status
+                                                    time_status
                                                         .set("Time selection cancelled".to_owned())
                                                 })
                                                 .child(|| {
@@ -1388,7 +1787,7 @@ pub fn material_components_page() {
                                             button()
                                                 .text()
                                                 .on_click(move || {
-                                                    picker_status.set("Time confirmed".to_owned())
+                                                    time_status.set("Time confirmed".to_owned())
                                                 })
                                                 .child(|| {
                                                     text().content("OK");
@@ -1396,6 +1795,10 @@ pub fn material_components_page() {
                                         });
                                 });
                         });
+                    text().content(time_state.with(|state| {
+                        format!("Selected time: {:02}:{:02}", state.hour(), state.minute())
+                    }));
+                    text().content(time_status.get());
                 });
             })
             .item(move || {
@@ -1609,6 +2012,110 @@ pub fn material_components_page() {
                                 .child(|| {
                                     text().content("Cancel");
                                 });
+                        });
+                });
+        });
+}
+
+#[tessera]
+fn badge_gallery() {
+    let count = remember(|| 3_u32);
+    let dot = remember(|| false);
+    let dark = remember(|| false);
+    let palettes = remember(|| {
+        [
+            MaterialTheme::default(),
+            MaterialTheme::from_seed(
+                tessera_ui::Color::from_rgb(0.135633335, 0.080219820, 0.371237695),
+                true,
+            ),
+        ]
+    });
+    section_header("Badge", "Show notifications or counts on top of an icon.");
+    flow_row().item_spacing(Dp(8.0)).children(move || {
+        button()
+            .tonal()
+            .on_click(move || count.set(count.get().saturating_add(1)))
+            .child(|| {
+                text().content("Add notification");
+            });
+        button()
+            .tonal()
+            .on_click(move || dot.set(!dot.get()))
+            .child(move || {
+                text().content(if dot.get() { "Show count" } else { "Show dot" });
+            });
+        button()
+            .tonal()
+            .on_click(move || dark.set(!dark.get()))
+            .child(move || {
+                text().content(if dark.get() {
+                    "Use light theme"
+                } else {
+                    "Use dark theme"
+                });
+            });
+    });
+    material_theme()
+        .theme(move || palettes.with(|palettes| palettes[usize::from(dark.get())].clone()))
+        .child(move || {
+            let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
+            surface()
+                .modifier(Modifier::new().fill_max_width())
+                .style(SurfaceStyle::Filled {
+                    color: scheme.surface,
+                })
+                .content_color(scheme.on_surface)
+                .child(move || {
+                    row()
+                        .modifier(Modifier::new().padding_all(Dp(16.0)))
+                        .children(move || {
+                            badged_box()
+                                .modifier(Modifier::new().semantics(SemanticsArgs {
+                                    role: Some(tessera_ui::accesskit::Role::Image),
+                                    label: Some(format!("Inbox, {} unread items", count.get())),
+                                    ..Default::default()
+                                }))
+                                .content(|| {
+                                    icon().painter(filled::HOME_SVG);
+                                })
+                                .badge(move || {
+                                    let modifier = Modifier::new().semantics(SemanticsArgs {
+                                        hidden: true,
+                                        ..Default::default()
+                                    });
+                                    if dot.get() {
+                                        badge().modifier(modifier);
+                                    } else {
+                                        badge_with_content().modifier(modifier).content(
+                                            move || {
+                                                text().content(if count.get() > 99 {
+                                                    "99+".into()
+                                                } else {
+                                                    count.get().to_string()
+                                                });
+                                            },
+                                        );
+                                    }
+                                });
+                            spacer().modifier(Modifier::new().width(Dp(32.0)));
+                            badged_box()
+                                .modifier(Modifier::new().semantics(SemanticsArgs {
+                                    role: Some(tessera_ui::accesskit::Role::Image),
+                                    label: Some("Settings, new activity".into()),
+                                    ..Default::default()
+                                }))
+                                .badge(|| {
+                                    badge().modifier(Modifier::new().semantics(SemanticsArgs {
+                                        hidden: true,
+                                        ..Default::default()
+                                    }));
+                                })
+                                .content(|| {
+                                    icon().painter(filled::SETTINGS_SVG);
+                                });
+                            spacer().modifier(Modifier::new().width(Dp(32.0)));
+                            text().content(format!("Unread: {}", count.get()));
                         });
                 });
         });

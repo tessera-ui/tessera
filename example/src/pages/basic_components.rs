@@ -1,4 +1,5 @@
 use tessera_components::{
+    alignment::CrossAxisAlignment,
     button::{ButtonShape, ButtonSize, ButtonVariant, button},
     checkbox::checkbox,
     column::column,
@@ -6,17 +7,19 @@ use tessera_components::{
     icon::icon,
     lazy_list::lazy_column,
     material_icons::filled,
-    modifier::ModifierExt,
+    modifier::{ModifierExt, SemanticsArgs},
     progress::progress,
+    row::row,
     slider::slider,
     spacer::spacer,
+    surface::{SurfaceStyle, surface},
     switch::switch,
     text::text,
     text_input::text_input,
-    theme::MaterialTheme,
+    theme::{MaterialTheme, material_theme},
 };
 use tessera_shard::shard;
-use tessera_ui::{Dp, Modifier, remember, use_context};
+use tessera_ui::{Color, Dp, FocusManager, Modifier, RenderSlot, remember, use_context};
 
 #[shard]
 pub fn basic_components_page() {
@@ -29,7 +32,14 @@ pub fn basic_components_page() {
     let button_selected = remember(|| [false; 5]);
     let input_value = remember(|| String::from("Try typing here"));
     let checkbox_checked = remember(|| true);
+    let checkbox_enabled = remember(|| true);
     let switch_checked = remember(|| false);
+    let switch_enabled = remember(|| true);
+    let switch_icons = remember(|| false);
+    let boolean_changes = remember(|| [0_u32; 2]);
+    let aggregate_choices = remember(|| [true, false]);
+    let aggregate_enabled = remember(|| true);
+    let aggregate_changes = remember(|| 0_u32);
     let slider_value = remember(|| 0.68_f32);
 
     lazy_column()
@@ -238,19 +248,125 @@ pub fn basic_components_page() {
 
                 spacer().modifier(Modifier::new().height(Dp(10.0)));
 
+                flow_row().item_spacing(Dp(8.0)).children(move || {
+                    button()
+                        .tonal()
+                        .on_click(move || {
+                            checkbox_enabled.set(!checkbox_enabled.get());
+                            FocusManager::current().defer_keyboard_until_layout();
+                        })
+                        .child(move || {
+                            text().content(if checkbox_enabled.get() {
+                                "Disable checkbox"
+                            } else {
+                                "Enable checkbox"
+                            });
+                        });
+                    button()
+                        .text()
+                        .on_click(move || checkbox_checked.set(!checkbox_checked.get()))
+                        .child(move || {
+                            text().content(if checkbox_checked.get() {
+                                "Set unchecked"
+                            } else {
+                                "Set checked"
+                            });
+                        });
+                });
                 checkbox()
                     .checked(checkbox_checked.get())
+                    .disabled(!checkbox_enabled.get())
                     .on_toggle(move |checked| {
                         checkbox_checked.set(checked);
+                        boolean_changes.with_mut(|changes| changes[0] += 1);
                     })
                     .accessibility_label("Basic checkbox");
 
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
 
                 text()
-                    .content(format!("Checked: {}", checkbox_checked.get()))
+                    .content(format!(
+                        "Checked: {} · Changes: {}",
+                        checkbox_checked.get(),
+                        boolean_changes.get()[0]
+                    ))
                     .style(theme.with(|t| t.typography.label_medium));
             });
+        })
+        .item(move || {
+            column().children(move || {
+                text()
+                    .content("Aggregate selection")
+                    .style(theme.with(|theme| theme.typography.title_medium));
+                button()
+                    .tonal()
+                    .on_click(move || {
+                        aggregate_enabled.set(!aggregate_enabled.get());
+                        FocusManager::current().defer_keyboard_until_layout();
+                    })
+                    .child(move || {
+                        text().content(if aggregate_enabled.get() {
+                            "Disable selection"
+                        } else {
+                            "Enable selection"
+                        });
+                    });
+                column()
+                    .modifier(Modifier::new().semantics(SemanticsArgs {
+                        role: Some(tessera_ui::accesskit::Role::Group),
+                        label: Some("Aggregate selection".to_string()),
+                        ..Default::default()
+                    }))
+                    .children(move || {
+                        for (index, label) in ["Select all", "Option one", "Option two"]
+                            .into_iter()
+                            .enumerate()
+                        {
+                            row()
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children(move || {
+                                    if index == 0 {
+                                        let choices = aggregate_choices.get();
+                                        let checked = choices.iter().all(|value| *value);
+                                        let indeterminate =
+                                            !checked && choices.iter().any(|value| *value);
+                                        checkbox()
+                                            .checked(checked)
+                                            .indeterminate(indeterminate)
+                                            .disabled(!aggregate_enabled.get())
+                                            .accessibility_label(label)
+                                            .on_toggle(move |value| {
+                                                aggregate_choices.set([value; 2]);
+                                                aggregate_changes.with_mut(|changes| *changes += 1);
+                                            });
+                                    } else {
+                                        checkbox()
+                                            .checked(aggregate_choices.get()[index - 1])
+                                            .disabled(!aggregate_enabled.get())
+                                            .accessibility_label(label)
+                                            .on_toggle(move |value| {
+                                                aggregate_choices
+                                                    .with_mut(|choices| choices[index - 1] = value);
+                                                aggregate_changes.with_mut(|changes| *changes += 1);
+                                            });
+                                    }
+                                    text().content(label);
+                                });
+                        }
+                    });
+                text().content(format!(
+                    "Selected: {}/2 · Changes: {}",
+                    aggregate_choices
+                        .get()
+                        .iter()
+                        .filter(|value| **value)
+                        .count(),
+                    aggregate_changes.get()
+                ));
+            });
+        })
+        .item(|| {
+            checkbox_state_gallery();
         })
         .item(move || {
             column().children(move || {
@@ -266,17 +382,69 @@ pub fn basic_components_page() {
 
                 spacer().modifier(Modifier::new().height(Dp(10.0)));
 
+                flow_row().item_spacing(Dp(8.0)).children(move || {
+                    button()
+                        .tonal()
+                        .on_click(move || {
+                            switch_enabled.set(!switch_enabled.get());
+                            FocusManager::current().defer_keyboard_until_layout();
+                        })
+                        .child(move || {
+                            text().content(if switch_enabled.get() {
+                                "Disable switch"
+                            } else {
+                                "Enable switch"
+                            });
+                        });
+                    button()
+                        .text()
+                        .on_click(move || switch_checked.set(!switch_checked.get()))
+                        .child(move || {
+                            text().content(if switch_checked.get() {
+                                "Set unchecked"
+                            } else {
+                                "Set checked"
+                            });
+                        });
+                    button()
+                        .tonal()
+                        .on_click(move || switch_icons.set(!switch_icons.get()))
+                        .child(move || {
+                            text().content(if switch_icons.get() {
+                                "Hide thumb icons"
+                            } else {
+                                "Show thumb icons"
+                            });
+                        });
+                });
                 switch()
                     .checked(switch_checked.get())
+                    .enabled(switch_enabled.get())
                     .on_toggle(move |checked| {
                         switch_checked.set(checked);
+                        boolean_changes.with_mut(|changes| changes[1] += 1);
                     })
-                    .accessibility_label("Basic switch");
+                    .accessibility_label("Basic switch")
+                    .child_optional(if switch_icons.get() {
+                        Some(RenderSlot::new(move || {
+                            icon().painter(if switch_checked.get() {
+                                filled::CHECK_SVG
+                            } else {
+                                filled::CLOSE_SVG
+                            });
+                        }))
+                    } else {
+                        None
+                    });
 
                 spacer().modifier(Modifier::new().height(Dp(8.0)));
 
                 text()
-                    .content(format!("Enabled: {}", switch_checked.get()))
+                    .content(format!(
+                        "Checked: {} · Changes: {}",
+                        switch_checked.get(),
+                        boolean_changes.get()[1]
+                    ))
                     .style(theme.with(|t| t.typography.label_medium));
             });
         })
@@ -338,4 +506,110 @@ pub fn basic_components_page() {
                     .style(theme.with(|t| t.typography.label_medium));
             });
         });
+}
+
+#[tessera_ui::tessera]
+fn checkbox_state_gallery() {
+    let theme = use_context::<MaterialTheme>().unwrap();
+    let dark = remember(|| false);
+    let error = remember(|| false);
+    let enabled = remember(|| true);
+    let checked = remember(|| [false, true, false]);
+    let mixed = remember(|| [false, false, true]);
+    let palettes = remember(|| {
+        // Theme seeds use linear sRGB, including the default purple seed.
+        let seed = Color::from_rgb(0.135633335, 0.080219820, 0.371237695);
+        [
+            MaterialTheme::default(),
+            MaterialTheme::from_seed(seed, true),
+        ]
+    });
+    column().children(move || {
+        text()
+            .content("Checkbox states")
+            .style(theme.with(|theme| theme.typography.title_medium));
+        flow_row().item_spacing(Dp(8.0)).children(move || {
+            button()
+                .tonal()
+                .on_click(move || dark.set(!dark.get()))
+                .child(move || {
+                    text().content(if dark.get() {
+                        "Use light theme"
+                    } else {
+                        "Use dark theme"
+                    });
+                });
+            button()
+                .tonal()
+                .on_click(move || error.set(!error.get()))
+                .child(move || {
+                    text().content(if error.get() {
+                        "Clear error"
+                    } else {
+                        "Show error"
+                    });
+                });
+            button()
+                .tonal()
+                .on_click(move || {
+                    enabled.set(!enabled.get());
+                    FocusManager::current().defer_keyboard_until_layout();
+                })
+                .child(move || {
+                    text().content(if enabled.get() {
+                        "Disable choices"
+                    } else {
+                        "Enable choices"
+                    });
+                });
+        });
+        spacer().modifier(Modifier::new().height(Dp(8.0)));
+        material_theme()
+            .theme(move || palettes.with(|palettes| palettes[usize::from(dark.get())].clone()))
+            .child(move || {
+                let theme = use_context::<MaterialTheme>().unwrap();
+                surface()
+                    .modifier(Modifier::new().fill_max_width())
+                    .style(SurfaceStyle::Filled {
+                        color: theme.with(|theme| theme.color_scheme.surface),
+                    })
+                    .content_color(theme.with(|theme| theme.color_scheme.on_surface))
+                    .child(move || {
+                        column()
+                            .modifier(Modifier::new().padding_all(Dp(8.0)))
+                            .children(move || {
+                                for (index, label) in
+                                    ["Choice A", "Choice B", "Choice C"].into_iter().enumerate()
+                                {
+                                    row()
+                                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                                        .children(move || {
+                                            checkbox()
+                                                .checked(checked.get()[index])
+                                                .indeterminate(mixed.get()[index])
+                                                .is_error(error.get())
+                                                .disabled(!enabled.get())
+                                                .accessibility_label(label)
+                                                .accessibility_description_optional(
+                                                    error.get().then(|| {
+                                                        "Review this selection".to_string()
+                                                    }),
+                                                )
+                                                .on_toggle(move |value| {
+                                                    checked
+                                                        .with_mut(|checked| checked[index] = value);
+                                                    mixed.with_mut(|mixed| mixed[index] = false);
+                                                });
+                                            text().content(label);
+                                        });
+                                }
+                                if error.get() {
+                                    text()
+                                        .content("Review these selections.")
+                                        .color(theme.with(|theme| theme.color_scheme.error));
+                                }
+                            });
+                    });
+            });
+    });
 }
