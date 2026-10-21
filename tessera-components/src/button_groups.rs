@@ -2,27 +2,42 @@
 //!
 //! ## Usage
 //!
-//! Used for grouping related actions.
+//! Group related actions or connected choices.
 
 use std::collections::HashMap;
 
 use tessera_ui::{
-    CallbackWith, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
-    RenderSlot, current_frame_nanos, key,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, CallbackWith, ComputedData,
+    Constraint, Dp, FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
+    RenderSlot, SemanticsModifierNode, State,
+    accesskit::{Orientation, Role},
+    current_frame_nanos, key,
     layout::{MeasureScope, layout},
-    receive_frame_nanos, remember, tessera, use_context,
+    modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
-    alignment::MainAxisAlignment,
-    animation::Animatable,
-    button::button,
-    modifier::ModifierExt,
-    row::row,
+    animation::shape_motion::ShapeMotion,
+    button::{ButtonShape, ButtonSize, button},
+    icon::IconSize,
+    modifier::{InteractionState, ModifierExt, Padding},
     shape_def::{RoundedCorner, Shape},
-    spacer::spacer,
-    theme::MaterialTheme,
 };
+
+use width_motion::{PressWidthMotion, WidthData, WidthObserver, redistribute_widths};
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod native_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod width_tests;
+
+mod width_motion;
+
+#[cfg(test)]
+thread_local! {
+    static GROUP_ITEM_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
 
 /// According to the Material 3 spec, the [`button_groups`] component supports
 /// two styles: `Standard` and `Connected`.
@@ -31,8 +46,7 @@ pub enum ButtonGroupsStyle {
     /// Buttons have spacing between them and do not need to be the same width.
     #[default]
     Standard,
-    /// Buttons are adjacent with no spacing, and each button must be the same
-    /// width.
+    /// Buttons use 2dp gaps and equal widths with rounded outer ends.
     Connected,
 }
 
@@ -108,10 +122,20 @@ struct ButtonGroupsLayout {
     inactive_button_shape: Shape,
     inactive_button_shape_start: Shape,
     inactive_button_shape_end: Shape,
+    outer_corner: RoundedCorner,
 }
 
 impl ButtonGroupsLayout {
-    fn new(size: ButtonGroupsSize, style: ButtonGroupsStyle) -> Self {
+    fn new(size: ButtonGroupsSize, style: ButtonGroupsStyle, shape: ButtonShape) -> Self {
+        let square = |radius| {
+            let corner = RoundedCorner::manual(radius, 2.0);
+            Shape::RoundedRectangle {
+                top_left: corner,
+                top_right: corner,
+                bottom_right: corner,
+                bottom_left: corner,
+            }
+        };
         let container_height = match size {
             ButtonGroupsSize::ExtraSmall => Dp(32.0),
             ButtonGroupsSize::Small => Dp(40.0),
@@ -128,29 +152,45 @@ impl ButtonGroupsLayout {
             ButtonGroupsStyle::Connected => Dp(2.0),
         };
         let active_button_shape = match style {
-            ButtonGroupsStyle::Standard => Shape::rounded_rectangle(Dp(16.0)),
+            ButtonGroupsStyle::Standard if shape == ButtonShape::Round => {
+                square(ButtonSize::from(size).square_radius())
+            }
+            ButtonGroupsStyle::Standard => Shape::CAPSULE,
             ButtonGroupsStyle::Connected => Shape::CAPSULE,
         };
+        let inner_radius = match size {
+            ButtonGroupsSize::Large => Dp(16.0),
+            ButtonGroupsSize::ExtraLarge => Dp(20.0),
+            _ => Dp(8.0),
+        };
+        let outer_corner = if shape == ButtonShape::Round {
+            RoundedCorner::Capsule
+        } else {
+            RoundedCorner::manual(inner_radius, 2.0)
+        };
         let inactive_button_shape = match style {
+            ButtonGroupsStyle::Standard if shape == ButtonShape::Square => {
+                square(ButtonSize::from(size).square_radius())
+            }
             ButtonGroupsStyle::Standard => Shape::CAPSULE,
-            ButtonGroupsStyle::Connected => Shape::rounded_rectangle(Dp(16.0)),
+            ButtonGroupsStyle::Connected => square(inner_radius),
         };
         let inactive_button_shape_start = match style {
-            ButtonGroupsStyle::Standard => active_button_shape,
+            ButtonGroupsStyle::Standard => inactive_button_shape,
             ButtonGroupsStyle::Connected => Shape::RoundedRectangle {
-                top_left: RoundedCorner::Capsule,
-                top_right: RoundedCorner::manual(Dp(16.0), 3.0),
-                bottom_right: RoundedCorner::manual(Dp(16.0), 3.0),
-                bottom_left: RoundedCorner::Capsule,
+                top_left: outer_corner,
+                top_right: RoundedCorner::manual(inner_radius, 2.0),
+                bottom_right: RoundedCorner::manual(inner_radius, 2.0),
+                bottom_left: outer_corner,
             },
         };
         let inactive_button_shape_end = match style {
-            ButtonGroupsStyle::Standard => active_button_shape,
+            ButtonGroupsStyle::Standard => inactive_button_shape,
             ButtonGroupsStyle::Connected => Shape::RoundedRectangle {
-                top_left: RoundedCorner::manual(Dp(16.0), 3.0),
-                top_right: RoundedCorner::Capsule,
-                bottom_right: RoundedCorner::Capsule,
-                bottom_left: RoundedCorner::manual(Dp(16.0), 3.0),
+                top_left: RoundedCorner::manual(inner_radius, 2.0),
+                top_right: outer_corner,
+                bottom_right: outer_corner,
+                bottom_left: RoundedCorner::manual(inner_radius, 2.0),
             },
         };
         Self {
@@ -160,6 +200,19 @@ impl ButtonGroupsLayout {
             inactive_button_shape,
             inactive_button_shape_start,
             inactive_button_shape_end,
+            outer_corner,
+        }
+    }
+}
+
+impl From<ButtonGroupsSize> for ButtonSize {
+    fn from(size: ButtonGroupsSize) -> Self {
+        match size {
+            ButtonGroupsSize::ExtraSmall => Self::ExtraSmall,
+            ButtonGroupsSize::Small => Self::Small,
+            ButtonGroupsSize::Medium => Self::Medium,
+            ButtonGroupsSize::Large => Self::Large,
+            ButtonGroupsSize::ExtraLarge => Self::ExtraLarge,
         }
     }
 }
@@ -167,15 +220,63 @@ impl ButtonGroupsLayout {
 #[derive(PartialEq, Default)]
 struct ButtonItemState {
     actived: bool,
-    elastic_state: ElasticState,
 }
 
+struct ButtonGroupsSemantics;
+
+impl SemanticsModifierNode for ButtonGroupsSemantics {
+    fn apply(
+        &self,
+        node: &mut AccessibilityNode,
+        _handler: &mut Option<AccessibilityActionHandler>,
+    ) {
+        node.role = Some(Role::Group);
+        node.orientation = Some(Orientation::Horizontal);
+        node.merge_descendants = true;
+    }
+}
+
+/// Selection shared with a button group.
+///
+/// Item indices follow visual order. Single-selection groups retain the first
+/// selected item when multiple selections are supplied.
 #[derive(PartialEq, Default)]
-struct ButtonGroupsState {
+pub struct ButtonGroupsState {
     item_states: HashMap<usize, ButtonItemState>,
 }
 
 impl ButtonGroupsState {
+    /// Creates an empty selection.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Returns whether the item at `index` is selected.
+    pub fn is_selected(&self, index: usize) -> bool {
+        self.item_states
+            .get(&index)
+            .is_some_and(|item| item.actived)
+    }
+
+    /// Updates an item's selection without invoking its click callback.
+    pub fn set_selected(&mut self, index: usize, selected: bool) {
+        if self.is_selected(index) != selected {
+            let item = self.item_state_mut(index);
+            item.actived = selected;
+        }
+    }
+
+    /// Clears selection without invoking click callbacks.
+    /// Groups requiring selection restore the first enabled item after an empty
+    /// update.
+    pub fn clear(&mut self) {
+        for item in self.item_states.values_mut() {
+            if item.actived {
+                item.actived = false;
+            }
+        }
+    }
+
     fn item_state_mut(&mut self, index: usize) -> &mut ButtonItemState {
         self.item_states.entry(index).or_default()
     }
@@ -193,15 +294,35 @@ impl ButtonGroupsState {
 ///
 /// - `size` — size of the button group.
 /// - `style` — visual style of the button group.
-/// - `selection_mode` — selection mode of the button group.
+/// - `shape_style` — round or square resting shapes; defaults to round.
+/// - `expanded_ratio` — pressed width expansion in standard groups, clamped to
+///   0–1; defaults to 0.15. Neighbors limit expansion to their content padding.
+///   Non-finite values use the default.
+/// - `selection_mode` — single or multiple selection; switching to single
+///   selection retains the first selected item in visual order.
+/// - `modifier` — group sizing, placement, and semantics.
+/// - `state` — optional external selection; omitted groups remember their own.
+/// - `enabled` — whether the group accepts input.
+/// - `disabled_indices` — items that retain selection but cannot be activated.
+/// - `selection_required` — prevents removing the final selection; an empty
+///   selection chooses the first enabled item when available.
 /// - `child_closures` — per-item content builders.
 /// - `on_click_closures` — per-item click handlers receiving the new active
-///   state.
+///   state after selection has been updated.
 ///
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::{button_groups::button_groups, text::text};
+/// use tessera_components::{
+///     button_groups::{ButtonGroupsState, button_groups},
+///     text::text,
+/// };
+///
+/// let mut selection = ButtonGroupsState::new();
+/// selection.set_selected(0, true);
+/// assert!(selection.is_selected(0));
+/// selection.clear();
+/// assert!(!selection.is_selected(0));
 ///
 /// # use tessera_ui::tessera;
 /// # #[tessera]
@@ -218,620 +339,516 @@ impl ButtonGroupsState {
 pub fn button_groups(
     size: Option<ButtonGroupsSize>,
     style: Option<ButtonGroupsStyle>,
+    shape_style: Option<ButtonShape>,
+    expanded_ratio: Option<f32>,
     selection_mode: Option<ButtonGroupsSelectionMode>,
+    modifier: Option<Modifier>,
+    state: Option<State<ButtonGroupsState>>,
+    enabled: Option<bool>,
+    disabled_indices: Option<Vec<usize>>,
+    selection_required: Option<bool>,
     #[prop(skip_setter)] child_closures: Option<Vec<RenderSlot>>,
     #[prop(skip_setter)] on_click_closures: Option<Vec<CallbackWith<bool>>>,
 ) {
     let size = size.unwrap_or_default();
     let style = style.unwrap_or_default();
+    let shape_style = shape_style.unwrap_or_default();
+    let expanded_ratio = expanded_ratio
+        .filter(|value| value.is_finite())
+        .unwrap_or(0.15)
+        .clamp(0.0, 1.0);
     let selection_mode = selection_mode.unwrap_or_default();
+    let enabled = enabled.unwrap_or(true);
+    let disabled_indices = disabled_indices.unwrap_or_default();
+    let selection_required = selection_required.unwrap_or(false);
     let child_closures = child_closures.unwrap_or_default();
     let on_click_closures = on_click_closures.unwrap_or_default();
-    let state = remember(ButtonGroupsState::default);
-    let layout = ButtonGroupsLayout::new(size, style);
+    let state = if let Some(state) = state {
+        state
+    } else {
+        remember(ButtonGroupsState::default)
+    };
+    let metrics = ButtonGroupsLayout::new(size, style, shape_style);
     let child_len = child_closures.len();
-    row()
-        .modifier(Modifier::new().height(layout.container_height))
-        .main_axis_alignment(MainAxisAlignment::Start)
-        .children(move || {
+    let policy = (selection_mode, selection_required);
+    let selection_policy = remember(|| policy);
+    if selection_policy.get() != policy {
+        selection_policy.set(policy);
+    }
+    if state.with(|state| state.item_states.keys().any(|index| *index >= child_len)) {
+        state.with_mut(|state| state.item_states.retain(|index, _| *index < child_len));
+    }
+    if selection_mode == ButtonGroupsSelectionMode::Single
+        && state.with(|state| {
+            state
+                .item_states
+                .values()
+                .filter(|item| item.actived)
+                .count()
+                > 1
+        })
+    {
+        state.with_mut(|state| {
+            let selected = state
+                .item_states
+                .iter()
+                .filter(|(_, item)| item.actived)
+                .map(|(index, _)| *index)
+                .min();
+            for (index, item) in &mut state.item_states {
+                if item.actived && Some(*index) != selected {
+                    item.actived = false;
+                }
+            }
+        });
+    }
+    if selection_required
+        && enabled
+        && !state.with(|state| state.item_states.values().any(|item| item.actived))
+        && let Some(index) = (0..child_len).find(|index| !disabled_indices.contains(index))
+    {
+        state.with_mut(|state| state.set_selected(index, true));
+    }
+    layout()
+        .modifier(
+            modifier
+                .unwrap_or_default()
+                .focus_group()
+                .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true))
+                .push_semantics(ButtonGroupsSemantics)
+                .size_in(
+                    None,
+                    None,
+                    Some(Dp(metrics.container_height.0.max(48.0))),
+                    None,
+                ),
+        )
+        .policy(ButtonGroupsRowLayout {
+            connected: style == ButtonGroupsStyle::Connected,
+            spacing: metrics.between_space.into(),
+            expanded_ratio,
+        })
+        .child(move || {
             for (index, child_closure) in child_closures.iter().cloned().enumerate() {
                 key(index, || {
                     let on_click_closure = on_click_closures[index];
-                    let item_layout = layout.clone();
-                    let between_space = layout.between_space;
+                    let item_layout = metrics.clone();
+                    let enabled = enabled && !disabled_indices.contains(&index);
 
-                    let actived =
-                        state.with(|s| s.item_states.get(&index).is_some_and(|item| item.actived));
-                    // The elastic container wraps the whole button so the
-                    // expansion applies to the pill itself. Wrapping only the
-                    // button content would be swallowed by the button's min
-                    // width, leaving the group visually unchanged.
-                    elastic_container()
-                        .state(state)
-                        .index(index)
-                        .child(move || {
-                            if actived {
-                                button()
-                                    .filled()
-                                    .on_click(move || {
-                                        on_click_closure.call(false);
-                                        state.with_mut(|s| {
-                                            let item = s.item_state_mut(index);
-                                            item.actived = false;
-                                            item.elastic_state.toggle();
-                                        });
-                                    })
-                                    .shape(item_layout.active_button_shape)
-                                    .child(move || child_closure.render());
-                            } else {
-                                let scheme = use_context::<MaterialTheme>()
-                                    .expect("MaterialTheme must be provided")
-                                    .get()
-                                    .color_scheme;
-                                let shape = if index == 0 {
-                                    item_layout.inactive_button_shape_start
-                                } else if index == child_len - 1 {
-                                    item_layout.inactive_button_shape_end
-                                } else {
-                                    item_layout.inactive_button_shape
-                                };
-                                button()
-                                    .filled()
-                                    .on_click(move || {
-                                        on_click_closure.call(true);
-                                        state.with_mut(|s| {
-                                            if selection_mode == ButtonGroupsSelectionMode::Single {
-                                                for (other_index, item) in &mut s.item_states {
-                                                    if *other_index != index && item.actived {
-                                                        item.actived = false;
-                                                        item.elastic_state.toggle();
-                                                    }
-                                                }
-                                            }
-
-                                            let item = s.item_state_mut(index);
-                                            item.actived = true;
-                                            item.elastic_state.toggle();
-                                        });
-                                    })
-                                    .color(scheme.secondary_container)
-                                    .shape(shape)
-                                    .child(move || child_closure.render());
+                    let interaction = remember(InteractionState::new);
+                    let width_motion = remember(PressWidthMotion::default);
+                    let item = RenderSlot::new(move || {
+                        let actived = state.with(|state| state.is_selected(index));
+                        let pressed = enabled && interaction.with(InteractionState::is_pressed);
+                        let resting_shape = if actived {
+                            item_layout.active_button_shape
+                        } else if child_len == 1 && style == ButtonGroupsStyle::Connected {
+                            let corner = item_layout.outer_corner;
+                            Shape::RoundedRectangle {
+                                top_left: corner,
+                                top_right: corner,
+                                bottom_right: corner,
+                                bottom_left: corner,
                             }
-                        });
-                    if index != child_len - 1 {
-                        spacer().modifier(Modifier::new().width(between_space));
-                    }
+                        } else if index == 0 {
+                            item_layout.inactive_button_shape_start
+                        } else if index == child_len - 1 {
+                            item_layout.inactive_button_shape_end
+                        } else {
+                            item_layout.inactive_button_shape
+                        };
+                        let shape = if pressed {
+                            if style == ButtonGroupsStyle::Connected && child_len > 1 {
+                                let radius = match size {
+                                    ButtonGroupsSize::Large => Dp(12.0),
+                                    ButtonGroupsSize::ExtraLarge => Dp(16.0),
+                                    _ => Dp(4.0),
+                                };
+                                let inner = RoundedCorner::manual(radius, 2.0);
+                                Shape::RoundedRectangle {
+                                    top_left: if index == 0 {
+                                        item_layout.outer_corner
+                                    } else {
+                                        inner
+                                    },
+                                    top_right: if index + 1 == child_len {
+                                        item_layout.outer_corner
+                                    } else {
+                                        inner
+                                    },
+                                    bottom_right: if index + 1 == child_len {
+                                        item_layout.outer_corner
+                                    } else {
+                                        inner
+                                    },
+                                    bottom_left: if index == 0 {
+                                        item_layout.outer_corner
+                                    } else {
+                                        inner
+                                    },
+                                }
+                            } else {
+                                let corner = RoundedCorner::manual(
+                                    ButtonSize::from(size).pressed_radius(),
+                                    2.0,
+                                );
+                                Shape::RoundedRectangle {
+                                    top_left: corner,
+                                    top_right: corner,
+                                    bottom_right: corner,
+                                    bottom_left: corner,
+                                }
+                            }
+                        } else {
+                            resting_shape
+                        };
+                        let motion = remember(|| ShapeMotion::new(shape));
+                        let mut next = motion.get();
+                        next.retarget(shape, enabled, current_frame_nanos());
+                        if next != motion.get() {
+                            motion.set(next);
+                        }
+                        if next.is_animating() {
+                            receive_frame_nanos(move |frame| {
+                                let mut next = motion.get();
+                                next.advance(frame);
+                                if next != motion.get() {
+                                    motion.set(next);
+                                }
+                                if next.is_animating() {
+                                    tessera_ui::FrameNanosControl::Continue
+                                } else {
+                                    tessera_ui::FrameNanosControl::Stop
+                                }
+                            });
+                        }
+                        button()
+                            .filled()
+                            .size(size.into())
+                            .content_padding(Padding::default())
+                            .selected(actived)
+                            .enabled(enabled)
+                            .accessibility_role(Role::CheckBox)
+                            .interaction_state(interaction)
+                            .on_click(move || {
+                                let mut next = width_motion.get();
+                                next.pulse(current_frame_nanos());
+                                if next != width_motion.get() {
+                                    width_motion.set(next);
+                                }
+                                let active = state.with(|state| {
+                                    state
+                                        .item_states
+                                        .get(&index)
+                                        .is_some_and(|item| item.actived)
+                                });
+                                let (mode, required) = selection_policy.get();
+                                if active
+                                    && required
+                                    && state.with(|state| {
+                                        state
+                                            .item_states
+                                            .values()
+                                            .filter(|item| item.actived)
+                                            .count()
+                                            == 1
+                                    })
+                                {
+                                    return;
+                                }
+                                state.with_mut(|s| {
+                                    if !active && mode == ButtonGroupsSelectionMode::Single {
+                                        for (other_index, item) in &mut s.item_states {
+                                            if *other_index != index && item.actived {
+                                                item.actived = false;
+                                            }
+                                        }
+                                    }
+
+                                    let item = s.item_state_mut(index);
+                                    item.actived = !active;
+                                });
+                                on_click_closure.call(!active);
+                            })
+                            .shape(motion.get().shape())
+                            .child(move || {
+                                let icon_size = ButtonSize::from(size).icon_size();
+                                provide_context(
+                                    || IconSize(icon_size),
+                                    move || {
+                                        let inherited = use_context::<IconSize>()
+                                            .expect("button group icon size");
+                                        if inherited.get().0 != icon_size {
+                                            inherited.set(IconSize(icon_size));
+                                        }
+                                        layout()
+                                            .policy(GroupContentLayout {
+                                                padding: ButtonSize::from(size).content_padding(),
+                                                compress: style == ButtonGroupsStyle::Standard,
+                                            })
+                                            .child_shared(child_closure);
+                                    },
+                                );
+                            });
+                    });
+                    group_item()
+                        .interaction_state(interaction)
+                        .width_motion(width_motion)
+                        .enabled(enabled && expanded_ratio > 0.0 && child_len > 1)
+                        .compression_limit(ButtonSize::from(size).content_padding().right)
+                        .connected(style == ButtonGroupsStyle::Connected)
+                        .child_shared(item);
                 });
             }
         });
 }
 
-#[derive(PartialEq)]
-struct ElasticState {
-    expended: bool,
-    /// Previous sample from the frame callback. `dt` is the gap to the next
-    /// one.
-    last_frame_nanos: Option<u64>,
-    motion: Animatable,
-}
-
-impl Default for ElasticState {
-    fn default() -> Self {
-        Self {
-            expended: false,
-            last_frame_nanos: None,
-            motion: Animatable::easing(0.0, ELASTIC_EASE_DURATION_SECS),
-        }
-    }
-}
-
-const ELASTIC_EASE_DURATION_SECS: f32 = 0.25;
-// Natural frequency in rad/s. Tuned so the pop settles in well under half a
-// second instead of slowly ringing out.
-const ELASTIC_SPRING_STIFFNESS: f32 = 60.0;
-const ELASTIC_SPRING_DAMPING: f32 = 0.35;
-// Extra width the selected button grows into while expanding.
-const ELASTIC_EXPAND_DP: Dp = Dp(12.0);
-
-impl ElasticState {
-    fn toggle(&mut self) {
-        let frame_nanos = current_frame_nanos();
-        self.advance_to(frame_nanos);
-        self.expended = !self.expended;
-        let value = self.motion.value();
-        let carried_velocity = self.motion.velocity();
-        if self.expended {
-            self.motion =
-                Animatable::spring(value, ELASTIC_SPRING_STIFFNESS, ELASTIC_SPRING_DAMPING)
-                    .with_velocity(carried_velocity);
-            self.motion.set_target(1.0);
-        } else {
-            self.motion = Animatable::easing(value, ELASTIC_EASE_DURATION_SECS);
-            self.motion.set_target(0.0);
-        }
-        self.last_frame_nanos = Some(frame_nanos);
-    }
-
-    fn update(&mut self, frame_nanos: u64) -> f32 {
-        self.advance_to(frame_nanos);
-        self.motion.value()
-    }
-
-    fn advance_to(&mut self, frame_nanos: u64) {
-        let Some(last_frame_nanos) = self.last_frame_nanos else {
-            self.last_frame_nanos = Some(frame_nanos);
-            return;
-        };
-        if frame_nanos <= last_frame_nanos {
-            return;
-        }
-        let dt = (frame_nanos - last_frame_nanos) as f32 / 1_000_000_000.0;
-        self.motion.tick(dt);
-        self.last_frame_nanos = Some(frame_nanos);
-    }
-
-    fn is_animating(&self) -> bool {
-        !self.motion.is_idle()
-    }
-}
-
 #[tessera]
-fn elastic_container(
-    state: Option<tessera_ui::State<ButtonGroupsState>>,
-    index: Option<usize>,
+fn group_item(
+    interaction_state: Option<State<InteractionState>>,
+    width_motion: Option<State<PressWidthMotion>>,
+    enabled: Option<bool>,
+    compression_limit: Option<Dp>,
+    connected: Option<bool>,
     child: Option<RenderSlot>,
 ) {
-    let state = state.expect("elastic_container requires state");
-    let index = index.unwrap_or(0);
-    let child = child.expect("elastic_container requires child content");
-    // The frame receiver only bumps this counter; the build below advances the
-    // motion. Reading it here makes the component rebuild every delivered
-    // frame, which keeps the animation running even when its parent subtree
-    // is reused.
-    let frame_tick = remember(|| 0_u64);
-    let _ = frame_tick.with(|tick| *tick);
-    let frame_nanos = current_frame_nanos();
-    let needs_tick = state.with(|state| {
-        state.item_states.get(&index).is_some_and(|item| {
-            item.elastic_state.is_animating()
-                && item.elastic_state.last_frame_nanos != Some(frame_nanos)
-        })
-    });
-    let progress = if needs_tick {
-        state.with_mut(|state| {
-            state
-                .item_states
-                .get_mut(&index)
-                .map_or(0.0, |item| item.elastic_state.update(frame_nanos))
-        })
-    } else {
-        state.with(|state| {
-            state
-                .item_states
-                .get(&index)
-                .map_or(0.0, |item| item.elastic_state.motion.value())
-        })
-    };
-    let is_animating = state.with(|state| {
-        state
-            .item_states
-            .get(&index)
-            .is_some_and(|item| item.elastic_state.is_animating())
-    });
-    if is_animating {
-        receive_frame_nanos(move |_frame_nanos| {
-            frame_tick.with_mut(|tick| *tick = tick.wrapping_add(1));
-            let still_animating = state.with(|state| {
-                state
-                    .item_states
-                    .get(&index)
-                    .is_some_and(|item| item.elastic_state.is_animating())
-            });
-            if still_animating {
+    #[cfg(test)]
+    GROUP_ITEM_BUILDS.set(GROUP_ITEM_BUILDS.get() + 1);
+    let interaction = interaction_state.expect("group item interaction");
+    let motion = width_motion.expect("group item width motion");
+    let child = child.expect("group item content");
+    let mut next = motion.get();
+    next.update(
+        interaction.with(InteractionState::is_pressed),
+        enabled.unwrap_or(true) && !connected.unwrap_or(false),
+        current_frame_nanos(),
+    );
+    if next != motion.get() {
+        motion.set(next);
+    }
+    if next.is_animating() {
+        receive_frame_nanos(move |frame| {
+            let mut next = motion.get();
+            next.advance(frame);
+            if next != motion.get() {
+                motion.set(next);
+            }
+            if next.is_animating() {
                 tessera_ui::FrameNanosControl::Continue
             } else {
                 tessera_ui::FrameNanosControl::Stop
             }
         });
     }
-
     layout()
-        .policy(ElasticContainerLayout { progress })
+        .modifier(
+            Modifier::new()
+                .push_parent_data(WidthData {
+                    progress: motion.get().value(),
+                    compression_limit: compression_limit.unwrap_or_default().into(),
+                })
+                .push_pointer_input(WidthObserver {
+                    interaction,
+                    motion,
+                }),
+        )
+        .policy(GroupItemLayout)
         .child(move || {
             child.render();
         });
 }
 
-#[derive(Clone, Copy, PartialEq)]
-struct ElasticContainerLayout {
-    progress: f32,
+#[derive(Clone, PartialEq)]
+struct GroupItemLayout;
+
+impl tessera_ui::LayoutModifierNode for GroupItemLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let child = input.children()[0];
+        let constraint = *input.parent_constraint().as_ref();
+        let size = child.measure(input, &constraint)?.size();
+        let mut result = LayoutResult::new(size);
+        result.place_child(child, PxPosition::ZERO);
+        Ok(result)
+    }
 }
 
-impl tessera_ui::LayoutModifierNode for ElasticContainerLayout {
-    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let mut result = LayoutResult::default();
-        let child = input.children()[0];
-        let child_constraint = input.parent_constraint().without_min();
-        let child_size = child.measure(input, &child_constraint)?;
-        let additional_width =
-            Px::new((ELASTIC_EXPAND_DP.to_pixels_f32() * self.progress).round() as i32);
-        result.place_child(child, PxPosition::new(additional_width / 2, Px::ZERO));
+#[derive(Clone, PartialEq)]
+struct GroupContentLayout {
+    padding: Padding,
+    compress: bool,
+}
 
-        Ok(result.with_size(ComputedData {
-            width: child_size.width + additional_width,
-            height: child_size.height,
-        }))
+impl tessera_ui::LayoutModifierNode for GroupContentLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let parent = *input.parent_constraint().as_ref();
+        let children = input.children();
+        let mut horizontal = Px::from(self.padding.left) + Px::from(self.padding.right);
+        let top = Px::from(self.padding.top);
+        let vertical = top + Px::from(self.padding.bottom);
+        if self.compress {
+            let mut natural_width = Px::ZERO;
+            for child in &children {
+                natural_width =
+                    natural_width.max(child.probe_intrinsic(input, &Constraint::NONE)?.width);
+            }
+            if let Some(maximum) = parent.width.resolve_max() {
+                horizontal = horizontal.min((maximum - natural_width).max(Px::ZERO));
+            }
+        }
+        let constraint = Constraint::new(
+            AxisConstraint::new(
+                Px::ZERO,
+                parent
+                    .width
+                    .resolve_max()
+                    .map(|width| (width - horizontal).max(Px::ZERO)),
+            ),
+            AxisConstraint::new(
+                Px::ZERO,
+                parent
+                    .height
+                    .resolve_max()
+                    .map(|height| (height - vertical).max(Px::ZERO)),
+            ),
+        );
+        let mut content = ComputedData {
+            width: Px::ZERO,
+            height: Px::ZERO,
+        };
+        for child in &children {
+            let size = child.measure(input, &constraint)?;
+            content.width = content.width.max(size.width);
+            content.height = content.height.max(size.height);
+        }
+        let size = ComputedData {
+            width: parent.width.clamp(content.width + horizontal),
+            height: parent.height.clamp(content.height + vertical),
+        };
+        let left = if self.compress {
+            horizontal.0 as f32 / 2.0
+        } else {
+            Px::from(self.padding.left).0 as f32
+        };
+        let mut result = LayoutResult::new(size);
+        for child in children {
+            result.place_child(child, PxPosition::from_f32_xy(left, top.0 as f32));
+        }
+        Ok(result)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct ButtonGroupsRowLayout {
+    connected: bool,
+    spacing: Px,
+    expanded_ratio: f32,
+}
+
+impl tessera_ui::LayoutModifierNode for ButtonGroupsRowLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let children = input.children();
+        let parent = *input.parent_constraint().as_ref();
+        let mut result = LayoutResult::default();
+        if children.is_empty() {
+            return Ok(result.with_size(ComputedData {
+                width: parent.width.clamp(Px::ZERO),
+                height: parent.height.clamp(Px::ZERO),
+            }));
+        }
+        let count = children.len() as i32;
+        let spacing = if count > 1 {
+            self.spacing
+                .min(parent.width.resolve_max().unwrap_or(Px::MAX) / (count - 1))
+        } else {
+            Px::ZERO
+        };
+        let gaps = spacing * (count - 1);
+        let child_constraint =
+            Constraint::new(parent.width.without_min(), parent.height.without_min());
+        let mut sizes = Vec::with_capacity(children.len());
+        for child in &children {
+            sizes.push(child.measure(input, &child_constraint)?.size());
+        }
+        if self.connected {
+            let natural = sizes
+                .iter()
+                .map(|size| size.width)
+                .max()
+                .unwrap_or(Px::ZERO)
+                * count
+                + gaps;
+            let budget = (parent.width.clamp(natural) - gaps).max(Px::ZERO);
+            let width = budget / count;
+            let remainder = budget.0 % count;
+            for (index, child) in children.iter().enumerate() {
+                let width = width + Px(i32::from((index as i32) < remainder));
+                sizes[index] = child
+                    .measure(
+                        input,
+                        &Constraint::new(AxisConstraint::exact(width), child_constraint.height),
+                    )?
+                    .size();
+            }
+        } else {
+            let data: Vec<_> = children
+                .iter()
+                .map(|child| child.parent_data::<WidthData>(input).unwrap_or_default())
+                .collect();
+            let mut widths: Vec<_> = sizes.iter().map(|size| size.width).collect();
+            redistribute_widths(&mut widths, &data, self.expanded_ratio);
+            for (index, child) in children.iter().enumerate() {
+                if widths[index] != sizes[index].width {
+                    sizes[index] = child
+                        .measure(
+                            input,
+                            &Constraint::new(
+                                AxisConstraint::exact(widths[index]),
+                                child_constraint.height,
+                            ),
+                        )?
+                        .size();
+                }
+            }
+        }
+        let height = sizes
+            .iter()
+            .map(|size| size.height)
+            .max()
+            .unwrap_or(Px::ZERO);
+        if self.connected {
+            let height = parent.height.clamp(height);
+            for (index, child) in children.iter().enumerate() {
+                if sizes[index].height == height {
+                    continue;
+                }
+                sizes[index] = child
+                    .measure(input, &Constraint::new(sizes[index].width, height))?
+                    .size();
+            }
+        }
+        let size = ComputedData {
+            width: parent.width.clamp(
+                sizes
+                    .iter()
+                    .map(|size| size.width)
+                    .fold(gaps, |total, width| total + width),
+            ),
+            height: parent.height.clamp(height),
+        };
+        let mut x = Px::ZERO;
+        for (child, child_size) in children.iter().zip(sizes) {
+            result.place_child(
+                *child,
+                PxPosition::from_f32_xy(
+                    x.0 as f32,
+                    (size.height.0 - child_size.height.0) as f32 / 2.0,
+                ),
+            );
+            x += child_size.width + spacing;
+        }
+        Ok(result.with_size(size))
     }
 }
 
 #[cfg(test)]
-mod tests {
-    use std::cell::{Cell, RefCell};
-
-    use tessera_ui::{
-        CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType, Px,
-        PxPosition, key, layout::layout, remember, tessera, time::Instant,
-    };
-
-    use crate::{
-        lazy_list::lazy_column,
-        modifier::{ModifierExt as _, SemanticsArgs},
-        row::row,
-        spacer::spacer,
-        text::text,
-        theme::{MaterialTheme, material_theme},
-    };
-
-    use super::{
-        Animatable, ButtonGroupsState, ELASTIC_SPRING_DAMPING, ELASTIC_SPRING_STIFFNESS,
-        ElasticState, button_groups, elastic_container,
-    };
-
-    thread_local! {
-        static IDLE_BUILDS: Cell<usize> = const { Cell::new(0) };
-        static IDLE_STATE: RefCell<Option<tessera_ui::State<ButtonGroupsState>>> =
-            const { RefCell::new(None) };
-    }
-
-    #[tessera]
-    fn idle_elastic_probe() {
-        let state = remember(ButtonGroupsState::default);
-        IDLE_STATE.with(|slot| *slot.borrow_mut() = Some(state));
-        layout().child(move || {
-            IDLE_BUILDS.with(|builds| builds.set(builds.get() + 1));
-            let _ = state.with(|state| state.item_states.len());
-            elastic_container().state(state).index(0).child(|| {
-                elastic_probe_box();
-            });
-        });
-    }
-
-    #[test]
-    fn elastic_container_stops_rebuilding_at_rest() {
-        IDLE_BUILDS.with(|builds| builds.set(0));
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                idle_elastic_probe();
-            })
-            .viewport_px(200, 100),
-        );
-        for frame in 0..4 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
-        let initial_builds = IDLE_BUILDS.with(Cell::get);
-        for frame in 4..12 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
-        assert_eq!(IDLE_BUILDS.with(Cell::get), initial_builds);
-
-        let state = IDLE_STATE.with(|slot| slot.borrow().expect("button group state"));
-        state.with_mut(|state| state.item_state_mut(0).elastic_state.toggle());
-        for frame in 12..120 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
-        assert!(!state.with(|state| state.item_states[&0].elastic_state.is_animating()));
-        let settled_builds = IDLE_BUILDS.with(Cell::get);
-        assert!(settled_builds > initial_builds);
-        for frame in 120..128 {
-            let _ = tessera_ui::testing::pump_layout_test_session(&mut session, frame * 16_666_667);
-        }
-        assert_eq!(IDLE_BUILDS.with(Cell::get), settled_builds);
-    }
-
-    #[tessera]
-    fn elastic_probe_box() {
-        spacer().modifier(Modifier::new().width(Dp(40.0)).height(Dp(20.0)).semantics(
-            SemanticsArgs {
-                test_tag: Some("probe".to_string()),
-                ..Default::default()
-            },
-        ));
-    }
-
-    #[tessera]
-    fn elastic_probe() {
-        let state = remember(|| {
-            let mut state = ButtonGroupsState::default();
-            let item = state.item_state_mut(0);
-            item.actived = true;
-            item.elastic_state.expended = true;
-            item.elastic_state.last_frame_nanos = Some(0);
-            item.elastic_state.motion =
-                Animatable::spring(0.0, ELASTIC_SPRING_STIFFNESS, ELASTIC_SPRING_DAMPING);
-            item.elastic_state.motion.set_target(1.0);
-            state
-        });
-        elastic_container().state(state).index(0).child(|| {
-            elastic_probe_box();
-        });
-    }
-
-    #[tessera]
-    fn nested_elastic_probe() {
-        let state = remember(|| {
-            let mut state = ButtonGroupsState::default();
-            let item = state.item_state_mut(0);
-            item.actived = true;
-            item.elastic_state.expended = true;
-            item.elastic_state.last_frame_nanos = Some(0);
-            item.elastic_state.motion =
-                Animatable::spring(0.0, ELASTIC_SPRING_STIFFNESS, ELASTIC_SPRING_DAMPING);
-            item.elastic_state.motion.set_target(1.0);
-            state
-        });
-        row().children(move || {
-            key(0, || {
-                elastic_container().state(state).index(0).child(|| {
-                    elastic_probe_box();
-                });
-            });
-        });
-    }
-
-    #[test]
-    fn nested_elastic_probe_settles_without_jitter() {
-        tessera_ui::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                nested_elastic_probe();
-            },
-            expect: {
-                0 => { node("probe").x(0); },
-                250_000_000 => {},
-                500_000_000 => {},
-                750_000_000 => { node("probe").x(6); },
-                1_000_000_000 => { node("probe").x(6); },
-            }
-        }
-    }
-    #[tessera]
-    fn labelled_box(tag: Option<String>, label: Option<String>) {
-        let label = label.unwrap_or_default();
-        layout()
-            .modifier(Modifier::new().semantics(SemanticsArgs {
-                test_tag: Some(tag.unwrap_or_default()),
-                ..Default::default()
-            }))
-            .child(move || {
-                text().content(label.clone());
-            });
-    }
-
-    #[tessera]
-    fn labelled_button_groups_case() {
-        material_theme()
-            .theme(|| MaterialTheme::default())
-            .child(|| {
-                button_groups()
-                    .child(
-                        || {
-                            labelled_box()
-                                .tag("one".to_string())
-                                .label("One".to_string());
-                        },
-                        |_| {},
-                    )
-                    .child(
-                        || {
-                            labelled_box()
-                                .tag("two".to_string())
-                                .label("Two".to_string());
-                        },
-                        |_| {},
-                    )
-                    .child(
-                        || {
-                            labelled_box()
-                                .tag("three".to_string())
-                                .label("Three".to_string());
-                        },
-                        |_| {},
-                    );
-            });
-    }
-
-    #[test]
-    fn button_groups_text_content_pops() {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                labelled_button_groups_case();
-            })
-            .viewport_px(400, 120),
-        );
-        let first = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-        let one = first.node("one").bounds();
-        let two = first.node("two").bounds();
-        let three = first.node("three").bounds();
-        assert!(one.width > Px::ZERO);
-        first.node("one").left_of("two");
-        first.node("two").left_of("three");
-
-        let now = Instant::now();
-        let cursor = Some(PxPosition::from_f32_xy(
-            one.x.to_f32() + one.width.to_f32() / 2.0,
-            one.y.to_f32() + one.height.to_f32() / 2.0,
-        ));
-        let press = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            16_666_667,
-            vec![press],
-            cursor,
-        );
-        let release = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Released(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let mut snap = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            33_333_334,
-            vec![release],
-            cursor,
-        );
-        for frame in 3..40u64 {
-            snap = tessera_ui::testing::pump_layout_test_session(
-                &mut session,
-                33_333_334 + 16_666_667 * (frame - 2),
-            );
-        }
-        snap.node("one").x(one.x.raw() + 6).width(one.width.raw());
-        snap.node("two").x(two.x.raw() + 12).width(two.width.raw());
-        snap.node("three")
-            .x(three.x.raw() + 12)
-            .width(three.width.raw());
-    }
-
-    #[tessera]
-    fn lazy_button_groups_case() {
-        material_theme()
-            .theme(|| MaterialTheme::default())
-            .child(|| {
-                lazy_column().item(move || {
-                    labelled_button_groups_case();
-                });
-            });
-    }
-
-    #[test]
-    fn button_groups_text_content_pops_in_lazy_column() {
-        let mut session = tessera_ui::testing::start_layout_test_session(
-            tessera_ui::testing::layout_test(|| {
-                lazy_button_groups_case();
-            })
-            .viewport_px(400, 120),
-        );
-        let first = tessera_ui::testing::pump_layout_test_session(&mut session, 0);
-        let one = first.node("one").bounds();
-        let two = first.node("two").bounds();
-        let three = first.node("three").bounds();
-        assert!(one.width > Px::ZERO);
-        first.node("one").left_of("two");
-        first.node("two").left_of("three");
-
-        let now = Instant::now();
-        let cursor = Some(PxPosition::from_f32_xy(
-            one.x.to_f32() + one.width.to_f32() / 2.0,
-            one.y.to_f32() + one.height.to_f32() / 2.0,
-        ));
-        let press = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Pressed(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let _ = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            16_666_667,
-            vec![press],
-            cursor,
-        );
-        let release = PointerChange::new(
-            now,
-            1,
-            CursorEventContent::Released(PressKeyEventType::Left),
-            GestureState::TapCandidate,
-        );
-        let mut snap = tessera_ui::testing::pump_layout_test_session_with_input(
-            &mut session,
-            33_333_334,
-            vec![release],
-            cursor,
-        );
-        for frame in 3..40u64 {
-            snap = tessera_ui::testing::pump_layout_test_session(
-                &mut session,
-                33_333_334 + 16_666_667 * (frame - 2),
-            );
-        }
-        snap.node("one").x(one.x.raw() + 6).width(one.width.raw());
-        snap.node("two").x(two.x.raw() + 12).width(two.width.raw());
-        snap.node("three")
-            .x(three.x.raw() + 12)
-            .width(three.width.raw());
-    }
-
-    #[test]
-    fn elastic_container_settles_without_jitter() {
-        tessera_ui::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                elastic_probe();
-            },
-            expect: {
-                0 => { node("probe").x(0); },
-                250_000_000 => {},
-                500_000_000 => {},
-                750_000_000 => { node("probe").x(6); },
-                1_000_000_000 => { node("probe").x(6); },
-            }
-        }
-    }
-    #[test]
-    fn elastic_collapse_eases_without_spring_velocity() {
-        let mut elastic = ElasticState::default();
-        elastic.toggle();
-        assert!(elastic.expended);
-        let origin = elastic
-            .last_frame_nanos
-            .expect("toggle records the frame clock");
-        elastic.update(origin.saturating_add(50_000_000));
-        assert!(elastic.motion.velocity().abs() > 0.0);
-
-        elastic.toggle();
-        assert!(!elastic.expended);
-        assert_eq!(elastic.motion.velocity(), 0.0);
-        assert_eq!(elastic.motion.target(), 0.0);
-
-        let origin = elastic
-            .last_frame_nanos
-            .expect("collapse retarget records the frame clock");
-        elastic.update(origin.saturating_add(250_000_000));
-        assert!((elastic.motion.value() - 0.0).abs() < 1.0e-4);
-        assert!(elastic.motion.velocity().abs() < 1.0e-6);
-        assert!(!elastic.is_animating());
-    }
-
-    #[test]
-    fn elastic_expand_settles_promptly() {
-        let mut elastic = ElasticState::default();
-        elastic.toggle();
-
-        let step_nanos = 16_666_667_u64;
-        let mut frame = 0_u64;
-        while elastic.is_animating() {
-            frame += 1;
-            assert!(frame < 120, "elastic pop kept ringing for {frame} frames");
-            elastic.update(step_nanos * frame);
-        }
-
-        assert!((elastic.motion.value() - 1.0).abs() < 1.0e-4);
-    }
-}
+mod tests;

@@ -1,5 +1,12 @@
 //! Animation mapping for UI components.
-///
+//!
+//! ## Usage
+//!
+//! Animate state changes and preserve interrupted transitions.
+
+pub(crate) mod material_motion;
+pub(crate) mod shape_motion;
+
 /// Cubic ease-in-out mapping (smooth start and end).
 /// Input: linear progress in [0.0, 1.0].
 /// Output: eased progress in [0.0, 1.0].
@@ -13,34 +20,16 @@ pub(crate) fn easing(progress: f32) -> f32 {
     }
 }
 
-/// Motion model used by [`Animatable`].
-///
-/// Spring motion is a velocity-preserving oscillator. Easing motion
-/// approaches its target over a finite duration and does not inherit velocity.
-#[derive(Clone, Copy, Debug, PartialEq)]
-pub(crate) enum AnimationSpec {
-    /// Spring. `stiffness` is the natural frequency ω (rad/s).
-    /// `damping` is the damping ratio ζ in `[0.0, 1.0]`.
-    Spring { stiffness: f32, damping: f32 },
-    /// Finite-duration cubic ease-in-out toward the target. Velocity is not
-    /// carried.
-    Easing { duration_secs: f32 },
-}
-
 /// Interruptible scalar animation.
 ///
-/// Changing the target preserves spring velocity and restarts easing from the
-/// current value without inheriting velocity.
+/// Changing the target preserves spring velocity.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub(crate) struct Animatable {
     value: f32,
     velocity: f32,
     target: f32,
-    spec: AnimationSpec,
-    /// Seconds already spent on the current easing segment. Unused by springs.
-    ease_elapsed: f32,
-    /// Value captured when the current easing segment started.
-    ease_origin: f32,
+    stiffness: f32,
+    damping: f32,
 }
 
 impl Animatable {
@@ -50,21 +39,8 @@ impl Animatable {
             value,
             velocity: 0.0,
             target: value,
-            spec: AnimationSpec::Spring { stiffness, damping },
-            ease_elapsed: 0.0,
-            ease_origin: value,
-        }
-    }
-
-    /// Finite ease starting at rest on `value`.
-    pub(crate) fn easing(value: f32, duration_secs: f32) -> Self {
-        Self {
-            value,
-            velocity: 0.0,
-            target: value,
-            spec: AnimationSpec::Easing { duration_secs },
-            ease_elapsed: 0.0,
-            ease_origin: value,
+            stiffness,
+            damping,
         }
     }
 
@@ -92,19 +68,13 @@ impl Animatable {
 
     /// Point the animation at a new target.
     ///
-    /// Spring velocity is left untouched. Easing drops velocity and restarts
-    /// its finite approach from the current value.
+    /// Spring velocity is left untouched.
     pub(crate) fn set_target(&mut self, target: f32) {
         if (self.target - target).abs() <= f32::EPSILON {
             self.target = target;
             return;
         }
         self.target = target;
-        if matches!(self.spec, AnimationSpec::Easing { .. }) {
-            self.velocity = 0.0;
-            self.ease_elapsed = 0.0;
-            self.ease_origin = self.value;
-        }
     }
 
     /// Advance by `dt` seconds taken from the caller (a frame-time delta).
@@ -116,14 +86,7 @@ impl Animatable {
             return self.value;
         }
         let dt = dt.min(0.25);
-        match self.spec {
-            AnimationSpec::Spring { stiffness, damping } => {
-                self.integrate_spring(dt, stiffness, damping);
-            }
-            AnimationSpec::Easing { duration_secs } => {
-                self.integrate_easing(dt, duration_secs);
-            }
-        }
+        self.integrate_spring(dt, self.stiffness, self.damping);
         self.value
     }
 
@@ -158,27 +121,6 @@ impl Animatable {
         }
 
         self.settle_if_resting();
-    }
-
-    fn integrate_easing(&mut self, dt: f32, duration_secs: f32) {
-        let duration = duration_secs.max(1.0e-4);
-        if self.ease_elapsed <= 0.0 && (self.value - self.target).abs() <= 1.0e-6 {
-            self.value = self.target;
-            self.velocity = 0.0;
-            self.ease_elapsed = duration;
-            self.ease_origin = self.target;
-            return;
-        }
-
-        self.ease_elapsed = (self.ease_elapsed + dt).min(duration);
-        let t = (self.ease_elapsed / duration).clamp(0.0, 1.0);
-        let origin = self.ease_origin;
-        self.value = origin + (self.target - origin) * easing(t);
-        self.velocity = 0.0;
-        if t >= 1.0 {
-            self.value = self.target;
-            self.ease_elapsed = duration;
-        }
     }
 
     fn settle_if_resting(&mut self) {
@@ -227,30 +169,6 @@ mod tests {
         assert!(velocity_after > 0.0, "got {velocity_after}");
         assert!(velocity_after < velocity_before);
         assert!((velocity_after - velocity_before).abs() < velocity_before);
-    }
-
-    #[test]
-    fn easing_approaches_in_finite_time_without_inheriting_velocity() {
-        let mut anim = Animatable::spring(0.0, 15.0, 0.2);
-        anim.set_target(1.0);
-        anim.tick(1.0 / 60.0);
-        assert!(anim.velocity().abs() > 0.0);
-
-        let mut anim = Animatable::easing(anim.value(), 0.25);
-        assert_eq!(anim.velocity(), 0.0);
-        anim.set_target(1.0);
-        assert_eq!(anim.velocity(), 0.0);
-
-        let start = anim.value();
-        anim.tick(0.125);
-        let mid = anim.value();
-        assert!(mid > start && mid < 1.0, "mid={mid} start={start}");
-        assert_eq!(anim.velocity(), 0.0);
-
-        anim.tick(0.125);
-        assert_eq!(anim.value(), 1.0);
-        assert!(anim.velocity().abs() < 1.0e-6);
-        assert!(anim.is_idle());
     }
 
     #[test]
