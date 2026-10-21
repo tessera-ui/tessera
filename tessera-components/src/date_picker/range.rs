@@ -7,10 +7,9 @@
 use std::ops::RangeInclusive;
 
 use tessera_ui::{
-    AxisConstraint, CallbackWith, ComputedData, Constraint, Dp, FocusDirection, FocusManager,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlotWith, State,
-    layout::{MeasureScope, layout},
-    remember, tessera, use_context,
+    AxisConstraint, CallbackWith, Dp, FocusProperties, FocusRequester, FocusScopeNode, Modifier,
+    RenderSlotWith, State, layout::layout, modifier::FocusModifierExt as _, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -20,7 +19,7 @@ use crate::{
     icon_button::icon_button,
     lazy_list::{LazyListController, lazy_column},
     material_icons::filled,
-    modifier::{ModifierExt as _, Padding, SemanticsArgs, with_keyboard_input},
+    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     row::row,
     scrollable::ScrollBarBehavior,
     spacer::spacer,
@@ -35,6 +34,7 @@ use super::{
     CalendarDate, DATE_CELL_SIZE, DATE_COLUMNS, DATE_PICKER_MAX_WIDTH, DateGridLayout,
     DatePickerDefaults, DatePickerDisplayMode, DatePickerState, Weekday, YearMonth,
     build_month_grid, calendar_day, format_date_input, format_month_short_name, format_month_year,
+    navigation::{CalendarFocus, CalendarKeyboard, CalendarOwner},
     parse_date_input, weekday_narrow_label, weekday_sequence,
 };
 
@@ -397,6 +397,17 @@ pub fn date_range_picker(
 fn range_calendar(state: State<DateRangePickerState>, first_day: Weekday, height: Dp) {
     let theme = use_context::<MaterialTheme>().expect("theme").get();
     let controller = remember(LazyListController::new);
+    let focus_scope = remember(FocusScopeNode::new).get();
+    let viewport_focus = remember(FocusRequester::new).get();
+    let today = CalendarDate::today();
+    let owner = CalendarOwner::Range(state);
+    let initial = owner.initial_date(today);
+    let focus = remember(move || CalendarFocus::new(initial));
+    let keyboard = CalendarKeyboard {
+        focus,
+        owner,
+        first_day,
+    };
     let first_year = state.with(|state| *state.year_range().start());
     let months = state
         .with(|state| ((*state.year_range().end() as i64 - first_year as i64 + 1) * 12) as usize);
@@ -421,39 +432,11 @@ fn range_calendar(state: State<DateRangePickerState>, first_day: Weekday, height
             previous.set(Some((first_year, month, revision, month_height)));
         }
     }
-    let modifier = with_keyboard_input(
-        Modifier::new()
-            .fill_max_width()
-            .padding_symmetric(Dp(12.0), Dp::ZERO),
-        |mut input| {
-            if input.key_modifiers.control_key()
-                || input.key_modifiers.alt_key()
-                || input.key_modifiers.super_key()
-                || input.key_modifiers.shift_key()
-            {
-                return;
-            }
-            let direction = input.keyboard_events.iter().find_map(|event| {
-                if event.state != tessera_ui::winit::event::ElementState::Pressed {
-                    return None;
-                }
-                match event.logical_key {
-                    tessera_ui::winit::keyboard::Key::Named(
-                        tessera_ui::winit::keyboard::NamedKey::ArrowRight,
-                    ) => Some(FocusDirection::Next),
-                    tessera_ui::winit::keyboard::Key::Named(
-                        tessera_ui::winit::keyboard::NamedKey::ArrowLeft,
-                    ) => Some(FocusDirection::Previous),
-                    _ => None,
-                }
-            });
-            if let Some(direction) = direction
-                && FocusManager::current().request_move_focus(direction)
-            {
-                input.block_keyboard();
-            }
-        },
-    );
+    keyboard.sync(today);
+    let modifier = Modifier::new()
+        .fill_max_width()
+        .padding_symmetric(Dp(12.0), Dp::ZERO)
+        .focus_restorer_with(focus_scope, Some(viewport_focus));
     column().modifier(modifier).children(move || {
         layout()
             .policy(DateGridLayout {
@@ -474,8 +457,24 @@ fn range_calendar(state: State<DateRangePickerState>, first_day: Weekday, height
                 }
             });
         lazy_column()
-            .modifier(Modifier::new().fill_max_width().height(height))
+            .modifier(
+                keyboard.viewport_modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .height(height)
+                        .focusable()
+                        .focus_requester(viewport_focus)
+                        .focus_properties(FocusProperties::new().skip_traversal(true))
+                        .semantics(SemanticsArgs {
+                            role: Some(tessera_ui::accesskit::Role::Group),
+                            label: Some("Date range calendar".into()),
+                            merge_descendants: true,
+                            ..Default::default()
+                        }),
+                ),
+            )
             .estimated_item_size(MONTH_HEIGHT)
+            .max_viewport_main(height.to_px())
             .scrollbar_behavior(ScrollBarBehavior::Hidden)
             .controller(controller)
             .items_with_key_shared(
@@ -486,14 +485,19 @@ fn range_calendar(state: State<DateRangePickerState>, first_day: Weekday, height
                     let month = YearMonth::new(first_year, 1)
                         .expect("January")
                         .add_months(index as i32);
-                    range_month(state, month, first_day);
+                    range_month(state, month, first_day, keyboard);
                 }),
             );
     });
 }
 
 #[tessera]
-fn range_month(state: State<DateRangePickerState>, month: YearMonth, first_day: Weekday) {
+fn range_month(
+    state: State<DateRangePickerState>,
+    month: YearMonth,
+    first_day: Weekday,
+    keyboard: CalendarKeyboard,
+) {
     let theme = use_context::<MaterialTheme>().expect("theme").get();
     let grid: [Option<CalendarDate>; DATE_COLUMNS * super::DATE_ROWS] =
         build_month_grid(month, first_day)
@@ -542,78 +546,31 @@ fn range_month(state: State<DateRangePickerState>, month: YearMonth, first_day: 
                         let selected = date.is_some() && (date == start || date == end);
                         let enabled = date
                             .is_some_and(|date| state.with(|state| state.is_date_selectable(date)));
-                        layout()
-                            .policy(RangeCellLayout {
-                                fill: in_range,
+                        calendar_day(on_select, today)
+                            .cell_optional(date)
+                            .selected(selected)
+                            .enabled(enabled)
+                            .keyboard(keyboard)
+                            .in_range(in_range)
+                            .range_band_optional(in_range.then_some(super::CalendarRangeBand {
                                 start: date == start,
                                 end: date == end,
-                            })
-                            .child(move || {
-                                if in_range {
-                                    layout().modifier(
-                                        Modifier::new()
-                                            .background(theme.color_scheme.secondary_container),
-                                    );
+                            }))
+                            .description_optional(date.map(|_| {
+                                if date == start {
+                                    "Start date"
+                                } else if date == end {
+                                    "End date"
+                                } else if in_range {
+                                    "In selected range"
+                                } else {
+                                    "Not selected"
                                 }
-                                calendar_day(on_select, today)
-                                    .cell_optional(date)
-                                    .selected(selected)
-                                    .enabled(enabled)
-                                    .in_range(in_range)
-                                    .description_optional(date.map(|_| {
-                                        if date == start {
-                                            "Start date"
-                                        } else if date == end {
-                                            "End date"
-                                        } else if in_range {
-                                            "In selected range"
-                                        } else {
-                                            "Not selected"
-                                        }
-                                        .to_owned()
-                                    }));
-                            });
+                                .to_owned()
+                            }));
                     }
                 });
         });
-}
-
-#[derive(Clone, PartialEq)]
-struct RangeCellLayout {
-    fill: bool,
-    start: bool,
-    end: bool,
-}
-
-impl tessera_ui::LayoutModifierNode for RangeCellLayout {
-    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let width = scope
-            .parent_constraint()
-            .width()
-            .clamp(DATE_CELL_SIZE.to_px());
-        let height = scope
-            .parent_constraint()
-            .height()
-            .clamp(DATE_CELL_SIZE.to_px());
-        let mut result = LayoutResult::new(ComputedData { width, height });
-        let children = scope.children();
-        let visual = super::DATE_VISUAL_SIZE.to_px().min(height);
-        let x = if self.start { width / 2 } else { Px::ZERO };
-        let end = if self.end { width / 2 } else { width };
-        let fill_width = if self.fill {
-            (end - x).max(Px::ZERO)
-        } else {
-            Px::ZERO
-        };
-        if self.fill {
-            children[0].measure(scope, &Constraint::new(fill_width, visual))?;
-            result.place_child(children[0], PxPosition::new(x, (height - visual) / 2));
-        }
-        let day = *children.last().expect("calendar day");
-        day.measure(scope, &Constraint::new(width, height))?;
-        result.place_child(day, PxPosition::ZERO);
-        Ok(result)
-    }
 }
 
 #[tessera]

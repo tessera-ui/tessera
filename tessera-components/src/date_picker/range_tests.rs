@@ -1,15 +1,20 @@
 use std::cell::Cell;
 
 use tessera_ui::{
-    CallbackWith, Color, Dp, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
-    Modifier, PressKeyEventType, PxPosition, State,
+    CallbackWith, Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer,
+    MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Rect, Role},
     remember, tessera,
 };
 
 use crate::{
+    button::button,
+    column::column,
+    lazy_list::{LazyListController, lazy_column},
     modifier::ModifierExt as _,
+    spacer::spacer,
     surface::{SurfaceStyle, surface},
+    text::text,
     theme::{MaterialTheme, material_theme},
 };
 
@@ -80,6 +85,171 @@ fn range_input_resolves_both_endpoints_and_preserves_invalid_drafts() {
 
 thread_local! {
     static STATE: Cell<Option<State<DateRangePickerState>>> = const { Cell::new(None) };
+    static OUTER_SCROLL: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
+}
+
+#[tessera]
+fn nested_fixture() {
+    let state = remember(|| {
+        DateRangePickerState::new(
+            None,
+            None,
+            YearMonth::new(2026, 7),
+            2026..=2027,
+            None,
+            None,
+            DatePickerDisplayMode::Picker,
+        )
+    });
+    let outer = remember(LazyListController::new);
+    STATE.set(Some(state));
+    OUTER_SCROLL.set(Some(outer));
+    material_theme().child(move || {
+        lazy_column()
+            .modifier(Modifier::new().fill_max_size())
+            .controller(outer)
+            .overscan(1)
+            .estimated_item_size(Dp(300.0))
+            .item(|| {
+                column().children(|| {
+                    button()
+                        .text()
+                        .accessibility_label("Outside calendar")
+                        .on_click(|| {})
+                        .child(|| {
+                            text().content("Outside calendar");
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(300.0)));
+                });
+            })
+            .item(move || {
+                date_range_picker()
+                    .state(state)
+                    .first_day_of_week(Weekday::Sunday);
+            })
+            .item(|| {
+                column().children(|| {
+                    button()
+                        .text()
+                        .accessibility_label("After calendar")
+                        .on_click(|| {})
+                        .child(|| {
+                            text().content("After calendar");
+                        });
+                    spacer().modifier(Modifier::new().height(Dp(400.0)));
+                });
+            });
+    });
+}
+
+fn check_nested_scroll(samples: u32) {
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(|| nested_fixture()),
+        vec![Box::new(crate::TesseraComponents)],
+        HeadlessConfig {
+            width: 600,
+            height: 950,
+            scale_factor: 1.5,
+            sample_count: samples,
+            ..Default::default()
+        },
+    )
+    .expect("nested renderer");
+    renderer.render_frames(8);
+    let outer = OUTER_SCROLL.get().expect("outer scroll");
+    outer.with_mut(|scroll| scroll.scroll_to(Dp::ZERO, Dp(400.0 / 1.5)));
+    renderer.render_frames(8);
+    click(&mut renderer, "July 29, 2026");
+    let state = STATE.get().expect("range state");
+    assert_eq!(
+        state.with(DateRangePickerState::selected_start_date),
+        Some(date(7, 29))
+    );
+    let accessibility = renderer.accessibility_snapshot().expect("tree");
+    let focused = accessibility
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == accessibility.focus)
+        .expect("focused date");
+    assert_eq!(focused.1.label(), Some("July 29, 2026"));
+    let before = outer.with(|list| list.scroll_controller().child_position());
+    assert!(
+        before.y < 0.0,
+        "the outside button is above the page viewport"
+    );
+    let day = bounds(&renderer, "July 29, 2026");
+    renderer.pointer_scroll(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(
+            ((day.x0 + day.x1) / 2.0) as f32,
+            ((day.y0 + day.y1) / 2.0) as f32,
+        ),
+        0.0,
+        -600.0,
+    );
+    renderer.render_frames(90);
+    let accessibility = renderer.accessibility_snapshot().expect("tree");
+    let focused = accessibility
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == accessibility.focus)
+        .expect("restored focus");
+    assert_eq!(
+        focused.1.label(),
+        Some("Date range calendar"),
+        "virtualizing a focused month restores focus to the stable calendar viewport"
+    );
+    assert_ne!(
+        state.with(DateRangePickerState::displayed_month),
+        YearMonth::new(2026, 7).unwrap(),
+        "the calendar must actually advance beyond the selected month"
+    );
+    assert!(
+        renderer
+            .accessibility_snapshot()
+            .expect("tree")
+            .nodes
+            .iter()
+            .all(|(_, node)| node.label() != Some("July 29, 2026")),
+        "the previously focused month must be virtualized"
+    );
+    assert_eq!(
+        outer.with(|list| list.scroll_controller().child_position()),
+        before,
+        "virtualizing the focused month must not reveal controls outside the calendar"
+    );
+    assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+    renderer.render_frames(8);
+    let accessibility = renderer.accessibility_snapshot().expect("tree");
+    let focused = accessibility
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == accessibility.focus)
+        .expect("focused visible date");
+    assert_eq!(focused.1.role(), Role::Button);
+    assert_eq!(focused.1.label(), Some("August 1, 2026"));
+    assert_eq!(
+        outer.with(|list| list.scroll_controller().child_position()),
+        before,
+        "navigation from the viewport enters its calendar dates without moving the page"
+    );
+    assert_eq!(
+        state.with(DateRangePickerState::selected_start_date),
+        Some(date(7, 29))
+    );
+    assert_eq!(state.with(DateRangePickerState::selected_end_date), None);
+    assert!(FocusManager::current().request_move_focus(FocusDirection::Next));
+    renderer.render_frames(12);
+    let accessibility = renderer.accessibility_snapshot().expect("tree");
+    assert_eq!(
+        accessibility
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == accessibility.focus)
+            .and_then(|(_, node)| node.label()),
+        Some("After calendar"),
+        "Tab navigation leaves the calendar after its single date stop"
+    );
 }
 
 #[tessera]
@@ -230,6 +400,30 @@ fn check_range(samples: u32) {
             "weekday and date columns align"
         );
     }
+    let day = bounds(&renderer, "July 12, 2026");
+    let x = day.x0 as usize + 12;
+    let y = ((day.y0 + day.y1) / 2.0) as usize;
+    let offset = (y * renderer.physical_size().width as usize + x) * 4;
+    let idle = renderer.read_pixels().expect("idle date");
+    renderer.pointer_move(
+        MOUSE_POINTER_ID,
+        PxPosition::from_f32_xy(x as f32, y as f32),
+    );
+    renderer.render_frames(3);
+    let hovered = renderer.read_pixels().expect("hovered date");
+    assert_ne!(
+        &idle[offset..offset + 4],
+        &hovered[offset..offset + 4],
+        "hover paints the date's state layer"
+    );
+    assert_color(&renderer, day.x0 + 2.0, y as f64, [255, 255, 255]);
+    renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(590.0, 940.0));
+    renderer.render_frames(3);
+    assert_eq!(
+        &renderer.read_pixels().expect("idle again")[offset..offset + 4],
+        &idle[offset..offset + 4],
+        "leaving the date clears its state layer"
+    );
     assert!(
         renderer.accessibility_snapshot().expect("tree").nodes.len() < 1200,
         "only visible months should be built"
@@ -258,6 +452,35 @@ fn check_range(samples: u32) {
     assert!(blocked.is_disabled());
     click(&mut renderer, "July 13, 2026");
     assert_eq!(state.with(DateRangePickerState::selected_start_date), None);
+    renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(590.0, 940.0));
+    renderer.render_frames(3);
+    let blocked = bounds(&renderer, "July 13, 2026");
+    let focus_x = (blocked.x0 + blocked.x1) / 2.0 + 20.0;
+    let focus_y = (blocked.y0 + blocked.y1) / 2.0;
+    assert_color(&renderer, focus_x, focus_y, [255, 255, 255]);
+    crate::date_picker::navigation::test_keyboard().request(date(7, 13));
+    renderer.render_frames(8);
+    let accessibility = renderer.accessibility_snapshot().expect("tree");
+    let focused = accessibility
+        .nodes
+        .iter()
+        .find(|(id, _)| *id == accessibility.focus)
+        .expect("focused unavailable date");
+    assert_eq!(focused.1.label(), Some("July 13, 2026"));
+    assert!(focused.1.is_disabled());
+    let pixels = renderer.read_pixels().expect("focused pixels");
+    let offset =
+        (focus_y as usize * renderer.physical_size().width as usize + focus_x as usize) * 4;
+    assert!(
+        pixels[offset..offset + 3]
+            .iter()
+            .any(|channel| *channel < 250),
+        "an unavailable date still shows a visible keyboard focus indicator"
+    );
+    assert_eq!(state.with(DateRangePickerState::selected_start_date), None);
+    FocusManager::current().clear_focus(true);
+    renderer.render_frames(3);
+    assert_color(&renderer, focus_x, focus_y, [255, 255, 255]);
     let start = bounds(&renderer, "July 29, 2026");
     let corner = Rect::new(
         start.x0 + 1.0,
@@ -290,6 +513,8 @@ fn check_range(samples: u32) {
     let y = (middle.y0 + middle.y1) / 2.0;
     assert_color(&renderer, middle.x0 + 2.0, y, [149, 203, 149]);
     assert_color(&renderer, start.x0 + 2.0, y, [255, 255, 255]);
+    assert_color(&renderer, start.x1 - 2.0, y, [149, 203, 149]);
+    assert_color(&renderer, end.x0 + 2.0, y, [149, 203, 149]);
     assert_color(&renderer, end.x1 - 2.0, y, [255, 255, 255]);
     let selected = renderer.read_pixels().expect("selected");
     renderer.resize(450, 950);
@@ -304,6 +529,13 @@ fn check_range(samples: u32) {
         renderer.read_pixels().expect("restored") == selected,
         "resize restores all pixels"
     );
+
+    state.with_mut(|state| state.set_selection(Some(date(7, 30)), Some(date(7, 30))));
+    renderer.render_frames(8);
+    let day = bounds(&renderer, "July 30, 2026");
+    let y = (day.y0 + day.y1) / 2.0;
+    assert_color(&renderer, day.x0 + 2.0, y, [255, 255, 255]);
+    assert_color(&renderer, day.x1 - 2.0, y, [255, 255, 255]);
 
     state.with_mut(|state| state.set_displayed_month(YearMonth::new(2027, 1).unwrap()));
     renderer.render_frames(8);
@@ -381,6 +613,24 @@ fn check_range(samples: u32) {
         state.with(DateRangePickerState::selected_start_date),
         Some(date(7, 29)),
         "clearing invalid drafts resets both editors"
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_date_range_nested_scroll_preserves_outer_position() {
+    crate::test_utils::run_isolated_test(
+        "date_picker::range::tests::gpu_date_range_nested_scroll_preserves_outer_position",
+        || check_nested_scroll(1),
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_date_range_nested_scroll_preserves_outer_position_msaa() {
+    crate::test_utils::run_isolated_test(
+        "date_picker::range::tests::gpu_date_range_nested_scroll_preserves_outer_position_msaa",
+        || check_nested_scroll(4),
     );
 }
 
