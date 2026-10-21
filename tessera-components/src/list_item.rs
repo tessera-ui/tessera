@@ -5,10 +5,9 @@
 //! Present rows of content in settings, inboxes, or selection lists.
 
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Callback, Color, Dp, Modifier, RenderSlot,
-    SemanticsModifierNode, State, accesskit::Role, current_frame_nanos, layout::layout,
-    modifier::ModifierCapabilityExt as _, provide_context, receive_frame_nanos, remember, tessera,
-    use_context,
+    Callback, CallbackWith, Color, Dp, Modifier, RenderSlot, State, current_frame_nanos,
+    layout::layout, modifier::ModifierCapabilityExt as _, provide_context, receive_frame_nanos,
+    remember, tessera, use_context,
 };
 
 use crate::{
@@ -25,11 +24,14 @@ use crate::{
 };
 
 use item_layout::ListItemLayout;
+use selection::{ListItemActivation, ListItemSelectionSemantics};
 
+pub use selection::ListItemSelectionMode;
 pub use shapes::{ListItemPosition, ListItemShapes};
 
 mod color_motion;
 mod item_layout;
+mod selection;
 mod shapes;
 
 #[cfg(test)]
@@ -38,7 +40,13 @@ mod tests;
 #[cfg(all(test, not(target_family = "wasm")))]
 mod color_tests;
 #[cfg(all(test, not(target_family = "wasm")))]
+mod long_click_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
 mod native_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod reflow_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod selection_tests;
 #[cfg(all(test, not(target_family = "wasm")))]
 mod shape_tests;
 
@@ -285,7 +293,12 @@ impl ListItemDefaults {
 ///
 /// - `modifier` — optional modifier chain applied to the list item container.
 /// - `enabled` — optional enabled state; defaults to `true`.
-/// - `selected` — whether the list item is selected.
+/// - `selected` — externally controlled selection or checked state.
+/// - `selection_mode` — action, single-selection, or multiple-selection
+///   behavior. The owner maintains exclusivity between single-selection rows.
+/// - `on_selection_change` — requested selection in Single/Multiple modes;
+///   takes precedence over `on_click`. Read latest application state in
+///   callbacks.
 /// - `headline` — primary headline text when `content` is absent.
 /// - `content` — optional custom main content, replacing `headline`.
 /// - `overline_content` — optional custom content replacing `overline_text`.
@@ -310,7 +323,10 @@ impl ListItemDefaults {
 /// - `min_height` — optional minimum height override.
 /// - `vertical_alignment` — content alignment; short rows center by default and
 ///   taller rows align to their top inset.
-/// - `on_click` — optional click callback.
+/// - `on_long_click` — optional long-press action; successful holds suppress
+///   ordinary clicks and selection requests. Also exposed as a context action.
+/// - `on_click` — action callback, also used as a selection-mode fallback when
+///   `on_selection_change` is absent.
 /// - `interaction_state` — optional shared interaction state.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
@@ -319,18 +335,22 @@ impl ListItemDefaults {
 ///
 /// ```
 /// use tessera_components::{
-///     list_item::{ListItemDefaults, list_item},
+///     list_item::{ListItemDefaults, ListItemSelectionMode, list_item},
 ///     text::text,
 /// };
-/// use tessera_ui::{Dp, tessera};
+/// use tessera_ui::{Dp, remember, tessera};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
 /// fn demo() {
+///     let selected = remember(|| false);
 ///     material_theme()
 ///         .theme(|| MaterialTheme::default())
-///         .child(|| {
+///         .child(move || {
 ///             list_item()
+///                 .selection_mode(ListItemSelectionMode::Multiple)
+///                 .selected(selected.get())
+///                 .on_selection_change(move |value| selected.set(value))
 ///                 .accessibility_label("Inbox")
 ///                 .content(|| {
 ///                     text().content("Inbox");
@@ -347,6 +367,8 @@ pub fn list_item(
     modifier: Option<Modifier>,
     enabled: Option<bool>,
     selected: Option<bool>,
+    selection_mode: Option<ListItemSelectionMode>,
+    on_selection_change: Option<CallbackWith<bool>>,
     #[prop(into)] headline: Option<String>,
     content: Option<RenderSlot>,
     overline_content: Option<RenderSlot>,
@@ -366,6 +388,7 @@ pub fn list_item(
     min_height: Option<Dp>,
     vertical_alignment: Option<ListItemVerticalAlignment>,
     on_click: Option<Callback>,
+    on_long_click: Option<Callback>,
     interaction_state: Option<State<InteractionState>>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
@@ -376,11 +399,27 @@ pub fn list_item(
         .expect("MaterialTheme must be provided")
         .get();
     let typography = theme.typography;
+    let selection_mode = selection_mode.unwrap_or_default();
     let modifier = modifier
         .unwrap_or_default()
-        .push_semantics(ListItemSelectionSemantics(selected));
+        .push_semantics(ListItemSelectionSemantics {
+            mode: selection_mode,
+            selected,
+        });
     let enabled = enabled.unwrap_or(true);
     let selected = selected.unwrap_or(false);
+    let action = ListItemActivation {
+        mode: selection_mode,
+        selected,
+        on_click,
+        on_selection_change,
+    };
+    let has_on_click = action.has_handler();
+    let activation = remember(|| action.clone());
+    if activation.get() != action {
+        activation.set(action);
+    }
+    let on_activate = Callback::new(move || activation.get().activate());
     let dragged = dragged.unwrap_or(false);
     let headline = headline.unwrap_or_default();
     let colors = colors.unwrap_or_else(|| ListItemDefaults::colors(&theme.color_scheme));
@@ -389,7 +428,7 @@ pub fn list_item(
     } else {
         remember(InteractionState::new)
     };
-    let interactive = enabled && on_click.is_some();
+    let interactive = enabled && (has_on_click || on_long_click.is_some());
     let shapes = shapes
         .unwrap_or_else(|| ListItemShapes::from_theme(&theme))
         .segmented(position.unwrap_or_default(), theme.shapes.large);
@@ -482,7 +521,6 @@ pub fn list_item(
                 None
             }
         });
-    let has_on_click = on_click.is_some();
     let elevation = (shadow_elevation.0 > 0.0).then_some(shadow_elevation);
 
     surface()
@@ -495,11 +533,12 @@ pub fn list_item(
         .enabled(enabled)
         .ripple_color(headline_color)
         .tonal_elevation(tonal_elevation)
-        .accessibility_role(Role::ListItem)
+        .accessibility_role(selection_mode.role())
         .elevation_optional(elevation)
         .interaction_state(interaction)
-        .on_click_optional(on_click)
-        .accessibility_focusable(enabled && has_on_click)
+        .on_click_optional(has_on_click.then_some(on_activate))
+        .on_long_click_optional(on_long_click)
+        .accessibility_focusable(interactive)
         .accessibility_label_optional(accessibility_label)
         .accessibility_description_optional(accessibility_description)
         .child(move || {
@@ -638,19 +677,4 @@ fn list_item_slot(
             );
         },
     );
-}
-
-#[derive(Clone)]
-struct ListItemSelectionSemantics(Option<bool>);
-
-impl SemanticsModifierNode for ListItemSelectionSemantics {
-    fn apply(
-        &self,
-        accessibility: &mut AccessibilityNode,
-        _: &mut Option<AccessibilityActionHandler>,
-    ) {
-        if let Some(selected) = self.0 {
-            accessibility.selected = Some(selected);
-        }
-    }
 }

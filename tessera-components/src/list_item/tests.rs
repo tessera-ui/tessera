@@ -140,9 +140,9 @@ fn wrapped_slot_fixture() {
                     text().content("Headline");
                 })
                 .supporting_content(|| {
-                    boxed().modifier(tagged("wrapped-supporting")).children(|| {
-                        text().content("Supporting text wraps");
-                    });
+                    text()
+                        .modifier(tagged("wrapped-supporting"))
+                        .content("Supporting text wraps");
                 })
                 .leading(|| {
                     spacer().modifier(Modifier::new().size(Dp(20.0), Dp(20.0)));
