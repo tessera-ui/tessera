@@ -13,20 +13,25 @@ disabled/hover/focus/pressed states, pointer and keyboard behavior, and accessib
 Repeat on native and WebAssembly. Record screenshot evidence separately from
 headless layout assertions. Animation and font rasterization need their own checks.
 
+Browser accessibility also requires an actual browser semantics bridge. The
+current WASM AccessKit adapter is a no-op and the browser exposes the example
+as a canvas image. Native semantic-tree tests do not establish Web screen-reader
+support; browser publication and assistive-technology actions remain open.
+
 ## Catalog coverage
 
 | Official component | Tessera implementation | Remaining verification or implementation |
 | --- | --- | --- |
-| Button groups | `button_groups` | Audit connected/standard sizes, selection, shape motion |
+| Button groups | `button_groups` | Five-size child typography/icons, round/square presets, standard press width exchange with adaptive content padding, connected equal widths and 2dp gaps, external selection/clear, live selection modes, required selection, disabled items/groups, checkbox roles, horizontal focus traversal, item cleanup, and size-specific pressed/selected shape motion implemented; native 1x/4x GPU scenarios cover geometry, pixels, input, resize and style/focus retention; browser required selection, disabled input and keyboard traversal verified; mixed action/icon items and color variants, RTL, vertical groups, overflow, and normalized reference state snapshots remain |
 | Buttons | `button` | Five sizes, round/square presets, controlled toggles, pressed shape motion, and elevation transitions implemented; native 1×/4× GPU geometry, typography, selection, semantics, and disabled input verified; WASM variants, pointer/Enter/Space, narrow wrapping, and resize/screenshot regression checked; complete normalized reference snapshots, dark themes, custom-shape states, constrained icon/label allocation, elevation snapshots, and motion-curve comparisons |
 | Extended FABs | `extended_floating_action_button` (new) | Three sizes, icon sizing, label-only mode, disabled input, dynamic props, and reversible expansion tested; native GPU cycle restores identical pixels; WASM pointer/keyboard activation and three-size label restoration verified; complete color/hover/focus/disabled reference comparisons |
 | FAB menu | `floating_action_button_menu` (new) | Native geometry, short viewports, input blocking, state retention, reversible stagger, GPU pixel recovery, and published AccessKit tree tested; WASM actions, arrow keys, reverse Tab, Escape, focus restoration, and three color sets verified; complete reference state snapshots, larger trigger anchoring, icon morph, and web baseline-menu presentation |
 | Floating action buttons | `floating_action_button` | 80dp medium size with 28dp icon and 20dp corners added; elevation transitions implemented; verify hover/focus/pressed snapshots and remaining color variants |
 | Icon buttons | `icon_button` | Five sizes, three widths, round/square presets, controlled toggles, vibrant/inherited colors, and 48dp targets implemented; native 1×/4× GPU geometry, fractional density, dynamic colors, input, selection semantics, and resize recovery verified; WASM four styles, three widths, pointer/keyboard activation, long press, disabled input, narrow wrapping, and lazy-list state retention verified; complete normalized reference state snapshots, dark themes, custom-shape states, and motion comparisons |
-| Segmented buttons | `segmented_buttons` | Audit single/multiple selection and states |
+| Segmented buttons | `segmented_buttons` | Standard M3 control retained; Expressive recommends connected button groups. Native 1x/4x checks at four densities cover roles, group metadata, selection, default checkmarks, focus, disabled input, live typography, stable natural widths, exact bounded widths, and zero-width recovery; WASM pointer/arrow/Tab/Space/Enter selection and stable group widths verified; icon/label motion, custom icons, full state snapshots, and RTL remain |
 | Split buttons | `split_buttons` | Five-size typography and icon contexts, sized outlines, trailing width priority, optical offsets, pressed/hover/focus shapes, controlled menu expansion, and arrow/elevation motion implemented; native 1×/4× GPU and fractional-density geometry, dynamic props, disabled semantics, and width-priority checks passed; full example menus, resizing, and lazy-list retention exercised on native and WASM; mixed-size/wrapped-label visual-height synchronization covered by 1×/4× native pixel readback at 1.5 density and WASM 390px/877px resize recovery; complete normalized state snapshots, dark themes, and motion-curve comparisons |
-| Date pickers | `date_picker` | Single-date layout/input/year grid tested; range state, continuous virtualized months, inclusive endpoints, restricted dates, and joint manual input implemented; 1×/4× GPU tests cover range bands, published date semantics, cross-month selection, dynamic years, programmatic month requests, draft clearing, and narrow/collapsed resize recovery; implement docked variants and complete modal integration, normalized reference states, and keyboard audits |
-| Time pickers | `time_picker` | Dial/input interaction tested; add/audit landscape layout; complete state screenshots |
+| Date pickers | `date_picker` | Single-date layout/input/year grid tested; range state, virtualized months, inclusive endpoints, restricted dates, and joint manual input implemented; native 1×/4× GPU checks cover range bands, semantics, selection, restrictions, month requests, resize recovery, local focus restoration, unavailable-date focus pixels, and one-stop Tab exit; day/week/month/year navigation, week boundaries, short-month/leap-day clamping, rapid navigation/selection, and forward/reverse Tab checked in WASM at normal and narrow widths; implement docked variants and complete modal integration, year-grid/grid-semantics audits, resize scroll-anchor retention, and normalized reference states |
+| Time pickers | `time_picker` | Native 1x/4x GPU checks cover individual clock button roles, labels, selected state, focus and activation, AM/PM radio semantics, roving traversal, exact values, pointer snapping, dynamic steps, 12/24-hour recovery, and manual entry; horizontal layout, narrow fallback, stable focus across resize, and 48dp period hit targets implemented; WASM horizontal 12/24-hour layouts, narrow fallback and resize recovery, arrow focus, Enter/Space activation, radio navigation, Tab exit, mode changes, input and confirmation checked; complete modal integration, automatic layout choice, outer-list resize anchoring, normalized state, dark-theme, and motion comparisons; browser screen-reader publication remains open |
 | Loading indicator | `loading_indicator` (new) | Official cubic morph data and spring timing verified; 48 GPU comparisons across eight sequences and 1×/4× sampling meet a 2.5% normalized coverage-error limit; animation/paused frames reuse buffers; native progress semantics and WASM pause/resume plus 0/50/100% progress verified; complete reference-theme screenshots and custom-size/container comparisons |
 | Progress indicators | `progress`, `wavy_progress` (new) | Straight and wavy linear/circular determinate/indeterminate variants present; wavy variants include independent stroke styles, adaptive gaps, reverse flow, frame-clock motion, and pause/resume; circle/star morph geometry checked against the independent Graphics Shapes library; complete normalized state, custom geometry, and straight-motion audits |
 | Navigation bar | `navigation_bar` | Flexible top/start arrangement tested; complete state/responsive screenshots |
@@ -34,22 +39,22 @@ headless layout assertions. Animation and font rasterization need their own chec
 | Navigation rail | `navigation_rail` | Audit collapsed/expanded/modal modes and current tokens |
 | Bottom sheets | `bottom_sheet` | Audit standard/modal geometry, dragging, dismissal, and focus |
 | Side sheets | `side_sheet` | Audit modal/standard geometry, dragging, dismissal, and focus |
-| App bars | `app_bar` | Compact top bar exists; add/audit medium/large layouts, centered titles, subtitles, and scroll behavior |
-| Badges | `badge` | Audit dot/count geometry, offsets, and accessibility |
-| Cards | `card` | Audit filled/elevated/outlined and interactive states |
+| App bars | `app_bar` | Small, medium flexible, and large flexible layouts, optional subtitles, leading/global-center alignment, action avoidance, dynamic slot colors, and multiline growth implemented; native 1×/4× GPU geometry, typography, reading order, colors, input, wrapping, and resize recovery verified; nested-scroll collapse, snap, inertia, color changes, idle callback cleanup, and hidden-navigation semantics and keyboard traversal verified; WASM variants, subtitle switching, centered titles, pointer/Tab/Enter actions, and 390px sizing checked; search composition, custom title content, scaffold-wide reading order, normalized reference states, dark themes, and motion comparisons remain |
+| Badges | `badge` | Dot/count sizes, offsets, rounded fractional-density geometry, anchor constraints, empty/multiple slot children, live theme/text contexts, explicit colors, semantic authoring, and pointer passthrough verified at four densities and 1x/4x GPU sampling; WASM count/dot/theme transitions checked; full normalized reference images, maximum-count width, anchor baselines, RTL, and bounded navigation placement remain |
+| Cards | `card` | Slow-frame elevation, disabled/static semantics, accessible labels, foreground borders/feedback over clipped media, outlined hover/focus tokens, dark container/content roles, theme restoration, and resize recovery verified by native 1x/4x GPU regressions; WASM media, keyboard focus/activation, disabled/static traversal, and re-enabling checked; full normalized reference states, fractional edge fidelity, remaining minimum-target/custom-shape cases, and motion comparisons |
 | Carousel | `carousel` (new) | Multi-browse, uncontained, mixed-aspect uncontained, hero, centered hero, and full-screen layouts implemented with virtualized full-size content, 28dp masks, snapping/free scrolling, controller navigation, reverse layout, keyboard and accessibility actions; Native checks include source geometry/padding vectors, 1.25×/1.5×/2× density, dynamic props, pointer cancellation, zero-width/resize recovery, a responsive lazy feed, and 1×/4× GPU readback; WASM layout switching, horizontal/vertical input, Home/End, activation, narrow-window recovery, idle content, and scrolling out of the lazy viewport are verified; complete reference state comparisons and motion audits |
-| Checkbox | `checkbox` | Audit selected/indeterminate/disabled states and transitions |
-| Chips | `chip` | Audit assist/filter/input/suggestion variants and states |
+| Checkbox | `checkbox` | Checked, unchecked, and indeterminate states share one builder and controller; native 1x/4x checks cover density, geometry, light/dark/error/disabled colors, custom overrides, validation semantics, activation, spatial springs, Oklab effects, reversal pixels, and idle-clock shutdown; normalized cross-platform reference comparisons remain |
+| Chips | `chip` | Four variants preserve icon/label edge spacing; selectable semantics, live typography, interaction elevation, focus outlines, and input icon colors verified; input avatars preserve source colors with circular center cropping, disabled opacity, priority, and restored spacing at four densities and 1x/4x sampling; Expressive selection/press shapes and interrupted spring motion verified; icon motion, RTL, tonal variants, and normalized reference images remain |
 | Dialogs | `dialog` | Audit basic/full-screen variants, actions, dismissal, and focus |
-| Divider | `divider` | Audit horizontal/vertical thickness, insets, and colors |
+| Divider | `divider` | Parent-constrained thickness, unbounded-axis recovery, modifier-based insets, hairlines, and live outline-variant colors implemented; native 1x/4x GPU checks at four densities and WASM rendering verified; fractional stroke/reference comparisons and the legacy default-color helper remain |
 | Lists | `list_item` | Audit line counts, leading/trailing content, selection, and Expressive grouping |
 | Menus | `menus` | Current/saved anchors, reflow, gap-aware side fallback, exact-fit resize, and outside dismissal GPU-tested; trigger focus restoration, explicit fallback, disabled trigger recovery, and forward/reverse Tab exit passed native GPU regression; WASM selection, Escape, Enter/Space reopening, Tab exit, narrow-window recovery, and lazy-list retention checked; queued close/navigation barrier covered by native core/order regressions and WASM rapid keyboard sequences; Expressive group surfaces, standard/vibrant colors, position-specific corners, selected menu-radio semantics, trailing-space reservation, and scrolling implemented; shared cascading overlays, branch/chain dismissal, source removal/disable cleanup, and virtualized Tab-exit navigation implemented; shadow overflow, rounded content clipping, scrolling shadow input bounds, container morphing, and delayed mouse-hover branch switching GPU-tested; normalized group/state snapshots, compact adaptive layout, and remaining focus audits |
-| Radio button | `radio_button` | Audit selection, disabled state, group keyboard behavior, and transitions |
+| Radio button | `radio_button` | Native 1x/4x GPU checks cover group names/roles/orientation, disabled checked-state semantics, 48dp targets at 1.5 density, directional selection, all four arrows for both orientations, wrapped traversal skipping disabled options, one-stop Tab entry/exit, unselected entry without activation, disabled-focus recovery without value changes, caller traversal exclusions, re-enabling identity, pointer completion/cancellation, interaction colors, custom color retention, internally managed mutual exclusion, independent groups, removal/reinsertion, and controller-driven selection; browser arrows and pointer cancellation verified; horizontal/RTL visual groups, toolbar integration, normalized dark/state snapshots, and motion comparisons remain |
 | Search | `search` | Focus, typing, submit/dismiss fixed; audit expanded/full-screen layouts and state screenshots |
 | Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; vertical orientation and direction reversal share layout, pointer coordinates, corner mapping, and keyboard behavior across all three variants; website color roles, independent tick colors, theme updates, marker gaps, and end-stop visibility implemented; optional floating value indicators, formatted screen-reader values, focus/drag visibility, and window-edge placement implemented; complete nested-viewport occlusion, fractional-anchor precision, range-label collision, focus-ring, and normalized reference state comparisons |
 | Snackbar | `snackbar` | Audit action/dismiss variants, timing, focus, and live announcement |
-| Switch | `switch` | Audit thumb/icon, checked/unchecked/disabled states, and transitions |
-| Tabs | `tabs` | Audit primary/secondary, fixed/scrolling, indicator, and keyboard navigation |
+| Switch | `switch` | Native 1x/4x checks cover semantics, targets, controlled updates, colors, input, icon sizing, spatial size/offset transitions, reversal, cancelled press/release, controller snapping, pixel recovery, and idle clocks; WASM dynamic icons, cancelled dragging, and keyboard operation verified; normalized reference geometry, intrinsic empty-slot sizing, focus-ring and ripple-motion audits, and cross-platform motion comparisons remain |
+| Tabs | `tabs` | Primary/secondary heights, colors, indicator geometry, selected semantics, roving traversal, dynamic props, controlled selection, focus recovery, and narrow scrolling covered by native 1x/4x GPU tests; manual/automatic keyboard activation exercised in WASM; complete final-build responsive browser checks, inline icons/badges, normalized state snapshots, primary indicator inset, dark themes, RTL, motion, and nested scroll-edge behavior |
 | Text fields | `text_field` | Shared typography and outline fixes verified; focused clipboard input, accepted/rejected/stale cut completion, and edit/policy pipelines tested natively; WASM full-date paste, copy readback, cut, rapid replacement, cross-field Tab routing, keyboard save, and read-only policy verified; complete delayed-write/lifecycle/cross-browser audits and error, supporting text, counters, icons, multiline comparisons |
 | Toolbars | `toolbar` (new) | Floating horizontal/vertical and collapsed layouts tested; docked 64dp height and 4–32dp spacing tested at 132/140/320/800px widths; pointer/keyboard activation and docked actions verified in WASM; complete transitions, FAB combination, scroll behavior, and full state screenshots |
 | Tooltips | `tooltip` (new) | Plain/rich page-level overlays, placement fallback, delayed hover, focus, touch hold, Escape/outside dismissal, and custom actions implemented; native GPU tests verify focus, descriptions, content/variant updates, pixel restoration, release cancellation, later clicks, and scroll cancellation; WASM rendering, word wrapping, pointer actions, repeated forward/reverse Tab, action activation, dismissal, and trigger re-entry verified; complete reference state snapshots, short-viewport/lifecycle/host coordination, caret and motion audits |
@@ -1510,3 +1515,1507 @@ October 18–22 range with the expected endpoint circles and band. The isolated
 month-scroll interval has no slow-frame or error records. Initial navigation
 through the date sections still records 42–53ms construction frames, down from
 the earlier 94–133ms observations; cold mounting is not eliminated by this fix.
+
+## Flexible app bar layouts
+
+The app bar audit on 2026-10-20 uses the current
+[website specification](https://m3.material.io/components/app-bars/specs), including
+its small/medium-flexible/large-flexible measurement figures. Baseline medium
+and large layouts are not the target. The current AndroidX
+[small](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/AppBarSmallTokens.kt),
+[medium flexible](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/AppBarMediumFlexibleTokens.kt),
+and [large flexible](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/AppBarLargeFlexibleTokens.kt)
+tokens independently identify the height and typography presets.
+
+`top_app_bar` now accepts `TopAppBarVariant`, `AppBarTitleAlignment`, and an
+optional subtitle. Small bars remain 64dp high. Medium flexible bars use
+112dp without a subtitle and 136dp with one. Large flexible bars use 120dp
+and 152dp. Title/subtitle styles are Title Large/Label Medium,
+Headline Medium/Label Large, and Display Small/Title Medium respectively.
+Navigation and actions stay in the first 64dp row. Expanded text starts at
+64dp and keeps a 16dp leading inset. A title-only flexible bar retains 12dp
+below its text; subtitle variants reserve 16dp or 20dp. Wrapped text grows the
+container while keeping that space, subject to host constraints.
+
+The compact bar uses a 4dp outer control inset, a 48dp standard icon-button
+target, and a 4dp title gap, placing its title at 56dp when navigation exists
+and 16dp otherwise. Center alignment uses the entire bar width and shifts
+only as needed to avoid navigation or actions. Action measurement precedes
+title allocation, independently of published reading order. The toolbar
+preserves navigation, title/subtitle, and action semantics instead of clearing
+its descendants. Leading title areas still fill their allocation for modifiers
+such as desktop window dragging. Centered title areas follow content bounds.
+
+Navigation/action slot color contexts update with their props. Standard icon
+buttons can opt into these colors with `IconButtonColorStyle::Inherited`;
+explicit vibrant icon-button styles keep their own color policy. The example
+page adds a retained size/subtitle/alignment selector and working navigation,
+search, and options actions near the top of the Material catalog.
+
+Native 1x/4x GPU scenarios run in isolated child processes at 1.5 density.
+They check all six height/typography combinations, control insets, globally
+centered titles with asymmetric action widths, collision avoidance with four
+actions, published reading order, mutable inherited icon colors, real pointer
+callbacks, no-navigation insets, wrapped titles with retained bottom padding,
+and identical pixels after a 1x1 viewport and recovery. The complete component
+suite passes 344 tests, including the opt-in GPU cases; all 110 component
+rustdoc examples pass. Formatting, import checks, the release WASM build, and
+the Tessera call-color check pass.
+
+Browser checks verify all three variants, subtitle height restoration,
+global centering, a pointer search action followed by Tab/Enter on options,
+and retained values across a 390px viewport and normal-size recovery. The
+final browser error log is empty. Screenshots are retained outside the
+repository under `tessera-app-bar-qa`. These observations are component
+implementation evidence rather than a normalized screenshot-diff claim.
+
+Search-bar composition, custom graphic title slots, collapse and nested-scroll
+integration, on-scroll color transitions, baseline/rasterization comparisons,
+complete normalized state snapshots, dark themes, and motion remain open.
+This entry does not establish complete catalog or pixel equivalence.
+
+## Date range calendar cold construction and visual nodes
+
+The first range-calendar mount previously used the lazy list's fallback of
+eight estimated items before measuring its viewport. Each item was a complete
+336dp month, so the cold frame constructed nine months for a 360dp calendar.
+The calendar now supplies its known viewport cap, and lazy lists apply that
+cap to item selection before measurement as well as to reported layout size.
+The same cold frame now constructs two months. A production-component layout
+test checks the initial construction bound on both list axes without timing
+assertions.
+
+Calendar dates now draw their explicit fill, outline, and interaction state
+through the existing shape pipeline instead of constructing a general surface
+and its content-color/elevation providers for every date. The shared single
+date picker benefits as well. The 48dp target, 40dp visual, fractional text
+centering, date semantics, and existing pointer handling are retained.
+
+The release headless comparison uses the complete example at 1316x1307 physical
+pixels, 1.5 density, and 4x sampling. Identical navigation reaches the range
+calendar, settles for 35 frames, then scrolls by 12 physical pixels per frame
+for 80 frames. CPU times include profiling overhead; GPU timestamp readback
+waits are outside CPU frame totals. These are local measurements, with other
+build activity on the host, rather than a cross-device frame-rate guarantee.
+
+| Measurement | Before | Fixed |
+| --- | ---: | ---: |
+| First range mount: component construction | 20.80ms | 3.32ms |
+| First range mount: CPU frame | 47.34ms | 10.02ms |
+| Scroll: mean CPU frame | 7.59ms | 6.85ms |
+| Scroll: mean component construction | 1.19ms | 0.92ms |
+| Scroll: mean GPU timestamp | 0.18ms | 0.17ms |
+| Settled scene nodes | 3096 | 2544 |
+
+The initial and final-scroll PNGs are byte-identical between runs. Raw traces,
+snapshots, and the compact comparison are in the ignored
+`target/date-range-current` directory. Native 1x/4x GPU range scenarios also
+check that hovering paints only the circular visual and leaving clears the
+state layer, alongside selection, disabled dates, range bands, manual input,
+and narrow/collapsed resize recovery. Nested lazy-list GPU scenarios select a
+date, verify focus, scroll until its month is unmounted, and check that focus
+does not move to an unrelated control or change the outer scroll position.
+All eleven date-picker tests and all 285 non-GPU component tests pass.
+
+The rebuilt WASM example also renders and selects a cross-month range. A
+separate focus-lifecycle audit identified the outer-page jump observed while
+scrolling a focused month out of view; the corrections are described below.
+A browser frame also reported 30.3ms in draw-command work with no component
+construction. The cold-construction measurements above do not establish that
+all scrolling stalls are resolved across devices and browsers.
+
+## Virtualized calendar focus and hidden app-bar semantics
+
+The range calendar now owns a focus restoration scope whose stable fallback is
+the calendar viewport. Unmounting a focused month preserves the selected range
+and restores focus locally without revealing an unrelated control elsewhere
+on the page. The viewport can receive restored focus but does not add a Tab
+stop. Forward and reverse traversal use a directly focused, skipped target as
+an ordering anchor while continuing to exclude it as a traversal destination.
+This prevents navigation from restarting at the beginning of the page after
+calendar scrolling.
+
+Windowed and headless frame completion now share persistent-focus cleanup.
+Headless previously retained focus handles for unmounted dates, leaving focus
+waiting for a reattachment and masking the windowed restoration behavior.
+Cleanup detaches every removed handle before choosing a surviving restoration
+target. Automatic recovery uses explicit scopes; removing unscoped focus clears
+it instead of activating an unrelated global control. Core regressions failed
+before these changes and cover surviving scope fallbacks, unscoped removal,
+forward/reverse skipped-target navigation, scoped traversal, and empty wrapping.
+The nested calendar GPU scenarios also navigate into August after virtualizing
+the selected July date and assert that the outer list position stays unchanged.
+
+Accessibility publication now excludes unplaced layout subtrees while keeping
+composition wrappers transparent. A completely hidden small EnterAlways app
+bar therefore stops publishing its navigation button. The existing placement
+regression covers semantic visibility and focus through placement, hiding, and
+restoration, alongside input geometry and drawing. Both 1x/4x app-bar
+scrolling scenarios pass the hidden-navigation assertion.
+
+Verification: 109 core tests, all 349 component tests including native GPU
+scenarios, and 201 runnable rustdoc examples pass. The release WASM build and
+Tessera call-color check also pass. At a 907x871 CSS-pixel viewport and 1.5
+density, the browser sequence selects October 29, scrolls October out of the
+calendar, then uses Right and Enter to complete October 29–November 1 without
+moving the outer page. Screenshots are saved outside the repository in
+`tessera-date-range-qa` under the local visualization directory. This closes
+the reproduced scrolling/focus regression; docked variants, full modal
+integration, the complete keyboard audit, and normalized catalog comparisons
+remain on the coverage checklist.
+
+## Calendar keyboard navigation
+
+Both calendar bodies now use the [date-picker keyboard conventions](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/examples/datepicker-dialog/):
+one date participates in Tab navigation; arrows move by day or week; Home/End
+use the configured week start; Page Up/Down move by month; shifted page keys
+move by year. Short months and allowed-year endpoints clamp the target date.
+Focus movement preserves selection until Enter or Space activates a date.
+Unavailable dates remain discoverable during calendar navigation, with disabled
+semantics and a visible focus layer, while activation stays disabled. This is
+an intentional composite-control policy consistent with the
+[focusability guidance](https://www.w3.org/WAI/ARIA/apg/practices/keyboard-interface/#focusability-of-disabled-controls).
+
+A shared calendar focus handle is rebound to the current date stop. Requested
+targets receive focus after their new bounds are published, including when a
+different virtualized month must be built. Following keyboard input waits for
+that layout/focus transition, preserving rapid navigation followed by selection.
+Calendar arithmetic uses wide day counts so supported integer-year endpoints
+do not overflow intermediate calculations.
+
+Three algorithm tests check day/week movement, Sunday/Monday week boundaries,
+month/year changes, leap days, short months, and year limits. Existing native
+1×/4× range scenarios additionally verify one-stop Tab exit without selection
+changes and request focus on an unavailable date through the production
+controller, checking disabled semantics, visible focus pixels, and pixel
+restoration after clearing focus. All 16 date-picker tests, all 288 non-GPU
+component tests, and 111 component rustdoc examples pass. Actual key-event
+routing is checked in the browser rather than inferred from arithmetic tests.
+
+WASM checks at 907x871 CSS pixels include October 29–November 7 range selection
+through week boundaries, month/year keys, and Enter; reverse Tab and Space then
+select November 14–December 14 and reach Save. Single-date checks include
+October 31→November 30 focus, rapid mixed navigation, February 29, 2024→February
+28, 2025 focus without premature selection, Enter/Space activation, and both Tab
+directions through Cancel/OK. At 390x844, range day/week/month navigation and
+Space select November 14–December 22. The viewport override is reset afterward.
+Screenshots are in `tessera-calendar-keyboard-qa` under the local visualization
+directory.
+
+A release headless comparison for the keyboard implementation, before the
+semantic-container correction below, replays the same complete-example navigation at
+1361x1307 physical pixels, 1.5 density, and 4× sampling, then scrolls the range
+calendar by 12 physical pixels for 80 frames. The initial and final-scroll PNGs
+are byte-identical, sampled node counts match, and cold construction still
+mounts two months. Local measurements are:
+
+| Measurement | Prior binary | Keyboard build | Repeat |
+| --- | ---: | ---: | ---: |
+| Mean CPU frame | 9.73ms | 10.99ms | 11.43ms |
+| 95th-percentile CPU frame | 12.54ms | 13.61ms | 14.10ms |
+| Mean component construction | 1.27ms | 1.33ms | 1.43ms |
+| Mean GPU timestamp | 0.094ms | 0.117ms | 0.101ms |
+
+The baseline executable predates shared headless focus cleanup as well as the
+keyboard changes, so these timings do not isolate keyboard overhead. A matched
+lifecycle baseline is needed before attributing the CPU increase. Raw traces,
+frame marks, screenshots, and a compact summary are in the ignored
+`target/date-keyboard-current` directory; orchestration ran in memory without
+adding a temporary script file.
+
+Resizing the complete browser example from its normal viewport to 390px
+changes the visible section from the single-date picker to the range picker;
+selection values survive and widening returns to the single-date section.
+Outer lazy-list scroll-anchor retention remains open. Docked/modal variants,
+year-grid keyboard behavior, full grid semantics, dark themes, and normalized
+reference screenshots also remain on the catalog checklist.
+
+### Calendar semantic container publication
+
+The single-date picker, its date grid, and its year list attached semantic
+containers with descendant publication disabled. This hid interactive content
+from the published tree even though layout snapshots and pointer input worked.
+The containers now publish their descendants as named groups. Before the fix,
+the new native regression observed zero published July date buttons instead of
+31. Native 1×/4× scenarios now verify all July dates, focused-date publication,
+one-stop Tab exit, published year selection and its month update without date
+selection, and the manual-entry text input. This is distinct from the remaining
+full grid-role and year-grid keyboard audits.
+
+The final WASM build passes the call-color check. Its browser confirmation
+selects October 31, moves to November 30, advances to November 30, 2027, then
+uses Enter and two Tab steps to confirm that date. No browser errors are
+captured during this sequence; `calendar-keyboard-final.png` records the result.
+
+The other conditional test-tag containers were inspected as well: FAB menu
+groups already publish descendants, extended FAB content deliberately hides
+decorative content, and the clock dial is a single focusable interaction surface.
+Its role/value/action semantics need a separate time-picker audit.
+
+### Range calendar cell construction and idle drawing
+
+A browser revisit captured a 61.9ms entry frame (43.7ms construction, 12ms
+layout/command processing, and 6.2ms rendering). Crossing a month also captured
+a 72.6ms frame dominated by construction. These CPU-side warnings are distinct
+from GPU timestamp execution; another frame spent 38.5ms in layout/command
+processing without construction. Host compilation was active during this
+inspection, so these observations identify phases rather than a stable frame
+rate.
+
+The range calendar now places its range band in the date's existing target
+layout instead of wrapping every grid cell in another layout component. Empty
+and unselected cells no longer construct that wrapper. Range endpoints retain
+their half-cell bands and the shared date target retains its 48dp hit area and
+40dp circular visual. Idle dates with no fill or outline also omit their
+fully transparent circle command; text and active interaction layers remain.
+
+The existing 1x/4x native range scenarios additionally check both inward band
+edges and the absence of a band outside a same-day selection. Their retained
+assertions cover hover clearing, disabled focus, selection, nested scrolling,
+manual input, and pixel restoration after narrow and collapsed viewports.
+
+Verification passes all 16 date-picker scenarios, including native 1x/4x GPU
+coverage, and 288 ordinary component tests. Formatting, import grouping, the
+Tessera call-color check, and the release WASM build pass. In the rebuilt
+browser example, October 29-31 keeps its joined range band; selecting October
+29, scrolling October out of view, then pressing Right and Enter completes
+October 29-November 1 without moving the outer page. Browser proof is saved
+as `range-band.png` and `range-scroll-focus.png` in the local visualization
+directory, outside the repository.
+
+After compilation finished, a paired release headless measurement ran both
+executables sequentially with identical keyboard/focus lifecycle code, at
+1361x1307 physical pixels, 1.5 density, and 4x sampling. Each run selects
+October 29-31, settles, then scrolls 12 physical pixels per frame for 80 frames.
+The baseline already contains the two-month construction cap and semantic
+publication fixes; this comparison isolates the subsequent cell-layout and
+transparent-draw changes rather than the earlier keyboard work.
+
+| Measurement | Before cell optimization | After |
+| --- | ---: | ---: |
+| First range mount: scene nodes | 2296 | 2044 |
+| First range mount: CPU frame | 17.10ms | 14.99ms |
+| Scroll: mean CPU frame | 10.75ms | 8.88ms |
+| Scroll: P95 CPU frame | 12.47ms | 10.86ms |
+| Scroll: mean construction | 1.37ms | 1.14ms |
+| Scroll: mean layout/command processing | 5.63ms | 4.74ms |
+| Scroll: mean command recording (included above) | 2.15ms | 1.78ms |
+| Scroll: mean GPU timestamp | 0.082ms | 0.095ms |
+
+Initial and final-scroll PNG files are byte-identical. CPU frame time falls
+about 17% in this local sample; the tiny GPU timings do not establish a GPU
+speedup. Raw traces, frame marks, snapshots, and `band-summary.json` are in the
+ignored `target/date-keyboard-current` directory. The temporary baseline
+executable was removed after measurement. Browser startup and large outer-page
+jumps can still produce cold frames; this result is not a guarantee that every
+browser frame meets a fixed refresh-rate budget.
+
+## Layout visibility and keyboard focus
+
+A fully collapsed small app bar already omitted its navigation controls from
+drawing, pointer geometry, and accessibility, but its focus registrations
+remained keyboard traversal destinations. In the browser, advancing from the
+title-alignment control needed three extra Tab steps through the invisible
+back, search, and menu controls before reaching the carousel controls. Enter
+on a hidden control was already blocked by input geometry; activation was not
+the failure.
+
+Focus eligibility now uses completed layout placement. An attached target
+without a placed rectangle rejects direct focus and linear traversal. Hiding
+the active target releases focus and capture. Requests before the first layout
+remain supported, and a placed target completely outside an ancestor's clip
+remains eligible for keyboard reveal. Temporarily detached scopes also retain
+their pending target until reattachment; their lifecycle is separate from an
+attached, unplaced subtree.
+
+The existing core placement regression now covers active/captured focus,
+direct requests, forward/reverse traversal, and a clipped but placed sibling,
+alongside geometry, drawing, input, and semantics. It failed before the fix
+because the hidden target retained focus. A separate production focus-tree
+scenario protects scope detachment, completed layout, and later reattachment;
+it caught an over-broad cleanup condition during implementation.
+
+Native 1x/4x app-bar scrolling scenarios include a real content button. They
+check traversal with the small header completely hidden, returning both header
+and body controls to traversal after expansion, and reverse traversal, without
+locking scaffold paint/composition order. Scaffold-wide reading order remains
+a separate audit.
+
+Final verification passes 110 core tests, all 354 component tests including 66
+native GPU scenarios, and 201 runnable rustdoc examples. Formatting, import
+grouping, the call-color check, and the release WASM build pass. In the rebuilt
+browser example, the same four Tab steps from title alignment followed by Enter
+activate the carousel layout control, whereas the prior build needed three
+additional steps. Reverse Tab reaches Reset scroll without entering the hidden
+header; after resetting, Tab and Enter activate the visible back button again.
+No browser errors are captured. `before-hidden-tab.png`, `after-hidden-tab.png`,
+and `after-expanded-tab.png` record the browser comparison outside the repository.
+
+The catalog remains incomplete: search app bars and custom title slots, full
+normalized reference states, dark themes, motion, and the other listed component
+audits still require implementation or verification.
+
+## Time picker values, selection, and keyboard operation
+
+The dial now exposes individual 48dp buttons with hour/minute labels, values,
+selection, focus, and activation actions, following the
+[time-picker accessibility guidance](https://m3.material.io/components/time-pickers/accessibility).
+Selection is independent of checked state. AM/PM exposes a radio group and
+checked radio buttons. Native accessibility focus requests route to registered
+focus targets without invoking activation callbacks.
+
+Only one value in the dial participates in linear traversal. Arrow keys move
+focus around its values without selecting them; Home/End choose the first/last
+focus destination. Enter or Space selects the focused value without switching
+to minutes. Pointer hour selection retains its automatic switch to minutes,
+and its release cannot also activate a newly mounted minute button. AM/PM has
+one Tab stop and arrow-key selection. Mode, field, and period changes defer
+following keys until the new layout is ready.
+
+Explicit value actions and manual input preserve exact values even with custom
+steps; step parameters apply to pointer snapping. Retained handlers read live
+state, and pointer snapping updates with changed props. Switching a focused
+inner 24-hour value to 12-hour format restores a valid dial focus destination.
+The example exposes format switching, the selected time, and a time-specific
+confirmation status independently of date-picker actions.
+
+Native 1x/4x GPU scenarios exercise published roles, labels, selected/checked
+states, target sizes, stable node identities, focus pixels, forward/reverse
+traversal, live step changes, pointer releases, accessibility actions, and
+manual-entry transitions and actual IME commits to both hour and minute inputs.
+Core regressions cover selection publication and
+focus actions independently of activation. The release WASM build and call-color
+check pass. Browser checks at 907x871 verify arrow focus without value changes,
+Enter selection, one-stop dial exit, period navigation, rapid mode/Tab changes,
+manual entry via paste, keyboard confirmation, and Space selection of the inner
+ring's 23-hour value while retaining the minute value. At 390x844, the dial
+and its actions fit without horizontal clipping. Viewport restoration retains
+the selected time. Proof images are stored outside the repository under
+`tessera-time-picker-qa`.
+
+Verification passes 130 core tests with headless/testing/profiling enabled
+(two GPU scenarios remain opt-in), 17 foundation tests, the full 356 component
+scenarios including 68 opt-in GPU cases, and the affected runnable rustdoc
+examples. The two time-picker GPU scenarios pass again after extending manual
+entry coverage. Formatting and import grouping pass.
+
+Strict Clippy remains blocked by existing warnings in the macro, glyphon, core,
+and component code. These include enum size, argument counts, and existing
+unwrap/closure lints; this batch does not establish a clean strict-lint baseline.
+
+At this checkpoint, horizontal/adaptive layouts, full modal integration, normalized light/dark
+reference states, and motion comparisons remain open. The current WASM
+AccessKit adapter does not publish a browser semantic tree, so the native
+accessibility checks are not evidence of Web screen-reader support.
+
+## Horizontal time picker and period hit targets
+
+`TimePickerLayout::Horizontal` places the dial beside the time controls.
+Select it with `time_picker().layout(...)` or
+`time_picker_dialog().picker_layout(...)`. Vertical remains the default. Below
+524dp of available content width, horizontal preference falls back to vertical.
+The same layout nodes, remembered input controllers, and focus requesters remain
+mounted while their placement changes.
+
+The [website measurement diagram](https://m3.material.io/components/time-pickers/specs)
+specifies 96dp time fields, a 24dp separator, a 52dp gap before the 256dp clock,
+and a 216x38dp horizontal period selector. The horizontal dialog omits the
+vertical header gap, retaining its 24dp action spacing. The resulting body is
+524x256dp; normal 24dp dialog padding makes the complete width 572dp. Horizontal
+24-hour fields use 96dp rather than the portrait variant's 114dp width.
+
+The period selector previously constrained its clickable surfaces to 36/40dp
+in vertical mode. Its visual group now paints independently of the radio
+targets. Each target is 48dp high: horizontal targets extend above and below
+the 38dp visual row; vertical targets extend only beyond the outer edges and
+meet at the shared boundary. The visual clipping does not clip their input or
+semantic bounds. Shared interaction state keeps focus/hover feedback within
+the visible group, and decorative labels are excluded from accessibility.
+
+Layout regressions cover both formats, the exact 524dp boundary, and narrower
+containers. Native 1x/4x GPU scenarios retain the focused period's published
+identity through wide/narrow/wide resizing, check the 96dp horizontal 24-hour
+field, and activate the extended hit areas with real pointer samples.
+Caller-provided semantic roles and labels remain intact. A constrained-width
+dialog regression verifies that the vertical header gap returns when the picker
+itself cannot accommodate the horizontal body, even inside a wide parent.
+
+The final six affected tests pass, including both opt-in GPU scenarios. The full
+357-test component suite passed before the final constrained-width and semantic
+preservation refinements; the affected tests were rerun after those refinements.
+Both runnable time-picker rustdoc examples, the final release WASM build, and
+call-color checking pass.
+
+Browser checks on that final WASM build verify horizontal 12/24-hour layouts,
+period selection with arrows, dial focus movement without a value change,
+Enter activation, manual entry of 19:56, and keyboard confirmation. At 390x844,
+the horizontal preference falls back to a complete vertical picker without
+horizontal clipping; restoring 907x871 restores horizontal placement and retains
+19:56 and the confirmation status. Browser error logs are empty. The outer lazy
+list still shifts its scroll position during resizing, so preserving the visible
+item's viewport anchor remains open. Proof images are stored outside the
+repository in `tessera-time-picker-qa`: `wasm-horizontal.png`,
+`wasm-horizontal-24-hour.png`, `wasm-horizontal-input-confirm.png`, and
+`wasm-horizontal-narrow.png`.
+
+Automatic layout selection, short-window modal behavior, complete normalized
+reference states, dark themes, and motion comparisons remain open.
+
+## Responsive lazy-list anchoring
+
+Remeasuring items before a visible item previously updated cached offsets
+without compensating the scroll position. A native layout scenario reproduced
+an 80px shift after a cross-axis resize. Lazy columns and rows now preserve the
+first item start inside the viewport, falling back to the partially visible
+item when no subsequent start is visible. This avoids anchoring a mostly hidden
+large card instead of the following visible section.
+
+The correction translates both the displayed scroll position and its animation
+target. Remaining smoothing distance and the idle state are preserved. Placement
+reads the corrected position in the same layout pass, including cached
+placement updates and sticky headers.
+
+The production-layout regression covers both orientations, shrinking and
+expanding cross-axis constraints, and oversized items with no subsequent visible
+start. Assertions check actual item sizes as well as stable viewport positions.
+The final 360-test component suite passes, including all opt-in GPU scenarios;
+the release WASM build, call-color check, formatting, and import grouping pass.
+
+On that WASM build, a constant-density browser cycle of 907x871 to 390x844
+and back preserves the time-picker heading at approximately y=180 CSS pixels
+and retains 10:08. The horizontal preference falls back to vertical and returns
+without moving the section's start. Canvas backing-store and client dimensions
+match at all three checkpoints, establishing a constant 1x density. Proof images
+are `wasm-anchor-density1-wide.png`, `wasm-anchor-density1-narrow.png`, and
+`wasm-anchor-density1-restored.png` under the external `tessera-time-picker-qa`
+directory.
+
+At this checkpoint, browser viewport emulation also changes the canvas density: the narrow override
+uses a 390x844 backing store for 390x844 CSS pixels, while restoring the host
+produces a 585x1266 backing store at the same CSS size. Scroll retention across
+this 1x/1.5x density transition remains open and must be distinguished from
+constant-density resizing. The document itself stays at scroll offset zero;
+the observed displacement is inside the rendered application.
+
+## Scroll retention across display densities
+
+Scroll controllers now track the density of their physical coordinates. A density
+change converts the current position, target, interpolation state, viewport and
+content extents, and active inertial motion together. New programmatic positions
+are interpreted in current physical units. Pending lazy-list requests are converted
+once, including retained-controller restoration.
+
+Lists, regular grids, and staggered grids retain a logical measurement alongside
+each cached physical size. Rebuilding density-dependent offsets uses that logical
+measurement, including items outside the current viewport. Repeated conversion
+therefore does not accumulate integer truncation in unvisited measurements.
+Visible items still publish their actual new measurements. The staggered-grid
+extent also includes the complete final item; it previously subtracted a spacing
+that was already absent from the stored lane end.
+
+Production layout tests exercise scrolled rows and columns through 1x, 1.25x,
+1.5x, 2x, and back, including requests issued immediately after a density change.
+Separate cache regressions cover unvisited list measurements, grid lines,
+staggered lanes, fractional-density truncation, and the final-item extent.
+Controller tests verify remaining animation distance and integrated inertial
+displacement. Grid cache tests do not establish complete grid interaction or
+browser-resize coverage. All 365 component tests, including opt-in GPU scenarios,
+and all 111 runnable documentation examples pass. Release WASM, call-color,
+formatting, and import checks pass.
+
+On the final WASM build, the time-picker section survives a host 1.5x to 1x
+density change, 907x871 to 390x844 and back, and restoration to host density.
+Its title remains around y=245 CSS pixels instead of jumping out of view, and
+10:08 is retained. Canvas dimensions confirm both density changes. A residual
+shift of approximately one CSS pixel remains after the cycle; exact fractional
+placement and rasterization recovery are still open. Browser error logs are
+checked separately from native accessibility coverage. Proof images in the
+external `tessera-time-picker-qa` directory are `wasm-dpi-host-before.png`,
+`wasm-dpi-density1.png`, `wasm-dpi-narrow.png`, and `wasm-dpi-host-restored.png`.
+
+## Tabs geometry and navigation
+
+The [current tab specifications](https://m3.material.io/components/tabs/specs)
+define 48dp text tabs, 64dp stacked icon-and-text tabs, 3dp primary indicators,
+2dp secondary indicators, and a 1dp outline-variant divider. Secondary labels
+use on-surface while both indicator variants use primary. Primary indicators
+round only their top corners. Fixed rows distribute fractional-density pixel
+remainders without gaps and fall back to scrolling before targets become smaller
+than 48dp.
+
+Manual activation separates arrow focus from Enter/Space selection. Automatic
+activation selects during arrow navigation. A tab strip has one traversal stop;
+disabled tabs are skipped, removed focused tabs recover to an enabled destination,
+and off-screen focus scrolls into view without selecting it in manual mode.
+Explicit per-tab selection stays controlled by the caller. Variant, icon, color,
+enabled, and selection updates preserve retained nodes and callbacks.
+
+Six focused regressions pass, including native GPU readback with one and four
+samples at 1.5 density. They exercise actual semantic actions, focus traversal,
+selection callbacks, dynamic variants, disabled focus actions, focused-item
+removal, narrow resizing, and indicator/label pixels. A separate spring test
+preserves in-flight motion across density changes. These checks do not establish
+complete reference equivalence; the remaining catalog items above stay open.
+
+The complete component suite passes all 369 tests, including opt-in GPU scenarios,
+and all 111 runnable documentation examples pass. Release WASM, call-color,
+formatting, and import grouping checks pass. This browser session exposes no
+viewport override capability; native narrow-layout assertions must not be reported
+as browser responsive coverage.
+
+Browser checks verify manual arrows without selection, Enter/Space
+activation, forward/reverse Tab exit and re-entry, disabled-tab skipping,
+automatic activation counts, and dynamic primary/secondary and icon changes.
+Browser semantics remain a canvas image, so these keyboard observations do not
+establish screen-reader publication.
+
+Browser testing also exposed an unstable large-frame spring: after Home/End,
+the content changed while the indicator escaped the strip. Tabs now use the
+shared subdivided spring integrator. The four-sample GPU scenario runs with
+explicit 50ms frame intervals and verifies indicator and focus-scroll convergence;
+the one-sample scenario retains 60Hz timestamps. Both pass, including retained
+selection, dynamic props, and narrow targets. Repeating the same pointer,
+Home, and End sequence on the rebuilt WASM leaves Ferries selected with the
+indicator correctly beneath it and exactly three activations. Browser error logs
+are empty. Proof images `wasm-slow-frame-before.png` and
+`wasm-slow-frame-after.png` are retained in the external `tessera-tabs-qa`
+directory; they record the failure and corrected placement rather than a
+normalized reference pixel comparison. The final 369-test component suite and
+111 documentation examples pass after the integration change.
+
+## Card motion and clipped content
+
+Card elevation now uses the shared subdivided spring integrator, retaining
+velocity and resetting its time origin when retargeted after idle. Regressions
+cover 16.7ms, 50ms, and 200ms intervals and a five-second idle gap. Card containers
+keep their specified color roles rather than adding shadow-dependent tonal tint.
+An optional accessible label names the main action; disabled and static cards
+publish neither focus nor click actions.
+
+Cards opt into `surface().clip_content(true)`. The shape mask encloses the
+painted surface and descendants while the shadow remains on the outer layout.
+Draw parameter updates are separated from content contexts so elevation and
+state-layer animation does not rebuild the content slot. Native 1x/4x GPU tests
+check real input and semantics, theme/variant changes, rounded opaque content,
+external shadows, exact hover pixel restoration, focus reattachment, and resize
+recovery at 1.5 density, including 50ms frames. All 372 component tests and 111
+documentation examples pass; release WASM and call-color checks pass. Full
+normalized reference and dark-state coverage remains open.
+
+On the rebuilt WASM, one pointer click and Enter/Space across all three variants
+produce exactly four activations. Disabled and static cards reject clicks and
+are skipped by Tab. Restoring clickable mode allows the first card to receive
+Tab and Enter, advancing the count to five. Browser error logs are empty.
+`wasm-disabled.png` and `wasm-enabled-restored.png` in the external
+`tessera-card-qa` directory record these states. The browser still publishes only
+a canvas image; native semantics coverage does not establish web screen-reader
+support, and native resizing does not establish browser viewport-resize coverage.
+
+## Card foreground feedback and dark media
+
+Surface borders, state layers, and ripples now occupy a final measured foreground
+child, after content. Opaque media therefore cannot hide them. Foreground bounds
+match the measured surface without contributing to its natural size; rounded
+clipping still encloses content while shadows remain outside. Plain filled
+surfaces without feedback do not create a foreground layout. This uses ordinary
+draw commands without adding scene texture captures.
+
+Outlined cards use the current generated token values: 1dp hover elevation and
+`on_surface` for the focused outline. Disabling a card clears retained interaction
+flags, and static cards do not animate interaction elevation. Native tests retain
+exact idle-pixel restoration and assert visible borders and feedback over opaque
+red content at 1.5 density with 1x/4x MSAA.
+
+Dark container samples and text rows are compared against independently colored
+reference surfaces for every variant. The selected seed aliases
+`surface_container_highest` with `surface_variant`: the official
+[Card defaults](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Card.kt)
+and [content-color lookup](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ColorScheme.kt)
+therefore resolve filled-card content to `on_surface_variant`; elevated and
+outlined content resolve to `on_surface`. The darker filled text is preserved
+rather than overridden by visual guesswork. The native regression compares actual
+glyph pixels and verifies exact card restoration after returning to the light
+theme.
+
+Carousel image regressions also distinguish focused images from idle images:
+focus feedback must remain visible after activation, then clearing focus restores
+the initial pixels. Density-change raster comparisons move the real pointer
+outside the resized viewport content before checking colors, avoiding accidental
+hover state in those geometry checks.
+
+WASM verification at a 1730x956 CSS viewport and 1.25 device-pixel ratio confirms
+the focused outline remains visible around the media header. Enter activates
+exactly once; disabling removes focus feedback and rejects a media click without
+changing the activation count. Re-enabling and restoring the light theme recover
+the three card variants. Browser error logs are empty. Screenshots
+`wasm-dark-media-focused.png`, `wasm-dark-media-disabled.png`, and
+`wasm-light-media-restored.png` remain in the external `tessera-card-qa` directory.
+Full normalized reference comparisons, fractional border edges, custom shapes,
+minimum targets, and browser viewport-resize coverage remain open.
+
+The completed component test binary passes all 372 tests, including native GPU
+cases, and all 111 documentation examples pass. The example check and release
+WASM call-color/build checks also pass. These results precede additional ongoing
+layout-cache changes in the shared workspace. One intermediate WASM build exposed
+a separate navigation regression: clicking Material Components or the drawer
+scrim showed feedback without switching or closing the drawer. A subsequent
+rebuild with the updated cache code restores drawer navigation. The external
+`wasm-layout-cache-navigation-regression.png` and `wasm-navigation-restored.png`
+record the failure and recovery; later cache changes still require integration
+verification.
+
+## Nested card actions
+
+The card GPU scenario now includes an actual child button. It first reproduced
+both the child callback and the outer card callback firing for one click. Click,
+toggle, and selection modifiers now claim tap presses in the Main pass, separately
+from sample consumption. Ancestor click recognizers cannot start that gesture or
+take its focus; scroll and drag observers still see the press. A parent click
+handler's long-press recognizer also ignores a press claimed by a descendant.
+
+Native 1x/4x MSAA checks exercise the nested button through real pointer dispatch,
+including presses and releases separated by a frame and queued together before
+one frame. They assert exactly one child activation, unchanged outer-card count,
+and child focus. The Carousel image-drag scenarios also pass with exclusive taps.
+A direct gesture regression verifies that claiming a press does not consume it
+and that observing recognizers still receive press/release samples. The example
+offers a secondary-action toggle and separate primary/secondary counters for
+browser verification.
+
+In the release WASM, clicking each variant's secondary button and pressing Enter
+on the last focused button produces four secondary activations and zero card
+activations. A card-body click and Enter then produce two card activations without
+changing the secondary count. Disabling rejects the child click; restoring enabled
+static cards allows the child action while retaining the card count. Error logs
+are empty. Dragging a clickable Carousel image advances the current item without
+activating an item; `wasm-carousel-exclusive-tap-drag.png` records that check.
+The external `wasm-nested-actions.png`,
+`wasm-static-secondary-action.png`, and `wasm-nested-actions-restored.png` record
+these states. Foundation's 18 tests and the 111 component documentation examples
+pass. The refreshed integrated native binary passes all 375 component tests,
+including the updated text-cache fixtures, nested card actions, and image-drag
+regressions. Release WASM and call-color checks pass. This validates the integrated
+snapshot used for these runs; later shared-workspace cache edits require their
+own verification.
+
+
+## Radio semantics, selection, and interaction colors
+
+Radio groups publish a `RadioGroup` with optional accessible name and description,
+preserving their explicitly labelled radio children. Disabled radios retain their
+role, description, checked state, and 48dp target while exposing no focus or click
+actions. Re-enabling retains the semantic node identity. Directional traversal
+wraps by default and skips disabled choices; `wrap(false)` remains available.
+
+The directional-selection observer also preserves interaction feedback, avoiding
+an overwritten callback that previously moved focus without changing the selected
+value. Arrow traversal selects immediately. Tab, explicit accessibility focus,
+and automatic focus restoration preserve the selected value. A pointer press only
+moves focus: selection waits for a completed click, and dragging away cancels it.
+The native fixture tests these production input paths rather than duplicating
+selection logic.
+
+Current [Radio tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/RadioButtonTokens.kt)
+use `on_surface_variant` for an idle unselected ring and `on_surface` for its
+hover/focus/press states. An explicit unselected color override applies to both
+idle and interacting states. Native 1x/4x GPU readback checks these roles, the
+38% disabled `on_surface` ink, and selected `primary` ink at 1.5 density. A separate
+unselected radio outside the group protects focus feedback without implicitly
+selecting it, and ensures group wrapping cannot escape into a following control.
+
+The example supplies three choices, a middle-option enable toggle, a named group,
+and a selection-change counter. Full normalized reference snapshots, dark themes,
+label alignment, horizontal/RTL visual behavior, toolbar-specific keyboard
+integration, and motion fidelity remain open. The
+[radio-group keyboard pattern](https://www.w3.org/WAI/ARIA/apg/patterns/radio/)
+defines the default keyboard behavior and the separate toolbar behavior.
+
+The integrated native binary passes all 378 component tests, including the
+explicitly enabled GPU cases. All 111 documentation examples and the example
+check pass. The final release WASM artifact also runs successfully in the browser.
+Real Up/Down input selects B, C, A, then C with exactly four changes. Disabling B
+and navigating from A skips to C; clicking disabled B leaves the value and count
+unchanged. After re-enabling B, dragging its press outside leaves C selected;
+completing a click selects B once, and Enter on that selected option does not add
+another change. Browser error logs are empty. The external
+`wasm-radio-navigation.png` records the final state. These results apply to the
+shared-workspace snapshot used for these runs, not subsequent layout-core edits.
+
+### Cross-axis radio navigation
+
+Radio groups use declaration-order traversal for all four arrows: Right/Down move
+forward and Left/Up move backward. The orientation parameter describes the group
+to assistive technology without restricting which arrow keys work. Native 1x/4x
+GPU scenarios cover both announced orientations, disabled-option skipping, edge
+wrapping, preserved group identity, and a following focusable control that must
+not receive a wrapped arrow move. Tab behavior is covered separately below.
+
+The expanded native GPU scenarios pass at 1x/4x MSAA and all 111 documentation
+examples pass. Release WASM and call-color checks pass. In the rebuilt browser
+example, Right, Right, Right, Left select B, C, A, C with exactly four changes.
+After disabling B and clicking A, Right then Left skip B in both directions and
+finish on A with seven changes. Browser error logs are empty;
+`wasm-radio-cross-axis.png` records this state outside the repository.
+
+### Radio Tab entry, exit, and restoration
+
+An opt-in focus policy gives each Radio group one global Tab stop while retaining
+all enabled choices for directional traversal. Entry from either side prefers the
+selected enabled choice, then the first traversable choice. Tab and Shift+Tab leave
+the whole group from any focused choice. A focused choice becoming disabled
+restores focus inside the surviving group without changing its checked value.
+Explicit caller traversal exclusions remain intact.
+
+Focus notifications carry their traversal direction through callback dispatch.
+Radio selects on arrow traversal and completed activation; Tab entry into an
+unselected group and explicit accessibility focus do not select a choice. The
+direction is scoped to each callback and restored after nested callbacks.
+
+The expanded native scenario covers forward/reverse entry and exit, no-selection
+entry, disabled focused-choice recovery, caller-provided traversal exclusions,
+and direction context cleanup, alongside the existing pointer and pixel checks.
+
+The final integrated native binary passes all 378 component tests, including
+opt-in GPU cases, and all 112 core unit tests pass. The 111 component and 90 core
+documentation tests, example check, release WASM build, and call-color check pass.
+In the browser, clearing selection and pressing Tab focuses A with `None` and
+zero changes. Right selects B once; Tab moves directly to the following text
+field. Shift+Tab returns to B, and another Shift+Tab reaches the preceding clear
+button without changing selection. Reverse entry into an unselected group also
+focuses A without selecting it. Space selects A, and subsequent Enter does not
+repeat activation. Browser error logs are empty. External
+`wasm-radio-empty-tab-entry.png`, `wasm-radio-tab-exit.png`, and
+`wasm-radio-tab-activation.png` record these checks. These are integrated snapshot
+results; subsequent visual and group-ownership work requires its own checks.
+
+### Internally managed radio groups
+
+Omitting `selected` on every choice now gives the group responsibility for mutual
+exclusion, including choices using an external controller. Explicit `selected`
+values remain application-controlled; a group should use one ownership mode
+consistently. Selecting another choice clears the previous controller without
+emitting a second activation callback. An initially selected controller and later
+controller-driven selection participate in the same rule. Group state retains
+only a non-owning handle and checks its liveness before clearing a removed choice.
+
+The native regression first reproduced both One and Preset remaining checked
+after clicking One. The updated 1x/4x GPU scenarios verify pointer activation,
+accessibility activation, directional activation, repeat activation, independent
+groups, selected-choice removal and reinsertion, external controller updates,
+and exact callback counts through the real components. The example adds a
+horizontal group without `selected` props and with an activation counter.
+
+All 380 integrated native component tests pass, including opt-in GPU cases. The
+111 component documentation examples, example check, release WASM build, and
+call-color check pass. In the browser, clicking Local A, B, then C leaves only C
+selected with three activations. Repeating C does not increment the count; three
+Left presses select B, A, then C and produce six activations. The independent
+application-controlled group remains on A with zero changes. Tab leaves the local
+group for the following text field, and Shift+Tab returns to C without another
+activation. Browser error logs are empty. External `wasm-radio-uncontrolled.png`
+records the result; normalized reference visuals and toolbar integration remain
+open.
+
+## Boolean control semantics and controlled values
+
+Disabled Checkbox and callback-bearing Switch controls retain their role, name,
+description, checked value, and target bounds without exposing activation or
+focus actions. Re-enabling keeps the same semantic identity. Disabled Switch
+controls retain the 52dp-wide track's 48dp-high interactive target instead of
+shrinking to its visual height. Disabled controls have no tap recognizer that
+could claim an ancestor's click.
+
+Role, label, and checked-value behavior follows the
+[Checkbox pattern](https://www.w3.org/WAI/ARIA/apg/patterns/checkbox/) and
+[Switch pattern](https://www.w3.org/WAI/ARIA/apg/patterns/switch/).
+
+Switch now applies explicit `checked` updates after creation, matching Checkbox's
+controlled-state behavior. Omitting `checked` leaves selection with the controller.
+Both public builders expose their documented controller parameter. Retargeting
+Switch animation uses its current thumb progress so reversing partway through
+does not jump to an endpoint. The controller regression uses explicit timestamps.
+
+The native GPU fixture initially reproduced the missing disabled Checkbox node.
+Its 1x/4x scenarios cover disabled metadata and action rejection, 1.5-density
+targets, forward Tab skipping, external value changes while disabled, stable
+identity after re-enabling, real pointer activation, accessibility activation,
+exact callback counts, disabling during a held press, and subsequent recovery.
+The basic example exposes enable toggles, external value updates, and activation
+counters for independent browser verification. Indeterminate Checkbox and the
+remaining visual token and motion audits remain open.
+
+All 383 integrated native component tests pass, including opt-in GPU cases. All
+111 component documentation examples pass, with the final Switch controller
+example additionally compiled and run after its update. The example check,
+release WASM build, and call-color check pass. In the browser, disabling both
+controls and externally changing Checkbox to false and Switch to true updates
+their visuals without incrementing either callback counter. Disabled clicks leave
+both values unchanged. Re-enabling and clicking each control produces one change
+each; Space and Enter then produce three changes each, matching the displayed
+values. Browser error logs are empty. External
+`wasm-disabled-controlled-values.png` and `wasm-boolean-keyboard-recovery.png`
+record these states; they do not establish complete reference pixel equivalence.
+
+## Checkbox partial selection and independent stroke rendering
+
+The existing Checkbox builder accepts `indeterminate`; its controller exposes
+the corresponding state. Partial selection takes precedence over `checked`,
+publishes the mixed accessibility value, and activates to checked through the
+existing boolean callback. Explicit props remain application-controlled. The
+basic example demonstrates a parent choice with two independently selectable
+children, disabling, and an activation counter.
+
+Native pixel assertions exposed a separate rendering defect: successive
+checkmarks overwrote the same vertex and uniform buffers before submission,
+leaving only the final stroke visible. Selection strokes now use independent
+instance ranges in reusable storage-buffer pages, including across batches and
+scene passes. A centered dash morphs into the checkmark while retargeting from
+the current progress. The glyph keeps its 18dp bounds and 48dp interaction target.
+
+Default selection-stroke width scales from 2dp and rounds down to a physical
+pixel; explicit `checkmark_stroke_width` values retain their physical-pixel unit.
+Checkbox uses the compact check path and square caps, while menu checkmarks keep
+their existing geometry. A zero-length segment caused by tiny animation progress
+uses a valid stroke axis instead of expanding coverage across the entire quad.
+Unselected outlines resolve to `on_surface` while hovered, focused, or pressed;
+an explicit `color` also overrides those states. The resting outline retains
+`on_surface_variant`. Geometry and roles were checked against the current
+[Checkbox implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Checkbox.kt)
+and [Checkbox tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/CheckboxTokens.kt).
+
+The extended 1x/4x GPU scenarios verify mixed semantics, precedence over checked,
+disabled action rejection, controlled and internal-controller activation,
+independent stroke positions and colors, dash-to-check pixels, exact callbacks,
+and reuse of instance pages across subsequent frames and state changes. A
+controller regression uses explicit timestamps for morph reversal.
+
+Additional 1x/4x GPU scenarios exercise display densities 1, 1.5, and 2 through
+real Checkbox components. They verify 48dp targets, dash row coverage, compact
+check-joint pixels, resting/hovered/pressed/focused outline color routing,
+pointer cancellation and focus clearing, and explicit-color precedence. A
+direct stroke scenario verifies that subpixel progress does not fill the quad.
+
+All 384 integrated component tests pass, including opt-in GPU cases. All 111
+component documentation examples pass; the final Checkbox example was also
+compiled and run separately. The example check, final development WASM build,
+call-color check, and formatting checks pass. Browser checks confirm all three
+selected marks remain visible, parent activation selects both children, partial
+selection restores the dash, and disabled clicks preserve the value and callback
+count. Re-enabling and Tab/Space select both children with one activation; Enter
+clears both with one more activation. Browser error logs are empty.
+
+External `wasm-checkbox-independent-checkmarks.png` and
+`wasm-checkbox-mixed-selection.png` record these states. Normalized reference
+color/shape comparisons and exact Expressive transition fidelity remain open.
+
+The geometry follow-up also passes the Checkbox documentation example, example
+check, formatting checks, and release WASM build with call-color checking. The
+complete native component run passes all 386 tests, including opt-in GPU cases
+and menu regressions sharing the selection-stroke pipeline. The
+browser retains all selected marks, Space clears the parent group, Enter restores
+it, and changing one child restores the dash, with exact displayed activation
+counts and no console errors. External `wasm-checkbox-material-geometry.png`
+records the updated rendering.
+
+## Checkbox Expressive motion
+
+Checkbox now uses an analytic spatial spring for appearance and morphing,
+retaining velocity across active-state morph reversals. Deselection holds the
+stroke and morph for 100ms before removal, including deselection while the morph already has
+zero as its target. Entering partial selection from off starts with a horizontal
+dash. Spatial overshoot is retained for morphing. Whole-millisecond sampling and
+spring settling are independent of the number of intermediate frames.
+
+The
+[Expressive motion tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/ExpressiveMotionTokens.kt)
+provide spatial damping/stiffness 0.8/380, default effects 1/1600, and fast
+effects 1/3800. Box, outline, and icon colors use common channel timing in Oklab;
+appearance uses default effects and removal uses fast effects. Disabled box and
+outline changes snap. Explicit controller setters also finish ongoing motion
+and apply the corresponding colors immediately. Default outlines use the same
+whole-pixel rounding as selection strokes at fractional density.
+
+Color interpolation follows the
+[color-vector contract](https://github.com/androidx/androidx/blob/androidx-main/compose/animation/animation/src/commonMain/kotlin/androidx/compose/animation/ColorVectorConverter.kt),
+using the [Oklab conversion equations](https://bottosson.github.io/posts/oklab/).
+Pure regressions compare spring samples against independently integrated values,
+verify frame partition independence and spatial overshoot, and check known
+primary/neutral color coordinates. The controller scenarios cover delayed
+removal during a morph and preservation of incoming velocity.
+
+The real-component 1x/4x GPU scenarios observe stroke progress and rendered fill
+alpha at explicit 50ms/100ms timestamps, accessibility activation and callback
+counts, immediate disabled appearance, and direct controller updates. They
+verify that intermediate morphs change pixels, reversal restores the original
+dash pixels, and settled controls stop their actual frame receiver. The density
+scenarios now also cover 1.25x and distinguish a rounded 2px outline from a
+2.5px outline. All 12 targeted Checkbox tests pass.
+
+All 391 integrated native component tests pass, including opt-in GPU cases.
+The Checkbox documentation example, example check, release WASM build, call-color
+check, and formatting checks pass. In the browser, pointer activation selects
+both children, Space clears them, Enter selects them again, and changing a child
+restores partial selection. Disabled clicks preserve the counter; re-enabling
+and Tab/Space selects both with a single additional activation. The final
+counter is five and browser error logs are empty. External
+`wasm-checkbox-expressive-motion.png` records the settled state after that
+sequence; deterministic native frames provide the motion evidence.
+
+Complete light/dark reference state images and normalized cross-platform motion
+comparisons remain open; these checks do not establish full pixel equivalence.
+
+## Checkbox validation and theme states
+
+Checkbox accepts `is_error` independently from its checked and indeterminate
+values. Default error outlines and fills use Error, and selected icons use
+OnError, following the current
+[Checkbox color tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/CheckboxTokens.kt).
+Explicit outline, fill, and icon colors retain precedence over these defaults;
+disabled appearance takes precedence over error colors. Error details can be
+provided through the accessibility description.
+
+Validation is published through the shared optional `invalid` accessibility
+metadata. Native tests observe Checkbox invalid=True and generic semantic
+invalid=Spelling reaching AccessKit and clearing after updates, while preserving
+node identity, target bounds, and activation counts. Browser screen-reader
+publication remains unverified.
+
+The real-component GPU scenarios check 24 combinations of light/dark theme,
+enabled/disabled state, ordinary/error appearance, and off/on/mixed selection
+at both 1x and 4x sampling. They also cover hover, press, focus, cancelled clicks,
+explicit color overrides, error clearing, and rejected disabled activation.
+Pixel expectations encode independently composed linear colors into sRGB with
+a two-byte tolerance. A focused custom-color case exposed the state layer tinting
+the icon; the Checkbox state layer now draws behind its glyph as a separate
+sibling. Shared Surface foreground behavior is unchanged.
+
+The example includes an interactive Checkbox states preview with theme, error,
+and enabled controls. Browser checks preserve all three selections while
+changing theme and validation, reject disabled clicks, and support Tab/Space
+after re-enabling. Clearing the error retains the selection. Error logs are
+empty; external `wasm-checkbox-dark-error.png` records the final preview.
+
+All 393 integrated native component tests pass, including the 14 targeted
+Checkbox tests and opt-in GPU cases. The 112 core and 18 foundation unit tests,
+111 component documentation tests, 90 core documentation tests, and three
+foundation documentation tests pass. Example checking, release WASM building,
+call-color checking, formatting, and whitespace checks pass. Complete normalized
+reference images and cross-platform motion comparisons remain open.
+
+## Switch interaction colors and passive semantics
+
+Default Switch thumbs now use PrimaryContainer when selected and interacting,
+and OnSurfaceVariant when unselected and interacting, following the current
+[Switch tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/SwitchTokens.kt).
+Hover, focus, and press share these roles. Explicit thumb colors remain effective
+in these states, and disabled colors retain precedence. Existing disabled thumb
+and icon opacity is 38%; disabled track opacity is 12%.
+
+Switches without an activation callback now retain their role, label,
+description, and checked value without adding focus or click actions. Native
+tests observe both checked values and enabled states through the actual AccessKit
+snapshot, reject accessibility activation, and retain zero callback counts.
+
+New 1x/4x GPU scenarios cover light/dark resting track, thumb, and inherited icon
+colors, disabled colors, hover/press/focus thumb colors, explicit overrides,
+stable interactive identity and 52x48dp targets, and cancelled pointer activation.
+Expected pixels independently compose linear color roles and encode sRGB with a
+two-byte tolerance. These checks protect interior colors, not complete reference
+shape or animation equivalence.
+
+All 395 integrated native component tests pass, including opt-in GPU cases.
+The Switch documentation example and related switch examples pass. Release WASM
+building, call-color checking, formatting, and whitespace checks pass. In the
+browser, pointer activation, Space, and Enter produce exactly one callback each;
+disabled clicks preserve the count, and Tab/Space works after re-enabling. The
+final selected state has five activations and no browser error logs. External
+`wasm-switch-state-colors.png` records this state. Normalized reference geometry,
+state-layer/focus-ring comparisons, and Expressive motion fidelity remain open.
+
+## Switch state-layer roles and thumb icons
+
+Switch state layers use Primary for selected controls and OnSurface for
+unselected controls instead of inheriting the surrounding content color. These
+roles, the 40dp layer, and the 16dp selected/unselected icon sizes follow the
+[Material switch tokens](https://github.com/material-components/material-web/blob/main/tokens/versions/v0_192/_md-comp-switch.scss).
+Thumb slots now provide a local 16dp icon-size default, retaining explicit icon
+sizes and state-dependent vector icon colors.
+
+The existing 1x/4x GPU scenarios now put the Switch inside green content to
+expose accidental inheritance. They verify resting and disabled layers are
+absent, hover layers blend the expected role at 8%, and focus layers blend at
+10%, including dark themes. Rendered vector-icon boundaries distinguish the
+16dp default from both the previous 24dp default and an explicit 12dp override,
+with selected and unselected icon-color checks.
+
+The basic example adds a Show/Hide thumb icons control. Browser checks cover
+the unselected cross, selected check, keyboard activation, disabled clicks,
+re-enabling, and removing/restoring the icon slot without altering selection or
+activation counts. The final selected control has three activations and no
+browser error logs. External `wasm-switch-icons-and-state-layer.png` records it.
+Focus-visible rings, full ripple timelines, normalized reference geometry, and
+Expressive motion fidelity remain open.
+
+The complete native component run passes all 395 tests with opt-in GPU coverage.
+Switch documentation examples, the release WASM build, call-color checking,
+formatting, and whitespace checks pass for this follow-up.
+
+## Switch Expressive spatial motion
+
+Switch size and offset transitions use the FastSpatial spring selected by the
+current [Switch implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Switch.kt).
+The [Expressive motion tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/ExpressiveMotionTokens.kt)
+specify damping 0.6 and stiffness 800. Pressing snaps to the pressed geometry;
+release, selection, and icon-slot changes animate from the rendered geometry.
+Interrupted transitions retain velocity, and spatial overshoot reaches layout.
+Direct controller setters finish ongoing motion even when setting its current
+target. Public selection progress remains clamped to 0..1.
+
+The analytic scalar implementation is shared with Checkbox without changing its
+motion settings or color timing. Controller samples are checked against
+independently integrated values: at 50ms selection progress is approximately
+0.5273675, and reversal at 75ms retains approximately 9.8223967 units/second.
+The prior fixture-supplied animation driver is replaced by real public-component
+GPU scenarios with explicit 10ms frames.
+
+At 2x density, the 1x/4x GPU checks observe the intermediate thumb bounds and
+changed pixels, retain incoming movement on reversal, and restore the exact
+initial pixels after settling. They verify pressed geometry, spring recovery
+after cancelled input, icon-driven size changes, direct-set snapping,
+accessibility activation counts, rendered overshoot, and both actual frame
+receivers stopping at rest. Checkbox's 14 targeted regressions also pass after
+extracting the shared scalar implementation.
+
+Browser checks cancel a press by dragging outside, activate using Space and
+Enter, change thumb content, reject disabled clicks, re-enable keyboard input,
+and recover after consecutive reverse toggles. The final selected control has
+five activations, and browser error logs are empty. External
+`wasm-switch-spatial-motion.png` records the settled state; deterministic native
+frames provide the motion evidence. Normalized cross-platform reference
+comparisons, intrinsic empty-slot sizing, focus-visible rings, and full ripple
+timelines remain open.
+
+All 396 integrated native component tests pass, including opt-in GPU cases,
+and all 111 component documentation examples pass. Release WASM building,
+call-color checking, formatting, and whitespace checks pass for this motion
+follow-up.
+
+## Badge slots, live themes, and fractional geometry
+
+The [website measurements](https://m3.material.io/components/badges/specs) specify
+6dp small badges, 16dp large badges, 4dp content padding, and 6x6dp / 14x12dp
+corner offsets. Default colors use Error and OnError, with LabelSmall text.
+Sizes, padding, and offsets now round to physical pixels, matching the
+[placement contract](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Badge.kt).
+At 1.25 density the small badge is 8px and the large badge's vertical offset is
+18px; truncation previously produced 7px and 17px.
+
+Badged boxes wrap their anchor and badge slots independently, allowing empty or
+multiple layout children while preserving anchor constraints and centering its
+content. Badge overflow does not enlarge the anchor's reported bounds. All
+three badge entrypoints accept modifiers for layout and explicit semantics.
+The default light-theme container-color helper now returns the actual Error
+role instead of transparency.
+
+Count badges update their scoped content color and text style when props or
+themes change. Native checks change light/dark colors, custom background
+fallbacks, explicit content colors, and enlarged label metrics, then restore the
+original state. Layout checks cover empty slots, multiple anchor/badge children,
+minimum dimensions, and exact offsets. The 1x/4x GPU scenarios cover densities
+1, 1.25, 1.5, and 2, observe default colors and measured text heights, verify
+caller-authored Image labels with hidden duplicate count text in AccessKit, and
+activate the real parent button through the badge's drawn bounds.
+
+The example exposes notification counts, dot/count mode, and a scoped light/dark
+preview. Browser checks update the visible count, switch variants, and restore
+themes. The final dark preview retains four unread items, and error logs are
+empty. External `wasm-badge-theme-and-count.png` records it. Web screen-reader
+publication remains open; native semantics do not
+prove browser accessibility. Maximum-count reference width, anchor baselines,
+RTL, bounded navigation placement, and complete normalized snapshots remain
+unverified.
+
+All 399 integrated native component tests and all 111 documentation examples
+pass, including opt-in GPU cases. Release WASM building and call-color checking
+pass; formatting and whitespace checks pass. README files remain unchanged.
+
+## Chip edge spacing, selection semantics, and live typography
+
+The [Material chip implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Chip.kt)
+reserves label spacing even when a leading or trailing icon is absent. The
+component now includes that spacing: text-only assist, suggestion, and filter
+chips have 16dp edges; text-only input chips have 12dp edges. An occupied icon
+edge retains 8dp of outer padding and an 8dp gap before the label.
+
+Filter and input chips publish a checkbox role and their controlled checked
+state, including when disabled. Assist and suggestion chips remain actions.
+The label text context updates when theme typography changes and restores its
+original metrics when the theme is restored.
+
+The native scenario uses all four public variants, all four leading/trailing
+icon combinations, and densities 1 and 2. It checks measured edge distances,
+changed and restored label line heights, real accessibility activation,
+controlled selection publication, disabled pointer suppression, and successful
+pointer activation after re-enabling. Expressive shape and icon transitions,
+avatars, interaction-specific elevation and outlines, RTL, pixel comparisons,
+and web assistive-technology publication remain unverified.
+
+All 400 integrated native component tests and 111 documentation examples pass.
+The final native test build has no new warnings. Release WASM building and
+call-color checking pass. Browser checks exercise pointer, Space, and Enter
+selection transitions with no console errors; external
+`wasm-chips-spacing-and-selection.png` records the selected filter. Formatting
+and whitespace checks pass. README files remain unchanged.
+
+## Chip interaction shadows and state colors
+
+Elevated chip shadows now use the common Surface shadow rendering and respond
+to hover, focus, press, and disabled states. Elevation is 1dp at rest and 3dp
+on hover; disabled chips snap to zero elevation. Selected flat filter chips
+use 1dp on hover and return to zero on press. An explicit elevation remains an
+enabled-state override. Default focus outlines follow the variant color roles,
+and input leading icons use the primary role during hover, focus, and press.
+Explicit colors and borders retain their overrides. The public default shape
+now matches the theme's 8dp rounded rectangle.
+
+The [reference elevation transitions](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/internal/Elevation.kt)
+use 120ms incoming motion, 120ms hover exit, and 150ms exit from other
+interactions. Interrupted transitions sample the current value before changing
+target; disabling snaps immediately, and finished transitions stop requesting
+frames. The implementation uses these finite curves for chip shadows.
+
+The example adds flat/elevated action and enabled/disabled controls, a selected
+filter check icon, and an input leading icon. Input examples retain their flat
+style. Avatar content, Expressive shape/icon transitions, RTL, and complete
+normalized reference images still require follow-up.
+
+The new native scenarios compare the chip's shadow pixels with independently
+sized Surface controls at fixed elevations. They cover all four variants,
+intermediate hover motion, immediate disabled shadow removal, re-enabling,
+selected flat-filter press behavior, input icon roles with state-layer
+compositing, custom colors, focus outline roles, and disabled icon opacity at
+1x and 4x sampling. The deterministic motion test checks the independent
+halfway sample, interruption continuity, exact completion times, and disabled
+snapping. All four Chip tests pass, as do the 111 documentation examples.
+Release WASM building and call-color checking pass.
+
+Browser checks show flat/elevated and enabled/disabled transitions, preserved
+selection, and ignored disabled clicks. External
+`wasm-chips-elevated-enabled.png` and `wasm-chips-elevated-disabled.png` record
+the states. A delayed whole-list position shift was also observed during this
+workflow and shared with the layout-cache task; its cause remains unproven.
+This remains a browser regression to investigate rather than a completed gate.
+
+Strict Clippy is not green: dependency linting reports existing macro and
+glyphon diagnostics, and `--no-deps` reports 49 diagnostics in other current
+component files, with none attributed to Chip sources. These checks must not be
+represented as passing. README files remain unchanged.
+
+The final integrated native run passes all 403 component tests, including the
+opt-in GPU scenarios. The temporary copied test executable has been removed.
+The full alignment goal remains open for the remaining component work and the
+browser/lint issues listed above.
+
+## Full-example headless investigation of delayed list movement
+
+The native example was rebuilt and driven through the JSONL headless worker
+at 1730x955 pixels, density 1, and 16ms frame steps. The real drawer navigated
+to Material Components. After a 4200px wheel input and 60 settling frames,
+Card and Chip headings remained at y=251 and y=711 while flat/elevated,
+selection, disabling, disabled clicks, and re-enabling were exercised. A
+further 400px input moved them to y=-149 and y=311, matching the partially
+hidden Card arrangement seen in the browser. Thirty frames after selection
+and disabling still preserved those exact positions. The worker shut down
+normally, and no probe scripts or snapshot files were added to the repository.
+
+This does not reproduce the delayed browser shift. Browser document visibility
+was `visible`, so a hidden-page explanation is also unproven. Headless explicit
+frame pumping does not prove that the browser's redraw scheduling or input
+queue behaves identically. Keep the browser issue open without assigning its
+cause to lazy anchoring on this evidence alone.
+
+## Input chip avatars
+
+The public `avatar` painter parameter accepts raster and vector artwork on
+input chips, takes precedence over a leading icon, and is ignored by the other
+variants. Artwork retains its source colors, fills a 24dp circular viewport
+with a centered aspect-preserving crop, and uses 38% opacity while disabled.
+Avatar-to-container start padding is 4dp, followed by an 8dp label gap. Clearing
+an avatar restores the normal leading-icon or label-only geometry. These
+sizes and opacity follow the [input chip tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/InputChipTokens.kt).
+
+The example switches its existing input icon to remembered local artwork.
+The runnable Chip API example exercises the owned image conversion and a
+controlled selection callback with an assertion. New native rendering
+scenarios cover landscape/portrait cropping, untinted vector colors, disabled
+opacity, circle corners and overflow, avatar/icon precedence, trailing icons,
+selection, ignored avatars on action chips, clearing, and restoration across
+densities 1, 1.25, 1.5, and 2 at 1x/4x sampling. Verification results follow.
+
+Both avatar scenarios pass all four densities and both sample counts. All 111
+documentation examples pass, including the new public owned-image setter
+usage. Release WASM and call-color checking pass. Browser checks switch
+icon/avatar content, disable it, and restore it without console errors. The
+full-example image is saved externally as `wasm-chip-avatar-full.png`.
+
+The browser position issue now has a narrower reproducible trigger: at rest,
+a full screenshot preserves the Chip heading at y=265; a clipped screenshot
+is followed by y=209. A second full screenshot preserves y=209, while another
+clipped capture is followed by y=153. No pointer or wheel input occurs in this
+comparison. The DOM viewport returns 1730x956 with scrollTop=0, and the canvas
+backing size is 2163x1195 at the browser's 1.25 density. A transient viewport or
+capture interaction is a candidate, not a proven root cause. Use complete
+screenshots for follow-up interaction tests and keep this issue open.
+
+The integrated native run passes all 405 component tests. Formatting and
+whitespace checks pass. The copied test executable was removed after the run,
+and README files remain unchanged. The broader alignment objective is still
+open, including the capture-triggered movement, previously recorded lint
+diagnostics, and remaining component behavior/reference comparisons.
+
+## Selectable chip Expressive shapes
+
+Filter and input chips now default to `ChipShapeStyle::Expressive`: the theme's
+medium corner at rest, a size-relative full corner when selected, and the
+theme's small corner while pressed. `Standard` preserves a fixed small corner,
+and an explicit `shape` takes precedence over either style. The shared shape
+feeds fill, outline, clipping, and elevation geometry. Transitions use the
+Fast Spatial spring, preserve velocity when interrupted, and stop requesting
+frames after settling. Disabled and fixed-shape changes snap immediately.
+These shape roles follow the current [Chips tokens](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/ChipsTokens.kt)
+and selectable shape defaults in [Chip](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Chip.kt).
+Existing color defaults remain unchanged; this does not establish parity for
+every tonal variant.
+
+The example exposes standard/Expressive shape switching. New opt-in native
+tests exercise actual filter and input chip pixels at 1x/4x sampling through
+selection, pointer press/release, standard style, explicit rectangular shapes,
+and disabled changes. The motion test separately protects an independently
+known intermediate spring value, interrupted velocity, size-relative corners,
+and exact preservation of an asymmetric fixed shape. All nine Chip scenarios
+and all 111 component documentation examples pass.
+
+The existing lazy-list anchor regression now covers both axes, density 1,
+1.25, 1.5, and 2, and repeated main/cross-axis viewport changes. It passes.
+Only test code changed in that module for this batch. A native full-example
+headless probe at density 1.25 also restores its anchor across repeated window
+shrink/restore cycles, without reproducing the browser's repeated 56px shift.
+This narrows the evidence but does not resolve the capture-triggered browser
+movement. Regression information was shared with the layout-cache task.
+
+The release WASM build and call-color check pass. Browser interaction confirms
+selected capsule silhouettes, switching to standard corners and back, and
+input avatar rendering. A complete viewport capture is stored externally as
+`wasm-chip-expressive-shapes.png`. No console errors were observed, but jank
+warnings remain: one frame reports build 74.2ms, draw-command recording 12.2ms,
+and render 30.8ms, totaling 117.2ms. These are CPU-side stage durations, not
+GPU timestamp measurements. Performance is not a passing gate on this evidence;
+the measurements were also shared with the layout-cache task.
+
+The final integrated native run passes all 408 component tests, including
+opt-in GPU coverage. Formatting and whitespace checks pass. The copied test
+executable was removed, and README files remain unchanged. The overall
+alignment and performance objective remains open.
+
+## Standard segmented button corrections
+
+The current [segmented button overview](https://m3.material.io/components/segmented-buttons/overview)
+recommends connected button groups for Expressive interfaces. The existing
+segmented component remains a standard M3 control, and its gallery heading and
+API guidance now make that distinction explicit. Connected-group fidelity is
+still a separate open catalog requirement.
+
+Standard segments now expose radio roles in single-choice groups and checkbox
+roles in multi-choice groups, with a toggled state even when disabled. Group
+semantics preserve caller labels/descriptions, publish horizontal orientation,
+and retain child controls. The single-choice row is one Tab stop preferring
+the selected enabled item. Directional focus selects an enabled option;
+Tab entry, explicit focus, and a pending pointer press do not activate it.
+Multi-choice directional focus preserves all checked values.
+
+Selection shows an 18dp checkmark by default, replacing the optional leading
+icon. Authors may supply `selected_icon` or disable this replacement with
+`show_selected_icon(false)`. Live label typography updates its inherited
+context. Equal-width rows distribute a bounded pixel budget, including border
+overlap and remainder pixels, instead of extending all natural-width items
+beyond the container. These defaults follow the primary
+[segmented button implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/SegmentedButton.kt).
+Both native integration scenarios pass at densities 1, 1.25, 1.5, and 2 with
+1x/4x sampling. Assertions inspect the published semantic tree, real focus
+traversal and activation, checkmark pixels, live 20dp/28dp label line heights,
+and exact row coverage across narrow, zero, and restored widths. All 111
+documentation examples pass. Integrated GPU and browser results follow below.
+
+The first integrated native run passes all 410 tests. Browser selection then
+exposed another gap outside that fixture: a naturally sized row grew when a
+checkmark appeared. The content now always reserves the icon and gap width,
+centering an icon-free label within that reservation. The native scenarios now
+also assert that natural group width survives selection/deselection and that
+icon-free labels remain centered at all four densities. Final verification of
+this correction follows below; icon/label transition animation remains open.
+
+After icon-space reservation, the updated native scenarios pass all four
+densities at both sample counts. All 309 ordinary component tests pass (101
+opt-in GPU cases are excluded from that ordinary run), and all 111 documentation
+examples pass. Release WASM and call-color checking also pass. The earlier
+410-case GPU-inclusive run predates this final geometry correction and must
+not be treated as a second full run of the final source.
+
+The final browser build was checked at a 907x871 CSS viewport after the wider
+1730px interaction pass. Pointer selection and directional selection move the
+single-choice checkmark without changing the group width. Tab leaves that row;
+Space selects News, moving right preserves News, and Enter additionally selects
+Mail without changing the multi-choice group width. No console errors were
+observed. A full viewport image is stored externally as
+`wasm-segmented-stable-selection.png`. Browser semantics still expose only a
+canvas, so these interactions do not establish browser screen-reader support.
+Formatting and whitespace checks pass, the temporary copied test executable
+has been removed, and README files remain unchanged. Reference pixel states,
+transition motion, connected-group updates, and the broader performance work
+remain open.
+
+The connected-group follow-up now passes the actual size preset to each child,
+including typography and inherited icon size. Connected rows distribute an
+equal-width budget with 2dp gaps and retain the 48dp interaction minimum without
+stretching 32dp/40dp visual containers. Selected buttons keep their identity and
+width. The live token tables use inner corners of 8/8/8/16/20dp for XS through
+XL, pressed corners of 4/4/4/12/16dp, and full rounding when selected, with
+shared size-relative shape motion. These states follow the primary
+[button group implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ButtonGroup.kt).
+The [official specs](https://m3.material.io/components/button-groups/specs)
+contain an unresolved XS discrepancy: the measurements prose says 4dp at rest,
+while the connected XS token table says 8dp. The implementation follows the
+token table; this discrepancy remains part of the reference-parity audit.
+
+`ButtonGroupsState` supports external selection and clearing. Click callbacks
+observe the committed selection, programmatic changes do not invoke callbacks,
+and switching to single selection retains the first selected item in visual
+order. Removed items discard their selection. The gallery exposes all five
+sizes and an external clear action. All nine group tests pass, including the
+two native scenarios at densities 1 and 1.5 with 1x/4x sampling. They assert
+actual visual and interaction heights, icon/label metrics, circular inner
+corners, real pointer press/release transitions for all five sizes, stable
+selection bounds/identity, live selection-mode updates, external clearing,
+removed-item cleanup, and narrow/zero/restored widths. All 309 ordinary
+component tests pass; 105 opt-in GPU cases are excluded from that ordinary run.
+All 111 documentation examples pass. These tests do not establish normalized
+reference-pixel parity or browser screen-reader support.
+Mixed action/icon items and color variants, RTL, vertical groups, standard-group
+press expansion and overflow, and normalized reference goldens remain open.
+
+The final release WASM build and call-color check pass. Browser checks at
+907x871 CSS pixels cover all five sizes, selection at natural width, and the
+external clear action. XS/S preserve smaller visual containers while M/L/XL
+update height and typography; connected selection preserves adjacent widths.
+No browser console errors were observed. The final XL selected view is stored
+externally as `wasm-connected-group-xl-selected.png`. All eight chip tests also
+pass, including native pixel/input scenarios after sharing shape motion.
+
+The selection follow-up publishes checkbox roles for toggle items, matching
+the current [toggle button implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ToggleButton.kt).
+The horizontal group keeps caller labels/descriptions and child controls.
+Disabled indices and group disabling retain checked values while withholding
+click/focus actions. Arrow traversal skips disabled items without activating
+them; Tab continues between individual items. Required selection restores the
+first enabled item after an empty update and prevents deselecting the final
+choice in either selection mode. If no item is enabled, an empty group remains
+empty until an enabled choice becomes available. These updates do not invoke
+click callbacks.
+
+Both expanded native scenarios pass at 1x/4x sampling and densities 1/1.5.
+They verify published group/checkbox semantics, actual disabled pointer and
+accessibility input, directional and Tab-order focus traversal, live required
+selection in both modes, all-disabled/whole-group recovery, and callback counts.
+All 309 ordinary tests, four button GPU regressions, and 111 documentation
+examples also pass. Release WASM and call-color checking pass. Browser checks
+at 907x871 CSS pixels verify arrow traversal skipping a disabled middle item,
+Space activation, Tab exit followed by Enter activation of the next FAB,
+required single/multiple selection, external reset, whole-group disabled input,
+and selection restoration after re-enabling. The console contains no errors;
+the final view is stored externally as
+`wasm-connected-group-required-disabled.png`. These checks do not establish
+browser assistive-technology support. A large batched scroll moved further
+between its first screenshot and the next action, so general lazy-scroll
+settling and layout anchoring remain part of the broader scroll audit.
+
+The square preset follow-up adds `shape_style` using `ButtonShape`. Connected
+square groups retain size-specific square outer corners while the pressed
+item's inner corners contract; selected items become fully round. Standard
+square groups use the button's size-specific corners and round their selected
+items, while standard round groups square their selected items. Both styles
+use one item rendering path so style changes preserve item identity and focus.
+
+All nine group tests pass after this update. The native scenarios at densities
+1/1.5 and 1x/4x sampling check square outer-corner pixels across five sizes,
+selection shape inversion in both styles, a real square-end press/release,
+and identity/selection/focus retention during shape and style changes. All 309
+ordinary component tests pass. The 111 documentation tests pass after adding
+the new public option. Final release WASM and call-color checking pass. Browser
+checks at 907x871 CSS pixels cover all five connected square sizes, square-to-
+round selection, round/square inversion in a standard group, selection
+retention across style changes, and Right/Space activation after switching
+styles. The console contains no errors. The final view is stored externally
+as `wasm-connected-square-xl-selected.png`. These checks do not establish
+complete reference goldens or singleton-state coverage.
+
+
+The standard group now exchanges width with adjacent items during a press,
+using the default 0.15 expansion ratio and limiting compression to their content
+padding. Total width stays constant and the child content remains centered at
+its natural width. `expanded_ratio` accepts finite values clamped to 0..1;
+zero disables this motion. Short releases complete a visible expansion before
+returning, while programmatic selection remains quiet. Disabling, changing
+styles, removing items, and cancelling a pointer press stop or restore motion.
+This follows the current [Material button group implementation](https://github.com/androidx/androidx/blob/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ButtonGroup.kt).
+
+The obsolete selected-item expansion tests were replaced with five tests of
+width exchange and deterministic press motion, plus two native GPU scenarios.
+The native scenarios cover 1x/4x sampling at densities 1/1.5, actual held and
+same-frame short presses, accessibility activation, cancellation, ratio limits,
+style changes, disabling, empty/singleton recovery, content centering, and
+pixel restoration after repeated clicks. They also observe the production item
+build path to ensure held/resting frames stop rebuilding. All nine group tests
+pass. Removing the legacy expansion also removed its unused animation variant;
+the shared spring behavior and standalone easing function retain their tests.
+
+Final verification passes 306 ordinary component tests, 111 documentation
+examples, 15 Expressive component tests including four button GPU regressions,
+and both stationary no-op ripple GPU tests. Release WASM and call-color checking
+pass. Browser checks at 907x871 CSS pixels verify standard group selection,
+width recovery, the expansion toggle, and Right/Space activation. The final
+view is saved externally as `wasm-standard-group-width-recovery.png`; no console
+errors were observed. These checks do not establish complete reference pixel
+parity, overflow behavior, or browser assistive-technology support.
+
+
+## Divider constraints and insets
+
+The current [website specs](https://m3.material.io/components/divider/specs)
+publish 1dp thickness and the outline-variant color role. Full-width dividers
+span the container; inset and middle-inset variants use 16dp on the leading
+edge and on both edges respectively. The public divider components now accept
+a modifier for those insets and explicit sizing. Their thickness is clamped to
+the parent's interval; a thicker requested line no longer exceeds a smaller
+parent maximum. An unbounded length resolves to its minimum instead of
+panicking. Zero thickness retains the one-physical-pixel hairline contract;
+negative thickness resolves to zero. Default component colors read the current
+Material theme directly.
+
+The layout regression invokes both public components under bounded, unbounded,
+minimum, maximum, and zero constraints, including an inset modifier. GPU
+regressions exercise full-component padding, live theme colors, explicit color
+retention, hairlines, and resize/pixel restoration at four densities and 1x/4x
+sampling. This does not establish fractional subpixel stroke fidelity or full
+reference image parity. The legacy `DividerDefaults::color()` helper still
+returns transparent and remains to be aligned; omitting a component color
+already resolves the active outline-variant role.
+
+
+All three divider scenarios pass, including the two opt-in GPU tests at
+1x/4x sampling and densities 1/1.25/1.5/2. The 307 ordinary component tests
+and both divider documentation examples pass. Nightly formatting and diff
+whitespace checks pass. Release WASM and call-color checking pass; the browser
+shows full-width, middle-inset, hairline, and vertical examples with no console
+errors. The final view is stored externally as `wasm-divider-insets-hairline.png`.
+The density cases verify the current integer layout/padding behavior; they do
+not prove fractional stroke agreement with the reference renderer.
