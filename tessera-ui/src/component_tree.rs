@@ -1040,7 +1040,7 @@ impl ComponentTree {
     /// needs.
     #[cfg(any(
         feature = "testing",
-        feature = "headless",
+        all(feature = "headless", not(target_family = "wasm")),
         feature = "debug-dirty-overlay"
     ))]
     pub(crate) fn metadatas(&self) -> &ComponentNodeMetaDatas {
