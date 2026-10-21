@@ -40,7 +40,10 @@ use tessera_components::{
         icon_button,
     },
     lazy_list::lazy_column,
-    list_item::{ListItemDefaults, ListItemPosition, ListItemVerticalAlignment, list_item},
+    list_item::{
+        ListItemDefaults, ListItemPosition, ListItemSelectionMode, ListItemVerticalAlignment,
+        list_item,
+    },
     loading_indicator::loading_indicator,
     material_icons::filled,
     menus::{
@@ -61,6 +64,7 @@ use tessera_components::{
         SegmentedButtonDefaults, multi_choice_segmented_button_row, segmented_button,
         single_choice_segmented_button_row,
     },
+    side_sheet::{SideSheetPosition, modal_side_sheet_provider},
     slider::{
         SliderOrientation, SliderSize, SliderValueIndicatorVisibility, centered_slider,
         range_slider, slider, slider_value_indicator_provider,
@@ -114,6 +118,8 @@ fn section_header(#[prop(into)] title: String, #[prop(into)] description: String
 #[tessera]
 fn list_demo() {
     let selected = remember(|| [false; 4]);
+    let selection_mode = remember(|| ListItemSelectionMode::Multiple);
+    let last_action = remember(|| None::<usize>);
     let enabled = remember(|| true);
     let large = remember(|| false);
     let narrow = remember(|| false);
@@ -123,7 +129,7 @@ fn list_demo() {
     let custom_content = remember(|| false);
     let theme = use_context::<MaterialTheme>().expect("Material theme");
     column().children(move || {
-        section_header("Lists", "Compare one-line, two-line, three-line, and wrapping rows.");
+        section_header("Lists", "Compare one-line, two-line, three-line, and wrapping rows. Hold an item to enter multiple selection.");
         flow_row().item_spacing(Dp(8.0)).line_spacing(Dp(8.0)).children(move || {
             button().tonal().on_click(move || enabled.set(!enabled.get())).child(move || {
                 text().content(if enabled.get() { "Disable rows" } else { "Enable rows" });
@@ -143,6 +149,20 @@ fn list_demo() {
             button().tonal().on_click(move || custom_content.set(!custom_content.get())).child(move || {
                 text().content(if custom_content.get() { "Use plain text" } else { "Use custom content" });
             });
+            button().tonal().on_click(move || {
+                let next = match selection_mode.get() {
+                    ListItemSelectionMode::Action => ListItemSelectionMode::Single,
+                    ListItemSelectionMode::Single => ListItemSelectionMode::Multiple,
+                    ListItemSelectionMode::Multiple => ListItemSelectionMode::Action,
+                };
+                selection_mode.set(next);
+                if next == ListItemSelectionMode::Single {
+                    selected.with_mut(|selected| {
+                        let first = selected.iter().position(|value| *value);
+                        for (index, value) in selected.iter_mut().enumerate() { *value = first == Some(index); }
+                    });
+                }
+            }).child(move || { text().content(format!("Selection: {:?}", selection_mode.get())); });
             button().tonal().on_click(move || alignment.set(match alignment.get() {
                 ListItemVerticalAlignment::Auto => ListItemVerticalAlignment::Top,
                 ListItemVerticalAlignment::Top => ListItemVerticalAlignment::Center,
@@ -151,6 +171,10 @@ fn list_demo() {
             })).child(move || { text().content(format!("Alignment: {:?}", alignment.get())); });
         });
         spacer().modifier(Modifier::new().height(Dp(12.0)));
+        text().content(if selection_mode.get() == ListItemSelectionMode::Action {
+            last_action.get().map(|index| format!("Opened item {}", index + 1)).unwrap_or_else(|| "Activate an item to open it.".into())
+        } else { format!("{} selected", selected.with(|selected| selected.iter().filter(|value| **value).count())) });
+        spacer().modifier(Modifier::new().height(Dp(8.0)));
         material_theme().theme(move || {
             let mut theme = theme.get();
             if large.get() {
@@ -198,10 +222,21 @@ fn list_demo() {
                         .enabled(enabled.get())
                         .dragged(drag_preview.get() && index == 0)
                         .selected(selected.with(|selected| selected[index]))
+                        .selection_mode(selection_mode.get())
                         .vertical_alignment(alignment.get())
                         .leading(|| { icon().painter(filled::HOME_SVG); })
                         .trailing(move || { text().content(format!("{}", index + 1)); })
-                        .on_click(move || selected.with_mut(|selected| selected[index] = !selected[index]));
+                        .on_long_click(move || {
+                            selection_mode.set(ListItemSelectionMode::Multiple);
+                            selected.with_mut(|selected| selected[index] = true);
+                        })
+                        .on_selection_change(move |value| {
+                            selected.with_mut(|selected| {
+                                if selection_mode.get() == ListItemSelectionMode::Single { *selected = [false; 4]; }
+                                selected[index] = value;
+                            });
+                        })
+                        .on_click(move || last_action.set(Some(index)));
                 }
             });
         });
@@ -716,6 +751,7 @@ pub fn material_components_page() {
     let local_radio_actions = remember(|| 0_u32);
     let dialog_open = remember(|| false);
     let bottom_sheet_open = remember(|| false);
+    let side_sheet_open = remember(|| false);
     let menu_controller = remember(MenuController::new);
     let menu_actions = remember(|| 0_u32);
     let menu_status = remember(|| "No menu action yet".to_string());
@@ -1222,21 +1258,22 @@ pub fn material_components_page() {
             })
             .item(move || {
                 column().children(move || {
-                    section_header("Dialog & bottom sheet", "Open modal overlays from buttons.");
-                    row().children(move || {
+                    section_header("Dialogs & sheets", "Open modal overlays from buttons.");
+                    flow_row().item_spacing(Dp(12.0)).line_spacing(Dp(8.0)).children(move || {
                         button()
                             .filled()
                             .on_click(move || dialog_open.set(true))
                             .child(|| {
                                 text().content("Open dialog");
                             });
-                        spacer().modifier(Modifier::new().width(Dp(12.0)));
                         button()
                             .tonal()
                             .on_click(move || bottom_sheet_open.set(true))
                             .child(|| {
                                 text().content("Open bottom sheet");
                             });
+                        button().tonal().on_click(move || side_sheet_open.set(true))
+                            .child(|| { text().content("Open side sheet"); });
                     });
                 });
             })
@@ -1975,10 +2012,18 @@ pub fn material_components_page() {
         )
         .children(move || {
             dialog_provider()
+                .accessibility_label("Discard draft?")
                 .is_open(dialog_open.get())
                 .on_close_request(move || dialog_open.set(false))
                 .main_content(move || {
+                    modal_side_sheet_provider()
+                        .accessibility_label("Library filters")
+                        .position(SideSheetPosition::End)
+                        .is_open(side_sheet_open.get())
+                        .on_close_request(move || side_sheet_open.set(false))
+                        .main_content(move || {
                     bottom_sheet_provider()
+                        .accessibility_label("Contextual actions")
                         .is_open(bottom_sheet_open.get())
                         .on_close_request(move || bottom_sheet_open.set(false))
                         .main_content(move || {
@@ -2090,6 +2135,26 @@ pub fn material_components_page() {
                                     text()
                                         .content("Contextual actions and information appear here.");
                                 });
+                        });
+                        })
+                        .side_sheet_content(move || {
+                            let theme = use_context::<MaterialTheme>().unwrap().get();
+                            column().children(move || {
+                                boxed().modifier(Modifier::new().fill_max_width().height(Dp(48.0)))
+                                    .children(move || {
+                                        text().content("Filters").style(theme.typography.title_large)
+                                            .modifier(Modifier::new().align(Alignment::CenterStart));
+                                        icon_button().icon(filled::CLOSE_SVG)
+                                            .accessibility_label("Close side sheet")
+                                            .modifier(Modifier::new().align(Alignment::CenterEnd))
+                                            .on_click(move || side_sheet_open.set(false));
+                                    });
+                                spacer().modifier(Modifier::new().height(Dp(16.0)));
+                                text().content("Choose how to organize your library.");
+                                spacer().modifier(Modifier::new().height(Dp(16.0)));
+                                button().text().on_click(move || side_sheet_open.set(false))
+                                    .child(|| { text().content("Done"); });
+                            });
                         });
                 })
                 .dialog_content(move || {
