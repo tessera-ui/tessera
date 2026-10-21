@@ -4,7 +4,7 @@
 //!
 //! Separate sections in lists, menus, and settings screens.
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Dp, LayoutResult, MeasurementError, Px,
+    Color, ComputedData, Dp, LayoutResult, MeasurementError, Modifier, Px,
     layout::{MeasureScope, layout},
     tessera, use_context,
 };
@@ -15,12 +15,8 @@ fn resolve_thickness_px(thickness: Dp) -> Px {
     if thickness == Dp::ZERO {
         Px(1)
     } else {
-        thickness.to_px()
+        thickness.to_px().max(Px::ZERO)
     }
-}
-
-fn resolve_dimension(axis: AxisConstraint, measure: Px) -> Px {
-    axis.clamp(measure)
 }
 
 /// Default values for divider components.
@@ -50,6 +46,14 @@ struct DividerLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for DividerLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.thickness == other.thickness && self.orientation == other.orientation
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other)
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (width, height) = match self.orientation {
             DividerOrientation::Horizontal => (
@@ -57,24 +61,16 @@ impl tessera_ui::LayoutModifierNode for DividerLayout {
                     .parent_constraint()
                     .width()
                     .resolve_max()
-                    .expect("horizontal_divider requires a bounded width"),
-                resolve_dimension(
-                    AxisConstraint::exact(self.thickness)
-                        .intersect(input.parent_constraint().height()),
-                    self.thickness,
-                ),
+                    .unwrap_or(input.parent_constraint().width().resolve_min()),
+                input.parent_constraint().height().clamp(self.thickness),
             ),
             DividerOrientation::Vertical => (
-                resolve_dimension(
-                    AxisConstraint::exact(self.thickness)
-                        .intersect(input.parent_constraint().width()),
-                    self.thickness,
-                ),
+                input.parent_constraint().width().clamp(self.thickness),
                 input
                     .parent_constraint()
                     .height()
                     .resolve_max()
-                    .expect("vertical_divider requires a bounded height"),
+                    .unwrap_or(input.parent_constraint().height().resolve_min()),
             ),
         };
 
@@ -107,7 +103,9 @@ impl tessera_ui::DrawModifierNode for DividerLayout {
 ///
 /// ## Parameters
 ///
-/// - `thickness` — optional line thickness in density-independent pixels.
+/// - `modifier` — sizing, insets, placement, and semantics.
+/// - `thickness` — optional line thickness; zero draws one physical pixel, and
+///   negative values resolve to zero.
 /// - `color` — optional line color override.
 ///
 /// ## Examples
@@ -119,22 +117,27 @@ impl tessera_ui::DrawModifierNode for DividerLayout {
 /// horizontal_divider().thickness(Dp::ZERO).color(Color::BLACK);
 /// ```
 #[tessera]
-pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
+pub fn horizontal_divider(modifier: Option<Modifier>, thickness: Option<Dp>, color: Option<Color>) {
     let thickness_px = resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS));
-    let color = color.unwrap_or_else(|| {
+    let color = if let Some(color) = color {
+        color
+    } else {
         use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
             .get()
             .color_scheme
             .outline_variant
-    });
+    };
 
     let policy = DividerLayout {
         thickness: thickness_px,
         color,
         orientation: DividerOrientation::Horizontal,
     };
-    layout().policy(policy).draw(policy);
+    layout()
+        .modifier(modifier.unwrap_or_default())
+        .policy(policy)
+        .draw(policy);
 }
 
 /// # vertical_divider
@@ -147,7 +150,9 @@ pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
 ///
 /// ## Parameters
 ///
-/// - `thickness` — optional line thickness in density-independent pixels.
+/// - `modifier` — sizing, insets, placement, and semantics.
+/// - `thickness` — optional line thickness; zero draws one physical pixel, and
+///   negative values resolve to zero.
 /// - `color` — optional line color override.
 ///
 /// ## Examples
@@ -159,20 +164,31 @@ pub fn horizontal_divider(thickness: Option<Dp>, color: Option<Color>) {
 /// vertical_divider().thickness(Dp(2.0)).color(Color::BLACK);
 /// ```
 #[tessera]
-pub fn vertical_divider(thickness: Option<Dp>, color: Option<Color>) {
+pub fn vertical_divider(modifier: Option<Modifier>, thickness: Option<Dp>, color: Option<Color>) {
     let thickness_px = resolve_thickness_px(thickness.unwrap_or(DividerDefaults::THICKNESS));
-    let color = color.unwrap_or_else(|| {
+    let color = if let Some(color) = color {
+        color
+    } else {
         use_context::<MaterialTheme>()
             .expect("MaterialTheme must be provided")
             .get()
             .color_scheme
             .outline_variant
-    });
+    };
 
     let policy = DividerLayout {
         thickness: thickness_px,
         color,
         orientation: DividerOrientation::Vertical,
     };
-    layout().policy(policy).draw(policy);
+    layout()
+        .modifier(modifier.unwrap_or_default())
+        .policy(policy)
+        .draw(policy);
 }
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod drawing_tests;
