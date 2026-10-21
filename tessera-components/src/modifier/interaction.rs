@@ -20,6 +20,7 @@ use tessera_ui::{
     FocusRequester, FocusState, KeyboardInput, KeyboardInputModifierNode, Modifier, PointerInput,
     PointerInputModifierNode, PxPosition, PxSize, SemanticsModifierNode, State,
     accesskit::{self, Action, Toggled},
+    current_frame_nanos,
     modifier::{CursorModifierExt as _, FocusModifierExt as _, ModifierCapabilityExt as _},
     remember,
     winit::window::CursorIcon,
@@ -143,6 +144,8 @@ struct ClickablePointerModifierNode {
     tap_recognizer: TapRecognizerHandle,
     long_press_recognizer: Option<State<LongPressRecognizer>>,
     on_click: Callback,
+    on_long_click: Option<Callback>,
+    click_enabled: bool,
     enabled: bool,
     block_input: bool,
     on_press: Option<PressCallback>,
@@ -172,24 +175,38 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
                 within_bounds,
             )
         });
-        let descendant_claimed_press = !tap_result.pressed
-            && input
-                .pointer_changes
-                .iter()
-                .any(|change| matches!(change.content, tessera_ui::CursorEventContent::Pressed(_)));
-        let long_press_triggered = !descendant_claimed_press
-            && self.long_press_recognizer.is_some_and(|state| {
+        let (already_long, long_press_triggered) = self
+            .long_press_recognizer
+            .map(|state| {
+                if !self.enabled {
+                    if state.with(LongPressRecognizer::is_active) {
+                        state.with_mut(LongPressRecognizer::cancel);
+                    }
+                    return (false, false);
+                }
+                if input.pointer_changes.is_empty()
+                    || input.pass == tessera_ui::PointerEventPass::Initial
+                {
+                    return (state.with(LongPressRecognizer::has_triggered), false);
+                }
                 state.with_mut(|recognizer| {
-                    recognizer
-                        .update(
-                            input.pass,
-                            input.pointer_changes.as_mut_slice(),
-                            within_bounds,
-                        )
-                        .triggered
+                    let already = recognizer.has_triggered();
+                    let result = recognizer.update_after_tap(
+                        input.pass,
+                        input.pointer_changes.as_mut_slice(),
+                        within_bounds,
+                        current_frame_nanos(),
+                        tap_result,
+                    );
+                    (already, result.triggered)
                 })
-            });
-        let tapped = tap_result.tapped && !long_press_triggered;
+            })
+            .unwrap_or((false, false));
+        if long_press_triggered && let Some(callback) = self.on_long_click {
+            callback.call();
+        }
+        let tapped =
+            self.click_enabled && tap_result.tapped && !already_long && !long_press_triggered;
 
         let Some(interaction_state) = self.interaction_state else {
             if !self.enabled {
@@ -268,13 +285,31 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
 
 struct ClickableKeyboardModifierNode {
     on_click: Callback,
+    on_long_click: Option<Callback>,
+    click_enabled: bool,
     enabled: bool,
     focus_requester: FocusRequester,
 }
 
 impl KeyboardInputModifierNode for ClickableKeyboardModifierNode {
     fn on_keyboard_input(&self, mut input: KeyboardInput<'_>) {
-        if !self.enabled
+        if !self.enabled {
+            return;
+        }
+        let context_menu = !input.key_modifiers.control_key() && !input.key_modifiers.alt_key() && !input.key_modifiers.super_key()
+            && input.keyboard_events.iter().any(|event| {
+                event.state == tessera_ui::winit::event::ElementState::Pressed
+                    && matches!(&event.logical_key, tessera_ui::winit::keyboard::Key::Named(key)
+                        if *key == tessera_ui::winit::keyboard::NamedKey::ContextMenu
+                            || (*key == tessera_ui::winit::keyboard::NamedKey::F10 && input.key_modifiers.shift_key()))
+            });
+        if context_menu && let Some(callback) = self.on_long_click {
+            self.focus_requester.request_focus();
+            callback.call();
+            input.block_keyboard();
+            return;
+        }
+        if !self.click_enabled
             || !has_keyboard_activation_event(input.keyboard_events, input.key_modifiers)
         {
             return;
@@ -288,6 +323,8 @@ impl KeyboardInputModifierNode for ClickableKeyboardModifierNode {
 
 struct ClickableSemanticsModifierNode {
     on_click: Callback,
+    on_long_click: Option<Callback>,
+    click_enabled: bool,
     enabled: bool,
     role: Option<accesskit::Role>,
     label: Option<String>,
@@ -308,13 +345,25 @@ impl SemanticsModifierNode for ClickableSemanticsModifierNode {
         accessibility.disabled = !self.enabled;
         accessibility.actions.clear();
         if self.enabled {
-            accessibility.actions.push(Action::Click);
+            if self.click_enabled {
+                accessibility.actions.push(Action::Click);
+            }
+            if self.on_long_click.is_some() {
+                accessibility.actions.push(Action::ShowContextMenu);
+            }
             let on_click = self.on_click;
+            let on_long_click = self.on_long_click;
+            let click_enabled = self.click_enabled;
             let focus_requester = self.focus_requester;
             *action_handler = Some(Box::new(move |action| {
-                if action == Action::Click {
+                if action == Action::Click && click_enabled {
                     focus_requester.request_focus();
                     on_click.call();
+                } else if action == Action::ShowContextMenu
+                    && let Some(callback) = on_long_click
+                {
+                    focus_requester.request_focus();
+                    callback.call();
                 }
             }));
         } else {
@@ -734,6 +783,15 @@ impl PointerInputModifierNode for BlockTouchPropagationPointerModifierNode {
 }
 
 pub(crate) fn apply_clickable_modifier(base: Modifier, args: ClickableArgs) -> Modifier {
+    apply_combined_clickable_modifier(base, args, None, true)
+}
+
+pub(crate) fn apply_combined_clickable_modifier(
+    base: Modifier,
+    args: ClickableArgs,
+    on_long_click: Option<Callback>,
+    click_enabled: bool,
+) -> Modifier {
     let ClickableArgs {
         on_click,
         enabled,
@@ -774,6 +832,8 @@ pub(crate) fn apply_clickable_modifier(base: Modifier, args: ClickableArgs) -> M
 
     modifier
         .push_semantics(ClickableSemanticsModifierNode {
+            on_long_click,
+            click_enabled,
             on_click,
             enabled,
             role,
@@ -782,11 +842,15 @@ pub(crate) fn apply_clickable_modifier(base: Modifier, args: ClickableArgs) -> M
             focus_requester,
         })
         .push_keyboard_input(ClickableKeyboardModifierNode {
+            on_long_click,
+            click_enabled,
             on_click,
             enabled,
             focus_requester,
         })
         .push_pointer_input(ClickablePointerModifierNode {
+            on_long_click,
+            click_enabled,
             tap_recognizer,
             long_press_recognizer,
             on_click,

@@ -255,6 +255,11 @@ impl TapRecognizer {
         result
     }
 
+    /// Cancels the active press without producing a tap.
+    pub fn cancel(&mut self) {
+        self.reset();
+    }
+
     fn reset(&mut self) {
         self.active_pointer = None;
         self.track.on_press(None);
@@ -501,6 +506,8 @@ pub struct LongPressRecognizer {
     press_time: Option<Instant>,
     canceled: bool,
     triggered: bool,
+    frame_press_start: Option<u64>,
+    within_bounds: bool,
 }
 
 impl LongPressRecognizer {
@@ -513,6 +520,8 @@ impl LongPressRecognizer {
             press_time: None,
             canceled: false,
             triggered: false,
+            frame_press_start: None,
+            within_bounds: false,
         }
     }
 
@@ -542,20 +551,122 @@ impl LongPressRecognizer {
         pointer_changes: &mut [PointerChange],
         within_bounds: bool,
     ) -> LongPressResult {
+        self.update_inner(pass, pointer_changes, within_bounds, None, None)
+    }
+
+    /// Updates a press using the UI frame clock, including final-pass drag
+    /// cancellation.
+    pub fn update_at_frame_nanos(
+        &mut self,
+        pass: PointerEventPass,
+        pointer_changes: &mut [PointerChange],
+        within_bounds: bool,
+        frame_nanos: u64,
+    ) -> LongPressResult {
+        self.update_frame_inner(pass, pointer_changes, within_bounds, frame_nanos, None)
+    }
+
+    /// Observes the samples belonging to the supplied tap result, including
+    /// consumed releases.
+    pub fn update_after_tap(
+        &mut self,
+        pass: PointerEventPass,
+        pointer_changes: &mut [PointerChange],
+        within_bounds: bool,
+        frame_nanos: u64,
+        tap: TapResult,
+    ) -> LongPressResult {
+        self.update_frame_inner(pass, pointer_changes, within_bounds, frame_nanos, Some(tap))
+    }
+
+    fn update_frame_inner(
+        &mut self,
+        pass: PointerEventPass,
+        pointer_changes: &mut [PointerChange],
+        within_bounds: bool,
+        frame_nanos: u64,
+        tap: Option<TapResult>,
+    ) -> LongPressResult {
+        if pass == PointerEventPass::Final {
+            if pointer_changes.iter().any(|change| {
+                Some(change.pointer_id) == self.active_pointer
+                    && (change.gesture_state == GestureState::Dragged
+                        || matches!(change.content, CursorEventContent::Scroll(_)))
+            }) {
+                self.canceled = true;
+            }
+            return LongPressResult::default();
+        }
+        self.update_inner(pass, pointer_changes, within_bounds, Some(frame_nanos), tap)
+    }
+
+    /// Reports whether a frame-clock press still needs its deadline checked.
+    pub fn needs_frame(&self) -> bool {
+        self.active_pointer.is_some()
+            && self.frame_press_start.is_some()
+            && !self.canceled
+            && !self.triggered
+    }
+
+    /// Reports whether the current press has already triggered.
+    pub fn has_triggered(&self) -> bool {
+        self.triggered
+    }
+
+    /// Reports whether a pointer press is being tracked.
+    pub fn is_active(&self) -> bool {
+        self.active_pointer.is_some()
+    }
+
+    /// Cancels the current press without activation.
+    pub fn cancel(&mut self) {
+        self.reset();
+    }
+
+    /// Advances a stationary press and returns true only at its first deadline.
+    pub fn advance_frame_nanos(&mut self, frame_nanos: u64) -> bool {
+        if !self.needs_frame() || !self.within_bounds {
+            return false;
+        }
+        let elapsed = frame_nanos.saturating_sub(self.frame_press_start.unwrap());
+        if u128::from(elapsed) < self.settings.threshold.as_nanos() {
+            return false;
+        }
+        self.triggered = true;
+        true
+    }
+
+    fn update_inner(
+        &mut self,
+        pass: PointerEventPass,
+        pointer_changes: &mut [PointerChange],
+        within_bounds: bool,
+        frame_nanos: Option<u64>,
+        tap: Option<TapResult>,
+    ) -> LongPressResult {
         if pass != PointerEventPass::Main {
             return LongPressResult::default();
         }
-
         let mut result = LongPressResult::default();
         for change in pointer_changes.iter_mut() {
-            if change.is_consumed() {
+            let owned = tap.is_some_and(|tap| match change.content {
+                CursorEventContent::Pressed(PressKeyEventType::Left) => tap.pressed,
+                CursorEventContent::Released(PressKeyEventType::Left)
+                | CursorEventContent::Cancelled(PressKeyEventType::Left) => tap.released,
+                _ => false,
+            });
+            if change.is_consumed() && !owned {
                 continue;
             }
             match change.content {
-                CursorEventContent::Pressed(PressKeyEventType::Left) if within_bounds => {
+                CursorEventContent::Pressed(PressKeyEventType::Left)
+                    if within_bounds && tap.is_none_or(|tap| tap.pressed) =>
+                {
                     self.active_pointer = Some(change.pointer_id);
+                    self.within_bounds = within_bounds;
                     self.track.on_press(change.position());
                     self.press_time = Some(change.timestamp);
+                    self.frame_press_start = frame_nanos;
                     self.canceled = false;
                     self.triggered = false;
                 }
@@ -563,11 +674,18 @@ impl LongPressRecognizer {
                     if Some(change.pointer_id) != self.active_pointer {
                         continue;
                     }
+                    self.within_bounds = within_bounds;
                     let observation = self.track.observe(position, self.settings.slop_px);
-                    if observation.exceeded_slop {
+                    if observation.exceeded_slop || (frame_nanos.is_some() && !within_bounds) {
                         self.canceled = true;
                     }
-                    self.try_trigger(change.timestamp, within_bounds, change, &mut result);
+                    self.try_trigger(
+                        change.timestamp,
+                        within_bounds,
+                        frame_nanos,
+                        change,
+                        &mut result,
+                    );
                 }
                 CursorEventContent::Scroll(_) if Some(change.pointer_id) == self.active_pointer => {
                     self.canceled = true;
@@ -581,7 +699,14 @@ impl LongPressRecognizer {
                     if Some(change.pointer_id) != self.active_pointer {
                         continue;
                     }
-                    self.try_trigger(change.timestamp, within_bounds, change, &mut result);
+                    self.within_bounds = within_bounds;
+                    self.try_trigger(
+                        change.timestamp,
+                        within_bounds,
+                        frame_nanos,
+                        change,
+                        &mut result,
+                    );
                     result.released = true;
                     self.reset();
                 }
@@ -595,9 +720,19 @@ impl LongPressRecognizer {
         &mut self,
         now: Instant,
         within_bounds: bool,
+        frame_nanos: Option<u64>,
         change: &mut PointerChange,
         result: &mut LongPressResult,
     ) {
+        if let Some(frame) = frame_nanos {
+            if self.advance_frame_nanos(frame) {
+                result.triggered = true;
+                if self.settings.consume_on_trigger {
+                    change.consume();
+                }
+                return;
+            }
+        }
         if self.triggered || self.canceled || !within_bounds {
             return;
         }
@@ -617,6 +752,8 @@ impl LongPressRecognizer {
         self.active_pointer = None;
         self.track.on_press(None);
         self.press_time = None;
+        self.frame_press_start = None;
+        self.within_bounds = false;
         self.canceled = false;
         self.triggered = false;
     }
@@ -1071,6 +1208,115 @@ mod slop_tests {
         let result = long_press.update(PointerEventPass::Main, &mut hold, true);
 
         assert!(result.triggered);
+    }
+
+    #[test]
+    fn frame_long_press_deadline_is_one_shot_and_respects_cancellation_and_pointer_identity() {
+        let start = Instant::now();
+        let mut recognizer = LongPressRecognizer::default();
+        let mut press = [change(
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            start,
+        )];
+        recognizer.update_at_frame_nanos(PointerEventPass::Main, &mut press, true, 10_000_000);
+        assert!(!recognizer.advance_frame_nanos(509_999_999));
+        let mut other = [PointerChange::new(
+            start,
+            POINTER + 1,
+            moved(100, 100),
+            GestureState::TapCandidate,
+        )];
+        recognizer.update_at_frame_nanos(PointerEventPass::Main, &mut other, false, 400_000_000);
+        assert!(recognizer.advance_frame_nanos(510_000_000));
+        assert!(recognizer.has_triggered());
+        assert!(!recognizer.needs_frame());
+        assert!(!recognizer.advance_frame_nanos(900_000_000));
+        let mut release = [change(
+            CursorEventContent::Released(PressKeyEventType::Left),
+            start,
+        )];
+        let result = recognizer.update_at_frame_nanos(
+            PointerEventPass::Main,
+            &mut release,
+            true,
+            900_000_000,
+        );
+        assert!(result.released);
+        assert!(!result.triggered);
+        assert!(!recognizer.is_active());
+        for cancelled in [true, false] {
+            let mut press = [change(
+                CursorEventContent::Pressed(PressKeyEventType::Left),
+                start,
+            )];
+            recognizer.update_at_frame_nanos(
+                PointerEventPass::Main,
+                &mut press,
+                true,
+                1_000_000_000,
+            );
+            let mut end = [change(
+                if cancelled {
+                    CursorEventContent::Cancelled(PressKeyEventType::Left)
+                } else {
+                    moved(0, 0)
+                },
+                start,
+            )];
+            if !cancelled {
+                end[0].gesture_state = GestureState::Dragged;
+            }
+            recognizer.update_at_frame_nanos(
+                if cancelled {
+                    PointerEventPass::Main
+                } else {
+                    PointerEventPass::Final
+                },
+                &mut end,
+                true,
+                1_100_000_000,
+            );
+            assert!(!recognizer.needs_frame());
+            assert!(!recognizer.advance_frame_nanos(2_000_000_000));
+        }
+    }
+
+    #[test]
+    fn frame_long_press_observes_owned_consumed_release_and_event_time_backlogs() {
+        let start = Instant::now();
+        let mut tap = TapRecognizer::new(TapSettings {
+            consume_on_tap: true,
+            ..Default::default()
+        });
+        let mut long = LongPressRecognizer::default();
+        let mut press = [change(
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            start,
+        )];
+        let result = tap.update_exclusive(PointerEventPass::Main, &mut press, true);
+        long.update_after_tap(PointerEventPass::Main, &mut press, true, 0, result);
+        let mut release = [change(
+            CursorEventContent::Released(PressKeyEventType::Left),
+            start + Duration::from_millis(600),
+        )];
+        let result = tap.update_exclusive(PointerEventPass::Main, &mut release, true);
+        assert!(result.tapped);
+        assert!(release[0].is_consumed());
+        let long_result =
+            long.update_after_tap(PointerEventPass::Main, &mut release, true, 0, result);
+        assert!(long_result.triggered);
+        assert!(long_result.released);
+        assert!(!long.is_active());
+        let mut child = TapRecognizer::default();
+        let mut press = [change(
+            CursorEventContent::Pressed(PressKeyEventType::Left),
+            start,
+        )];
+        child.update_exclusive(PointerEventPass::Main, &mut press, true);
+        let result = tap.update_exclusive(PointerEventPass::Main, &mut press, true);
+        assert!(!result.pressed);
+        long.update_after_tap(PointerEventPass::Main, &mut press, true, 0, result);
+        assert!(!long.needs_frame());
     }
 
     #[test]
