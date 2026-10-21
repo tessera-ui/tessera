@@ -5,32 +5,57 @@
 //! Switch between views or filters with a connected control.
 
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusState,
-    FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    accesskit::Role,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, Color, ComputedData,
+    Constraint, Dp, FocusDirection, FocusManager, FocusState, FocusTraversalPolicy, LayoutResult,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, SemanticsModifierNode,
+    accesskit::{Orientation, Role, Toggled},
     layout::{MeasureScope, layout},
-    modifier::FocusModifierExt as _,
-    provide_context, tessera, use_context,
+    modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
+    provide_context, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     icon::icon as icon_component,
-    modifier::{ModifierExt as _, Padding},
+    material_icons::filled,
+    modifier::{InteractionState, ModifierExt as _, Padding},
     painter::Painter,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle},
 };
 
 const SEGMENTED_ICON_SPACING: Dp = Dp(8.0);
 
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests;
+
 #[derive(Clone, Copy, Debug)]
 struct SegmentedButtonRowContext {
     select_on_focus: bool,
+}
+
+struct SegmentedGroupSemantics {
+    single_choice: bool,
+}
+
+impl SemanticsModifierNode for SegmentedGroupSemantics {
+    fn apply(
+        &self,
+        node: &mut AccessibilityNode,
+        _handler: &mut Option<AccessibilityActionHandler>,
+    ) {
+        node.role = Some(if self.single_choice {
+            Role::RadioGroup
+        } else {
+            Role::Group
+        });
+        node.orientation = Some(Orientation::Horizontal);
+        node.merge_descendants = true;
+    }
 }
 
 /// Color values for segmented buttons in different states.
@@ -184,6 +209,8 @@ impl SegmentedButtonDefaults {
 /// ## Usage
 ///
 /// Use inside segmented button rows to represent selectable options.
+/// Prefer connected [`crate::button_groups::button_groups`] for Expressive
+/// interfaces.
 ///
 /// ## Parameters
 ///
@@ -191,6 +218,9 @@ impl SegmentedButtonDefaults {
 /// - `enabled` — whether the segment is enabled.
 /// - `label` — label shown inside the segment.
 /// - `icon` — optional icon displayed before the label.
+/// - `selected_icon` — optional replacement for the selected checkmark.
+/// - `show_selected_icon` — whether selection replaces the leading icon with a
+///   checkmark; defaults to true.
 /// - `modifier` — layout and behavior modifiers applied to the segment.
 /// - `shape` — shape of the segment.
 /// - `colors` — optional color overrides for the segment.
@@ -248,6 +278,8 @@ pub fn segmented_button(
     enabled: Option<bool>,
     #[prop(into)] label: Option<String>,
     #[prop(into)] icon: Option<Painter>,
+    #[prop(into)] selected_icon: Option<Painter>,
+    show_selected_icon: Option<bool>,
     modifier: Option<Modifier>,
     shape: Option<Shape>,
     colors: Option<SegmentedButtonColors>,
@@ -263,6 +295,16 @@ pub fn segmented_button(
     let modifier = modifier.unwrap_or_default();
     let shape = shape.unwrap_or_else(SegmentedButtonDefaults::shape);
     let row_context = use_context::<SegmentedButtonRowContext>().map(|context| context.get());
+    let single_choice = row_context.is_some_and(|context| context.select_on_focus);
+    let icon = if selected && show_selected_icon.unwrap_or(true) {
+        Some(selected_icon.unwrap_or_else(|| filled::CHECK_SVG.into()))
+    } else {
+        icon
+    };
+    let interaction_state = remember(InteractionState::new);
+    if (!enabled || on_click.is_none()) && interaction_state.get() != InteractionState::default() {
+        interaction_state.set(InteractionState::default());
+    }
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
@@ -286,17 +328,33 @@ pub fn segmented_button(
         }
     };
 
-    let mut modifier = modifier.size_in(None, None, Some(SegmentedButtonDefaults::HEIGHT), None);
+    let mut modifier = modifier.size_in(
+        Some(Dp(58.0)),
+        None,
+        Some(SegmentedButtonDefaults::HEIGHT),
+        None,
+    );
     if enabled
-        && row_context.is_some_and(|context| context.select_on_focus)
+        && single_choice
         && let Some(on_click) = on_click
     {
         let is_selected = selected;
-        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
-            if focus_state.has_focus() && !is_selected {
-                on_click.call();
-            }
-        });
+        modifier = modifier
+            .focusable()
+            .preferred_tab_stop(selected)
+            .on_focus_event(move |focus_state: FocusState| {
+                let directional = matches!(
+                    FocusManager::current().focus_change_direction(),
+                    Some(FocusDirection::Left | FocusDirection::Right)
+                );
+                if focus_state.is_focused()
+                    && directional
+                    && !is_selected
+                    && !interaction_state.with(|state| state.is_pressed())
+                {
+                    on_click.call();
+                }
+            });
     }
 
     let has_on_click = on_click.is_some();
@@ -310,10 +368,20 @@ pub fn segmented_button(
         .content_alignment(Alignment::Center)
         .content_color(content_color)
         .enabled(enabled)
+        .interaction_state(interaction_state)
         .ripple_color(content_color)
         .on_click_optional(on_click)
-        .accessibility_role_optional(has_on_click.then_some(Role::Button))
-        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_role(if single_choice {
+            Role::RadioButton
+        } else {
+            Role::CheckBox
+        })
+        .accessibility_toggled(if selected {
+            Toggled::True
+        } else {
+            Toggled::False
+        })
+        .accessibility_focusable(has_on_click && enabled)
         .accessibility_label_optional(accessibility_label)
         .accessibility_description_optional(accessibility_description)
         .child(move || {
@@ -323,6 +391,11 @@ pub fn segmented_button(
             provide_context(
                 || typography.label_large,
                 move || {
+                    let inherited =
+                        use_context::<TextStyle>().expect("segmented button text style");
+                    if inherited.get() != typography.label_large {
+                        inherited.set(typography.label_large);
+                    }
                     let leading_icon = leading_icon.clone();
                     let label_outer = label_outer.clone();
                     layout()
@@ -330,28 +403,38 @@ pub fn segmented_button(
                         .child(move || {
                             let leading_icon = leading_icon.clone();
                             let label = label_outer.clone();
+                            let label_offset = if leading_icon.is_none() {
+                                Dp::from(
+                                    Px::ZERO
+                                        - (Px::from(SegmentedButtonDefaults::ICON_SIZE)
+                                            + Px::from(SEGMENTED_ICON_SPACING))
+                                            / 2,
+                                )
+                            } else {
+                                Dp(0.0)
+                            };
                             row()
                                 .cross_axis_alignment(CrossAxisAlignment::Center)
                                 .children(move || {
-                                    let mut has_content = false;
-
                                     if let Some(icon_content) = leading_icon.clone() {
-                                        has_content = true;
                                         icon_component()
                                             .painter(icon_content)
                                             .size(SegmentedButtonDefaults::ICON_SIZE);
+                                    } else {
+                                        spacer().modifier(
+                                            Modifier::new()
+                                                .width(SegmentedButtonDefaults::ICON_SIZE),
+                                        );
                                     }
 
                                     if !label.is_empty() {
-                                        if has_content {
-                                            {
-                                                spacer().modifier(
-                                                    Modifier::new().width(SEGMENTED_ICON_SPACING),
-                                                );
-                                            };
-                                        }
+                                        spacer().modifier(
+                                            Modifier::new().width(SEGMENTED_ICON_SPACING),
+                                        );
                                         {
-                                            text().content(label.clone());
+                                            text().content(label.clone()).modifier(
+                                                Modifier::new().offset(label_offset, Dp(0.0)),
+                                            );
                                         };
                                     }
                                 });
@@ -436,7 +519,14 @@ pub fn single_choice_segmented_button_row(
     );
     let modifier = modifier
         .focus_group()
-        .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
+        .push_semantics(SegmentedGroupSemantics {
+            single_choice: true,
+        })
+        .focus_traversal_policy(
+            FocusTraversalPolicy::horizontal()
+                .wrap(true)
+                .single_tab_stop(true),
+        );
     layout().modifier(modifier).child(move || {
         let content = content;
         layout().policy(layout_policy.clone()).child(move || {
@@ -528,6 +618,9 @@ pub fn multi_choice_segmented_button_row(
     );
     let modifier = modifier
         .focus_group()
+        .push_semantics(SegmentedGroupSemantics {
+            single_choice: false,
+        })
         .focus_traversal_policy(FocusTraversalPolicy::horizontal().wrap(true));
     layout().modifier(modifier).child(move || {
         let content = content;
@@ -600,11 +693,23 @@ impl tessera_ui::LayoutModifierNode for SegmentedButtonRowLayout {
         }
 
         if self.equal_width && max_width > Px::ZERO {
-            let equal_constraint = Constraint::new(max_width, row_constraint.height);
+            let count = children.len() as i32;
+            let available = row_constraint.width.resolve_max();
+            let overlap = self
+                .overlap
+                .min(max_width)
+                .min(available.unwrap_or(max_width));
+            let target = row_constraint
+                .width
+                .clamp(max_width * count - overlap * (count - 1));
+            let budget = target + overlap * (count - 1);
+            let (width, remainder) = (budget / count, budget.0 % count);
             total_width = Px::ZERO;
             max_height = Px::ZERO;
 
             for (index, &child) in children.iter().enumerate() {
+                let child_width = width + Px(i32::from((index as i32) < remainder));
+                let equal_constraint = Constraint::new(child_width, row_constraint.height);
                 let child_result = child.measure(input, &equal_constraint)?;
                 children_sizes[index] = Some(child_result.size());
                 total_width += child_result.width;
