@@ -4,6 +4,7 @@
 //!
 //! Animate state changes and preserve interrupted transitions.
 
+pub(crate) mod color_motion;
 pub(crate) mod material_motion;
 pub(crate) mod shape_motion;
 
