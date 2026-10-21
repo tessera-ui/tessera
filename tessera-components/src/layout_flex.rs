@@ -88,3 +88,6 @@ pub(crate) fn cross_axis_offset(
 
 #[cfg(test)]
 mod tests;
+
+#[cfg(test)]
+mod drawing_tests;

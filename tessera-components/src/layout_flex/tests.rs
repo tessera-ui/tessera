@@ -1,8 +1,8 @@
 use std::cell::Cell;
 
 use tessera_ui::{
-    AxisConstraint, ComputedData, LayoutModifierNode, LayoutResult, MeasurementError, Modifier, Px,
-    RenderSlot, State,
+    AxisConstraint, ComputedData, Dp, LayoutModifierNode, LayoutResult, MeasurementError, Modifier,
+    Px, RenderSlot, State,
     layout::{MeasureScope, layout},
     remember, tessera,
     testing::{layout_test, pump_layout_test_session, start_layout_test_session},
@@ -10,6 +10,7 @@ use tessera_ui::{
 
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
+    boxed::boxed,
     column::column,
     modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
@@ -28,6 +29,56 @@ struct Inputs {
 thread_local! {
     static INPUTS: Cell<Option<State<Inputs>>> = const { Cell::new(None) };
     static MEASURES: Cell<usize> = const { Cell::new(0) };
+    static WRAPPER_WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) };
+}
+
+#[tessera]
+fn padded_constraint_fixture(vertical: bool) {
+    let width = remember(|| Dp(16.0));
+    WRAPPER_WIDTH.set(Some(width));
+    let children = RenderSlot::new(move || {
+        boxed().modifier(Modifier::new().size(width.get(), width.get()));
+        boxed()
+            .modifier(
+                Modifier::new()
+                    .size(Dp(60.0), Dp(40.0))
+                    .padding_all(Dp(5.0)),
+            )
+            .children(|| {
+                leaf().id(77);
+            });
+    });
+    if vertical {
+        column().children_shared(children);
+    } else {
+        row().children_shared(children);
+    }
+}
+
+#[test]
+fn fixed_size_wrappers_preserve_child_origins_when_offered_bounds_change() {
+    for vertical in [false, true] {
+        let mut session = start_layout_test_session(
+            layout_test(move || {
+                padded_constraint_fixture(vertical);
+            })
+            .viewport_px(200, 200),
+        );
+        pump_layout_test_session(&mut session, 0)
+            .node("flex-77")
+            .size(20, 10)
+            .position(if vertical { 5 } else { 21 }, if vertical { 21 } else { 5 });
+        WRAPPER_WIDTH.get().unwrap().set(Dp(24.0));
+        pump_layout_test_session(&mut session, 16_666_667)
+            .node("flex-77")
+            .size(20, 10)
+            .position(if vertical { 5 } else { 29 }, if vertical { 29 } else { 5 });
+        pump_layout_test_session(&mut session, 33_333_334)
+            .node("flex-77")
+            .size(20, 10)
+            .position(if vertical { 5 } else { 29 }, if vertical { 29 } else { 5 });
+        assert_eq!(session.diagnostics().unwrap().geometry_nodes_updated, 0);
+    }
 }
 
 #[derive(Clone, PartialEq)]
