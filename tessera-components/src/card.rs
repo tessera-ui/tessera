@@ -10,6 +10,7 @@ use tessera_ui::{
 };
 
 use crate::{
+    animation::Animatable,
     modifier::InteractionState,
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
@@ -18,6 +19,9 @@ use crate::{
 
 const DEFAULT_SPATIAL_DAMPING_RATIO: f32 = 0.9;
 const DEFAULT_SPATIAL_STIFFNESS: f32 = 700.0;
+
+#[cfg(test)]
+mod tests;
 
 fn composite_over(base: Color, overlay: Color) -> Color {
     let overlay_a = overlay.a.clamp(0.0, 1.0);
@@ -33,74 +37,33 @@ fn composite_over(base: Color, overlay: Color) -> Color {
     Color::new(r, g, b, out_a)
 }
 
-#[derive(Clone, PartialEq, Copy, Debug)]
-struct Spring1D {
-    value: f32,
-    velocity: f32,
-    target: f32,
-}
-
-impl Spring1D {
-    fn new(value: f32) -> Self {
-        Self {
-            value,
-            velocity: 0.0,
-            target: value,
-        }
-    }
-
-    fn snap_to(&mut self, value: f32) {
-        self.value = value;
-        self.target = value;
-        self.velocity = 0.0;
-    }
-
-    fn set_target(&mut self, target: f32) {
-        self.target = target;
-    }
-
-    fn update(&mut self, dt: f32, stiffness: f32, damping_ratio: f32) {
-        let dt = dt.clamp(0.0, 0.05);
-        let stiffness = stiffness.max(0.0);
-        if stiffness == 0.0 {
-            self.snap_to(self.target);
-            return;
-        }
-
-        let damping_ratio = damping_ratio.max(0.0);
-        let damping = 2.0 * damping_ratio * stiffness.sqrt();
-        let displacement = self.value - self.target;
-        let acceleration = -stiffness * displacement - damping * self.velocity;
-
-        self.velocity += acceleration * dt;
-        self.value += self.velocity * dt;
-
-        if (self.value - self.target).abs() < 0.01 && self.velocity.abs() < 0.01 {
-            self.snap_to(self.target);
-        }
-    }
-}
-
 #[derive(Clone, PartialEq, Debug)]
 struct CardElevationSpring {
     last_frame_nanos: Option<u64>,
-    spring: Spring1D,
+    spring: Animatable,
 }
 
 impl CardElevationSpring {
     fn new(initial: Dp) -> Self {
         Self {
             last_frame_nanos: None,
-            spring: Spring1D::new(initial.0 as f32),
+            spring: Animatable::spring(
+                initial.0 as f32,
+                DEFAULT_SPATIAL_STIFFNESS.sqrt(),
+                DEFAULT_SPATIAL_DAMPING_RATIO,
+            ),
         }
     }
 
     fn set_target(&mut self, target: Dp) {
+        if self.spring.target() != target.0 as f32 {
+            self.last_frame_nanos = None;
+        }
         self.spring.set_target(target.0 as f32);
     }
 
     fn snap_to(&mut self, target: Dp) {
-        self.spring.snap_to(target.0 as f32);
+        *self = Self::new(target);
     }
 
     fn tick(&mut self, frame_nanos: u64) {
@@ -110,16 +73,15 @@ impl CardElevationSpring {
             1.0 / 60.0
         };
         self.last_frame_nanos = Some(frame_nanos);
-        self.spring
-            .update(dt, DEFAULT_SPATIAL_STIFFNESS, DEFAULT_SPATIAL_DAMPING_RATIO);
+        self.spring.tick(dt);
     }
 
     fn is_animating(&self) -> bool {
-        (self.spring.value - self.spring.target).abs() >= 0.01 || self.spring.velocity.abs() >= 0.01
+        !self.spring.is_idle()
     }
 
     fn value_dp(&self) -> Dp {
-        Dp(self.spring.value as f64)
+        Dp(self.spring.value() as f64)
     }
 }
 
@@ -273,7 +235,7 @@ impl CardDefaults {
             default_elevation: Dp(0.0),
             pressed_elevation: Dp(0.0),
             focused_elevation: Dp(0.0),
-            hovered_elevation: Dp(0.0),
+            hovered_elevation: Dp(1.0),
             dragged_elevation: Dp(3.0),
             disabled_elevation: Dp(0.0),
         }
@@ -374,6 +336,8 @@ struct CardResolvedArgs {
 /// - `colors` — optional color override set.
 /// - `elevation` — optional elevation override.
 /// - `border` — optional border override.
+/// - `accessibility_label` — optional accessible name for the card's main
+///   action.
 /// - `content` — optional content render slot.
 ///
 /// ## Examples
@@ -405,6 +369,7 @@ pub fn card(
     colors: Option<CardColors>,
     elevation: Option<CardElevation>,
     border: Option<CardBorder>,
+    #[prop(into)] accessibility_label: Option<String>,
     content: Option<RenderSlot>,
 ) {
     let args = CardResolvedArgs {
@@ -446,22 +411,39 @@ pub fn card(
         CardVariant::Outlined => CardDefaults::outlined_card_elevation(),
     });
 
+    let clickable = args.on_click.is_some();
+    let interaction_state = if clickable {
+        Some(if let Some(state) = args.interaction_state {
+            state
+        } else {
+            remember(InteractionState::new)
+        })
+    } else {
+        None
+    };
+    if !args.enabled
+        && let Some(state) = interaction_state
+    {
+        if state.with(|state| *state != InteractionState::default()) {
+            state.set(InteractionState::default());
+        }
+    }
     let border = match args.border {
         Some(border) => Some(border),
         None if matches!(args.variant, CardVariant::Outlined) => {
-            Some(CardDefaults::outlined_card_border(&theme, args.enabled))
+            let mut border = CardDefaults::outlined_card_border(&theme, args.enabled);
+            if args.enabled
+                && interaction_state.is_some_and(|state| {
+                    state.with(|state| {
+                        state.is_focused() && !state.is_pressed() && !state.is_dragged()
+                    })
+                })
+            {
+                border.color = theme.color_scheme.on_surface;
+            }
+            Some(border)
         }
         None => None,
-    };
-
-    let clickable = args.on_click.is_some();
-    let interaction_state = if clickable {
-        Some(
-            args.interaction_state
-                .unwrap_or_else(|| remember(InteractionState::new)),
-        )
-    } else {
-        None
     };
 
     let elevation_spring = remember(|| CardElevationSpring::new(elevation.default_elevation()));
@@ -471,7 +453,7 @@ pub fn card(
     let should_update_spring = elevation_spring.with(|spring| {
         let mut next = spring.clone();
         next.set_target(target);
-        if !enabled {
+        if !enabled || !clickable {
             next.snap_to(target);
         }
         next != *spring
@@ -479,7 +461,7 @@ pub fn card(
     if should_update_spring {
         elevation_spring.with_mut(|spring| {
             spring.set_target(target);
-            if !enabled {
+            if !enabled || !clickable {
                 spring.snap_to(target);
             }
         });
@@ -524,16 +506,17 @@ pub fn card(
 
     surface()
         .shape(shape)
+        .clip_content(true)
         .modifier(args.modifier)
         .content_color(content_color)
         .elevation(shadow_elevation)
-        .tonal_elevation(shadow_elevation)
         .enabled(args.enabled)
         .style(style)
         .interaction_state_optional(interaction_state)
         .on_click_optional(args.on_click)
         .accessibility_role_optional(has_on_click.then_some(Role::Button))
-        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_label_optional(accessibility_label)
+        .accessibility_focusable_optional(has_on_click.then_some(args.enabled))
         .child_shared(content);
 }
 
