@@ -4,22 +4,32 @@
 //!
 //! Present compact actions, filters, or input tokens in dense UIs.
 use tessera_ui::{
-    Callback, Color, Dp, Modifier, accesskit::Role, layout::layout, provide_context, tessera,
-    use_context,
+    Callback, Color, Dp, Modifier,
+    accesskit::{Role, Toggled},
+    current_frame_nanos,
+    layout::layout,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
+    animation::shape_motion::ShapeMotion,
+    boxed::boxed,
     icon::icon,
-    modifier::{ModifierExt as _, Padding, ShadowArgs},
+    image::image,
+    modifier::{InteractionState, ModifierExt as _, Padding},
     painter::Painter,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle},
 };
+
+use motion::{Elevation, Interaction};
+
+mod motion;
 
 /// Visual variants supported by [`chip`].
 #[derive(Clone, PartialEq, Copy, Debug, Default)]
@@ -43,6 +53,17 @@ pub enum ChipStyle {
     Flat,
     /// Elevated style with a subtle shadow.
     Elevated,
+}
+
+/// Shape behavior for selectable chips.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub enum ChipShapeStyle {
+    /// Medium corners at rest, rounded ends when selected, and small pressed
+    /// corners.
+    #[default]
+    Expressive,
+    /// Fixed small corners in every selection and interaction state.
+    Standard,
 }
 
 /// Represents the container and content colors used in a chip in different
@@ -194,6 +215,8 @@ impl ChipDefaults {
     pub const HEIGHT: Dp = Dp(32.0);
     /// Default icon size used inside chips.
     pub const ICON_SIZE: Dp = Dp(18.0);
+    /// Diameter of an input chip avatar.
+    pub const AVATAR_SIZE: Dp = Dp(24.0);
     /// Spacing between icons and label content.
     pub const ELEMENT_SPACING: Dp = Dp(8.0);
     /// Horizontal padding applied to most chip variants.
@@ -203,13 +226,13 @@ impl ChipDefaults {
     /// Input chip horizontal padding when leading or trailing icon is present.
     pub const INPUT_ICON_PADDING: Dp = Dp(8.0);
 
-    /// Default shape for chip containers.
+    /// Fixed standard shape for chip containers.
     pub fn shape() -> Shape {
         Shape::RoundedRectangle {
-            top_left: RoundedCorner::manual(Dp(8.0), 3.0),
-            top_right: RoundedCorner::manual(Dp(8.0), 3.0),
-            bottom_right: RoundedCorner::manual(Dp(8.0), 3.0),
-            bottom_left: RoundedCorner::manual(Dp(8.0), 3.0),
+            top_left: RoundedCorner::manual(Dp(8.0), 2.0),
+            top_right: RoundedCorner::manual(Dp(8.0), 2.0),
+            bottom_right: RoundedCorner::manual(Dp(8.0), 2.0),
+            bottom_left: RoundedCorner::manual(Dp(8.0), 2.0),
         }
     }
 
@@ -388,6 +411,7 @@ struct ChipResolvedArgs {
     style: ChipStyle,
     label: String,
     leading_icon: Option<Painter>,
+    avatar: Option<Painter>,
     trailing_icon: Option<Painter>,
     selected: bool,
     enabled: bool,
@@ -395,6 +419,7 @@ struct ChipResolvedArgs {
     colors: Option<ChipColors>,
     border: Option<ChipBorder>,
     shape: Option<Shape>,
+    shape_style: ChipShapeStyle,
     elevation: Option<Dp>,
     on_click: Option<Callback>,
     accessibility_label: Option<String>,
@@ -463,12 +488,16 @@ impl ChipBuilder {
 /// - `label` — visible chip label text.
 /// - `leading_icon` — optional leading icon content.
 /// - `trailing_icon` — optional trailing icon content.
+/// - `avatar` — optional raster or vector input avatar; takes precedence over
+///   the leading icon and is ignored by other variants.
 /// - `selected` — optional selected state used by selectable variants.
 /// - `enabled` — optional enabled flag.
 /// - `modifier` — modifier chain applied to the chip subtree.
 /// - `colors` — optional chip color override set.
 /// - `border` — optional chip border override.
 /// - `shape` — optional chip shape override.
+/// - `shape_style` — optional selectable-chip shape behavior; defaults to
+///   Expressive and is replaced by an explicit `shape`.
 /// - `elevation` — optional chip elevation override.
 /// - `on_click` — optional click callback.
 /// - `accessibility_label` — optional accessibility label.
@@ -480,18 +509,23 @@ impl ChipBuilder {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::chip::chip;
-/// use tessera_ui::remember;
+/// use tessera_components::{chip::chip, image::ImageData};
+/// use tessera_ui::{Callback, remember};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// let selected = remember(|| false);
-/// selected.with_mut(|value| *value = true);
+/// let toggle = Callback::new(move || selected.set(!selected.get()));
+/// toggle.call();
+/// assert!(selected.get());
+/// let avatar = ImageData::from_rgba(vec![255, 128, 0, 255], 1, 1);
 /// chip()
-///     .filter("Favorites")
-///     .selected(selected.with(|value| *value));
+///     .input("Alex")
+///     .avatar(avatar)
+///     .selected(selected.get())
+///     .on_click_shared(toggle);
 /// #     });
 /// # }
 /// # component();
@@ -503,12 +537,14 @@ pub fn chip(
     #[prop(into)] label: Option<String>,
     #[prop(skip_setter)] leading_icon: Option<Painter>,
     #[prop(skip_setter)] trailing_icon: Option<Painter>,
+    #[prop(into)] avatar: Option<Painter>,
     selected: Option<bool>,
     enabled: Option<bool>,
     modifier: Option<Modifier>,
     colors: Option<ChipColors>,
     border: Option<ChipBorder>,
     shape: Option<Shape>,
+    shape_style: Option<ChipShapeStyle>,
     elevation: Option<Dp>,
     on_click: Option<Callback>,
     #[prop(into)] accessibility_label: Option<String>,
@@ -521,6 +557,7 @@ pub fn chip(
         style: style.unwrap_or_default(),
         label,
         leading_icon,
+        avatar,
         trailing_icon,
         selected: selected.unwrap_or(false),
         enabled: enabled.unwrap_or(true),
@@ -528,6 +565,7 @@ pub fn chip(
         colors,
         border,
         shape,
+        shape_style: shape_style.unwrap_or_default(),
         elevation,
         on_click,
         accessibility_label,
@@ -541,23 +579,137 @@ pub fn chip(
     let style = args.style;
     let selectable = matches!(variant, ChipVariant::Filter | ChipVariant::Input);
     let selected = args.selected && selectable;
+    let custom_colors = args.colors.is_some();
     let colors = args
         .colors
         .unwrap_or_else(|| ChipDefaults::colors(&theme.color_scheme, variant, style));
-    let border = args
+    let custom_border = args.border.is_some();
+    let mut border = args
         .border
         .or_else(|| ChipDefaults::border(&theme.color_scheme, variant, style));
-    let elevation = args.elevation.or_else(|| ChipDefaults::elevation(style));
-    let shape = args.shape.unwrap_or(theme.shapes.small);
+    let interaction_state = remember(InteractionState::new);
+    if (!args.enabled || args.on_click.is_none())
+        && interaction_state.get() != InteractionState::default()
+    {
+        interaction_state.set(InteractionState::default());
+    }
+    let interaction = Interaction::from_state(interaction_state.get());
+    if !custom_border && args.enabled && interaction == Interaction::Focus {
+        if let Some(border) = &mut border {
+            border.color = if variant == ChipVariant::Assist {
+                theme.color_scheme.on_surface
+            } else {
+                theme.color_scheme.on_surface_variant
+            };
+        }
+    }
+    let target_elevation = if !args.enabled {
+        Dp::ZERO
+    } else if let Some(elevation) = args.elevation {
+        elevation
+    } else if interaction == Interaction::Drag {
+        Dp(8.0)
+    } else if style == ChipStyle::Elevated {
+        if interaction == Interaction::Hover {
+            Dp(3.0)
+        } else {
+            Dp(1.0)
+        }
+    } else if variant == ChipVariant::Filter && selected && interaction == Interaction::Hover {
+        Dp(1.0)
+    } else {
+        Dp::ZERO
+    };
+    let elevation = remember(|| Elevation::new(target_elevation));
+    let mut next = elevation.get();
+    next.update(
+        target_elevation,
+        interaction,
+        args.enabled,
+        current_frame_nanos(),
+    );
+    if next != elevation.get() {
+        elevation.set(next);
+    }
+    if next.is_animating() {
+        receive_frame_nanos(move |now| {
+            let mut next = elevation.get();
+            next.advance(now);
+            if next != elevation.get() {
+                elevation.set(next);
+            }
+            if next.is_animating() {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+    let shadow_elevation = elevation.get().value();
+    let target_shape = args.shape.unwrap_or_else(|| {
+        if !selectable || args.shape_style == ChipShapeStyle::Standard {
+            theme.shapes.small
+        } else if interaction == Interaction::Press {
+            theme.shapes.small
+        } else if selected {
+            Shape::CAPSULE
+        } else {
+            theme.shapes.medium
+        }
+    });
+    let shape_motion = remember(|| ShapeMotion::new(target_shape));
+    let mut next = shape_motion.get();
+    next.retarget(
+        target_shape,
+        args.enabled
+            && args.shape.is_none()
+            && selectable
+            && args.shape_style == ChipShapeStyle::Expressive,
+        current_frame_nanos(),
+    );
+    if next != shape_motion.get() {
+        shape_motion.set(next);
+    }
+    if next.is_animating() {
+        receive_frame_nanos(move |now| {
+            let mut next = shape_motion.get();
+            next.advance(now);
+            if next != shape_motion.get() {
+                shape_motion.set(next);
+            }
+            if next.is_animating() {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+    let shape = shape_motion.get().shape();
+    let avatar = if variant == ChipVariant::Input {
+        args.avatar
+    } else {
+        None
+    };
     let padding = chip_padding(
         variant,
+        avatar.is_some(),
         args.leading_icon.is_some(),
         args.trailing_icon.is_some(),
     );
 
     let container_color = colors.container_color(args.enabled, selected);
     let label_color = colors.label_color(args.enabled, selected);
-    let leading_icon_color = colors.leading_icon_color(args.enabled, selected);
+    let leading_icon_color = if !custom_colors
+        && args.enabled
+        && variant == ChipVariant::Input
+        && matches!(
+            interaction,
+            Interaction::Hover | Interaction::Focus | Interaction::Press
+        ) {
+        theme.color_scheme.primary
+    } else {
+        colors.leading_icon_color(args.enabled, selected)
+    };
     let trailing_icon_color = colors.trailing_icon_color(args.enabled, selected);
 
     let border_style = border.and_then(|border| border.resolve(args.enabled, selected));
@@ -577,34 +729,19 @@ pub fn chip(
         .accessibility_label
         .or_else(|| (!label.is_empty()).then(|| label.clone()));
 
-    let mut modifier = args
+    let modifier = args
         .modifier
         .default_min_size(Dp::ZERO, ChipDefaults::HEIGHT)
-        // Match Material: every chip reserves the minimum interactive target,
-        // including non-clickable ones, so a row of chips stays visually aligned.
         .minimum_interactive_component_size();
-    if matches!(style, ChipStyle::Elevated)
-        && let Some(elevation) = elevation
-    {
-        modifier = modifier.shadow(
-            &theme.color_scheme,
-            &ShadowArgs {
-                elevation,
-                shape,
-                ambient_color: Some(theme.color_scheme.shadow.with_alpha(0.12)),
-                spot_color: Some(Color::TRANSPARENT),
-                ..Default::default()
-            },
-        );
-    }
-
-    let surface_elevation = (!matches!(style, ChipStyle::Elevated))
-        .then_some(elevation)
-        .flatten();
     let has_on_click = args.on_click.is_some();
     let leading_icon = args.leading_icon;
     let trailing_icon = args.trailing_icon;
     let has_label = !label.is_empty();
+    let avatar_alpha = if args.enabled {
+        1.0
+    } else {
+        MaterialAlpha::DISABLED_CONTENT
+    };
 
     surface()
         .modifier(modifier)
@@ -614,22 +751,38 @@ pub fn chip(
         .content_color(label_color)
         .enabled(args.enabled)
         .ripple_color(label_color)
-        .elevation_optional(surface_elevation)
+        .elevation(shadow_elevation)
+        .interaction_state(interaction_state)
         .on_click_optional(args.on_click)
-        .accessibility_role_optional(has_on_click.then_some(Role::Button))
+        .accessibility_role_optional((has_on_click || selectable).then_some(if selectable {
+            Role::CheckBox
+        } else {
+            Role::Button
+        }))
+        .accessibility_toggled_optional(selectable.then_some(if selected {
+            Toggled::True
+        } else {
+            Toggled::False
+        }))
         .accessibility_focusable_optional(has_on_click.then_some(true))
         .accessibility_label_optional(accessibility_label)
         .accessibility_description_optional(args.accessibility_description)
         .child(move || {
+            let avatar = avatar.clone();
             let leading_icon = leading_icon.clone();
             let trailing_icon = trailing_icon.clone();
             let label = label.clone();
             provide_context(
                 || typography.label_large,
                 move || {
+                    let inherited = use_context::<TextStyle>().expect("chip text style");
+                    if inherited.get() != typography.label_large {
+                        inherited.set(typography.label_large);
+                    }
                     layout()
                         .modifier(Modifier::new().padding(padding))
                         .child(move || {
+                            let avatar = avatar.clone();
                             let leading_icon = leading_icon.clone();
                             let trailing_icon = trailing_icon.clone();
                             let label = label.clone();
@@ -639,7 +792,10 @@ pub fn chip(
                                     let spacing = ChipDefaults::ELEMENT_SPACING;
                                     let mut item_count = 0;
 
-                                    if let Some(icon_content) = leading_icon.clone() {
+                                    if let Some(avatar) = avatar.clone() {
+                                        item_count += 1;
+                                        chip_avatar().painter(avatar).alpha(avatar_alpha);
+                                    } else if let Some(icon_content) = leading_icon.clone() {
                                         if item_count > 0 {
                                             spacer().modifier(Modifier::new().width(spacing));
                                         }
@@ -674,10 +830,48 @@ pub fn chip(
         });
 }
 
-fn chip_padding(variant: ChipVariant, has_leading_icon: bool, has_trailing_icon: bool) -> Padding {
-    match variant {
+#[tessera]
+fn chip_avatar(painter: Option<Painter>, alpha: Option<f32>) {
+    let painter = painter.expect("chip avatar painter");
+    let (width, height) = match &painter {
+        Painter::Raster(data) => (f64::from(data.width), f64::from(data.height)),
+        Painter::Vector(data) => (
+            f64::from(data.viewport_width),
+            f64::from(data.viewport_height),
+        ),
+    };
+    let shortest = width.min(height);
+    let scale = if shortest.is_finite() && shortest > 0.0 {
+        ChipDefaults::AVATAR_SIZE.0 / shortest
+    } else {
+        1.0
+    };
+    let width = Dp(width * scale);
+    let height = Dp(height * scale);
+    boxed()
+        .modifier(
+            Modifier::new()
+                .size(ChipDefaults::AVATAR_SIZE, ChipDefaults::AVATAR_SIZE)
+                .clip_shape(Shape::Ellipse)
+                .alpha(alpha.unwrap_or(1.0)),
+        )
+        .alignment(Alignment::Center)
+        .children(move || {
+            image()
+                .painter(painter.clone())
+                .modifier(Modifier::new().required_size(width, height));
+        });
+}
+
+fn chip_padding(
+    variant: ChipVariant,
+    has_avatar: bool,
+    has_leading_icon: bool,
+    has_trailing_icon: bool,
+) -> Padding {
+    let (start, end) = match variant {
         ChipVariant::Input => {
-            let start = if has_leading_icon {
+            let start = if has_leading_icon && !has_avatar {
                 ChipDefaults::INPUT_ICON_PADDING
             } else {
                 ChipDefaults::INPUT_EDGE_PADDING
@@ -687,8 +881,37 @@ fn chip_padding(variant: ChipVariant, has_leading_icon: bool, has_trailing_icon:
             } else {
                 ChipDefaults::INPUT_EDGE_PADDING
             };
-            Padding::new(start, Dp(0.0), end, Dp(0.0))
+            (start, end)
         }
-        _ => Padding::symmetric(ChipDefaults::HORIZONTAL_PADDING, Dp(0.0)),
-    }
+        _ => (
+            ChipDefaults::HORIZONTAL_PADDING,
+            ChipDefaults::HORIZONTAL_PADDING,
+        ),
+    };
+    // Missing icons still reserve the label-to-edge spacing.
+    let start = Dp(start.0
+        + if has_leading_icon || has_avatar {
+            0.0
+        } else {
+            ChipDefaults::ELEMENT_SPACING.0
+        });
+    let end = Dp(end.0
+        + if has_trailing_icon {
+            0.0
+        } else {
+            ChipDefaults::ELEMENT_SPACING.0
+        });
+    Padding::new(start, Dp::ZERO, end, Dp::ZERO)
 }
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(test)]
+mod appearance_tests;
+
+#[cfg(test)]
+mod avatar_tests;
+
+#[cfg(test)]
+mod shape_tests;
