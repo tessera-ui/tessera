@@ -120,6 +120,8 @@ pub struct AccessibilityNode {
     pub disabled: bool,
     /// Whether this node is hidden from accessibility
     pub hidden: bool,
+    /// Whether this dialog blocks interaction with the rest of the window.
+    pub modal: bool,
     /// Supported actions
     pub actions: Vec<Action>,
     /// Custom accessibility key provided by the component
@@ -271,6 +273,7 @@ impl Default for AccessibilityNode {
             has_popup: None,
             disabled: false,
             hidden: false,
+            modal: false,
             actions: Vec::new(),
             key: None,
             merge_descendants: true,

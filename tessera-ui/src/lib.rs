@@ -358,7 +358,8 @@ pub use crate::{
     entry_registry::{EntryRegistry, TesseraPackage},
     focus::{
         FocusDirection, FocusGroupNode, FocusManager, FocusProperties, FocusRequester,
-        FocusScopeNode, FocusState, FocusTraversalPolicy, FocusTraversalStrategy,
+        FocusRestorationTarget, FocusScopeNode, FocusState, FocusTraversalPolicy,
+        FocusTraversalStrategy,
     },
     layout::{
         DefaultLayoutNode, DrawModifierHandle, LayoutModifierHandle, LayoutResult,

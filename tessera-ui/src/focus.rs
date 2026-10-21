@@ -813,6 +813,36 @@ impl Default for FocusGroupNode {
     }
 }
 
+/// A saved focus target that can be restored while it remains available.
+///
+/// Use [`FocusManager::save_focus`] before showing temporary interactive
+/// content. Restoration does not wait for a removed or disabled target to
+/// become available.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct FocusRestorationTarget {
+    id: FocusHandleId,
+}
+
+impl FocusRestorationTarget {
+    /// Restores focus if the target is attached, enabled and available.
+    ///
+    /// Returns `false` when the window is unfocused or another target has
+    /// captured focus. Check availability after layout when target
+    /// properties have changed.
+    pub fn restore(self) -> bool {
+        with_focus_owner_mut(|owner| {
+            if !owner.owner_focused
+                || !owner.can_request_focus(self.id)
+                || owner.captured.is_some_and(|captured| captured != self.id)
+            {
+                return false;
+            }
+            owner.request_focus(self.id);
+            true
+        })
+    }
+}
+
 /// Owner-scoped focus manager for traversal and forced clear operations.
 ///
 /// Use the focus manager to trigger application-level traversal without
@@ -832,6 +862,15 @@ impl FocusManager {
     /// Returns the focus manager for the current component tree.
     pub fn current() -> Self {
         Self
+    }
+
+    /// Saves the current target for restoring focus after temporary UI closes.
+    ///
+    /// Saving does not move focus or keep the target alive. Restore only while
+    /// the temporary UI still owns focus, so later user navigation is
+    /// preserved.
+    pub fn save_focus(self) -> Option<FocusRestorationTarget> {
+        with_focus_owner(|owner| owner.active.map(|id| FocusRestorationTarget { id }))
     }
 
     /// Returns the traversal direction responsible for the focus callback
@@ -1494,10 +1533,11 @@ impl FocusOwner {
             return false;
         }
         let previous_states = self.snapshot_live_states();
-        let moved = self
-            .resolve_policy_move_target(direction)
-            .or_else(|| self.resolve_move_target(direction))
-            .is_some_and(|target| self.set_active(target));
+        let target = match self.resolve_policy_move_target(direction) {
+            Some(target) => target,
+            None => self.resolve_move_target(direction),
+        };
+        let moved = target.is_some_and(|target| self.set_active(target));
         self.recompute_states();
         self.notify_state_changes_from(previous_states, Some(direction));
         moved
@@ -1521,13 +1561,19 @@ impl FocusOwner {
         moved
     }
 
-    fn resolve_policy_move_target(&self, direction: FocusDirection) -> Option<FocusHandleId> {
+    fn resolve_policy_move_target(
+        &self,
+        direction: FocusDirection,
+    ) -> Option<Option<FocusHandleId>> {
         let active = self
             .active
-            .and_then(|current| self.resolve_request_target(current))?;
+            .filter(|current| self.can_request_focus(*current))?;
         let (owner_id, policy) = self.nearest_traversal_policy_owner(active)?;
         let scoped_direction = policy.scoped_direction(direction)?;
-        self.resolve_move_target_in_scope(owner_id, scoped_direction, policy.wrap)
+        let target = self.resolve_move_target_in_scope(owner_id, scoped_direction, policy.wrap);
+        // Empty wrapping scopes still own traversal; an absent candidate must
+        // not be interpreted as permission to navigate behind a modal.
+        (target.is_some() || policy.wrap).then_some(target)
     }
 
     fn nearest_traversal_policy_owner(
@@ -1840,7 +1886,7 @@ impl FocusOwner {
 
         let Some(active) = self
             .active
-            .and_then(|current| self.resolve_request_target(current))
+            .filter(|current| self.can_request_focus(*current))
         else {
             return if forward {
                 candidates.first().copied()
@@ -1879,7 +1925,7 @@ impl FocusOwner {
 
         let active = self
             .active
-            .and_then(|current| self.resolve_request_target(current))
+            .filter(|current| self.can_request_focus(*current))
             .filter(|current| self.is_ancestor(scope_id, *current));
 
         if let Some(active) = active
@@ -2055,7 +2101,7 @@ impl FocusOwner {
         }
         scope
             .last_focused_descendant
-            .filter(|candidate| self.can_request_focus(*candidate))
+            .filter(|candidate| *candidate != id && self.can_request_focus(*candidate))
             .or_else(|| {
                 scope
                     .restorer_fallback

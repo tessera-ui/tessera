@@ -46,6 +46,8 @@ pub struct SemanticsArgs {
     pub disabled: bool,
     /// Whether the node is hidden from accessibility.
     pub hidden: bool,
+    /// Whether this dialog blocks interaction with the rest of the window.
+    pub modal: bool,
     /// Custom accessibility actions.
     pub actions: Vec<Action>,
     /// Optional testing tag (mapped to the accessibility key).
@@ -115,6 +117,7 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
             has_popup,
             disabled,
             hidden,
+            modal,
             actions,
             test_tag,
             bounds_padding,
@@ -148,6 +151,7 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
         accessibility.has_popup = *has_popup;
         accessibility.disabled = *disabled;
         accessibility.hidden = *hidden;
+        accessibility.modal = *modal;
         accessibility.actions = actions.clone();
         accessibility.key = test_tag.clone();
         accessibility.merge_descendants = *merge_descendants;

@@ -492,6 +492,9 @@ fn build_node(
         if accessibility_node.hidden {
             node.set_hidden();
         }
+        if accessibility_node.modal {
+            node.set_modal();
+        }
 
         // Add actions
         for action in accessibility_node.actions {
@@ -641,6 +644,23 @@ pub fn dispatch_action(
         .iter()
         .find(|node| !node.is_removed() && node.get().instance_key == accessibility_id.0)
         .and_then(|node| tree.get_node_id(node));
+
+    let Some(target) = component_node_id else {
+        return false;
+    };
+    for ancestor in target.ancestors(tree) {
+        let Some(metadata) = metadatas.get(&ancestor) else {
+            return false;
+        };
+        if tree[ancestor].get().role == NodeRole::Layout && metadata.abs_position.is_none() {
+            return false;
+        }
+        if let Some(semantics) = &metadata.accessibility
+            && (semantics.hidden || (ancestor != target && !semantics.merge_descendants))
+        {
+            return false;
+        }
+    }
 
     if action_request.action == accesskit::Action::Focus {
         let Some(node_id) = component_node_id else {
