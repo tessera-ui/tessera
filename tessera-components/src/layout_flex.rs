@@ -85,3 +85,6 @@ pub(crate) fn cross_axis_offset(
         CrossAxisAlignment::End => (container_cross.0 - child_cross.0).max(0) as f32,
     }
 }
+
+#[cfg(test)]
+mod tests;

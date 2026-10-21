@@ -128,6 +128,17 @@ struct IconLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for IconLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.size == other.size
+            && self.width == other.width
+            && self.height == other.height
+            && intrinsic_dimensions(&self.content) == intrinsic_dimensions(&other.content)
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other)
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let (intrinsic_width, intrinsic_height) = intrinsic_dimensions(&self.content);
         let size_px = self.size.to_px();

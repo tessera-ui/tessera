@@ -166,6 +166,14 @@ impl TextLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for TextLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.text == other.text && self.style == other.style
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other)
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let max_width = input.parent_constraint().width().resolve_max();
         let max_height = input.parent_constraint().height().resolve_max();
@@ -278,6 +286,44 @@ mod tests {
                 assert_eq!(restored, original);
             },
         );
+    }
+
+    thread_local! { static COLOR: Cell<Option<State<tessera_ui::Color>>> = const { Cell::new(None) }; }
+
+    #[tessera]
+    fn color_fixture() {
+        let color = remember(|| tessera_ui::Color::BLACK);
+        COLOR.set(Some(color));
+        boxed()
+            .modifier(Modifier::new().semantics(SemanticsArgs {
+                test_tag: Some("color-text".into()),
+                ..Default::default()
+            }))
+            .children(move || {
+                text().content("Color cache").color(color.get());
+            });
+    }
+
+    #[test]
+    fn text_color_updates_retain_measurements_and_window_geometry() {
+        let mut session = start_layout_test_session(
+            layout_test(|| {
+                color_fixture();
+            })
+            .viewport_px(240, 100),
+        );
+        let original = pump_layout_test_session(&mut session, 0)
+            .node("color-text")
+            .bounds();
+        COLOR.get().unwrap().set(tessera_ui::Color::WHITE);
+        let changed = pump_layout_test_session(&mut session, 16_666_667)
+            .node("color-text")
+            .bounds();
+        assert_eq!(changed, original);
+        let diagnostics = session.diagnostics().unwrap();
+        assert_eq!(diagnostics.measure_node_calls, 1);
+        assert_eq!(diagnostics.cache_store_count, 0);
+        assert_eq!(diagnostics.geometry_nodes_updated, 0);
     }
 
     #[test]

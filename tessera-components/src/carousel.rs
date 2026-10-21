@@ -1782,6 +1782,19 @@ mod tests {
         );
         renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(490.0, 290.0));
         renderer.render_frames(100);
+        let focused = renderer.accessibility_snapshot().expect("focused tree");
+        assert!(
+            focused
+                .nodes
+                .iter()
+                .any(|(id, node)| *id == focused.focus && node.label() == Some("Item 0"))
+        );
+        assert!(
+            renderer.read_pixels().expect("focused image pixels") != initial,
+            "focus feedback must remain visible over opaque carousel images"
+        );
+        tessera_ui::FocusManager::current().clear_focus(true);
+        renderer.render_frames(12);
         assert!(renderer.read_pixels().expect("restored pixels") == initial);
 
         let mut node = AccessibilityNode::new();
@@ -2056,6 +2069,7 @@ mod tests {
         renderer.render_frames(8);
         tessera_ui::dp::set_scale_factor(1.5);
         renderer.resize(750, 450);
+        renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(740.0, 440.0));
         renderer.render_frames(8);
         assert_eq!(renderer.snapshot()["scale_factor"], 1.5);
         assert!(CONTROLLER.get() == Some(controller));

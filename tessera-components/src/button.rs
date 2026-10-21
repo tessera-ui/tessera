@@ -355,6 +355,7 @@ struct ButtonResolvedArgs {
 /// - `disabled_border_color` — optional disabled border color.
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
+/// - `accessibility_role` — optional semantic role; defaults to button.
 /// - `child` — optional child render slot.
 ///
 /// ## Examples
@@ -416,6 +417,7 @@ pub fn button(
     disabled_border_color: Option<Color>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
+    accessibility_role: Option<Role>,
     child: Option<RenderSlot>,
 ) {
     let scheme = use_context::<MaterialTheme>()
@@ -751,7 +753,7 @@ pub fn button(
                 Toggled::False
             }
         }))
-        .accessibility_role(Role::Button)
+        .accessibility_role(accessibility_role.unwrap_or(Role::Button))
         .accessibility_focusable(button_args.enabled)
         .elevation_optional(button_args.elevation)
         .on_click_optional(on_click)

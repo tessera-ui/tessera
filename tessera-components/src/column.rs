@@ -6,7 +6,9 @@
 use tessera_ui::{
     AxisConstraint, ComputedData, Constraint, LayoutResult, MeasurementError, Modifier,
     ParentConstraint, Px, PxPosition, RenderSlot,
-    layout::{MeasureScope, layout},
+    layout::{
+        LayoutChild, LayoutPlacementTarget, MeasureScope, PlacementResult, PlacementScope, layout,
+    },
     tessera,
 };
 
@@ -79,10 +81,46 @@ struct ColumnLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for ColumnLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        (self.cross_axis_alignment == CrossAxisAlignment::Stretch)
+            == (other.cross_axis_alignment == CrossAxisAlignment::Stretch)
+    }
+
+    fn place_children(
+        &self,
+        scope: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        let children = scope.children();
+        let children_sizes = children
+            .iter()
+            .map(|child| Some(child.size()))
+            .collect::<Vec<_>>();
+        let total_children_height = children
+            .iter()
+            .map(|child| child.size().height)
+            .fold(Px::ZERO, |total, size| total + size);
+        let mut result = LayoutResult::new(scope.size());
+        place_children_with_alignment(
+            &PlaceChildrenArgs {
+                children_sizes: &children_sizes,
+                children: &children,
+                final_column_width: scope.size().width,
+                final_column_height: scope.size().height,
+                total_children_height,
+                main_axis_alignment: self.main_axis_alignment,
+                cross_axis_alignment: self.cross_axis_alignment,
+                child_count: children.len(),
+            },
+            &mut result,
+        );
+        Some(result.into_placement_result())
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
-        let child_weights = collect_child_weights(input);
+        let child_weights = collect_child_weights(input, &children);
         let n = child_weights.len();
         assert_eq!(
             children.len(),
@@ -102,6 +140,7 @@ impl tessera_ui::LayoutModifierNode for ColumnLayout {
         let (final_column_width, final_column_height, total_measured_children_height) =
             if should_use_weight_for_height {
                 measure_weighted_column(
+                    &children,
                     input,
                     &child_weights,
                     &column_parent_constraint,
@@ -111,6 +150,7 @@ impl tessera_ui::LayoutModifierNode for ColumnLayout {
                 )?
             } else {
                 measure_unweighted_column(
+                    &children,
                     input,
                     &column_parent_constraint,
                     &mut children_sizes,
@@ -141,9 +181,9 @@ impl tessera_ui::LayoutModifierNode for ColumnLayout {
 }
 
 /// Helper struct used to place children with alignment. Local to this module.
-struct PlaceChildrenArgs<'a> {
+struct PlaceChildrenArgs<'a, T> {
     children_sizes: &'a [Option<ComputedData>],
-    children: &'a [tessera_ui::layout::LayoutChild],
+    children: &'a [T],
     final_column_width: Px,
     final_column_height: Px,
     total_children_height: Px,
@@ -161,6 +201,7 @@ fn classify_children(child_weights: &[f32]) -> (Vec<usize>, Vec<usize>, f32) {
 /// Measure all non-weighted children (vertical variant).
 /// Returns the accumulated total height of those children.
 fn measure_unweighted_children_for_column(
+    children: &[LayoutChild],
     input: &mut MeasureScope<'_>,
     indices: &[usize],
     children_sizes: &mut [Option<ComputedData>],
@@ -176,7 +217,7 @@ fn measure_unweighted_children_for_column(
     );
 
     for &child_idx in indices {
-        let child_id = input.children()[child_idx];
+        let child_id = children[child_idx];
         let child_result = child_id.measure(input, &parent_offered_constraint_for_child)?;
         children_sizes[child_idx] = Some(child_result.size());
         total += child_result.height;
@@ -197,6 +238,7 @@ struct WeightedColumnMeasureContext<'a> {
 }
 
 fn measure_weighted_children_for_column(
+    children: &[LayoutChild],
     scope: &mut MeasureScope<'_>,
     ctx: WeightedColumnMeasureContext<'_>,
     weighted_indices: &[usize],
@@ -211,7 +253,7 @@ fn measure_weighted_children_for_column(
         let child_weight = ctx.child_weights[child_idx];
         let allocated_height =
             Px((remaining_height.0 as f32 * (child_weight / total_weight)) as i32);
-        let child_id = scope.children()[child_idx];
+        let child_id = children[child_idx];
         let parent_offered_constraint_for_child = Constraint::new(
             cross_axis_child_constraint(
                 ctx.column_parent_constraint.width,
@@ -248,6 +290,7 @@ fn calculate_final_column_width(
 /// Measure column when height uses weighted allocation.
 /// Returns (final_width, final_height, total_measured_children_height)
 fn measure_weighted_column(
+    children: &[LayoutChild],
     input: &mut MeasureScope<'_>,
     child_weights: &[f32],
     column_parent_constraint: &Constraint,
@@ -264,6 +307,7 @@ fn measure_weighted_column(
         classify_children(child_weights);
 
     let total_height_of_unweighted_children = measure_unweighted_children_for_column(
+        children,
         input,
         &unweighted_children_indices,
         children_sizes,
@@ -276,6 +320,7 @@ fn measure_weighted_column(
         (available_height_for_children - total_height_of_unweighted_children).max(Px(0));
 
     measure_weighted_children_for_column(
+        children,
         input,
         WeightedColumnMeasureContext {
             children_sizes,
@@ -309,9 +354,8 @@ fn measure_weighted_column(
     ))
 }
 
-fn collect_child_weights(input: &mut MeasureScope<'_>) -> Vec<f32> {
-    input
-        .children()
+fn collect_child_weights(input: &MeasureScope<'_>, children: &[LayoutChild]) -> Vec<f32> {
+    children
         .iter()
         .map(|child_id| {
             child_id
@@ -323,6 +367,7 @@ fn collect_child_weights(input: &mut MeasureScope<'_>) -> Vec<f32> {
 }
 
 fn measure_unweighted_column(
+    children: &[LayoutChild],
     input: &mut MeasureScope<'_>,
     column_parent_constraint: &Constraint,
     children_sizes: &mut [Option<ComputedData>],
@@ -337,7 +382,7 @@ fn measure_unweighted_column(
         column_parent_constraint.height.without_min(),
     );
 
-    for (i, child_id) in input.children().iter().enumerate().take(n) {
+    for (i, child_id) in children.iter().enumerate().take(n) {
         let child_result = child_id.measure(input, &parent_offered_constraint_for_child)?;
         children_sizes[i] = Some(child_result.size());
         total_children_measured_height += child_result.height;
@@ -369,7 +414,10 @@ fn measure_unweighted_column(
 ///
 /// `args` contains measured child sizes, node ids, component metadata and final
 /// column size.
-fn place_children_with_alignment(args: &PlaceChildrenArgs, result: &mut LayoutResult) {
+fn place_children_with_alignment<T: LayoutPlacementTarget>(
+    args: &PlaceChildrenArgs<'_, T>,
+    result: &mut LayoutResult,
+) {
     let (mut current_y, spacing_between_children) = calculate_main_axis_layout_for_column(
         args.final_column_height,
         args.total_children_height,

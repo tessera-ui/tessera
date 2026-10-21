@@ -26,6 +26,9 @@ use crate::{
     theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, content_color_for},
 };
 
+#[cfg(all(test, not(target_family = "wasm")))]
+mod ripple_tests;
+
 #[derive(Clone, PartialEq, Copy, Debug)]
 struct AbsoluteTonalElevation {
     current: Dp,
@@ -106,6 +109,7 @@ struct SurfaceResolvedArgs {
     modifier: Modifier,
     style: SurfaceStyle,
     shape: Shape,
+    clip_content: bool,
     elevation: Option<Dp>,
     tonal_elevation: Dp,
     content_color: Option<Color>,
@@ -369,7 +373,7 @@ fn build_shape_command(
     ripple_props: RippleProps,
     size: PxSize,
 ) -> ShapeCommand {
-    let use_ripple = args.show_ripple && (args.on_click.is_some() || ripple_props.alpha > 0.0);
+    let use_ripple = args.show_ripple && ripple_props.alpha > 0.0;
 
     match args.shape.resolve_for_size(size) {
         ResolvedShape::Rounded {
@@ -389,30 +393,18 @@ fn build_shape_command(
 fn make_surface_drawable(
     args: &SurfaceResolvedArgs,
     style: &SurfaceStyle,
-    ripple_state: Option<State<RippleState>>,
-    frame_nanos: u64,
+    ripple_props: RippleProps,
     size: PxSize,
 ) -> ShapeCommand {
-    let ripple_props = build_ripple_props(args, ripple_state, frame_nanos);
     build_shape_command(args, style, ripple_props, size)
 }
 
 fn try_build_simple_rect_command(
     args: &SurfaceResolvedArgs,
     style: &SurfaceStyle,
-    ripple_state: Option<State<RippleState>>,
-    frame_nanos: u64,
+    ripple_props: RippleProps,
 ) -> Option<SimpleRectCommand> {
-    if args.show_ripple && args.on_click.is_some() {
-        return None;
-    }
-    if args.show_ripple
-        && ripple_state
-            .and_then(|state| {
-                state.with(|ripple| ripple.animation_snapshot_at_frame_nanos(frame_nanos))
-            })
-            .is_some()
-    {
+    if args.show_ripple && ripple_props.alpha > 0.0 {
         return None;
     }
 
@@ -468,6 +460,16 @@ struct SurfaceLayout {
     ripple_state: Option<State<RippleState>>,
     scheme: MaterialColorScheme,
     absolute_tonal_elevation: Dp,
+    ripple_frame_nanos: Option<u64>,
+}
+
+impl SurfaceLayout {
+    fn has_foreground(&self) -> bool {
+        !matches!(self.args.style, SurfaceStyle::Filled { .. })
+            || (self.args.show_state_layer && self.interaction_state.is_some())
+            || (self.args.show_ripple
+                && (self.args.on_click.is_some() || self.ripple_state.is_some()))
+    }
 }
 
 impl PartialEq for SurfaceLayout {
@@ -475,22 +477,77 @@ impl PartialEq for SurfaceLayout {
         self.args == other.args
             && self.interaction_state == other.interaction_state
             && self.ripple_state == other.ripple_state
+            && self.ripple_frame_nanos == other.ripple_frame_nanos
             && self.scheme == other.scheme
             && self.absolute_tonal_elevation == other.absolute_tonal_elevation
     }
 }
 
 impl tessera_ui::LayoutModifierNode for SurfaceLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.has_foreground() == other.has_foreground()
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other) && self.args.content_alignment == other.args.content_alignment
+    }
+
+    fn place_children(
+        &self,
+        scope: &tessera_ui::layout::PlacementScope<'_>,
+        _inner: &tessera_ui::layout::PlacementResult,
+    ) -> Option<tessera_ui::layout::PlacementResult> {
+        let children = scope.children();
+        let (foreground, children) = if self.has_foreground() {
+            let (foreground, children) = children.split_last()?;
+            (Some(*foreground), children)
+        } else {
+            (None, children.as_slice())
+        };
+        let size = scope.size();
+        let child_width = children
+            .iter()
+            .map(|child| child.size().width)
+            .max()
+            .unwrap_or(Px::ZERO);
+        let child_height = children
+            .iter()
+            .map(|child| child.size().height)
+            .max()
+            .unwrap_or(Px::ZERO);
+        let (x, y) = compute_content_offset(
+            self.args.content_alignment,
+            size.width,
+            size.height,
+            child_width,
+            child_height,
+        );
+        let mut result = LayoutResult::new(size);
+        if let Some(foreground) = foreground {
+            result.place_child(foreground, PxPosition::ZERO);
+        }
+        for &child in children {
+            result.place_child(child, PxPosition::from_f32_xy(x, y));
+        }
+        Some(result.into_placement_result())
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let parent_constraint = *input.parent_constraint().as_ref();
         let child_constraint = input.parent_constraint().without_min();
         let children = input.children();
+        let (foreground, children) = if self.has_foreground() {
+            let (foreground, children) = children.split_last().expect("surface foreground");
+            (Some(*foreground), children)
+        } else {
+            (None, children.as_slice())
+        };
 
         let child_measurement = if !children.is_empty() {
             let mut max_width = Px::ZERO;
             let mut max_height = Px::ZERO;
-            for &child in &children {
+            for &child in children {
                 let measurement = child.measure(input, &child_constraint)?;
                 max_width = max_width.max(measurement.width);
                 max_height = max_height.max(measurement.height);
@@ -507,6 +564,16 @@ impl tessera_ui::LayoutModifierNode for SurfaceLayout {
         };
 
         let (width, height) = compute_surface_size(parent_constraint, child_measurement);
+        if let Some(foreground) = foreground {
+            foreground.measure(
+                input,
+                &Constraint::new(
+                    tessera_ui::AxisConstraint::exact(width),
+                    tessera_ui::AxisConstraint::exact(height),
+                ),
+            )?;
+            result.place_child(foreground, PxPosition::ZERO);
+        }
 
         if !children.is_empty() {
             let (extra_x, extra_y) = compute_content_offset(
@@ -517,7 +584,7 @@ impl tessera_ui::LayoutModifierNode for SurfaceLayout {
                 child_measurement.height,
             );
             let origin = PxPosition::from_f32_xy(extra_x, extra_y);
-            for &child in &children {
+            for &child in children {
                 result.place_child(child, origin);
             }
         }
@@ -533,59 +600,103 @@ impl tessera_ui::DrawModifierNode for SurfaceLayout {
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
         let input = &mut *ctx.render_input;
-        let state_layer_alpha = if self.args.show_state_layer {
-            self.interaction_state
-                .as_ref()
-                .map(|state| state.with(|s| s.state_layer_alpha()))
-                .unwrap_or(0.0)
-        } else {
-            0.0
-        };
-
-        let mut effective_style = apply_tonal_elevation_to_style(
+        let effective_style = apply_tonal_elevation_to_style(
             &self.args.style,
             &self.scheme,
             self.absolute_tonal_elevation,
         );
-        if self.args.show_state_layer {
-            effective_style = apply_state_layer_to_style(
-                &effective_style,
-                self.args.ripple_color.with_alpha(1.0),
-                state_layer_alpha,
-            );
-        }
-
-        let ripple_state_for_draw = if self.args.show_ripple {
-            self.ripple_state
-        } else {
-            None
+        let background = match effective_style {
+            SurfaceStyle::Filled { color } => Some(SurfaceStyle::Filled { color }),
+            SurfaceStyle::FilledOutlined { fill_color, .. } => {
+                Some(SurfaceStyle::Filled { color: fill_color })
+            }
+            SurfaceStyle::Outlined { .. } => None,
         };
-        let frame_nanos = current_frame_nanos();
-
-        let mut metadata = input.metadata_mut();
-        let size = metadata
-            .computed_data()
-            .expect("Surface node must have computed size before record");
-
-        if let Some(simple) = try_build_simple_rect_command(
-            &self.args,
-            &effective_style,
-            ripple_state_for_draw,
-            frame_nanos,
-        ) {
-            metadata.fragment_mut().push_draw_command(simple);
-        } else {
-            let drawable = make_surface_drawable(
-                &self.args,
-                &effective_style,
-                ripple_state_for_draw,
-                frame_nanos,
-                PxSize::new(size.width, size.height),
-            );
-
-            metadata.fragment_mut().push_draw_command(drawable);
+        if let Some(background) = background {
+            record_surface_style(input, &self.args, &background, RippleProps::default());
         }
         content.draw(input);
+    }
+}
+
+fn record_surface_style(
+    input: &mut tessera_ui::layout::RenderInput<'_>,
+    args: &SurfaceResolvedArgs,
+    style: &SurfaceStyle,
+    ripple: RippleProps,
+) {
+    let mut metadata = input.metadata_mut();
+    let size = metadata.computed_data().expect("surface draw bounds");
+    if let Some(simple) = try_build_simple_rect_command(args, style, ripple) {
+        metadata.fragment_mut().push_draw_command(simple);
+    } else {
+        let drawable =
+            make_surface_drawable(args, style, ripple, PxSize::new(size.width, size.height));
+        metadata.fragment_mut().push_draw_command(drawable);
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct SurfaceForeground(SurfaceLayout);
+
+impl tessera_ui::DrawModifierNode for SurfaceForeground {
+    fn draw(
+        &self,
+        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+        content: &mut dyn tessera_ui::DrawModifierContent,
+    ) {
+        let policy = &self.0;
+        let alpha = if policy.args.enabled && policy.args.show_state_layer {
+            policy
+                .interaction_state
+                .map(|state| state.with(|state| state.state_layer_alpha()))
+                .unwrap_or(0.0)
+        } else {
+            0.0
+        };
+        let ripple = if policy.args.enabled {
+            policy
+                .ripple_frame_nanos
+                .map(|frame_nanos| {
+                    build_ripple_props(&policy.args, policy.ripple_state, frame_nanos)
+                })
+                .unwrap_or_default()
+        } else {
+            RippleProps::default()
+        };
+        let style = match policy.args.style {
+            SurfaceStyle::Filled { .. } => SurfaceStyle::Filled {
+                color: Color::TRANSPARENT,
+            },
+            SurfaceStyle::Outlined { color, width } => SurfaceStyle::FilledOutlined {
+                fill_color: Color::TRANSPARENT,
+                border_color: color,
+                border_width: width,
+            },
+            SurfaceStyle::FilledOutlined {
+                border_color,
+                border_width,
+                ..
+            } => SurfaceStyle::FilledOutlined {
+                fill_color: Color::TRANSPARENT,
+                border_color,
+                border_width,
+            },
+        };
+        if alpha > 0.0 || ripple.alpha > 0.0 || !matches!(style, SurfaceStyle::Filled { .. }) {
+            let style =
+                apply_state_layer_to_style(&style, policy.args.ripple_color.with_alpha(1.0), alpha);
+            record_surface_style(ctx.render_input, &policy.args, &style, ripple);
+        }
+        content.draw(ctx.render_input);
+    }
+}
+
+#[tessera]
+fn surface_foreground(paint: Option<State<SurfaceLayout>>) {
+    let paint = paint.expect("surface foreground paint").get();
+    if paint.has_foreground() {
+        layout().draw(SurfaceForeground(paint));
     }
 }
 
@@ -618,7 +729,6 @@ fn surface_content(
     ripple_state: Option<State<RippleState>>,
 ) {
     let surface = resolved.expect("surface_content requires resolved args");
-    let child = surface.child;
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -644,15 +754,18 @@ fn surface_content(
     let clickable = surface.on_click.is_some();
     let interactive = surface.enabled && clickable;
 
+    let mut ripple_frame_nanos = None;
     if surface.show_ripple
         && let Some(ripple_state) = ripple_state
     {
+        let frame_nanos = current_frame_nanos();
         let has_active_ripple = ripple_state.with(|state| {
             state
-                .animation_snapshot_at_frame_nanos(current_frame_nanos())
+                .animation_snapshot_at_frame_nanos(frame_nanos)
                 .is_some()
         });
         if has_active_ripple {
+            ripple_frame_nanos = Some(frame_nanos);
             receive_frame_nanos(move |frame_nanos| {
                 let has_active_ripple = ripple_state.with(|state| {
                     state
@@ -684,49 +797,69 @@ fn surface_content(
             },
         );
     }
-
     let policy = SurfaceLayout {
         args: layout_args,
         interaction_state,
         ripple_state,
         scheme,
         absolute_tonal_elevation,
+        ripple_frame_nanos,
     };
-    layout()
-        .modifier(modifier)
-        .policy(policy.clone())
-        .draw(policy)
-        .child(move || {
-            provide_context(
-                || AbsoluteTonalElevation {
-                    current: absolute_tonal_elevation,
-                },
-                || {
-                    let elevation = use_context::<AbsoluteTonalElevation>().unwrap();
-                    if elevation.with(|value| value.current) != absolute_tonal_elevation {
-                        elevation.set(AbsoluteTonalElevation {
-                            current: absolute_tonal_elevation,
-                        });
-                    }
-                    provide_context(
-                        || ContentColor {
-                            current: content_color,
-                        },
-                        || {
-                            let color = use_context::<ContentColor>().unwrap();
-                            if color.with(|value| value.current) != content_color {
-                                color.set(ContentColor {
-                                    current: content_color,
-                                });
-                            }
-                            if let Some(child) = child.as_ref() {
-                                child.render();
-                            }
-                        },
-                    );
-                },
-            );
-        });
+    let current_context = (absolute_tonal_elevation, content_color, policy.args.child);
+    let context = remember(|| current_context);
+    if context.with(|value| value != &current_context) {
+        context.set(current_context);
+    }
+    let current = policy;
+    let live = remember(|| current.clone());
+    if live.with(|value| value != &current) {
+        live.set(current);
+    }
+    layout().modifier(modifier).child(move || {
+        let policy = live.get();
+        let modifier = if policy.args.clip_content {
+            Modifier::new().clip_shape(policy.args.shape)
+        } else {
+            Modifier::new()
+        };
+        layout()
+            .modifier(modifier)
+            .policy(policy.clone())
+            .draw(policy)
+            .child(move || {
+                let (absolute_tonal_elevation, content_color, child) = context.get();
+                provide_context(
+                    || AbsoluteTonalElevation {
+                        current: absolute_tonal_elevation,
+                    },
+                    || {
+                        let elevation = use_context::<AbsoluteTonalElevation>().unwrap();
+                        if elevation.with(|value| value.current) != absolute_tonal_elevation {
+                            elevation.set(AbsoluteTonalElevation {
+                                current: absolute_tonal_elevation,
+                            });
+                        }
+                        provide_context(
+                            || ContentColor {
+                                current: content_color,
+                            },
+                            || {
+                                let color = use_context::<ContentColor>().unwrap();
+                                if color.with(|value| value.current) != content_color {
+                                    color.set(ContentColor {
+                                        current: content_color,
+                                    });
+                                }
+                                if let Some(child) = child.as_ref() {
+                                    child.render();
+                                }
+                            },
+                        );
+                    },
+                );
+                surface_foreground().paint(live);
+            });
+    });
 }
 
 /// # surface
@@ -743,6 +876,8 @@ fn surface_content(
 /// - `modifier` — optional modifier chain applied to the surface subtree.
 /// - `style` — optional visual style of the surface.
 /// - `shape` — optional geometric outline of the surface.
+/// - `clip_content` — clip the surface and its descendants to the shape while
+///   preserving the outer shadow.
 /// - `elevation` — optional shadow elevation.
 /// - `tonal_elevation` — optional tonal elevation tint for theme surfaces.
 /// - `content_color` — optional explicit content color override.
@@ -799,6 +934,7 @@ pub fn surface(
     modifier: Option<Modifier>,
     style: Option<SurfaceStyle>,
     shape: Option<Shape>,
+    clip_content: Option<bool>,
     elevation: Option<Dp>,
     tonal_elevation: Option<Dp>,
     content_color: Option<Color>,
@@ -833,6 +969,7 @@ pub fn surface(
             color: scheme.surface,
         }),
         shape: shape.unwrap_or_default(),
+        clip_content: clip_content.unwrap_or(false),
         elevation,
         tonal_elevation: tonal_elevation.unwrap_or(Dp(0.0)),
         content_color,
@@ -1061,6 +1198,7 @@ mod tests {
             },
             interaction_state: None,
             ripple_state: None,
+            ripple_frame_nanos: None,
             scheme: MaterialColorScheme::default(),
             absolute_tonal_elevation: Dp(0.0),
         }

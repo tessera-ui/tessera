@@ -23,6 +23,8 @@ thread_local! {
     static INK: Cell<Option<State<Color>>> = const { Cell::new(None) };
     static SHIFT: Cell<Option<State<Dp>>> = const { Cell::new(None) };
     static PLACED: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    static PAINT_BUILDS: Cell<usize> = const { Cell::new(0) };
+    static PAINTS: Cell<usize> = const { Cell::new(0) };
     static MEASURES: Cell<usize> = const { Cell::new(0) };
 }
 
@@ -268,5 +270,77 @@ fn placement_only_content_moves_and_hides_without_remeasuring_the_policy() {
     crate::test_utils::run_isolated_test(
         "text::drawing_tests::placement_only_content_moves_and_hides_without_remeasuring_the_policy",
         check_placement_only_drawing,
+    );
+}
+
+#[derive(Clone, PartialEq)]
+struct StateInkDraw {
+    ink: State<Color>,
+}
+
+impl DrawModifierNode for StateInkDraw {
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, _content: &mut dyn DrawModifierContent) {
+        PAINTS.set(PAINTS.get() + 1);
+        ctx.render_input
+            .metadata_mut()
+            .fragment_mut()
+            .push_draw_command(ShapeCommand::Rect {
+                color: self.ink.get(),
+                corner_radii: [0.0; 4],
+                corner_g2: [2.0; 4],
+            });
+    }
+}
+
+#[tessera]
+fn paint_state_fixture() {
+    PAINT_BUILDS.set(PAINT_BUILDS.get() + 1);
+    let ink = remember(|| Color::new(1.0, 0.0, 0.0, 1.0));
+    INK.set(Some(ink));
+    layout().policy(SolidLeaf).draw(StateInkDraw { ink });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_fragments() {
+    crate::test_utils::run_isolated_test(
+        "text::drawing_tests::paint_state_updates_pixels_without_rebuilding_or_measuring_and_reuses_stable_fragments",
+        || {
+            MEASURES.set(0);
+            PAINTS.set(0);
+            PAINT_BUILDS.set(0);
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(|| paint_state_fixture()),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 64,
+                    height: 48,
+                    ..Default::default()
+                },
+            )
+            .expect("renderer");
+            renderer.render_frames(1);
+            let reference = renderer.read_pixels().expect("red frame");
+            let pixel = (12 * 64 + 16) * 4;
+            assert_eq!(&reference[pixel..pixel + 4], &[255, 0, 0, 255]);
+            let measures = MEASURES.get();
+            let paints = PAINTS.get();
+            let builds = PAINT_BUILDS.get();
+            renderer.render_frames(3);
+            assert!(reference == renderer.read_pixels().expect("retained red frame"));
+            assert_eq!(PAINTS.get(), paints);
+            INK.get()
+                .expect("ink state")
+                .set(Color::new(0.0, 0.0, 1.0, 1.0));
+            renderer.render_frames(1);
+            let changed = renderer.read_pixels().expect("blue frame");
+            assert_eq!(&changed[pixel..pixel + 4], &[0, 0, 255, 255]);
+            assert_eq!(MEASURES.get(), measures);
+            assert_eq!(PAINT_BUILDS.get(), builds);
+            assert_eq!(PAINTS.get(), paints + 1);
+            renderer.render_frames(3);
+            assert!(changed == renderer.read_pixels().expect("retained blue frame"));
+            assert_eq!(PAINTS.get(), paints + 1);
+        },
     );
 }

@@ -242,6 +242,14 @@ struct DialogContentLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for DialogContentLayout {
+    fn measure_eq(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn placement_eq(&self, _other: &Self) -> bool {
+        true
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let Some(child) = input.children().first().copied() else {

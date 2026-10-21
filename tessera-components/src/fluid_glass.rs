@@ -346,6 +346,14 @@ struct FluidGlassLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for FluidGlassLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.padding == other.padding
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other)
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let parent_constraint = *input.parent_constraint().as_ref();
