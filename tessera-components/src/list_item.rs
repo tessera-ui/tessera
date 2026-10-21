@@ -5,22 +5,61 @@
 //! Present rows of content in settings, inboxes, or selection lists.
 
 use tessera_ui::{
-    AxisConstraint, Callback, Color, Dp, Modifier, Px, RenderSlot, State, accesskit::Role,
-    provide_context, tessera, use_context,
+    AccessibilityActionHandler, AccessibilityNode, Callback, Color, Dp, Modifier, RenderSlot,
+    SemanticsModifierNode, State, accesskit::Role, current_frame_nanos, layout::layout,
+    modifier::ModifierCapabilityExt as _, provide_context, receive_frame_nanos, remember, tessera,
+    use_context,
 };
 
 use crate::{
-    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
+    alignment::Alignment,
+    animation::shape_motion::ShapeMotion,
     boxed::boxed,
-    column::column,
+    icon::IconSize,
     modifier::{InteractionState, ModifierExt as _, Padding},
-    row::row,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
-    theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme},
+    theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle},
 };
+
+use item_layout::ListItemLayout;
+
+pub use shapes::{ListItemPosition, ListItemShapes};
+
+mod color_motion;
+mod item_layout;
+mod shapes;
+
+#[cfg(test)]
+mod tests;
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod color_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod native_tests;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod shape_tests;
+
+#[cfg(test)]
+thread_local! {
+    static ITEM_BUILDS: std::cell::Cell<usize> = const { std::cell::Cell::new(0) };
+}
+
+/// Vertical placement of content inside a list row.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum ListItemVerticalAlignment {
+    /// Center shorter rows and top-align taller rows.
+    #[default]
+    Auto,
+    /// Align all content at the top inset.
+    Top,
+    /// Center all content vertically.
+    Center,
+    /// Align all content at the bottom inset.
+    Bottom,
+}
 
 /// Colors used by list items in different states.
 #[derive(Clone, PartialEq, Copy, Debug)]
@@ -61,12 +100,26 @@ pub struct ListItemColors {
     pub selected_leading_color: Color,
     /// Trailing slot content color when selected.
     pub selected_trailing_color: Color,
+    /// Container color while dragged.
+    pub dragged_container_color: Color,
+    /// Headline color while dragged.
+    pub dragged_headline_color: Color,
+    /// Overline color while dragged.
+    pub dragged_overline_color: Color,
+    /// Supporting text color while dragged.
+    pub dragged_supporting_color: Color,
+    /// Leading content color while dragged.
+    pub dragged_leading_color: Color,
+    /// Trailing content color while dragged.
+    pub dragged_trailing_color: Color,
 }
 
 impl ListItemColors {
-    fn container_color(self, enabled: bool, selected: bool) -> Color {
+    fn container_color(self, enabled: bool, selected: bool, dragged: bool) -> Color {
         if !enabled {
             self.disabled_container_color
+        } else if dragged {
+            self.dragged_container_color
         } else if selected {
             self.selected_container_color
         } else {
@@ -74,9 +127,11 @@ impl ListItemColors {
         }
     }
 
-    fn headline_color(self, enabled: bool, selected: bool) -> Color {
+    fn headline_color(self, enabled: bool, selected: bool, dragged: bool) -> Color {
         if !enabled {
             self.disabled_headline_color
+        } else if dragged {
+            self.dragged_headline_color
         } else if selected {
             self.selected_headline_color
         } else {
@@ -84,9 +139,11 @@ impl ListItemColors {
         }
     }
 
-    fn overline_color(self, enabled: bool, selected: bool) -> Color {
+    fn overline_color(self, enabled: bool, selected: bool, dragged: bool) -> Color {
         if !enabled {
             self.disabled_overline_color
+        } else if dragged {
+            self.dragged_overline_color
         } else if selected {
             self.selected_overline_color
         } else {
@@ -94,9 +151,11 @@ impl ListItemColors {
         }
     }
 
-    fn supporting_color(self, enabled: bool, selected: bool) -> Color {
+    fn supporting_color(self, enabled: bool, selected: bool, dragged: bool) -> Color {
         if !enabled {
             self.disabled_supporting_color
+        } else if dragged {
+            self.dragged_supporting_color
         } else if selected {
             self.selected_supporting_color
         } else {
@@ -104,9 +163,11 @@ impl ListItemColors {
         }
     }
 
-    fn leading_color(self, enabled: bool, selected: bool) -> Color {
+    fn leading_color(self, enabled: bool, selected: bool, dragged: bool) -> Color {
         if !enabled {
             self.disabled_leading_color
+        } else if dragged {
+            self.dragged_leading_color
         } else if selected {
             self.selected_leading_color
         } else {
@@ -114,9 +175,11 @@ impl ListItemColors {
         }
     }
 
-    fn trailing_color(self, enabled: bool, selected: bool) -> Color {
+    fn trailing_color(self, enabled: bool, selected: bool, dragged: bool) -> Color {
         if !enabled {
             self.disabled_trailing_color
+        } else if dragged {
+            self.dragged_trailing_color
         } else if selected {
             self.selected_trailing_color
         } else {
@@ -139,6 +202,10 @@ impl ListItemDefaults {
     pub const LEADING_MIN_SIZE: Dp = Dp(24.0);
     /// Minimum size for trailing content slots.
     pub const TRAILING_MIN_SIZE: Dp = Dp(24.0);
+    /// Default icon size within an Expressive list item.
+    pub const ICON_SIZE: Dp = Dp(20.0);
+    /// Vertical gap between segmented list items.
+    pub const SEGMENTED_GAP: Dp = Dp(2.0);
     /// Spacing between leading/trailing slots and the main text column.
     pub const INTERNAL_SPACING: Dp = Dp(12.0);
     /// Default content padding applied inside the list item container.
@@ -150,7 +217,13 @@ impl ListItemDefaults {
 
     /// Default container shape for list items.
     pub fn shape() -> Shape {
-        Shape::RECTANGLE
+        let corner = RoundedCorner::manual(Dp(4.0), 2.0);
+        Shape::RoundedRectangle {
+            top_left: corner,
+            top_right: corner,
+            bottom_right: corner,
+            bottom_left: corner,
+        }
     }
 
     /// Default colors for list items derived from the current theme.
@@ -178,6 +251,12 @@ impl ListItemDefaults {
             selected_supporting_color: scheme.on_secondary_container,
             selected_leading_color: scheme.on_secondary_container,
             selected_trailing_color: scheme.on_secondary_container,
+            dragged_container_color: scheme.tertiary_container,
+            dragged_headline_color: scheme.on_tertiary_container,
+            dragged_overline_color: scheme.on_tertiary_container,
+            dragged_supporting_color: scheme.on_tertiary_container,
+            dragged_leading_color: scheme.on_tertiary_container,
+            dragged_trailing_color: scheme.on_tertiary_container,
         }
     }
 
@@ -195,8 +274,8 @@ impl ListItemDefaults {
 
 /// # list_item
 ///
-/// Render a Material list row with optional leading/trailing slots and
-/// supporting text.
+/// Render an adaptive Material list row for settings, inboxes, and selection
+/// lists.
 ///
 /// ## Usage
 ///
@@ -207,17 +286,30 @@ impl ListItemDefaults {
 /// - `modifier` — optional modifier chain applied to the list item container.
 /// - `enabled` — optional enabled state; defaults to `true`.
 /// - `selected` — whether the list item is selected.
-/// - `headline` — primary headline text.
+/// - `headline` — primary headline text when `content` is absent.
+/// - `content` — optional custom main content, replacing `headline`.
+/// - `overline_content` — optional custom content replacing `overline_text`.
+/// - `supporting_content` — optional custom content replacing
+///   `supporting_text`. Custom slots inherit their role typography and color.
+///   Supply explicit accessibility labels and descriptions when their meaning
+///   is not text.
 /// - `overline_text` — optional overline text.
 /// - `supporting_text` — optional supporting text.
 /// - `leading` — optional leading slot.
 /// - `trailing` — optional trailing slot.
 /// - `colors` — optional color palette override.
-/// - `shape` — optional container shape override.
+/// - `shape` — optional container shape override. A fixed shape overrides
+///   position and state shapes.
+/// - `shapes` — optional shapes for resting and active states.
+/// - `position` — row position within a segmented list; defaults to standalone.
+///   Place segmented rows with `ListItemDefaults::SEGMENTED_GAP` between them.
+/// - `dragged` — apply drag colors and shape during an externally managed drag.
 /// - `content_padding` — optional inner padding override.
 /// - `tonal_elevation` — optional tonal elevation override.
 /// - `shadow_elevation` — optional shadow elevation override.
 /// - `min_height` — optional minimum height override.
+/// - `vertical_alignment` — content alignment; short rows center by default and
+///   taller rows align to their top inset.
 /// - `on_click` — optional click callback.
 /// - `interaction_state` — optional shared interaction state.
 /// - `accessibility_label` — optional accessibility label.
@@ -226,8 +318,11 @@ impl ListItemDefaults {
 /// ## Examples
 ///
 /// ```
-/// use tessera_components::list_item::list_item;
-/// use tessera_ui::tessera;
+/// use tessera_components::{
+///     list_item::{ListItemDefaults, list_item},
+///     text::text,
+/// };
+/// use tessera_ui::{Dp, tessera};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// #[tessera]
@@ -236,12 +331,16 @@ impl ListItemDefaults {
 ///         .theme(|| MaterialTheme::default())
 ///         .child(|| {
 ///             list_item()
-///                 .headline("Inbox")
+///                 .accessibility_label("Inbox")
+///                 .content(|| {
+///                     text().content("Inbox");
+///                 })
 ///                 .supporting_text("3 new messages");
 ///         });
 /// }
 ///
 /// demo();
+/// assert_eq!(ListItemDefaults::min_height(false, true), Dp(72.0));
 /// ```
 #[tessera]
 pub fn list_item(
@@ -249,57 +348,140 @@ pub fn list_item(
     enabled: Option<bool>,
     selected: Option<bool>,
     #[prop(into)] headline: Option<String>,
+    content: Option<RenderSlot>,
+    overline_content: Option<RenderSlot>,
+    supporting_content: Option<RenderSlot>,
     #[prop(into)] overline_text: Option<String>,
     #[prop(into)] supporting_text: Option<String>,
     leading: Option<RenderSlot>,
     trailing: Option<RenderSlot>,
     colors: Option<ListItemColors>,
     shape: Option<Shape>,
+    shapes: Option<ListItemShapes>,
+    position: Option<ListItemPosition>,
+    dragged: Option<bool>,
     content_padding: Option<Padding>,
     tonal_elevation: Option<Dp>,
     shadow_elevation: Option<Dp>,
     min_height: Option<Dp>,
+    vertical_alignment: Option<ListItemVerticalAlignment>,
     on_click: Option<Callback>,
     interaction_state: Option<State<InteractionState>>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
+    #[cfg(test)]
+    ITEM_BUILDS.set(ITEM_BUILDS.get() + 1);
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
     let typography = theme.typography;
-    let modifier = modifier.unwrap_or_else(|| Modifier::new().fill_max_width());
+    let modifier = modifier
+        .unwrap_or_default()
+        .push_semantics(ListItemSelectionSemantics(selected));
     let enabled = enabled.unwrap_or(true);
     let selected = selected.unwrap_or(false);
+    let dragged = dragged.unwrap_or(false);
     let headline = headline.unwrap_or_default();
     let colors = colors.unwrap_or_else(|| ListItemDefaults::colors(&theme.color_scheme));
-    let shape = shape.unwrap_or_else(ListItemDefaults::shape);
+    let interaction = if let Some(interaction) = interaction_state {
+        interaction
+    } else {
+        remember(InteractionState::new)
+    };
+    let interactive = enabled && on_click.is_some();
+    let shapes = shapes
+        .unwrap_or_else(|| ListItemShapes::from_theme(&theme))
+        .segmented(position.unwrap_or_default(), theme.shapes.large);
+    let target = if let Some(shape) = shape {
+        shape
+    } else if interactive && interaction.with(InteractionState::is_pressed) {
+        shapes.pressed_shape
+    } else if dragged && enabled {
+        shapes.dragged_shape
+    } else if selected {
+        shapes.selected_shape
+    } else if interactive && interaction.with(InteractionState::is_focused) {
+        shapes.focused_shape
+    } else if interactive && interaction.with(InteractionState::is_hovered) {
+        shapes.hovered_shape
+    } else {
+        shapes.shape
+    };
+    let motion = remember(|| ShapeMotion::new(target));
+    let mut next = motion.get();
+    next.retarget(target, enabled, current_frame_nanos());
+    if next != motion.get() {
+        motion.set(next);
+    }
     let content_padding = content_padding.unwrap_or(ListItemDefaults::CONTENT_PADDING);
     let tonal_elevation = tonal_elevation.unwrap_or(ListItemDefaults::TONAL_ELEVATION);
     let shadow_elevation = shadow_elevation.unwrap_or(ListItemDefaults::SHADOW_ELEVATION);
 
     let overline_text = overline_text.filter(|value| !value.is_empty());
     let supporting_text = supporting_text.filter(|value| !value.is_empty());
-    let has_overline = overline_text.is_some();
-    let has_supporting = supporting_text.is_some();
-    let min_height =
-        min_height.unwrap_or_else(|| ListItemDefaults::min_height(has_overline, has_supporting));
-    let content_min_height =
-        content_min_height(min_height, content_padding.top, content_padding.bottom);
+    let has_overline = overline_text.is_some() || overline_content.is_some();
+    let has_supporting = supporting_text.is_some() || supporting_content.is_some();
 
-    let container_color = colors.container_color(enabled, selected);
-    let headline_color = colors.headline_color(enabled, selected);
-    let overline_color = colors.overline_color(enabled, selected);
-    let supporting_color = colors.supporting_color(enabled, selected);
-    let leading_color = colors.leading_color(enabled, selected);
-    let trailing_color = colors.trailing_color(enabled, selected);
+    let target_colors = [
+        colors.container_color(enabled, selected, dragged),
+        colors.headline_color(enabled, selected, dragged),
+        colors.overline_color(enabled, selected, dragged),
+        colors.supporting_color(enabled, selected, dragged),
+        colors.leading_color(enabled, selected, dragged),
+        colors.trailing_color(enabled, selected, dragged),
+    ];
+    let color_motion = remember(|| color_motion::ListColorsMotion::new(target_colors));
+    let mut next_colors = color_motion.get();
+    next_colors.retarget(target_colors, current_frame_nanos());
+    if next_colors != color_motion.get() {
+        color_motion.set(next_colors);
+    }
+    if next.is_animating() || next_colors.is_animating() {
+        receive_frame_nanos(move |frame| {
+            let mut next = motion.get();
+            next.advance(frame);
+            if next != motion.get() {
+                motion.set(next);
+            }
+            let mut next_colors = color_motion.get();
+            next_colors.advance(frame);
+            if next_colors != color_motion.get() {
+                color_motion.set(next_colors);
+            }
+            if next.is_animating() || next_colors.is_animating() {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+    let [
+        container_color,
+        headline_color,
+        overline_color,
+        supporting_color,
+        leading_color,
+        trailing_color,
+    ] = next_colors.value();
 
-    let accessibility_label =
-        accessibility_label.or_else(|| (!headline.is_empty()).then(|| headline.clone()));
+    let accessibility_label = accessibility_label
+        .or_else(|| (content.is_none() && !headline.is_empty()).then(|| headline.clone()));
     let accessibility_description = accessibility_description
-        .or_else(|| supporting_text.clone())
-        .or_else(|| overline_text.clone());
-    let internal_spacing = ListItemDefaults::INTERNAL_SPACING;
+        .or_else(|| {
+            if supporting_content.is_none() {
+                supporting_text.clone()
+            } else {
+                None
+            }
+        })
+        .or_else(|| {
+            if overline_content.is_none() {
+                overline_text.clone()
+            } else {
+                None
+            }
+        });
     let has_on_click = on_click.is_some();
     let elevation = (shadow_elevation.0 > 0.0).then_some(shadow_elevation);
 
@@ -308,140 +490,167 @@ pub fn list_item(
         .style(SurfaceStyle::Filled {
             color: container_color,
         })
-        .shape(shape)
+        .shape(motion.get().shape())
         .content_color(headline_color)
         .enabled(enabled)
         .ripple_color(headline_color)
         .tonal_elevation(tonal_elevation)
         .accessibility_role(Role::ListItem)
         .elevation_optional(elevation)
-        .interaction_state_optional(interaction_state)
+        .interaction_state(interaction)
         .on_click_optional(on_click)
-        .accessibility_focusable_optional(has_on_click.then_some(true))
+        .accessibility_focusable(enabled && has_on_click)
         .accessibility_label_optional(accessibility_label)
         .accessibility_description_optional(accessibility_description)
-        .child_shared(RenderSlot::new(move || {
+        .child(move || {
             let headline = headline.clone();
-            let leading = leading;
-            let trailing = trailing;
             let overline_text = overline_text.clone();
             let supporting_text = supporting_text.clone();
-            let row_modifier = Modifier::new()
-                .constrain(
-                    None,
-                    Some(AxisConstraint::at_least(Px::from(content_min_height))),
-                )
-                .padding(content_padding)
-                .fill_max_width();
-
-            row()
-                .modifier(row_modifier)
-                .main_axis_alignment(MainAxisAlignment::Start)
-                .cross_axis_alignment(CrossAxisAlignment::Center)
-                .children(move || {
-                    if let Some(leading) = leading {
-                        let color = leading_color;
-                        {
-                            list_item_slot()
-                                .content_shared(leading)
-                                .color(color)
-                                .min_size(ListItemDefaults::LEADING_MIN_SIZE);
-                        };
-                        {
-                            spacer().modifier(Modifier::new().width(internal_spacing));
-                        };
-                    }
-
-                    let overline_text = overline_text.clone();
-                    let supporting_text = supporting_text.clone();
-                    let headline_text = headline.clone();
-                    column()
-                        .modifier(Modifier::new().fill_max_width().weight(1.0))
-                        .main_axis_alignment(MainAxisAlignment::Start)
-                        .cross_axis_alignment(CrossAxisAlignment::Start)
-                        .children(move || {
-                            if let Some(overline) = overline_text.clone() {
-                                let color = overline_color;
-                                list_item_text_line()
-                                    .text_value(overline.clone())
-                                    .style(typography.label_small)
-                                    .color(color);
-                            }
-
-                            let color = headline_color;
-                            if headline_text.is_empty() {
-                                spacer().modifier(Modifier::new());
-                            } else {
-                                list_item_text_line()
-                                    .text_value(headline_text.clone())
-                                    .style(typography.body_large)
-                                    .color(color);
-                            }
-
-                            if let Some(supporting) = supporting_text.clone() {
-                                let color = supporting_color;
-                                list_item_text_line()
-                                    .text_value(supporting.clone())
-                                    .style(typography.body_medium)
-                                    .color(color);
-                            }
-                        });
-
-                    if let Some(trailing) = trailing {
-                        {
-                            spacer().modifier(Modifier::new().width(internal_spacing));
-                        };
-                        let color = trailing_color;
-                        {
-                            list_item_slot()
-                                .content_shared(trailing)
-                                .color(color)
-                                .min_size(ListItemDefaults::TRAILING_MIN_SIZE);
-                        };
-                    }
+            layout()
+                .policy(ListItemLayout {
+                    padding: content_padding,
+                    min_height,
+                    has_overline,
+                    has_supporting,
+                    supporting_line_height: typography
+                        .body_medium
+                        .line_height
+                        .unwrap_or(Dp(typography.body_medium.font_size.0 * 1.2)),
+                    vertical_alignment: vertical_alignment.unwrap_or_default(),
+                })
+                .child(move || {
+                    list_item_slot()
+                        .content_optional(leading)
+                        .color(leading_color)
+                        .style(typography.title_medium)
+                        .leading(true);
+                    list_item_slot()
+                        .content_optional(trailing)
+                        .color(trailing_color)
+                        .style(typography.label_small);
+                    list_item_text_line()
+                        .text_value_optional(overline_text.clone())
+                        .content_optional(overline_content)
+                        .style(typography.label_small)
+                        .color(overline_color);
+                    list_item_text_line()
+                        .text_value(headline.clone())
+                        .content_optional(content)
+                        .style(typography.body_large)
+                        .color(headline_color);
+                    list_item_text_line()
+                        .text_value_optional(supporting_text.clone())
+                        .content_optional(supporting_content)
+                        .style(typography.body_medium)
+                        .color(supporting_color);
                 });
-        }));
+        });
 }
 
 #[tessera]
 fn list_item_text_line(
     #[prop(into)] text_value: Option<String>,
+    content: Option<RenderSlot>,
     style: Option<crate::theme::TextStyle>,
     color: Option<Color>,
 ) {
     let text_value = text_value.unwrap_or_default();
-    let style = style.unwrap_or_default();
-    let color = color.unwrap_or(Color::TRANSPARENT);
-    provide_context(
-        || style,
-        move || {
-            text().content(text_value.clone()).color(color);
-        },
-    );
+    if let Some(content) = content {
+        list_item_slot()
+            .content_shared(content)
+            .color_optional(color)
+            .style_optional(style)
+            .main(true);
+    } else if text_value.is_empty() {
+        spacer();
+    } else {
+        text()
+            .content(text_value)
+            .style(style.unwrap_or_default())
+            .color(color.unwrap_or(Color::TRANSPARENT));
+    }
 }
 
 #[tessera]
-fn list_item_slot(content: Option<RenderSlot>, color: Option<Color>, min_size: Option<Dp>) {
-    let content = content.unwrap_or_else(RenderSlot::empty);
+fn list_item_slot(
+    content: Option<RenderSlot>,
+    color: Option<Color>,
+    style: Option<TextStyle>,
+    leading: Option<bool>,
+    main: Option<bool>,
+) {
     let color = color.unwrap_or(Color::TRANSPARENT);
-    let min_size = min_size.unwrap_or(Dp(0.0));
+    let style = style.unwrap_or_default();
+    let icon_size = ListItemDefaults::ICON_SIZE;
     provide_context(
         || ContentColor { current: color },
         move || {
-            boxed()
-                .alignment(Alignment::Center)
-                .modifier(Modifier::new().default_min_size(min_size, min_size))
-                .children(move || {
-                    {
-                        content.render();
-                    };
-                });
+            let current = use_context::<ContentColor>().expect("list item content color");
+            if current.get().current != color {
+                current.set(ContentColor { current: color });
+            }
+            provide_context(
+                || style,
+                move || {
+                    let current = use_context::<TextStyle>().expect("list item slot typography");
+                    if current.get() != style {
+                        current.set(style);
+                    }
+                    provide_context(
+                        || IconSize(icon_size),
+                        move || {
+                            let current = use_context::<IconSize>().expect("list item icon size");
+                            if current.get().0 != icon_size {
+                                current.set(IconSize(icon_size));
+                            }
+                            let padding = if content.is_none() || main.unwrap_or(false) {
+                                Padding::default()
+                            } else if leading.unwrap_or(false) {
+                                Padding::new(
+                                    Dp::ZERO,
+                                    Dp::ZERO,
+                                    ListItemDefaults::INTERNAL_SPACING,
+                                    Dp::ZERO,
+                                )
+                            } else {
+                                Padding::new(
+                                    ListItemDefaults::INTERNAL_SPACING,
+                                    Dp::ZERO,
+                                    Dp::ZERO,
+                                    Dp::ZERO,
+                                )
+                            };
+                            boxed()
+                                .alignment(if main.unwrap_or(false) {
+                                    Alignment::TopStart
+                                } else {
+                                    Alignment::Center
+                                })
+                                .modifier(Modifier::new().padding(padding))
+                                .children(move || {
+                                    if let Some(content) = content {
+                                        content.render();
+                                    }
+                                });
+                        },
+                    );
+                },
+            );
         },
     );
 }
 
-fn content_min_height(min_height: Dp, top_padding: Dp, bottom_padding: Dp) -> Dp {
-    let total_padding = top_padding.0 + bottom_padding.0;
-    let value = (min_height.0 - total_padding).max(0.0);
-    Dp(value)
+#[derive(Clone)]
+struct ListItemSelectionSemantics(Option<bool>);
+
+impl SemanticsModifierNode for ListItemSelectionSemantics {
+    fn apply(
+        &self,
+        accessibility: &mut AccessibilityNode,
+        _: &mut Option<AccessibilityActionHandler>,
+    ) {
+        if let Some(selected) = self.0 {
+            accessibility.selected = Some(selected);
+        }
+    }
 }
