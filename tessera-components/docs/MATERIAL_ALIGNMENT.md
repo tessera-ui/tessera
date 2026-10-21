@@ -37,22 +37,22 @@ support; browser publication and assistive-technology actions remain open.
 | Navigation bar | `navigation_bar` | Flexible top/start arrangement tested; complete state/responsive screenshots |
 | Navigation drawer | `navigation_drawer` (new) | 336×56dp destinations, selection and disabled input tested; destination switching verified in WASM; complete modal overlay integration, transitions, and full state screenshots |
 | Navigation rail | `navigation_rail` | Audit collapsed/expanded/modal modes and current tokens |
-| Bottom sheets | `bottom_sheet` | Audit standard/modal geometry, dragging, dismissal, and focus |
-| Side sheets | `side_sheet` | Audit modal/standard geometry, dragging, dismissal, and focus |
+| Bottom sheets | `bottom_sheet` | Modal opening, exit focus restoration, forward/reverse traversal, empty-content fallback, added controls, background pointer isolation, unavailable origins and programmatic motion reversal covered at two densities and 1x/4x MSAA; standard/modal geometry, detents/dragging, full semantics and reference states remain |
+| Side sheets | `side_sheet` | Modal focus restoration, traversal, empty-content fallback and scrim isolation covered at two densities and 1x/4x MSAA; standard traversal/background interaction, both-edge motion reversal, 400dp width cap, 24dp padding and narrow resize covered; drag settling, detached geometry, full semantics and reference states remain |
 | App bars | `app_bar` | Small, medium flexible, and large flexible layouts, optional subtitles, leading/global-center alignment, action avoidance, dynamic slot colors, and multiline growth implemented; native 1×/4× GPU geometry, typography, reading order, colors, input, wrapping, and resize recovery verified; nested-scroll collapse, snap, inertia, color changes, idle callback cleanup, and hidden-navigation semantics and keyboard traversal verified; WASM variants, subtitle switching, centered titles, pointer/Tab/Enter actions, and 390px sizing checked; search composition, custom title content, scaffold-wide reading order, normalized reference states, dark themes, and motion comparisons remain |
 | Badges | `badge` | Dot/count sizes, offsets, rounded fractional-density geometry, anchor constraints, empty/multiple slot children, live theme/text contexts, explicit colors, semantic authoring, and pointer passthrough verified at four densities and 1x/4x GPU sampling; WASM count/dot/theme transitions checked; full normalized reference images, maximum-count width, anchor baselines, RTL, and bounded navigation placement remain |
 | Cards | `card` | Slow-frame elevation, disabled/static semantics, accessible labels, foreground borders/feedback over clipped media, outlined hover/focus tokens, dark container/content roles, theme restoration, and resize recovery verified by native 1x/4x GPU regressions; WASM media, keyboard focus/activation, disabled/static traversal, and re-enabling checked; full normalized reference states, fractional edge fidelity, remaining minimum-target/custom-shape cases, and motion comparisons |
 | Carousel | `carousel` (new) | Multi-browse, uncontained, mixed-aspect uncontained, hero, centered hero, and full-screen layouts implemented with virtualized full-size content, 28dp masks, snapping/free scrolling, controller navigation, reverse layout, keyboard and accessibility actions; Native checks include source geometry/padding vectors, 1.25×/1.5×/2× density, dynamic props, pointer cancellation, zero-width/resize recovery, a responsive lazy feed, and 1×/4× GPU readback; WASM layout switching, horizontal/vertical input, Home/End, activation, narrow-window recovery, idle content, and scrolling out of the lazy viewport are verified; complete reference state comparisons and motion audits |
 | Checkbox | `checkbox` | Checked, unchecked, and indeterminate states share one builder and controller; native 1x/4x checks cover density, geometry, light/dark/error/disabled colors, custom overrides, validation semantics, activation, spatial springs, Oklab effects, reversal pixels, and idle-clock shutdown; normalized cross-platform reference comparisons remain |
 | Chips | `chip` | Four variants preserve icon/label edge spacing; selectable semantics, live typography, interaction elevation, focus outlines, and input icon colors verified; input avatars preserve source colors with circular center cropping, disabled opacity, priority, and restored spacing at four densities and 1x/4x sampling; Expressive selection/press shapes and interrupted spring motion verified; icon motion, RTL, tonal variants, and normalized reference images remain |
-| Dialogs | `dialog` | Audit basic/full-screen variants, actions, dismissal, and focus |
+| Dialogs | `dialog` | Provider opening, exit focus restoration, forward/reverse traversal, empty-content fallback, added controls, background pointer isolation, unavailable origins and programmatic motion reversal covered at two densities and 1x/4x MSAA; basic/full-screen variants, action geometry, full semantics and reference states remain |
 | Divider | `divider` | Parent-constrained thickness, unbounded-axis recovery, modifier-based insets, hairlines, and live outline-variant colors implemented; analytic fractional strokes, default-palette helper colors, half-pixel placement, opacity, stencil clipping, forced-size recovery, and stable upload allocation verified at 1x/4x sampling; native checks cover four densities; release WASM and browser rendering verified; complete normalized reference comparisons remain |
-| Lists | `list_item` | 56/72/88dp minimum heights, measured supporting-text wrapping, short/tall automatic alignment and explicit overrides, 20dp icon context, live slot typography/colors, selected semantics and disabled focus/input corrected; native 1x/4x tests at four densities and WASM interaction/reflow verified; segmented positions and FastSpatial state shapes verified by native input/pixel regressions; perceptual color transitions and controlled drag palettes implemented, with rendering verification recorded below; main/overline/supporting render slots implemented with verification recorded below; complete selection modes, nested controls/targets, expansion/swipe/drag behavior, and normalized reference states remain |
+| Lists | `list_item` | 56/72/88dp minimum heights, measured supporting-text wrapping, short/tall automatic alignment and explicit overrides, 20dp icon context, live slot typography/colors, selected semantics and disabled focus/input corrected; native 1x/4x tests at four densities and WASM interaction/reflow verified; segmented positions and FastSpatial state shapes verified by native input/pixel regressions; perceptual color transitions and controlled drag palettes implemented, with rendering verification recorded below; main/overline/supporting render slots implemented with verification recorded below; controlled action/single/multiple selection roles and callbacks verified; selection indicators/group navigation, nested controls/targets, expansion/swipe/drag behavior, and normalized reference states remain |
 | Menus | `menus` | Current/saved anchors, reflow, gap-aware side fallback, exact-fit resize, and outside dismissal GPU-tested; trigger focus restoration, explicit fallback, disabled trigger recovery, and forward/reverse Tab exit passed native GPU regression; WASM selection, Escape, Enter/Space reopening, Tab exit, narrow-window recovery, and lazy-list retention checked; queued close/navigation barrier covered by native core/order regressions and WASM rapid keyboard sequences; Expressive group surfaces, standard/vibrant colors, position-specific corners, selected menu-radio semantics, trailing-space reservation, and scrolling implemented; shared cascading overlays, branch/chain dismissal, source removal/disable cleanup, and virtualized Tab-exit navigation implemented; shadow overflow, rounded content clipping, scrolling shadow input bounds, container morphing, and delayed mouse-hover branch switching GPU-tested; normalized group/state snapshots, compact adaptive layout, and remaining focus audits |
 | Radio button | `radio_button` | Native 1x/4x GPU checks cover group names/roles/orientation, disabled checked-state semantics, 48dp targets at 1.5 density, directional selection, all four arrows for both orientations, wrapped traversal skipping disabled options, one-stop Tab entry/exit, unselected entry without activation, disabled-focus recovery without value changes, caller traversal exclusions, re-enabling identity, pointer completion/cancellation, interaction colors, custom color retention, internally managed mutual exclusion, independent groups, removal/reinsertion, and controller-driven selection; browser arrows and pointer cancellation verified; horizontal/RTL visual groups, toolbar integration, normalized dark/state snapshots, and motion comparisons remain |
 | Search | `search` | Focus, typing, submit/dismiss fixed; audit expanded/full-screen layouts and state screenshots |
 | Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; vertical orientation and direction reversal share layout, pointer coordinates, corner mapping, and keyboard behavior across all three variants; website color roles, independent tick colors, theme updates, marker gaps, and end-stop visibility implemented; optional floating value indicators, formatted screen-reader values, focus/drag visibility, and window-edge placement implemented; complete nested-viewport occlusion, fractional-anchor precision, range-label collision, focus-ring, and normalized reference state comparisons |
-| Snackbar | `snackbar` | Audit action/dismiss variants, timing, focus, and live announcement |
+| Snackbar | `snackbar` | Polite status messages, named action/close buttons, customizable dismiss labels, appearance focus preservation, dismissal restoration, controlled timeout and consecutive actions verified at two densities and 1x/4x MSAA; complete queue/host lifecycle, normalized geometry/states, motion, platform accessibility timeout preferences, and browser semantics remain |
 | Switch | `switch` | Native 1x/4x checks cover semantics, targets, controlled updates, colors, input, icon sizing, spatial size/offset transitions, reversal, cancelled press/release, controller snapping, pixel recovery, and idle clocks; WASM dynamic icons, cancelled dragging, and keyboard operation verified; normalized reference geometry, intrinsic empty-slot sizing, focus-ring and ripple-motion audits, and cross-platform motion comparisons remain |
 | Tabs | `tabs` | Primary/secondary heights, colors, indicator geometry, selected semantics, roving traversal, dynamic props, controlled selection, focus recovery, and narrow scrolling covered by native 1x/4x GPU tests; manual/automatic keyboard activation exercised in WASM; complete final-build responsive browser checks, inline icons/badges, normalized state snapshots, primary indicator inset, dark themes, RTL, motion, and nested scroll-edge behavior |
 | Text fields | `text_field` | Shared typography and outline fixes verified; focused clipboard input, accepted/rejected/stale cut completion, and edit/policy pipelines tested natively; WASM full-date paste, copy readback, cut, rapid replacement, cross-field Tab routing, keyboard save, and read-only policy verified; complete delayed-write/lifecycle/cross-browser audits and error, supporting text, counters, icons, multiline comparisons |
@@ -3241,8 +3241,373 @@ being declared fixed. The initial view also needs a deterministic browser
 reproduction. The build retains the existing unused `ComponentTree::metadatas`
 warning.
 
-The wrapping fixture tags a layout wrapper around text: `text` currently replaces
-caller semantics with its built-in semantics, losing a caller's test tag. That
-independent semantic-preservation issue remains open. Complete list selection
+The wrapping fixture initially tagged a layout wrapper because `text` replaced
+caller semantics and lost test tags. The text-semantics follow-up below now
+preserves those tags, so the fixture queries the text node directly. Complete list selection
 roles, nested interactive targets, drag/elevation/reordering, and normalized
 reference goldens also remain open.
+
+
+### Text semantic preservation and scrolled list reflow
+
+Text now supplements caller semantics instead of replacing the whole record.
+The default role is Label only when no role is provided. Explicit text label and
+description parameters override modifier values; otherwise modifier labels and
+descriptions remain, with displayed content used only as a missing-label fallback.
+Testing keys, heading levels, tooltips, selection, disabled/hidden flags, and
+unrelated metadata/action handling remain intact. Two actual native renderer
+regressions verify caller Heading and ListBoxOption roles, explicit label updates,
+restoration, automatic content labels, stable node identities, hidden flags, and
+restored pixels under 1x/4x MSAA. The list wrapping regression now selects the
+actual text node by its caller test tag.
+
+Two scrolled list regressions at 1.0/1.5 density and 1x/4x MSAA place a row after
+a measured 480dp item, scroll it to an independently known 80dp window origin,
+then enlarge typography, reduce width and add custom content. They sample visible
+container pixels inside newly added height, activate that area, restore the row,
+scroll away, reject clicks at its old position, and scroll back to activate it
+again. These protect rendered/semantic/pointer geometry together through actual
+list, lazy-list and input entrypoints.
+
+Final verification passes: 310 ordinary component tests (120 opt-in cases
+ignored), all eight list GPU scenarios, both new text semantic tests and four
+existing text drawing/placement/paint tests, the text documentation example,
+release WASM and call-color checking. Targeted nightly formatting and whitespace
+checks pass. The release build retains the unrelated unused
+`ComponentTree::metadatas` warning.
+
+A fresh browser reload followed by Material navigation, scrolling, custom content,
+large text and narrow width reproduced the earlier setup at 907x871 CSS pixels
+with a 1.5 backing-store ratio. Clicking both the original first-row region and
+its expanded lower region correctly toggled selection; no console errors were
+observed. Evidence is external as `wasm-list-first-reflow-hit-regression.png`.
+The earlier one-off feedback-position anomaly did not recur. These successful
+checks do not identify its root cause or establish a production fix for that
+transient, so the broad first-reflow audit remains open. Complete selection modes,
+nested interactive target allocation, drag/elevation/reordering and normalized
+official reference goldens also remain open.
+
+
+### Controlled list selection modes
+
+`ListItemSelectionMode` adds Action, Single and Multiple behavior to the existing
+entrypoint. `on_selection_change` emits controlled requests in Single/Multiple
+modes and takes precedence over the fallback `on_click`; Action uses `on_click`.
+Single requests `true`, including repeated activation. Multiple requests the
+inverse of the latest supplied `selected` value. The owner updates state and
+maintains single-selection exclusivity. A stable callback reads updated activation
+state, so mode switches and external selection updates do not depend on closure
+replacement. Read-only rows expose state without adding click/focus actions.
+
+Single rows publish RadioButton role, selection and native checked state;
+Multiple rows publish CheckBox role and checked state. Mode changes clear the
+inapplicable checked/selection metadata while keeping unrelated caller metadata
+and node identities. Disabled rows retain their state without activation. These
+roles follow the current [Material list selection overloads](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ListItem.kt).
+Indicators remain slot content; this API does not add nested indicator controls,
+radio-group arrow traversal, or long-press selection gestures.
+
+Two native scenarios run with 1x/4x MSAA at 1.0/1.5 density through actual pointer,
+accessibility-action and focus paths. They verify repeated single requests,
+independent multiple requests, external state changes, rejected state updates,
+action callback fallback/precedence, live mode changes, stable identities,
+read-only and disabled actions, retained metadata and stopped idle component
+builds. The fixture owner enforces exclusivity, matching the public controlled
+contract. The initial callback constructor was corrected to use the framework's
+native stable handle directly, avoiding nested slot initialization.
+
+All 310 ordinary component tests (122 opt-in tests ignored), ten list GPU
+scenarios, and the updated controlled-selection documentation example pass.
+Release WASM and call-color checking pass. Targeted nightly formatting and diff
+whitespace checks pass. The release build retains the unrelated unused
+`ComponentTree::metadatas` warning.
+
+Browser checks at 907x871 CSS pixels verify multiple selection, transition to an
+action with an opened-item result, owner-maintained exclusivity after entering
+Single, repeated single activation, Tab/Space/Enter input, independent multiple
+keyboard toggles, disabled activation suppression and state restoration. No
+console errors were observed. The final view is stored externally as
+`wasm-list-controlled-selection-modes.png`. Native role assertions do not establish
+browser screen-reader publication because the WASM accessibility bridge remains
+open. Complete selection indicators/group navigation, nested interactive targets,
+long-press/drag/elevation/reordering and normalized reference goldens remain open.
+
+
+### Stationary long actions and interaction cleanup
+
+Surface and list rows now accept an optional `on_long_click`. A pending gesture
+receives frame timestamps, so holding a stationary pointer fires once without
+requiring movement or application state changes. The framework default is 500ms;
+this is not an assertion about platform gesture preferences. A completed long
+action suppresses the following short click. Shift+F10, the context-menu key and
+native ShowContextMenu actions use the same callback.
+
+Owned tap consumption is distinguished from presses claimed by nested children.
+Movement beyond slop, scrolling, cancellation, focus loss, disabling, handler
+removal and unmounting cancel pending work. Input ownership cleanup also releases
+externally supplied interaction/ripple state, preventing retained pressed pixels
+after a target disappears. Pending clocks stop after completion or cancellation.
+
+Validation passes for all 20 foundation tests, all 310 ordinary component tests,
+12 list GPU scenarios, both stationary no-op ripple scenarios and the tooltip
+long-press/scroll regression. Native long-action cases cover 1x/4x MSAA at
+1.0/1.5 density, actual pointer and accessibility dispatch, nested child priority,
+release suppression, state restoration and external-controller cleanup. Release
+WASM and call-color checking pass. Browser holding an Action row for 650ms enters
+Multiple mode with one selected item; releasing preserves that selection. A
+subsequent Space activation deselects it. This does not establish web screen-reader
+publication or custom accessibility action labels.
+
+Custom long-action labels, platform gesture preferences, full selection indicators
+and group traversal, the broader nested-target audit, drag/elevation/reordering,
+the earlier transient first-reflow investigation and official pixel goldens remain
+open. Full Material parity is not established.
+
+
+### Snackbar notification semantics and named controls
+
+Snackbar messages publish a nonfocusable Status node with a Polite live region.
+Both inline and separate-line actions expose their visible label as the Button
+name. Close buttons expose Dismiss by default; `dismiss_action_label` allows a
+localized or application-specific name. This follows the noninterrupting feedback
+and named close-affordance behavior of the
+[Material snackbar](https://m3.material.io/components/snackbar/overview) and
+[official implementation](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Snackbar.kt).
+
+Two opt-in native GPU scenarios cover 1x/4x MSAA and 1.0/1.5 density using actual
+components and published accessibility trees. They first focus an existing task,
+mount the snackbar, and verify that neither layout steals focus. They verify the
+message's role/politeness, invoke both controls through accessibility actions,
+check callback results, and update the close-button name. Both scenarios, all
+310 ordinary component tests and both snackbar documentation examples pass.
+These checks protect native semantics; the current no-op WASM accessibility
+adapter still prevents a claim of browser screen-reader support. Complete timing,
+queue lifecycle, host transitions, normalized geometry and state goldens, and
+platform timeout preference handling remain open.
+
+
+Release WASM and call-color checking pass. In the fresh browser build, the
+notification opens and both Undo and the close icon dismiss it. However, removal
+of a focused snackbar control moves focus to the earlier Filled name field. The
+first dismissal also moved the outer page by about 64 CSS pixels; the close-icon
+cycle reproduced the text-field focus fallback without another displacement.
+This is an open host focus-restoration regression, not covered by the standalone
+component mount-focus tests above. Evidence is stored externally as
+`wasm-snackbar-notification.png` and `wasm-snackbar-dismiss-focus-regression.png`.
+The browser still exposes the canvas image rather than the native semantic tree.
+
+
+### Snackbar host focus restoration and consecutive actions
+
+`FocusManager::save_focus` now returns an optional `FocusRestorationTarget`.
+Restoring checks the current tree and declines detached, disabled or unavailable
+targets, unfocused windows and another target's focus capture. It does not retain
+a target or leave a request waiting for later remounting.
+
+The snackbar host saves the origin when its queue becomes visible and owns a
+focus scope. When the final notification disappears while that scope still has
+focus, restoration runs after layout. A newly disabled or removed origin is
+therefore checked against the resulting tree. Focus already moved outside the
+notification is preserved. Queued notifications share the original restoration
+target until the queue empties. Opening a notification does not move focus.
+
+The built-in snackbar renderer is now a private component with remembered current
+notification data. Its stable action and dismiss callbacks resolve that data at
+activation, preventing an earlier notification ID from rejecting later queued
+actions. No callback replacement semantics are assumed.
+
+Two new native host scenarios run at 1x/4x MSAA and 1.0/1.5 density. Actual host
+components, pointer close clicks and native accessibility actions verify appearance,
+Undo and close restoration, external navigation preservation, two consecutive
+actions, deterministic 4-second timeout restoration, same-frame origin disabling
+or removal, and no delayed focus theft after re-enabling/remounting. All four
+snackbar GPU scenarios pass, as do 114 core tests, 310 ordinary component tests,
+seven focus documentation examples and both snackbar documentation examples.
+These checks do not establish complete host-unmount, simultaneous overlay,
+platform timeout preferences, native assistive-technology behavior or browser
+semantics publication. Full geometry, motion and reference goldens remain open.
+
+
+The fresh release WASM build and call-color check pass. Browser reproduction at
+907x871 CSS pixels verifies Undo and close-icon dismissal without the former
+text-field focus fallback or 64px displacement. Pressing Enter immediately after
+Undo reopens the notification through its restored trigger. Enqueuing two
+notifications leaves the second visible after the first Undo; the next Undo
+closes it. No error-level browser logs were observed. Evidence is external as
+`wasm-snackbar-focus-before-dismiss.png` and `wasm-snackbar-focus-restored.png`.
+This resolves the recorded focus fallback for these normal action/close paths;
+full host disposal, simultaneous overlays and browser accessibility publication
+remain separate requirements.
+
+### Snackbar measured text and action geometry
+
+The snackbar now measures message text independently of its action controls.
+Single-line containers are 48dp; two 20dp lines with 14dp vertical message insets
+produce 68dp. Natural wrapping grows the same layout. Controls no longer add
+message padding to their own 48dp targets. Separate-line actions follow the
+padded message with a 4dp bottom inset (100dp for a one-line message and standard
+controls). Start padding is 16dp; inline action-only controls end 8dp from the
+container edge, and close targets reach the trailing edge. Explicit content
+padding controls message insets and horizontal action bounds.
+
+Reference sources are the [website measurements](https://m3.material.io/components/snackbar/specs)
+and the corrected OneRowSnackbar/NewLineButtonSnackbar paths in the
+[official implementation](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/Snackbar.kt).
+The correction branch is still behind a default-off
+[upstream styling flag](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/ComposeMaterial3Flags.kt).
+These changes target the corrected layout; they do not assert pixel equivalence
+to the legacy default branch. The website measurement diagram was inspected in
+the browser and saved externally as `snackbar-official-measurements.png`.
+
+Fractional placement preserves half-pixel text insets and action centering.
+Vertical insets are combined before conversion to integer container dimensions,
+avoiding separate truncation at 1.25 density. An explicit default message padding
+produces the same pixels as the implicit default in the plain-message case.
+
+Two new native scenarios cover eight explicit message/action/close combinations,
+automatic wrapping, separate-line actions, constrained long action text, zero
+width and exact pixel restoration at densities 1.0, 1.25, 1.5 and 2.0 with 1x/4x
+MSAA. All six snackbar GPU scenarios, 310 ordinary component tests and both
+snackbar documentation examples pass. This protects current geometry and recovery;
+it does not establish independent reference raster goldens, legacy baseline
+fidelity, all explicit inset/height constraints, dark colors or full motion
+equivalence.
+
+The final release WASM build and call-color checking pass. Browser verification
+at the normal 907px width and a temporary 390x844px viewport checks inline
+rendering, both control positions, close and Enter reopening, and restoration to
+the default viewport. The compact sample remains within its host at both widths;
+the browser check does not exercise the separate-line or long-action variants.
+No error-level browser logs were observed. Evidence is external as
+`wasm-snackbar-48dp.png`, `wasm-snackbar-390px.png` and
+`wasm-snackbar-resize-restored.png`. The viewport override has been reset.
+
+### Dialog and bottom-sheet exit focus ownership
+
+Both providers keep the modal focus scope in the provider rather than in the
+temporary content wrapper. They save the invoking target when the overlay
+appears, defer keyboard input across visibility changes, and restore that target
+after layout when the exit animation has removed focused modal content. Disabled
+or detached targets are declined without a request waiting for later remounting.
+Restoration is conditional on the modal scope still owning focus.
+
+Scrims retain their pointer dismissal and blocking behavior but cannot acquire
+focus, participate in Tab traversal or show ripple feedback. This prevents a
+background dismissal from losing modal focus ownership before restoration. Frame
+callbacks inspect animation state without mutating the controller merely to read
+it.
+
+The expected interaction follows the [modal dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
+and [Material dialog behavior](https://material-web.dev/components/dialog/).
+Two native GPU scenarios cover Dialog and Bottom sheet at 1.0/1.5 density with
+1x/4x MSAA. Actual pointer input opens each provider, native queued traversal
+cycles forward/reverse within its actions, action dismissal restores the origin,
+and clicking over a background button dismisses without activating that button.
+Disabling/removing an origin during exit prevents restoration and later focus
+theft. Both scenarios, 310 ordinary component tests and all three affected dialog
+and sheet documentation examples pass.
+
+These checks cover settled opening and exit. Full modal semantic isolation,
+simultaneous overlays, host disposal and interrupted
+motion remain open. The existing forward-shifted reversal timestamps in these
+controllers also need dedicated motion checks; this focus correction does not
+establish Expressive animation fidelity. Basic/full-screen dialog variants,
+sheet detents/dragging, normalized state goldens and browser screen-reader
+publication remain separate requirements.
+
+The browser then reproduced a text-only bottom sheet that could not handle
+Escape because focus remained on its background trigger. The wrappers now request
+their scope with a directly focusable, traversal-skipped fallback. Real controls
+remain the preferred initial targets. Empty scopes own Tab/Shift+Tab even without
+candidates; a handled empty wrapping policy no longer falls back to global
+traversal. Navigation anchors the actual focused handle rather than resolving a
+focused scope into a different descendant. Scope restoration excludes the scope
+itself from its saved-descendant candidate, so later controls can receive focus.
+
+The same two native scenarios now include empty content, forward/reverse Tab
+retention, adding controls while open, entry into the first added control and
+subsequent reopening. Both 1x/4x scenarios pass at both densities. The final core
+run passes 114 tests, ordinary component tests pass all 310, and six snackbar,
+four radio-button and two menu-focus GPU regressions also pass. Full semantic
+modal isolation and background assistive-technology exclusion remain unverified;
+the empty-focus correction does not establish those separate requirements.
+
+The final release WASM build and call-color check pass. Browser checks verify
+normal Dialog Tab/Shift+Tab, Escape, background dismissal without incrementing
+the button below, and Enter reopening through the restored trigger. The text-only
+Bottom sheet now retains forward/reverse Tab, closes with Escape and reopens with
+Enter through its own trigger. Both behaviors were checked again on the final
+build with no error-level browser logs. Evidence is external as
+`wasm-dialog-focus-final.png`, `wasm-empty-sheet-escape-before.png` and
+`wasm-empty-sheet-focus-restored.png`. All three affected component documentation
+examples and seven core focus documentation examples pass. These are settled
+motion checks, not interruption, simultaneous-modal or screen-reader validation.
+
+### Interruptible overlay motion and modal side-sheet focus
+
+Dialog, Bottom sheet and Side sheet no longer shift animation start timestamps
+into the future when a visibility target reverses. A shared visibility motion
+preserves the sampled value and velocity when retargeted. Sheet placement uses
+the default Expressive spatial spring (stiffness 380, damping ratio 0.8), while
+opacity uses the default effects spring (1600, 1.0). Dialog opacity uses the
+effects spring. Sheet scrims have an independent effects track; their fade does
+not inherit spatial overshoot. Placement preserves fractional coordinates.
+Dialog scrim opacity now uses 0.32 rather than 0.5.
+
+These values follow the current [Expressive motion tokens](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/ExpressiveMotionTokens.kt),
+the [motion scheme](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/MotionScheme.kt)
+and [scrim tokens](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/tokens/ScrimTokens.kt).
+This resolves the timestamp-reversal defect recorded above; it does not establish
+all component-specific entry/exit timing or reduced-motion behavior.
+
+Two scalar regressions cover reversal values/velocities, repeated targets,
+same-frame reversal and final settling. Two placement regressions cover
+fractional sheet offsets and both side-sheet edges. Native rendering scenarios
+use explicit 10ms frames to reverse all three provider types repeatedly, compare
+successive bounds/opacity, require nontrivial entrance motion, and verify exact
+pixel recovery after reopening and final exit. Both 1x/4x scenarios pass at
+1.0/1.5 density. All 314 ordinary component tests pass. These counts include the
+four scalar/placement cases rather than treating them as extra test runs.
+
+Modal Side sheet now retains its focus scope in the provider and uses the same
+exit restoration as Dialog and Bottom sheet. It requests a traversal-skipped
+fallback when content contains no controls. Scrims cannot take focus or render a
+ripple. The existing native modal-focus scenarios now exercise Side sheet too:
+initial focus, forward/reverse wrapping, action and scrim dismissal, background
+input isolation, empty content, adding controls, and disabled/removed origins.
+Both scenarios pass at both densities and both sample counts. The example page
+now includes an end-edge modal side sheet for browser interaction checks.
+
+The [current side-sheet specs](https://m3.material.io/components/side-sheets/specs)
+also exposed geometry differences. The width cap is now 400dp and ordinary
+content padding is 24dp, replacing the previous 250dp/16dp values. Standard
+Side sheet traversal no longer wraps within its own scope; reverse traversal can
+return to the preceding main-content action. The native focus scenario checks
+this and verifies that the background action still runs while a standard sheet
+stays open. Closing a focused standard sheet restores its origin; closing after
+focus has moved to main content preserves that new focus. Rendering scenarios
+additionally cover standard sheets on both edges,
+exact content placement under the width cap, and resizing below the cap.
+Sheet drag settling, detached margins, modal semantic isolation and
+reference-image comparisons remain open. Programmatic visibility reversal does
+not prove drag interruption behavior.
+
+The [side-sheet accessibility guidance](https://m3.material.io/components/side-sheets/accessibility)
+requires a persistent close affordance and a Dialog accessibility role. The new
+example includes a labeled close icon beside its headline and a separate Done
+action. Provider-level Dialog semantics and accessible naming still need
+implementation and verification; keyboard focus tests alone do not prove those
+requirements.
+
+The final release WASM build and call-color check pass. Browser interaction
+verifies the new end-edge sheet's close icon, Tab movement to Done, Escape exit
+and Enter reopening through the restored trigger. Dialog and the text-only
+Bottom sheet also exit with Escape and retain a usable trigger for reopening.
+The normal-width sheet shows the 400dp container with 24dp content insets. No
+error-level browser logs were observed. External evidence is saved as
+`wasm-side-sheet-400dp.png`, `wasm-dialog-material-motion.png` and
+`wasm-bottom-sheet-material-motion.png`. The requested browser viewport override
+did not change the rendered dimensions in this run and was reset; narrow
+placement is supported here by native resize tests, not a narrow-browser claim.
+All three Side sheet documentation examples pass; the two Dialog examples and
+the Bottom sheet example also pass with the visibility-motion implementation.
