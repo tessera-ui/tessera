@@ -15,7 +15,6 @@ pub(crate) mod linear_wave;
 pub(crate) mod loading_shape;
 pub(crate) mod mean;
 pub(crate) mod path_stroke;
-pub(crate) mod pos_misc;
 pub(crate) mod progress_arc;
 pub(crate) mod shadow;
 pub(crate) mod shape;
@@ -28,9 +27,12 @@ mod draw;
 
 /// Register all draw and compute pipelines required by this crate.
 pub fn register_pipelines(context: &mut tessera_ui::PipelineContext<'_>) {
+    // Independent renderer instances can reuse backend device identifiers.
+    SharedQuad::clear();
     draw::register(context);
     compute::register(context);
     composite::register(context);
+    SharedQuad::clear();
 }
 
 use std::{cell::RefCell, sync::Arc};
@@ -60,6 +62,10 @@ thread_local! {
 }
 
 impl SharedQuad {
+    fn clear() {
+        SHARED_QUAD.with(|cache| *cache.borrow_mut() = None);
+    }
+
     /// Returns the shared (0,0)-(1,1) quad buffers for `device`.
     ///
     /// Repeated calls on the same device and thread reuse the buffers.

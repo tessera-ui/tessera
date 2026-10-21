@@ -11,6 +11,10 @@ pub struct CheckmarkCommand {
     pub progress: f32,
     /// Padding around the checkmark within its bounds
     pub padding: [f32; 2], // [horizontal, vertical]
+    /// Blend from a checkmark to a centered partial-selection dash.
+    pub indeterminate_fraction: f32,
+    /// Uses the compact selection path with square stroke caps.
+    pub checkbox_geometry: bool,
 }
 
 impl CheckmarkCommand {
@@ -21,6 +25,8 @@ impl CheckmarkCommand {
             stroke_width: 5.0,
             progress: 1.0, // Fully drawn by default
             padding: [2.0, 2.0],
+            indeterminate_fraction: 0.0,
+            checkbox_geometry: false,
         }
     }
 
@@ -45,6 +51,18 @@ impl CheckmarkCommand {
     /// Set the padding around the checkmark
     pub fn with_padding(mut self, horizontal: f32, vertical: f32) -> Self {
         self.padding = [horizontal, vertical];
+        self
+    }
+
+    /// Sets the blend from a checkmark to a centered dash.
+    pub fn with_indeterminate_fraction(mut self, fraction: f32) -> Self {
+        self.indeterminate_fraction = if fraction.is_finite() { fraction } else { 0.0 };
+        self
+    }
+
+    /// Uses the compact selection path with square stroke caps.
+    pub fn with_checkbox_geometry(mut self, enabled: bool) -> Self {
+        self.checkbox_geometry = enabled;
         self
     }
 }
