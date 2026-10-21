@@ -254,6 +254,7 @@ impl CursorState {
             gesture_state: GestureState::TapCandidate,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         };
         self.push_event(press_event);
     }
@@ -311,6 +312,7 @@ impl CursorState {
             gesture_state,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         });
         (self.touch_scroll_config.enabled && dragging).then_some(PointerChange {
             timestamp: now,
@@ -324,6 +326,7 @@ impl CursorState {
             gesture_state,
             sampled_position: PointerPosition::At(current_position),
             consumed: false,
+            tap_claimed: false,
         })
     }
 
@@ -360,6 +363,7 @@ impl CursorState {
             },
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         });
         self.pointer_positions.remove(&touch_state.pointer_id);
         if self.touch_points.is_empty() {
@@ -397,6 +401,7 @@ pub struct PointerChange {
     pub gesture_state: GestureState,
     /// Whether this change has been consumed by a handler.
     pub(crate) consumed: bool,
+    pub(crate) tap_claimed: bool,
     pub(crate) sampled_position: PointerPosition,
 }
 
@@ -415,6 +420,7 @@ impl PointerChange {
             gesture_state,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         }
     }
 
@@ -475,6 +481,18 @@ impl PointerChange {
     /// Returns whether this change has already been consumed.
     pub fn is_consumed(&self) -> bool {
         self.consumed
+    }
+
+    /// Claims a press for one tap recognizer without consuming the sample.
+    ///
+    /// Returns `false` for a non-press sample or a press already claimed by
+    /// another recognizer. Drag and scroll observers can still inspect it.
+    pub fn claim_tap_press(&mut self) -> bool {
+        if self.tap_claimed || !matches!(self.content, CursorEventContent::Pressed(_)) {
+            return false;
+        }
+        self.tap_claimed = true;
+        true
     }
 }
 

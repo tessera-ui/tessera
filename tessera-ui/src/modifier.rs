@@ -46,6 +46,18 @@ pub struct LayoutModifierInput<'a> {
     pub layout_input: &'a LayoutInput<'a>,
 }
 
+impl LayoutModifierInput<'_> {
+    /// Calculates positions and placement bookkeeping independent of measured
+    /// size.
+    ///
+    /// State reads invalidate placement. Size and constraint calculations must
+    /// remain outside this closure.
+    pub fn placement<R>(&self, calculate: impl FnOnce() -> R) -> R {
+        let _phase = crate::runtime::push_phase(crate::runtime::RuntimePhase::Place);
+        calculate()
+    }
+}
+
 /// Draw continuation used by draw modifier nodes.
 pub trait DrawModifierContent {
     /// Records the wrapped content.
@@ -136,9 +148,17 @@ pub trait DrawModifierNode: Send + Sync + 'static {
 }
 
 /// A node-local parent-data modifier.
-pub trait ParentDataModifierNode: Send + Sync + 'static {
+pub trait ParentDataModifierNode: Any + Send + Sync + 'static {
     /// Applies parent data visible to the parent layout.
     fn apply_parent_data(&self, data: &mut ParentDataMap);
+
+    /// Returns whether this node supplies the same layout inputs as another.
+    ///
+    /// The default conservatively invalidates the parent layout when the node
+    /// is replaced. Override this for value-based parent data such as weights.
+    fn equivalent(&self, _other: &dyn ParentDataModifierNode) -> bool {
+        false
+    }
 }
 
 /// A node-local build modifier.
@@ -285,6 +305,7 @@ enum FocusModifierOp {
     Requester(FocusRequester),
     Registration(FocusModifierRegistration),
     Properties(FocusProperties),
+    PreferredTabStop(bool),
     TraversalPolicy(FocusTraversalPolicy),
     ChangedHandler(CallbackWith<FocusState>),
     EventHandler(CallbackWith<FocusState>),
@@ -520,6 +541,10 @@ pub trait FocusModifierExt {
 
     /// Applies explicit focus properties to this subtree.
     fn focus_properties(self, properties: FocusProperties) -> Modifier;
+
+    /// Prefers this focus target when Tab enters a group with a single Tab
+    /// stop, preserving its other focus properties.
+    fn preferred_tab_stop(self, preferred: bool) -> Modifier;
 
     /// Registers a traversal-only focus group for this subtree.
     fn focus_group(self) -> Modifier;
@@ -920,53 +945,59 @@ impl Modifier {
     }
 
     pub(crate) fn layout_placement_eq(&self, other: &Self) -> bool {
-        #[derive(Clone)]
-        enum PlacementComparableAction {
-            Layout(Arc<dyn ErasedLayoutModifierNode>),
-            Placement(Arc<dyn ErasedPlacementModifierNode>),
-        }
-
-        let lhs: Vec<_> = self
-            .ordered_actions()
-            .into_iter()
-            .filter_map(|action| match action {
-                OrderedModifierAction::Layout(node) => {
-                    Some(PlacementComparableAction::Layout(node))
-                }
-                OrderedModifierAction::Placement(node) => {
-                    Some(PlacementComparableAction::Placement(node))
-                }
-                _ => None,
-            })
-            .collect();
-        let rhs: Vec<_> = other
-            .ordered_actions()
-            .into_iter()
-            .filter_map(|action| match action {
-                OrderedModifierAction::Layout(node) => {
-                    Some(PlacementComparableAction::Layout(node))
-                }
-                OrderedModifierAction::Placement(node) => {
-                    Some(PlacementComparableAction::Placement(node))
-                }
-                _ => None,
-            })
-            .collect();
+        let nodes = |modifier: &Self| {
+            modifier
+                .ordered_actions()
+                .into_iter()
+                .filter_map(|action| match action {
+                    OrderedModifierAction::Layout(node) => Some(node),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let lhs = nodes(self);
+        let rhs = nodes(other);
         lhs.len() == rhs.len()
             && lhs
                 .iter()
-                .zip(rhs.iter())
-                .all(|(lhs, rhs)| match (lhs, rhs) {
-                    (
-                        PlacementComparableAction::Layout(lhs),
-                        PlacementComparableAction::Layout(rhs),
-                    ) => lhs.placement_eq(rhs.as_ref()),
-                    (
-                        PlacementComparableAction::Placement(lhs),
-                        PlacementComparableAction::Placement(rhs),
-                    ) => lhs.eq(rhs.as_ref()),
-                    _ => false,
+                .zip(&rhs)
+                .all(|(lhs, rhs)| lhs.placement_eq(rhs.as_ref()))
+    }
+
+    pub(crate) fn position_eq(&self, other: &Self) -> bool {
+        let nodes = |modifier: &Self| {
+            modifier
+                .ordered_actions()
+                .into_iter()
+                .filter_map(|action| match action {
+                    OrderedModifierAction::Placement(node) => Some(node),
+                    _ => None,
                 })
+                .collect::<Vec<_>>()
+        };
+        let lhs = nodes(self);
+        let rhs = nodes(other);
+        lhs.len() == rhs.len() && lhs.iter().zip(&rhs).all(|(lhs, rhs)| lhs.eq(rhs.as_ref()))
+    }
+
+    pub(crate) fn parent_data_eq(&self, other: &Self) -> bool {
+        let nodes = |modifier: &Self| {
+            modifier
+                .ordered_actions()
+                .into_iter()
+                .filter_map(|action| match action {
+                    OrderedModifierAction::ParentData(node) => Some(node),
+                    _ => None,
+                })
+                .collect::<Vec<_>>()
+        };
+        let lhs = nodes(self);
+        let rhs = nodes(other);
+        lhs.len() == rhs.len()
+            && lhs
+                .iter()
+                .zip(&rhs)
+                .all(|(lhs, rhs)| Arc::ptr_eq(lhs, rhs) || lhs.equivalent(rhs.as_ref()))
     }
 }
 
@@ -1097,6 +1128,10 @@ impl FocusModifierExt for Modifier {
 
     fn focus_properties(self, properties: FocusProperties) -> Modifier {
         self.push_focus_properties(properties)
+    }
+
+    fn preferred_tab_stop(self, preferred: bool) -> Modifier {
+        self.push_focus_op(FocusModifierOp::PreferredTabStop(preferred))
     }
 
     fn focus_group(self) -> Modifier {
@@ -1264,6 +1299,7 @@ fn hash_focus_op<H: Hasher>(op: &FocusModifierOp, state: &mut H) {
             value.can_focus.hash(state);
             value.can_request_focus.hash(state);
             value.skip_traversal.hash(state);
+            value.preferred_tab_stop.hash(state);
             value.next.hash(state);
             value.previous.hash(state);
             value.up.hash(state);
@@ -1274,6 +1310,7 @@ fn hash_focus_op<H: Hasher>(op: &FocusModifierOp, state: &mut H) {
             value.exit.hash(state);
         }
         FocusModifierOp::TraversalPolicy(value) => value.hash(state),
+        FocusModifierOp::PreferredTabStop(value) => value.hash(state),
         FocusModifierOp::ChangedHandler(value) => hash_callback_bits(value, state),
         FocusModifierOp::EventHandler(value) => hash_callback_bits(value, state),
         FocusModifierOp::BeyondBoundsHandler(value) => hash_callback_bits(value, state),
@@ -1414,6 +1451,10 @@ mod runtime {
             self.runtime.set_current_focus_properties(properties);
         }
 
+        pub(super) fn set_preferred_tab_stop(&mut self, preferred: bool) {
+            self.runtime.set_current_preferred_tab_stop(preferred);
+        }
+
         pub(super) fn set_traversal_policy(&mut self, policy: FocusTraversalPolicy) {
             self.runtime.set_current_focus_traversal_policy(policy);
         }
@@ -1449,6 +1490,7 @@ fn apply_focus_op(runtime: runtime::FocusModifierRuntime<'_>, op: FocusModifierO
         FocusModifierOp::Requester(requester) => runtime.bind_requester(requester),
         FocusModifierOp::Registration(registration) => runtime.ensure_registration(registration),
         FocusModifierOp::Properties(properties) => runtime.set_properties(properties),
+        FocusModifierOp::PreferredTabStop(preferred) => runtime.set_preferred_tab_stop(preferred),
         FocusModifierOp::TraversalPolicy(policy) => runtime.set_traversal_policy(policy),
         FocusModifierOp::ChangedHandler(handler) => runtime.set_changed_handler(handler),
         FocusModifierOp::EventHandler(handler) => runtime.set_event_handler(handler),

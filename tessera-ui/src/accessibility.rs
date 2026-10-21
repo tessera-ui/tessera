@@ -106,6 +106,10 @@ pub struct AccessibilityNode {
     pub focused: bool,
     /// Toggled/checked state (for checkboxes, switches, radio buttons)
     pub toggled: Option<Toggled>,
+    /// Validation failure associated with the current value.
+    pub invalid: Option<accesskit::Invalid>,
+    /// Whether this item is selected, when selection applies to its role.
+    pub selected: Option<bool>,
     /// Whether a disclosure control is expanded.
     pub expanded: Option<bool>,
     /// Kind of popup opened by this control.
@@ -259,6 +263,8 @@ impl Default for AccessibilityNode {
             focusable: false,
             focused: false,
             toggled: None,
+            invalid: None,
+            selected: None,
             expanded: None,
             has_popup: None,
             disabled: false,

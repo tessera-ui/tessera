@@ -425,6 +425,7 @@ fn push_build_root_node() -> BuildRootNodeGuard {
         runtime.component_tree.add_node(ComponentNode {
             fn_name: "__tessera_build_root".to_string(),
             role: NodeRole::Composition,
+            layout_children: None,
             instance_logic_id: 0,
             instance_key: 0,
             pointer_preview_handlers: Vec::new(),

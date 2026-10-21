@@ -11,7 +11,7 @@ use rustc_hash::FxHashMap as HashMap;
 use crate::{
     Px, PxPosition, PxRect, PxSize,
     build_tree::build_component_tree,
-    component_tree::{ComputeMode, ComputeParams, LayoutFrameDiagnostics, clear_layout_snapshots},
+    component_tree::{ComputeMode, ComputeParams, clear_layout_snapshots},
     context::{reset_component_context_tracking, reset_context_read_dependencies},
     cursor::PointerChange,
     focus::flush_pending_focus_callbacks,
@@ -24,6 +24,8 @@ use crate::{
     },
     time::Instant,
 };
+
+pub use crate::component_tree::LayoutFrameDiagnostics;
 
 thread_local! {
     /// Layout diagnostics produced by the most recent `pump_layout_test_session`
@@ -89,6 +91,14 @@ where
     viewport: (u32, u32),
     frame_origin: Instant,
     current_frame_nanos: u64,
+    diagnostics: Option<LayoutFrameDiagnostics>,
+}
+
+impl<F: Fn()> LayoutTestSession<F> {
+    /// Returns layout work recorded during the most recently pumped frame.
+    pub fn diagnostics(&self) -> Option<LayoutFrameDiagnostics> {
+        self.diagnostics
+    }
 }
 
 /// Starts a headless layout test session for `harness`.
@@ -102,6 +112,7 @@ where
         viewport: harness.viewport,
         frame_origin: Instant::now(),
         current_frame_nanos: 0,
+        diagnostics: None,
     }
 }
 
@@ -160,6 +171,7 @@ where
         diagnostics
     });
     LAST_LAYOUT_FRAME_DIAGNOSTICS.with(|cell| cell.set(Some(diagnostics)));
+    session.diagnostics = Some(diagnostics);
     flush_pending_focus_callbacks();
     crate::component_tree::flush_pending_globally_positioned_callbacks();
 
@@ -1614,10 +1626,219 @@ mod tests {
             );
             assert_eq!(
                 direct_layout_children(layout_composition_id, tree),
-                vec![layout_node_id],
+                vec![layout_node_id].into(),
                 "direct layout children must resolve to the emitted layout node"
             );
         });
+    }
+
+    thread_local! { static INTRINSIC_WIDTH: Cell<Option<State<i32>>> = const { Cell::new(None) }; }
+
+    #[derive(Clone, PartialEq)]
+    struct IntrinsicStateLeaf {
+        width: State<i32>,
+    }
+
+    impl LayoutModifierNode for IntrinsicStateLeaf {
+        fn measure(
+            &self,
+            scope: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            Ok(LayoutResult::new(ComputedData {
+                width: Px(if scope.is_intrinsic() {
+                    self.width.get()
+                } else {
+                    20
+                }),
+                height: Px(20),
+            }))
+        }
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct IntrinsicPositionPolicy;
+
+    impl LayoutModifierNode for IntrinsicPositionPolicy {
+        fn measure(
+            &self,
+            scope: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            let child = scope.children()[0];
+            let natural = child.probe_intrinsic(scope, &Constraint::NONE)?;
+            let normal = child.measure(scope, &Constraint::NONE)?;
+            let mut result = LayoutResult::new(ComputedData {
+                width: natural.width + normal.width,
+                height: normal.height,
+            });
+            result.place_child(child, PxPosition::new(natural.width, Px::ZERO));
+            Ok(result)
+        }
+    }
+
+    #[tessera(crate)]
+    fn intrinsic_state_fixture() {
+        let width = remember(|| 40);
+        INTRINSIC_WIDTH.set(Some(width));
+        crate::layout::layout()
+            .policy(IntrinsicPositionPolicy)
+            .child(move || {
+                crate::layout::layout()
+                    .policy(IntrinsicStateLeaf { width })
+                    .modifier(Modifier::new().push_semantics(TestTagSemanticsModifier {
+                        tag: "intrinsic-state".into(),
+                    }));
+            });
+    }
+
+    #[test]
+    fn intrinsic_state_dependencies_survive_normal_measurement_and_invalidate_the_probe_owner() {
+        let mut session = start_layout_test_session(
+            layout_test(|| {
+                intrinsic_state_fixture();
+            })
+            .viewport_px(240, 100),
+        );
+        pump_layout_test_session(&mut session, 0)
+            .node("intrinsic-state")
+            .size(20, 20)
+            .position(40, 0);
+        let width = INTRINSIC_WIDTH.get().unwrap();
+        for (frame, value) in [(16_666_667, 70), (33_333_334, 30)] {
+            width.set(value);
+            assert!(!crate::runtime::has_pending_build_invalidations());
+            pump_layout_test_session(&mut session, frame)
+                .node("intrinsic-state")
+                .size(20, 20)
+                .position(value, 0);
+        }
+    }
+
+    thread_local! {
+        static PHASE_OFFSET: Cell<Option<State<i32>>> = const { Cell::new(None) };
+        static PHASE_MEASURES: Cell<usize> = const { Cell::new(0) };
+        static PHASE_BUILDS: Cell<usize> = const { Cell::new(0) };
+        static PHASE_TRANSFORMS: Cell<usize> = const { Cell::new(0) };
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct PlacementStatePolicy {
+        offset: State<i32>,
+        transform: bool,
+    }
+
+    impl LayoutModifierNode for PlacementStatePolicy {
+        fn measure(
+            &self,
+            scope: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            PHASE_MEASURES.set(PHASE_MEASURES.get() + 1);
+            let child = scope.children()[0];
+            child.measure(scope, &Constraint::exact(Px(20), Px(20)))?;
+            let offset = scope.placement(|| if self.transform { 0 } else { self.offset.get() });
+            let mut result = LayoutResult::new(ComputedData {
+                width: Px(200),
+                height: Px(60),
+            });
+            result.place_child(child, PxPosition::new(Px(offset), Px::ZERO));
+            Ok(result)
+        }
+
+        fn place_children(
+            &self,
+            scope: &crate::layout::PlacementScope<'_>,
+            _inner: &crate::layout::PlacementResult,
+        ) -> Option<crate::layout::PlacementResult> {
+            let offset = if self.transform { 0 } else { self.offset.get() };
+            let mut result = LayoutResult::new(scope.size());
+            result.place_child(scope.children()[0], PxPosition::new(Px(offset), Px::ZERO));
+            Some(result.into_placement_result())
+        }
+    }
+
+    #[derive(PartialEq)]
+    struct StateOffsetModifier {
+        offset: State<i32>,
+    }
+
+    impl PlacementModifierNode for StateOffsetModifier {
+        fn transform_position(&self, position: PxPosition) -> PxPosition {
+            PHASE_TRANSFORMS.set(PHASE_TRANSFORMS.get() + 1);
+            position.offset(Px(self.offset.get()), Px::ZERO)
+        }
+    }
+
+    #[tessera(crate)]
+    fn placement_state_fixture(transform: bool) {
+        PHASE_BUILDS.set(PHASE_BUILDS.get() + 1);
+        let offset = remember(|| 0);
+        PHASE_OFFSET.set(Some(offset));
+        let modifier = if transform {
+            Modifier::new().push_placement(StateOffsetModifier { offset })
+        } else {
+            Modifier::new()
+        };
+        crate::layout::layout()
+            .policy(PlacementStatePolicy { offset, transform })
+            .modifier(modifier)
+            .child(|| {
+                tagged_box()
+                    .tag("phase-child".to_string())
+                    .width(20)
+                    .height(20);
+            });
+    }
+
+    #[test]
+    fn placement_and_transform_state_move_descendants_without_build_or_measure() {
+        for transform in [false, true] {
+            PHASE_MEASURES.set(0);
+            PHASE_BUILDS.set(0);
+            PHASE_TRANSFORMS.set(0);
+            let mut session = start_layout_test_session(
+                layout_test(move || {
+                    placement_state_fixture(transform);
+                })
+                .viewport_px(240, 100),
+            );
+            pump_layout_test_session(&mut session, 0)
+                .node("phase-child")
+                .position(0, 0);
+            let measures = PHASE_MEASURES.get();
+            let builds = PHASE_BUILDS.get();
+            let transforms = PHASE_TRANSFORMS.get();
+            pump_layout_test_session(&mut session, 16_666_667)
+                .node("phase-child")
+                .position(0, 0);
+            assert_eq!(
+                last_layout_frame_diagnostics()
+                    .unwrap()
+                    .geometry_nodes_updated,
+                0
+            );
+            assert_eq!(PHASE_TRANSFORMS.get(), transforms);
+            PHASE_OFFSET.get().unwrap().set(35);
+            assert!(!crate::runtime::has_pending_build_invalidations());
+            pump_layout_test_session(&mut session, 33_333_334)
+                .node("phase-child")
+                .position(35, 0);
+            assert_eq!(PHASE_MEASURES.get(), measures);
+            assert_eq!(PHASE_BUILDS.get(), builds);
+            assert!(
+                last_layout_frame_diagnostics()
+                    .unwrap()
+                    .geometry_nodes_updated
+                    > 0
+            );
+            pump_layout_test_session(&mut session, 50_000_001)
+                .node("phase-child")
+                .position(35, 0);
+            assert_eq!(
+                last_layout_frame_diagnostics()
+                    .unwrap()
+                    .geometry_nodes_updated,
+                0
+            );
+        }
     }
 
     #[tessera(crate)]
@@ -1639,6 +1860,14 @@ mod tests {
         let _ = pump_layout_test_session(&mut session, 16_666_667);
 
         let diagnostics = last_layout_frame_diagnostics().expect("layout diagnostics");
+        assert_eq!(
+            diagnostics.geometry_nodes_updated, 0,
+            "unchanged subtrees retain window geometry"
+        );
+        assert_eq!(
+            diagnostics.dirty_nodes_structural, 0,
+            "unchanged frames retain layout adjacency"
+        );
         assert_eq!(
             diagnostics.cache_miss_no_entry, 0,
             "composition boundaries must not force descendant layout nodes to miss the cache"

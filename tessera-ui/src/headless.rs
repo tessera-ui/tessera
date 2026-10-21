@@ -43,10 +43,10 @@ use crate::{
     },
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
-        reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
-        reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
-        reset_slots, reset_state_read_dependencies, take_layout_dirty_nodes,
-        tick_frame_nanos_receivers,
+        prune_persistent_focus_handles, reset_build_invalidations, reset_component_replay_tracking,
+        reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
+        reset_render_slot_read_dependencies, reset_slots, reset_state_read_dependencies,
+        take_layout_dirty_nodes, tick_frame_nanos_receivers,
     },
     time::Instant,
 };
@@ -254,6 +254,7 @@ impl HeadlessRenderer {
             gesture_state: GestureState::TapCandidate,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         });
     }
 
@@ -272,6 +273,7 @@ impl HeadlessRenderer {
             gesture_state: GestureState::TapCandidate,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         });
     }
 
@@ -290,6 +292,7 @@ impl HeadlessRenderer {
             gesture_state: GestureState::TapCandidate,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         });
     }
 
@@ -314,6 +317,7 @@ impl HeadlessRenderer {
             gesture_state: GestureState::TapCandidate,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         });
     }
 
@@ -396,6 +400,7 @@ impl HeadlessRenderer {
         });
         flush_pending_focus_callbacks();
         crate::component_tree::flush_pending_globally_positioned_callbacks();
+        prune_persistent_focus_handles();
         #[cfg(feature = "profiling")]
         let draw_duration = draw_timer.elapsed();
 
@@ -555,6 +560,20 @@ impl HeadlessRenderer {
                     .active_component_node_id(),
             )
         })
+    }
+
+    /// Dispatches an assistive-technology action to a published node.
+    ///
+    /// Returns whether a focus target or action handler received the request.
+    /// Render another frame to publish resulting state and focus changes.
+    pub fn dispatch_accessibility_action(&mut self, request: accesskit::ActionRequest) -> bool {
+        let handled = TesseraRuntime::with_mut(|runtime| {
+            let (tree, metadatas, focus_owner) =
+                runtime.component_tree.accessibility_dispatch_context();
+            crate::accessibility::dispatch_action(tree, metadatas, focus_owner, request)
+        });
+        flush_pending_focus_callbacks();
+        handled
     }
 }
 

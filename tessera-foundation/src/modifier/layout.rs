@@ -373,12 +373,18 @@ pub struct WeightParentData {
     pub weight: f32,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) struct WeightParentDataModifierNode {
     pub weight: f32,
 }
 
 impl ParentDataModifierNode for WeightParentDataModifierNode {
+    fn equivalent(&self, other: &dyn ParentDataModifierNode) -> bool {
+        (other as &dyn std::any::Any)
+            .downcast_ref::<Self>()
+            .is_some_and(|other| self == other)
+    }
+
     fn apply_parent_data(&self, map: &mut ParentDataMap) {
         map.insert(
             TypeId::of::<WeightParentData>(),
@@ -396,12 +402,18 @@ pub struct AlignmentParentData {
     pub alignment: Alignment,
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 pub(crate) struct AlignmentParentDataModifierNode {
     pub alignment: Alignment,
 }
 
 impl ParentDataModifierNode for AlignmentParentDataModifierNode {
+    fn equivalent(&self, other: &dyn ParentDataModifierNode) -> bool {
+        (other as &dyn std::any::Any)
+            .downcast_ref::<Self>()
+            .is_some_and(|other| self == other)
+    }
+
     fn apply_parent_data(&self, map: &mut ParentDataMap) {
         map.insert(
             TypeId::of::<AlignmentParentData>(),

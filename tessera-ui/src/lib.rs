@@ -266,6 +266,14 @@
 //! layout primitives, while application code typically composes existing
 //! components and modifiers.
 //!
+//! State dependencies are tracked separately for composition, measurement,
+//! placement, and drawing. Custom layout policies can implement `measure_eq`,
+//! `placement_eq`, and `place_children` to reuse measurements when only
+//! positions change. Use `MeasureScope::placement` or
+//! `LayoutModifierInput::placement` for state reads that affect positions but
+//! never sizes or constraints. Drawing-only properties should be excluded from
+//! both layout equality comparisons.
+//!
 //! For more details, see the [Layout Guide](https://tessera-ui.github.io/guide/component.html#layout).
 #![deny(
     missing_docs,

@@ -659,6 +659,7 @@ struct RuntimeEventRecord {
 
 #[derive(Serialize, Clone, Copy)]
 struct LayoutDiagnosticsRecord {
+    geometry_nodes_updated: u64,
     dirty_nodes_param: u64,
     dirty_nodes_structural: u64,
     dirty_nodes_with_ancestors: u64,
@@ -677,6 +678,7 @@ struct LayoutDiagnosticsRecord {
 impl From<LayoutFrameDiagnostics> for LayoutDiagnosticsRecord {
     fn from(value: LayoutFrameDiagnostics) -> Self {
         Self {
+            geometry_nodes_updated: value.geometry_nodes_updated,
             dirty_nodes_param: value.dirty_nodes_param,
             dirty_nodes_structural: value.dirty_nodes_structural,
             dirty_nodes_with_ancestors: value.dirty_nodes_with_ancestors,

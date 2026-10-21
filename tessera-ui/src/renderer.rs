@@ -47,11 +47,10 @@ use crate::{
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
         has_pending_build_invalidations, has_pending_frame_nanos_receivers,
-        has_pending_layout_invalidations, install_redraw_waker, reset_build_invalidations,
-        reset_component_replay_tracking, reset_focus_read_dependencies, reset_frame_clock,
-        reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
-        reset_state_read_dependencies, retain_persistent_focus_handles, take_layout_dirty_nodes,
-        tick_frame_nanos_receivers,
+        has_pending_layout_invalidations, install_redraw_waker, prune_persistent_focus_handles,
+        reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
+        reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
+        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_nanos_receivers,
     },
     thread_utils,
     time::Instant,
@@ -1228,7 +1227,7 @@ Fps: {:.2}
                 };
                 let layout_nodes = match tree.get(node_id) {
                     Some(node_ref) if node_ref.get().role == NodeRole::Layout => vec![node_id],
-                    Some(_) => direct_layout_children(node_id, tree),
+                    Some(_) => direct_layout_children(node_id, tree).to_vec(),
                     None => continue,
                 };
                 for layout_node_id in layout_nodes {
@@ -1374,19 +1373,7 @@ Fps: {:.2}
             pending_focus_reveal_retry = next_focus_reveal_retry;
             pending_keyboard_retry = next_keyboard_retry;
         }
-        let final_frame_instance_keys =
-            TesseraRuntime::with(|runtime| runtime.component_tree.live_instance_keys());
-        let removed_focus_handles = retain_persistent_focus_handles(&final_frame_instance_keys);
-        if !removed_focus_handles.handle_ids.is_empty()
-            || !removed_focus_handles.requester_ids.is_empty()
-        {
-            TesseraRuntime::with_mut(|runtime| {
-                runtime.component_tree.focus_owner_mut().remove_handles(
-                    &removed_focus_handles.handle_ids,
-                    &removed_focus_handles.requester_ids,
-                );
-            });
-        }
+        prune_persistent_focus_handles();
         #[cfg(not(feature = "profiling"))]
         let _ = (layout_diagnostics, record_cost);
         #[cfg(feature = "debug-dirty-overlay")]
@@ -1815,6 +1802,7 @@ impl<F: Fn()> Renderer<F> {
             gesture_state: GestureState::TapCandidate,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         });
         debug!("Cursor moved to: {}, {}", position.x, position.y);
     }
@@ -1908,6 +1896,7 @@ impl<F: Fn()> Renderer<F> {
             gesture_state: GestureState::TapCandidate,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         };
         self.cursor_state.push_event(event);
         debug!("Mouse input: {state:?} button {button:?}");
@@ -1925,6 +1914,7 @@ impl<F: Fn()> Renderer<F> {
             gesture_state: GestureState::Dragged,
             sampled_position: Default::default(),
             consumed: false,
+            tap_claimed: false,
         };
         self.cursor_state.push_event(event);
         debug!("Mouse scroll: {delta:?}");

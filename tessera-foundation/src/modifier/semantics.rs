@@ -2,7 +2,8 @@
 //!
 //! ## Usage
 //!
-//! Attach accessibility roles, labels, and testing tags to component subtrees.
+//! Attach roles, labels, validation state, and testing tags to component
+//! subtrees.
 
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, SemanticsModifierNode,
@@ -33,6 +34,10 @@ pub struct SemanticsArgs {
     pub focused: bool,
     /// Optional toggled state.
     pub toggled: Option<Toggled>,
+    /// Optional validation failure associated with the current value.
+    pub invalid: Option<tessera_ui::accesskit::Invalid>,
+    /// Whether this item is selected, when selection applies to its role.
+    pub selected: Option<bool>,
     /// Whether a disclosure control is expanded.
     pub expanded: Option<bool>,
     /// Kind of popup opened by this control.
@@ -104,6 +109,8 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
             focusable,
             focused,
             toggled,
+            invalid,
+            selected,
             expanded,
             has_popup,
             disabled,
@@ -135,6 +142,8 @@ impl SemanticsModifierNode for SemanticsModifierNodeImpl {
         accessibility.focusable = *focusable;
         accessibility.focused = *focused;
         accessibility.toggled = *toggled;
+        accessibility.invalid = *invalid;
+        accessibility.selected = *selected;
         accessibility.expanded = *expanded;
         accessibility.has_popup = *has_popup;
         accessibility.disabled = *disabled;

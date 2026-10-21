@@ -6,6 +6,7 @@
 //! input.
 
 use std::{
+    cell::Cell,
     ptr::NonNull,
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -31,6 +32,18 @@ use crate::{
 static NEXT_FOCUS_TARGET_ID: AtomicU64 = AtomicU64::new(1);
 static NEXT_FOCUS_REQUESTER_ID: AtomicU64 = AtomicU64::new(1);
 const ROOT_SCOPE_ID: FocusHandleId = 0;
+
+thread_local! {
+    static FOCUS_CHANGE_DIRECTION: Cell<Option<FocusDirection>> = const { Cell::new(None) };
+}
+
+struct FocusChangeDirectionGuard(Option<FocusDirection>);
+
+impl Drop for FocusChangeDirectionGuard {
+    fn drop(&mut self) {
+        FOCUS_CHANGE_DIRECTION.set(self.0);
+    }
+}
 
 pub(crate) type FocusHandleId = u64;
 pub(crate) type FocusRequesterId = u64;
@@ -219,6 +232,10 @@ pub struct FocusTraversalPolicy {
     pub wrap: bool,
     /// Whether `Tab` and `Shift+Tab` should be handled by this policy.
     pub tab_navigation: bool,
+    /// Whether the group contributes one stop to global Tab navigation.
+    /// The preferred enabled descendant is used on entry; arrows still visit
+    /// every traversable descendant.
+    pub single_tab_stop: bool,
 }
 
 impl FocusTraversalPolicy {
@@ -228,6 +245,7 @@ impl FocusTraversalPolicy {
             strategy,
             wrap: false,
             tab_navigation: false,
+            single_tab_stop: false,
         }
     }
 
@@ -264,8 +282,16 @@ impl FocusTraversalPolicy {
         self
     }
 
+    /// Makes this group a single Tab stop, preferring a descendant marked with
+    /// [`FocusProperties::preferred_tab_stop`] and otherwise its first enabled
+    /// descendant. Tab leaves the group from any focused descendant.
+    pub const fn single_tab_stop(mut self, single_tab_stop: bool) -> Self {
+        self.single_tab_stop = single_tab_stop;
+        self
+    }
+
     fn scoped_direction(self, direction: FocusDirection) -> Option<FocusDirection> {
-        if self.tab_navigation {
+        if self.tab_navigation && !self.single_tab_stop {
             match direction {
                 FocusDirection::Next | FocusDirection::Previous => return Some(direction),
                 _ => {}
@@ -323,6 +349,8 @@ impl FocusRevealRequest {
 ///
 /// Use properties to enable or disable focus participation and to declare
 /// explicit traversal neighbors for complex layouts.
+/// Controls hidden by layout cannot receive focus. Placed controls outside a
+/// scroll viewport remain eligible so navigation can reveal them.
 ///
 /// # Examples
 ///
@@ -349,7 +377,10 @@ pub struct FocusProperties {
     /// Whether this node may be the target of focus requests.
     pub can_request_focus: bool,
     /// Whether traversal should skip this node.
+    /// A directly focused skipped target still anchors subsequent traversal.
     pub skip_traversal: bool,
+    /// Whether this target is preferred when Tab enters a single-stop group.
+    pub preferred_tab_stop: bool,
     /// Explicit target for `Next` traversal.
     pub next: Option<FocusRequester>,
     /// Explicit target for `Previous` traversal.
@@ -389,6 +420,13 @@ impl FocusProperties {
     /// Sets whether traversal should skip this node.
     pub fn skip_traversal(mut self, skip_traversal: bool) -> Self {
         self.skip_traversal = skip_traversal;
+        self
+    }
+
+    /// Prefers this target when entering a group whose traversal policy uses a
+    /// single Tab stop. Disabled or skipped targets are never chosen on entry.
+    pub fn preferred_tab_stop(mut self, preferred: bool) -> Self {
+        self.preferred_tab_stop = preferred;
         self
     }
 
@@ -447,6 +485,7 @@ impl Default for FocusProperties {
             can_focus: true,
             can_request_focus: true,
             skip_traversal: false,
+            preferred_tab_stop: false,
             next: None,
             previous: None,
             up: None,
@@ -530,6 +569,9 @@ impl FocusRequester {
     }
 
     /// Requests focus for the bound target.
+    ///
+    /// An attached target hidden by layout rejects the request. Navigation can
+    /// still reveal a placed target outside its scroll viewport.
     pub fn request_focus(&self) {
         with_focus_owner_mut(|owner| owner.request_focus_by_requester(self.id));
     }
@@ -545,7 +587,7 @@ impl FocusRequester {
     }
 
     /// Captures focus on this node, preventing focus from moving elsewhere
-    /// until released or force-cleared.
+    /// until released, force-cleared, hidden by layout, or removed.
     pub fn capture_focus(&self) {
         with_focus_owner_mut(|owner| owner.capture_focus_by_requester(self.id));
     }
@@ -791,6 +833,13 @@ impl FocusManager {
         Self
     }
 
+    /// Returns the traversal direction responsible for the focus callback
+    /// currently running. Explicit focus requests, restoration, and calls
+    /// outside a focus callback return `None`.
+    pub fn focus_change_direction(self) -> Option<FocusDirection> {
+        FOCUS_CHANGE_DIRECTION.get()
+    }
+
     /// Defers queued keys until the next layout and its focus updates finish.
     ///
     /// Use when opening or closing focusable content so subsequent keys reach
@@ -848,6 +897,12 @@ struct FocusAttachment {
 }
 
 impl FocusAttachment {
+    fn permits_focus(self) -> bool {
+        // Requests before layout remain valid. Clipped but placed targets keep
+        // a rectangle so keyboard navigation can reveal them.
+        self.traversal_order.is_none() || self.focus_rect.is_some()
+    }
+
     fn root_scope() -> Self {
         Self {
             host_replay_boundary_key: 0,
@@ -914,14 +969,24 @@ impl FocusTreeNode {
 pub(crate) struct PendingFocusCallbackInvocation {
     callback: CallbackWith<FocusState>,
     state: FocusState,
+    direction: Option<FocusDirection>,
 }
 
 impl PendingFocusCallbackInvocation {
-    pub(crate) fn new(callback: CallbackWith<FocusState>, state: FocusState) -> Self {
-        Self { callback, state }
+    pub(crate) fn new(
+        callback: CallbackWith<FocusState>,
+        state: FocusState,
+        direction: Option<FocusDirection>,
+    ) -> Self {
+        Self {
+            callback,
+            state,
+            direction,
+        }
     }
 
     pub(crate) fn invoke(self) {
+        let _direction = FocusChangeDirectionGuard(FOCUS_CHANGE_DIRECTION.replace(self.direction));
         self.callback.call(self.state);
     }
 }
@@ -931,6 +996,7 @@ pub(crate) struct FocusNotification {
     pub handle_id: FocusHandleId,
     pub state: FocusState,
     pub changed: bool,
+    pub direction: Option<FocusDirection>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -1211,6 +1277,22 @@ impl FocusOwner {
             &mut next_traversal_order,
         );
         self.sort_children_by_traversal_order();
+        if self.active.is_some_and(|id| {
+            self.nodes.get(&id).is_some_and(|node| node.is_attached())
+                && !self.can_request_focus(id)
+        }) {
+            let previous_states = self.snapshot_live_states();
+            self.active = self
+                .active
+                .and_then(|id| self.restore_single_tab_stop_group(id));
+            self.captured = None;
+            self.pending_reveal = self.active;
+            if let Some(active) = self.active {
+                self.update_scope_restore_chain(active);
+            }
+            self.recompute_states();
+            self.notify_state_changes(previous_states);
+        }
     }
 
     pub(crate) fn commit_pending(&mut self) {
@@ -1261,7 +1343,7 @@ impl FocusOwner {
             .or_else(|| self.resolve_move_target(direction))
             .is_some_and(|target| self.set_active(target));
         self.recompute_states();
-        self.notify_state_changes(previous_states);
+        self.notify_state_changes_from(previous_states, Some(direction));
         moved
     }
 
@@ -1279,7 +1361,7 @@ impl FocusOwner {
             .resolve_move_target_in_scope(scope_id, direction, wrap)
             .is_some_and(|target| self.set_active(target));
         self.recompute_states();
-        self.notify_state_changes(previous_states);
+        self.notify_state_changes_from(previous_states, Some(direction));
         moved
     }
 
@@ -1482,7 +1564,11 @@ impl FocusOwner {
             .is_some_and(|id| !self.nodes.get(&id).is_some_and(|node| node.is_attached()))
         {
             let previous_active = self.active;
-            if !previous_active.is_some_and(|id| self.should_wait_for_reattach(id)) {
+            if previous_active
+                .and_then(|id| self.restore_single_tab_stop_group(id))
+                .is_some()
+                || !previous_active.is_some_and(|id| self.should_wait_for_reattach(id))
+            {
                 let previous_active = self.active.take();
                 self.active = previous_active.and_then(|id| self.restore_from_detached(id));
                 self.captured = None;
@@ -1515,9 +1601,14 @@ impl FocusOwner {
                 node.is_attached() && (!self.can_focus(id) || !self.can_request_focus(id))
             })
         }) {
-            self.active = None;
+            self.active = self
+                .active
+                .and_then(|id| self.restore_single_tab_stop_group(id));
             self.captured = None;
-            self.pending_reveal = None;
+            self.pending_reveal = self.active;
+            if let Some(active) = self.active {
+                self.update_scope_restore_chain(active);
+            }
         }
 
         let live_ids = self
@@ -1576,6 +1667,14 @@ impl FocusOwner {
         }
         for requesters in self.requesters_by_handle.values_mut() {
             requesters.retain(|requester_id| !removed_requesters.contains(requester_id));
+        }
+
+        // Restore against survivors while retaining scope ancestry until
+        // cleanup finishes.
+        for handle_id in removed_handles {
+            if let Some(node) = self.nodes.get_mut(handle_id) {
+                node.attachment = None;
+            }
         }
 
         let active_was_removed = self.active.filter(|id| removed_handles.contains(id));
@@ -1752,7 +1851,13 @@ impl FocusOwner {
             return Some(target);
         }
 
-        let candidates = self.traversable_focus_handles();
+        let candidates = if matches!(direction, FocusDirection::Next | FocusDirection::Previous) {
+            let mut candidates = Vec::new();
+            self.collect_tab_focus_handles(ROOT_SCOPE_ID, &mut candidates);
+            candidates
+        } else {
+            self.traversable_focus_handles()
+        };
         if candidates.is_empty() {
             return None;
         }
@@ -1853,14 +1958,18 @@ impl FocusOwner {
         };
 
         if forward {
-            candidates
-                .get(index + 1)
-                .copied()
-                .or_else(|| wrap.then_some(candidates.first().copied()).flatten())
+            candidates.get(index + 1).copied().or_else(|| {
+                wrap.then_some(candidates.first().copied())
+                    .flatten()
+                    .filter(|candidate| self.is_traversable_focus_handle(*candidate))
+            })
         } else if index > 0 {
             candidates.get(index - 1).copied()
         } else if wrap {
-            candidates.last().copied()
+            candidates
+                .last()
+                .copied()
+                .filter(|candidate| self.is_traversable_focus_handle(*candidate))
         } else {
             None
         }
@@ -1994,6 +2103,79 @@ impl FocusOwner {
         ordered
     }
 
+    fn collect_tab_focus_handles(&self, parent: FocusHandleId, ordered: &mut Vec<FocusHandleId>) {
+        let Some(children) = self.children_by_parent.get(&parent) else {
+            return;
+        };
+        for &child in children {
+            if self.is_single_tab_stop_group(child) {
+                let target = self
+                    .active
+                    .filter(|active| {
+                        self.is_ancestor(child, *active) && self.can_request_focus(*active)
+                    })
+                    .or_else(|| self.tab_entry_target(child));
+                if let Some(target) = target {
+                    ordered.push(target);
+                }
+                continue;
+            }
+            if self.is_traversable_focus_handle(child)
+                || (self.active == Some(child) && self.can_request_focus(child))
+            {
+                ordered.push(child);
+            }
+            self.collect_tab_focus_handles(child, ordered);
+        }
+    }
+
+    fn is_single_tab_stop_group(&self, id: FocusHandleId) -> bool {
+        self.nodes.get(&id).is_some_and(|node| {
+            node.is_attached()
+                && matches!(
+                    node.kind,
+                    FocusRegistrationKind::Group | FocusRegistrationKind::Scope
+                )
+                && node
+                    .traversal_policy
+                    .is_some_and(|policy| policy.single_tab_stop)
+        })
+    }
+
+    fn tab_entry_target(&self, group: FocusHandleId) -> Option<FocusHandleId> {
+        let mut candidates = Vec::new();
+        self.collect_tab_focus_handles(group, &mut candidates);
+        candidates
+            .iter()
+            .copied()
+            .find(|id| {
+                self.is_traversable_focus_handle(*id)
+                    && self
+                        .nodes
+                        .get(id)
+                        .is_some_and(|node| node.props.preferred_tab_stop)
+            })
+            .or_else(|| {
+                candidates
+                    .into_iter()
+                    .find(|id| self.is_traversable_focus_handle(*id))
+            })
+    }
+
+    fn restore_single_tab_stop_group(&self, id: FocusHandleId) -> Option<FocusHandleId> {
+        let mut current = self.nodes.get(&id).map(|node| node.last_parent);
+        while let Some(parent) = current {
+            if self.is_single_tab_stop_group(parent) {
+                return self.tab_entry_target(parent);
+            }
+            current = self
+                .nodes
+                .get(&parent)
+                .and_then(|node| (parent != ROOT_SCOPE_ID).then_some(node.last_parent));
+        }
+        None
+    }
+
     fn traversable_focus_handles_in_scope(&self, scope_id: FocusHandleId) -> Vec<FocusHandleId> {
         let mut ordered = Vec::new();
         self.collect_traversable_focus_handles(scope_id, &mut ordered);
@@ -2009,7 +2191,11 @@ impl FocusOwner {
             return;
         };
         for &child in children {
-            if self.is_traversable_focus_handle(child) {
+            // A skipped target can hold focus and must retain its position as a
+            // traversal anchor.
+            if self.is_traversable_focus_handle(child)
+                || (self.active == Some(child) && self.can_request_focus(child))
+            {
                 ordered.push(child);
             }
             self.collect_traversable_focus_handles(child, ordered);
@@ -2017,12 +2203,11 @@ impl FocusOwner {
     }
 
     fn is_traversable_focus_handle(&self, id: FocusHandleId) -> bool {
-        self.nodes.get(&id).is_some_and(|node| {
-            node.is_attached()
-                && !node.props.skip_traversal
-                && node.props.can_focus
-                && node.props.can_request_focus
-        })
+        self.can_request_focus(id)
+            && self
+                .nodes
+                .get(&id)
+                .is_some_and(|node| !node.props.skip_traversal)
     }
 
     fn first_focusable_descendant(&self, parent: FocusHandleId) -> Option<FocusHandleId> {
@@ -2046,13 +2231,16 @@ impl FocusOwner {
     }
 
     fn restore_from_detached(&self, id: FocusHandleId) -> Option<FocusHandleId> {
+        if let Some(target) = self.restore_single_tab_stop_group(id) {
+            return Some(target);
+        }
         let mut current_scope = self.nodes.get(&id).map(|node| node.last_scope_parent)?;
         loop {
-            if let Some(candidate) = self.resolve_restore_candidate(current_scope) {
-                return Some(candidate);
-            }
             if current_scope == ROOT_SCOPE_ID {
                 break;
+            }
+            if let Some(candidate) = self.resolve_restore_candidate(current_scope) {
+                return Some(candidate);
             }
             current_scope = self
                 .nodes
@@ -2120,6 +2308,14 @@ impl FocusOwner {
     }
 
     fn notify_state_changes(&mut self, previous_states: HashMap<FocusHandleId, FocusState>) {
+        self.notify_state_changes_from(previous_states, None);
+    }
+
+    fn notify_state_changes_from(
+        &mut self,
+        previous_states: HashMap<FocusHandleId, FocusState>,
+        direction: Option<FocusDirection>,
+    ) {
         let mut changed = HashSet::default();
         let mut events = HashSet::default();
         let mut changed_requesters = HashSet::default();
@@ -2166,6 +2362,7 @@ impl FocusOwner {
                 handle_id: id,
                 state,
                 changed: true,
+                direction,
             });
             for reader in focus_read_subscribers(id) {
                 record_replay_boundary_invalidation_for_instance_key(reader);
@@ -2197,6 +2394,7 @@ impl FocusOwner {
                 handle_id: id,
                 state,
                 changed: false,
+                direction,
             });
         }
 
@@ -2254,15 +2452,17 @@ impl FocusOwner {
     }
 
     fn can_focus(&self, id: FocusHandleId) -> bool {
-        self.nodes
-            .get(&id)
-            .is_some_and(|node| node.is_attached() && node.props.can_focus)
+        self.nodes.get(&id).is_some_and(|node| {
+            node.attachment.is_some_and(FocusAttachment::permits_focus) && node.props.can_focus
+        })
     }
 
     fn can_request_focus(&self, id: FocusHandleId) -> bool {
-        self.nodes.get(&id).is_some_and(|node| {
-            node.is_attached() && node.props.can_focus && node.props.can_request_focus
-        })
+        self.can_focus(id)
+            && self
+                .nodes
+                .get(&id)
+                .is_some_and(|node| node.props.can_request_focus)
     }
 
     fn is_ancestor(&self, ancestor: FocusHandleId, descendant: FocusHandleId) -> bool {

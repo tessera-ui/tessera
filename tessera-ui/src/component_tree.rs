@@ -60,7 +60,7 @@ pub(crate) struct DrawLayoutBounds {
     pub size: ComputedData,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 pub(crate) struct NodeDrawLayout {
     // Cached frames share immutable layer bounds instead of allocating a copy
     // for every restored node.
@@ -81,7 +81,7 @@ impl Default for NodeDrawLayout {
 
 #[derive(Default)]
 pub(crate) struct LayoutSnapshotMap {
-    entries: HashMap<u64, LayoutSnapshotEntry>,
+    entries: HashMap<u64, Arc<LayoutSnapshotEntry>>,
 }
 
 impl LayoutSnapshotMap {
@@ -89,7 +89,7 @@ impl LayoutSnapshotMap {
         self.entries.clear();
     }
 
-    pub(crate) fn remove(&mut self, instance_key: &u64) -> Option<LayoutSnapshotEntry> {
+    pub(crate) fn remove(&mut self, instance_key: &u64) -> Option<Arc<LayoutSnapshotEntry>> {
         self.entries.remove(instance_key)
     }
 
@@ -97,11 +97,11 @@ impl LayoutSnapshotMap {
         &mut self,
         instance_key: u64,
         entry: LayoutSnapshotEntry,
-    ) -> Option<LayoutSnapshotEntry> {
-        self.entries.insert(instance_key, entry)
+    ) -> Option<Arc<LayoutSnapshotEntry>> {
+        self.entries.insert(instance_key, Arc::new(entry))
     }
 
-    pub(crate) fn get_cloned(&self, instance_key: &u64) -> Option<LayoutSnapshotEntry> {
+    pub(crate) fn get_cloned(&self, instance_key: &u64) -> Option<Arc<LayoutSnapshotEntry>> {
         self.entries.get(instance_key).cloned()
     }
 }
@@ -168,6 +168,7 @@ pub(crate) fn flush_pending_globally_positioned_callbacks() {
 
 #[derive(Clone, Copy)]
 pub(crate) struct LayoutContext<'a> {
+    pub state_reader_instance_key: Option<u64>,
     snapshots: *mut LayoutSnapshotMap,
     pub measure_self_nodes: &'a HashSet<u64>,
     pub placement_self_nodes: &'a HashSet<u64>,
@@ -178,19 +179,36 @@ pub(crate) struct LayoutContext<'a> {
 
 #[cfg_attr(not(feature = "profiling"), allow(dead_code))]
 #[derive(Clone, Copy, Debug, Default)]
+/// Layout work observed during one frame.
 pub struct LayoutFrameDiagnostics {
+    /// Number of nodes whose window geometry was resolved in this frame.
+    pub geometry_nodes_updated: u64,
+    /// Nodes with changed measurement or child-placement inputs.
     pub dirty_nodes_param: u64,
+    /// Nodes whose direct layout children changed.
     pub dirty_nodes_structural: u64,
+    /// Invalidated nodes including ancestors that depend on their sizes.
     pub dirty_nodes_with_ancestors: u64,
+    /// Time spent identifying affected ancestors, in nanoseconds.
     pub dirty_expand_ns: u64,
+    /// Measurement entrypoint calls, including cache lookups.
     pub measure_node_calls: u64,
+    /// Cache hits that skipped an unchanged subtree.
     pub cache_hits_direct: u64,
+    /// Cache hits after checking changed descendants or updating placements.
     pub cache_hits_boundary: u64,
+    /// Cache misses without a reusable size snapshot.
     pub cache_miss_no_entry: u64,
+    /// Cache misses caused by changed parent constraints.
     pub cache_miss_constraint: u64,
+    /// Cache misses caused by the node's own layout inputs.
     pub cache_miss_dirty_self: u64,
+    /// Cache misses caused by child size dependencies.
     pub cache_miss_child_size: u64,
+    /// Measured or repositioned layouts saved for reuse.
     pub cache_store_count: u64,
+    /// Layouts excluded from caching because child measurements were incomplete
+    /// or inconsistent.
     pub cache_drop_non_cacheable_count: u64,
 }
 
@@ -218,6 +236,7 @@ impl LayoutDiagnosticsCollector {
         let cache_hits_direct = self.cache_hits_direct;
         let cache_hits_boundary = self.cache_hits_boundary;
         LayoutFrameDiagnostics {
+            geometry_nodes_updated: 0,
             dirty_nodes_param,
             dirty_nodes_structural,
             dirty_nodes_with_ancestors,
@@ -244,6 +263,7 @@ impl LayoutContext<'_> {
         diagnostics: &'a mut LayoutDiagnosticsCollector,
     ) -> LayoutContext<'a> {
         LayoutContext {
+            state_reader_instance_key: None,
             snapshots,
             measure_self_nodes,
             placement_self_nodes,
@@ -260,6 +280,7 @@ impl LayoutContext<'_> {
         parent: Option<&'a LayoutContext<'_>>,
     ) -> LayoutContext<'a> {
         LayoutContext {
+            state_reader_instance_key: crate::runtime::current_measured_node_instance_key(),
             snapshots,
             measure_self_nodes: empty,
             placement_self_nodes: empty,
@@ -270,7 +291,7 @@ impl LayoutContext<'_> {
     }
 
     #[inline]
-    pub(crate) fn snapshot(&self, instance_key: u64) -> Option<LayoutSnapshotEntry> {
+    pub(crate) fn snapshot(&self, instance_key: u64) -> Option<Arc<LayoutSnapshotEntry>> {
         // SAFETY: Layout snapshots are owned by the single-threaded compute
         // pass. The pointer is created from a unique mutable borrow for the
         // duration of the pass and only accessed on the same thread.
@@ -415,6 +436,7 @@ pub struct ComponentTree {
     node_queue: Vec<indextree::NodeId>,
     /// Detached old-subtree nodes keyed by instance key during replay replace.
     replay_reuse_candidates: HashMap<u64, indextree::NodeId>,
+    node_ids_by_instance_key: HashMap<u64, indextree::NodeId>,
     /// Active pointer hit paths keyed by pointer id.
     /// Each path stores node instance keys from root to leaf.
     active_pointer_paths: HashMap<u64, Vec<u64>>,
@@ -477,6 +499,7 @@ impl ComponentTree {
             layout_snapshots: LayoutSnapshotMap::default(),
             scale_factor_bits: crate::dp::scale_factor().to_bits(),
             replay_reuse_candidates: HashMap::default(),
+            node_ids_by_instance_key: HashMap::default(),
             active_pointer_paths: HashMap::default(),
             active_pointer_positions: HashMap::default(),
             focus_owner: FocusOwner::new(),
@@ -489,11 +512,15 @@ impl ComponentTree {
 
     /// Clear the component tree
     pub fn clear(&mut self) {
+        crate::runtime::remove_layout_structure(
+            &self.node_ids_by_instance_key.keys().copied().collect(),
+        );
         self.tree.clear();
         self.metadatas.clear();
         self.layout_snapshots.clear();
         self.node_queue.clear();
         self.replay_reuse_candidates.clear();
+        self.node_ids_by_instance_key.clear();
         self.last_global_rects.clear();
         self.pending_globally_positioned_invocations.clear();
     }
@@ -537,21 +564,7 @@ impl ComponentTree {
         &self,
         instance_key: u64,
     ) -> Option<indextree::NodeId> {
-        let root = self
-            .tree
-            .get_node_id_at(NonZero::new(1).expect("root node index must be non-zero"))?;
-        for edge in root.traverse(&self.tree) {
-            let indextree::NodeEdge::Start(node_id) = edge else {
-                continue;
-            };
-            let Some(node) = self.tree.get(node_id) else {
-                continue;
-            };
-            if node.get().instance_key == instance_key {
-                return Some(node_id);
-            }
-        }
-        None
+        self.node_ids_by_instance_key.get(&instance_key).copied()
     }
 
     pub(crate) fn live_instance_keys(&self) -> HashSet<u64> {
@@ -676,6 +689,7 @@ impl ComponentTree {
         let mut inserted_instance_keys = HashSet::default();
         let mut inserted_instance_logic_ids = HashSet::default();
         let mut reused_instance_logic_ids = HashSet::default();
+        let mut replaced_nodes = Vec::new();
         for inserted_root_id in &inserted_root_ids {
             for edge in inserted_root_id.traverse(&self.tree) {
                 let indextree::NodeEdge::Start(id) = edge else {
@@ -686,6 +700,10 @@ impl ComponentTree {
                     inserted_instance_logic_ids.insert(node.get().instance_logic_id);
                     if detached_node_ids.contains(&id) {
                         reused_instance_logic_ids.insert(node.get().instance_logic_id);
+                    } else if let Some(old_id) =
+                        self.replay_reuse_candidates.get(&node.get().instance_key)
+                    {
+                        replaced_nodes.push((*old_id, id));
                     }
                 }
             }
@@ -699,6 +717,43 @@ impl ComponentTree {
             .difference(&inserted_instance_logic_ids)
             .copied()
             .collect::<HashSet<_>>();
+        for (old_id, new_id) in replaced_nodes {
+            let old_parent = if old_id == detached_root_id {
+                Some(parent_id)
+            } else {
+                self.tree.get(old_id).and_then(|node| node.parent())
+            };
+            let new_parent = self.tree.get(new_id).and_then(|node| node.parent());
+            let same_parent = old_parent
+                .and_then(|id| self.tree.get(id))
+                .map(|node| node.get().instance_key)
+                == new_parent
+                    .and_then(|id| self.tree.get(id))
+                    .map(|node| node.get().instance_key);
+            if let Some(previous) = self.metadatas.remove(&old_id) {
+                let metadata = self.metadatas.entry_or_default(new_id);
+                metadata.computed_data = previous.computed_data;
+                metadata.draw_layout = previous.draw_layout;
+                metadata.rel_position = previous.rel_position;
+                metadata.placement_order = previous.placement_order;
+                metadata.base_abs_position = previous.base_abs_position;
+                metadata.abs_position = previous.abs_position;
+                metadata.event_clip_rect = previous.event_clip_rect;
+                metadata.prepared_layout = previous.prepared_layout;
+                metadata.geometry_initialized = previous.geometry_initialized;
+                metadata.clips_children = previous.clips_children;
+                metadata.clip_region = previous.clip_region;
+                metadata.opacity = previous.opacity;
+                metadata.has_shape_clipping = previous.has_shape_clipping;
+                if same_parent && metadata.geometry_initialized {
+                    self.metadatas.geometry_dirty.remove(&new_id);
+                }
+            }
+        }
+        for key in &removed_instance_keys {
+            self.node_ids_by_instance_key.remove(key);
+        }
+        crate::runtime::remove_layout_structure(&removed_instance_keys);
         if !detached_root_reused {
             let detached_node_ids = detached_root_id
                 .traverse(&self.tree)
@@ -713,6 +768,12 @@ impl ComponentTree {
             detached_root_id.remove_subtree(&mut self.tree);
         }
         self.replay_reuse_candidates.clear();
+
+        let mut ancestor = Some(parent_id);
+        while let Some(node_id) = ancestor {
+            self.refresh_layout_children(node_id);
+            ancestor = self.tree.get(node_id).and_then(|node| node.parent());
+        }
 
         self.node_queue = previous_queue;
         Ok(ReplayReplaceResult {
@@ -735,6 +796,23 @@ impl ComponentTree {
     pub(crate) fn current_node_mut(&mut self) -> Option<&mut ComponentNode> {
         let node_id = self.node_queue.last()?;
         self.get_mut(*node_id)
+    }
+
+    pub(crate) fn set_current_node_identity(&mut self, instance_key: u64, instance_logic_id: u64) {
+        if let Some(&node_id) = self.node_queue.last() {
+            let node = self.tree[node_id].get_mut();
+            if self.node_ids_by_instance_key.get(&node.instance_key) == Some(&node_id) {
+                self.node_ids_by_instance_key.remove(&node.instance_key);
+            }
+            node.instance_key = instance_key;
+            node.instance_logic_id = instance_logic_id;
+            self.node_ids_by_instance_key.insert(instance_key, node_id);
+        } else {
+            debug_assert!(
+                false,
+                "set_current_node_identity requires a component build"
+            );
+        }
     }
 
     pub(crate) fn try_reuse_current_subtree(
@@ -779,6 +857,8 @@ impl ComponentTree {
         if let Some(current_node) = self.node_queue.last_mut() {
             *current_node = candidate_node_id;
         }
+        self.node_ids_by_instance_key
+            .insert(instance_key, candidate_node_id);
         self.replay_reuse_candidates.remove(&instance_key);
         true
     }
@@ -788,7 +868,12 @@ impl ComponentTree {
     /// The `node_component` itself primarily holds the layout policy, render
     /// policy, and handlers.
     pub(crate) fn add_node(&mut self, node_component: ComponentNode) -> indextree::NodeId {
+        let instance_key = node_component.instance_key;
         let new_node_id = self.tree.new_node(node_component);
+        if instance_key != 0 || self.node_queue.is_empty() {
+            self.node_ids_by_instance_key
+                .insert(instance_key, new_node_id);
+        }
         if let Some(current_node_id) = self.node_queue.last_mut() {
             current_node_id.append(new_node_id, &mut self.tree);
         }
@@ -800,7 +885,30 @@ impl ComponentTree {
 
     /// Pop the last node from the queue
     pub(crate) fn pop_node(&mut self) {
-        self.node_queue.pop();
+        if let Some(node_id) = self.node_queue.pop() {
+            self.refresh_layout_children(node_id);
+        }
+    }
+
+    fn refresh_layout_children(&mut self, node_id: indextree::NodeId) {
+        let mut children = Vec::new();
+        for child_id in node_id.children(&self.tree) {
+            let child = self.tree[child_id].get();
+            if child.role == NodeRole::Layout {
+                children.push(child_id);
+            } else {
+                children.extend(direct_layout_children(child_id, &self.tree).iter().copied());
+            }
+        }
+        let keys = children
+            .iter()
+            .map(|id| self.tree[*id].get().instance_key)
+            .collect();
+        let node = self.tree[node_id].get_mut();
+        if node.layout_children.as_deref() != Some(children.as_slice()) {
+            node.layout_children = Some(children.into());
+        }
+        crate::runtime::record_layout_structure(node.instance_key, keys);
     }
 
     /// Get a reference to the underlying tree structure.
@@ -925,12 +1033,14 @@ impl ComponentTree {
                 invocations.push(PendingFocusCallbackInvocation::new(
                     *handler,
                     notification.state,
+                    notification.direction,
                 ));
             }
             if let Some(handler) = &node.focus_event_handler {
                 invocations.push(PendingFocusCallbackInvocation::new(
                     *handler,
                     notification.state,
+                    notification.direction,
                 ));
             }
         }
@@ -1447,18 +1557,41 @@ impl ComponentTree {
             );
         };
         let screen_constraint = Constraint::exact(screen_size.width, screen_size.height);
-        let current_children_by_node = collect_children_by_instance_key(root_node, &self.tree);
+        for key in &layout_dirty_nodes.transform_nodes {
+            if let Some(&node_id) = self.node_ids_by_instance_key.get(key) {
+                self.metadatas.mark_geometry_dirty(node_id);
+            }
+        }
+        for key in &layout_dirty_nodes.paint_nodes {
+            if let Some(&node_id) = self.node_ids_by_instance_key.get(key) {
+                self.metadatas.entry_or_default(node_id).paint_dirty = true;
+            }
+        }
         let StructureReconcileResult {
             changed_nodes: structural_dirty_nodes,
             removed_nodes,
-        } = crate::runtime::reconcile_layout_structure(&current_children_by_node);
+        } = crate::runtime::take_layout_structure_changes();
         self.remove_layout_snapshots(&removed_nodes);
         // Layout nodes dropped from the tree must also drop the state-read
         // dependencies they registered during measurement, otherwise recycled
         // instance keys would keep stale placement dirtiness alive.
         crate::runtime::remove_layout_state_read_dependencies(&removed_nodes);
 
-        let mut dirty_nodes_self = layout_dirty_nodes.measure_self_nodes.clone();
+        let mut measure_self_nodes = layout_dirty_nodes.measure_self_nodes.clone();
+        for key in &layout_dirty_nodes.parent_data_nodes {
+            if let Some(&node_id) = self.node_ids_by_instance_key.get(key) {
+                let mut parent = self.tree.get(node_id).and_then(|node| node.parent());
+                while let Some(parent_id) = parent {
+                    let node = &self.tree[parent_id];
+                    if node.get().role == NodeRole::Layout || node.parent().is_none() {
+                        measure_self_nodes.insert(node.get().instance_key);
+                        break;
+                    }
+                    parent = node.parent();
+                }
+            }
+        }
+        let mut dirty_nodes_self = measure_self_nodes.clone();
         dirty_nodes_self.extend(layout_dirty_nodes.placement_self_nodes.iter().copied());
         let dirty_nodes_param = dirty_nodes_self.len() as u64;
         let dirty_nodes_structural = structural_dirty_nodes.len() as u64;
@@ -1471,8 +1604,11 @@ impl ComponentTree {
         // without a position.
         let mut placement_dirty_nodes = layout_dirty_nodes.placement_self_nodes.clone();
         placement_dirty_nodes.extend(structural_dirty_nodes.iter().copied());
-        let dirty_nodes_effective =
-            expand_dirty_nodes_with_ancestors(root_node, &self.tree, &dirty_nodes_self);
+        let dirty_nodes_effective = expand_dirty_nodes_with_ancestors(
+            &self.tree,
+            &self.node_ids_by_instance_key,
+            &dirty_nodes_self,
+        );
         let dirty_expand_ns = dirty_prepare_start.elapsed().as_nanos() as u64;
         let mut diagnostics = LayoutDiagnosticsCollector::default();
 
@@ -1480,9 +1616,10 @@ impl ComponentTree {
             .sync_from_component_tree(root_node, &self.tree);
         self.focus_owner.commit_pending();
 
+        measure_self_nodes.extend(structural_dirty_nodes);
         let layout_ctx = LayoutContext::new(
             &mut self.layout_snapshots,
-            &layout_dirty_nodes.measure_self_nodes,
+            &measure_self_nodes,
             &placement_dirty_nodes,
             &dirty_nodes_effective,
             &mut diagnostics,
@@ -1508,7 +1645,7 @@ impl ComponentTree {
             }
         }
 
-        let diagnostics_snapshot = diagnostics.snapshot(
+        let mut diagnostics_snapshot = diagnostics.snapshot(
             dirty_nodes_param,
             dirty_nodes_structural,
             dirty_nodes_effective.len() as u64,
@@ -1522,7 +1659,8 @@ impl ComponentTree {
             } => (compute_resource_manager, gpu),
             #[cfg(feature = "testing")]
             ComputeMode::LayoutOnly => {
-                populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
+                diagnostics_snapshot.geometry_nodes_updated =
+                    populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
                 self.collect_globally_positioned_invocations(root_node);
                 let _ = self.dispatch_pointer_input(
                     root_node,
@@ -1552,7 +1690,8 @@ impl ComponentTree {
             gpu,
         );
         let record_cost = record_timer.elapsed();
-        populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
+        diagnostics_snapshot.geometry_nodes_updated =
+            populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);
         self.collect_globally_positioned_invocations(root_node);
 
         let compute_draw_timer = Instant::now();
@@ -2662,63 +2801,22 @@ fn component_node_viewport_rect(
 }
 
 fn expand_dirty_nodes_with_ancestors(
-    root_node: indextree::NodeId,
     tree: &ComponentNodeTree,
+    node_ids: &HashMap<u64, indextree::NodeId>,
     dirty_nodes_self: &HashSet<u64>,
 ) -> HashSet<u64> {
-    if dirty_nodes_self.is_empty() {
-        return HashSet::default();
-    }
-
-    let mut parent_by_key: HashMap<u64, u64> = HashMap::default();
-    for edge in root_node.traverse(tree) {
-        let indextree::NodeEdge::Start(node_id) = edge else {
-            continue;
-        };
-        let Some(node) = tree.get(node_id) else {
-            continue;
-        };
-        let instance_key = node.get().instance_key;
-        let Some(parent_id) = node.parent() else {
-            continue;
-        };
-        if let Some(parent) = tree.get(parent_id) {
-            parent_by_key.insert(instance_key, parent.get().instance_key);
-        }
-    }
-
-    let mut expanded = dirty_nodes_self.clone();
+    let mut expanded = HashSet::default();
     for dirty_key in dirty_nodes_self {
-        let mut current = *dirty_key;
-        while let Some(parent_key) = parent_by_key.get(&current).copied() {
-            expanded.insert(parent_key);
-            current = parent_key;
+        let mut current = node_ids.get(dirty_key).copied();
+        while let Some(node_id) = current {
+            let Some(node) = tree.get(node_id) else { break };
+            if !expanded.insert(node.get().instance_key) {
+                break;
+            }
+            current = node.parent();
         }
     }
-
     expanded
-}
-
-fn collect_children_by_instance_key(
-    root_node: indextree::NodeId,
-    tree: &ComponentNodeTree,
-) -> HashMap<u64, Vec<u64>> {
-    let mut children_by_node = HashMap::default();
-    for edge in root_node.traverse(tree) {
-        let indextree::NodeEdge::Start(node_id) = edge else {
-            continue;
-        };
-        let Some(node) = tree.get(node_id) else {
-            continue;
-        };
-        let instance_key = node.get().instance_key;
-        let child_keys = direct_layout_children(node_id, tree)
-            .into_iter()
-            .filter_map(|child_id| tree.get(child_id).map(|child| child.get().instance_key))
-            .collect();
-        children_by_node.insert(instance_key, child_keys);
-    }
-    children_by_node
 }
 
 fn record_layout_commands(
@@ -2787,6 +2885,19 @@ fn record_layout_commands(
         {
             continue;
         }
+        if metadatas
+            .get(&node_id)
+            .is_some_and(|metadata| !metadata.paint_dirty)
+        {
+            stack.extend(node_id.children(tree));
+            continue;
+        }
+        let _phase = push_phase(RuntimePhase::Paint);
+        let _instance = push_current_component_instance_key(node.get().instance_key);
+        crate::runtime::clear_phase_state_reads(
+            node.get().instance_key,
+            crate::runtime::ReadPhase::Paint,
+        );
         #[cfg(feature = "profiling")]
         let _record_profiler_guard = {
             let parent_id = node.parent();
@@ -2799,6 +2910,13 @@ fn record_layout_commands(
         };
         // Recording also runs on layout cache hits, so visual state must be
         // reset independently of measurement invalidation.
+        let previous_visual = metadatas.get(&node_id).map(|metadata| {
+            (
+                metadata.clips_children,
+                metadata.clip_region,
+                metadata.opacity,
+            )
+        });
         if let Some(metadata) = metadatas.get_mut(&node_id) {
             metadata.fragment = Default::default();
             metadata.clips_children = false;
@@ -2833,11 +2951,24 @@ fn record_layout_commands(
             pending_start: 0,
         };
         content.draw(&mut input);
+        if let Some(metadata) = metadatas.get_mut(&node_id) {
+            metadata.paint_dirty = false;
+        }
+        let next_visual = metadatas.get(&node_id).map(|metadata| {
+            (
+                metadata.clips_children,
+                metadata.clip_region,
+                metadata.opacity,
+            )
+        });
+        if previous_visual != next_visual {
+            metadatas.mark_geometry_dirty(node_id);
+        }
         stack.extend(node_id.children(tree));
     }
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, PartialEq)]
 struct PreparedLayoutMetadata {
     self_position: PxPosition,
     size: PxSize,
@@ -2845,6 +2976,7 @@ struct PreparedLayoutMetadata {
     clip_region: Option<crate::ClipRegion>,
     child_clip_rect: Option<PxRect>,
     cumulative_opacity: f32,
+    has_shape_clipping: bool,
 }
 
 fn prepare_layout_metadata_for_node(
@@ -2856,6 +2988,14 @@ fn prepare_layout_metadata_for_node(
     parent_clip_rect: Option<PxRect>,
     current_opacity: f32,
 ) -> Option<PreparedLayoutMetadata> {
+    let _phase = push_phase(RuntimePhase::Place);
+    let _instance = push_current_component_instance_key(tree.get(node_id)?.get().instance_key);
+    if let Some(node) = tree.get(node_id) {
+        crate::runtime::clear_phase_state_reads(
+            node.get().instance_key,
+            crate::runtime::ReadPhase::Transform,
+        );
+    }
     let parent_has_shape_clipping = tree
         .get(node_id)
         .and_then(|node| node.parent())
@@ -2925,6 +3065,7 @@ fn prepare_layout_metadata_for_node(
         clip_region,
         child_clip_rect,
         cumulative_opacity,
+        has_shape_clipping: metadata.has_shape_clipping,
     })
 }
 
@@ -2932,17 +3073,40 @@ fn populate_layout_metadata(
     root_node: indextree::NodeId,
     tree: &ComponentNodeTree,
     metadatas: &mut ComponentNodeMetaDatas,
-) {
+) -> u64 {
+    let mut dirty = std::mem::take(&mut metadatas.geometry_dirty);
+    for node_id in dirty.iter().copied().collect::<Vec<_>>() {
+        let mut parent = tree.get(node_id).and_then(|node| node.parent());
+        while let Some(node_id) = parent {
+            if !dirty.insert(node_id) {
+                break;
+            }
+            parent = tree.get(node_id).and_then(|node| node.parent());
+        }
+    }
     fn visit(
         tree: &ComponentNodeTree,
         metadatas: &mut ComponentNodeMetaDatas,
+        dirty: &HashSet<indextree::NodeId>,
         start_pos: PxPosition,
         is_root: bool,
         node_id: indextree::NodeId,
         clip_rect: Option<PxRect>,
         current_opacity: f32,
+        inherited_changed: bool,
+        updates: &mut u64,
     ) {
-        let Some(prepared) = prepare_layout_metadata_for_node(
+        let previous = metadatas
+            .get(&node_id)
+            .and_then(|metadata| metadata.prepared_layout);
+        let initialized = metadatas
+            .get(&node_id)
+            .is_some_and(|metadata| metadata.geometry_initialized);
+        if initialized && !inherited_changed && !dirty.contains(&node_id) {
+            return;
+        }
+        *updates += 1;
+        let prepared = prepare_layout_metadata_for_node(
             tree,
             metadatas,
             start_pos,
@@ -2950,7 +3114,13 @@ fn populate_layout_metadata(
             node_id,
             clip_rect,
             current_opacity,
-        ) else {
+        );
+        if let Some(metadata) = metadatas.get_mut(&node_id) {
+            metadata.prepared_layout = prepared;
+            metadata.geometry_initialized = true;
+        }
+        let changed = inherited_changed || !initialized || prepared != previous;
+        let Some(prepared) = prepared else {
             if tree
                 .get(node_id)
                 .is_some_and(|node| node.get().role == NodeRole::Layout)
@@ -2968,38 +3138,47 @@ fn populate_layout_metadata(
                 visit(
                     tree,
                     metadatas,
+                    dirty,
                     start_pos,
                     false,
                     child,
                     clip_rect,
                     current_opacity,
+                    changed,
+                    updates,
                 );
             }
             return;
         };
-
         for child in node_id.children(tree) {
             visit(
                 tree,
                 metadatas,
+                dirty,
                 prepared.self_position,
                 false,
                 child,
                 prepared.child_clip_rect,
                 prepared.cumulative_opacity,
+                changed,
+                updates,
             );
         }
     }
-
+    let mut updates = 0;
     visit(
         tree,
         metadatas,
+        &dirty,
         PxPosition::ZERO,
         true,
         root_node,
         None,
         1.0,
+        false,
+        &mut updates,
     );
+    updates
 }
 
 /// Sequential computation of render graph ops from the component tree.
@@ -3044,15 +3223,11 @@ fn build_render_graph_inner(
     clip_rect: Option<PxRect>,
     current_opacity: f32,
 ) {
-    let Some(prepared) = prepare_layout_metadata_for_node(
-        context.tree,
-        context.metadatas,
-        start_pos,
-        is_root,
-        node_id,
-        clip_rect,
-        current_opacity,
-    ) else {
+    let Some(prepared) = context
+        .metadatas
+        .get(&node_id)
+        .and_then(|metadata| metadata.prepared_layout)
+    else {
         if context
             .tree
             .get(node_id)
@@ -3077,7 +3252,7 @@ fn build_render_graph_inner(
     }
 
     let fragment = match context.metadatas.get_mut(&node_id) {
-        Some(metadata) => metadata.take_fragment(),
+        Some(metadata) => metadata.fragment.clone(),
         None => {
             warn!("Missing metadata for node {node_id:?}; skipping render graph build");
             return;
@@ -3132,6 +3307,7 @@ mod tests {
         ComponentNode {
             fn_name: name.to_string(),
             role,
+            layout_children: None,
             instance_logic_id,
             instance_key,
             pointer_preview_handlers: Vec::new(),
@@ -3163,7 +3339,9 @@ mod tests {
     }
 
     #[test]
-    fn unplaced_layout_subtrees_hide_descendant_geometry_input_and_draw_ops() {
+    fn unplaced_layout_subtrees_hide_geometry_input_drawing_semantics_and_focus() {
+        use crate::focus::{FocusNode, FocusRegistration};
+
         #[derive(Clone)]
         struct Marker;
 
@@ -3176,24 +3354,87 @@ mod tests {
         tree.add_node(node_with_role("transparent", NodeRole::Composition, 2, 2));
         let panel = tree.add_node(node("panel", 3, 3));
         tree.add_node(node_with_role("content", NodeRole::Composition, 4, 4));
-        let leaf = tree.add_node(node("leaf", 5, 5));
-        for _ in 0..5 {
+        let leaf_focus = FocusRegistration::target(FocusNode::new());
+        let mut leaf_node = node("leaf", 5, 5);
+        leaf_node.focus_registration = Some(leaf_focus);
+        let leaf = tree.add_node(leaf_node);
+        for _ in 0..4 {
             tree.pop_node();
         }
-        for (id, length) in [(root, 200), (panel, 30), (leaf, 6)] {
+        let outside_focus = FocusRegistration::target(FocusNode::new());
+        let mut outside_node = node("outside", 6, 6);
+        outside_node.focus_registration = Some(outside_focus);
+        let outside = tree.add_node(outside_node);
+        tree.pop_node();
+        tree.pop_node();
+        for (id, length) in [(root, 200), (panel, 30), (leaf, 6), (outside, 6)] {
             tree.metadatas.entry_or_default(id).computed_data = Some(ComputedData {
                 width: Px(length),
                 height: Px(length),
             });
         }
         tree.metadatas.entry_or_default(leaf).rel_position = Some(PxPosition::new(Px(4), Px(5)));
+        tree.metadatas.entry_or_default(outside).rel_position =
+            Some(PxPosition::new(Px(240), Px(240)));
+        tree.metadatas.entry_or_default(root).clips_children = true;
+        tree.metadatas.entry_or_default(leaf).accessibility = Some(
+            crate::accessibility::AccessibilityNode::new()
+                .with_role(accesskit::Role::Button)
+                .with_label("Panel action"),
+        );
         for position in [Some(20), None, Some(40)] {
+            tree.metadatas.mark_geometry_dirty(panel);
             tree.metadatas.entry_or_default(panel).rel_position =
                 position.map(|position| PxPosition::new(Px(position), Px(position)));
             let metadata = tree.metadatas.entry_or_default(leaf);
             metadata.fragment = Default::default();
             metadata.fragment.push_draw_command(Marker);
             populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+            assert_eq!(
+                tree.metadatas.get(&outside).unwrap().event_clip_rect,
+                Some(PxRect::new(Px::ZERO, Px::ZERO, Px(200), Px(200))),
+                "the placed traversal target is outside its ancestor's clip"
+            );
+            tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+            tree.focus_owner
+                .sync_layout_from_component_tree(root, &tree.tree, &tree.metadatas);
+            if position.is_none() {
+                assert_eq!(
+                    tree.focus_owner.active_component_node_id(),
+                    None,
+                    "hiding the active subtree releases focus, including capture"
+                );
+            }
+            tree.focus_owner.clear_focus_global(true);
+            tree.focus_owner.request_focus(leaf_focus.id);
+            tree.focus_owner.commit_pending();
+            assert_eq!(
+                tree.focus_owner.active_component_node_id(),
+                position.map(|_| leaf),
+                "unplaced descendants reject direct focus requests"
+            );
+            tree.focus_owner.clear_focus_global(true);
+            assert!(tree.focus_owner.move_focus(FocusDirection::Next));
+            assert_eq!(
+                tree.focus_owner.active_component_node_id(),
+                Some(if position.is_some() { leaf } else { outside }),
+                "forward traversal skips the unplaced subtree"
+            );
+            if position.is_some() {
+                assert!(tree.focus_owner.move_focus(FocusDirection::Next));
+            }
+            assert_eq!(
+                tree.focus_owner.move_focus(FocusDirection::Previous),
+                position.is_some(),
+                "reverse traversal also skips the unplaced subtree"
+            );
+            assert_eq!(
+                tree.focus_owner.active_component_node_id(),
+                Some(if position.is_some() { leaf } else { outside })
+            );
+            if position.is_some() {
+                tree.focus_owner.capture_focus(leaf_focus.id);
+            }
             let graph = build_render_graph(
                 root,
                 &tree.tree,
@@ -3211,9 +3452,37 @@ mod tests {
                 resolve_node_input_context(&tree.tree, &tree.metadatas, leaf).is_some(),
                 expected.is_some()
             );
-            assert_eq!(graph.ops().len(), usize::from(expected.is_some()));
+            let marker_ops: Vec<_> = graph
+                .ops()
+                .iter()
+                .filter(|op| op.type_id == std::any::TypeId::of::<Marker>())
+                .collect();
+            assert_eq!(marker_ops.len(), usize::from(expected.is_some()));
+            let accessibility = crate::accessibility::build_tree_update(
+                &tree.tree,
+                &tree.metadatas,
+                root,
+                None,
+                Some(leaf),
+            )
+            .expect("accessibility tree");
+            assert_eq!(
+                accessibility
+                    .nodes
+                    .iter()
+                    .any(|(_, node)| node.label() == Some("Panel action")),
+                expected.is_some()
+            );
+            assert_eq!(
+                accessibility
+                    .nodes
+                    .iter()
+                    .find(|(id, _)| *id == accessibility.focus)
+                    .and_then(|(_, node)| node.label()),
+                expected.map(|_| "Panel action")
+            );
             if let Some(expected) = expected {
-                assert_eq!(graph.ops()[0].position, expected);
+                assert_eq!(marker_ops[0].position, expected);
             }
         }
     }
@@ -3562,6 +3831,165 @@ mod tests {
     }
 
     #[test]
+    fn skipped_focus_targets_anchor_navigation_without_becoming_destinations() {
+        use crate::focus::{FocusNode, FocusRegistration, FocusScopeNode};
+
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let scope = FocusRegistration::scope(FocusScopeNode::new());
+        let mut container = node("scope", 2, 2);
+        container.focus_registration = Some(scope);
+        tree.add_node(container);
+        let mut targets = Vec::new();
+        for index in 0..3 {
+            let mut registration = FocusRegistration::target(FocusNode::new());
+            registration.properties.skip_traversal = index == 1;
+            let mut target = node("target", index + 3, index + 3);
+            target.focus_registration = Some(registration);
+            targets.push((tree.add_node(target), registration.id));
+            tree.pop_node();
+        }
+        tree.pop_node();
+        tree.pop_node();
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        for scoped in [false, true] {
+            for (direction, expected) in [(FocusDirection::Next, 2), (FocusDirection::Previous, 0)]
+            {
+                tree.focus_owner.request_focus(targets[1].1);
+                assert_eq!(
+                    tree.focus_owner.active_component_node_id(),
+                    Some(targets[1].0)
+                );
+                assert!(if scoped {
+                    tree.focus_owner
+                        .move_focus_in_scope(scope.id, direction, true)
+                } else {
+                    tree.focus_owner.move_focus(direction)
+                });
+                assert_eq!(
+                    tree.focus_owner.active_component_node_id(),
+                    Some(targets[expected].0)
+                );
+            }
+        }
+        tree.focus_owner.request_focus(targets[0].1);
+        assert!(tree.focus_owner.move_focus(FocusDirection::Next));
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(targets[2].0)
+        );
+        for index in [0, 2] {
+            tree.tree[targets[index].0]
+                .get_mut()
+                .focus_registration
+                .as_mut()
+                .unwrap()
+                .properties
+                .can_focus = false;
+        }
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner.request_focus(targets[1].1);
+        for direction in [FocusDirection::Next, FocusDirection::Previous] {
+            assert!(
+                !tree
+                    .focus_owner
+                    .move_focus_in_scope(scope.id, direction, true)
+            );
+        }
+    }
+
+    #[test]
+    fn removing_unscoped_focus_does_not_activate_an_unrelated_control() {
+        let (mut tree, targets) = focus_targets(true);
+        tree.focus_owner.request_focus(targets[0].1);
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(targets[0].0)
+        );
+        tree.focus_owner
+            .remove_handles(&[targets[0].1].into_iter().collect(), &HashSet::default());
+        assert_eq!(tree.focus_owner.active_component_node_id(), None);
+    }
+
+    #[test]
+    fn removing_focused_handles_restores_to_a_surviving_scope_target() {
+        use crate::focus::{FocusNode, FocusRegistration, FocusRequester, FocusScopeNode};
+
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let scope = FocusRegistration::scope(FocusScopeNode::new());
+        let fallback = FocusRequester::new();
+        let mut container = node("scope", 2, 2);
+        container.focus_registration = Some(scope);
+        container.focus_restorer_fallback = Some(fallback);
+        tree.add_node(container);
+        let removed = FocusRegistration::target(FocusNode::new());
+        let mut target = node("removed", 3, 3);
+        target.focus_registration = Some(removed);
+        let removed_node = tree.add_node(target);
+        tree.pop_node();
+        let mut target = node("survivor", 4, 4);
+        target.focus_registration = Some(FocusRegistration::target(FocusNode::new()));
+        target.focus_requester_binding = Some(fallback);
+        let survivor = tree.add_node(target);
+        tree.pop_node();
+        tree.pop_node();
+        tree.pop_node();
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner.request_focus(removed.id);
+        assert_eq!(
+            tree.focus_owner.active_component_node_id(),
+            Some(removed_node)
+        );
+        tree.focus_owner
+            .remove_handles(&[removed.id].into_iter().collect(), &HashSet::default());
+        assert_eq!(tree.focus_owner.active_component_node_id(), Some(survivor));
+    }
+
+    #[test]
+    fn detached_focus_scopes_retain_their_target_through_layout_until_reattached() {
+        use crate::focus::{FocusNode, FocusRegistration, FocusScopeNode};
+
+        let mut tree = ComponentTree::new();
+        let root = tree.add_node(node("root", 1, 1));
+        let mut container = node_with_role("scope", NodeRole::Composition, 2, 2);
+        container.focus_registration = Some(FocusRegistration::scope(FocusScopeNode::new()));
+        let scope = tree.add_node(container);
+        let registration = FocusRegistration::target(FocusNode::new());
+        let mut target = node("target", 3, 3);
+        target.focus_registration = Some(registration);
+        let target = tree.add_node(target);
+        for _ in 0..3 {
+            tree.pop_node();
+        }
+        for id in [root, target] {
+            let metadata = tree.metadatas.entry_or_default(id);
+            metadata.computed_data = Some(ComputedData {
+                width: Px(20),
+                height: Px(20),
+            });
+            metadata.rel_position = Some(PxPosition::ZERO);
+        }
+        populate_layout_metadata(root, &tree.tree, &mut tree.metadatas);
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner
+            .sync_layout_from_component_tree(root, &tree.tree, &tree.metadatas);
+        tree.focus_owner.request_focus(registration.id);
+        assert_eq!(tree.focus_owner.active_component_node_id(), Some(target));
+
+        scope.detach(&mut tree.tree);
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner
+            .sync_layout_from_component_tree(root, &tree.tree, &tree.metadatas);
+        assert_eq!(tree.focus_owner.active_component_node_id(), None);
+        root.append(scope, &mut tree.tree);
+        tree.focus_owner.sync_from_component_tree(root, &tree.tree);
+        tree.focus_owner
+            .sync_layout_from_component_tree(root, &tree.tree, &tree.metadatas);
+        assert_eq!(tree.focus_owner.active_component_node_id(), Some(target));
+    }
+
+    #[test]
     fn redundant_scope_restore_does_not_pull_focus_back_from_another_scope() {
         use crate::focus::{FocusNode, FocusRegistration, FocusScopeNode};
 
@@ -3881,7 +4309,7 @@ mod tests {
     }
 
     #[test]
-    fn layout_node_input_traversal_skips_composition_nodes() {
+    fn layout_traversal_and_adjacency_track_transparent_subtree_replacement() {
         let mut tree = ComponentTree::new();
 
         let root = tree.add_node(node_with_role("root", NodeRole::Composition, 1, 1));
@@ -3900,6 +4328,46 @@ mod tests {
         assert_eq!(preorder, vec![layout_a, layout_b]);
         assert_eq!(postorder, vec![layout_b, layout_a]);
         assert_eq!(composition.children(tree.tree()).count(), 1);
+        assert_eq!(
+            direct_layout_children(root, tree.tree()).as_ref(),
+            &[layout_a, layout_b]
+        );
+
+        let context = tree
+            .begin_replace_subtree_by_instance_key(3)
+            .unwrap_or_else(|_| panic!("wrapper exists"));
+        tree.add_node(node_with_role("replacement", NodeRole::Composition, 9, 9));
+        tree.add_node(node("layout_b", 4, 4));
+        assert!(tree.try_reuse_current_subtree(4, 4));
+        tree.pop_node();
+        let layout_c = tree.add_node(node("layout_c", 10, 10));
+        tree.pop_node();
+        tree.pop_node();
+        assert!(tree.finish_replace_subtree(context).is_ok());
+        assert_eq!(
+            direct_layout_children(root, tree.tree()).as_ref(),
+            &[layout_a, layout_b, layout_c]
+        );
+
+        let context = tree
+            .begin_replace_subtree_by_instance_key(9)
+            .unwrap_or_else(|_| panic!("replacement exists"));
+        tree.add_node(node_with_role("reordered", NodeRole::Composition, 9, 9));
+        for (name, key) in [("layout_c", 10), ("layout_b", 4)] {
+            tree.add_node(node(name, key, key));
+            assert!(tree.try_reuse_current_subtree(key, key));
+            tree.pop_node();
+        }
+        tree.pop_node();
+        assert!(tree.finish_replace_subtree(context).is_ok());
+        assert_eq!(
+            direct_layout_children(root, tree.tree()).as_ref(),
+            &[layout_a, layout_c, layout_b]
+        );
+        assert_eq!(
+            layout_node_ids_preorder(root, tree.tree()),
+            vec![layout_a, layout_c, layout_b]
+        );
     }
 
     #[test]

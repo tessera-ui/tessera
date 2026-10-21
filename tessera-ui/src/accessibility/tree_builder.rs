@@ -9,7 +9,7 @@ use indextree::NodeId as ComponentNodeId;
 
 use crate::{
     accessibility::AccessibilityId,
-    component_tree::{ComponentNodeMetaDatas, ComponentNodeTree, ComputedData},
+    component_tree::{ComponentNodeMetaDatas, ComponentNodeTree, ComputedData, NodeRole},
     focus::{FocusOwner, bind_focus_owner},
     px::PxPosition,
 };
@@ -113,6 +113,9 @@ fn traverse_and_collect(
         Some(metadata) => metadata,
         None => return false,
     };
+    if !is_root && tree[node_id].get().role == NodeRole::Layout && metadata.abs_position.is_none() {
+        return false;
+    }
 
     let accessibility_node = metadata.accessibility.clone();
     let inherited_tooltip = accessibility_node
@@ -291,6 +294,12 @@ fn traverse_and_collect(
         // Set toggled state
         if let Some(toggled) = accessibility_node.toggled {
             node.set_toggled(toggled);
+        }
+        if let Some(invalid) = accessibility_node.invalid {
+            node.set_invalid(invalid);
+        }
+        if let Some(selected) = accessibility_node.selected {
+            node.set_selected(selected);
         }
         if let Some(expanded) = accessibility_node.expanded {
             node.set_expanded(expanded);
@@ -474,6 +483,24 @@ pub fn dispatch_action(
         .find(|node| !node.is_removed() && node.get().instance_key == accessibility_id.0)
         .and_then(|node| tree.get_node_id(node));
 
+    if action_request.action == accesskit::Action::Focus {
+        let Some(node_id) = component_node_id else {
+            return false;
+        };
+        let eligible = metadatas.get(&node_id).is_some_and(|metadata| {
+            metadata.abs_position.is_some()
+                && metadata.accessibility.as_ref().is_some_and(|semantics| {
+                    semantics.focusable && !semantics.disabled && !semantics.hidden
+                })
+        });
+        let registration = tree[node_id].get().focus_registration;
+        if eligible && let Some(registration) = registration {
+            focus_owner.request_focus(registration.id);
+            return true;
+        }
+        return false;
+    }
+
     // Look up the component's metadata and call handler
     if let Some(node_id) = component_node_id
         && let Some(metadata) = metadatas.get(&node_id)
@@ -515,6 +542,7 @@ mod tests {
         let id = tree.new_node(ComponentNode {
             fn_name: "test_node".to_string(),
             role: NodeRole::Layout,
+            layout_children: None,
             instance_logic_id: 0,
             instance_key: 0,
             pointer_preview_handlers: Vec::new(),
@@ -889,6 +917,89 @@ mod tests {
             node(&update, trigger).has_popup(),
             Some(accesskit::HasPopup::Menu)
         );
+    }
+
+    #[test]
+    fn button_selection_distinguishes_selected_unselected_and_not_applicable() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let button = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode::new().with_role(Role::Button)),
+        );
+        for selected in [Some(true), Some(false), None] {
+            metadatas
+                .get_mut(&button)
+                .expect("semantic fixture")
+                .accessibility
+                .as_mut()
+                .expect("semantic fixture")
+                .selected = selected;
+            let update =
+                build_tree_update(&tree, &metadatas, root, None, None).expect("semantic fixture");
+            assert_eq!(node(&update, button).is_selected(), selected);
+            assert_eq!(node(&update, button).toggled(), None);
+        }
+    }
+
+    #[test]
+    fn focus_actions_reach_registered_targets_without_activating_their_handlers() {
+        use crate::focus::{FocusNode, FocusRegistration};
+
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let target = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode::new().with_role(Role::Button).focusable()),
+        );
+        tree[target].get_mut().focus_registration =
+            Some(FocusRegistration::target(FocusNode::new()));
+        metadatas
+            .get_mut(&target)
+            .expect("semantic fixture")
+            .accessibility_action_handler = Some(Box::new(|_| {
+            panic!("a focus action must not activate a control");
+        }));
+        let mut owner = FocusOwner::new();
+        owner.sync_from_component_tree(root, &tree);
+        owner.sync_layout_from_component_tree(root, &tree, &metadatas);
+        let request = || accesskit::ActionRequest {
+            action: Action::Focus,
+            target_tree: TreeId::ROOT,
+            target_node: accesskit_id(target),
+            data: None,
+        };
+        assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(owner.active_component_node_id(), Some(target));
+        owner.clear_focus_global(true);
+        metadatas
+            .get_mut(&target)
+            .expect("semantic fixture")
+            .accessibility
+            .as_mut()
+            .expect("semantic fixture")
+            .disabled = true;
+        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(owner.active_component_node_id(), None);
+        metadatas
+            .get_mut(&target)
+            .expect("semantic fixture")
+            .accessibility
+            .as_mut()
+            .expect("semantic fixture")
+            .disabled = false;
+        metadatas
+            .get_mut(&target)
+            .expect("semantic fixture")
+            .abs_position = None;
+        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(owner.active_component_node_id(), None);
     }
 
     #[test]

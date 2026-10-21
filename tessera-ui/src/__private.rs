@@ -55,6 +55,7 @@ pub fn register_component_node(fn_name: &str, _component_type_id: u64) -> NodeId
         runtime.component_tree.add_node(ComponentNode {
             fn_name: fn_name.to_string(),
             role: NodeRole::Composition,
+            layout_children: None,
             instance_logic_id: 0,
             instance_key: 0,
             pointer_preview_handlers: Vec::new(),
@@ -87,6 +88,7 @@ pub fn register_layout_node(fn_name: &str, _component_type_id: u64) -> NodeId {
         runtime.component_tree.add_node(ComponentNode {
             fn_name: fn_name.to_string(),
             role: NodeRole::Layout,
+            layout_children: None,
             instance_logic_id: 0,
             instance_key: 0,
             pointer_preview_handlers: Vec::new(),

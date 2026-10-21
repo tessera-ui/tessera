@@ -261,6 +261,18 @@ impl<'a> MeasureScope<'a> {
         self.parent_constraint
     }
 
+    /// Calculates child positions without affecting measured sizes or
+    /// constraints.
+    ///
+    /// State read here invalidates placement instead of measurement. Implement
+    /// [`LayoutModifierNode::place_children`] to update those positions using
+    /// cached child sizes. Keep size and constraint calculations outside this
+    /// closure.
+    pub fn placement<R>(&self, calculate: impl FnOnce() -> R) -> R {
+        let _phase = crate::runtime::push_phase(crate::runtime::RuntimePhase::Place);
+        calculate()
+    }
+
     /// Returns whether this pass is probing natural content dimensions.
     pub fn is_intrinsic(&self) -> bool {
         self.layout_ctx.is_some_and(|context| context.intrinsic)

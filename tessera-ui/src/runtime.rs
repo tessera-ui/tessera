@@ -472,8 +472,26 @@ struct LayoutDirtyTracker {
     pending_placement_self_dirty_nodes: HashSet<u64>,
     ready_placement_self_dirty_nodes: HashSet<u64>,
     previous_children_by_node: HashMap<u64, Vec<u64>>,
-    layout_readers_by_state: HashMap<StateReadDependencyKey, HashSet<u64>>,
-    layout_states_by_reader: HashMap<u64, HashSet<StateReadDependencyKey>>,
+    structural_changes: StructureReconcileResult,
+    pending_parent_data_dirty_nodes: HashSet<u64>,
+    pending_transform_dirty_nodes: HashSet<u64>,
+    pending_paint_dirty_nodes: HashSet<u64>,
+    layout_readers_by_state: HashMap<StateReadDependencyKey, HashSet<PhaseReader>>,
+    layout_states_by_reader: HashMap<PhaseReader, HashSet<StateReadDependencyKey>>,
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+pub(crate) enum ReadPhase {
+    Measure,
+    Place,
+    Transform,
+    Paint,
+}
+
+#[derive(Clone, Copy, Hash, PartialEq, Eq)]
+struct PhaseReader {
+    instance_key: u64,
+    phase: ReadPhase,
 }
 
 struct LayoutInputSnapshot {
@@ -485,6 +503,9 @@ struct LayoutInputSnapshot {
 pub(crate) struct LayoutDirtyNodes {
     pub measure_self_nodes: HashSet<u64>,
     pub placement_self_nodes: HashSet<u64>,
+    pub parent_data_nodes: HashSet<u64>,
+    pub transform_nodes: HashSet<u64>,
+    pub paint_nodes: HashSet<u64>,
 }
 
 #[derive(Default)]
@@ -746,6 +767,20 @@ pub(crate) fn retain_persistent_focus_handles(
     with_persistent_focus_handle_store_mut(|store| store.retain_instance_keys(live_instance_keys))
 }
 
+pub(crate) fn prune_persistent_focus_handles() {
+    let live_instance_keys =
+        TesseraRuntime::with(|runtime| runtime.component_tree.live_instance_keys());
+    let removed = retain_persistent_focus_handles(&live_instance_keys);
+    if !removed.handle_ids.is_empty() || !removed.requester_ids.is_empty() {
+        TesseraRuntime::with_mut(|runtime| {
+            runtime
+                .component_tree
+                .focus_owner_mut()
+                .remove_handles(&removed.handle_ids, &removed.requester_ids);
+        });
+    }
+}
+
 pub(crate) fn clear_persistent_focus_handles() {
     with_persistent_focus_handle_store_mut(PersistentFocusHandleStore::clear);
 }
@@ -922,8 +957,17 @@ pub(crate) fn defer_build_invalidations(instance_keys: &HashSet<u64>) {
 }
 
 fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
-    if matches!(current_phase(), Some(RuntimePhase::Measure)) {
-        track_layout_state_read_dependency(slot, generation);
+    let phase = match current_phase() {
+        Some(RuntimePhase::Measure) => Some(ReadPhase::Measure),
+        Some(RuntimePhase::Place) if current_measured_node_instance_key().is_some() => {
+            Some(ReadPhase::Place)
+        }
+        Some(RuntimePhase::Place) => Some(ReadPhase::Transform),
+        Some(RuntimePhase::Paint) => Some(ReadPhase::Paint),
+        _ => None,
+    };
+    if let Some(phase) = phase {
+        track_layout_state_read_dependency(slot, generation, phase);
         return;
     }
     if !matches!(current_phase(), Some(RuntimePhase::Build)) {
@@ -955,14 +999,15 @@ fn track_state_read_dependency(slot: SlotHandle, generation: u64) {
     });
 }
 
-fn track_layout_state_read_dependency(slot: SlotHandle, generation: u64) {
-    // A state read during measure is a placement dependency of the exact
-    // layout node being measured. Falling back to the replay boundary keeps
-    // reads made outside a measured node scoped to their component.
+fn track_layout_state_read_dependency(slot: SlotHandle, generation: u64, phase: ReadPhase) {
     let Some(reader_instance_key) = current_measured_node_instance_key()
         .or_else(current_replay_boundary_instance_key_from_scope)
     else {
         return;
+    };
+    let reader_instance_key = PhaseReader {
+        instance_key: reader_instance_key,
+        phase,
     };
     let key = StateReadDependencyKey { slot, generation };
     with_layout_dirty_tracker_mut(|tracker| {
@@ -998,36 +1043,51 @@ fn mark_layout_state_readers_dirty(slot: SlotHandle, generation: u64) {
     if readers.is_empty() {
         return;
     }
-    // A state read during measure is placement input. Its write can happen
-    // outside the build phase (frame callbacks, input), so the node must be
-    // queued for the next layout pass rather than waiting for a rebuild.
     with_layout_dirty_tracker_mut(|tracker| {
-        tracker.pending_placement_self_dirty_nodes.extend(readers);
+        for reader in readers {
+            let target = match reader.phase {
+                ReadPhase::Measure => &mut tracker.pending_measure_self_dirty_nodes,
+                ReadPhase::Place => &mut tracker.pending_placement_self_dirty_nodes,
+                ReadPhase::Transform => &mut tracker.pending_transform_dirty_nodes,
+                ReadPhase::Paint => &mut tracker.pending_paint_dirty_nodes,
+            };
+            target.insert(reader.instance_key);
+        }
     });
     schedule_runtime_redraw();
 }
 
-pub(crate) fn remove_layout_state_read_dependencies(instance_keys: &HashSet<u64>) {
-    if instance_keys.is_empty() {
-        return;
-    }
+pub(crate) fn clear_phase_state_reads(instance_key: u64, phase: ReadPhase) {
     with_layout_dirty_tracker_mut(|tracker| {
-        for instance_key in instance_keys {
-            let Some(state_keys) = tracker.layout_states_by_reader.remove(instance_key) else {
-                continue;
-            };
-            for state_key in state_keys {
-                let mut remove_entry = false;
-                if let Some(readers) = tracker.layout_readers_by_state.get_mut(&state_key) {
-                    readers.remove(instance_key);
-                    remove_entry = readers.is_empty();
-                }
-                if remove_entry {
+        let reader = PhaseReader {
+            instance_key,
+            phase,
+        };
+        let Some(state_keys) = tracker.layout_states_by_reader.remove(&reader) else {
+            return;
+        };
+        for state_key in state_keys {
+            if let Some(readers) = tracker.layout_readers_by_state.get_mut(&state_key) {
+                readers.remove(&reader);
+                if readers.is_empty() {
                     tracker.layout_readers_by_state.remove(&state_key);
                 }
             }
         }
     });
+}
+
+pub(crate) fn remove_layout_state_read_dependencies(instance_keys: &HashSet<u64>) {
+    for &instance_key in instance_keys {
+        for phase in [
+            ReadPhase::Measure,
+            ReadPhase::Place,
+            ReadPhase::Transform,
+            ReadPhase::Paint,
+        ] {
+            clear_phase_state_reads(instance_key, phase);
+        }
+    }
 }
 
 fn state_read_subscribers(slot: SlotHandle, generation: u64) -> Vec<u64> {
@@ -1371,7 +1431,7 @@ fn ensure_frame_receive_phase() {
         Some(RuntimePhase::Measure) => {
             panic!("receive_frame_nanos must not be called inside measure")
         }
-        Some(RuntimePhase::Input) => {
+        Some(RuntimePhase::Place | RuntimePhase::Paint | RuntimePhase::Input) => {
             panic!("receive_frame_nanos must be called inside a tessera component build")
         }
         None => panic!("receive_frame_nanos must be called inside a tessera component build"),
@@ -1470,35 +1530,50 @@ fn record_layout_policy_dirty(
         return;
     }
     with_layout_dirty_tracker_mut(|tracker| {
-        let (measure_changed, placement_changed, next_layout_inputs) =
-            match tracker.previous_layout_inputs_by_node.remove(&instance_key) {
-                Some(previous) => {
-                    let measure_changed = !previous.policy.dyn_measure_eq(layout_policy)
-                        || !previous.modifier.layout_measure_eq(modifier);
-                    let placement_changed = !previous.policy.dyn_placement_eq(layout_policy)
-                        || !previous.modifier.layout_placement_eq(modifier);
-                    if !measure_changed && !placement_changed {
-                        (false, false, previous)
-                    } else {
-                        (
-                            measure_changed,
-                            placement_changed,
-                            LayoutInputSnapshot {
-                                policy: layout_policy.clone_box(),
-                                modifier: modifier.clone(),
-                            },
-                        )
-                    }
+        let (
+            measure_changed,
+            placement_changed,
+            transform_changed,
+            parent_data_changed,
+            next_layout_inputs,
+        ) = match tracker.previous_layout_inputs_by_node.remove(&instance_key) {
+            Some(previous) => {
+                let measure_changed = !previous.policy.dyn_measure_eq(layout_policy)
+                    || !previous.modifier.layout_measure_eq(modifier);
+                let placement_changed = !previous.policy.dyn_placement_eq(layout_policy)
+                    || !previous.modifier.layout_placement_eq(modifier);
+                let transform_changed = !previous.modifier.position_eq(modifier);
+                let parent_data_changed = !previous.modifier.parent_data_eq(modifier);
+                if !measure_changed
+                    && !placement_changed
+                    && !transform_changed
+                    && !parent_data_changed
+                {
+                    (false, false, false, false, previous)
+                } else {
+                    (
+                        measure_changed,
+                        placement_changed,
+                        transform_changed,
+                        parent_data_changed,
+                        LayoutInputSnapshot {
+                            policy: layout_policy.clone_box(),
+                            modifier: modifier.clone(),
+                        },
+                    )
                 }
-                None => (
-                    true,
-                    true,
-                    LayoutInputSnapshot {
-                        policy: layout_policy.clone_box(),
-                        modifier: modifier.clone(),
-                    },
-                ),
-            };
+            }
+            None => (
+                true,
+                true,
+                true,
+                true,
+                LayoutInputSnapshot {
+                    policy: layout_policy.clone_box(),
+                    modifier: modifier.clone(),
+                },
+            ),
+        };
         if measure_changed {
             tracker
                 .pending_measure_self_dirty_nodes
@@ -1507,6 +1582,12 @@ fn record_layout_policy_dirty(
             tracker
                 .pending_placement_self_dirty_nodes
                 .insert(instance_key);
+        }
+        if parent_data_changed {
+            tracker.pending_parent_data_dirty_nodes.insert(instance_key);
+        }
+        if transform_changed {
+            tracker.pending_transform_dirty_nodes.insert(instance_key);
         }
         tracker
             .frame_layout_inputs_by_node
@@ -1545,8 +1626,9 @@ pub(crate) fn finalize_frame_layout_dirty_tracking() {
             .extend(std::mem::take(
                 &mut tracker.pending_placement_self_dirty_nodes,
             ));
-        tracker.previous_layout_inputs_by_node =
-            std::mem::take(&mut tracker.frame_layout_inputs_by_node);
+        tracker
+            .previous_layout_inputs_by_node
+            .extend(std::mem::take(&mut tracker.frame_layout_inputs_by_node));
     });
 }
 
@@ -1566,6 +1648,9 @@ pub(crate) fn take_layout_dirty_nodes() -> LayoutDirtyNodes {
         LayoutDirtyNodes {
             measure_self_nodes,
             placement_self_nodes,
+            parent_data_nodes: std::mem::take(&mut tracker.pending_parent_data_dirty_nodes),
+            transform_nodes: std::mem::take(&mut tracker.pending_transform_dirty_nodes),
+            paint_nodes: std::mem::take(&mut tracker.pending_paint_dirty_nodes),
         }
     })
 }
@@ -1576,6 +1661,9 @@ pub(crate) fn has_pending_layout_invalidations() -> bool {
             || !tracker.ready_measure_self_dirty_nodes.is_empty()
             || !tracker.pending_placement_self_dirty_nodes.is_empty()
             || !tracker.ready_placement_self_dirty_nodes.is_empty()
+            || !tracker.pending_parent_data_dirty_nodes.is_empty()
+            || !tracker.pending_transform_dirty_nodes.is_empty()
+            || !tracker.pending_paint_dirty_nodes.is_empty()
     })
 }
 
@@ -1614,37 +1702,37 @@ fn record_component_replay_snapshot(runtime: &TesseraRuntime, node_id: NodeId) {
     });
 }
 
-pub(crate) fn reconcile_layout_structure(
-    current_children_by_node: &HashMap<u64, Vec<u64>>,
-) -> StructureReconcileResult {
+pub(crate) fn record_layout_structure(instance_key: u64, children: Vec<u64>) {
     with_layout_dirty_tracker_mut(|tracker| {
-        let previous_children_by_node = &tracker.previous_children_by_node;
-
-        let mut changed_nodes = HashSet::default();
-        let mut removed_nodes = HashSet::default();
-
-        for (node, current_children) in current_children_by_node {
-            match previous_children_by_node.get(node) {
-                Some(previous_children) if previous_children == current_children => {}
-                _ => {
-                    changed_nodes.insert(*node);
-                }
-            }
+        if tracker.previous_children_by_node.get(&instance_key) != Some(&children) {
+            tracker
+                .structural_changes
+                .changed_nodes
+                .insert(instance_key);
+            tracker
+                .previous_children_by_node
+                .insert(instance_key, children);
         }
+        tracker
+            .structural_changes
+            .removed_nodes
+            .remove(&instance_key);
+    });
+}
 
-        for node in previous_children_by_node.keys().copied() {
-            if !current_children_by_node.contains_key(&node) {
-                changed_nodes.insert(node);
-                removed_nodes.insert(node);
-            }
+pub(crate) fn remove_layout_structure(instance_keys: &HashSet<u64>) {
+    with_layout_dirty_tracker_mut(|tracker| {
+        for key in instance_keys {
+            tracker.previous_children_by_node.remove(key);
+            tracker.previous_layout_inputs_by_node.remove(key);
+            tracker.structural_changes.removed_nodes.insert(*key);
+            tracker.structural_changes.changed_nodes.remove(key);
         }
+    });
+}
 
-        tracker.previous_children_by_node = current_children_by_node.clone();
-        StructureReconcileResult {
-            changed_nodes,
-            removed_nodes,
-        }
-    })
+pub(crate) fn take_layout_structure_changes() -> StructureReconcileResult {
+    with_layout_dirty_tracker_mut(|tracker| std::mem::take(&mut tracker.structural_changes))
 }
 
 /// Handle to memoized state created by [`remember`] and [`remember_with_key`].
@@ -1868,15 +1956,8 @@ impl TesseraRuntime {
 
     /// Sets identity fields for the current component node.
     pub(crate) fn set_current_node_identity(&mut self, instance_key: u64, instance_logic_id: u64) {
-        if let Some(node) = self.component_tree.current_node_mut() {
-            node.instance_key = instance_key;
-            node.instance_logic_id = instance_logic_id;
-        } else {
-            debug_assert!(
-                false,
-                "set_current_node_identity must be called inside a component build"
-            );
-        }
+        self.component_tree
+            .set_current_node_identity(instance_key, instance_logic_id);
     }
 
     /// Stores replay metadata for the current component node.
@@ -2114,6 +2195,18 @@ impl TesseraRuntime {
         }
     }
 
+    pub(crate) fn set_current_preferred_tab_stop(&mut self, preferred: bool) {
+        let registration = self
+            .component_tree
+            .current_node_mut()
+            .and_then(|node| node.focus_registration.as_mut());
+        if let Some(registration) = registration {
+            registration.properties.preferred_tab_stop = preferred;
+        } else {
+            debug_assert!(false, "preferred_tab_stop requires a focus registration");
+        }
+    }
+
     pub(crate) fn set_current_focus_traversal_policy(&mut self, policy: FocusTraversalPolicy) {
         if let Some(current) = self.component_tree.current_node_mut() {
             if current.focus_registration.is_some_and(|registration| {
@@ -2251,6 +2344,10 @@ pub enum RuntimePhase {
     Build,
     /// Measurement phase (disallowed for `remember`).
     Measure,
+    /// Child placement and window-position resolution phase.
+    Place,
+    /// Drawing command recording phase.
+    Paint,
     /// Input handling phase (disallowed for `remember`).
     Input,
 }
@@ -2921,6 +3018,12 @@ pub(crate) fn ensure_build_phase() {
         Some(RuntimePhase::Build) => {}
         Some(RuntimePhase::Measure) => {
             panic!("remember must not be called inside measure; move state to component render")
+        }
+        Some(RuntimePhase::Place) => {
+            panic!("remember must not be called during placement; move state to component render")
+        }
+        Some(RuntimePhase::Paint) => {
+            panic!("remember must not be called during drawing; move state to component render")
         }
         Some(RuntimePhase::Input) => {
             panic!(
@@ -3691,6 +3794,7 @@ mod tests {
             runtime.component_tree.add_node(ComponentNode {
                 fn_name: "root".to_string(),
                 role: NodeRole::Layout,
+                layout_children: None,
                 instance_logic_id: 0,
                 instance_key: 0,
                 pointer_preview_handlers: Vec::new(),
@@ -3733,7 +3837,7 @@ mod tests {
         state.set(1);
         finalize_frame_layout_dirty_tracking();
         let dirty = take_layout_dirty_nodes();
-        assert!(dirty.placement_self_nodes.contains(&77));
+        assert!(dirty.measure_self_nodes.contains(&77));
     }
 
     #[test]
@@ -4082,6 +4186,7 @@ mod tests {
             runtime.component_tree.add_node(ComponentNode {
                 fn_name: "root".to_string(),
                 role: NodeRole::Composition,
+                layout_children: None,
                 instance_logic_id: 0,
                 instance_key: 0,
                 pointer_preview_handlers: Vec::new(),

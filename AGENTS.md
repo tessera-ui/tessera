@@ -90,6 +90,7 @@ This document defines how You should assist in the Tessera project to ensure cod
 
 - The component tree is managed internally by `ComponentTree` and node metadata structures, supporting layout, rendering, and event dispatch.
 - Accessibility updates flatten layout and composition nodes without semantics. Preserve explicit semantic nodes, their order, bounds, actions, and focus; synthesize only the root window node.
+- Publish item selection separately from checked/toggled state. Accessibility focus actions must request the registered focus target without invoking its activation callback.
 - Newly attached global-position observers must receive the first valid window rectangle even if another observer already watched the same unchanged node. Existing observers should run only when the rectangle changes.
 
 ---
@@ -100,8 +101,11 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Layout policies measure direct child layout nodes through handle-based APIs such as `MeasureScope`, `LayoutChild`, and `LayoutResult`.
 - `LayoutChild::probe_intrinsic` probes natural content dimensions in isolated metadata and caches. It excludes minimum interactive-size padding while preserving visual sizing and content padding. Use normal `measure` to publish final layout and retain interaction bounds; intrinsic probes must not replace normal measurement.
 - `place_node` is used to position child nodes.
-- Measuring a layout child does not place it. An unplaced layout node hides its entire subtree from drawing and input geometry; composition nodes remain transparent to placed descendants. Cached layouts must clear placements that are no longer present.
+- Measuring a layout child does not place it. An unplaced layout node hides its entire subtree from drawing, input geometry, semantics, and keyboard focus. Hiding the active target releases focus and capture. Placed targets outside a scroll viewport remain eligible for keyboard focus and reveal; composition nodes remain transparent to placed descendants. Cached layouts must clear placements that are no longer present.
 - Default layout: If no layout policy is attached to the current node, `DefaultLayoutPolicy` stacks children at (0,0), and the container size is the minimal bounding rectangle.
+- Direct layout-child adjacency is persistent and updated at build/replay structure changes. Stable frames must not rebuild these lists or restore cached layout subtrees recursively.
+- Keep Compose, Measure, Place, and Paint dependencies separate. State reads during measurement invalidate measurement; placement-only calculations may use `MeasureScope::placement` or `LayoutModifierInput::placement` and must not determine sizes or constraints. Implement `place_children` when a policy supports cached placement.
+- Draw-only properties must be excluded from both measurement and placement equality. Placement transforms invalidate window geometry without measuring. Parent-data modifiers should implement `equivalent` when their values can be compared so unchanged weights or alignment do not invalidate the parent.
 
 ---
 
@@ -156,12 +160,20 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Treat input contexts as event/consumption surfaces, not generic renderer request bags. Cursor changes, semantics, IME publication, and window-side effects must use their dedicated modifier/controller/session APIs.
 - Mouse, keyboard, and IME events are processed via event queues and must be consumed promptly.
 - Use `FocusManager::request_move_focus` when traversal may need lazy content to be revealed, including Tab exit after popup focus restoration. This traversal is queued after layout and precedes following keys; explicit focus requests, capture, and window blur cancel it. `move_focus` remains an immediate operation on attached targets.
+- Focus cleanup must detach all removed handles before selecting a restoration target. Virtualized controls that unmount focused children should provide a stable local fallback so scrolling does not reveal unrelated controls. Without an explicit scope, removing focus must not activate an unrelated control. A focused `skip_traversal` target still anchors forward and reverse navigation without becoming a traversal destination.
 - Preserve each pointer sample's position when queuing it. Dispatch each sample's
   Initial, Main, and Final passes in order before processing the next sample.
   Captured paths use stable instance identities and survive recomposition;
   runtime reset clears captures. Independent held pointers retain their own
   positions during unrelated events and idle frames.
+- Nested click targets must claim tap presses independently of event consumption.
+  Ancestor tap handlers must not activate or take focus for a child's press, while
+  drag and scroll observers must still receive that press to track the gesture.
 - Event handlers should be lightweight to avoid blocking the main loop.
+- Gesture slop starts at the sample's recorded press position; only positionless
+  synthetic presses fall back to their first movement sample. Direct and inertial
+  scroll deltas share nested-scroll dispatch, and zero-velocity releases still
+  notify nested-scroll completion. Advance inertia from the framework frame clock.
 - When opening or closing focusable content, use `FocusManager::defer_keyboard_until_layout` to preserve subsequent keys until the new layout and focus callbacks finish. Ordinary text-input updates must not introduce a layout barrier.
 
 ---
