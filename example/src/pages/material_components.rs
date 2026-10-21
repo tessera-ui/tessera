@@ -40,6 +40,7 @@ use tessera_components::{
         icon_button,
     },
     lazy_list::lazy_column,
+    list_item::{ListItemDefaults, ListItemPosition, ListItemVerticalAlignment, list_item},
     loading_indicator::loading_indicator,
     material_icons::filled,
     menus::{
@@ -107,6 +108,103 @@ fn section_header(#[prop(into)] title: String, #[prop(into)] description: String
             .content(description.clone())
             .style(theme.with(|t| t.typography.body_medium));
         spacer().modifier(Modifier::new().height(Dp(10.0)));
+    });
+}
+
+#[tessera]
+fn list_demo() {
+    let selected = remember(|| [false; 4]);
+    let enabled = remember(|| true);
+    let large = remember(|| false);
+    let narrow = remember(|| false);
+    let alignment = remember(ListItemVerticalAlignment::default);
+    let segmented = remember(|| true);
+    let drag_preview = remember(|| false);
+    let custom_content = remember(|| false);
+    let theme = use_context::<MaterialTheme>().expect("Material theme");
+    column().children(move || {
+        section_header("Lists", "Compare one-line, two-line, three-line, and wrapping rows.");
+        flow_row().item_spacing(Dp(8.0)).line_spacing(Dp(8.0)).children(move || {
+            button().tonal().on_click(move || enabled.set(!enabled.get())).child(move || {
+                text().content(if enabled.get() { "Disable rows" } else { "Enable rows" });
+            });
+            button().tonal().on_click(move || large.set(!large.get())).child(move || {
+                text().content(if large.get() { "Normal text" } else { "Larger text" });
+            });
+            button().tonal().on_click(move || narrow.set(!narrow.get())).child(move || {
+                text().content(if narrow.get() { "Wider list" } else { "Narrower list" });
+            });
+            button().tonal().on_click(move || segmented.set(!segmented.get())).child(move || {
+                text().content(if segmented.get() { "Standard rows" } else { "Segmented rows" });
+            });
+            button().tonal().on_click(move || drag_preview.set(!drag_preview.get())).child(move || {
+                text().content(if drag_preview.get() { "End drag preview" } else { "Preview drag colors" });
+            });
+            button().tonal().on_click(move || custom_content.set(!custom_content.get())).child(move || {
+                text().content(if custom_content.get() { "Use plain text" } else { "Use custom content" });
+            });
+            button().tonal().on_click(move || alignment.set(match alignment.get() {
+                ListItemVerticalAlignment::Auto => ListItemVerticalAlignment::Top,
+                ListItemVerticalAlignment::Top => ListItemVerticalAlignment::Center,
+                ListItemVerticalAlignment::Center => ListItemVerticalAlignment::Bottom,
+                ListItemVerticalAlignment::Bottom => ListItemVerticalAlignment::Auto,
+            })).child(move || { text().content(format!("Alignment: {:?}", alignment.get())); });
+        });
+        spacer().modifier(Modifier::new().height(Dp(12.0)));
+        material_theme().theme(move || {
+            let mut theme = theme.get();
+            if large.get() {
+                theme.typography.body_large.font_size = Dp(22.0);
+                theme.typography.body_large.line_height = Some(Dp(32.0));
+                theme.typography.body_medium.font_size = Dp(18.0);
+                theme.typography.body_medium.line_height = Some(Dp(28.0));
+                theme.typography.label_small.font_size = Dp(14.0);
+                theme.typography.label_small.line_height = Some(Dp(20.0));
+            }
+            theme
+        }).child(move || {
+            column().modifier(Modifier::new().width(if narrow.get() { Dp(280.0) } else { Dp(640.0) })).children(move || {
+                for index in 0..4 {
+                    if index > 0 {
+                        spacer().modifier(Modifier::new().height(if segmented.get() { ListItemDefaults::SEGMENTED_GAP } else { Dp::ZERO }));
+                    }
+                    let content = if custom_content.get() && index == 0 {
+                        Some(RenderSlot::new(|| {
+                            column().children(|| {
+                                text().content("One-line item");
+                                text().content("Custom main content");
+                            });
+                        }))
+                    } else { None };
+                    let overline = if custom_content.get() && index == 1 {
+                        Some(RenderSlot::new(|| { text().content("Status"); }))
+                    } else { None };
+                    let supporting = if custom_content.get() && index == 2 {
+                        Some(RenderSlot::new(|| { text().content("Supporting content from a render slot."); }))
+                    } else { None };
+                    list_item()
+                        .content_optional(content)
+                        .overline_content_optional(overline)
+                        .supporting_content_optional(supporting)
+                        .accessibility_label(match index { 0 => "One-line item", 1 => "Two-line item", 2 => "Three-line item", _ => "Wrapping supporting text" })
+                        .position(if !segmented.get() { ListItemPosition::Standalone } else if index == 0 { ListItemPosition::First } else if index == 3 { ListItemPosition::Last } else { ListItemPosition::Middle })
+                        .headline(match index { 0 => "One-line item", 1 => "Two-line item", 2 => "Three-line item", _ => "Wrapping supporting text" })
+                        .overline_text_optional((index == 2).then(|| "Overline".into()))
+                        .supporting_text_optional(match index {
+                            1 | 2 => Some("Supporting text".into()),
+                            3 => Some("A longer description that wraps naturally when the available width becomes smaller.".into()),
+                            _ => None,
+                        })
+                        .enabled(enabled.get())
+                        .dragged(drag_preview.get() && index == 0)
+                        .selected(selected.with(|selected| selected[index]))
+                        .vertical_alignment(alignment.get())
+                        .leading(|| { icon().painter(filled::HOME_SVG); })
+                        .trailing(move || { text().content(format!("{}", index + 1)); })
+                        .on_click(move || selected.with_mut(|selected| selected[index] = !selected[index]));
+                }
+            });
+        });
     });
 }
 
@@ -1173,6 +1271,7 @@ pub fn material_components_page() {
                         });
                 });
             })
+            .item(|| { list_demo(); })
             .item(move || {
                 column().children(move || {
                     section_header("Card", "Group related information and activate the main card action.");
