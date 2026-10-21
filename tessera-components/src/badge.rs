@@ -5,18 +5,19 @@
 //! Highlight counts or status markers on top of icons and other UI elements.
 
 use tessera_ui::{
-    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Px,
-    PxPosition, PxSize, RenderSlot,
+    AxisConstraint, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
+    Px, PxPosition, PxSize, RenderSlot,
     layout::{MeasureScope, layout},
     provide_context, tessera, use_context,
 };
 
 use crate::{
-    alignment::{CrossAxisAlignment, MainAxisAlignment},
+    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
+    boxed::boxed,
     pipelines::shape::command::ShapeCommand,
     row::row,
     shape_def::{ResolvedShape, Shape},
-    theme::{ContentColor, MaterialTheme, content_color_for},
+    theme::{ContentColor, MaterialTheme, TextStyle, content_color_for},
 };
 
 fn resolve_dimension(axis: AxisConstraint, measure: Px) -> Px {
@@ -29,6 +30,10 @@ fn dimension_max(axis: AxisConstraint) -> Option<Px> {
 
 fn relax_min_constraint(axis: AxisConstraint) -> AxisConstraint {
     axis.without_min()
+}
+
+fn badge_pixels(value: Dp) -> Px {
+    Px::from_f32(value.to_pixels_f32().round())
 }
 
 #[derive(Clone, Copy, Default, PartialEq, Eq, Hash)]
@@ -44,7 +49,7 @@ impl tessera_ui::LayoutModifierNode for BadgedBoxLayout {
             "badged_box expects exactly two children: anchor and badge",
         );
 
-        let parent_constraint = input.parent_constraint().without_min();
+        let parent_constraint = *input.parent_constraint().as_ref();
         let badge_constraint = Constraint::new(
             relax_min_constraint(parent_constraint.width),
             relax_min_constraint(parent_constraint.height),
@@ -58,22 +63,20 @@ impl tessera_ui::LayoutModifierNode for BadgedBoxLayout {
 
         result.place_child(anchor, PxPosition::new(Px(0), Px(0)));
 
-        let badge_size_px = BadgeDefaults::SIZE.to_px();
+        let badge_size_px = badge_pixels(BadgeDefaults::SIZE);
         let has_content = badge_data.width > badge_size_px;
 
-        let horizontal_offset = if has_content {
+        let horizontal_offset = badge_pixels(if has_content {
             BadgeDefaults::WITH_CONTENT_HORIZONTAL_OFFSET
         } else {
             BadgeDefaults::OFFSET
-        }
-        .to_px();
+        });
 
-        let vertical_offset = if has_content {
+        let vertical_offset = badge_pixels(if has_content {
             BadgeDefaults::WITH_CONTENT_VERTICAL_OFFSET
         } else {
             BadgeDefaults::OFFSET
-        }
-        .to_px();
+        });
 
         let badge_x = anchor_size.width - horizontal_offset;
         let badge_y = -badge_data.height + vertical_offset;
@@ -93,8 +96,16 @@ struct BadgeLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for BadgeLayout {
+    fn measure_eq(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other)
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let size_px = BadgeDefaults::SIZE.to_px();
+        let size_px = badge_pixels(BadgeDefaults::SIZE);
         let intrinsic = Constraint::new(
             AxisConstraint::new(size_px, None),
             AxisConstraint::new(size_px, None),
@@ -151,6 +162,14 @@ struct BadgeWithContentLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for BadgeWithContentLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.padding_px == other.padding_px
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other)
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -160,7 +179,7 @@ impl tessera_ui::LayoutModifierNode for BadgeWithContentLayout {
             "badge_with_content expects a single row child",
         );
 
-        let min_size_px = BadgeDefaults::LARGE_SIZE.to_px();
+        let min_size_px = badge_pixels(BadgeDefaults::LARGE_SIZE);
         let intrinsic = Constraint::new(
             AxisConstraint::new(min_size_px, None),
             AxisConstraint::new(min_size_px, None),
@@ -252,9 +271,9 @@ impl BadgeDefaults {
     /// Offset for badges without content relative to the anchor.
     pub const OFFSET: Dp = Dp(6.0);
 
-    /// Default container color for a badge.
+    /// Default light-theme container color for a badge.
     pub fn container_color() -> Color {
-        Color::new(0.0, 0.0, 0.0, 0.0)
+        MaterialTheme::default().color_scheme.error
     }
 }
 
@@ -271,6 +290,7 @@ impl BadgeDefaults {
 ///
 /// - `badge` — badge slot rendered on top of content.
 /// - `content` — anchor content slot.
+/// - `modifier` — layout, drawing, and accessibility configuration.
 ///
 /// ## Examples
 ///
@@ -280,11 +300,20 @@ impl BadgeDefaults {
 /// assert_eq!(BadgeDefaults::OFFSET, Dp(6.0));
 /// ```
 #[tessera]
-pub fn badged_box(badge: Option<RenderSlot>, content: Option<RenderSlot>) {
-    layout().policy(BadgedBoxLayout).child(move || {
-        content.unwrap_or_else(RenderSlot::empty).render();
-        badge.unwrap_or_else(RenderSlot::empty).render();
-    });
+pub fn badged_box(
+    badge: Option<RenderSlot>,
+    content: Option<RenderSlot>,
+    modifier: Option<Modifier>,
+) {
+    layout()
+        .modifier(modifier.unwrap_or_default())
+        .policy(BadgedBoxLayout)
+        .child(move || {
+            boxed()
+                .alignment(Alignment::Center)
+                .children_shared(content.unwrap_or_else(RenderSlot::empty));
+            boxed().children_shared(badge.unwrap_or_else(RenderSlot::empty));
+        });
 }
 
 /// # badge
@@ -299,6 +328,7 @@ pub fn badged_box(badge: Option<RenderSlot>, content: Option<RenderSlot>) {
 ///
 /// - `container_color` — optional background color of the badge.
 /// - `content_color` — optional preferred content color for descendants.
+/// - `modifier` — layout, drawing, and accessibility configuration.
 ///
 /// ## Examples
 ///
@@ -318,7 +348,11 @@ pub fn badged_box(badge: Option<RenderSlot>, content: Option<RenderSlot>) {
 /// # component();
 /// ```
 #[tessera]
-pub fn badge(container_color: Option<Color>, content_color: Option<Color>) {
+pub fn badge(
+    container_color: Option<Color>,
+    content_color: Option<Color>,
+    modifier: Option<Modifier>,
+) {
     let _ = content_color;
     let container_color = container_color.unwrap_or_else(|| {
         use_context::<MaterialTheme>()
@@ -328,7 +362,10 @@ pub fn badge(container_color: Option<Color>, content_color: Option<Color>) {
             .error
     });
     let policy = BadgeLayout { container_color };
-    layout().policy(policy).draw(policy);
+    layout()
+        .modifier(modifier.unwrap_or_default())
+        .policy(policy)
+        .draw(policy);
 }
 
 /// # badge_with_content
@@ -345,6 +382,7 @@ pub fn badge(container_color: Option<Color>, content_color: Option<Color>) {
 /// - `container_color` — optional background color of the badge.
 /// - `content_color` — optional preferred content color for descendants.
 /// - `content` — optional content slot rendered inside the badge.
+/// - `modifier` — layout, drawing, and accessibility configuration.
 ///
 /// ## Examples
 ///
@@ -370,6 +408,7 @@ pub fn badge_with_content(
     container_color: Option<Color>,
     content_color: Option<Color>,
     content: Option<RenderSlot>,
+    modifier: Option<Modifier>,
 ) {
     let content = content.unwrap_or_else(RenderSlot::empty);
     let theme = use_context::<MaterialTheme>()
@@ -393,27 +432,44 @@ pub fn badge_with_content(
         )
     });
 
-    let padding_px = BadgeDefaults::WITH_CONTENT_HORIZONTAL_PADDING.to_px();
+    let padding_px = badge_pixels(BadgeDefaults::WITH_CONTENT_HORIZONTAL_PADDING);
     let policy = BadgeWithContentLayout {
         container_color,
         padding_px,
     };
-    layout().policy(policy).draw(policy).child(move || {
-        provide_context(
-            || ContentColor {
-                current: content_color,
-            },
-            || {
-                provide_context(
-                    || typography.label_small,
-                    move || {
-                        row()
-                            .main_axis_alignment(MainAxisAlignment::Center)
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
-                            .children_shared(content);
-                    },
-                );
-            },
-        );
-    });
+    layout()
+        .modifier(modifier.unwrap_or_default())
+        .policy(policy)
+        .draw(policy)
+        .child(move || {
+            provide_context(
+                || ContentColor {
+                    current: content_color,
+                },
+                || {
+                    let inherited = use_context::<ContentColor>().expect("badge content color");
+                    if inherited.get().current != content_color {
+                        inherited.set(ContentColor {
+                            current: content_color,
+                        });
+                    }
+                    provide_context(
+                        || typography.label_small,
+                        move || {
+                            let inherited = use_context::<TextStyle>().expect("badge text style");
+                            if inherited.get() != typography.label_small {
+                                inherited.set(typography.label_small);
+                            }
+                            row()
+                                .main_axis_alignment(MainAxisAlignment::Center)
+                                .cross_axis_alignment(CrossAxisAlignment::Center)
+                                .children_shared(content);
+                        },
+                    );
+                },
+            );
+        });
 }
+
+#[cfg(test)]
+mod tests;
