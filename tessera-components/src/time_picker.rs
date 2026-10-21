@@ -3,15 +3,18 @@
 //! ## Usage
 //!
 //! Use to let users choose a time for alarms, reminders, or schedules.
+
 use std::{
     f32::consts::TAU,
     sync::{Arc, OnceLock},
 };
 
 use tessera_ui::{
-    Color, ComputedData, Constraint, CursorEventContent, Dp, KeyboardInput,
-    KeyboardInputModifierNode, LayoutResult, MeasurementError, Modifier, PointerInput,
-    PointerInputModifierNode, PressKeyEventType, PxPosition, RenderSlot, State,
+    AxisConstraint, Color, ComputedData, Constraint, CursorEventContent, Dp, FocusManager,
+    FocusProperties, FocusRequester, KeyboardInput, KeyboardInputModifierNode, LayoutResult,
+    MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PressKeyEventType, Px,
+    PxPosition, RenderSlot, State,
+    accesskit::{Role, Toggled},
     layout::{MeasureScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera,
@@ -20,18 +23,16 @@ use tessera_ui::{
 };
 
 use crate::{
-    alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
-    boxed::boxed,
+    alignment::{Alignment, CrossAxisAlignment},
     column::column,
-    divider::horizontal_divider,
     icon::icon,
     icon_button::icon_button,
     image_vector::{ImageVectorData, TintMode},
     material_icons::filled,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::{InteractionState, ModifierExt as _, SemanticsArgs},
     pipelines::image_vector::command::ImageVectorVertex,
     row::row,
-    shape_def::{RoundedCorner, Shape},
+    shape_def::Shape,
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     text::text,
@@ -42,6 +43,10 @@ use crate::{
 const CLOCK_SIZE: Dp = Dp(256.0);
 const CLOCK_OUTER_RADIUS: f32 = 101.0;
 const CLOCK_INNER_RADIUS: f32 = 69.0;
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "time_picker/accessibility_tests.rs"]
+mod accessibility_tests;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 enum TimeField {
@@ -58,6 +63,18 @@ pub enum TimePickerDisplayMode {
     Picker,
     /// Input-focused layout with labels.
     Input,
+}
+
+/// Preferred arrangement of the clock dial and time controls.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum TimePickerLayout {
+    /// Stack the time controls above the clock dial.
+    #[default]
+    Vertical,
+    /// Place the time controls beside the dial when at least 524dp is
+    /// available. Narrower containers fall back to the vertical
+    /// arrangement.
+    Horizontal,
 }
 
 /// Indicates whether the selected time is in AM or PM.
@@ -243,9 +260,13 @@ struct TimePickerSnapshot {
 /// - `initial_minute` — initial minute for the internal state.
 /// - `is_24_hour` — whether the internal state uses 24-hour mode.
 /// - `display_mode` — initial display mode for the internal state.
-/// - `hour_step` — step size for dial and keyboard hour changes.
-/// - `minute_step` — step size for dial and keyboard minute changes.
+/// - `hour_step` — pointer snapping interval for hour changes.
+/// - `minute_step` — pointer snapping interval for minute changes.
 /// - `state` — optional external state for selected time and display mode.
+/// - `layout` — preferred dial arrangement; defaults to vertical.
+///
+/// Labeled clock values and manual entry select their exact value. Pointer
+/// snapping steps apply to selecting a position on the dial.
 ///
 /// ## Examples
 ///
@@ -253,13 +274,13 @@ struct TimePickerSnapshot {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::time_picker::{TimePickerState, time_picker};
+/// use tessera_components::time_picker::{TimePickerLayout, TimePickerState, time_picker};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
-/// time_picker();
+/// time_picker().layout(TimePickerLayout::Horizontal);
 ///
 /// let state = TimePickerState::default();
 /// assert!(state.hour() <= 23);
@@ -277,6 +298,7 @@ pub fn time_picker(
     hour_step: Option<u8>,
     minute_step: Option<u8>,
     state: Option<State<TimePickerState>>,
+    layout: Option<TimePickerLayout>,
 ) {
     let modifier = modifier.unwrap_or_default();
     let initial_hour = initial_hour.unwrap_or(0);
@@ -285,10 +307,18 @@ pub fn time_picker(
     let display_mode = display_mode.unwrap_or_default();
     let hour_step = hour_step.unwrap_or(1);
     let minute_step = minute_step.unwrap_or(1);
-    let state = state.unwrap_or_else(|| {
+    let state = if let Some(state) = state {
+        state
+    } else {
         remember(|| TimePickerState::new(initial_hour, initial_minute, is_24_hour, display_mode))
-    });
-    time_picker_content(state, modifier, hour_step, minute_step);
+    };
+    time_picker_content(
+        state,
+        modifier,
+        hour_step,
+        minute_step,
+        layout.unwrap_or_default(),
+    );
 }
 
 #[tessera]
@@ -297,39 +327,174 @@ fn time_picker_content(
     modifier: Modifier,
     hour_step: u8,
     minute_step: u8,
+    arrangement: TimePickerLayout,
 ) {
     let snapshot = state.with(TimePickerState::snapshot);
     let input = snapshot.display_mode == TimePickerDisplayMode::Input;
-    let width = if snapshot.is_24_hour { 256.0 } else { 280.0 };
-    column()
-        .modifier(modifier.width(Dp(width)))
-        .cross_axis_alignment(CrossAxisAlignment::Center)
-        .children(move || {
-            row()
-                .cross_axis_alignment(CrossAxisAlignment::Start)
-                .children(move || {
-                    time_number(state, TimeField::Hour, input);
-                    let theme = use_context::<MaterialTheme>().unwrap().get();
-                    surface()
-                        .modifier(
-                            Modifier::new().size(Dp(24.0), Dp(if input { 72.0 } else { 80.0 })),
-                        )
-                        .style(Color::TRANSPARENT.into())
-                        .content_alignment(Alignment::Center)
-                        .child(move || {
-                            text().content(":").style(theme.typography.display_large);
-                        });
-                    time_number(state, TimeField::Minute, input);
-                    if !snapshot.is_24_hour {
-                        spacer().modifier(Modifier::new().width(Dp(12.0)));
-                        time_period_selector(state, input);
-                    }
+    #[cfg(test)]
+    let modifier = modifier.push_semantics(TimePickerTag("time-picker"));
+    layout()
+        .modifier(modifier)
+        .policy(TimePickerMeasure {
+            arrangement,
+            input,
+            is_24_hour: snapshot.is_24_hour,
+        })
+        .child(move || {
+            time_number(state, TimeField::Hour, input);
+            let theme = use_context::<MaterialTheme>().unwrap().get();
+            surface()
+                .modifier(Modifier::new().size(Dp(24.0), Dp(if input { 72.0 } else { 80.0 })))
+                .style(Color::TRANSPARENT.into())
+                .content_alignment(Alignment::Center)
+                .child(move || {
+                    text().content(":").style(theme.typography.display_large);
                 });
+            time_number(state, TimeField::Minute, input);
+            if !snapshot.is_24_hour {
+                time_period_selector(state, input);
+            }
             if !input {
-                spacer().modifier(Modifier::new().height(Dp(36.0)));
                 time_clock(state, hour_step, minute_step);
             }
         });
+}
+
+#[cfg(test)]
+#[derive(Clone, PartialEq)]
+struct TimePickerTag(&'static str);
+
+#[cfg(test)]
+impl tessera_ui::SemanticsModifierNode for TimePickerTag {
+    fn apply(
+        &self,
+        node: &mut tessera_ui::AccessibilityNode,
+        _: &mut Option<tessera_ui::AccessibilityActionHandler>,
+    ) {
+        node.key = Some(self.0.to_owned());
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct TimePickerMeasure {
+    arrangement: TimePickerLayout,
+    input: bool,
+    is_24_hour: bool,
+}
+
+impl tessera_ui::LayoutModifierNode for TimePickerMeasure {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let parent = *scope.parent_constraint().as_ref();
+        let horizontal = !self.input
+            && self.arrangement != TimePickerLayout::Vertical
+            && parent
+                .width
+                .max
+                .is_none_or(|width| width >= Dp(524.0).to_px());
+        let width = if horizontal {
+            524.0
+        } else if self.is_24_hour {
+            256.0
+        } else {
+            280.0
+        };
+        let width = parent.width.clamp(Dp(width).to_px());
+        let field_width = Dp(if self.is_24_hour && !horizontal && !self.input {
+            114.0
+        } else {
+            96.0
+        })
+        .to_px();
+        let field_height = Dp(if self.input { 72.0 } else { 80.0 }).to_px();
+        let fields_width = field_width * 2 + Dp(24.0).to_px();
+        let natural_height = if self.input {
+            Dp(92.0).to_px()
+        } else if horizontal {
+            CLOCK_SIZE.to_px()
+        } else {
+            Dp(372.0).to_px()
+        };
+        let height = parent.height.clamp(natural_height);
+        let mut result = LayoutResult::new(ComputedData { width, height });
+        let children = scope.children();
+        let controls_width = fields_width
+            + if !horizontal && !self.is_24_hour {
+                Dp(64.0).to_px()
+            } else {
+                Px::ZERO
+            };
+        let controls_x = if horizontal {
+            Px::ZERO
+        } else {
+            (width - controls_width).max(Px::ZERO) / 2
+        };
+        let controls_y = if horizontal {
+            (height - CLOCK_SIZE.to_px()).max(Px::ZERO) / 2
+                + Dp(if self.is_24_hour { 88.0 } else { 72.0 }).to_px()
+        } else {
+            Px::ZERO
+        };
+        for (index, child) in children.iter().copied().take(3).enumerate() {
+            let child_width = if index == 1 {
+                Dp(24.0).to_px()
+            } else {
+                field_width
+            };
+            child.measure(
+                scope,
+                &Constraint::new(AxisConstraint::exact(child_width), AxisConstraint::NONE),
+            )?;
+            let x = match index {
+                0 => Px::ZERO,
+                1 => field_width,
+                _ => field_width + Dp(24.0).to_px(),
+            };
+            result.place_child(child, PxPosition::new(controls_x + x, controls_y));
+        }
+        if !self.is_24_hour {
+            let period = children[3];
+            let (period_width, period_height, x, y) = if horizontal {
+                (
+                    Dp(216.0).to_px(),
+                    Dp(38.0).to_px(),
+                    controls_x,
+                    controls_y + field_height + Dp(16.0).to_px(),
+                )
+            } else {
+                (
+                    Dp(52.0).to_px(),
+                    field_height,
+                    controls_x + fields_width + Dp(12.0).to_px(),
+                    controls_y,
+                )
+            };
+            period.measure(
+                scope,
+                &Constraint::new(
+                    AxisConstraint::exact(period_width),
+                    AxisConstraint::exact(period_height),
+                ),
+            )?;
+            result.place_child(period, PxPosition::new(x, y));
+        }
+        if !self.input {
+            let clock = *children.last().expect("clock dial");
+            clock.measure(scope, &Constraint::NONE)?;
+            let (x, y) = if horizontal {
+                (
+                    Dp(268.0).to_px(),
+                    (height - CLOCK_SIZE.to_px()).max(Px::ZERO) / 2,
+                )
+            } else {
+                (
+                    (width - CLOCK_SIZE.to_px()).max(Px::ZERO) / 2,
+                    Dp(116.0).to_px(),
+                )
+            };
+            result.place_child(clock, PxPosition::new(x, y));
+        }
+        Ok(result)
+    }
 }
 
 #[tessera]
@@ -449,12 +614,23 @@ fn time_number(state: State<TimePickerState>, field: TimeField, input: bool) {
                 .color(scheme.on_surface_variant);
         } else {
             surface()
-                .modifier(Modifier::new().size(Dp(width), Dp(height)))
+                .modifier(
+                    Modifier::new()
+                        .size(Dp(width), Dp(height))
+                        .semantics(SemanticsArgs {
+                            value: Some(format_two_digit(value)),
+                            selected: Some(selected),
+                            ..Default::default()
+                        }),
+                )
                 .style(background.into())
                 .shape(theme.shapes.small)
                 .content_alignment(Alignment::Center)
                 .accessibility_label(label)
-                .on_click(move || state.with_mut(|s| s.selection = field))
+                .on_click(move || {
+                    state.with_mut(|s| s.selection = field);
+                    FocusManager::current().defer_keyboard_until_layout();
+                })
                 .child(move || {
                     text()
                         .content(format_two_digit(value))
@@ -467,71 +643,268 @@ fn time_number(state: State<TimePickerState>, field: TimeField, input: bool) {
 
 #[tessera]
 fn time_period_selector(state: State<TimePickerState>, input: bool) {
-    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let theme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get();
     let scheme = theme.color_scheme;
-    let height = if input { 72.0 } else { 80.0 };
     let period = state.with(TimePickerState::period);
-    boxed().children(move || {
-        column().children(move || {
-            for (label, value) in [("AM", DayPeriod::Am), ("PM", DayPeriod::Pm)] {
-                let selected = value == period;
-                let corner = RoundedCorner::manual(Dp(8.0), 2.0);
-                let shape = if value == DayPeriod::Am {
-                    Shape::RoundedRectangle {
-                        top_left: corner,
-                        top_right: corner,
-                        bottom_left: RoundedCorner::ZERO,
-                        bottom_right: RoundedCorner::ZERO,
-                    }
-                } else {
-                    Shape::RoundedRectangle {
-                        top_left: RoundedCorner::ZERO,
-                        top_right: RoundedCorner::ZERO,
-                        bottom_left: corner,
-                        bottom_right: corner,
-                    }
-                };
-                surface()
-                    .modifier(Modifier::new().size(Dp(52.0), Dp(height / 2.0)))
-                    .style(
-                        if selected {
-                            scheme.tertiary_container
-                        } else {
-                            Color::TRANSPARENT
-                        }
-                        .into(),
-                    )
-                    .shape(shape)
-                    .content_alignment(Alignment::Center)
-                    .accessibility_label(label)
-                    .on_click(move || state.with_mut(|s| s.set_period(value)))
-                    .child(move || {
-                        text()
-                            .content(label)
-                            .style(theme.typography.title_medium)
-                            .color(if selected {
-                                scheme.on_tertiary_container
-                            } else {
-                                scheme.on_surface_variant
+    let requesters = remember(|| [FocusRequester::new(), FocusRequester::new()]).get();
+    let interactions = [
+        remember(InteractionState::new),
+        remember(InteractionState::new),
+    ];
+    layout()
+        .policy(PeriodMeasure { input })
+        .modifier(Modifier::new().semantics(SemanticsArgs {
+            test_tag: cfg!(test).then(|| "time-period".to_owned()),
+            role: Some(Role::RadioGroup),
+            label: Some("AM/PM".to_owned()),
+            merge_descendants: true,
+            ..Default::default()
+        }))
+        .child(move || {
+            layout()
+                .policy(PeriodVisualMeasure { input })
+                .modifier(
+                    Modifier::new()
+                        .clip_shape(theme.shapes.small)
+                        .semantics(SemanticsArgs::clear()),
+                )
+                .child(move || {
+                    for (index, (label, value)) in [("AM", DayPeriod::Am), ("PM", DayPeriod::Pm)]
+                        .into_iter()
+                        .enumerate()
+                    {
+                        let selected = value == period;
+                        surface()
+                            .style(
+                                if selected {
+                                    scheme.tertiary_container
+                                } else {
+                                    Color::TRANSPARENT
+                                }
+                                .into(),
+                            )
+                            .shape(Shape::RECTANGLE)
+                            .interaction_state(interactions[index])
+                            .show_ripple(false)
+                            .block_input(false)
+                            .content_alignment(Alignment::Center)
+                            .child(move || {
+                                text()
+                                    .content(label)
+                                    .style(theme.typography.title_medium)
+                                    .color(if selected {
+                                        scheme.on_tertiary_container
+                                    } else {
+                                        scheme.on_surface_variant
+                                    });
                             });
+                    }
+                    surface()
+                        .shape(theme.shapes.small)
+                        .block_input(false)
+                        .style(SurfaceStyle::Outlined {
+                            color: scheme.outline,
+                            width: Dp(1.0),
+                        });
+                    surface()
+                        .shape(Shape::RECTANGLE)
+                        .block_input(false)
+                        .style(scheme.outline.into());
+                });
+            for (index, (label, value)) in [("AM", DayPeriod::Am), ("PM", DayPeriod::Pm)]
+                .into_iter()
+                .enumerate()
+            {
+                surface()
+                    .modifier(
+                        Modifier::new()
+                            .semantics(SemanticsArgs::clear())
+                            .push_keyboard_input(PeriodNavigation {
+                                state,
+                                requesters,
+                                index,
+                            }),
+                    )
+                    .style(Color::TRANSPARENT.into())
+                    .shape(Shape::RECTANGLE)
+                    .interaction_state(interactions[index])
+                    .show_state_layer(false)
+                    .show_ripple(false)
+                    .accessibility_label(label)
+                    .focus_requester(requesters[index])
+                    .focus_properties(FocusProperties::new().skip_traversal(value != period))
+                    .accessibility_role(Role::RadioButton)
+                    .accessibility_toggled(if value == period {
+                        Toggled::True
+                    } else {
+                        Toggled::False
+                    })
+                    .on_click(move || {
+                        state.with_mut(|state| state.set_period(value));
+                        FocusManager::current().defer_keyboard_until_layout();
                     });
             }
         });
-        surface()
-            .modifier(Modifier::new().size(Dp(52.0), Dp(height)))
-            .shape(theme.shapes.small)
-            .block_input(false)
-            .style(SurfaceStyle::Outlined {
-                color: scheme.outline,
-                width: Dp(1.0),
+}
+
+#[derive(Clone, PartialEq)]
+struct PeriodMeasure {
+    input: bool,
+}
+
+impl tessera_ui::LayoutModifierNode for PeriodMeasure {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let parent = *scope.parent_constraint().as_ref();
+        let width = parent.width.clamp(Dp(52.0).to_px());
+        let height = parent
+            .height
+            .clamp(Dp(if self.input { 72.0 } else { 80.0 }).to_px());
+        let horizontal = width > height;
+        let mut result = LayoutResult::new(ComputedData { width, height });
+        let children = scope.children();
+        children[0].measure(
+            scope,
+            &Constraint::new(AxisConstraint::exact(width), AxisConstraint::exact(height)),
+        )?;
+        result.place_child(children[0], PxPosition::ZERO);
+        let target_height = Dp(48.0).to_px();
+        // Targets remain outside the visual clip so compact toggles keep 48dp
+        // hit areas.
+        for (index, child) in children.iter().copied().skip(1).enumerate() {
+            let first = if horizontal { width / 2 } else { height / 2 };
+            let (w, h, x, y) = if horizontal {
+                (
+                    if index == 0 { first } else { width - first },
+                    target_height,
+                    if index == 0 { Px::ZERO } else { first },
+                    (height - target_height) / 2,
+                )
+            } else {
+                (
+                    width,
+                    target_height,
+                    Px::ZERO,
+                    if index == 0 {
+                        first - target_height
+                    } else {
+                        first
+                    },
+                )
+            };
+            child.measure(
+                scope,
+                &Constraint::new(AxisConstraint::exact(w), AxisConstraint::exact(h)),
+            )?;
+            result.place_child(child, PxPosition::new(x, y));
+        }
+        Ok(result)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct PeriodVisualMeasure {
+    input: bool,
+}
+
+impl tessera_ui::LayoutModifierNode for PeriodVisualMeasure {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let parent = *scope.parent_constraint().as_ref();
+        let width = parent.width.clamp(Dp(52.0).to_px());
+        let height = parent
+            .height
+            .clamp(Dp(if self.input { 72.0 } else { 80.0 }).to_px());
+        let horizontal = width > height;
+        let mut result = LayoutResult::new(ComputedData { width, height });
+        let children = scope.children();
+        let first = if horizontal { width / 2 } else { height / 2 };
+        for (index, child) in children.iter().copied().take(2).enumerate() {
+            let (w, h, x, y) = if horizontal {
+                (
+                    if index == 0 { first } else { width - first },
+                    height,
+                    if index == 0 { Px::ZERO } else { first },
+                    Px::ZERO,
+                )
+            } else {
+                (
+                    width,
+                    if index == 0 { first } else { height - first },
+                    Px::ZERO,
+                    if index == 0 { Px::ZERO } else { first },
+                )
+            };
+            child.measure(
+                scope,
+                &Constraint::new(AxisConstraint::exact(w), AxisConstraint::exact(h)),
+            )?;
+            result.place_child(child, PxPosition::new(x, y));
+        }
+        children[2].measure(
+            scope,
+            &Constraint::new(AxisConstraint::exact(width), AxisConstraint::exact(height)),
+        )?;
+        result.place_child(children[2], PxPosition::ZERO);
+        let thickness = Dp(1.0).to_px();
+        let (w, h, x, y) = if horizontal {
+            (thickness, height, first, Px::ZERO)
+        } else {
+            (width, thickness, Px::ZERO, first)
+        };
+        children[3].measure(
+            scope,
+            &Constraint::new(AxisConstraint::exact(w), AxisConstraint::exact(h)),
+        )?;
+        result.place_child(children[3], PxPosition::new(x, y));
+        Ok(result)
+    }
+}
+
+#[derive(Clone, Copy)]
+struct PeriodNavigation {
+    state: State<TimePickerState>,
+    requesters: [FocusRequester; 2],
+    index: usize,
+}
+
+impl KeyboardInputModifierNode for PeriodNavigation {
+    fn on_keyboard_input(&self, mut input: KeyboardInput<'_>) {
+        if input.key_modifiers.control_key()
+            || input.key_modifiers.alt_key()
+            || input.key_modifiers.super_key()
+            || input.key_modifiers.shift_key()
+        {
+            return;
+        }
+        for event in input.keyboard_events.iter() {
+            if event.state != winit::event::ElementState::Pressed {
+                continue;
+            }
+            let index = match event.logical_key {
+                winit::keyboard::Key::Named(
+                    winit::keyboard::NamedKey::ArrowLeft
+                    | winit::keyboard::NamedKey::ArrowRight
+                    | winit::keyboard::NamedKey::ArrowUp
+                    | winit::keyboard::NamedKey::ArrowDown,
+                ) => 1 - self.index,
+                winit::keyboard::Key::Named(winit::keyboard::NamedKey::Home) => 0,
+                winit::keyboard::Key::Named(winit::keyboard::NamedKey::End) => 1,
+                _ => continue,
+            };
+            self.state.with_mut(|state| {
+                state.set_period(if index == 0 {
+                    DayPeriod::Am
+                } else {
+                    DayPeriod::Pm
+                });
             });
-        column()
-            .modifier(Modifier::new().size(Dp(52.0), Dp(height)))
-            .main_axis_alignment(MainAxisAlignment::Center)
-            .children(move || {
-                horizontal_divider().color(scheme.outline);
-            });
-    });
+            self.requesters[index].request_focus();
+            FocusManager::current().defer_keyboard_until_layout();
+            input.block_keyboard();
+            return;
+        }
+    }
 }
 
 fn clock_track(inner: bool) -> ImageVectorData {
@@ -634,10 +1007,14 @@ struct ClockInput {
     dragging: State<bool>,
     hour_step: u8,
     minute_step: u8,
+    focus: State<ClockFocus>,
 }
 
 impl PointerInputModifierNode for ClockInput {
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
+        if input.pointer_changes.is_empty() {
+            return;
+        }
         if input
             .pointer_changes
             .iter()
@@ -703,41 +1080,120 @@ impl PointerInputModifierNode for ClockInput {
                 s.set_minute((minute / step) * step);
             }
         });
+        let slot = self
+            .state
+            .with(|state| selected_clock_slot(&state.snapshot()));
+        let requester = self.focus.with_mut(|focus| {
+            focus.anchor = slot;
+            focus.requesters[slot]
+        });
+        requester.request_focus();
         if released {
             self.dragging.set(false);
+            FocusManager::current().defer_keyboard_until_layout();
         }
         input.consume_pointer_changes();
     }
 }
 
-impl KeyboardInputModifierNode for ClockInput {
+#[derive(Clone, Copy)]
+struct ClockFocus {
+    requesters: [FocusRequester; 24],
+    anchor: usize,
+    field: TimeField,
+}
+
+impl ClockFocus {
+    fn new(snapshot: &TimePickerSnapshot) -> Self {
+        Self {
+            requesters: std::array::from_fn(|_| FocusRequester::new()),
+            anchor: selected_clock_slot(snapshot),
+            field: snapshot.selection,
+        }
+    }
+}
+
+fn selected_clock_slot(snapshot: &TimePickerSnapshot) -> usize {
+    match snapshot.selection {
+        TimeField::Hour if snapshot.is_24_hour && snapshot.hour == 0 => 12,
+        TimeField::Hour if snapshot.is_24_hour && snapshot.hour > 12 => snapshot.hour as usize,
+        TimeField::Hour => (snapshot.hour % 12) as usize,
+        TimeField::Minute => ((snapshot.minute as f32 / 5.0).round() as usize) % 12,
+    }
+}
+
+fn clock_value_number(field: TimeField, index: usize) -> u8 {
+    match (field, index) {
+        (TimeField::Minute, _) => index as u8 * 5,
+        (TimeField::Hour, 0) => 12,
+        (TimeField::Hour, 12) => 0,
+        (TimeField::Hour, _) => index as u8,
+    }
+}
+
+fn select_clock_slot(state: State<TimePickerState>, index: usize) {
+    state.with_mut(|state| {
+        let number = clock_value_number(state.selection, index);
+        match state.selection {
+            TimeField::Hour => {
+                let hour = if state.is_24_hour {
+                    number
+                } else {
+                    number % 12
+                        + if state.period() == DayPeriod::Pm {
+                            12
+                        } else {
+                            0
+                        }
+                };
+                state.set_hour(hour);
+            }
+            TimeField::Minute => {
+                state.set_minute(number);
+            }
+        }
+    });
+}
+
+#[derive(Clone, Copy)]
+struct ClockNavigation {
+    focus: State<ClockFocus>,
+    index: usize,
+    count: usize,
+}
+
+impl KeyboardInputModifierNode for ClockNavigation {
     fn on_keyboard_input(&self, mut input: KeyboardInput<'_>) {
-        let mut handled = false;
+        if input.key_modifiers.control_key()
+            || input.key_modifiers.alt_key()
+            || input.key_modifiers.super_key()
+            || input.key_modifiers.shift_key()
+        {
+            return;
+        }
         for event in input.keyboard_events.iter() {
             if event.state != winit::event::ElementState::Pressed {
                 continue;
             }
-            let delta = match event.logical_key {
+            let target = match event.logical_key {
                 winit::keyboard::Key::Named(
-                    winit::keyboard::NamedKey::ArrowRight | winit::keyboard::NamedKey::ArrowUp,
-                ) => 1,
+                    winit::keyboard::NamedKey::ArrowRight | winit::keyboard::NamedKey::ArrowDown,
+                ) => (self.index + 1) % self.count,
                 winit::keyboard::Key::Named(
-                    winit::keyboard::NamedKey::ArrowLeft | winit::keyboard::NamedKey::ArrowDown,
-                ) => -1,
-                _ => 0,
+                    winit::keyboard::NamedKey::ArrowLeft | winit::keyboard::NamedKey::ArrowUp,
+                ) => (self.index + self.count - 1) % self.count,
+                winit::keyboard::Key::Named(winit::keyboard::NamedKey::Home) => 0,
+                winit::keyboard::Key::Named(winit::keyboard::NamedKey::End) => self.count - 1,
+                _ => continue,
             };
-            if delta != 0 {
-                self.state.with_mut(|s| match (s.selection, delta > 0) {
-                    (TimeField::Hour, true) => s.increment_hour(self.hour_step),
-                    (TimeField::Hour, false) => s.decrement_hour(self.hour_step),
-                    (TimeField::Minute, true) => s.increment_minute(self.minute_step),
-                    (TimeField::Minute, false) => s.decrement_minute(self.minute_step),
-                });
-                handled = true;
-            }
-        }
-        if handled {
+            let requester = self.focus.with_mut(|focus| {
+                focus.anchor = target;
+                focus.requesters[target]
+            });
+            requester.request_focus();
+            FocusManager::current().defer_keyboard_until_layout();
             input.block_keyboard();
+            return;
         }
     }
 }
@@ -748,6 +1204,25 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let scheme = theme.color_scheme;
     let dragging = remember(|| false);
+    let focus = remember(|| ClockFocus::new(&snapshot));
+    let count = if snapshot.is_24_hour && snapshot.selection == TimeField::Hour {
+        24
+    } else {
+        12
+    };
+    let current = focus.get();
+    if current.field != snapshot.selection
+        || current.anchor >= count
+        || !current.requesters.iter().any(FocusRequester::is_focused)
+    {
+        let anchor = selected_clock_slot(&snapshot);
+        if current.field != snapshot.selection || current.anchor != anchor {
+            focus.with_mut(|focus| {
+                focus.anchor = anchor;
+                focus.field = snapshot.selection;
+            });
+        }
+    }
     let policy = ClockLayout {
         hour: snapshot.hour,
         minute: snapshot.minute,
@@ -759,11 +1234,7 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
         dragging,
         hour_step,
         minute_step,
-    };
-    let count = if snapshot.is_24_hour && snapshot.selection == TimeField::Hour {
-        24
-    } else {
-        12
+        focus,
     };
     layout()
         .modifier(
@@ -771,12 +1242,20 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
                 .size(CLOCK_SIZE, CLOCK_SIZE)
                 .semantics(SemanticsArgs {
                     test_tag: cfg!(test).then(|| "time-clock".to_owned()),
-                    label: Some("Time dial".to_owned()),
+                    role: Some(Role::Group),
+                    label: Some(
+                        if snapshot.selection == TimeField::Hour {
+                            "Hours"
+                        } else {
+                            "Minutes"
+                        }
+                        .to_owned(),
+                    ),
+                    merge_descendants: true,
                     ..Default::default()
                 })
-                .focusable()
-                .push_pointer_input(interaction)
-                .push_keyboard_input(interaction),
+                .focus_restorer(Some(focus.with(|focus| focus.requesters[focus.anchor])))
+                .push_pointer_preview_input(interaction),
         )
         .policy(policy.clone())
         .child(move || {
@@ -811,41 +1290,75 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
                 .shape(Shape::Ellipse)
                 .child(|| {});
             for index in 0..count {
-                let number = if snapshot.selection == TimeField::Minute {
-                    index * 5
-                } else if index == 0 {
-                    12
-                } else if index == 12 {
-                    0
-                } else {
-                    index
-                };
-                let selected = if snapshot.selection == TimeField::Minute {
-                    number == ((snapshot.minute as f32 / 5.0).round() as u8 * 5) % 60
-                } else if snapshot.is_24_hour {
-                    number == snapshot.hour
-                } else {
-                    number == hour_for_display(snapshot.hour, false)
-                };
-                surface()
-                    .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
-                    .style(Color::TRANSPARENT.into())
-                    .content_alignment(Alignment::Center)
-                    .child(move || {
-                        text()
-                            .content(if snapshot.selection == TimeField::Minute {
-                                format_two_digit(number)
-                            } else {
-                                number.to_string()
-                            })
-                            .style(theme.typography.body_large)
-                            .color(if selected {
-                                scheme.on_primary
-                            } else {
-                                scheme.on_surface
-                            });
-                    });
+                clock_value(state, focus, index, count);
             }
+        });
+}
+
+#[tessera]
+fn clock_value(
+    state: State<TimePickerState>,
+    focus: State<ClockFocus>,
+    index: usize,
+    count: usize,
+) {
+    let snapshot = state.with(TimePickerState::snapshot);
+    let theme = use_context::<MaterialTheme>().expect("theme").get();
+    let number = clock_value_number(snapshot.selection, index);
+    let selected = index == selected_clock_slot(&snapshot);
+    let (requester, anchor) = focus.with(|focus| (focus.requesters[index], focus.anchor));
+    let field = if snapshot.selection == TimeField::Hour {
+        "Hour"
+    } else {
+        "Minute"
+    };
+    let total = if snapshot.selection == TimeField::Minute {
+        60
+    } else if snapshot.is_24_hour {
+        24
+    } else {
+        12
+    };
+    surface()
+        .modifier(
+            Modifier::new()
+                .size(Dp(48.0), Dp(48.0))
+                .semantics(SemanticsArgs {
+                    selected: Some(selected),
+                    ..Default::default()
+                })
+                .on_focus_event(move |state: tessera_ui::FocusState| {
+                    if state.is_focused() && focus.with(|focus| focus.anchor != index) {
+                        focus.with_mut(|focus| focus.anchor = index);
+                    }
+                })
+                .push_keyboard_input(ClockNavigation {
+                    focus,
+                    index,
+                    count,
+                }),
+        )
+        .style(Color::TRANSPARENT.into())
+        .shape(Shape::Ellipse)
+        .show_ripple(false)
+        .focus_requester(requester)
+        .focus_properties(FocusProperties::new().skip_traversal(index != anchor))
+        .accessibility_label(format!("{field} {number} of {total}"))
+        .on_click(move || select_clock_slot(state, index))
+        .content_alignment(Alignment::Center)
+        .child(move || {
+            text()
+                .content(if snapshot.selection == TimeField::Minute {
+                    format_two_digit(number)
+                } else {
+                    number.to_string()
+                })
+                .style(theme.typography.body_large)
+                .color(if selected {
+                    theme.color_scheme.on_primary
+                } else {
+                    theme.color_scheme.on_surface
+                });
         });
 }
 
@@ -871,6 +1384,7 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
 /// - `picker_display_mode` — initial picker display mode.
 /// - `picker_hour_step` — hour step size for the picker.
 /// - `picker_minute_step` — minute step size for the picker.
+/// - `picker_layout` — preferred dial arrangement; defaults to vertical.
 ///
 /// ## Examples
 ///
@@ -880,13 +1394,15 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
 /// # fn component() {
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
-/// use tessera_components::time_picker::{TimePickerState, time_picker_dialog};
+/// use tessera_components::time_picker::{TimePickerLayout, TimePickerState, time_picker_dialog};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// let state = remember(TimePickerState::default);
-/// time_picker_dialog().state(state);
+/// time_picker_dialog()
+///     .state(state)
+///     .picker_layout(TimePickerLayout::Horizontal);
 /// # });
 /// # }
 /// # component();
@@ -905,6 +1421,7 @@ pub fn time_picker_dialog(
     picker_display_mode: Option<TimePickerDisplayMode>,
     picker_hour_step: Option<u8>,
     picker_minute_step: Option<u8>,
+    picker_layout: Option<TimePickerLayout>,
 ) {
     let show_mode_toggle = show_mode_toggle.unwrap_or(true);
     let picker_modifier = picker_modifier.unwrap_or_default();
@@ -914,7 +1431,9 @@ pub fn time_picker_dialog(
     let picker_display_mode = picker_display_mode.unwrap_or_default();
     let picker_hour_step = picker_hour_step.unwrap_or(1);
     let picker_minute_step = picker_minute_step.unwrap_or(1);
-    let state = state.unwrap_or_else(|| {
+    let state = if let Some(state) = state {
+        state
+    } else {
         remember(|| {
             TimePickerState::new(
                 picker_initial_hour,
@@ -923,27 +1442,28 @@ pub fn time_picker_dialog(
                 picker_display_mode,
             )
         })
-    });
-    let theme = use_context::<MaterialTheme>().unwrap().get();
-    let width = if state.with(|s| s.is_24_hour) {
-        256.0
-    } else {
-        280.0
     };
-    column()
-        .modifier(Modifier::new().width(Dp(width)))
-        .children(move || {
+    let theme = use_context::<MaterialTheme>().unwrap().get();
+    let modifier = Modifier::new();
+    #[cfg(test)]
+    let modifier = modifier.push_semantics(TimePickerTag("time-picker-dialog"));
+    layout()
+        .modifier(modifier)
+        .policy(TimeDialogMeasure {
+            arrangement: picker_layout.unwrap_or_default(),
+            input: state.with(|state| state.display_mode() == TimePickerDisplayMode::Input),
+        })
+        .child(move || {
             text()
                 .content(title.as_deref().unwrap_or("Select time"))
                 .style(theme.typography.label_medium)
                 .color(theme.color_scheme.on_surface_variant);
-            spacer().modifier(Modifier::new().height(Dp(20.0)));
             time_picker()
                 .modifier(picker_modifier.clone())
                 .state(state)
                 .hour_step(picker_hour_step)
-                .minute_step(picker_minute_step);
-            spacer().modifier(Modifier::new().height(Dp(24.0)));
+                .minute_step(picker_minute_step)
+                .layout(picker_layout.unwrap_or_default());
             row()
                 .modifier(Modifier::new().fill_max_width().height(Dp(40.0)))
                 .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -976,6 +1496,85 @@ pub fn time_picker_dialog(
         });
 }
 
+#[derive(Clone, PartialEq)]
+struct TimeDialogMeasure {
+    arrangement: TimePickerLayout,
+    input: bool,
+}
+
+impl tessera_ui::LayoutModifierNode for TimeDialogMeasure {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let parent = *scope.parent_constraint().as_ref();
+        let children = scope.children();
+        let gap = Dp(
+            if !self.input
+                && self.arrangement == TimePickerLayout::Horizontal
+                && parent
+                    .width
+                    .max
+                    .is_none_or(|width| width >= Dp(524.0).to_px())
+            {
+                0.0
+            } else {
+                20.0
+            },
+        )
+        .to_px();
+        let title = children[0].probe(
+            scope,
+            &Constraint::new(parent.width.without_min(), AxisConstraint::NONE),
+        )?;
+        let mut body = children[1].measure(
+            scope,
+            &Constraint::new(
+                parent.width.without_min(),
+                (parent.height - title.height - gap - Dp(64.0).to_px()).without_min(),
+            ),
+        )?;
+        let resolved_gap = Dp(
+            if !self.input
+                && self.arrangement == TimePickerLayout::Horizontal
+                && body.width >= Dp(524.0).to_px()
+            {
+                0.0
+            } else {
+                20.0
+            },
+        )
+        .to_px();
+        if resolved_gap != gap {
+            body = children[1].measure(
+                scope,
+                &Constraint::new(
+                    parent.width.without_min(),
+                    (parent.height - title.height - resolved_gap - Dp(64.0).to_px()).without_min(),
+                ),
+            )?;
+        }
+        let title = children[0].measure(
+            scope,
+            &Constraint::new(AxisConstraint::exact(body.width), AxisConstraint::NONE),
+        )?;
+        let actions = children[2].measure(
+            scope,
+            &Constraint::new(
+                AxisConstraint::exact(body.width),
+                AxisConstraint::exact(Dp(40.0).to_px()),
+            ),
+        )?;
+        let body_y = title.height + resolved_gap;
+        let actions_y = body_y + body.height + Dp(24.0).to_px();
+        let mut result = LayoutResult::new(ComputedData {
+            width: parent.width.clamp(body.width),
+            height: parent.height.clamp(actions_y + actions.height),
+        });
+        result.place_child(children[0], PxPosition::ZERO);
+        result.place_child(children[1], PxPosition::new(Px::ZERO, body_y));
+        result.place_child(children[2], PxPosition::new(Px::ZERO, actions_y));
+        Ok(result)
+    }
+}
+
 #[tessera]
 fn time_display_mode_toggle(state: State<TimePickerState>) {
     let input = state.with(|s| s.display_mode == TimePickerDisplayMode::Input);
@@ -991,7 +1590,10 @@ fn time_display_mode_toggle(state: State<TimePickerState>) {
         } else {
             "Switch to time input"
         })
-        .on_click(move || state.with_mut(TimePickerState::toggle_display_mode));
+        .on_click(move || {
+            state.with_mut(TimePickerState::toggle_display_mode);
+            FocusManager::current().defer_keyboard_until_layout();
+        });
 }
 
 fn format_two_digit(value: u8) -> String {
@@ -1034,17 +1636,17 @@ mod tests {
     use std::cell::Cell;
 
     use tessera_ui::{
-        CursorEventContent, GestureState, PointerChange, PressKeyEventType, PxPosition, State,
-        remember, tessera,
+        CursorEventContent, Dp, GestureState, Modifier, PointerChange, PressKeyEventType,
+        PxPosition, State, remember, tessera,
         testing::{
             layout_test, pump_layout_test_session, pump_layout_test_session_with_input,
             start_layout_test_session,
         },
     };
 
-    use crate::theme::material_theme;
+    use crate::{modifier::ModifierExt as _, theme::material_theme};
 
-    use super::{TimeField, TimePickerState, time_picker};
+    use super::{TimeField, TimePickerLayout, TimePickerState, time_picker, time_picker_dialog};
 
     thread_local! {
         static STATE: Cell<Option<State<TimePickerState>>> = const { Cell::new(None) };
@@ -1057,6 +1659,129 @@ mod tests {
         material_theme().child(move || {
             time_picker().state(state);
         });
+    }
+
+    #[tessera]
+    fn arrangement_fixture(arrangement: TimePickerLayout, is_24_hour: bool) {
+        material_theme().child(move || {
+            crate::boxed::boxed().children(move || {
+                time_picker().layout(arrangement).is_24_hour(is_24_hour);
+            });
+        });
+    }
+
+    #[test]
+    fn dial_arrangement_uses_available_space_and_horizontal_period_geometry() {
+        for (arrangement, is_24_hour, viewport, size, clock_x, clock_y) in [
+            (
+                TimePickerLayout::Vertical,
+                false,
+                (800, 600),
+                (280, 372),
+                12,
+                116,
+            ),
+            (
+                TimePickerLayout::Horizontal,
+                false,
+                (800, 600),
+                (524, 256),
+                268,
+                0,
+            ),
+            (
+                TimePickerLayout::Horizontal,
+                true,
+                (800, 600),
+                (524, 256),
+                268,
+                0,
+            ),
+            (
+                TimePickerLayout::Horizontal,
+                false,
+                (400, 600),
+                (280, 372),
+                12,
+                116,
+            ),
+            (
+                TimePickerLayout::Horizontal,
+                false,
+                (524, 300),
+                (524, 256),
+                268,
+                0,
+            ),
+            (
+                TimePickerLayout::Horizontal,
+                false,
+                (523, 600),
+                (280, 372),
+                12,
+                116,
+            ),
+        ] {
+            let mut session = start_layout_test_session(
+                layout_test(move || {
+                    arrangement_fixture(arrangement, is_24_hour);
+                })
+                .viewport_px(viewport.0, viewport.1),
+            );
+            let snapshot = pump_layout_test_session(&mut session, 0);
+            snapshot.node("time-picker").size(size.0, size.1);
+            let clock = snapshot.node("time-clock").bounds();
+            assert_eq!((clock.x.raw(), clock.y.raw()), (clock_x, clock_y));
+            if !is_24_hour {
+                let period = snapshot.node("time-period").bounds();
+                if size.0 == 524 {
+                    assert_eq!(
+                        (
+                            period.x.raw(),
+                            period.y.raw(),
+                            period.width.raw(),
+                            period.height.raw()
+                        ),
+                        (0, 168, 216, 38)
+                    );
+                } else {
+                    assert_eq!(
+                        (
+                            period.x.raw(),
+                            period.y.raw(),
+                            period.width.raw(),
+                            period.height.raw()
+                        ),
+                        (228, 0, 52, 80)
+                    );
+                }
+            }
+        }
+    }
+
+    #[tessera]
+    fn constrained_dialog_fixture() {
+        material_theme().child(|| {
+            crate::boxed::boxed().children(|| {
+                time_picker_dialog()
+                    .picker_layout(TimePickerLayout::Horizontal)
+                    .picker_modifier(Modifier::new().width(Dp(400.0)));
+            });
+        });
+    }
+
+    #[test]
+    fn constrained_horizontal_dialog_restores_vertical_header_spacing() {
+        let mut session = start_layout_test_session(
+            layout_test(|| {
+                constrained_dialog_fixture();
+            })
+            .viewport_px(800, 600),
+        );
+        let snapshot = pump_layout_test_session(&mut session, 0);
+        snapshot.node("time-picker-dialog").size(400, 472);
+        let clock = snapshot.node("time-clock").bounds();
+        assert_eq!((clock.x.raw(), clock.y.raw()), (72, 152));
     }
 
     #[test]
