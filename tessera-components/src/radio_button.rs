@@ -8,10 +8,14 @@ use std::time::Duration;
 
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    AxisConstraint, Callback, CallbackWith, Color, Dp, FocusState, FocusTraversalPolicy, Modifier,
-    Px, PxSize, RenderSlot, State, accesskit::Role, current_frame_nanos, layout::layout,
-    modifier::FocusModifierExt as _, provide_context, receive_frame_nanos, remember, tessera,
-    use_context,
+    AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
+    Dp, FocusDirection, FocusManager, FocusState, FocusTraversalPolicy, Modifier, Px, PxSize,
+    RenderSlot, SemanticsModifierNode, State,
+    accesskit::{Orientation, Role, Toggled},
+    current_frame_nanos,
+    layout::layout,
+    modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -27,16 +31,78 @@ use crate::{
 
 const RADIO_ANIMATION_DURATION: Duration = Duration::from_millis(200);
 
-#[derive(Clone, Copy, Debug)]
-struct RadioGroupContext;
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests;
 
-/// Orientation for [`radio_group`] traversal.
+struct RadioSemantics {
+    group: bool,
+    selected: bool,
+    label: Option<String>,
+    description: Option<String>,
+    orientation: Option<Orientation>,
+}
+
+impl SemanticsModifierNode for RadioSemantics {
+    fn apply(
+        &self,
+        node: &mut AccessibilityNode,
+        handler: &mut Option<AccessibilityActionHandler>,
+    ) {
+        node.role = Some(if self.group {
+            Role::RadioGroup
+        } else {
+            Role::RadioButton
+        });
+        if let Some(label) = &self.label {
+            node.label = Some(label.clone());
+        }
+        if let Some(description) = &self.description {
+            node.description = Some(description.clone());
+        }
+        if let Some(orientation) = self.orientation {
+            node.orientation = Some(orientation);
+        }
+        if !self.group {
+            node.toggled = Some(if self.selected {
+                Toggled::True
+            } else {
+                Toggled::False
+            });
+            node.disabled = true;
+            node.focusable = false;
+            node.actions.clear();
+            *handler = None;
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct RadioGroupContext {
+    selected: State<Option<State<RadioButtonController>>>,
+}
+
+fn claim_group_selection(
+    group: State<Option<State<RadioButtonController>>>,
+    controller: State<RadioButtonController>,
+) {
+    if group.with(|selected| *selected == Some(controller)) {
+        return;
+    }
+    let previous = group.with_mut(|selected| selected.replace(controller));
+    if let Some(previous) = previous
+        && previous.is_alive()
+    {
+        previous.with_mut(|controller| controller.set_selected(false));
+    }
+}
+
+/// Physical orientation announced for [`radio_group`].
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum RadioGroupOrientation {
-    /// Traverse radios vertically with `Up` and `Down`.
+    /// Announce a vertical group; all four arrows navigate the choices.
     #[default]
     Vertical,
-    /// Traverse radios horizontally with `Left` and `Right`.
+    /// Announce a horizontal group; all four arrows navigate the choices.
     Horizontal,
 }
 
@@ -142,19 +208,26 @@ fn interpolate_color(a: Color, b: Color, t: f32) -> Color {
 
 /// # radio_group
 ///
-/// Provide roving-focus keyboard navigation for a single-choice group of radio
+/// Provide directional keyboard navigation for a single-choice group of radio
 /// buttons.
 ///
 /// ## Usage
 ///
-/// Use around related radio buttons so arrow keys move within the group and
-/// focus change selects the active radio.
+/// Use around related radio buttons so arrow keys move and select within the
+/// group while pointer selection waits for a completed click. Tab enters at the
+/// selected enabled choice, or the first available choice, and then leaves the
+/// whole group.
+/// Omit `selected` on every choice for automatic mutual exclusion, or control
+/// every choice from the same application selection value.
 ///
 /// ## Parameters
 ///
 /// - `modifier` — modifier chain applied to the group container.
-/// - `orientation` — optional traversal direction.
-/// - `wrap` — whether traversal wraps when it reaches either end.
+/// - `orientation` — physical direction announced to assistive technology;
+///   defaults to vertical. All four arrows navigate in declaration order.
+/// - `wrap` — whether arrow traversal wraps at either end; defaults to `true`.
+/// - `accessibility_label` — optional name for the related choices.
+/// - `accessibility_description` — optional additional group instructions.
 /// - `content` — optional group content slot.
 ///
 /// ## Examples
@@ -181,22 +254,34 @@ pub fn radio_group(
     modifier: Option<Modifier>,
     orientation: Option<RadioGroupOrientation>,
     wrap: Option<bool>,
+    #[prop(into)] accessibility_label: Option<String>,
+    #[prop(into)] accessibility_description: Option<String>,
     content: Option<RenderSlot>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let wrap = wrap.unwrap_or(false);
+    let wrap = wrap.unwrap_or(true);
     let content = content.unwrap_or_else(RenderSlot::empty);
+    let selected = remember(|| None::<State<RadioButtonController>>);
+    let orientation = match orientation.unwrap_or_default() {
+        RadioGroupOrientation::Horizontal => Orientation::Horizontal,
+        RadioGroupOrientation::Vertical => Orientation::Vertical,
+    };
     let modifier = modifier.focus_group().focus_traversal_policy(
-        match orientation.unwrap_or_default() {
-            RadioGroupOrientation::Horizontal => FocusTraversalPolicy::horizontal(),
-            RadioGroupOrientation::Vertical => FocusTraversalPolicy::vertical(),
-        }
-        .wrap(wrap),
+        FocusTraversalPolicy::linear()
+            .wrap(wrap)
+            .single_tab_stop(true),
     );
+    let modifier = modifier.push_semantics(RadioSemantics {
+        group: true,
+        selected: false,
+        label: accessibility_label,
+        description: accessibility_description,
+        orientation: Some(orientation),
+    });
     layout().modifier(modifier).child(move || {
         let content = content;
         provide_context(
-            || RadioGroupContext,
+            move || RadioGroupContext { selected },
             move || {
                 content.render();
             },
@@ -218,13 +303,15 @@ pub fn radio_group(
 /// - `modifier` — optional modifier chain applied to the radio button subtree.
 /// - `on_select` — optional callback invoked when the radio transitions to the
 ///   selected state.
-/// - `selected` — whether the radio button is currently selected.
+/// - `selected` — externally controlled selection; omit on every choice to let
+///   its radio group coordinate the controllers.
 /// - `size` — optional visual diameter of the radio glyph.
 /// - `touch_target_size` — optional minimum interactive touch target.
 /// - `stroke_width` — optional stroke width applied to the outer ring.
 /// - `dot_size` — optional diameter of the inner dot when fully selected.
 /// - `selected_color` — optional ring and dot color when selected.
-/// - `unselected_color` — optional ring color when not selected.
+/// - `unselected_color` — optional ring color override for all unselected
+///   states.
 /// - `disabled_selected_color` — optional ring and dot color when disabled but
 ///   selected.
 /// - `disabled_unselected_color` — optional ring color when disabled and not
@@ -275,6 +362,7 @@ pub fn radio_button(
     let stroke_width = stroke_width.unwrap_or(Dp(2.0));
     let dot_size = dot_size.unwrap_or(Dp(10.0));
     let selected_color = selected_color.unwrap_or(scheme.primary);
+    let unselected_interaction_color = unselected_color.unwrap_or(scheme.on_surface);
     let unselected_color = unselected_color.unwrap_or(scheme.on_surface_variant);
     let disabled_selected_color = disabled_selected_color.unwrap_or(
         scheme
@@ -288,8 +376,11 @@ pub fn radio_button(
     );
     let on_select = on_select.unwrap_or_else(CallbackWith::default_value);
 
-    let controller = controller
-        .unwrap_or_else(|| remember(|| RadioButtonController::new(selected.unwrap_or(false))));
+    let controller = if let Some(controller) = controller {
+        controller
+    } else {
+        remember(|| RadioButtonController::new(selected.unwrap_or(false)))
+    };
 
     if let Some(selected) = selected
         && controller.with(|c| c.is_selected()) != selected
@@ -300,13 +391,14 @@ pub fn radio_button(
     radio_button_inner()
         .modifier(modifier)
         .on_select_shared(on_select)
-        .selected(selected.unwrap_or(false))
+        .selected_optional(selected)
         .size(size)
         .touch_target_size(touch_target_size)
         .stroke_width(stroke_width)
         .dot_size(dot_size)
         .selected_color(selected_color)
         .unselected_color(unselected_color)
+        .unselected_interaction_color(unselected_interaction_color)
         .disabled_selected_color(disabled_selected_color)
         .disabled_unselected_color(disabled_unselected_color)
         .enabled(enabled)
@@ -326,6 +418,7 @@ fn radio_button_inner(
     dot_size: Option<Dp>,
     selected_color: Option<Color>,
     unselected_color: Option<Color>,
+    unselected_interaction_color: Option<Color>,
     disabled_selected_color: Option<Color>,
     disabled_unselected_color: Option<Color>,
     enabled: Option<bool>,
@@ -334,22 +427,43 @@ fn radio_button_inner(
     controller: Option<State<RadioButtonController>>,
 ) {
     let modifier = modifier.unwrap_or_default();
-    let selected = selected.unwrap_or(false);
     let size = size.unwrap_or(Dp(20.0));
     let touch_target_size = touch_target_size.unwrap_or(Dp(48.0));
     let stroke_width = stroke_width.unwrap_or(Dp(2.0));
     let dot_size = dot_size.unwrap_or(Dp(10.0));
     let selected_color = selected_color.unwrap_or(Color::TRANSPARENT);
     let unselected_color = unselected_color.unwrap_or(Color::TRANSPARENT);
+    let unselected_interaction_color = unselected_interaction_color.unwrap_or(unselected_color);
     let disabled_selected_color = disabled_selected_color.unwrap_or(Color::TRANSPARENT);
     let disabled_unselected_color = disabled_unselected_color.unwrap_or(Color::TRANSPARENT);
     let enabled = enabled.unwrap_or(true);
-    let _ = selected;
     let radio_group = use_context::<RadioGroupContext>().map(|context| context.get());
     let controller = controller.expect("radio_button_inner requires controller to be set");
-    let interaction_state = enabled.then(|| remember(InteractionState::new));
-    let ripple_state = enabled.then(|| remember(RippleState::new));
-    let tap_recognizer = enabled.then(|| remember(TapRecognizer::default));
+    let group_selection = if selected.is_none() {
+        radio_group.map(|group| group.selected)
+    } else {
+        None
+    };
+    if let Some(group_selection) = group_selection
+        && controller.with(|controller| controller.is_selected())
+    {
+        claim_group_selection(group_selection, controller);
+    }
+    let interaction_state = if enabled {
+        Some(remember(InteractionState::new))
+    } else {
+        None
+    };
+    let ripple_state = if enabled {
+        Some(remember(RippleState::new))
+    } else {
+        None
+    };
+    let tap_recognizer = if enabled {
+        Some(remember(TapRecognizer::default))
+    } else {
+        None
+    };
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating = controller.with_mut(|controller| {
@@ -370,6 +484,14 @@ fn radio_button_inner(
 
     let target_size = Dp(touch_target_size.0.max(size.0));
 
+    let unselected_color = if enabled
+        && interaction_state.is_some_and(|state| {
+            state.with(|state| state.is_hovered() || state.is_focused() || state.is_pressed())
+        }) {
+        unselected_interaction_color
+    } else {
+        unselected_color
+    };
     let ring_color = if enabled {
         interpolate_color(unselected_color, selected_color, progress)
     } else if is_selected {
@@ -395,24 +517,19 @@ fn radio_button_inner(
     };
     let active_dot_color = interpolate_color(Color::TRANSPARENT, target_dot_color, eased_progress);
 
-    let on_click = move || {
+    let on_click = Callback::new(move || {
+        if let Some(group_selection) = group_selection {
+            claim_group_selection(group_selection, controller);
+        }
         if controller.with_mut(|c| c.select()) {
             on_select.call(true);
         }
-    };
+    });
 
     let state_layer_size = RadioButtonDefaults::STATE_LAYER_SIZE;
     let state_layer_radius = Dp(state_layer_size.0 / 2.0);
 
     let mut modifier = modifier.size(target_size, target_size);
-    if enabled && radio_group.is_some() {
-        modifier = modifier.on_focus_changed(move |focus_state: FocusState| {
-            if focus_state.has_focus() && controller.with_mut(|controller| controller.select()) {
-                on_select.call(true);
-            }
-        });
-    }
-
     if enabled {
         let ripple_spec = RippleSpec {
             bounded: false,
@@ -430,7 +547,7 @@ fn radio_button_inner(
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
         let selectable_args = SelectableArgs {
             selected: is_selected,
-            on_click: Callback::new(on_click),
+            on_click,
             enabled: true,
             role: Some(Role::RadioButton),
             label: accessibility_label.clone(),
@@ -442,6 +559,38 @@ fn radio_button_inner(
             ..Default::default()
         };
         modifier = modifier.selectable_with(selectable_args);
+        if radio_group.is_some() {
+            modifier = modifier.preferred_tab_stop(is_selected).on_focus_changed(
+                move |focus_state: FocusState| {
+                    let pointer_pressed = interaction_state
+                        .is_some_and(|state| state.with(|state| state.is_pressed()));
+                    if let Some(interaction_state) = interaction_state {
+                        interaction_state
+                            .with_mut(|state| state.set_focused(focus_state.has_focus()));
+                    }
+                    let directional = matches!(
+                        FocusManager::current().focus_change_direction(),
+                        Some(
+                            FocusDirection::Left
+                                | FocusDirection::Right
+                                | FocusDirection::Up
+                                | FocusDirection::Down
+                        )
+                    );
+                    if focus_state.is_focused() && directional && !pointer_pressed {
+                        on_click.call();
+                    }
+                },
+            );
+        }
+    } else {
+        modifier = modifier.push_semantics(RadioSemantics {
+            group: false,
+            selected: is_selected,
+            label: accessibility_label,
+            description: accessibility_description,
+            orientation: None,
+        });
     }
 
     boxed()

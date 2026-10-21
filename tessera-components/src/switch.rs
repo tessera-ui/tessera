@@ -3,30 +3,35 @@
 //! ## Usage
 //!
 //! Use to control a boolean on/off state.
-use std::time::Duration;
-
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
     MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
-    accesskit::Role,
+    accesskit::{Role, Toggled},
     current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
-    receive_frame_nanos, remember, tessera, use_context,
+    modifier::ModifierCapabilityExt as _,
+    provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
     alignment::Alignment,
-    animation,
+    animation::material_motion::{Scalar, Spec},
     boxed::boxed,
-    modifier::{InteractionState, ModifierExt, PointerEventContext, ToggleableArgs},
+    icon::IconSize,
+    modifier::{
+        DisabledToggleSemantics, InteractionState, ModifierExt, PointerEventContext, SemanticsArgs,
+        ToggleableArgs,
+    },
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
     surface::{SurfaceStyle, surface},
-    theme::{ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme},
+    theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
 
-const ANIMATION_DURATION: Duration = Duration::from_millis(150);
+use motion::Geometry;
+
+mod motion;
 
 #[cfg(test)]
 const THUMB_TEST_TAG: &str = "__switch_thumb";
@@ -65,6 +70,8 @@ impl SwitchDefaults {
     pub const PRESSED_THUMB_DIAMETER: Dp = Dp(28.0);
     /// Default track outline width.
     pub const TRACK_OUTLINE_WIDTH: Dp = Dp(2.0);
+    /// Default size of icons rendered inside the thumb.
+    pub const ICON_SIZE: Dp = Dp(16.0);
 
     /// Resolves effective colors for the current state.
     fn resolve_colors(
@@ -138,27 +145,12 @@ struct SwitchResolvedColors {
     icon_color: Color,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct SwitchLayout {
     track_width: Dp,
     track_height: Dp,
-    track_outline_width: Dp,
     thumb_diameter: Dp,
-    progress: f64,
-    checked: bool,
-    is_pressed: bool,
-}
-
-impl PartialEq for SwitchLayout {
-    fn eq(&self, other: &Self) -> bool {
-        self.track_width == other.track_width
-            && self.track_height == other.track_height
-            && self.track_outline_width == other.track_outline_width
-            && self.thumb_diameter == other.thumb_diameter
-            && self.progress == other.progress
-            && self.checked == other.checked
-            && self.is_pressed == other.is_pressed
-    }
+    thumb_offset: Dp,
 }
 
 impl tessera_ui::LayoutModifierNode for SwitchLayout {
@@ -184,21 +176,7 @@ impl tessera_ui::LayoutModifierNode for SwitchLayout {
         let track_origin_x = (self_width_px.0 - track_size.width.0) / 2;
         let track_origin_y = (self_height_px.0 - track_size.height.0) / 2;
 
-        let checked_thumb_diameter = SwitchDefaults::THUMB_DIAMETER;
-        let thumb_padding_start = Dp((self.track_height.0 - checked_thumb_diameter.0) / 2.0);
-        let max_bound_dp =
-            Dp((self.track_width.0 - checked_thumb_diameter.0) - thumb_padding_start.0);
-
-        let min_bound_dp = Dp((self.track_height.0 - self.thumb_diameter.0) / 2.0);
-        let anim_offset_dp = Dp(min_bound_dp.0 + (max_bound_dp.0 - min_bound_dp.0) * self.progress);
-        let offset_dp = if self.is_pressed && self.checked {
-            Dp(max_bound_dp.0 - self.track_outline_width.0)
-        } else if self.is_pressed && !self.checked {
-            self.track_outline_width
-        } else {
-            anim_offset_dp
-        };
-        let thumb_x = offset_dp.to_px();
+        let thumb_x = self.thumb_offset.to_px();
 
         let thumb_center_x = track_origin_x + thumb_x.0 + thumb_size.width.0 / 2;
         let thumb_center_y = track_origin_y + track_size.height.0 / 2;
@@ -230,18 +208,14 @@ impl tessera_ui::LayoutModifierNode for SwitchLayout {
     fn measure_eq(&self, other: &Self) -> bool {
         self.track_width == other.track_width
             && self.track_height == other.track_height
-            && self.track_outline_width == other.track_outline_width
             && self.thumb_diameter == other.thumb_diameter
     }
 
     fn placement_eq(&self, other: &Self) -> bool {
         self.track_width == other.track_width
             && self.track_height == other.track_height
-            && self.track_outline_width == other.track_outline_width
             && self.thumb_diameter == other.thumb_diameter
-            && self.progress == other.progress
-            && self.checked == other.checked
-            && self.is_pressed == other.is_pressed
+            && self.thumb_offset == other.thumb_offset
     }
 
     fn place_children(
@@ -266,21 +240,7 @@ impl tessera_ui::LayoutModifierNode for SwitchLayout {
         let track_origin_x = (self_width_px.0 - track_size.width.0) / 2;
         let track_origin_y = (self_height_px.0 - track_size.height.0) / 2;
 
-        let checked_thumb_diameter = SwitchDefaults::THUMB_DIAMETER;
-        let thumb_padding_start = Dp((self.track_height.0 - checked_thumb_diameter.0) / 2.0);
-        let max_bound_dp =
-            Dp((self.track_width.0 - checked_thumb_diameter.0) - thumb_padding_start.0);
-
-        let min_bound_dp = Dp((self.track_height.0 - self.thumb_diameter.0) / 2.0);
-        let anim_offset_dp = Dp(min_bound_dp.0 + (max_bound_dp.0 - min_bound_dp.0) * self.progress);
-        let offset_dp = if self.is_pressed && self.checked {
-            Dp(max_bound_dp.0 - self.track_outline_width.0)
-        } else if self.is_pressed && !self.checked {
-            self.track_outline_width
-        } else {
-            anim_offset_dp
-        };
-        let thumb_x = offset_dp.to_px();
+        let thumb_x = self.thumb_offset.to_px();
 
         let thumb_center_x = track_origin_x + thumb_x.0 + thumb_size.width.0 / 2;
         let thumb_center_y = track_origin_y + track_size.height.0 / 2;
@@ -334,8 +294,8 @@ impl tessera_ui::LayoutModifierNode for SwitchThumbLayout {
 /// Controller for the `switch` component.
 pub struct SwitchController {
     checked: bool,
-    progress: f32,
-    last_toggle_frame_nanos: Option<u64>,
+    progress: Scalar,
+    snap_revision: u64,
 }
 
 impl SwitchController {
@@ -343,8 +303,8 @@ impl SwitchController {
     pub fn new(initial_state: bool) -> Self {
         Self {
             checked: initial_state,
-            progress: if initial_state { 1.0 } else { 0.0 },
-            last_toggle_frame_nanos: None,
+            progress: Scalar::new(if initial_state { 1.0 } else { 0.0 }),
+            snap_revision: 0,
         }
     }
 
@@ -353,55 +313,39 @@ impl SwitchController {
         self.checked
     }
 
-    /// Sets the checked state directly, resetting animation progress.
+    /// Sets the checked state immediately, finishing any ongoing transition.
     pub fn set_checked(&mut self, checked: bool) {
-        if self.checked != checked {
-            self.checked = checked;
-            self.progress = if checked { 1.0 } else { 0.0 };
-            self.last_toggle_frame_nanos = None;
-        }
+        self.checked = checked;
+        self.progress.snap(if checked { 1.0 } else { 0.0 });
+        self.snap_revision = self.snap_revision.wrapping_add(1);
     }
 
-    /// Toggles the switch and kicks off the animation timeline.
+    /// Toggles the switch with an interruptible transition.
     pub fn toggle(&mut self) {
+        self.toggle_at(current_frame_nanos());
+    }
+
+    fn toggle_at(&mut self, frame_nanos: u64) {
         self.checked = !self.checked;
-        self.last_toggle_frame_nanos = Some(current_frame_nanos());
+        self.progress.retarget(
+            if self.checked { 1.0 } else { 0.0 },
+            Spec::FastSpatial,
+            frame_nanos,
+        );
     }
 
-    /// Returns the current animation progress (0.0..1.0).
+    /// Returns the current selection progress, clamped to 0.0..1.0.
     pub fn animation_progress(&self) -> f32 {
-        self.progress
+        self.progress.value.clamp(0.0, 1.0) as f32
     }
 
-    /// Returns whether the switch animation is currently running.
+    /// Returns whether the selection transition is still settling.
     pub fn is_animating(&self) -> bool {
-        self.last_toggle_frame_nanos.is_some()
+        self.progress.is_animating()
     }
 
-    /// Advances the animation timeline based on elapsed time.
     fn update_progress(&mut self, frame_nanos: u64) {
-        if let Some(last_toggle_frame_nanos) = self.last_toggle_frame_nanos {
-            let elapsed_nanos = frame_nanos.saturating_sub(last_toggle_frame_nanos);
-            let animation_nanos = ANIMATION_DURATION.as_nanos().min(u64::MAX as u128) as u64;
-            let fraction = if animation_nanos == 0 {
-                1.0
-            } else {
-                (elapsed_nanos as f32 / animation_nanos as f32).min(1.0)
-            };
-            let target = if self.checked { 1.0 } else { 0.0 };
-            let progress = if self.checked {
-                fraction
-            } else {
-                1.0 - fraction
-            };
-
-            self.progress = progress;
-
-            if (progress - target).abs() < f32::EPSILON || fraction >= 1.0 {
-                self.progress = target;
-                self.last_toggle_frame_nanos = None;
-            }
-        }
+        self.progress.advance(frame_nanos);
     }
 }
 
@@ -422,9 +366,11 @@ impl Default for SwitchController {
 /// ## Parameters
 ///
 /// - `modifier` — optional modifier chain applied to the switch subtree.
-/// - `on_toggle` — optional callback invoked when the switch toggles.
+/// - `on_toggle` — optional callback invoked when the switch toggles; omit for
+///   a noninteractive state display that retains its accessibility value.
 /// - `enabled` — optional enabled state; defaults to `true`.
-/// - `checked` — initial checked state.
+/// - `checked` — externally controlled checked state; omit to use the
+///   controller.
 /// - `width` — optional track width override.
 /// - `height` — optional track height override.
 /// - `track_color` — optional track color when unchecked.
@@ -438,7 +384,8 @@ impl Default for SwitchController {
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
 /// - `controller` — optional external controller.
-/// - `child` — optional content rendered at the thumb center.
+/// - `child` — optional content rendered at the thumb center; icons default to
+///   16dp and inherit the current thumb icon color.
 ///
 /// ## Examples
 ///
@@ -446,14 +393,19 @@ impl Default for SwitchController {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::switch::switch;
+/// use tessera_components::switch::{SwitchController, switch};
+/// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 /// material_theme()
 ///     .theme(|| MaterialTheme::default())
 ///     .child(|| {
-///         switch().on_toggle(|checked| {
-///             assert!(checked || !checked);
+///         let controller = remember(|| {
+///             let mut controller = SwitchController::new(false);
+///             controller.toggle();
+///             assert!(controller.is_checked());
+///             controller
 ///         });
+///         switch().controller(controller).on_toggle(|_| {});
 ///     });
 /// # }
 /// # component();
@@ -476,20 +428,41 @@ pub fn switch(
     thumb_icon_color: Option<Color>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
-    #[prop(skip_setter)] controller: Option<State<SwitchController>>,
+    controller: Option<State<SwitchController>>,
     child: Option<RenderSlot>,
 ) {
-    let checked = checked.unwrap_or(false);
-    let controller = controller.unwrap_or_else(|| remember(|| SwitchController::new(checked)));
+    let controller = if let Some(controller) = controller {
+        controller
+    } else {
+        remember(|| SwitchController::new(checked.unwrap_or(false)))
+    };
+    if let Some(checked) = checked
+        && controller.with(|controller| controller.is_checked()) != checked
+    {
+        controller.with_mut(|controller| controller.toggle());
+    }
     let enabled = enabled.unwrap_or(true);
-    let on_toggle = enabled.then_some(on_toggle).flatten();
-    let interactive = on_toggle.is_some();
-    let interaction_state = interactive.then(|| remember(InteractionState::new));
-    let ripple_state = interactive.then(|| remember(RippleState::new));
-    let tap_recognizer = interactive.then(|| remember(TapRecognizer::default));
+    let interactive = enabled && on_toggle.is_some();
+    let interaction_state = if interactive {
+        Some(remember(InteractionState::new))
+    } else {
+        None
+    };
+    let ripple_state = if interactive {
+        Some(remember(RippleState::new))
+    } else {
+        None
+    };
+    let tap_recognizer = if interactive {
+        Some(remember(TapRecognizer::default))
+    } else {
+        None
+    };
 
     if controller.with(|c| c.is_animating()) {
         receive_frame_nanos(move |frame_nanos| {
+            #[cfg(test)]
+            motion_tests::TICKS.set(motion_tests::TICKS.get() + 1);
             let is_animating = controller.with_mut(|controller| {
                 controller.update_progress(frame_nanos);
                 controller.is_animating()
@@ -561,8 +534,20 @@ fn switch_content(
     let track_checked_color = track_checked_color.unwrap_or(scheme.primary);
     let track_outline_color = track_outline_color.unwrap_or(scheme.outline);
     let track_outline_width = track_outline_width.unwrap_or(SwitchDefaults::TRACK_OUTLINE_WIDTH);
-    let thumb_color = thumb_color.unwrap_or(scheme.outline);
-    let thumb_checked_color = thumb_checked_color.unwrap_or(scheme.on_primary);
+    let interacting = enabled
+        && interaction_state.is_some_and(|state| {
+            state.with(|state| state.is_hovered() || state.is_focused() || state.is_pressed())
+        });
+    let thumb_color = thumb_color.unwrap_or(if interacting {
+        scheme.on_surface_variant
+    } else {
+        scheme.outline
+    });
+    let thumb_checked_color = thumb_checked_color.unwrap_or(if interacting {
+        scheme.primary_container
+    } else {
+        scheme.on_primary
+    });
     let thumb_checked_icon_color = thumb_checked_icon_color.unwrap_or(scheme.on_primary_container);
     let thumb_icon_color = thumb_icon_color.unwrap_or(scheme.surface_container_highest);
 
@@ -608,13 +593,32 @@ fn switch_content(
             tap_recognizer,
             ..Default::default()
         };
-        modifier = modifier.toggleable_with(toggle_args);
+        modifier = if enabled {
+            modifier.toggleable_with(toggle_args)
+        } else {
+            modifier.push_semantics(DisabledToggleSemantics {
+                role: Role::Switch,
+                value: checked,
+                label: accessibility_label,
+                description: accessibility_description,
+            })
+        };
+    } else {
+        modifier = modifier.semantics(SemanticsArgs {
+            role: Some(Role::Switch),
+            toggled: Some(if checked {
+                Toggled::True
+            } else {
+                Toggled::False
+            }),
+            label: accessibility_label,
+            description: accessibility_description,
+            disabled: !enabled,
+            ..Default::default()
+        });
     }
 
     let has_thumb_content = child.is_some();
-    let progress = controller.with(|c| c.animation_progress());
-    let eased_progress = animation::easing(progress);
-    let eased_progress_f64 = eased_progress as f64;
     let is_pressed = interaction_state
         .map(|state| state.with(|s| s.is_pressed()))
         .unwrap_or(false);
@@ -632,34 +636,67 @@ fn switch_content(
         SwitchStateFlags { checked, enabled },
     );
 
-    let off_diameter = if has_thumb_content {
+    let target_diameter = if is_pressed {
+        SwitchDefaults::PRESSED_THUMB_DIAMETER
+    } else if has_thumb_content || checked {
         SwitchDefaults::THUMB_DIAMETER
     } else {
         SwitchDefaults::UNCHECKED_THUMB_DIAMETER
     };
-    let thumb_diameter_dp = if is_pressed {
-        SwitchDefaults::PRESSED_THUMB_DIAMETER
+    let target_offset = if checked {
+        width.0
+            - SwitchDefaults::THUMB_DIAMETER.0
+            - (height.0 - SwitchDefaults::THUMB_DIAMETER.0) / 2.0
+            - if is_pressed {
+                track_outline_width.0
+            } else {
+                0.0
+            }
+    } else if is_pressed {
+        track_outline_width.0
     } else {
-        Dp(off_diameter.0
-            + (SwitchDefaults::THUMB_DIAMETER.0 - off_diameter.0) * eased_progress_f64)
+        (height.0 - target_diameter.0) / 2.0
     };
+    let revision = controller.with(|controller| controller.snap_revision);
+    let geometry = remember(|| Geometry::new(target_offset, target_diameter.0, revision));
+    let mut current_geometry = geometry.get();
+    current_geometry.retarget(
+        target_offset,
+        target_diameter.0,
+        is_pressed,
+        revision,
+        current_frame_nanos(),
+    );
+    if geometry.with(|geometry| *geometry != current_geometry) {
+        geometry.set(current_geometry);
+    }
+    if geometry.with(Geometry::is_animating) {
+        receive_frame_nanos(move |frame| {
+            #[cfg(test)]
+            motion_tests::TICKS.set(motion_tests::TICKS.get() + 1);
+            let active = geometry.with_mut(|geometry| {
+                geometry.advance(frame);
+                geometry.is_animating()
+            });
+            if active {
+                tessera_ui::FrameNanosControl::Continue
+            } else {
+                tessera_ui::FrameNanosControl::Stop
+            }
+        });
+    }
+    let thumb_diameter_dp = Dp(geometry.with(|geometry| geometry.diameter.value).max(0.0));
+    let thumb_offset = Dp(geometry.with(|geometry| geometry.offset.value));
     let thumb_size_px = thumb_diameter_dp.to_px();
     layout()
         .modifier(modifier)
         .policy(SwitchLayout {
             track_width: width,
             track_height: height,
-            track_outline_width,
             thumb_diameter: thumb_diameter_dp,
-            progress: eased_progress_f64,
-            checked,
-            is_pressed,
+            thumb_offset,
         })
         .child(move || {
-            let inherited_content_color = use_context::<ContentColor>()
-                .map(|c| c.get().current)
-                .unwrap_or(ContentColor::default().current);
-
             let track_style = if checked {
                 SurfaceStyle::Filled {
                     color: colors.track_color,
@@ -693,7 +730,11 @@ fn switch_content(
                 .show_ripple(true)
                 .ripple_bounded(false)
                 .ripple_radius(Dp(SwitchDefaults::STATE_LAYER_SIZE.0 / 2.0))
-                .ripple_color(inherited_content_color)
+                .ripple_color(if checked {
+                    scheme.primary
+                } else {
+                    scheme.on_surface
+                })
                 .interaction_state_optional(interaction_state)
                 .ripple_state_optional(ripple_state)
                 .child(|| {});
@@ -724,7 +765,10 @@ fn switch_content(
                                     .modifier(Modifier::new().fill_max_size())
                                     .alignment(Alignment::Center)
                                     .children(move || {
-                                        child.render();
+                                        provide_context(
+                                            || IconSize(SwitchDefaults::ICON_SIZE),
+                                            move || child.render(),
+                                        );
                                     });
                             }
                         });
@@ -733,104 +777,68 @@ fn switch_content(
 }
 
 #[cfg(test)]
+mod state_tests;
+
+#[cfg(test)]
+mod motion_tests;
+
+#[cfg(test)]
 mod tests {
-    use tessera_ui::{receive_frame_nanos, remember, tessera};
+    use super::SwitchController;
 
-    use crate::theme::{MaterialTheme, material_theme};
-
-    use super::{ANIMATION_DURATION, SwitchController, THUMB_TEST_TAG, switch_content};
-
-    #[tessera]
-    fn animated_switch_thumb_probe() {
-        let controller = remember(|| SwitchController::new(false));
-        let started = remember(|| false);
-
-        if !started.get() {
-            controller.with_mut(|c| c.toggle());
-            started.set(true);
-        }
-
-        if controller.with(|c| c.is_animating()) {
-            receive_frame_nanos(move |frame_nanos| {
-                let is_animating = controller.with_mut(|controller| {
-                    controller.update_progress(frame_nanos);
-                    controller.is_animating()
-                });
-                if is_animating {
-                    tessera_ui::FrameNanosControl::Continue
-                } else {
-                    tessera_ui::FrameNanosControl::Stop
-                }
+    #[test]
+    fn selection_spring_matches_reference_samples_and_settles_both_values() {
+        for checked in [false, true] {
+            let mut controller = SwitchController::new(checked);
+            controller.toggle_at(0);
+            controller.update_progress(50_000_000);
+            let expected = if checked {
+                1.0 - 0.5273674995
+            } else {
+                0.5273674995
+            };
+            assert!((controller.animation_progress() as f64 - expected).abs() < 0.000001);
+            controller.update_progress(150_000_000);
+            assert!(if checked {
+                controller.progress.value < 0.0
+            } else {
+                controller.progress.value > 1.0
             });
+            assert!(controller.is_animating());
+            controller.update_progress(2_000_000_000);
+            assert_eq!(
+                controller.animation_progress(),
+                if checked { 0.0 } else { 1.0 }
+            );
+            assert!(!controller.is_animating());
         }
-
-        material_theme()
-            .theme(MaterialTheme::default)
-            .child(move || {
-                switch_content().enabled(true).controller(controller);
-            });
     }
 
     #[test]
-    fn switch_controller_animates_to_checked_state() {
+    fn retarget_samples_the_incoming_position_and_preserves_velocity() {
         let mut controller = SwitchController::new(false);
-
-        controller.toggle();
-
-        assert!(controller.is_checked());
-        assert!(controller.is_animating());
-        assert_eq!(controller.animation_progress(), 0.0);
-
-        let half_nanos = (ANIMATION_DURATION.as_nanos() / 2) as u64;
-        controller.update_progress(half_nanos);
-        let mid = controller.animation_progress();
-        assert!(mid > 0.0 && mid < 1.0, "mid animation progress was {mid}");
-        assert!(controller.is_animating());
-
-        controller.update_progress(ANIMATION_DURATION.as_nanos() as u64);
-        assert_eq!(controller.animation_progress(), 1.0);
-        assert!(!controller.is_animating());
-    }
-
-    #[test]
-    fn switch_controller_animates_to_unchecked_state() {
-        let mut controller = SwitchController::new(true);
-
-        controller.toggle();
-
-        assert!(!controller.is_checked());
-        assert!(controller.is_animating());
-        assert_eq!(controller.animation_progress(), 1.0);
-
-        let half_nanos = (ANIMATION_DURATION.as_nanos() / 2) as u64;
-        controller.update_progress(half_nanos);
-        let mid = controller.animation_progress();
-        assert!(mid > 0.0 && mid < 1.0, "mid animation progress was {mid}");
-        assert!(controller.is_animating());
-
-        controller.update_progress(ANIMATION_DURATION.as_nanos() as u64);
+        controller.toggle_at(0);
+        controller.update_progress(50_000_000);
+        controller.toggle_at(75_000_000);
+        assert!((controller.progress.value - 0.8269005484).abs() < 0.000001);
+        assert!((controller.progress.velocity - 9.8223966780).abs() < 0.000001);
+        controller.update_progress(76_000_000);
+        assert!(controller.progress.value > 0.8269005484);
+        controller.update_progress(2_000_000_000);
         assert_eq!(controller.animation_progress(), 0.0);
         assert!(!controller.is_animating());
     }
 
     #[test]
-    fn switch_thumb_layout_grows_across_frames() {
-        tessera_ui::assert_layout! {
-            viewport: (200, 100),
-            content: {
-                animated_switch_thumb_probe();
-            },
-            expect: {
-                0 => {
-                    node(THUMB_TEST_TAG).size(16, 16);
-                },
-                75_000_000 => {
-                    node(THUMB_TEST_TAG).size(20, 20);
-                },
-                150_000_000 => {
-                    node(THUMB_TEST_TAG).size(24, 24);
-                }
-            }
-        }
+    fn setting_the_current_target_finishes_an_active_transition() {
+        let mut controller = SwitchController::new(false);
+        controller.toggle_at(0);
+        controller.update_progress(50_000_000);
+        controller.set_checked(true);
+        assert_eq!(controller.animation_progress(), 1.0);
+        assert!(!controller.is_animating());
+        controller.set_checked(false);
+        assert_eq!(controller.animation_progress(), 0.0);
+        assert!(!controller.is_animating());
     }
 }
