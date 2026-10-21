@@ -5,12 +5,11 @@
 //! Use to indicate the completion of a task or a specific value in a range.
 use tessera_ui::{
     Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError, Modifier,
-    ParentConstraint, Px, PxPosition,
+    ParentConstraint, Px, PxPosition, State,
     accesskit::Role,
+    current_frame_nanos,
     layout::{MeasureScope, layout},
-    receive_frame_nanos, remember, tessera,
-    time::Instant,
-    use_context,
+    receive_frame_nanos, remember, tessera, use_context,
 };
 
 use crate::{
@@ -202,10 +201,19 @@ struct CircularProgressLayout {
     track_color: Color,
     stroke_cap: ProgressStrokeCap,
     gap_size: Dp,
-    animation_start: Instant,
+    animation_start_nanos: u64,
+    frame_tick: State<u64>,
 }
 
 impl tessera_ui::LayoutModifierNode for CircularProgressLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.diameter == other.diameter
+    }
+
+    fn placement_eq(&self, other: &Self) -> bool {
+        self.measure_eq(other)
+    }
+
     fn measure(&self, _input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let diameter_px = self.diameter.to_px();
         Ok(LayoutResult::new(ComputedData {
@@ -272,9 +280,11 @@ impl tessera_ui::DrawModifierNode for CircularProgressLayout {
                     });
             }
         } else {
-            let elapsed_ms = Instant::now()
-                .saturating_duration_since(self.animation_start)
-                .as_millis() as f32;
+            let elapsed_ms = self
+                .frame_tick
+                .get()
+                .saturating_sub(self.animation_start_nanos) as f32
+                / 1_000_000.0;
             let cycle_ms = elapsed_ms % 6000.0;
 
             let global_rotation = (cycle_ms / 6000.0) * 1080.0;
@@ -367,8 +377,8 @@ fn lerp(a: f32, b: f32, t: f32) -> f32 {
     a + (b - a) * t
 }
 
-fn linear_cycle_progress(start: Instant, duration_ms: u32) -> f32 {
-    let elapsed_ms = Instant::now().saturating_duration_since(start).as_millis() as u64;
+fn linear_cycle_progress(start_nanos: u64, frame_nanos: u64, duration_ms: u32) -> f32 {
+    let elapsed_ms = frame_nanos.saturating_sub(start_nanos) / 1_000_000;
     let duration_ms = duration_ms.max(1) as u64;
     (elapsed_ms % duration_ms) as f32 / duration_ms as f32
 }
@@ -554,8 +564,8 @@ pub fn linear_progress_indicator(
     let draw_stop_indicator = draw_stop_indicator.unwrap_or(true);
 
     layout().modifier(modifier).child(move || {
-        let animation_start = remember(Instant::now);
-        let frame_tick = remember(|| 0_u64);
+        let animation_start = remember(current_frame_nanos);
+        let frame_tick = remember(current_frame_nanos);
         let should_receive_frames = remember(|| progress.is_none());
         should_receive_frames.set(progress.is_none());
 
@@ -599,7 +609,11 @@ pub fn linear_progress_indicator(
         let animation_cycle = if progress.is_some() {
             None
         } else {
-            Some(linear_cycle_progress(animation_start.get(), 1750))
+            Some(linear_cycle_progress(
+                animation_start.get(),
+                frame_tick.get(),
+                1750,
+            ))
         };
 
         layout()
@@ -739,8 +753,8 @@ pub fn circular_progress_indicator(
     let track_color = track_color.unwrap_or(scheme.secondary_container);
     let stroke_cap = stroke_cap.unwrap_or_default();
     let gap_size = gap_size.unwrap_or(ProgressIndicatorDefaults::CIRCULAR_INDICATOR_TRACK_GAP_SIZE);
-    let animation_start = remember(Instant::now);
-    let frame_tick = remember(|| 0_u64);
+    let animation_start = remember(current_frame_nanos);
+    let frame_tick = remember(current_frame_nanos);
     let should_receive_frames = remember(|| progress.is_none());
     should_receive_frames.set(progress.is_none());
 
@@ -778,7 +792,8 @@ pub fn circular_progress_indicator(
         track_color,
         stroke_cap,
         gap_size,
-        animation_start: animation_start.get(),
+        animation_start_nanos: animation_start.get(),
+        frame_tick,
     };
     layout()
         .modifier(Modifier::new().semantics(semantics))
@@ -850,4 +865,86 @@ pub fn progress(
                 .color_scheme
                 .surface_variant
         }));
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod tests {
+    use std::{cell::Cell, time::Duration};
+
+    use tessera_ui::{Color, HeadlessConfig, HeadlessRenderer, State, remember, tessera};
+
+    use crate::theme::material_theme;
+
+    use super::{circular_progress_indicator, linear_progress_indicator};
+
+    thread_local! { static DETERMINATE: Cell<Option<State<bool>>> = const { Cell::new(None) }; }
+
+    #[tessera]
+    fn animated_fixture(linear: bool) {
+        let determinate = remember(|| false);
+        DETERMINATE.set(Some(determinate));
+        material_theme().child(move || {
+            if linear {
+                let indicator = linear_progress_indicator()
+                    .color(Color::new(1.0, 0.0, 0.0, 1.0))
+                    .track_color(Color::new(0.0, 0.0, 1.0, 1.0));
+                if determinate.get() {
+                    indicator.progress(0.6);
+                } else {
+                    drop(indicator);
+                }
+            } else {
+                let indicator = circular_progress_indicator()
+                    .color(Color::new(1.0, 0.0, 0.0, 1.0))
+                    .track_color(Color::new(0.0, 0.0, 1.0, 1.0));
+                if determinate.get() {
+                    indicator.progress(0.6);
+                } else {
+                    drop(indicator);
+                }
+            }
+        });
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn indeterminate_progress_advances_with_the_frame_clock_and_determinate_progress_stays_still() {
+        crate::test_utils::run_isolated_test(
+            "progress::tests::indeterminate_progress_advances_with_the_frame_clock_and_determinate_progress_stays_still",
+            || {
+                for linear in [false, true] {
+                    let mut renderer = HeadlessRenderer::new(
+                        Box::new(move || {
+                            animated_fixture(linear);
+                        }),
+                        vec![Box::new(crate::TesseraComponents)],
+                        HeadlessConfig {
+                            width: 256,
+                            height: 80,
+                            frame_time: Duration::from_millis(250),
+                            ..Default::default()
+                        },
+                    )
+                    .expect("renderer");
+                    renderer.render_frames(1);
+                    let first = renderer.read_pixels().expect("first pose");
+                    assert!(first.chunks_exact(4).any(|pixel| pixel[3] > 0));
+                    renderer.render_frames(2);
+                    let moving = renderer.read_pixels().expect("later pose");
+                    assert!(
+                        first != moving,
+                        "indeterminate progress must subscribe to frame changes, linear={linear}"
+                    );
+                    DETERMINATE.get().unwrap().set(true);
+                    renderer.render_frames(2);
+                    let stopped = renderer.read_pixels().expect("determinate pose");
+                    renderer.render_frames(4);
+                    assert!(
+                        stopped == renderer.read_pixels().expect("retained determinate pose"),
+                        "determinate progress must stop changing, linear={linear}"
+                    );
+                }
+            },
+        );
+    }
 }
