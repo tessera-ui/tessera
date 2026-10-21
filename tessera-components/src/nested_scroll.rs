@@ -106,6 +106,7 @@ pub(crate) struct NestedScrollConnection {
     on_pre_scroll: CallbackWith<PreScrollInput, ScrollDelta>,
     on_post_scroll: CallbackWith<PostScrollInput, ScrollDelta>,
     on_pre_fling: CallbackWith<PreFlingInput, ScrollVelocity>,
+    on_post_fling: CallbackWith<ScrollVelocity, ScrollVelocity>,
 }
 
 impl NestedScrollConnection {
@@ -115,6 +116,7 @@ impl NestedScrollConnection {
             on_pre_scroll: CallbackWith::default_value(),
             on_post_scroll: CallbackWith::default_value(),
             on_pre_fling: CallbackWith::default_value(),
+            on_post_fling: CallbackWith::default_value(),
         }
     }
 
@@ -162,6 +164,24 @@ impl NestedScrollConnection {
             .as_ref()
             .map(|connection| connection.pre_scroll(remaining, source))
             .unwrap_or(ScrollDelta::ZERO);
+        local + parent
+    }
+
+    pub(crate) fn with_post_fling_handler(
+        mut self,
+        handler: CallbackWith<ScrollVelocity, ScrollVelocity>,
+    ) -> Self {
+        self.on_post_fling = handler;
+        self
+    }
+
+    pub(crate) fn post_fling(&self, available: ScrollVelocity) -> ScrollVelocity {
+        let local = available.clamp_consumed(self.on_post_fling.call(available));
+        let parent = self
+            .parent
+            .as_ref()
+            .map(|connection| connection.post_fling(available - local))
+            .unwrap_or(ScrollVelocity::ZERO);
         local + parent
     }
 

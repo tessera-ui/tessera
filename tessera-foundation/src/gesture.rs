@@ -17,26 +17,20 @@ const DEFAULT_SLOP_PX: f32 = 8.0;
 
 /// Shared bookkeeping for a single press across pointer updates.
 ///
-/// A press event carries no position, so the origin of a gesture is the
-/// **first movement sample** observed after the press. `PressTrack` owns that
-/// origin together with the most recent sample and derives every slop and
-/// delta value the recognizers need from event positions alone, so tap,
-/// long-press, and drag no longer each carry their own copy of this logic.
+/// Recorded press positions anchor gesture travel. Synthetic events without
+/// a position fall back to the first movement sample.
 #[derive(Clone, Copy, Debug, PartialEq, Default)]
 struct PressTrack {
-    /// Slop origin: the first movement sample seen since the press.
+    /// Recorded press position, or the first available movement sample.
     start: Option<PxPosition>,
     /// Most recent movement sample, used as the delta baseline.
     last: Option<PxPosition>,
 }
 
 impl PressTrack {
-    /// Clears the track so the next movement sample becomes the new origin.
-    ///
-    /// Called both when a fresh press starts and when a recognizer resets.
-    fn on_press(&mut self) {
-        self.start = None;
-        self.last = None;
+    fn on_press(&mut self, position: Option<PxPosition>) {
+        self.start = position;
+        self.last = position;
     }
 
     /// Folds one movement sample into the track and reports the derived facts.
@@ -154,16 +148,12 @@ impl TapRecognizer {
     ///
     /// # Position source
     ///
-    /// Positions come only from the events themselves
-    /// (`CursorEventContent::Moved`); the caller neither needs to nor can
-    /// provide a coordinate space.
+    /// Positions come from the samples themselves in a shared coordinate space.
     ///
     /// # Slop origin
     ///
-    /// The press event carries no position, so the slop origin is the **first
-    /// movement sample** observed after the press. Displacement that happens
-    /// entirely within the press frame is therefore not counted toward
-    /// `slop_px`, bounding the error by the pointer movement of that one frame.
+    /// The recorded press position anchors slop and movement. A press without
+    /// a recorded position uses the first movement sample as its origin.
     ///
     /// # `within_bounds`
     ///
@@ -175,6 +165,29 @@ impl TapRecognizer {
         pass: PointerEventPass,
         pointer_changes: &mut [PointerChange],
         within_bounds: bool,
+    ) -> TapResult {
+        self.update_inner(pass, pointer_changes, within_bounds, false)
+    }
+
+    /// Recognizes taps while claiming each press before ancestor tap handlers.
+    ///
+    /// Use for nested click targets. Claims preserve samples for drag and
+    /// scroll observers that use [`Self::update`].
+    pub fn update_exclusive(
+        &mut self,
+        pass: PointerEventPass,
+        pointer_changes: &mut [PointerChange],
+        within_bounds: bool,
+    ) -> TapResult {
+        self.update_inner(pass, pointer_changes, within_bounds, true)
+    }
+
+    fn update_inner(
+        &mut self,
+        pass: PointerEventPass,
+        pointer_changes: &mut [PointerChange],
+        within_bounds: bool,
+        exclusive: bool,
     ) -> TapResult {
         if pass != PointerEventPass::Main {
             return TapResult::default();
@@ -189,8 +202,11 @@ impl TapRecognizer {
                 CursorEventContent::Pressed(button)
                     if button == self.settings.button && within_bounds =>
                 {
+                    if exclusive && !change.claim_tap_press() {
+                        continue;
+                    }
                     self.active_pointer = Some(change.pointer_id);
-                    self.track.on_press();
+                    self.track.on_press(change.position());
                     self.canceled = false;
                     result.pressed = true;
                     result.press_timestamp = Some(change.timestamp);
@@ -241,7 +257,7 @@ impl TapRecognizer {
 
     fn reset(&mut self) {
         self.active_pointer = None;
-        self.track.on_press();
+        self.track.on_press(None);
         self.canceled = false;
     }
 }
@@ -355,7 +371,7 @@ impl DragRecognizer {
             match change.content {
                 CursorEventContent::Pressed(PressKeyEventType::Left) if within_bounds => {
                     self.active_pointer = Some(change.pointer_id);
-                    self.track.on_press();
+                    self.track.on_press(change.position());
                     self.dragging = false;
                 }
                 CursorEventContent::Moved(position) => {
@@ -364,10 +380,6 @@ impl DragRecognizer {
                     }
                     let observation = self.track.observe(position, self.settings.slop_px);
                     if observation.started_now {
-                        // The press position is not carried by the event, so
-                        // the first sample becomes both
-                        // the slop origin and the delta
-                        // baseline.
                         continue;
                     }
                     if !self.dragging {
@@ -439,7 +451,7 @@ impl DragRecognizer {
 
     fn reset(&mut self) {
         self.active_pointer = None;
-        self.track.on_press();
+        self.track.on_press(None);
         self.dragging = false;
     }
 }
@@ -542,7 +554,7 @@ impl LongPressRecognizer {
             match change.content {
                 CursorEventContent::Pressed(PressKeyEventType::Left) if within_bounds => {
                     self.active_pointer = Some(change.pointer_id);
-                    self.track.on_press();
+                    self.track.on_press(change.position());
                     self.press_time = Some(change.timestamp);
                     self.canceled = false;
                     self.triggered = false;
@@ -603,7 +615,7 @@ impl LongPressRecognizer {
 
     fn reset(&mut self) {
         self.active_pointer = None;
-        self.track.on_press();
+        self.track.on_press(None);
         self.press_time = None;
         self.canceled = false;
         self.triggered = false;
@@ -817,9 +829,62 @@ mod slop_tests {
     }
 
     #[test]
+    fn exclusive_taps_leave_claimed_presses_visible_to_scroll_observers() {
+        let mut child = TapRecognizer::default();
+        let mut parent = TapRecognizer::default();
+        let mut observer = TapRecognizer::default();
+        let now = Instant::now();
+        for _ in 0..2 {
+            let mut down = [change(
+                CursorEventContent::Pressed(PressKeyEventType::Left),
+                now,
+            )];
+            assert!(
+                !child
+                    .update_exclusive(PointerEventPass::Initial, &mut down, true)
+                    .pressed
+            );
+            assert!(
+                child
+                    .update_exclusive(PointerEventPass::Main, &mut down, true)
+                    .pressed
+            );
+            assert!(
+                !parent
+                    .update_exclusive(PointerEventPass::Main, &mut down, true)
+                    .pressed
+            );
+            assert!(!down[0].is_consumed());
+            assert!(
+                observer
+                    .update(PointerEventPass::Main, &mut down, true)
+                    .pressed
+            );
+            let mut up = [change(
+                CursorEventContent::Released(PressKeyEventType::Left),
+                now,
+            )];
+            assert!(
+                child
+                    .update_exclusive(PointerEventPass::Main, &mut up, true)
+                    .tapped
+            );
+            assert!(
+                !parent
+                    .update_exclusive(PointerEventPass::Main, &mut up, true)
+                    .tapped
+            );
+            assert!(
+                observer
+                    .update(PointerEventPass::Main, &mut up, true)
+                    .released
+            );
+        }
+    }
+
+    #[test]
     fn first_move_sample_establishes_the_slop_origin() {
-        // The press event carries no position, so a far-away first sample only
-        // fixes the origin and must not count as travel.
+        // Positionless synthetic presses retain the movement-origin fallback.
         let mut tap = TapRecognizer::default();
         let now = Instant::now();
         press(&mut tap, now);
@@ -830,6 +895,51 @@ mod slop_tests {
         tap.update(PointerEventPass::Main, &mut same, true);
 
         assert!(!tap.canceled);
+    }
+
+    #[test]
+    fn recorded_press_anchors_the_first_drag_and_cancels_a_travelled_tap() {
+        let now = Instant::now();
+        let press = change(CursorEventContent::Pressed(PressKeyEventType::Left), now)
+            .with_position(PxPosition::from_f32_xy(100.0, 200.0));
+        let mut drag = DragRecognizer::default();
+        let mut tap = TapRecognizer::default();
+        drag.update(PointerEventPass::Main, &mut [press.clone()], true);
+        tap.update(PointerEventPass::Main, &mut [press], true);
+        let movement = change(moved(100, 180), now + Duration::from_millis(16));
+        let result = drag.update(PointerEventPass::Main, &mut [movement.clone()], true);
+        assert!(result.started && result.updated);
+        assert_eq!(result.delta_y, Px::new(-20));
+        tap.update(PointerEventPass::Main, &mut [movement], true);
+        let result = tap.update(
+            PointerEventPass::Main,
+            &mut [change(
+                CursorEventContent::Released(PressKeyEventType::Left),
+                now + Duration::from_millis(32),
+            )],
+            true,
+        );
+        assert!(!result.tapped);
+    }
+
+    #[test]
+    fn recorded_press_cancels_long_press_on_the_first_large_movement() {
+        let now = Instant::now();
+        let mut recognizer = LongPressRecognizer::default();
+        let press = change(CursorEventContent::Pressed(PressKeyEventType::Left), now)
+            .with_position(PxPosition::from_f32_xy(100.0, 200.0));
+        recognizer.update(PointerEventPass::Main, &mut [press], true);
+        recognizer.update(
+            PointerEventPass::Main,
+            &mut [change(moved(100, 180), now + Duration::from_millis(16))],
+            true,
+        );
+        let result = recognizer.update(
+            PointerEventPass::Main,
+            &mut [change(moved(100, 180), now + Duration::from_millis(800))],
+            true,
+        );
+        assert!(!result.triggered);
     }
 
     #[test]

@@ -16,7 +16,7 @@ use tessera_ui::{
     AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutModifierChild,
     LayoutModifierInput, LayoutModifierNode, LayoutResult, MeasurementError, Modifier,
     PointerInput, PointerInputModifierNode, Px, PxPosition, RenderSlot, ScrollDeltaUnit,
-    ScrollEventSource, State, current_frame_nanos,
+    ScrollEventSource, State, current_frame_nanos, current_frame_time,
     focus::FocusRevealRequest,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
@@ -138,6 +138,7 @@ pub enum ScrollBarLayout {
 /// scrolling effect.
 #[derive(Clone, PartialEq)]
 pub struct ScrollableController {
+    density: f64,
     /// The current position of the child component (for rendering)
     child_position: PxPosition,
     /// The target position of the child component (scrolling destination)
@@ -185,6 +186,7 @@ impl ScrollableController {
     /// Creates a new `ScrollableController` with default values.
     pub fn new() -> Self {
         Self {
+            density: tessera_ui::dp::scale_factor(),
             child_position: PxPosition::ZERO,
             target_position: PxPosition::ZERO,
             target_position_f32: (0.0, 0.0),
@@ -241,6 +243,7 @@ impl ScrollableController {
     ///
     /// The new extent is immediately available to scrolling and scrollbars.
     pub fn override_child_size(&mut self, size: ComputedData) {
+        self.update_density(tessera_ui::dp::scale_factor());
         self.override_child_size = Some(size);
         self.child_size = size;
     }
@@ -250,6 +253,7 @@ impl ScrollableController {
     }
 
     pub(crate) fn set_target_position(&mut self, target: PxPosition) {
+        self.update_density(tessera_ui::dp::scale_factor());
         self.cancel_inertia();
         self.velocity_tracker = None;
         self.positioned = true;
@@ -262,6 +266,7 @@ impl ScrollableController {
     /// This is useful for restoring a saved scroll position when remounting
     /// a component.
     pub fn set_scroll_position(&mut self, position: PxPosition) {
+        self.update_density(tessera_ui::dp::scale_factor());
         self.cancel_inertia();
         self.velocity_tracker = None;
         self.last_frame_nanos = None;
@@ -271,6 +276,56 @@ impl ScrollableController {
         self.child_position_f32 = (position.x, position.y);
         self.animation_position = (position.x as f64, position.y as f64);
         self.target_position_f32 = (position.x, position.y);
+    }
+
+    pub(crate) fn translate_scroll_position(&mut self, delta: PxPosition) {
+        // Layout anchoring changes the content origin, not the remaining
+        // motion.
+        self.child_position = self.child_position + delta;
+        self.target_position = self.target_position + delta;
+        self.child_position_f32.0 += delta.x;
+        self.child_position_f32.1 += delta.y;
+        self.target_position_f32.0 += delta.x;
+        self.target_position_f32.1 += delta.y;
+        self.animation_position.0 += f64::from(delta.x);
+        self.animation_position.1 += f64::from(delta.y);
+    }
+
+    pub(crate) fn update_density(&mut self, density: f64) -> f64 {
+        let ratio = density / self.density;
+        if density == self.density {
+            return 1.0;
+        }
+        self.density = density;
+        self.animation_position.0 *= ratio;
+        self.animation_position.1 *= ratio;
+        self.child_position_f32 = (
+            self.animation_position.0 as f32,
+            self.animation_position.1 as f32,
+        );
+        self.target_position_f32.0 = (f64::from(self.target_position_f32.0) * ratio) as f32;
+        self.target_position_f32.1 = (f64::from(self.target_position_f32.1) * ratio) as f32;
+        self.child_position =
+            PxPosition::from_f32_xy(self.child_position_f32.0, self.child_position_f32.1);
+        self.target_position =
+            PxPosition::from_f32_xy(self.target_position_f32.0, self.target_position_f32.1);
+        let scale_size = |size: ComputedData| ComputedData {
+            width: Px((f64::from(size.width.0) * ratio) as i32),
+            height: Px((f64::from(size.height.0) * ratio) as i32),
+        };
+        self.child_size = scale_size(self.child_size);
+        self.visible_size = scale_size(self.visible_size);
+        self.override_child_size = self.override_child_size.map(scale_size);
+        if let Some(inertia) = &mut self.active_inertia {
+            inertia.position_x *= ratio as f32;
+            inertia.position_y *= ratio as f32;
+            inertia.velocity_x *= ratio as f32;
+            inertia.velocity_y *= ratio as f32;
+        }
+        // Samples collected in the previous physical units cannot be mixed with
+        // new input.
+        self.velocity_tracker = None;
+        ratio
     }
 
     /// Updates the scroll position based on time-based interpolation
@@ -426,52 +481,6 @@ impl ScrollableController {
         ));
     }
 
-    fn advance_inertia(
-        &mut self,
-        now: Instant,
-        container_size: &ComputedData,
-        vertical_scrollable: bool,
-        horizontal_scrollable: bool,
-    ) {
-        let Some(mut inertia) = self.active_inertia.take() else {
-            return;
-        };
-        let last_tick = self.inertia_last_tick.replace(now).unwrap_or(now);
-        let displacement = inertia.advance(now.duration_since(last_tick));
-        let proposed = (
-            self.target_position_f32.0 + displacement.x,
-            self.target_position_f32.1 + displacement.y,
-        );
-        let constrained = constrain_position(
-            PxPosition::new(Px::new(i32::MIN), Px::new(i32::MIN)),
-            &self.child_size,
-            container_size,
-            vertical_scrollable,
-            horizontal_scrollable,
-        );
-        let next = (
-            clamp_scroll_coordinate(proposed.0, constrained.x, horizontal_scrollable),
-            clamp_scroll_coordinate(proposed.1, constrained.y, vertical_scrollable),
-        );
-        self.target_position_f32 = next;
-        self.target_position = PxPosition::from_f32_xy(next.0, next.1);
-        self.child_position_f32 = next;
-        self.animation_position = (next.0 as f64, next.1 as f64);
-        self.child_position = self.target_position;
-        if (next.0 - proposed.0).abs() > f32::EPSILON {
-            inertia.velocity_x = 0.0;
-        }
-        if (next.1 - proposed.1).abs() > f32::EPSILON {
-            inertia.velocity_y = 0.0;
-        }
-        if inertia.velocity().x.abs() >= SCROLL_INERTIA_MIN_VELOCITY
-            || inertia.velocity().y.abs() >= SCROLL_INERTIA_MIN_VELOCITY
-        {
-            self.active_inertia = Some(inertia);
-        } else {
-            self.inertia_last_tick = None;
-        }
-    }
     fn has_pending_animation_frame(&self) -> bool {
         self.child_position_f32 != self.target_position_f32 || self.active_inertia.is_some()
     }
@@ -482,6 +491,15 @@ impl ScrollableController {
 
     pub(crate) fn scrollbar_state_h(&self) -> ScrollBarState {
         self.scrollbar_state_h.clone()
+    }
+}
+
+pub(crate) fn synchronize_scroll_density(controller: State<ScrollableController>) {
+    let density = tessera_ui::dp::scale_factor();
+    if controller.with(|controller| controller.density != density) {
+        controller.with_mut(|controller| {
+            controller.update_density(density);
+        });
     }
 }
 
@@ -587,26 +605,30 @@ impl LayoutModifierNode for ScrollLayoutModifierNode {
         }
 
         let child_measurement = child.measure(&child_constraint)?;
-        let next_child_size = self
-            .controller
-            .with(|c| c.override_child_size.unwrap_or(child_measurement));
-        if self.controller.with(|c| c.child_size != next_child_size) {
-            self.controller.with_mut(|c| c.child_size = next_child_size);
-        }
+        let current_child_position = input.placement(|| {
+            let next_child_size = self
+                .controller
+                .with(|c| c.override_child_size.unwrap_or(child_measurement));
+            if self.controller.with(|c| c.child_size != next_child_size) {
+                self.controller.with_mut(|c| c.child_size = next_child_size);
+            }
 
-        let current_child_position = if self.apply_child_offset {
-            self.controller.with(|c| c.child_position())
-        } else {
-            PxPosition::ZERO
-        };
+            if self.apply_child_offset {
+                self.controller.with(|c| c.child_position())
+            } else {
+                PxPosition::ZERO
+            }
+        });
         child.place(current_child_position);
 
         let width = parent.width().clamp(child_measurement.width);
         let height = parent.height().clamp(child_measurement.height);
         let computed_data = ComputedData { width, height };
-        if self.controller.with(|c| c.visible_size != computed_data) {
-            self.controller.with_mut(|c| c.visible_size = computed_data);
-        }
+        input.placement(|| {
+            if self.controller.with(|c| c.visible_size != computed_data) {
+                self.controller.with_mut(|c| c.visible_size = computed_data);
+            }
+        });
 
         Ok(LayoutResult::new(computed_data))
     }
@@ -646,6 +668,8 @@ pub(crate) fn apply_scroll_modifier(
     if !(vertical || horizontal) {
         return base;
     }
+
+    synchronize_scroll_density(controller);
 
     let scrollbar_state_v = controller.with(|c| c.scrollbar_state_v());
     let scrollbar_state_h = controller.with(|c| c.scrollbar_state_h());
@@ -1005,13 +1029,74 @@ impl PointerInputModifierNode for ScrollableViewportPointerModifierNode {
             input.pointer_changes.as_mut_slice(),
             input.cursor_position_rel,
             input.computed_data,
-            Instant::now(),
+            current_frame_time().unwrap_or_else(Instant::now),
             current_frame_nanos(),
         );
     }
 }
 
 impl ScrollableViewportPointerModifierNode {
+    fn advance_inertia(&self, now: Instant, viewport: &ComputedData) {
+        let step = self.controller.with_mut(|controller| {
+            let mut inertia = controller.active_inertia.take()?;
+            let last = controller.inertia_last_tick.replace(now).unwrap_or(now);
+            let displacement = inertia.advance(now.duration_since(last));
+            Some((inertia, ScrollDelta::new(displacement.x, displacement.y)))
+        });
+        let Some((mut inertia, displacement)) = step else {
+            return;
+        };
+        let pre = self
+            .nested_scroll_connection
+            .as_ref()
+            .map(|connection| connection.pre_scroll(displacement, ScrollEventSource::Touch))
+            .unwrap_or(ScrollDelta::ZERO);
+        let child = self.controller.with_mut(|controller| {
+            controller.apply_input_delta(
+                displacement - pre,
+                ScrollEventSource::Touch,
+                ScrollDeltaUnit::Pixel,
+                viewport,
+                self.vertical,
+                self.horizontal,
+            )
+        });
+        let available = displacement - pre - child;
+        let post = self
+            .nested_scroll_connection
+            .as_ref()
+            .map(|connection| connection.post_scroll(child, available, ScrollEventSource::Touch))
+            .unwrap_or(ScrollDelta::ZERO);
+        let remaining = available - post;
+        // Subtracting large scroll coordinates loses fractional precision;
+        // that rounding residue does not indicate a scroll boundary.
+        let target = self
+            .controller
+            .with(|controller| controller.target_position_f32);
+        let tolerance_x = (target.0.abs() * f32::EPSILON * 2.0).max(0.001);
+        let tolerance_y = (target.1.abs() * f32::EPSILON * 2.0).max(0.001);
+        let mut velocity = ScrollVelocity::ZERO;
+        if remaining.x.abs() > tolerance_x {
+            velocity.x = inertia.velocity_x;
+            inertia.velocity_x = 0.0;
+        }
+        if remaining.y.abs() > tolerance_y {
+            velocity.y = inertia.velocity_y;
+            inertia.velocity_y = 0.0;
+        }
+        let active = inertia.velocity_x.abs() >= SCROLL_INERTIA_MIN_VELOCITY
+            || inertia.velocity_y.abs() >= SCROLL_INERTIA_MIN_VELOCITY;
+        self.controller.with_mut(|controller| {
+            if active {
+                controller.active_inertia = Some(inertia);
+                controller.inertia_last_tick = Some(now);
+            }
+        });
+        if !active && let Some(connection) = &self.nested_scroll_connection {
+            connection.post_fling(velocity);
+        }
+    }
+
     fn handle_changes(
         &self,
         pass: tessera_ui::PointerEventPass,
@@ -1095,14 +1180,16 @@ impl ScrollableViewportPointerModifierNode {
                             .unwrap_or(ScrollDelta::ZERO);
                         let remaining = available_after_child - parent_post_consumed;
 
+                        let gesture_consumed =
+                            parent_pre_consumed + child_consumed + parent_post_consumed;
                         if scroll_event.source == ScrollEventSource::Touch
-                            && !child_consumed.is_zero()
+                            && !gesture_consumed.is_zero()
                         {
                             self.controller.with_mut(|c| {
                                 c.push_touch_delta(
                                     context.timestamp,
-                                    child_consumed.x,
-                                    child_consumed.y,
+                                    gesture_consumed.x,
+                                    gesture_consumed.y,
                                 );
                             });
                         }
@@ -1155,26 +1242,30 @@ impl ScrollableViewportPointerModifierNode {
                     c.velocity_tracker = None;
                     c.cancel_inertia();
                 });
+                if let Some(connection) = &self.nested_scroll_connection {
+                    connection.post_fling(ScrollVelocity::ZERO);
+                }
             } else if let Some(release_timestamp) = tap_result.release_timestamp {
                 let available_velocity = self
                     .controller
                     .with_mut(|c| c.resolve_touch_velocity(release_timestamp));
-                if !available_velocity.is_zero() {
-                    let consumed_velocity = self
-                        .nested_scroll_connection
-                        .as_ref()
-                        .map(|connection| connection.pre_fling(available_velocity))
-                        .unwrap_or(ScrollVelocity::ZERO);
-                    self.controller.with_mut(|c| {
-                        c.start_inertia(release_timestamp, available_velocity - consumed_velocity)
-                    });
+                let consumed_velocity = self
+                    .nested_scroll_connection
+                    .as_ref()
+                    .map(|connection| connection.pre_fling(available_velocity))
+                    .unwrap_or(ScrollVelocity::ZERO);
+                self.controller.with_mut(|c| {
+                    c.start_inertia(release_timestamp, available_velocity - consumed_velocity)
+                });
+                if self.controller.with(|c| c.active_inertia.is_none()) {
+                    if let Some(connection) = &self.nested_scroll_connection {
+                        connection.post_fling(ScrollVelocity::ZERO);
+                    }
                 }
             }
         }
         if self.controller.with(|c| c.active_inertia.is_some()) {
-            self.controller.with_mut(|c| {
-                c.advance_inertia(now, &computed_data, self.vertical, self.horizontal);
-            });
+            self.advance_inertia(now, &computed_data);
         }
     }
 }
@@ -1197,6 +1288,7 @@ fn scrollable_viewport(
     let apply_child_offset = apply_child_offset.unwrap_or(true);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let controller = controller.expect("scrollable_viewport requires controller");
+    synchronize_scroll_density(controller);
     let scrollbar_state_v =
         scrollbar_state_v.unwrap_or_else(|| controller.with(|c| c.scrollbar_state_v()));
     let scrollbar_state_h =
@@ -1404,6 +1496,69 @@ mod scroll_tests {
         }
         assert!(!controller.has_pending_animation_frame());
         assert_eq!(controller.child_position.y, -100.0);
+    }
+
+    #[test]
+    fn translating_layout_origin_preserves_smoothing_and_idle_state() {
+        let mut original = controller();
+        original.set_scroll_position(PxPosition::from_f32_xy(-100.25, -200.5));
+        original.set_target_position(PxPosition::from_f32_xy(-300.25, -500.5));
+        original.update_scroll_position(16_666_667, 0.75);
+        let mut translated = original.clone();
+        let delta = PxPosition::new(Px(-80), Px(-120));
+        translated.translate_scroll_position(delta);
+        for frame in 2..100 {
+            original.update_scroll_position(frame * 16_666_667, 0.75);
+            translated.update_scroll_position(frame * 16_666_667, 0.75);
+            let expected = original.child_position() + delta;
+            let actual = translated.child_position();
+            assert!((actual.x - expected.x).abs() < 0.0001);
+            assert!((actual.y - expected.y).abs() < 0.0001);
+            assert_eq!(
+                translated.has_pending_animation_frame(),
+                original.has_pending_animation_frame()
+            );
+        }
+        assert_eq!(
+            translated.child_position(),
+            PxPosition::from_f32_xy(-380.25, -620.5)
+        );
+        translated.translate_scroll_position(PxPosition::new(Px(80), Px(120)));
+        assert_eq!(translated.child_position(), original.child_position());
+        assert!(!translated.has_pending_animation_frame());
+    }
+
+    #[test]
+    fn density_changes_scale_animation_distance_and_inertial_motion() {
+        let mut original = controller();
+        original.set_scroll_position(PxPosition::from_f32_xy(-100.25, -200.5));
+        original.set_target_position(PxPosition::from_f32_xy(-300.25, -500.5));
+        original.update_scroll_position(16_666_667, 0.75);
+        let now = Instant::now();
+        original.start_inertia(now, ScrollVelocity::new(120.0, -240.0));
+        let mut scaled = original.clone();
+        scaled.update_density(original.density * 1.5);
+        assert_eq!(scaled.last_frame_nanos, original.last_frame_nanos);
+        assert_eq!(scaled.inertia_last_tick, Some(now));
+        assert_eq!(
+            scaled.target_position(),
+            PxPosition::from_f32_xy(-450.375, -750.75)
+        );
+        let remaining = original.target_position().y - original.child_position().y;
+        let scaled_remaining = scaled.target_position().y - scaled.child_position().y;
+        assert!((scaled_remaining - remaining * 1.5).abs() < 0.0001);
+        let mut original_motion = original.active_inertia.expect("active inertia");
+        let motion = scaled.active_inertia.as_mut().expect("scaled inertia");
+        assert_eq!(motion.velocity_x, 180.0);
+        assert_eq!(motion.velocity_y, -360.0);
+        let before = original_motion.advance(Duration::from_millis(32));
+        let after = motion.advance(Duration::from_millis(32));
+        assert!((after.x - before.x * 1.5).abs() < 0.0001);
+        assert!((after.y - before.y * 1.5).abs() < 0.0001);
+        scaled.update_density(original.density);
+        assert_eq!(scaled.child_position(), original.child_position());
+        assert_eq!(scaled.target_position(), original.target_position());
+        assert!(scaled.has_pending_animation_frame());
     }
 
     #[test]

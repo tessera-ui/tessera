@@ -35,7 +35,7 @@ use visual::{AlphaModifierNode, BackgroundModifierNode, BorderModifierNode, Clip
 
 pub use shadow::ShadowArgs;
 
-pub(crate) use interaction::{with_keyboard_input, with_pointer_input};
+pub(crate) use interaction::{DisabledToggleSemantics, with_keyboard_input, with_pointer_input};
 
 /// Extensions for composing reusable wrapper behavior around component
 /// subtrees.

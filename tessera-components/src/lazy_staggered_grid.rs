@@ -22,8 +22,11 @@ use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     layout_flex::cross_axis_child_constraint,
     lazy_grid::GridCells,
-    lazy_shared::clamp_reported_main,
-    scrollable::{ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable},
+    lazy_shared::{MeasuredMain, clamp_reported_main},
+    scrollable::{
+        ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable,
+        synchronize_scroll_density,
+    },
 };
 
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
@@ -839,6 +842,7 @@ fn lazy_staggered_grid_view(
     let controller = controller.expect("lazy_staggered_grid_view requires controller");
     let scroll_controller =
         scroll_controller.expect("lazy_staggered_grid_view requires scroll_controller");
+    synchronize_scroll_density(scroll_controller);
     let plan = LazySlotPlan::new(slots.clone());
     let total_count = plan.total_count();
 
@@ -1444,7 +1448,8 @@ fn lazy_staggered_grid_focus_beyond_bounds_modifier(args: LazyStaggeredGridFocus
 #[derive(PartialEq)]
 struct StaggeredGridCache {
     /// Measured main-axis sizes. `None` still uses the estimated size.
-    item_main: Vec<Option<Px>>,
+    item_main: Vec<Option<MeasuredMain>>,
+    density: f64,
     /// Lane assignment for each built item, parallel to the item prefix.
     lane_of: Vec<usize>,
     /// Exclusive main-axis end of every item in a lane, in placement order.
@@ -1460,6 +1465,7 @@ impl Default for StaggeredGridCache {
     fn default() -> Self {
         Self {
             item_main: Vec::new(),
+            density: 0.0,
             lane_of: Vec::new(),
             lane_ends: Vec::new(),
             lane_items: Vec::new(),
@@ -1478,6 +1484,14 @@ impl StaggeredGridCache {
     /// reorders cannot be told apart from length, so they invalidate the whole
     /// table instead of pretending keys stayed stable.
     fn prepare(&mut self, count: usize, lane_count: usize, estimated_item_main: Px, spacing: Px) {
+        let density = tessera_ui::dp::scale_factor();
+        if self.density != density {
+            for measurement in self.item_main.iter_mut().flatten() {
+                measurement.rebase(density);
+            }
+            self.density = density;
+            self.invalidate_geometry();
+        }
         if self.lane_count != lane_count
             || self.spacing != spacing
             || self.estimated_item_main != estimated_item_main
@@ -1502,17 +1516,21 @@ impl StaggeredGridCache {
     }
 
     fn item_main(&self, index: usize) -> Option<Px> {
-        self.item_main.get(index).copied().flatten()
+        self.item_main
+            .get(index)
+            .copied()
+            .flatten()
+            .map(MeasuredMain::pixels)
     }
 
     fn record_measurement(&mut self, index: usize, actual: Px) {
         if index >= self.item_main.len() {
             return;
         }
-        if self.item_main[index] == Some(actual) {
+        if self.item_main(index) == Some(actual) {
             return;
         }
-        self.item_main[index] = Some(actual);
+        self.item_main[index] = Some(MeasuredMain::new(actual, self.density));
         self.truncate_geometry(index);
         self.ensure_built(self.item_main.len());
     }
@@ -1569,17 +1587,11 @@ impl StaggeredGridCache {
         {
             return Px::ZERO;
         }
-        let max_end = self
-            .lane_ends
+        self.lane_ends
             .iter()
             .filter_map(|ends| ends.last().copied())
             .max()
-            .unwrap_or(Px::ZERO);
-        if max_end == Px::ZERO {
-            Px::ZERO
-        } else {
-            (max_end - self.spacing).max(Px::ZERO)
-        }
+            .unwrap_or(Px::ZERO)
     }
 
     fn resolved_main(&self, index: usize) -> Px {
@@ -2129,6 +2141,33 @@ mod tests {
         let _ = tessera_ui::testing::pump_layout_test_session(&mut session, 33_333_334);
         let third_builds = LAZY_STAGGERED_GRID_VISIBLE_ITEM_BUILD_COUNT.load(Ordering::Relaxed);
         assert_eq!(third_builds, first_builds);
+    }
+
+    #[test]
+    fn density_changes_rebase_lanes_and_keep_the_complete_final_item_extent() {
+        crate::test_utils::run_isolated_test(
+            "lazy_staggered_grid::tests::density_changes_rebase_lanes_and_keep_the_complete_final_item_extent",
+            || {
+                tessera_ui::dp::set_scale_factor(1.0);
+                let mut cache = super::StaggeredGridCache::default();
+                cache.prepare(6, 2, Px(20), Px(4));
+                for (index, size) in [(0, 33), (1, 33), (4, 55), (5, 55)] {
+                    cache.record_measurement(index, Px(size));
+                }
+                for (density, estimated, spacing, last_start, last_main, total) in [
+                    (1.25, 25, 5, 76, 68, 144),
+                    (1.5, 30, 6, 91, 82, 173),
+                    (2.0, 40, 8, 122, 110, 232),
+                    (1.0, 20, 4, 61, 55, 116),
+                ] {
+                    tessera_ui::dp::set_scale_factor(density);
+                    cache.prepare(6, 2, Px(estimated), Px(spacing));
+                    assert_eq!(cache.item_layout(4), Some((Px(last_start), Px(last_main))));
+                    assert_eq!(cache.item_layout(5), Some((Px(last_start), Px(last_main))));
+                    assert_eq!(cache.total_main(), Px(total));
+                }
+            },
+        );
     }
 
     #[test]

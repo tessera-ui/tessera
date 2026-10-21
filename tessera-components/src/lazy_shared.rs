@@ -1,6 +1,33 @@
-//! Shared helpers for the lazy scrolling components.
+//! Shared measurements and viewport bounds for lazy scrolling components.
+//!
+//! ## Usage
+//!
+//! Display long lists and grids in resizable windows on different displays.
 
 use tessera_ui::Px;
+
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub(crate) struct MeasuredMain {
+    pixels: Px,
+    logical: f64,
+}
+
+impl MeasuredMain {
+    pub(crate) fn new(pixels: Px, density: f64) -> Self {
+        Self {
+            pixels,
+            logical: f64::from(pixels.0) / density,
+        }
+    }
+
+    pub(crate) fn pixels(self) -> Px {
+        self.pixels
+    }
+
+    pub(crate) fn rebase(&mut self, density: f64) {
+        self.pixels = Px((self.logical * density) as i32);
+    }
+}
 
 /// Clamps the main-axis size a lazy component reports to its parent.
 ///

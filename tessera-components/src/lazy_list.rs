@@ -21,8 +21,8 @@ use tessera_ui::{
 use crate::{
     alignment::CrossAxisAlignment,
     layout_flex::cross_axis_child_constraint,
-    lazy_shared::clamp_reported_main,
-    scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
+    lazy_shared::{MeasuredMain, clamp_reported_main},
+    scrollable::{ScrollBarBehavior, ScrollableController, scrollable, synchronize_scroll_density},
 };
 
 const DEFAULT_VIEWPORT_ITEMS: usize = 8;
@@ -101,6 +101,17 @@ fn restore_scroll_position(
     controller: State<LazyListController>,
     viewport: State<ScrollableController>,
 ) {
+    let density = tessera_ui::dp::scale_factor();
+    if controller.with(|controller| controller.cache.density != density) {
+        controller.with_mut(|controller| {
+            let ratio = controller.scroll.update_density(density);
+            if let Some(position) = &mut controller.pending_position {
+                position.x = (f64::from(position.x) * ratio) as f32;
+                position.y = (f64::from(position.y) * ratio) as f32;
+            }
+        });
+    }
+    synchronize_scroll_density(viewport);
     let request = controller.with(|controller| controller.pending_position);
     if request.is_some() {
         controller.with_mut(|controller| controller.pending_position = None);
@@ -141,6 +152,8 @@ impl LazyListContent {
 ///
 /// Display a long, vertical list of items without incurring the performance
 /// cost of rendering every item at once.
+/// Remeasurement preserves the first item start visible in the viewport. If no
+/// item start is visible, the partially visible item retains its offset.
 ///
 /// ## Parameters
 ///
@@ -152,8 +165,8 @@ impl LazyListContent {
 /// - `estimated_item_size` — estimated main-axis size used before real
 ///   measurements exist.
 /// - `content_padding` — symmetric padding around the lazy list content.
-/// - `max_viewport_main` — optional maximum viewport length reported back to
-///   parents.
+/// - `max_viewport_main` — optional maximum viewport length, also limiting
+///   initial item construction before the viewport is measured.
 /// - `scroll_smoothing` — fraction of the remaining distance kept per 60Hz
 ///   frame while animating a scroll step; defaults to the scrollable default.
 /// - `scrollbar_behavior` — scrollbar visibility; visible by default.
@@ -291,8 +304,8 @@ fn lazy_column_slots(args: LazyListSlotsArgs) {
 /// - `estimated_item_size` — estimated main-axis size used before real
 ///   measurements exist.
 /// - `content_padding` — symmetric padding around the lazy list content.
-/// - `max_viewport_main` — optional maximum viewport length reported back to
-///   parents.
+/// - `max_viewport_main` — optional maximum viewport length, also limiting
+///   initial item construction before the viewport is measured.
 /// - `scroll_smoothing` — fraction of the remaining distance kept per 60Hz
 ///   frame while animating a scroll step; defaults to the scrollable default.
 /// - `scrollbar_behavior` — scrollbar visibility; visible by default.
@@ -670,7 +683,9 @@ fn lazy_list_view(
     let total_count = plan.total_count();
 
     let cache_config_changed = controller.with(|c| {
-        c.cache.total_items != total_count || c.cache.estimated_main != estimated_item_main
+        c.cache.total_items != total_count
+            || c.cache.estimated_main != estimated_item_main
+            || c.cache.density != tessera_ui::dp::scale_factor()
     });
     if cache_config_changed {
         controller.with_mut(|c| c.cache.configure(total_count, estimated_item_main));
@@ -682,6 +697,9 @@ fn lazy_list_view(
         estimated_item_main,
         item_spacing,
     );
+    let viewport_span = max_viewport_main
+        .map(|limit| viewport_span.min(limit.max(Px::ZERO)))
+        .unwrap_or(viewport_span);
     let viewport_span = (viewport_span - (padding_main * 2)).max(Px::ZERO);
     let total_main =
         controller.with(|c| c.cache.total_main_size(estimated_item_main, item_spacing));
@@ -853,12 +871,41 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
                 measured_entries
                     .iter()
                     .any(|(item_index, _, _, measured_main)| {
-                        c.cache.measured_main.get(*item_index).copied().flatten()
-                            != Some(*measured_main)
+                        c.cache.measurement(*item_index) != Some(*measured_main)
                     })
             });
         if has_cache_updates {
-            self.controller.with_mut(|c| {
+            let scroll_offset = self.axis.scroll_offset(
+                self.scroll_controller
+                    .with(|controller| controller.child_position()),
+            );
+            let anchor_delta = self.controller.with_mut(|c| {
+                let mut anchor_index = c.cache.index_for_offset(
+                    (scroll_offset - self.padding_main).max(Px::ZERO),
+                    self.estimated_item_main,
+                    self.item_spacing,
+                );
+                let first_start =
+                    c.cache
+                        .offset_for(anchor_index, self.estimated_item_main, self.item_spacing)
+                        + self.padding_main;
+                let next_start = c.cache.offset_for(
+                    anchor_index + 1,
+                    self.estimated_item_main,
+                    self.item_spacing,
+                ) + self.padding_main;
+                // A mostly hidden large item must not displace the next visible
+                // item start.
+                if first_start < scroll_offset
+                    && anchor_index + 1 < c.cache.total_items
+                    && next_start < scroll_offset + self.viewport_limit
+                {
+                    anchor_index += 1;
+                }
+                let anchor_offset = c.cache.measurement(anchor_index).map(|_| {
+                    c.cache
+                        .offset_for(anchor_index, self.estimated_item_main, self.item_spacing)
+                });
                 for (item_index, _, _, measured_main) in &measured_entries {
                     c.cache.record_measurement(
                         *item_index,
@@ -866,8 +913,23 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
                         self.estimated_item_main,
                     );
                 }
+                anchor_offset.map_or(Px::ZERO, |previous| {
+                    c.cache
+                        .offset_for(anchor_index, self.estimated_item_main, self.item_spacing)
+                        - previous
+                })
             });
+            if anchor_delta != Px::ZERO {
+                self.scroll_controller.with_mut(|controller| {
+                    controller.translate_scroll_position(self.axis.scroll_position(anchor_delta));
+                });
+            }
         }
+
+        let scroll_offset = self.axis.scroll_offset(
+            self.scroll_controller
+                .with(|controller| controller.child_position()),
+        );
 
         let (item_offsets, total_main) = self.controller.with(|c| {
             let item_offsets = measured_entries
@@ -914,7 +976,7 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
                 self.axis.cross(&placement.3),
                 self.cross_axis_alignment,
             );
-            let mut main_offset = placement.2 + self.padding_main - self.scroll_offset;
+            let mut main_offset = placement.2 + self.padding_main - scroll_offset;
             if self.is_sticky(placement.0) {
                 let sticky_start = self.padding_main;
                 main_offset = main_offset.max(sticky_start);
@@ -925,7 +987,7 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
                     });
                     let max_offset = next_offset + self.padding_main
                         - self.axis.main(&placement.3)
-                        - self.scroll_offset;
+                        - scroll_offset;
                     main_offset = main_offset.min(max_offset);
                 }
             }
@@ -977,6 +1039,10 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
         }
 
         let mut placements = Vec::with_capacity(self.visible_item_indices.len());
+        let scroll_offset = self.axis.scroll_offset(
+            self.scroll_controller
+                .with(|controller| controller.child_position()),
+        );
         let mut inner_cross = Px::ZERO;
         for (&item_index, &child) in self.visible_item_indices.iter().zip(children.iter()) {
             let child_size = child.size();
@@ -995,7 +1061,7 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
                 self.axis.cross(&placement.3),
                 self.cross_axis_alignment,
             );
-            let mut main_offset = placement.2 + self.padding_main - self.scroll_offset;
+            let mut main_offset = placement.2 + self.padding_main - scroll_offset;
             if self.is_sticky(placement.0) {
                 let sticky_start = self.padding_main;
                 main_offset = main_offset.max(sticky_start);
@@ -1006,7 +1072,7 @@ impl tessera_ui::LayoutModifierNode for LazyListLayout {
                     });
                     let max_offset = next_offset + self.padding_main
                         - self.axis.main(&placement.3)
-                        - self.scroll_offset;
+                        - scroll_offset;
                     main_offset = main_offset.min(max_offset);
                 }
             }
@@ -1262,10 +1328,7 @@ fn lazy_list_focus_beyond_bounds_modifier(args: LazyListFocusArgs) -> Modifier {
                 c.cache
                     .offset_for(target_index, args.estimated_item_main, args.item_spacing),
                 c.cache
-                    .measured_main
-                    .get(target_index)
-                    .copied()
-                    .flatten()
+                    .measurement(target_index)
                     .unwrap_or(args.estimated_item_main),
             )
         });
@@ -1471,33 +1534,48 @@ struct VisibleChild {
 struct LazyListCache {
     total_items: usize,
     estimated_main: Px,
-    measured_main: Vec<Option<Px>>,
+    density: f64,
+    measured_main: Vec<Option<MeasuredMain>>,
     fenwick: FenwickTree,
 }
 
 impl LazyListCache {
     fn configure(&mut self, count: usize, estimated: Px) {
+        let density = tessera_ui::dp::scale_factor();
+        let density_changed = self.density != density;
         if self.total_items != count {
             self.total_items = count;
             self.measured_main = vec![None; count];
             self.fenwick.resize(count);
         }
-        if self.estimated_main != estimated {
+        if self.estimated_main != estimated || density_changed {
             self.estimated_main = estimated;
+            self.density = density;
             self.fenwick.resize(count);
-            for (index, actual) in self.measured_main.iter().enumerate() {
+            for (index, actual) in self.measured_main.iter_mut().enumerate() {
                 if let Some(actual) = actual {
-                    self.fenwick.update(index, *actual - estimated);
+                    if density_changed {
+                        actual.rebase(density);
+                    }
+                    self.fenwick.update(index, actual.pixels() - estimated);
                 }
             }
         }
+    }
+
+    fn measurement(&self, index: usize) -> Option<Px> {
+        self.measured_main
+            .get(index)
+            .copied()
+            .flatten()
+            .map(MeasuredMain::pixels)
     }
 
     fn record_measurement(&mut self, index: usize, actual: Px, estimated: Px) {
         if index >= self.total_items {
             return;
         }
-        let previous = self.measured_main[index];
+        let previous = self.measurement(index);
         if previous == Some(actual) {
             return;
         }
@@ -1505,7 +1583,7 @@ impl LazyListCache {
         let prev_delta = previous.map(|val| val - estimated).unwrap_or(Px::ZERO);
         let new_delta = actual - estimated;
         let delta_change = new_delta - prev_delta;
-        self.measured_main[index] = Some(actual);
+        self.measured_main[index] = Some(MeasuredMain::new(actual, self.density));
         self.fenwick.update(index, delta_change);
     }
 
@@ -1659,11 +1737,70 @@ mod tests {
 
     use super::{LazyListCache, LazyListController, lazy_column, lazy_row};
 
+    thread_local! {
+        static CAPPED_ITEMS: Cell<u64> = const { Cell::new(0) };
+    }
+
+    #[tessera]
+    fn capped_list_fixture(horizontal: bool) {
+        material_theme().child(move || {
+            if horizontal {
+                lazy_row()
+                    .modifier(Modifier::new().size(Dp(360.0), Dp(40.0)))
+                    .max_viewport_main(Px(360))
+                    .estimated_item_size(Dp(336.0))
+                    .items(20, |index| {
+                        CAPPED_ITEMS.set(CAPPED_ITEMS.get() | (1 << index));
+                        fixed_test_box()
+                            .tag(format!("capped_{index}"))
+                            .width(336)
+                            .height(40);
+                    });
+            } else {
+                lazy_column()
+                    .modifier(Modifier::new().size(Dp(40.0), Dp(360.0)))
+                    .max_viewport_main(Px(360))
+                    .estimated_item_size(Dp(336.0))
+                    .items(20, |index| {
+                        CAPPED_ITEMS.set(CAPPED_ITEMS.get() | (1 << index));
+                        fixed_test_box()
+                            .tag(format!("capped_{index}"))
+                            .width(40)
+                            .height(336);
+                    });
+            }
+        });
+    }
+
+    #[test]
+    fn viewport_cap_limits_initial_item_construction_on_both_axes() {
+        crate::test_utils::run_isolated_test(
+            "lazy_list::tests::viewport_cap_limits_initial_item_construction_on_both_axes",
+            || {
+                for horizontal in [false, true] {
+                    CAPPED_ITEMS.set(0);
+                    let _ = tessera_ui::testing::layout_test(move || {
+                        capped_list_fixture(horizontal);
+                    })
+                    .viewport_px(360, 360)
+                    .run();
+                    assert_eq!(
+                        CAPPED_ITEMS.get(),
+                        0b11,
+                        "the first layout must only construct the two intersecting items"
+                    );
+                }
+            },
+        );
+    }
+
     thread_local! { static ESTIMATE: Cell<Option<State<Dp>>> = const { Cell::new(None) }; }
     thread_local! {
         static COLLAPSED_WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) };
         static COLLAPSED_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
         static PROGRAMMATIC_LIST: Cell<Option<State<LazyListController>>> = const { Cell::new(None) };
+        static RESPONSIVE_CROSS: Cell<Option<State<Dp>>> = const { Cell::new(None) };
+        static RESPONSIVE_MAIN: Cell<Option<State<Dp>>> = const { Cell::new(None) };
     }
 
     #[tessera]
@@ -1728,6 +1865,141 @@ mod tests {
         check_programmatic_position(true);
     }
 
+    #[derive(Clone, PartialEq)]
+    struct ResponsiveItemLayout(bool, bool);
+
+    impl tessera_ui::LayoutModifierNode for ResponsiveItemLayout {
+        fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+            let cross = if self.0 {
+                input.parent_constraint().height().resolve_max()
+            } else {
+                input.parent_constraint().width().resolve_max()
+            }
+            .expect("bounded cross axis");
+            let main = if cross < Dp(200.0).to_px() {
+                Dp(80.0).to_px()
+            } else {
+                Dp(40.0).to_px()
+            };
+            let main = if self.1 { main * 10 } else { main };
+            Ok(LayoutResult::new(if self.0 {
+                ComputedData {
+                    width: main,
+                    height: cross,
+                }
+            } else {
+                ComputedData {
+                    width: cross,
+                    height: main,
+                }
+            }))
+        }
+    }
+
+    #[tessera]
+    fn responsive_anchor_fixture(horizontal: bool, tall: bool) {
+        let cross = remember(|| Dp(300.0));
+        let main = remember(|| Dp(120.0));
+        let controller = remember(LazyListController::new);
+        RESPONSIVE_CROSS.set(Some(cross));
+        RESPONSIVE_MAIN.set(Some(main));
+        PROGRAMMATIC_LIST.set(Some(controller));
+        let items = RenderSlotWith::new(move |index| {
+            layout()
+                .modifier(Modifier::new().semantics(SemanticsArgs {
+                    test_tag: Some(format!("responsive_{index}")),
+                    ..Default::default()
+                }))
+                .policy(ResponsiveItemLayout(horizontal, tall));
+        });
+        material_theme().child(move || {
+            crate::boxed::boxed().children(move || {
+                if horizontal {
+                    lazy_row()
+                        .modifier(Modifier::new().size(main.get(), cross.get()))
+                        .scrollbar_behavior(crate::scrollable::ScrollBarBehavior::Hidden)
+                        .controller(controller)
+                        .overscan(2)
+                        .estimated_item_size(Dp(40.0))
+                        .items_with_key_shared(20, |index| index, items);
+                } else {
+                    lazy_column()
+                        .modifier(Modifier::new().size(cross.get(), main.get()))
+                        .scrollbar_behavior(crate::scrollable::ScrollBarBehavior::Hidden)
+                        .controller(controller)
+                        .overscan(2)
+                        .estimated_item_size(Dp(40.0))
+                        .items_with_key_shared(20, |index| index, items);
+                }
+            });
+        });
+    }
+
+    #[test]
+    fn responsive_measurements_preserve_the_first_visible_item_start_on_both_axes() {
+        crate::test_utils::run_isolated_test(
+            "lazy_list::tests::responsive_measurements_preserve_the_first_visible_item_start_on_both_axes",
+            || {
+                for density in [1.0, 1.25, 1.5, 2.0] {
+                    tessera_ui::dp::set_scale_factor(density);
+                    for (horizontal, tall) in
+                        [(false, false), (true, false), (false, true), (true, true)]
+                    {
+                        let mut session = tessera_ui::testing::start_layout_test_session(
+                            tessera_ui::testing::layout_test(move || {
+                                responsive_anchor_fixture(horizontal, tall);
+                            })
+                            .viewport_px(800, 800),
+                        );
+                        tessera_ui::testing::pump_layout_test_session(&mut session, 0);
+                        let controller = PROGRAMMATIC_LIST.get().expect("list controller");
+                        let offset = if tall { Dp(60.0) } else { Dp(180.0) };
+                        controller.with_mut(|controller| {
+                            controller.scroll_to(
+                                if horizontal { offset } else { Dp::ZERO },
+                                if horizontal { Dp::ZERO } else { offset },
+                            );
+                        });
+                        let cross = RESPONSIVE_CROSS.get().expect("cross-axis state");
+                        let main_span = RESPONSIVE_MAIN.get().expect("main-axis state");
+                        let mut frame = 1;
+                        for (width, span) in [
+                            (300.0, 120.0),
+                            (150.0, 60.0),
+                            (300.0, 120.0),
+                            (150.0, 60.0),
+                            (300.0, 120.0),
+                        ] {
+                            cross.set(Dp(width));
+                            main_span.set(Dp(span));
+                            let main = Dp(if width < 200.0 { 80.0 } else { 40.0 }).to_px().0
+                                * if tall { 10 } else { 1 };
+                            let position = Dp(if tall { -60.0 } else { 20.0 }).to_px().0;
+                            let cross_size = Dp(width).to_px().0;
+                            for _ in 0..4 {
+                                let snapshot = tessera_ui::testing::pump_layout_test_session(
+                                    &mut session,
+                                    frame * 16_666_667,
+                                );
+                                snapshot
+                                    .node(if tall { "responsive_0" } else { "responsive_5" })
+                                    .position(
+                                        if horizontal { position } else { 0 },
+                                        if horizontal { 0 } else { position },
+                                    )
+                                    .size(
+                                        if horizontal { main } else { cross_size },
+                                        if horizontal { cross_size } else { main },
+                                    );
+                                frame += 1;
+                            }
+                        }
+                    }
+                }
+            },
+        );
+    }
+
     #[tessera]
     fn collapsed_viewport_fixture() {
         let width = remember(|| Dp(300.0));
@@ -1743,6 +2015,99 @@ mod tests {
                     text().content("A responsive list retains measured geometry while its viewport is temporarily collapsed.");
                 });
         });
+    }
+
+    #[tessera]
+    fn density_scroll_fixture(horizontal: bool) {
+        let controller = remember(LazyListController::new);
+        PROGRAMMATIC_LIST.set(Some(controller));
+        let items = RenderSlotWith::new(|index| {
+            fixed_test_box()
+                .tag(format!("density_{index}"))
+                .width(Dp(20.0).to_px().0)
+                .height(Dp(40.0).to_px().0);
+        });
+        material_theme().child(move || {
+            crate::boxed::boxed().children(move || {
+                if horizontal {
+                    lazy_row()
+                        .modifier(Modifier::new().size(Dp(100.0), Dp(100.0)))
+                        .controller(controller)
+                        .content_padding(Dp(4.0))
+                        .item_spacing(Dp(4.0))
+                        .scrollbar_behavior(crate::scrollable::ScrollBarBehavior::Hidden)
+                        .estimated_item_size(Dp(20.0))
+                        .items_with_key_shared(100, |index| index, items);
+                } else {
+                    lazy_column()
+                        .modifier(Modifier::new().size(Dp(100.0), Dp(100.0)))
+                        .controller(controller)
+                        .content_padding(Dp(4.0))
+                        .item_spacing(Dp(4.0))
+                        .scrollbar_behavior(crate::scrollable::ScrollBarBehavior::Hidden)
+                        .estimated_item_size(Dp(40.0))
+                        .items_with_key_shared(100, |index| index, items);
+                }
+            });
+        });
+    }
+
+    #[test]
+    fn density_changes_preserve_scrolled_items_and_new_programmatic_requests() {
+        crate::test_utils::run_isolated_test(
+            "lazy_list::tests::density_changes_preserve_scrolled_items_and_new_programmatic_requests",
+            || {
+                for horizontal in [false, true] {
+                    tessera_ui::dp::set_scale_factor(1.0);
+                    let mut session = tessera_ui::testing::start_layout_test_session(
+                        tessera_ui::testing::layout_test(move || {
+                            density_scroll_fixture(horizontal);
+                        })
+                        .viewport_px(400, 400),
+                    );
+                    for frame in 0..4 {
+                        tessera_ui::testing::pump_layout_test_session(
+                            &mut session,
+                            frame * 16_666_667,
+                        );
+                    }
+                    let controller = PROGRAMMATIC_LIST.get().expect("controller");
+                    let offset = if horizontal { Dp(104.0) } else { Dp(204.0) };
+                    controller.with_mut(|controller| {
+                        controller.scroll_to(
+                            if horizontal { offset } else { Dp::ZERO },
+                            if horizontal { Dp::ZERO } else { offset },
+                        )
+                    });
+                    let mut frame = 4;
+                    for density in [1.0, 1.25, 1.5, 2.0, 1.0] {
+                        tessera_ui::dp::set_scale_factor(density);
+                        if density == 1.5 {
+                            controller.with_mut(|controller| {
+                                controller.scroll_to(
+                                    if horizontal { offset } else { Dp::ZERO },
+                                    if horizontal { Dp::ZERO } else { offset },
+                                )
+                            });
+                        }
+                        for _ in 0..4 {
+                            let snapshot = tessera_ui::testing::pump_layout_test_session(
+                                &mut session,
+                                frame * 16_666_667,
+                            );
+                            snapshot
+                                .node("density_5")
+                                .position(
+                                    Dp(if horizontal { 20.0 } else { 4.0 }).to_px().0,
+                                    Dp(if horizontal { 4.0 } else { 20.0 }).to_px().0,
+                                )
+                                .size(Dp(20.0).to_px().0, Dp(40.0).to_px().0);
+                            frame += 1;
+                        }
+                    }
+                }
+            },
+        );
     }
 
     #[test]
@@ -1799,6 +2164,31 @@ mod tests {
         assert_eq!(cache.total_main_size(Px(20), Px(8)), Px::ZERO);
         cache.configure(3, Px(100));
         assert_eq!(cache.total_main_size(Px(100), Px(8)), Px(316));
+    }
+
+    #[test]
+    fn unvisited_measurements_rebase_density_without_round_trip_drift() {
+        crate::test_utils::run_isolated_test(
+            "lazy_list::tests::unvisited_measurements_rebase_density_without_round_trip_drift",
+            || {
+                tessera_ui::dp::set_scale_factor(1.0);
+                let mut cache = LazyListCache::default();
+                cache.configure(3, Px(20));
+                cache.record_measurement(0, Px(33), Px(20));
+                cache.record_measurement(2, Px(55), Px(20));
+                for (density, estimated, spacing, offset, total) in [
+                    (1.25, 25, 5, 46, 144),
+                    (1.5, 30, 6, 55, 173),
+                    (2.0, 40, 8, 74, 232),
+                    (1.0, 20, 4, 37, 116),
+                ] {
+                    tessera_ui::dp::set_scale_factor(density);
+                    cache.configure(3, Px(estimated));
+                    assert_eq!(cache.offset_for(1, Px(estimated), Px(spacing)), Px(offset));
+                    assert_eq!(cache.total_main_size(Px(estimated), Px(spacing)), Px(total));
+                }
+            },
+        );
     }
 
     #[tessera]

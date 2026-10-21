@@ -21,8 +21,11 @@ use tessera_ui::{
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     layout_flex::cross_axis_child_constraint,
-    lazy_shared::clamp_reported_main,
-    scrollable::{ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable},
+    lazy_shared::{MeasuredMain, clamp_reported_main},
+    scrollable::{
+        ScrollBarBehavior, ScrollBarLayout, ScrollableController, scrollable,
+        synchronize_scroll_density,
+    },
 };
 
 const DEFAULT_VIEWPORT_LINES: usize = 8;
@@ -229,6 +232,7 @@ impl tessera_ui::LayoutModifierNode for LazyGridLayout {
                         .get(self.line_range.start + offset)
                         .copied()
                         .flatten()
+                        .map(MeasuredMain::pixels)
                         != Some(*size)
                 })
             });
@@ -959,6 +963,7 @@ fn lazy_grid_view(
     let slots = slots.unwrap_or_default();
     let controller = controller.expect("lazy_grid_view requires controller");
     let scroll_controller = scroll_controller.expect("lazy_grid_view requires scroll_controller");
+    synchronize_scroll_density(scroll_controller);
 
     let plan = LazySlotPlan::new(slots.clone());
     let total_count = plan.total_count();
@@ -978,6 +983,7 @@ fn lazy_grid_view(
         c.cache.total_items != total_count
             || c.cache.slots_per_line != slots_per_line.max(1)
             || c.cache.estimated_main != estimated_line_main
+            || c.cache.density != tessera_ui::dp::scale_factor()
     });
     if cache_config_changed {
         controller.with_mut(|c| {
@@ -1530,6 +1536,7 @@ fn lazy_grid_focus_beyond_bounds_modifier(args: LazyGridFocusArgs) -> Modifier {
                     .get(target_line)
                     .copied()
                     .flatten()
+                    .map(MeasuredMain::pixels)
                     .unwrap_or(args.estimated_line_main),
             )
         });
@@ -1557,12 +1564,15 @@ struct LazyGridCache {
     total_items: usize,
     slots_per_line: usize,
     estimated_main: Px,
-    measured_line_main: Vec<Option<Px>>,
+    density: f64,
+    measured_line_main: Vec<Option<MeasuredMain>>,
     fenwick: FenwickTree,
 }
 
 impl LazyGridCache {
     fn configure(&mut self, count: usize, slots_per_line: usize, estimated: Px) {
+        let density = tessera_ui::dp::scale_factor();
+        let density_changed = self.density != density;
         let slots_per_line = slots_per_line.max(1);
         if self.total_items != count || self.slots_per_line != slots_per_line {
             self.total_items = count;
@@ -1571,12 +1581,16 @@ impl LazyGridCache {
             self.measured_line_main = vec![None; lines];
             self.fenwick.resize(lines);
         }
-        if self.estimated_main != estimated {
+        if self.estimated_main != estimated || density_changed {
             self.estimated_main = estimated;
+            self.density = density;
             self.fenwick.resize(self.measured_line_main.len());
-            for (index, actual) in self.measured_line_main.iter().enumerate() {
+            for (index, actual) in self.measured_line_main.iter_mut().enumerate() {
                 if let Some(actual) = actual {
-                    self.fenwick.update(index, *actual - estimated);
+                    if density_changed {
+                        actual.rebase(density);
+                    }
+                    self.fenwick.update(index, actual.pixels() - estimated);
                 }
             }
         }
@@ -1590,7 +1604,7 @@ impl LazyGridCache {
         if index >= self.measured_line_main.len() {
             return;
         }
-        let previous = self.measured_line_main[index];
+        let previous = self.measured_line_main[index].map(MeasuredMain::pixels);
         if previous == Some(actual) {
             return;
         }
@@ -1598,7 +1612,7 @@ impl LazyGridCache {
         let prev_delta = previous.map(|val| val - estimated).unwrap_or(Px::ZERO);
         let new_delta = actual - estimated;
         let delta_change = new_delta - prev_delta;
-        self.measured_line_main[index] = Some(actual);
+        self.measured_line_main[index] = Some(MeasuredMain::new(actual, self.density));
         self.fenwick.update(index, delta_change);
     }
 
@@ -1809,6 +1823,34 @@ mod tests {
         assert_eq!(
             controller.with(|state| state.cache.measured_line_main.clone()),
             before
+        );
+    }
+
+    #[test]
+    fn density_changes_rebase_unvisited_lines_without_round_trip_drift() {
+        crate::test_utils::run_isolated_test(
+            "lazy_grid::tests::density_changes_rebase_unvisited_lines_without_round_trip_drift",
+            || {
+                tessera_ui::dp::set_scale_factor(1.0);
+                let mut cache = LazyGridCache::default();
+                cache.configure(6, 2, Px(20));
+                cache.record_line_measurement(0, Px(33), Px(20));
+                cache.record_line_measurement(2, Px(55), Px(20));
+                for (density, estimated, spacing, offset, total) in [
+                    (1.25, 25, 5, 46, 144),
+                    (1.5, 30, 6, 55, 173),
+                    (2.0, 40, 8, 74, 232),
+                    (1.0, 20, 4, 37, 116),
+                ] {
+                    tessera_ui::dp::set_scale_factor(density);
+                    cache.configure(6, 2, Px(estimated));
+                    assert_eq!(
+                        cache.offset_for_line(1, Px(estimated), Px(spacing)),
+                        Px(offset)
+                    );
+                    assert_eq!(cache.total_main_size(Px(estimated), Px(spacing)), Px(total));
+                }
+            },
         );
     }
 

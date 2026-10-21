@@ -166,23 +166,29 @@ impl PointerInputModifierNode for ClickablePointerModifierNode {
             .unwrap_or(false);
 
         let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(
+            recognizer.update_exclusive(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
                 within_bounds,
             )
         });
-        let long_press_triggered = self.long_press_recognizer.is_some_and(|state| {
-            state.with_mut(|recognizer| {
-                recognizer
-                    .update(
-                        input.pass,
-                        input.pointer_changes.as_mut_slice(),
-                        within_bounds,
-                    )
-                    .triggered
-            })
-        });
+        let descendant_claimed_press = !tap_result.pressed
+            && input
+                .pointer_changes
+                .iter()
+                .any(|change| matches!(change.content, tessera_ui::CursorEventContent::Pressed(_)));
+        let long_press_triggered = !descendant_claimed_press
+            && self.long_press_recognizer.is_some_and(|state| {
+                state.with_mut(|recognizer| {
+                    recognizer
+                        .update(
+                            input.pass,
+                            input.pointer_changes.as_mut_slice(),
+                            within_bounds,
+                        )
+                        .triggered
+                })
+            });
         let tapped = tap_result.tapped && !long_press_triggered;
 
         let Some(interaction_state) = self.interaction_state else {
@@ -343,7 +349,7 @@ impl PointerInputModifierNode for ToggleablePointerModifierNode {
             .unwrap_or(false);
 
         let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(
+            recognizer.update_exclusive(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
                 within_bounds,
@@ -433,6 +439,38 @@ impl KeyboardInputModifierNode for ToggleableKeyboardModifierNode {
     }
 }
 
+pub(crate) struct DisabledToggleSemantics {
+    pub role: accesskit::Role,
+    pub value: bool,
+    pub label: Option<String>,
+    pub description: Option<String>,
+}
+
+impl SemanticsModifierNode for DisabledToggleSemantics {
+    fn apply(
+        &self,
+        node: &mut AccessibilityNode,
+        handler: &mut Option<AccessibilityActionHandler>,
+    ) {
+        node.role = Some(self.role);
+        node.toggled = Some(if self.value {
+            Toggled::True
+        } else {
+            Toggled::False
+        });
+        if let Some(label) = &self.label {
+            node.label = Some(label.clone());
+        }
+        if let Some(description) = &self.description {
+            node.description = Some(description.clone());
+        }
+        node.disabled = true;
+        node.focusable = false;
+        node.actions.clear();
+        *handler = None;
+    }
+}
+
 struct ToggleableSemanticsModifierNode {
     value: bool,
     on_value_change: CallbackWith<bool, ()>,
@@ -502,7 +540,7 @@ impl PointerInputModifierNode for SelectablePointerModifierNode {
             .unwrap_or(false);
 
         let tap_result = self.tap_recognizer.with_mut(|recognizer| {
-            recognizer.update(
+            recognizer.update_exclusive(
                 input.pass,
                 input.pointer_changes.as_mut_slice(),
                 within_bounds,
