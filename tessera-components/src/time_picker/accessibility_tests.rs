@@ -24,7 +24,7 @@ use crate::{
 };
 
 use super::{
-    DayPeriod, TimeField, TimePickerDisplayMode, TimePickerLayout, TimePickerState,
+    DayPeriod, TimePickerDisplayMode, TimePickerLayout, TimePickerSelection, TimePickerState,
     time_picker_dialog,
 };
 
@@ -221,7 +221,10 @@ fn check_accessibility(samples: u32) {
 
     action(&mut renderer, third, Action::Click);
     assert_eq!(state.with(TimePickerState::hour), 15);
-    assert_eq!(state.with(|state| state.selection), TimeField::Hour);
+    assert_eq!(
+        state.with(TimePickerState::selection),
+        TimePickerSelection::Hour
+    );
     assert_eq!(control(&renderer, "Hour 3 of 12", Role::Button).0, third);
     assert_eq!(
         control(&renderer, "Hour 3 of 12", Role::Button)
@@ -283,6 +286,10 @@ fn check_accessibility(samples: u32) {
 
     let minute = control(&renderer, "Minute", Role::Button).0;
     action(&mut renderer, minute, Action::Click);
+    assert_eq!(
+        state.with(TimePickerState::selection),
+        TimePickerSelection::Minute
+    );
     let quarter = control(&renderer, "Minute 15 of 60", Role::Button).0;
     action(&mut renderer, quarter, Action::Focus);
     assert_eq!(state.with(TimePickerState::minute), 8);
@@ -321,7 +328,10 @@ fn check_accessibility(samples: u32) {
     );
     tap(&mut renderer, point);
     assert_eq!(state.with(TimePickerState::hour), 14);
-    assert_eq!(state.with(|state| state.selection), TimeField::Minute);
+    assert_eq!(
+        state.with(TimePickerState::selection),
+        TimePickerSelection::Minute
+    );
     assert_eq!(
         state.with(TimePickerState::minute),
         8,
@@ -346,7 +356,10 @@ fn check_accessibility(samples: u32) {
         15,
         "pointer snapping reads updated props"
     );
-    assert_eq!(state.with(|state| state.selection), TimeField::Minute);
+    assert_eq!(
+        state.with(TimePickerState::selection),
+        TimePickerSelection::Minute
+    );
     assert_eq!(state.with(TimePickerState::minute), 15);
 
     let toggle = control(&renderer, "Switch to time input", Role::Button).0;
@@ -354,7 +367,10 @@ fn check_accessibility(samples: u32) {
     let hour = control(&renderer, "Hour", Role::TextInput).0;
     control(&renderer, "Minute", Role::TextInput);
     action(&mut renderer, hour, Action::Focus);
-    assert_eq!(state.with(|state| state.selection), TimeField::Hour);
+    assert_eq!(
+        state.with(TimePickerState::selection),
+        TimePickerSelection::Hour
+    );
     renderer.inject_ime_event(Ime::Commit("7".to_owned()));
     renderer.render_frames(8);
     assert_eq!(state.with(TimePickerState::hour), 19);
@@ -369,7 +385,7 @@ fn check_accessibility(samples: u32) {
     control(&renderer, "Minute 55 of 60", Role::Button);
     state.with_mut(|state| {
         state.set_hour(14);
-        state.selection = TimeField::Hour;
+        state.selection = TimePickerSelection::Hour;
     });
     renderer.render_frames(8);
     let pm = control(&renderer, "PM", Role::RadioButton).0;

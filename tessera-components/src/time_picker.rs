@@ -48,10 +48,13 @@ const CLOCK_INNER_RADIUS: f32 = 69.0;
 #[path = "time_picker/accessibility_tests.rs"]
 mod accessibility_tests;
 
+/// The time unit currently selected for dial adjustment or manual entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-enum TimeField {
+pub enum TimePickerSelection {
+    /// Adjust or enter the hour.
     #[default]
     Hour,
+    /// Adjust or enter the minute.
     Minute,
 }
 
@@ -92,7 +95,7 @@ pub struct TimePickerState {
     minute: u8,
     is_24_hour: bool,
     display_mode: TimePickerDisplayMode,
-    selection: TimeField,
+    selection: TimePickerSelection,
 }
 
 impl TimePickerState {
@@ -108,7 +111,7 @@ impl TimePickerState {
             minute: clamp_minute(initial_minute),
             is_24_hour,
             display_mode,
-            selection: TimeField::Hour,
+            selection: TimePickerSelection::Hour,
         }
     }
 
@@ -130,6 +133,11 @@ impl TimePickerState {
     /// Returns the display mode.
     pub fn display_mode(&self) -> TimePickerDisplayMode {
         self.display_mode
+    }
+
+    /// Returns the time unit currently selected for adjustment or manual entry.
+    pub fn selection(&self) -> TimePickerSelection {
+        self.selection
     }
 
     /// Returns the period for 12-hour mode.
@@ -242,7 +250,7 @@ struct TimePickerSnapshot {
     minute: u8,
     is_24_hour: bool,
     display_mode: TimePickerDisplayMode,
-    selection: TimeField,
+    selection: TimePickerSelection,
 }
 
 /// # time_picker
@@ -341,7 +349,7 @@ fn time_picker_content(
             is_24_hour: snapshot.is_24_hour,
         })
         .child(move || {
-            time_number(state, TimeField::Hour, input);
+            time_number(state, TimePickerSelection::Hour, input);
             let theme = use_context::<MaterialTheme>().unwrap().get();
             surface()
                 .modifier(Modifier::new().size(Dp(24.0), Dp(if input { 72.0 } else { 80.0 })))
@@ -350,7 +358,7 @@ fn time_picker_content(
                 .child(move || {
                     text().content(":").style(theme.typography.display_large);
                 });
-            time_number(state, TimeField::Minute, input);
+            time_number(state, TimePickerSelection::Minute, input);
             if !snapshot.is_24_hour {
                 time_period_selector(state, input);
             }
@@ -498,12 +506,12 @@ impl tessera_ui::LayoutModifierNode for TimePickerMeasure {
 }
 
 #[tessera]
-fn time_number(state: State<TimePickerState>, field: TimeField, input: bool) {
+fn time_number(state: State<TimePickerState>, field: TimePickerSelection, input: bool) {
     let snapshot = state.with(TimePickerState::snapshot);
     let theme = use_context::<MaterialTheme>().unwrap().get();
     let scheme = theme.color_scheme;
     let selected = snapshot.selection == field;
-    let value = if field == TimeField::Hour {
+    let value = if field == TimePickerSelection::Hour {
         hour_for_display(snapshot.hour, snapshot.is_24_hour)
     } else {
         snapshot.minute
@@ -514,7 +522,7 @@ fn time_number(state: State<TimePickerState>, field: TimeField, input: bool) {
         96.0
     };
     let height = if input { 72.0 } else { 80.0 };
-    let label = if field == TimeField::Hour {
+    let label = if field == TimePickerSelection::Hour {
         "Hour"
     } else {
         "Minute"
@@ -583,25 +591,25 @@ fn time_number(state: State<TimePickerState>, field: TimeField, input: bool) {
                     if let Ok(number) = text.parse::<u8>() {
                         let is_24_hour = state.with(TimePickerState::is_24_hour);
                         let valid = match field {
-                            TimeField::Hour => {
+                            TimePickerSelection::Hour => {
                                 if is_24_hour {
                                     number <= 23
                                 } else {
                                     (1..=12).contains(&number)
                                 }
                             }
-                            TimeField::Minute => number <= 59,
+                            TimePickerSelection::Minute => number <= 59,
                         };
                         if !valid {
                             return previous.get();
                         }
                         state.with_mut(|s| match field {
-                            TimeField::Hour => s.set_hour(if is_24_hour {
+                            TimePickerSelection::Hour => s.set_hour(if is_24_hour {
                                 number
                             } else {
                                 number % 12 + if s.period() == DayPeriod::Pm { 12 } else { 0 }
                             }),
-                            TimeField::Minute => s.set_minute(number),
+                            TimePickerSelection::Minute => s.set_minute(number),
                         });
                     }
                     previous.set(text.clone());
@@ -937,15 +945,17 @@ struct ClockLayout {
     hour: u8,
     minute: u8,
     is_24_hour: bool,
-    selection: TimeField,
+    selection: TimePickerSelection,
 }
 
 impl ClockLayout {
     fn inner(&self) -> bool {
-        self.selection == TimeField::Hour && self.is_24_hour && (self.hour == 0 || self.hour > 12)
+        self.selection == TimePickerSelection::Hour
+            && self.is_24_hour
+            && (self.hour == 0 || self.hour > 12)
     }
     fn angle(&self) -> f32 {
-        if self.selection == TimeField::Hour {
+        if self.selection == TimePickerSelection::Hour {
             (self.hour % 12) as f32 * TAU / 12.0
         } else {
             self.minute as f32 * TAU / 60.0
@@ -1053,7 +1063,7 @@ impl PointerInputModifierNode for ClockInput {
         let dy = position.y - center;
         let angle = dx.atan2(-dy).rem_euclid(TAU);
         self.state.with_mut(|s| match s.selection {
-            TimeField::Hour => {
+            TimePickerSelection::Hour => {
                 let index = (angle * 12.0 / TAU).round() as u8 % 12;
                 let hour = if s.is_24_hour {
                     if dx.hypot(dy) < center * 85.0 / 128.0 {
@@ -1071,10 +1081,10 @@ impl PointerInputModifierNode for ClockInput {
                         * normalize_step(self.hour_step, 23),
                 );
                 if released {
-                    s.selection = TimeField::Minute;
+                    s.selection = TimePickerSelection::Minute;
                 }
             }
-            TimeField::Minute => {
+            TimePickerSelection::Minute => {
                 let step = normalize_step(self.minute_step, 59);
                 let minute = (angle * 60.0 / TAU).round() as u8 % 60;
                 s.set_minute((minute / step) * step);
@@ -1100,7 +1110,7 @@ impl PointerInputModifierNode for ClockInput {
 struct ClockFocus {
     requesters: [FocusRequester; 24],
     anchor: usize,
-    field: TimeField,
+    field: TimePickerSelection,
 }
 
 impl ClockFocus {
@@ -1115,19 +1125,21 @@ impl ClockFocus {
 
 fn selected_clock_slot(snapshot: &TimePickerSnapshot) -> usize {
     match snapshot.selection {
-        TimeField::Hour if snapshot.is_24_hour && snapshot.hour == 0 => 12,
-        TimeField::Hour if snapshot.is_24_hour && snapshot.hour > 12 => snapshot.hour as usize,
-        TimeField::Hour => (snapshot.hour % 12) as usize,
-        TimeField::Minute => ((snapshot.minute as f32 / 5.0).round() as usize) % 12,
+        TimePickerSelection::Hour if snapshot.is_24_hour && snapshot.hour == 0 => 12,
+        TimePickerSelection::Hour if snapshot.is_24_hour && snapshot.hour > 12 => {
+            snapshot.hour as usize
+        }
+        TimePickerSelection::Hour => (snapshot.hour % 12) as usize,
+        TimePickerSelection::Minute => ((snapshot.minute as f32 / 5.0).round() as usize) % 12,
     }
 }
 
-fn clock_value_number(field: TimeField, index: usize) -> u8 {
+fn clock_value_number(field: TimePickerSelection, index: usize) -> u8 {
     match (field, index) {
-        (TimeField::Minute, _) => index as u8 * 5,
-        (TimeField::Hour, 0) => 12,
-        (TimeField::Hour, 12) => 0,
-        (TimeField::Hour, _) => index as u8,
+        (TimePickerSelection::Minute, _) => index as u8 * 5,
+        (TimePickerSelection::Hour, 0) => 12,
+        (TimePickerSelection::Hour, 12) => 0,
+        (TimePickerSelection::Hour, _) => index as u8,
     }
 }
 
@@ -1135,7 +1147,7 @@ fn select_clock_slot(state: State<TimePickerState>, index: usize) {
     state.with_mut(|state| {
         let number = clock_value_number(state.selection, index);
         match state.selection {
-            TimeField::Hour => {
+            TimePickerSelection::Hour => {
                 let hour = if state.is_24_hour {
                     number
                 } else {
@@ -1148,7 +1160,7 @@ fn select_clock_slot(state: State<TimePickerState>, index: usize) {
                 };
                 state.set_hour(hour);
             }
-            TimeField::Minute => {
+            TimePickerSelection::Minute => {
                 state.set_minute(number);
             }
         }
@@ -1205,7 +1217,7 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
     let scheme = theme.color_scheme;
     let dragging = remember(|| false);
     let focus = remember(|| ClockFocus::new(&snapshot));
-    let count = if snapshot.is_24_hour && snapshot.selection == TimeField::Hour {
+    let count = if snapshot.is_24_hour && snapshot.selection == TimePickerSelection::Hour {
         24
     } else {
         12
@@ -1244,7 +1256,7 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
                     test_tag: cfg!(test).then(|| "time-clock".to_owned()),
                     role: Some(Role::Group),
                     label: Some(
-                        if snapshot.selection == TimeField::Hour {
+                        if snapshot.selection == TimePickerSelection::Hour {
                             "Hours"
                         } else {
                             "Minutes"
@@ -1276,7 +1288,8 @@ fn time_clock(state: State<TimePickerState>, hour_step: u8, minute_step: u8) {
                 .shape(Shape::Ellipse)
                 .content_alignment(Alignment::Center)
                 .child(move || {
-                    if snapshot.selection == TimeField::Minute && snapshot.minute % 5 != 0 {
+                    if snapshot.selection == TimePickerSelection::Minute && snapshot.minute % 5 != 0
+                    {
                         surface()
                             .modifier(Modifier::new().size(Dp(4.0), Dp(4.0)))
                             .style(scheme.on_primary.into())
@@ -1307,12 +1320,12 @@ fn clock_value(
     let number = clock_value_number(snapshot.selection, index);
     let selected = index == selected_clock_slot(&snapshot);
     let (requester, anchor) = focus.with(|focus| (focus.requesters[index], focus.anchor));
-    let field = if snapshot.selection == TimeField::Hour {
+    let field = if snapshot.selection == TimePickerSelection::Hour {
         "Hour"
     } else {
         "Minute"
     };
-    let total = if snapshot.selection == TimeField::Minute {
+    let total = if snapshot.selection == TimePickerSelection::Minute {
         60
     } else if snapshot.is_24_hour {
         24
@@ -1348,7 +1361,7 @@ fn clock_value(
         .content_alignment(Alignment::Center)
         .child(move || {
             text()
-                .content(if snapshot.selection == TimeField::Minute {
+                .content(if snapshot.selection == TimePickerSelection::Minute {
                     format_two_digit(number)
                 } else {
                     number.to_string()
@@ -1646,7 +1659,9 @@ mod tests {
 
     use crate::{modifier::ModifierExt as _, theme::material_theme};
 
-    use super::{TimeField, TimePickerLayout, TimePickerState, time_picker, time_picker_dialog};
+    use super::{
+        TimePickerLayout, TimePickerSelection, TimePickerState, time_picker, time_picker_dialog,
+    };
 
     thread_local! {
         static STATE: Cell<Option<State<TimePickerState>>> = const { Cell::new(None) };
@@ -1821,7 +1836,7 @@ mod tests {
             }
             let state = STATE.get().unwrap();
             assert_eq!(state.with(TimePickerState::hour), expected_hour);
-            assert_eq!(state.with(|s| s.selection), TimeField::Minute);
+            assert_eq!(state.with(|s| s.selection), TimePickerSelection::Minute);
             for (index, content) in [
                 CursorEventContent::Pressed(PressKeyEventType::Left),
                 CursorEventContent::Released(PressKeyEventType::Left),
@@ -1848,7 +1863,7 @@ mod tests {
     fn time_input_fixture() {
         let state = remember(|| {
             let mut state = TimePickerState::new(10, 8, false, super::TimePickerDisplayMode::Input);
-            state.selection = TimeField::Minute;
+            state.selection = TimePickerSelection::Minute;
             state
         });
         STATE.set(Some(state));
@@ -1890,6 +1905,9 @@ mod tests {
         for frame in 3..6 {
             pump_layout_test_session(&mut session, frame * 16_666_667);
         }
-        assert_eq!(STATE.get().unwrap().with(|s| s.selection), TimeField::Hour);
+        assert_eq!(
+            STATE.get().unwrap().with(|s| s.selection),
+            TimePickerSelection::Hour
+        );
     }
 }
