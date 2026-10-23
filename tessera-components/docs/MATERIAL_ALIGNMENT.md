@@ -37,15 +37,15 @@ support; browser publication and assistive-technology actions remain open.
 | Navigation bar | `navigation_bar` | Flexible top/start arrangement tested; complete state/responsive screenshots |
 | Navigation drawer | `navigation_drawer` (new) | 336×56dp destinations, selection and disabled input tested; destination switching verified in WASM; complete modal overlay integration, transitions, and full state screenshots |
 | Navigation rail | `navigation_rail` | Audit collapsed/expanded/modal modes and current tokens |
-| Bottom sheets | `bottom_sheet` | Modal opening, exit focus restoration, forward/reverse traversal, empty-content fallback, added controls, background pointer isolation, unavailable origins and programmatic motion reversal covered at two densities and 1x/4x MSAA; standard/modal geometry, detents/dragging, full semantics and reference states remain |
-| Side sheets | `side_sheet` | Modal focus restoration, traversal, empty-content fallback and scrim isolation covered at two densities and 1x/4x MSAA; standard traversal/background interaction, both-edge motion reversal, 400dp width cap, 24dp padding and narrow resize covered; drag settling, detached geometry, full semantics and reference states remain |
+| Bottom sheets | `bottom_sheet` | Modal opening, exit focus restoration, forward/reverse traversal, empty-content fallback, added controls, background pointer isolation, unavailable origins and programmatic motion reversal covered at two densities and 1x/4x MSAA; named Dialog roles, modal flags and background semantic isolation verified; handle release/cancellation, velocity thresholds, nested drag settling and reversal verified; standard/modal geometry, partial detents, stacked-modal/platform semantics and reference states remain |
+| Side sheets | `side_sheet` | Modal focus restoration, traversal, empty-content fallback and scrim isolation covered at two densities and 1x/4x MSAA; named Dialog roles, modal flags and background semantic isolation verified; standard traversal/background interaction, both-edge motion reversal, 400dp width cap, 24dp padding and narrow resize covered; nested drag settling, flings, resized thresholds and live edge changes verified; direct container dragging, detached geometry, stacked-modal/platform semantics and reference states remain |
 | App bars | `app_bar` | Small, medium flexible, and large flexible layouts, optional subtitles, leading/global-center alignment, action avoidance, dynamic slot colors, and multiline growth implemented; native 1×/4× GPU geometry, typography, reading order, colors, input, wrapping, and resize recovery verified; nested-scroll collapse, snap, inertia, color changes, idle callback cleanup, and hidden-navigation semantics and keyboard traversal verified; WASM variants, subtitle switching, centered titles, pointer/Tab/Enter actions, and 390px sizing checked; search composition, custom title content, scaffold-wide reading order, normalized reference states, dark themes, and motion comparisons remain |
 | Badges | `badge` | Dot/count sizes, offsets, rounded fractional-density geometry, anchor constraints, empty/multiple slot children, live theme/text contexts, explicit colors, semantic authoring, and pointer passthrough verified at four densities and 1x/4x GPU sampling; WASM count/dot/theme transitions checked; full normalized reference images, maximum-count width, anchor baselines, RTL, and bounded navigation placement remain |
 | Cards | `card` | Slow-frame elevation, disabled/static semantics, accessible labels, foreground borders/feedback over clipped media, outlined hover/focus tokens, dark container/content roles, theme restoration, and resize recovery verified by native 1x/4x GPU regressions; WASM media, keyboard focus/activation, disabled/static traversal, and re-enabling checked; full normalized reference states, fractional edge fidelity, remaining minimum-target/custom-shape cases, and motion comparisons |
 | Carousel | `carousel` (new) | Multi-browse, uncontained, mixed-aspect uncontained, hero, centered hero, and full-screen layouts implemented with virtualized full-size content, 28dp masks, snapping/free scrolling, controller navigation, reverse layout, keyboard and accessibility actions; Native checks include source geometry/padding vectors, 1.25×/1.5×/2× density, dynamic props, pointer cancellation, zero-width/resize recovery, a responsive lazy feed, and 1×/4× GPU readback; WASM layout switching, horizontal/vertical input, Home/End, activation, narrow-window recovery, idle content, and scrolling out of the lazy viewport are verified; complete reference state comparisons and motion audits |
 | Checkbox | `checkbox` | Checked, unchecked, and indeterminate states share one builder and controller; native 1x/4x checks cover density, geometry, light/dark/error/disabled colors, custom overrides, validation semantics, activation, spatial springs, Oklab effects, reversal pixels, and idle-clock shutdown; normalized cross-platform reference comparisons remain |
 | Chips | `chip` | Four variants preserve icon/label edge spacing; selectable semantics, live typography, interaction elevation, focus outlines, and input icon colors verified; input avatars preserve source colors with circular center cropping, disabled opacity, priority, and restored spacing at four densities and 1x/4x sampling; Expressive selection/press shapes and interrupted spring motion verified; icon motion, RTL, tonal variants, and normalized reference images remain |
-| Dialogs | `dialog` | Provider opening, exit focus restoration, forward/reverse traversal, empty-content fallback, added controls, background pointer isolation, unavailable origins and programmatic motion reversal covered at two densities and 1x/4x MSAA; basic/full-screen variants, action geometry, full semantics and reference states remain |
+| Dialogs | `dialog` | Provider opening, exit focus restoration, forward/reverse traversal, empty-content fallback, added controls, background pointer isolation, unavailable origins and programmatic motion reversal covered at two densities and 1x/4x MSAA; named Dialog roles, modal flags and background semantic isolation verified; basic/full-screen variants, action geometry, stacked-modal/platform semantics and reference states remain |
 | Divider | `divider` | Parent-constrained thickness, unbounded-axis recovery, modifier-based insets, hairlines, and live outline-variant colors implemented; analytic fractional strokes, default-palette helper colors, half-pixel placement, opacity, stencil clipping, forced-size recovery, and stable upload allocation verified at 1x/4x sampling; native checks cover four densities; release WASM and browser rendering verified; complete normalized reference comparisons remain |
 | Lists | `list_item` | 56/72/88dp minimum heights, measured supporting-text wrapping, short/tall automatic alignment and explicit overrides, 20dp icon context, live slot typography/colors, selected semantics and disabled focus/input corrected; native 1x/4x tests at four densities and WASM interaction/reflow verified; segmented positions and FastSpatial state shapes verified by native input/pixel regressions; perceptual color transitions and controlled drag palettes implemented, with rendering verification recorded below; main/overline/supporting render slots implemented with verification recorded below; controlled action/single/multiple selection roles and callbacks verified; selection indicators/group navigation, nested controls/targets, expansion/swipe/drag behavior, and normalized reference states remain |
 | Menus | `menus` | Current/saved anchors, reflow, gap-aware side fallback, exact-fit resize, and outside dismissal GPU-tested; trigger focus restoration, explicit fallback, disabled trigger recovery, and forward/reverse Tab exit passed native GPU regression; WASM selection, Escape, Enter/Space reopening, Tab exit, narrow-window recovery, and lazy-list retention checked; queued close/navigation barrier covered by native core/order regressions and WASM rapid keyboard sequences; Expressive group surfaces, standard/vibrant colors, position-specific corners, selected menu-radio semantics, trailing-space reservation, and scrolling implemented; shared cascading overlays, branch/chain dismissal, source removal/disable cleanup, and virtualized Tab-exit navigation implemented; shadow overflow, rounded content clipping, scrolling shadow input bounds, container morphing, and delayed mouse-hover branch switching GPU-tested; normalized group/state snapshots, compact adaptive layout, and remaining focus audits |
@@ -3611,3 +3611,774 @@ did not change the rendered dimensions in this run and was reset; narrow
 placement is supported here by native resize tests, not a narrow-browser claim.
 All three Side sheet documentation examples pass; the two Dialog examples and
 the Bottom sheet example also pass with the visibility-motion implementation.
+
+### Dialog roles, names and background semantic isolation
+
+All four overlay providers now accept `accessibility_label` to describe their
+purpose. Dialog, modal Bottom sheet and modal Side sheet publish a Dialog role
+with the modal flag; standard Side sheet publishes a nonmodal Dialog. The
+underlying accessibility metadata and semantics modifier forward the modal flag
+to AccessKit. The example supplies explicit names for all three modal providers.
+
+The dialog's semantic boundary and focus scope are attached to its painted
+surface rather than its full-window positioning wrapper. Actions remain
+descendants of that boundary. While a modal surface is visible, a stable wrapper
+around main content clears its descendant semantics and hides its own node.
+Scrims are hidden from assistive technology without losing pointer dismissal.
+Standard Side sheet retains the main content's semantics and interaction.
+This follows the [modal dialog pattern](https://www.w3.org/WAI/ARIA/apg/patterns/dialog-modal/)
+and [side-sheet accessibility guidance](https://m3.material.io/components/side-sheets/accessibility).
+
+Accessibility action dispatch now rejects targets beneath hidden, cleared or
+unplaced ancestors. This prevents a previously published background node ID from
+activating or focusing a control after the modal appears. A core regression
+checks successful action dispatch, each exclusion independently, and successful
+dispatch again after revealing the same target.
+
+The two native focus scenarios now assert exactly one Dialog boundary with the
+expected name/modal flag, ownership of both action buttons, a 248dp painted
+dialog boundary for the fixed-width fixture, exclusion of background controls,
+and rejection of stale background click/focus requests. Updating the accessible
+name preserves the dialog's node ID. Both 1x/4x scenarios pass at 1.0/1.5 density,
+including the previous restoration, empty-content and standard-sheet cases.
+Both overlay rendering/motion scenarios also pass. The current verification
+passes 115 core tests, 314 ordinary component tests, 20 foundation tests, all 111
+component documentation examples and all three foundation documentation examples.
+
+Release WASM and call-color checking pass. Browser inspection still exposes the
+application as a canvas image rather than a published web Dialog tree; native
+AccessKit snapshot assertions do not establish browser screen-reader support.
+Stacked modal ownership, host removal, platform assistive-technology behavior and
+optional description relationships remain open.
+
+Browser testing also exposed an input-order gap when opening a provider and
+immediately pressing Tab before its first layout: traversal could change the
+background focus before the provider saved its origin. The example now defers
+keyboard input immediately in its visibility-change callbacks, following the
+same layout barrier used by focusable popup transitions. This is an example
+integration correction, not an automatic guarantee for arbitrary application
+state writes.
+
+The final release WASM build and call-color check pass with that correction.
+Actual browser sequences open each of the three modals, immediately send Tab
+and Escape, observe its exit, and use Enter to reopen the same provider. The
+reopened Dialog, Side sheet and empty-content Bottom sheet were visually
+confirmed, with no error-level browser logs. External rendering evidence is
+saved as `wasm-dialog-semantic-boundary.png`,
+`wasm-side-sheet-semantic-boundary.png` and
+`wasm-bottom-sheet-semantic-boundary.png`. Those images verify rendering and
+interaction; the accessibility tree contracts above are established by native
+snapshots, not by the images or the browser canvas node.
+
+### Sheet drag settling, thresholds and context reset
+
+Bottom and Side sheets now retain drag displacement in density-independent
+units and settle it with the default Expressive spatial spring. A release keeps
+its current displacement instead of resetting it in one frame. Grabbing or
+reopening a moving sheet samples the existing displacement; sheet visibility
+and drag tracks remain continuous. Direct drag displacement is limited by the measured
+sheet extent. Settling requests frames while an open sheet still moves, without
+keeping an already hidden provider alive for an invisible residual track.
+
+Bottom sheet dismissal uses the 56dp positional and 125dp/s velocity thresholds
+from [Sheet defaults](https://raw.githubusercontent.com/androidx/androidx/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/SheetDefaults.kt).
+The handle uses the shared bounded velocity tracker, and cancellation returns it
+to the open anchor without requesting dismissal. Its 48dp region now has a
+`Drag handle` accessibility label. Side sheet uses half its measured width as
+the distance threshold, following the [edge delegate's halfway rule](https://raw.githubusercontent.com/material-components/material-components-android/master/lib/java/com/google/android/material/sidesheet/RightSheetDelegate.java),
+and a 500dp/s significant horizontal velocity threshold. Nested scroll release
+velocity is forwarded in the correct direction for both edges. The Android
+delegate also has platform-specific prediction and direction rules that these
+checks do not establish as equivalent.
+
+Nested scroll callbacks are owned by the persistent providers and passed into
+the transient sheet wrappers. The current side is read from a stable state
+handle so retained callbacks follow an edge change. Scrims now disable state
+layers as well as ripple, preventing cursor hover from tinting the dimmed scene
+after a sheet returns to its initial position.
+
+The expanded headless scenarios also exposed a separate reset defect: remembered
+callback slots were reset while context values containing their handles survived
+into the next renderer. Runtime slot reset now clears context slots too, advances
+their generations, rebuilds the free list and releases values after the table
+borrow ends. The existing cleanup regression now covers full runtime reset in
+addition to individual owner removal and recycling. All 115 core tests pass.
+
+Two new native GPU cases exercise the Bottom sheet and modal/standard Side
+sheets on both edges, at 1.0/1.5 density and 1x/4x MSAA. They obtain the nested
+scroll connection from the actual providers and observe rendered geometry,
+pixels and close callbacks for small releases, threshold crossing, outward and
+inward flings, rejected dismissal, close/reopen interruption, narrow resizing
+and changing sides. Bottom-handle coverage additionally sends real pointer
+samples for cancellation, a held slow release and a fast short fling. Pointer
+assertions wait for the layout after input rather than reading the preceding
+frame's cached geometry. Final settled pixels must match the initial image.
+Both cases, both prior overlay-motion cases and both modal-focus/semantic cases
+pass. All 314 ordinary component tests and 111 component documentation examples
+also pass.
+
+These checks cover the providers' current expanded/hidden anchors. Partial
+detents, direct whole-container Side sheet dragging, detached margins, platform
+gesture prediction, normalized reference frames and browser assistive-technology
+publication remain open.
+
+The final release WASM build and call-color check pass. In the browser, a small
+handle drag returns to the open position; a 64 CSS-pixel downward drag dismisses
+the sheet, and Enter reopens it through the restored trigger. The settled sheet
+and dimmed scene recover without a hover-tinted scrim, and no error-level browser
+logs were observed. External interaction evidence is saved as
+`wasm-sheet-drag-settled.png`, `wasm-sheet-drag-dismissed.png` and
+`wasm-sheet-drag-reopened.png`. Browser input is supplementary interaction evidence;
+the explicit-frame native cases establish the detailed settling and velocity
+contracts.
+
+The final checks also pass all 90 core documentation examples and 20 foundation
+unit tests. Formatting and whitespace checks are clean.
+
+## Interactive specification page migration
+
+The Material Components route now starts a categorized directory based on the
+official Components page inspected in the browser. Its categories and individual
+component entries open focused articles instead of rendering the entire gallery.
+The old stacked gallery route has been removed. Sliders, Buttons, Checkbox, Switch,
+Radio button, Chips, Icon buttons, Cards, Lists, Divider and Time pickers have
+interactive specification articles. Date pickers has its modal calendar, range,
+input and element-state sections; the Docked date picker component and its
+section are still missing. The other articles
+host their own existing live examples while their specification sections are
+migrated.
+Unsupported resource and platform chips are omitted. Other article tabs are
+also omitted until their actual content is implemented; abbreviated substitute
+pages are not used to fill their positions.
+
+The directory follows the six official component categories and exposes 36
+individual entries without adding a component sidebar. A native headless GPU
+regression clicks every card, verifies the matching article is published, and
+returns through the real back button. All 36 round trips pass. Cards without
+a purpose-built live illustration omit that illustration rather than using a
+generic control as a substitute.
+
+The Sliders page includes live standard, centered and range controls, five sizes,
+vertical orientation, light and dark schemes, disabled controls, token groups
+and section links. This is an initial migration, not a claim of complete article
+or pixel parity: detailed sections in other component articles, full token
+tables and precise diagram annotations still require work.
+
+Browser inspection exposed text ignoring the minimum dimensions offered by
+weighted rows. Text measurement now clamps its result to both offered axes.
+A real three-column layout regression protects the allocated widths and
+positions. All 315 ordinary component tests and four GPU text drawing tests
+pass with this correction.
+
+Buttons now separates default and toggle variants, five sizes, round and square
+shapes, five color styles, anatomy, light/dark colors, live input states and
+measurements. Checkbox and Switch provide their own tokens, settings examples,
+colors, states and measurements; Switch also exposes all three icon configurations.
+These pages follow the current Expressive sections inspected in the official
+Specs. Deprecated button baseline tokens and unsupported resource/platform chips
+are omitted.
+
+All four detailed articles share responsive headers and section links. The
+native GPU directory regression now also exercises button selection, token-table
+updates, checkbox indeterminate-state clearing and switch icon configurations.
+It checks first-section and Measurements links below the fixed back button,
+article titles at 390-pixel width and the one-column compact directory. All 36
+routes and these interaction/layout assertions pass. Browser inspection caught
+first-section headings being obscured after navigation; anchors now resolve the
+article viewport origin at click time and include section padding, independent
+of observer callback order. The native fixture includes the app-bar offset.
+Tables publish semantic rows and cells, and article groups retain their interactive descendants.
+
+The release WASM build and call-color check pass after the anchor correction.
+Browser verification confirms the first section heading remains visible, the
+live toggle button changes selection and shape, the checkbox settings example
+updates, and choosing Outlined updates the token table. External screenshots
+are saved as `wasm-spec-buttons-expressive.png`,
+`wasm-spec-checkbox-settings.png` and `wasm-spec-components-directory.png`.
+Detailed sections for the remaining component articles and complete reference
+annotation/pixel comparisons are still outstanding.
+
+Radio button now follows the four official sections with live exclusive choices,
+light/dark schemes, enabled/disabled controls and 20/40/48dp measurements. Icon
+buttons follows the current Expressive sections with default/toggle variants,
+five sizes, two shapes, three widths, four color styles, live state feedback,
+shape morphing and dimension tables. Deprecated baseline token tables are omitted.
+Chips follows the official token section and four purpose-specific sections,
+each with anatomy, light/dark color examples, states and measurements. Its 8dp
+corners match the current Chips specs rather than importing another component's
+Expressive shapes. Optional imagery and unsupported resource chips are omitted.
+
+The existing native GPU directory scenario now also verifies icon action counts,
+icon-toggle selection, filter/input-chip selection, chip token-table updates and
+mutually exclusive radio selection. It checks section links and 390-pixel titles
+for all seven detailed articles, including Chips' final Suggestion chip section.
+All 36 route round trips and these assertions pass.
+
+The final release WASM build and call-color check pass for these three pages.
+Browser interaction confirms exclusive radio selection, icon toggle color/shape
+changes and filter-chip checkmarks. Shared subheadings inherit their surface's
+content color so dark examples remain legible; the final browser preview verifies
+this correction and reports no error-level console entries. External evidence is
+saved as `wasm-spec-icon-buttons-expressive.png`, `wasm-spec-chips-selection.png`,
+`wasm-spec-radio-exclusive.png` and `wasm-spec-chips-dark-theme.png`.
+Remaining articles still require detailed specification migration; these checks
+do not establish complete diagram or pixel parity for the whole catalog.
+
+Cards now follows the official token section, three container-style sections and
+measurements. Each style has real enabled/disabled cards, light/dark schemes and
+observable activation counts. Content uses 16dp horizontal padding; adjacent
+measurement cards use 8dp spacing and the component's 12dp corners.
+
+Lists now follows the recommended Expressive sections, including standard and
+segmented styles, single-action, multi-action, single-select and multi-select
+examples, controlled expansion, slots, color, states and measurements. The
+inspected common token module confirms 56/72/88dp minimum heights, 20dp Expressive
+icons, 12dp between slots, 10dp vertical padding and a 2dp segmented gap. Optional
+media is omitted. Platform-specific swipe examples and the unrecommended baseline
+article are not presented as implemented content.
+
+Divider follows its three official sections with live full-width, 16dp inset and
+16dp middle-inset lines, light/dark colors, supporting-text spacing and a dimension
+table. The native GPU directory case now verifies the actual line bounds and
+thickness, list heights, independent primary/secondary list actions, exclusive and
+multiple selection, expansion and card activation/disabled behavior. All 36 route
+round trips and the ten detailed articles' section-link/narrow-title checks pass.
+
+The final release WASM build and call-color check pass. Browser inspection verifies
+card activation counts, selected segmented-list colors/corners and all three
+horizontal divider insets. No error-level browser entries were observed. Evidence
+is stored outside the repository as `wasm-spec-cards-activation.png`,
+`wasm-spec-lists-selection.png` and `wasm-spec-divider-insets.png`. The remaining
+articles and comprehensive token/diagram/pixel comparisons are still outstanding.
+
+Date pickers now separates modal calendar selection, modal date input and element
+states. Single-date/range and light/dark controls share live examples; range months
+remain virtualized in a bounded viewport. The page also opens real dialogs and
+confirms current draft values. Docked date picker is absent from the library and
+has no substitute illustration or section. A reusable anchored Docked component
+and its specifications remain required work.
+
+Time pickers now follows the six official sections. Live examples switch between
+dial/input, twelve/twenty-four-hour formats and vertical/horizontal layouts, expose
+light/dark colors, and open a real confirmation dialog. Narrow articles use 8dp
+content insets to preserve picker space; container padding belongs inside the time
+picker surface rather than becoming an external margin.
+
+The expanded native directory regression verifies scoped calendar/date-range
+selection, named range inputs and values, unavailable-date rejection, current-value
+confirmation, real dialog closure, time-dial selection and input transitions. It
+also checks horizontal-clock fallback after narrowing and full calendar width in
+a 390-pixel article. These checks and all 36 route round trips pass.
+
+Inspection corrected modal date headlines to On surface. The range-input scenario
+also exposed unnamed editors: TextField now inherits a nonempty visible label when
+no explicit accessible name is supplied. Existing range GPU assertions now check
+both editor names and reading order. Date-picker predicate initialization resolves
+callbacks before remember's slot-table borrow; a real component/layout regression
+covers internal-controller initialization with date and year predicates.
+
+Final native checks pass all 316 ordinary component tests, all six opt-in date
+calendar/range GPU cases at 1x/4x MSAA and all 111 component documentation examples.
+The example's full directory/interaction scenario also passes with the calendar
+and range year windows set to 2020–2030, preserving usable year navigation rather
+than limiting the primary examples to one year.
+
+Browser inspection exposed date fields expanding to the bounded modal's available
+height after switching a range calendar to input mode. Single-date and range
+fields now retain their 56dp height. The native directory scenario switches the
+actual range dialog at a 900-by-1200 viewport, checks compact input bounds and
+dialog height, and verifies the cancel action remains inside the dialog. All 316
+ordinary component cases, six date GPU cases and the full directory scenario pass
+after this correction. Section-link checks reopen each article before navigation
+so focus restoration from an earlier dialog cannot leave their links offscreen.
+
+The final release WASM build and call-color check pass. Browser inspection confirms
+the range dialog's compact input fields, visible Cancel/OK actions and successful
+closure. Time-picker checks cover horizontal 24-hour selection, confirmation,
+keyboard mode and dialog closure. No error-level browser entries were observed.
+Evidence remains outside the repository as `wasm-spec-date-range-input-modal.png`
+and `wasm-spec-time-horizontal-confirmed.png`. The directory follows component
+categories and individual Specs articles without adding a component sidebar.
+
+The FAB and Extended FAB directory routes now use dedicated Expressive Specs
+articles, following the current [FAB sections](https://m3.material.io/components/floating-action-button/specs)
+and [Extended FAB sections](https://m3.material.io/components/extended-fab/specs).
+They present three live sizes, anatomy, six color mappings in light/dark schemes,
+interactive state feedback and measurement tables. FAB also retains its separate
+Configurations section. Baseline-only variants and unavailable resource chips
+are omitted. The Extended FAB anatomy example supports reversible label collapse.
+
+The full native directory scenario passes after adding actual button activation,
+three-size height checks, square FAB bounds, and collapsed/restored Extended FAB
+width assertions. First/last section navigation and 390-pixel title bounds now
+cover fourteen detailed or partially migrated articles. The other twenty-two
+routes still require detailed article migration, and Docked date picker remains
+missing; these page checks do not establish complete visual equivalence.
+
+The release WASM build and call-color check pass for both new articles. Browser
+checks verify three-size rendering, action counts, Extended FAB label collapse
+and restoration, light/dark color rows and section navigation. No error-level
+browser entries were observed. Screenshot evidence is stored outside the
+repository as `wasm-spec-fab-variants.png` and
+`wasm-spec-extended-fab-variants.png`.
+
+Button groups, Split buttons and FAB menu now have dedicated Specs articles with
+the current official chapter order. Their examples exercise single/multiple and
+required selection, disabled groups, five group/split sizes, independent split
+actions and anchored alternatives, and real floating creation menus. FAB menu
+examples start closed so offscreen examples do not request focus and scroll the
+article away from its heading. Split menu geometry is measured relative to the
+article host, independently of the popup's size.
+
+The official Button groups measurement captions list a 4dp XS inner corner,
+whereas the current connected-Xsmall token set specifies an 8dp resting corner
+and a 4dp pressed corner. The implementation and token table follow that explicit
+token set. Existing native pixel assertions retain both resting and pressed
+curvature checks. Split button Xsmall hovered/focused/pressed inner corners were
+corrected from 12dp to the explicit 8dp token; Small retains 12dp.
+
+Native checks pass four button-group GPU scenarios, five split-button GPU
+scenarios and all 111 component documentation examples. The directory scenario
+covers the new selection policies, disabled input, split option callbacks, popup
+size limits, floating menu selection/closure and first/last section navigation.
+Seventeen routes now have detailed or partially migrated articles; nineteen
+still use the earlier focused demonstrations. Group color-style composition,
+FAB menu's web-specific baseline presentation, Docked date picker and complete
+normalized reference comparisons remain required work.
+
+Final native checks pass 317 ordinary component cases and the complete directory
+scenario, including 390-pixel connected-group and extra-large split bounds.
+Split color samples now wrap at their natural widths on a theme-colored surface
+so light/dark labels retain contrast without allocating a whole row per action.
+
+The final release WASM build and call-color check pass. Browser checks confirm
+group multi-selection, FAB menu opening/selection/closure, anchored split menu
+callbacks, and wrapped light/dark split styles without error-level console
+entries. Evidence remains outside the repository as
+`wasm-spec-button-groups-selection.png`, `wasm-spec-fab-menu-expanded.png`,
+`wasm-spec-split-button-menu.png` and `wasm-spec-split-button-colors.png`.
+
+Badges, Loading indicator and Progress indicators now have independent Specs
+articles with their current official chapter order. Badge examples use actual
+navigation destinations, dot/numeric/capped labels, unread-count updates and a
+bar/rail switch. Loading examples compare default and contained appearances with
+pause controls. Progress examples switch flat/wavy and determinate/indeterminate
+forms, configure thickness, update completion and pause wave motion. Light/dark
+examples use theme surfaces; supplementary loading/wave illustrations are paused
+to keep their states inspectable.
+
+Chapter structure was checked against the official [Badges](https://m3.material.io/components/badges/specs),
+[Loading indicator](https://m3.material.io/components/loading-indicator/specs) and
+[Progress indicators](https://m3.material.io/components/progress-indicators/specs)
+Specs pages.
+
+The complete native directory regression passes with all twenty detailed or
+partially migrated articles. New assertions cover 6dp/16dp badge geometry,
+48dp loading bounds, progress values and indeterminate semantics, thick circular
+bounds, unread updates, destination selection and rail replacement. Sixteen
+directory routes still require detailed article migration. Existing partial-page
+and component alignment work, including Docked date picker, remains outstanding.
+
+Browser interaction exposed a shared article-anchor regression at short final
+sections: an unconstrained jump temporarily scrolled beyond the content extent,
+then the first focused control moved the page back into range. Section navigation
+now clamps its target against the measured content bottom and visible height.
+The directory regression reproduced the old 568-pixel heading displacement and
+now verifies that the first unread-count action succeeds without moving the
+heading. The full directory scenario passes after this correction.
+
+All eight affected opt-in GPU cases pass (two loading, four wavy progress, two
+badge), as do the final release WASM build and call-color check. Browser checks
+verify 75% wavy completion, indeterminate progress, contained/paused loading,
+retained badge navigation selection, rail replacement and badge removal at zero.
+The corrected final-section jump accepts its first control click without the
+previous page displacement. No error-level browser entries were observed.
+Evidence remains outside the repository as `wasm-spec-progress-configured.png`,
+`wasm-spec-loading-contained.png` and `wasm-spec-badges-rail.png`.
+
+
+Component detail navigation now shares selection with the example app bar. The
+upper-left navigation button crossfades between the drawer and back icons over
+200ms; the separate content-area back row has been removed. The button retains
+one 48dp interactive target and changes its accessible label with the action.
+A native opt-in GPU regression verifies the shared position, article origin at
+64dp, return to the directory, and continued bidirectional fading without pointer
+events. This targeted regression passes. The complete directory scenario also passes
+once the test lets initial adaptive navigation layout finish before checking
+orientation changes.
+
+
+## Shared specification layout and official media (2026-10-21)
+
+The directory and migrated articles now use the official Material Design header
+illustrations, with the original source URLs and attribution in
+`example/assets/material_spec/SOURCES.md`. All 36 directory thumbnails are also
+available locally. Artwork remains decorative: component configurations, state
+examples and navigation destinations continue to use real Tessera components.
+Previously separate live hero examples now appear within the relevant article
+configuration or state section instead of duplicating the decorative header.
+Unavailable platform/resource badges and unsupported article tabs remain absent.
+
+Header layout follows the observed website rules: 32dp inset and 45/52 typography
+through 600dp, 56dp inset and 88/96 typography at intermediate widths, and a
+544dp-tall two-column header from 1295dp with 96/96 typography. The wide text block
+is vertically centered. The light page background and header fill use the
+website's `#fefbff` and `#f8f1f6` values. Renamed Latin subsets of the open Google
+Sans font provide the display 475/18 and text 400/17 instances; the OFL license
+ships alongside them. Both title and body advance measurements were compared
+against the website fonts.
+
+Directory categories preserve independent groups of three cards, including the
+otherwise empty second cell after a third card at intermediate widths. Thumbnails
+are 200dp high; text uses 24/32 titles and 16/24 descriptions. Adjacent cards now
+stretch to the same row height. This exposed and corrected missing final
+cross-axis measurement in both `FlowRow` and `FlowColumn`: after wrapping, Stretch
+alignment measures children against their own row/column cross size. New real
+layout regressions failed before the correction and pass afterward.
+
+The detailed Navigation bar, Navigation rail and Tabs articles now participate
+in the directory regression, including destination changes, adaptive item layout,
+rail expansion/hiding, FAB actions, tab selection, icons, badges, disabled tabs and
+scrollable destinations. This brings the migrated or partially migrated article
+count to 23. Thirteen routes retain their legacy detail presentation. Expanded
+modal rail, Docked date picker, remaining chapter figure layouts and normalized
+pixel comparison are still outstanding; these changes do not establish complete
+website parity.
+
+Verification: all 319 ordinary component tests pass (136 GPU cases remain
+explicitly opt-in). Both native directory scenarios pass, including real scrolling
+to offscreen controls, stable back-button geometry, idle-completing crossfades,
+matched card-row heights/group breaks, and header geometry at 390, 900 and 1440dp.
+The complete directory scenario covers all 36 entry points and the detailed
+article interactions. Formatting and whitespace checks pass.
+
+
+The final release WASM build and call-color check pass. Both affected runnable
+flow-layout documentation examples pass. The final native scenarios pass after
+using the directory's own copy independently of article descriptions. Browser
+checks confirm the official header artwork, equal card bottoms, retained
+three-card groups, centered Specs label, and the upper-left back button; no
+error-level entries were observed. Proof images remain outside the repository as
+`wasm-spec-directory-official-media.png` and
+`wasm-spec-header-official-media.png`.
+
+
+## Segmented buttons, text fields and tooltips (2026-10-22)
+
+Three more routes now use the corresponding official Specs chapter hierarchy:
+Segmented buttons, Text fields and Tooltips. This brings the migrated or partially
+migrated route count to 26; ten routes still use their legacy detail presentation:
+App bars, Carousel, Toolbars, Navigation drawer, Dialogs, Snackbar, Menus, Search,
+Bottom sheets and Side sheets. Full figure layout and normalized pixel parity
+remain outstanding, including on migrated routes.
+
+The shared preview panel now places multiple examples in a column. Previously,
+its stacking container overlaid sibling examples and their hit targets. The real
+single-select and multi-select segmented button scenario exposed this failure;
+its retained regression also checks that the two examples have separate bounds.
+
+Segmented buttons support visual minimum heights of 40, 36, 32 and 28dp while
+retaining a 48dp minimum interactive target. Both existing native GPU cases cover
+all four densities at scales 1, 1.25, 1.5 and 2 with MSAA 1 and 4; the assertions
+check actual painted height as well as accessibility geometry.
+
+Filled text field floating labels now begin 8dp below the container top. Icon
+slots remain vertically centered independently of floating labels, prefix and
+suffix content. Leading glyphs are inset 12dp with a 16dp gap before the text;
+trailing actions retain their full 48dp hit target. The catalog regression checks
+these measured positions, editable and read-only input, clear actions, secure
+text, error toggles and multiline sizing. The anatomy examples use compact empty
+and populated fields with a numbered legend instead of full-width stacked fields.
+Tooltips use the real provider, anchors and actions, covering manual visibility,
+long messages, plain/rich variants and action dismissal.
+
+Verification completed during this update: 319 ordinary component tests pass,
+with 136 GPU cases explicitly opt-in; both segmented GPU cases pass. Native
+catalog scenarios and final WASM/browser results are recorded after the final
+figure-layout check below.
+
+
+Final verification: both native catalog scenarios pass after the last icon-style
+correction (108.28s), including all 36 routes. Formatting and whitespace checks
+pass. The final release WASM build and call-color check pass. Browser checks
+confirm attributed official headers, independent segmented selections, working
+chapter anchors, side-by-side text field anatomy, standard clear icons without
+filled button backgrounds, and rich-tooltip action dismissal. A historical fetch
+error from before the local preview server was restored remains in the tab log;
+no later error entries were observed during the final checks. Proof images are
+stored outside the repository as `wasm-text-field-official-header.png`,
+`wasm-text-field-anatomy.png` and `wasm-rich-tooltip-action.png`.
+
+
+## App bars and Snackbar articles (2026-10-23)
+
+App bars now has independent Variants, Configurations, Tokens & specs, Anatomy,
+Color and Measurements sections. Its interactive preview uses real app bar
+scrolling, selectable small/medium-flexible/large-flexible layouts, subtitle and
+alignment controls, standard/filled actions, and a bundled Tessera logo. Legacy
+baseline bars remain superseded by flexible variants for the Expressive target.
+Search uses the existing search component; the additional official search app
+bar arrangements still need figure-level alignment.
+
+The public top app bar accepts an optional `title_content` render slot. It
+replaces the text title in both compact and expanded layers while retaining the
+subtitle, navigation, actions and alignment. Existing GPU scenarios now verify
+custom content dimensions, global centering, subtitle placement and absence of
+the replaced text for all three variants, with MSAA 1 and 4.
+
+Snackbar follows the four official Specs chapters, with its unheaded anatomy
+figure before the first chapter. The shared article supports an optional intro
+slot for that ordering. Its five configurations use real snackbar components,
+including a separate line for a long action. Actions and close affordances can
+dismiss and restore the individual examples. The interactive queue uses the real
+snackbar host, immutable requests and action/dismiss results; changing the next
+request settings does not replace the active notification.
+
+The migrated or partially migrated route count is now 28. Eight legacy routes
+remain: Carousel, Toolbars, Navigation drawer, Dialogs, Menus, Search, Bottom
+sheets and Side sheets. Official figure layout and pixel-level acceptance remain
+outstanding, including on migrated routes. Docked date picker and expanded modal
+navigation rail are also still missing.
+
+Verification: all 319 ordinary component tests pass (136 GPU cases remain
+opt-in). Both extended app bar GPU scenarios pass. The complete native directory
+scenario passes all 36 routes and the new interactions (127.45s); the independent
+back-button/crossfade scenario also passes (3.30s). The runnable top app bar
+rustdoc example passes. Formatting and whitespace checks pass. Final WASM and
+browser checks follow below.
+
+
+Final release WASM and call-color checks pass. Browser validation of the final
+artifact confirms the Snackbar intro ordering, chapter jump, five configuration
+figures and action dismissal through the real queue. The App bars preview
+switches between variants, replaces the title with its bundled logo, preserves
+centering/subtitle placement, and collapses during real nested scrolling. No
+error entries were recorded after the final reload. Proof images remain outside
+the repository: `wasm-snackbar-intro.png`, `wasm-snackbar-configurations.png`,
+`wasm-snackbar-action.png`, `wasm-app-bar-logo.png` and
+`wasm-app-bar-collapsed.png`.
+
+
+Dialogs now has real Overview, Specs, Guidelines and Accessibility pages in the
+shared article shell. Its navigation uses horizontal icon/label pills, a rounded
+track, measured content widths and an independently selected page. Inactive
+article content is unmounted. Other articles still need their additional page
+data; their single Specs entry must not be counted as completed four-page
+navigation. There are now 29 migrated or partially migrated routes and seven
+legacy routes.
+
+The basic dialog anatomy and measurement figures render actual dialog content,
+actions and dividers. Measured component bounds drive numbered callouts, dotted
+leaders, icon/action outlines, padding overlays and dimension labels. The current
+Material theme is retained by request; legacy illustration colors are not a
+matching target. Portrait assets, full-screen figure annotations, complete
+Guidelines illustrations and normalized pixel acceptance remain outstanding.
+
+The dialog provider supports a full-screen presentation with square corners,
+zero outer padding and a 560dp maximum width. Full-screen dialog content provides
+a fixed header, optional confirm action and a scrolling body. Basic dialog width
+limits now include the provider's default 24dp padding. Native GPU scenarios
+verify modal geometry, focus order, action omission, confirmation, dismissal and
+focus restoration at two densities with MSAA 1 and 4. The new article scenario
+verifies four-tab selection, inactive-content removal, actual annotation pixels
+and opening a real dialog. All three native catalog scenarios pass (168.39s),
+as do all 319 ordinary component tests and three runnable dialog rustdoc examples.
+
+The article intro now stacks its slot children vertically. The dialog scenario
+also checks that its launch controls remain separate and precede the anatomy
+figure, guarding against an overlay container hiding those controls.
+
+Final release WASM and call-color checks pass. Browser verification confirms
+Overview content stacking, four-page selection, basic dialog dismissal, the
+full-screen form, anatomy callouts and measurement overlays with the current
+theme. No browser error entries were recorded. Proof images remain outside the
+repository: `wasm-dialog-overview-tabs.png`, `wasm-dialog-anatomy.png` and
+`wasm-dialog-measurements.png`. Pixel-level equivalence is still incomplete.
+
+
+Checkbox, Radio button and Switch now have independent Overview, Specs,
+Guidelines and Accessibility content. Their official chapter structure and
+selection rules were inspected on 2026-10-23. Platform/resource availability is
+omitted rather than inferred from another implementation. Four articles now
+provide all four page choices; the other articles still require this migration.
+The overall migrated or partially migrated route count remains 29 of 36.
+
+The checkbox Guidelines page includes real parent/child selection: a mixed
+parent, independent children, select-all and clear-all. Labels for the three
+selection controls now operate their associated control and request its actual
+focus target. Label targets retain a 48dp minimum size without adding a second
+keyboard stop or duplicate accessible control. The example switch keeps its
+component identity when its optional selected icon appears or disappears.
+
+Checkbox, radio button and switch expose optional focus requesters bound to
+their interactive targets. Existing native boolean-control scenarios verify
+these handles against actual semantic nodes and assert that focus does not
+activate or select controls. Both MSAA cases pass. All 319 ordinary component
+tests and all 112 runnable component rustdoc examples pass. Four native catalog
+scenarios pass; the extended selection article case also covers repeated label
+toggles, radio exclusivity, actual focus, parent/child icon activation, tab
+selection and removal of inactive chapters. Release WASM and call-color checks
+pass.
+
+The official Checkbox accessibility page currently contains a chip keyboard
+table, including deletion actions. The checkbox article uses checkbox traversal
+and activation behavior instead. Figure-by-figure visual matching, detailed
+anatomy overlays and responsive reference comparisons are still incomplete.
+
+Browser checks of the final WASM confirm label selection and subsequent Space
+activation for checkboxes, mixed-parent select-all, radio-label selection followed
+by arrow-key navigation within its group, and switch-label activation followed
+by Space across icon removal/restoration. The Switch Accessibility page shows
+its separate chapter list. No browser errors were recorded. Proof remains
+outside the repository: `wasm-checkbox-guidelines-parent.png`,
+`wasm-radio-overview-selection.png`, `wasm-switch-overview-keyboard.png` and
+`wasm-switch-accessibility-tabs.png`.
+
+The 2026-10-23 parallel article pass removes the remaining seven legacy demo
+routes: Carousel, Toolbars, Navigation drawer, Menus, Search, Bottom sheets and
+Side sheets. All 36 directory entries now open independent articles. Nineteen
+articles provide distinct Overview, Specs, Guidelines and Accessibility pages;
+17 still need alternate-page content. The unused legacy demonstration body has
+been removed from the Material route module.
+
+The eight action-family articles also provide separate pages. Native checks
+cover actual actions, toggle icon pixels, tooltip behavior and the recommendation
+from deprecated segmented buttons to button groups. Segmented accessibility
+subheadings and filtered search items use stable per-item component boundaries.
+Search results publish their real items and live counts, and the search field
+uses its hint as its accessible name. Search supports a truly omitted divider
+and independent result-surface colors. Floating toolbars expose optional shadow
+elevation for paired FAB figures without changing the ordinary default.
+
+Verification covers six native catalog scenarios, contextual-menu actions,
+actual search input/filter/select/clear, responsive six-marker search anatomy,
+all six GPU-rendered carousel viewports, and toolbar geometry/touch containment.
+All 320 ordinary component tests and 112 runnable component rustdoc examples
+pass. The call-color check passes. Screenshot proof remains outside the repository.
+
+Pixel equivalence remains unfinished. Known gaps include standalone reference
+photographs, proportional scaling of native controls inside illustrative device
+frames, detailed guideline and motion figures, several paired color diagrams,
+animated search margins and arrow-key traversal into search results. Native
+geometry and interaction assertions do not establish visual equivalence. The
+remaining navigation, tabs, app-bar and tooltip differences are recorded in
+external next-pass audits; the current theme remains intentional.
+
+The release WASM build and call-color validation pass. Browser checks confirm
+independent native menu selection and search typing, filtering, selection and
+restoration of all four suggestions. Batched IME commits preserve every character
+in the native regression. Browser automation bulk text entry differs from normal
+per-key input; it did not reproduce an ordinary keyboard-input failure. Search
+navigation/clear buttons use transparent standard treatment, and phone content
+is clipped inside its rounded bezel. Final screenshot checks follow these fixes.
+Final release WASM and call-color checks pass after the Search visual corrections.
+The browser confirms transparent back/clear icons and intact rounded phone
+bezels around the six live anatomy callouts, with no new error entries. Proof:
+`wasm-parallel-search-anatomy.png`, `wasm-parallel-menus-selection.png` and
+`wasm-parallel-search-filter.png`, stored outside the repository. The next-pass
+navigation bar, rail and tabs audit now also has live official DOM evidence for
+all twelve pages, including actual heading levels. Lazy image placeholders
+initially reported zero intrinsic dimensions; subsequent evidence uses the
+rendered image source and declared aspect ratio, with full-size originals
+inspected separately. Placeholder dimensions are not visual acceptance evidence.
+
+
+## Parallel article expansion (2026-10-23)
+
+All 36 articles now define separate Overview, Specs, Guidelines and Accessibility
+pages. This pass completes the remaining 17 article definitions, while preserving
+existing interactive Specs examples. Unsupported platform/resource information
+remains omitted. The official site is the chapter and illustration reference;
+older illustration palettes do not override the current default theme.
+
+New figures compose native controls with geometry annotations. They include
+navigation badges and large labels, combined app-bar anatomy, paired search
+arrangements, tooltip grids, removable chips, card/list/divider anatomy, docked
+calendars, clock/input time pickers, field anatomy, badges, snackbars, loading,
+progress and sliders. This is implementation progress, not pixel acceptance.
+
+The core changes include separate 48dp input-chip removal targets, rail badges
+that follow the expanded label, navigation labels that grow with typography,
+12dp rich-tooltip action spacing, and a public time-picker selection state.
+The docked calendar provides independent month/year menus, adjacent-month dates,
+selectable-date restrictions and the existing calendar keyboard navigation.
+Its example keeps the date-field anchor fixed, validates on submission, commits
+with OK and restores the last committed date on Cancel.
+
+Verification so far: 323 ordinary component tests and 113 runnable component
+rustdoc examples pass. Native GPU checks pass for chip removal, rail indicator
+pixels and activation, docked-calendar geometry/navigation, rich-tooltip spacing,
+and both time-picker MSAA cases. Example integration and release-WASM/browser
+checks are tracked separately below.
+
+Full visual equivalence remains unfinished. Native figures currently lack
+subtree scaling to match the site's responsive illustration scaling. Several
+contextual/device illustrations, paired color examples, configuration variants
+and fine-grained date annotations remain incomplete. Chip/list group arrow-key
+navigation, chip keyboard removal and snackbar Escape/shortcut handling also
+remain gaps; example keyboard tables do not claim those behaviors. An official
+date illustration contains inconsistent year/weekday data; the native calendar
+keeps correct Gregorian arithmetic. Modal date figures still use the component's
+actual current-day indication rather than falsifying a fixed historical today.
+
+
+Example integration: the full 17-scenario run passed 15 cases, including every
+one of the 36 directory routes and its four available tabs. The two failures
+identified missing explicit accessible button names. After those fixes, the
+docked field/commit/cancel case and the collection action case both pass. The
+form scenario also passes again after matching the official Snackbar
+Accessibility page's 24px/32px H3 headings, H4 strategy headings and omitted
+contents list. Together these runs validate all 17 scenarios; the original full
+run itself was not green. Formatting and whitespace checks pass. Release call
+color validation passes; final WASM/browser verification follows the button and
+heading corrections.
+
+
+Browser inspection caught an additional layout regression that semantic-only
+checks missed: the docked example's date field expanded to its figure host's
+height, allowing the overlaid calendar to cover the value and trailing icon.
+The field now has an explicit 56dp visual height. Its GPU regression observes
+that actual outer geometry, checks painted date text, and verifies stable
+anchoring, selection, confirmation and cancellation. The extended scenario
+passes. The fixed figure is included in the final WASM build below.
+
+
+The docked anatomy overlay now projects the actual selected date and displayed
+month, rather than retaining the initial date's cell. Current-day and ordinary
+day markers stay outside the calendar grid. The same GPU scenario selects a
+date on a different row and compares its live cell center with the annotation,
+then verifies confirmation and cancellation. This extended case passes.
+
+
+A parallel padding audit also moved content insets inside the painted surfaces
+of the time-picker figure and the card/chip/list/divider/slider color examples.
+The contact-form figure now paints its background outside its content padding.
+The added time-figure GPU regression checks the actual 328dp surface, 24dp text
+inset and painted padding pixels; it passes. These changes do not alter the
+source palette exception or establish full responsive figure equivalence.
+
+The final combined native example run passes all 18 GPU scenarios, including
+all 36 routes and their four tabs, the docked field's live annotation and
+commit/cancel behavior, and the time figure's painted padding. The final release
+WASM build and semantic call-color validation pass. Browser checks of that
+artifact confirm date selection, cancellation, and the corrected time surface;
+no browser errors were captured during that check.
+
+Browser performance is not accepted: a fresh date-anatomy interaction after all
+builds finished still reported approximately 67–68ms in the renderer's CPU
+"Draw commands" phase and 88ms total frames. That phase includes layout and
+other component-tree work, so these warnings do not establish GPU execution
+cost or identify a specific bottleneck. Further investigation is required.
+
+The subsequent bounded figure pass corrects slider measurement-span end caps,
+6dp track gaps and the 4dp stop annotation, and makes the handle callout follow
+its current value and interaction width. The badge Overview/Usage figure now
+uses three horizontal native destinations (dot, 1, 999+) with labels and numbered
+captions. The existing form-article GPU scenario now asserts three aligned
+labels at 136dp spacing; the extended scenario passes.
+
+Read-only performance inspection confirms that Date Specs mounts 18 picker
+instances, including offscreen illustrations. Absolute-window geometry observers
+also invalidate annotation state during whole-figure scrolling. These mechanisms
+are potential contributors, not a measured attribution of the slow CPU phase;
+SVG contents are cached, and no persistent idle redraw loop was observed.
