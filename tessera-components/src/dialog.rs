@@ -16,12 +16,17 @@ use tessera_ui::{
 use crate::{
     alignment::{Alignment, CrossAxisAlignment, MainAxisAlignment},
     animation::visibility_motion::{VisibilityMotion, VisibilitySample},
+    app_bar::top_app_bar,
     boxed::boxed,
+    button::button,
     column::column,
+    icon_button::{IconButtonColorStyle, icon_button},
+    material_icons::filled,
     modal_focus::{ModalFocusState, modal_focus_modifier},
     modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
     overlay_semantics::{dialog_semantics, overlay_background},
     row::row,
+    scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::surface,
@@ -115,7 +120,9 @@ fn dialog_content_wrapper(
     on_close_request: Option<Callback>,
     content: Option<RenderSlot>,
     focus_scope: Option<FocusScopeNode>,
+    full_screen: Option<bool>,
 ) {
+    let full_screen = full_screen.unwrap_or(false);
     let alpha = alpha.unwrap_or(1.0);
     let padding = padding.unwrap_or(Dp(24.0));
     let just_opened = just_opened.unwrap_or(false);
@@ -155,12 +162,16 @@ fn dialog_content_wrapper(
                     .modifier(
                         Modifier::new()
                             .constrain(Some(AxisConstraint::NONE), Some(AxisConstraint::NONE))
-                            .padding_all(Dp(24.0)),
+                            .padding_all(if full_screen { Dp::ZERO } else { Dp(24.0) }),
                     )
                     .child(move || {
                         let content = content;
                         surface()
-                            .modifier(modifier.clone())
+                            .modifier(if full_screen {
+                                modifier.clone().width(Dp(560.0)).fill_max_height()
+                            } else {
+                                modifier.clone()
+                            })
                             .style(
                                 use_context::<MaterialTheme>()
                                     .expect("MaterialTheme must be provided")
@@ -169,12 +180,16 @@ fn dialog_content_wrapper(
                                     .surface_container_high
                                     .into(),
                             )
-                            .elevation(Dp(6.0))
-                            .shape(Shape::RoundedRectangle {
-                                top_left: RoundedCorner::manual(Dp(28.0), 3.0),
-                                top_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
-                                bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                            .elevation(if full_screen { Dp::ZERO } else { Dp(6.0) })
+                            .shape(if full_screen {
+                                Shape::RECTANGLE
+                            } else {
+                                Shape::RoundedRectangle {
+                                    top_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                    top_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                    bottom_right: RoundedCorner::manual(Dp(28.0), 3.0),
+                                    bottom_left: RoundedCorner::manual(Dp(28.0), 3.0),
+                                }
                             })
                             .block_input(true)
                             .child(move || {
@@ -245,6 +260,8 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// - `accessibility_label` — accessible name describing the dialog or sheet.
 /// - `on_close_request` — optional close-request callback.
 /// - `padding` — padding applied inside the dialog surface.
+/// - `full_screen` — fill the available height without outer margins or rounded
+///   corners; width remains limited to 560dp.
 /// - `is_open` — declarative open state.
 /// - `controller` — optional external controller.
 /// - `main_content` — optional main content rendered behind the dialog.
@@ -281,13 +298,15 @@ pub fn dialog_provider(
     #[prop(into)] accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
+    full_screen: Option<bool>,
     is_open: Option<bool>,
     #[prop(skip_setter)] controller: Option<State<DialogController>>,
     main_content: Option<RenderSlot>,
     dialog_content: Option<RenderSlot>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
-    let padding = padding.unwrap_or(Dp(24.0));
+    let full_screen = full_screen.unwrap_or(false);
+    let padding = padding.unwrap_or(if full_screen { Dp::ZERO } else { Dp(24.0) });
     let is_open = is_open.unwrap_or(false);
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let dialog_content = dialog_content.unwrap_or_else(RenderSlot::empty);
@@ -311,6 +330,7 @@ pub fn dialog_provider(
         .accessibility_label_optional(accessibility_label)
         .on_close_request_shared(on_close_request)
         .padding(padding)
+        .full_screen(full_screen)
         .controller(controller)
         .main_content_shared(main_content)
         .dialog_content_shared(dialog_content);
@@ -321,6 +341,7 @@ fn dialog_provider_render(
     accessibility_label: Option<String>,
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
+    full_screen: Option<bool>,
     controller: Option<State<DialogController>>,
     main_content: Option<RenderSlot>,
     dialog_content: Option<RenderSlot>,
@@ -372,6 +393,7 @@ fn dialog_provider_render(
                 .style(scrim_color.with_alpha(alpha).into())
                 .on_click_shared(on_close_request)
                 .show_ripple(false)
+                .show_state_layer(false)
                 .modifier(
                     Modifier::new()
                         .fill_max_size()
@@ -395,11 +417,130 @@ fn dialog_provider_render(
                 .focus_scope(focus_scope)
                 .alpha(content_alpha)
                 .padding(padding)
+                .full_screen(full_screen.unwrap_or(false))
                 .just_opened(just_opened)
                 .on_close_request_shared(on_close_request)
                 .content_shared(dialog_content);
         }
     });
+}
+
+/// # full_screen_dialog
+///
+/// Present a scrollable form with a close action and optional save action.
+///
+/// ## Usage
+///
+/// Edit information or complete a task that needs the available screen height.
+///
+/// ## Parameters
+///
+/// - `on_close` — callback invoked by the close button.
+/// - `modifier` — modifier chain applied to the content surface.
+/// - `title` — optional headline in the top bar.
+/// - `confirm_label` — text for the optional confirm action, defaulting to
+///   Save.
+/// - `on_confirm` — optional callback; omitting it hides the confirm action.
+/// - `content` — scrollable form or task content.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_components::{
+///     dialog::{dialog_provider, full_screen_dialog},
+///     text::text,
+///     theme::material_theme,
+/// };
+/// use tessera_ui::{Callback, remember, tessera};
+/// #[tessera]
+/// fn example() {
+///     material_theme().child(|| {
+///         let open = remember(|| true);
+///         let close = Callback::new(move || open.set(false));
+///         dialog_provider()
+///             .is_open(open.get())
+///             .full_screen(true)
+///             .on_close_request_shared(close)
+///             .main_content(|| {
+///                 text().content("Calendar");
+///             })
+///             .dialog_content(move || {
+///                 full_screen_dialog(close).title("New event").content(|| {
+///                     text().content("Event details");
+///                 });
+///             });
+///         close.call();
+///         assert!(!open.get());
+///     });
+/// }
+/// example();
+/// ```
+#[tessera]
+pub fn full_screen_dialog(
+    on_close: Callback,
+    modifier: Option<Modifier>,
+    #[prop(into)] title: Option<String>,
+    #[prop(into)] confirm_label: Option<String>,
+    on_confirm: Option<Callback>,
+    content: Option<RenderSlot>,
+) {
+    let title = title.unwrap_or_default();
+    let confirm_label = confirm_label.unwrap_or_else(|| "Save".to_owned());
+    let content = content.unwrap_or_else(RenderSlot::empty);
+    let scroll = remember(ScrollableController::new);
+    let scheme = use_context::<MaterialTheme>()
+        .expect("MaterialTheme must be provided")
+        .get()
+        .color_scheme;
+    surface()
+        .modifier(modifier.unwrap_or_default().fill_max_size())
+        .style(scheme.surface_container_high.into())
+        .shape(Shape::RECTANGLE)
+        .content_color(scheme.on_surface)
+        .child(move || {
+            let title = title.clone();
+            let confirm_label = confirm_label.clone();
+            column()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    let mut bar = top_app_bar()
+                        .title(title.clone())
+                        .container_color(scheme.surface_container_high)
+                        .navigation_icon(move || {
+                            icon_button()
+                                .standard()
+                                .color_style(IconButtonColorStyle::Inherited)
+                                .icon(filled::CLOSE_SVG)
+                                .accessibility_label("Close dialog")
+                                .on_click_shared(on_close);
+                        });
+                    if let Some(on_confirm) = on_confirm {
+                        let confirm_label = confirm_label.clone();
+                        bar = bar.action(move || {
+                            let confirm_label = confirm_label.clone();
+                            button()
+                                .text()
+                                .content_color(scheme.primary)
+                                .ripple_color(scheme.primary)
+                                .accessibility_label(confirm_label.clone())
+                                .on_click_shared(on_confirm)
+                                .child(move || {
+                                    text().content(confirm_label.clone());
+                                });
+                        });
+                    }
+                    drop(bar);
+                    column()
+                        .modifier(
+                            Modifier::new()
+                                .fill_max_width()
+                                .weight(1.0)
+                                .vertical_scroll(scroll)
+                                .padding_all(Dp(24.0)),
+                        )
+                        .children_shared(content);
+                });
+        });
 }
 
 /// # basic_dialog
@@ -415,6 +556,7 @@ fn dialog_provider_render(
 /// - `icon` — optional icon slot shown above the headline.
 /// - `headline` — optional headline text.
 /// - `supporting_text` — body text shown in the dialog.
+/// - `content` — optional custom body replacing the supporting text.
 /// - `confirm_button` — optional confirm button slot.
 /// - `dismiss_button` — optional dismiss button slot.
 ///
@@ -447,14 +589,15 @@ pub fn basic_dialog(
     icon: Option<RenderSlot>,
     #[prop(into)] headline: Option<String>,
     #[prop(into)] supporting_text: Option<String>,
+    content: Option<RenderSlot>,
     confirm_button: Option<RenderSlot>,
     dismiss_button: Option<RenderSlot>,
 ) {
     let supporting_text = supporting_text.unwrap_or_default();
-    let scheme = use_context::<MaterialTheme>()
+    let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
-        .get()
-        .color_scheme;
+        .get();
+    let scheme = theme.color_scheme;
     let alignment = if icon.is_some() {
         CrossAxisAlignment::Center
     } else {
@@ -464,14 +607,13 @@ pub fn basic_dialog(
     column()
         .modifier(Modifier::new().constrain(
             Some(AxisConstraint::new(
-                Dp(280.0).into(),
-                Some(Dp(560.0).into()),
+                Dp(232.0).into(),
+                Some(Dp(512.0).into()),
             )),
             Some(AxisConstraint::NONE),
         ))
         .cross_axis_alignment(alignment)
         .children(move || {
-            // Icon
             if let Some(icon) = icon.as_ref() {
                 let icon = *icon;
                 let icon_color = scheme.secondary;
@@ -490,13 +632,12 @@ pub fn basic_dialog(
                 };
             }
 
-            // Headline
             if let Some(headline) = headline.as_ref() {
                 let headline = headline.clone();
                 {
                     text()
                         .content(headline.clone())
-                        .size(Dp(24.0))
+                        .style(theme.typography.headline_small)
                         .color(scheme.on_surface);
                 };
                 {
@@ -504,12 +645,15 @@ pub fn basic_dialog(
                 };
             }
 
-            // Supporting Text
             {
-                text()
-                    .content(supporting_text.clone())
-                    .size(Dp(14.0))
-                    .color(scheme.on_surface_variant);
+                if let Some(content) = content {
+                    content.render();
+                } else {
+                    text()
+                        .content(supporting_text.clone())
+                        .style(theme.typography.body_medium)
+                        .color(scheme.on_surface_variant);
+                }
             };
 
             if confirm_button.is_some() || dismiss_button.is_some() {

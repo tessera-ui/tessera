@@ -189,3 +189,6 @@ impl TesseraPackage for ComponentsPackage {
 
 #[cfg(test)]
 mod overlay_motion_tests;
+
+#[cfg(test)]
+mod sheet_drag_tests;

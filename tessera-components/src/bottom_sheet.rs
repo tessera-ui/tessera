@@ -4,19 +4,26 @@
 //!
 //! Used to show contextual information or actions in a modal sheet.
 
-use tessera_foundation::gesture::DragRecognizer;
+use std::time::Duration;
+
+use tessera_foundation::{gesture::DragRecognizer, scroll_physics::ScrollVelocityTracker};
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    State, current_frame_nanos,
+    State, current_frame_nanos, current_frame_time,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
-    provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
+    provide_context, receive_frame_nanos, remember, tessera,
+    time::Instant,
+    use_context, winit,
 };
 
 use crate::{
     alignment::CrossAxisAlignment,
-    animation::visibility_motion::{VisibilityMotion, VisibilitySample},
+    animation::{
+        sheet_drag::SheetDrag,
+        visibility_motion::{VisibilityMotion, VisibilitySample},
+    },
     column::column,
     modal_focus::{ModalFocusState, modal_focus_modifier},
     modifier::{ModifierExt, SemanticsArgs, with_keyboard_input, with_pointer_input},
@@ -42,7 +49,7 @@ pub struct BottomSheetController {
     is_open: bool,
     motion: VisibilityMotion,
     is_dragging: bool,
-    drag_offset: f32,
+    drag: SheetDrag,
 }
 
 impl BottomSheetController {
@@ -52,7 +59,7 @@ impl BottomSheetController {
             is_open: initial_open,
             motion: VisibilityMotion::new(initial_open, true),
             is_dragging: false,
-            drag_offset: 0.0,
+            drag: SheetDrag::new(),
         }
     }
 
@@ -65,7 +72,7 @@ impl BottomSheetController {
         if !self.is_open {
             self.motion.retarget(true, current_frame_nanos());
             self.is_open = true;
-            self.drag_offset = 0.0;
+            self.drag.settle(current_frame_nanos());
         }
     }
 
@@ -78,6 +85,8 @@ impl BottomSheetController {
         if self.is_open {
             self.motion.retarget(false, current_frame_nanos());
             self.is_open = false;
+            self.is_dragging = false;
+            self.drag.settle(current_frame_nanos());
         }
     }
 
@@ -88,39 +97,40 @@ impl BottomSheetController {
 
     /// Returns whether the sheet is currently animating in either direction.
     pub fn is_animating(&self) -> bool {
-        self.motion.sample(current_frame_nanos()).active
+        self.is_animating_at(current_frame_nanos())
+    }
+
+    fn is_animating_at(&self, frame: u64) -> bool {
+        self.motion.sample(frame).active || (self.is_open && self.drag.sample(frame).1)
     }
 
     fn snapshot(&self) -> (bool, VisibilitySample, f32) {
         (
             self.is_open,
             self.motion.sample(current_frame_nanos()),
-            self.drag_offset,
+            self.drag_offset(),
         )
     }
 
     fn set_dragging(&mut self, dragging: bool) {
         self.is_dragging = dragging;
+        if dragging {
+            self.drag.grab(current_frame_nanos());
+        }
     }
 
     fn apply_drag_delta(&mut self, delta_y: f32) -> f32 {
-        let current_offset = self.drag_offset;
-        let new_offset = (current_offset + delta_y).max(0.0);
-        self.drag_offset = new_offset;
-        new_offset - current_offset
+        self.drag.apply_delta(delta_y, current_frame_nanos())
     }
 
     fn drag_offset(&self) -> f32 {
-        self.drag_offset
+        self.drag.sample(current_frame_nanos()).0
     }
 
-    fn complete_drag(&mut self) -> bool {
+    fn complete_drag(&mut self, velocity: f32) -> bool {
         self.is_dragging = false;
-        let should_close = self.drag_offset > 100.0;
-        if !should_close {
-            self.drag_offset = 0.0;
-        }
-        should_close
+        self.drag
+            .release(current_frame_nanos(), velocity, 56.0, 125.0)
     }
 }
 
@@ -179,6 +189,7 @@ fn make_keyboard_closure(
 fn handle_drag_gestures(
     controller: State<BottomSheetController>,
     drag_recognizer: State<DragRecognizer>,
+    velocity_tracker: State<Option<ScrollVelocityTracker>>,
     input: &mut tessera_ui::PointerInput<'_>,
     on_close: &Callback,
 ) {
@@ -186,11 +197,32 @@ fn handle_drag_gestures(
         .cursor_position_rel
         .map(|pos| is_position_inside_bounds(input.computed_data, pos))
         .unwrap_or(false);
-    let drag_result = drag_recognizer.with_mut(|recognizer| {
-        recognizer.update(
+    let now = current_frame_time().unwrap_or_else(Instant::now);
+    if within_bounds
+        && input.pointer_changes.iter().any(|change| {
+            !change.is_consumed()
+                && matches!(
+                    change.content,
+                    tessera_ui::CursorEventContent::Pressed(tessera_ui::PressKeyEventType::Left)
+                )
+        })
+    {
+        velocity_tracker.set(Some(ScrollVelocityTracker::new(
+            now,
+            Duration::from_millis(90),
+            Duration::from_millis(65),
+        )));
+    }
+    let (drag_result, cancelled) = drag_recognizer.with_mut(|recognizer| {
+        let was_dragging = recognizer.is_dragging();
+        let result = recognizer.update(
             input.pass,
             input.pointer_changes.as_mut_slice(),
             within_bounds,
+        );
+        (
+            result,
+            was_dragging && !recognizer.is_dragging() && !result.ended,
         )
     });
 
@@ -200,16 +232,32 @@ fn handle_drag_gestures(
 
     if drag_result.updated {
         let consumed = controller.with_mut(|c| c.apply_drag_delta(drag_result.delta_y.to_f32()));
-        if consumed.abs() > f32::EPSILON {
-            controller.with_mut(|c| c.set_dragging(true));
-        }
+        velocity_tracker.with_mut(|tracker| {
+            if let Some(tracker) = tracker {
+                tracker.push_delta(now, 0.0, consumed);
+            }
+        });
     }
 
     if drag_result.ended {
-        let should_close = controller.with_mut(|c| c.complete_drag());
+        let velocity = velocity_tracker.with_mut(|tracker| {
+            tracker
+                .take()
+                .and_then(|mut tracker| tracker.resolve(now))
+                .map(|v| v.y)
+                .unwrap_or(0.0)
+        });
+        let should_close = controller.with_mut(|c| c.complete_drag(velocity));
         if should_close {
             on_close.call();
         }
+    }
+    if cancelled {
+        velocity_tracker.set(None);
+        controller.with_mut(|c| {
+            c.is_dragging = false;
+            c.drag.settle(current_frame_nanos());
+        });
     }
 }
 
@@ -289,9 +337,23 @@ fn bottom_sheet_drag_handle(
     let on_close = on_close.unwrap_or_default();
     let controller = controller.expect("bottom_sheet_drag_handle requires controller");
     let drag_recognizer = remember(DragRecognizer::default);
-    let modifier = with_pointer_input(Modifier::new(), move |mut input| {
-        handle_drag_gestures(controller, drag_recognizer, &mut input, &on_close);
-    });
+    let velocity_tracker = remember(|| None::<ScrollVelocityTracker>);
+    let modifier = with_pointer_input(
+        Modifier::new().semantics(SemanticsArgs {
+            role: Some(tessera_ui::accesskit::Role::Group),
+            label: Some("Drag handle".to_string()),
+            ..Default::default()
+        }),
+        move |mut input| {
+            handle_drag_gestures(
+                controller,
+                drag_recognizer,
+                velocity_tracker,
+                &mut input,
+                &on_close,
+            );
+        },
+    );
 
     layout().modifier(modifier).child(|| {
         column()
@@ -353,7 +415,7 @@ fn build_bottom_sheet_nested_scroll_connection(
                     return ScrollVelocity::ZERO;
                 }
 
-                let should_close = controller.with_mut(|c| c.complete_drag());
+                let should_close = controller.with_mut(|c| c.complete_drag(input.available.y));
                 if should_close {
                     on_close.call();
                 }
@@ -367,6 +429,7 @@ fn build_bottom_sheet_nested_scroll_connection(
 #[tessera]
 fn bottom_sheet_content_wrapper(
     accessibility_label: Option<String>,
+    nested_scroll_connection: Option<NestedScrollConnection>,
     bottom_sheet_content: Option<RenderSlot>,
     controller: Option<State<BottomSheetController>>,
     on_close: Option<Callback>,
@@ -378,9 +441,8 @@ fn bottom_sheet_content_wrapper(
     let controller = controller.expect("bottom_sheet_content_wrapper requires controller");
     let bottom_sheet_content =
         bottom_sheet_content.expect("bottom_sheet_content_wrapper requires sheet content");
-    let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
     let nested_scroll_connection =
-        build_bottom_sheet_nested_scroll_connection(controller, on_close, parent_nested_scroll);
+        nested_scroll_connection.expect("sheet content requires its nested scroll connection");
     let focus_scope = focus_scope.expect("modal content requires its focus scope");
     let modifier = dialog_semantics(
         with_keyboard_input(
@@ -439,7 +501,14 @@ fn bottom_sheet_content_wrapper(
                 bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
                 bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
-            .modifier(Modifier::new().fill_max_width())
+            .modifier(Modifier::new().fill_max_width().on_globally_positioned(
+                move |bounds: tessera_ui::PxRect| {
+                    let extent = Dp::from_pixels_f64(f64::from(bounds.height.0)).0;
+                    if controller.with(|c| c.drag.extent() != extent) {
+                        controller.with_mut(|c| c.drag.set_extent(extent, current_frame_nanos()));
+                    }
+                },
+            ))
             .block_input(true)
             .child(content_wrapper);
     });
@@ -502,6 +571,12 @@ pub fn bottom_sheet_provider(
     let external_controller = controller;
     let controller =
         external_controller.unwrap_or_else(|| remember(|| BottomSheetController::new(is_open)));
+    let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let nested_scroll_connection = build_bottom_sheet_nested_scroll_connection(
+        controller,
+        on_close_request,
+        parent_nested_scroll,
+    );
 
     // In controlled mode (external controller provided), do not override
     // controller state from `is_open`.
@@ -528,7 +603,7 @@ pub fn bottom_sheet_provider(
     if is_animating {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating =
-                controller.with(|controller| controller.motion.sample(frame_nanos).active);
+                controller.with(|controller| controller.is_animating_at(frame_nanos));
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -576,6 +651,7 @@ pub fn bottom_sheet_provider(
                 .style(scrim_color.with_alpha(scrim_alpha).into())
                 .on_click_shared(on_close_request)
                 .show_ripple(false)
+                .show_state_layer(false)
                 .modifier(
                     Modifier::new()
                         .fill_max_size()
@@ -595,6 +671,7 @@ pub fn bottom_sheet_provider(
                 .child(|| {});
 
             bottom_sheet_content_wrapper()
+                .nested_scroll_connection(nested_scroll_connection.clone())
                 .accessibility_label_optional(accessibility_label.clone())
                 .focus_scope(focus_scope)
                 .bottom_sheet_content_shared(bottom_sheet_content)

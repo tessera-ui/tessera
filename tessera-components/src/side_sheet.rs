@@ -4,17 +4,22 @@
 //!
 //! Show filters, details and secondary tasks beside the main content.
 
+mod input;
+
 use tessera_ui::{
     Callback, CallbackWith, Color, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     State, current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
-    provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
+    receive_frame_nanos, remember, tessera, use_context, winit,
 };
 
 use crate::{
-    animation::visibility_motion::{VisibilityMotion, VisibilitySample},
+    animation::{
+        sheet_drag::SheetDrag,
+        visibility_motion::{VisibilityMotion, VisibilitySample},
+    },
     modal_focus::{ModalFocusState, modal_focus_modifier},
     modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
     nested_scroll::{
@@ -26,6 +31,8 @@ use crate::{
     surface::surface,
     theme::MaterialTheme,
 };
+
+use input::side_sheet_body;
 
 const SCRIM_ALPHA: f32 = 0.32;
 const MAX_SHEET_WIDTH: Dp = Dp(400.0);
@@ -75,7 +82,7 @@ pub enum SideSheetPosition {
 pub struct SideSheetController {
     is_open: bool,
     motion: VisibilityMotion,
-    drag_offset: f32,
+    drag: SheetDrag,
 }
 
 impl SideSheetController {
@@ -84,7 +91,7 @@ impl SideSheetController {
         Self {
             is_open: initial_open,
             motion: VisibilityMotion::new(initial_open, true),
-            drag_offset: 0.0,
+            drag: SheetDrag::new(),
         }
     }
 
@@ -97,7 +104,7 @@ impl SideSheetController {
         if !self.is_open {
             self.motion.retarget(true, current_frame_nanos());
             self.is_open = true;
-            self.drag_offset = 0.0;
+            self.drag.settle(current_frame_nanos());
         }
     }
 
@@ -110,6 +117,7 @@ impl SideSheetController {
         if self.is_open {
             self.motion.retarget(false, current_frame_nanos());
             self.is_open = false;
+            self.drag.settle(current_frame_nanos());
         }
     }
 
@@ -120,37 +128,53 @@ impl SideSheetController {
 
     /// Returns whether the side sheet is currently animating.
     pub fn is_animating(&self) -> bool {
-        self.motion.sample(current_frame_nanos()).active
+        self.is_animating_at(current_frame_nanos())
+    }
+
+    fn is_animating_at(&self, frame: u64) -> bool {
+        self.motion.sample(frame).active || (self.is_open && self.drag.sample(frame).1)
     }
 
     fn snapshot(&self) -> (bool, VisibilitySample, f32) {
         (
             self.is_open,
             self.motion.sample(current_frame_nanos()),
-            self.drag_offset,
+            self.drag_offset(),
         )
     }
 
     fn drag_offset(&self) -> f32 {
-        self.drag_offset
+        self.drag.sample(current_frame_nanos()).0
     }
 
     fn apply_drag_delta(&mut self, delta_x: f32, position: SideSheetPosition) -> f32 {
-        let current_offset = self.drag_offset;
-        let new_offset = match position {
-            SideSheetPosition::Start => (current_offset + delta_x).min(0.0),
-            SideSheetPosition::End => (current_offset + delta_x).max(0.0),
+        let direction = if position == SideSheetPosition::Start {
+            -1.0
+        } else {
+            1.0
         };
-        self.drag_offset = new_offset;
-        new_offset - current_offset
+        self.drag
+            .apply_delta(delta_x * direction, current_frame_nanos())
+            * direction
     }
 
-    fn complete_drag(&mut self) -> bool {
-        let should_close = self.drag_offset.abs() > 100.0;
-        if !should_close {
-            self.drag_offset = 0.0;
-        }
-        should_close
+    fn complete_drag(&mut self, velocity: f32, position: SideSheetPosition) -> bool {
+        let direction = if position == SideSheetPosition::Start {
+            -1.0
+        } else {
+            1.0
+        };
+        let extent = if self.drag.extent() > 0.0 {
+            self.drag.extent()
+        } else {
+            MAX_SHEET_WIDTH.0
+        };
+        self.drag.release(
+            current_frame_nanos(),
+            velocity * direction,
+            extent * 0.5,
+            500.0,
+        )
     }
 }
 
@@ -235,6 +259,17 @@ fn is_close_direction(delta_x: f32, position: SideSheetPosition) -> bool {
     }
 }
 
+fn side_sheet_extent_modifier(controller: State<SideSheetController>) -> Modifier {
+    Modifier::new()
+        .fill_max_height()
+        .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
+            let extent = Dp::from_pixels_f64(f64::from(bounds.width.0)).0;
+            if controller.with(|c| c.drag.extent() != extent) {
+                controller.with_mut(|c| c.drag.set_extent(extent, current_frame_nanos()));
+            }
+        })
+}
+
 fn is_open_direction(delta_x: f32, position: SideSheetPosition) -> bool {
     match position {
         SideSheetPosition::Start => delta_x > 0.0,
@@ -245,34 +280,34 @@ fn is_open_direction(delta_x: f32, position: SideSheetPosition) -> bool {
 fn build_side_sheet_nested_scroll_connection(
     controller: State<SideSheetController>,
     on_close_request: Callback,
-    position: SideSheetPosition,
+    position: State<SideSheetPosition>,
     parent: Option<NestedScrollConnection>,
 ) -> NestedScrollConnection {
     NestedScrollConnection::new()
         .with_pre_scroll_handler(CallbackWith::new({
             move |input: PreScrollInput| {
                 if input.source != tessera_ui::ScrollEventSource::Touch
-                    || !is_open_direction(input.available.x, position)
+                    || !is_open_direction(input.available.x, position.get())
                     || controller.with(|c| c.drag_offset()) == 0.0
                 {
                     return ScrollDelta::ZERO;
                 }
 
                 let consumed_x =
-                    controller.with_mut(|c| c.apply_drag_delta(input.available.x, position));
+                    controller.with_mut(|c| c.apply_drag_delta(input.available.x, position.get()));
                 ScrollDelta::new(consumed_x, 0.0)
             }
         }))
         .with_post_scroll_handler(CallbackWith::new({
             move |input: PostScrollInput| {
                 if input.source != tessera_ui::ScrollEventSource::Touch
-                    || !is_close_direction(input.available.x, position)
+                    || !is_close_direction(input.available.x, position.get())
                 {
                     return ScrollDelta::ZERO;
                 }
 
                 let consumed_x =
-                    controller.with_mut(|c| c.apply_drag_delta(input.available.x, position));
+                    controller.with_mut(|c| c.apply_drag_delta(input.available.x, position.get()));
                 ScrollDelta::new(consumed_x, 0.0)
             }
         }))
@@ -282,7 +317,8 @@ fn build_side_sheet_nested_scroll_connection(
                     return ScrollVelocity::ZERO;
                 }
 
-                let should_close = controller.with_mut(|c| c.complete_drag());
+                let should_close =
+                    controller.with_mut(|c| c.complete_drag(input.available.x, position.get()));
                 if should_close {
                     on_close_request.call();
                 }
@@ -528,6 +564,17 @@ fn side_sheet_provider_render(
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let side_sheet_content = side_sheet_content.unwrap_or_else(RenderSlot::empty);
 
+    let current_position = remember(|| position);
+    if current_position.get() != position {
+        current_position.set(position);
+    }
+    let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
+        controller,
+        on_close_request,
+        current_position,
+        parent_nested_scroll,
+    );
     let (is_open, visibility, drag_offset) = controller.get().snapshot();
     let is_animating = controller.get().is_animating();
     let side_sheet_open_state = remember(|| false);
@@ -539,7 +586,7 @@ fn side_sheet_provider_render(
     if is_animating {
         receive_frame_nanos(move |frame_nanos| {
             let is_animating =
-                controller.with(|controller| controller.motion.sample(frame_nanos).active);
+                controller.with(|controller| controller.is_animating_at(frame_nanos));
             if is_animating {
                 tessera_ui::FrameNanosControl::Continue
             } else {
@@ -549,6 +596,11 @@ fn side_sheet_provider_render(
     }
 
     let show_side_sheet = is_open || is_animating;
+    let drag_offset = if position == SideSheetPosition::Start {
+        -drag_offset
+    } else {
+        drag_offset
+    };
     let focus_scope = remember(FocusScopeNode::new).get();
     let focus_state = remember(ModalFocusState::default);
     let modifier = modal_focus_modifier(Modifier::new(), focus_state, show_side_sheet, focus_scope);
@@ -587,6 +639,7 @@ fn side_sheet_provider_render(
                             .style(scrim_color.with_alpha(scrim_alpha).into())
                             .on_click_shared(on_close_request)
                             .show_ripple(false)
+                            .show_state_layer(false)
                             .modifier(
                                 Modifier::new()
                                     .fill_max_size()
@@ -614,10 +667,11 @@ fn side_sheet_provider_render(
                 }
 
                 side_sheet_content_wrapper()
+                    .nested_scroll_connection(nested_scroll_connection.clone())
                     .accessibility_label_optional(accessibility_label.clone())
                     .focus_scope(focus_scope)
                     .sheet_type(sheet_type)
-                    .position(position)
+                    .position(current_position)
                     .controller(controller)
                     .on_close_request_shared(on_close_request)
                     .just_opened(just_opened)
@@ -629,20 +683,23 @@ fn side_sheet_provider_render(
 #[tessera]
 fn side_sheet_content_wrapper(
     accessibility_label: Option<String>,
+    nested_scroll_connection: Option<NestedScrollConnection>,
     focus_scope: Option<FocusScopeNode>,
     sheet_type: Option<SideSheetType>,
-    position: Option<SideSheetPosition>,
+    position: Option<State<SideSheetPosition>>,
     controller: Option<State<SideSheetController>>,
     on_close_request: Option<Callback>,
     just_opened: Option<bool>,
     content: Option<RenderSlot>,
 ) {
     let sheet_type = sheet_type.unwrap_or(SideSheetType::Modal);
-    let position = position.unwrap_or_default();
+    let position = position.expect("sheet wrapper requires its edge state");
     let just_opened = just_opened.unwrap_or(false);
     let controller = controller.expect("side_sheet_content_wrapper requires controller");
     let on_close_request = on_close_request.unwrap_or_default();
     let content = content.expect("side_sheet_content_wrapper requires content");
+    let nested_scroll_connection =
+        nested_scroll_connection.expect("sheet content requires its nested scroll connection");
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -679,62 +736,36 @@ fn side_sheet_content_wrapper(
     }
     layout().modifier(modifier).child(move || {
         let content = content;
+        let nested_scroll_connection = nested_scroll_connection.clone();
+        let edge = position.get();
         if is_modal {
             surface()
                 .elevation(MODAL_ELEVATION)
                 .style(container_color.into())
-                .shape(sheet_shape(position))
-                .modifier(Modifier::new().fill_max_height())
+                .shape(sheet_shape(edge))
+                .modifier(side_sheet_extent_modifier(controller))
                 .block_input(true)
                 .child(move || {
-                    let content = content;
-                    let parent_nested_scroll =
-                        use_context::<NestedScrollConnection>().map(|context| context.get());
-                    let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
-                        controller,
-                        on_close_request,
-                        position,
-                        parent_nested_scroll,
-                    );
-                    layout()
-                        .modifier(Modifier::new().padding_all(Dp(24.0)))
-                        .child(move || {
-                            let content = content;
-                            provide_context(
-                                || nested_scroll_connection.clone(),
-                                move || {
-                                    content.render();
-                                },
-                            );
-                        });
+                    side_sheet_body()
+                        .controller(controller)
+                        .position(position)
+                        .on_close_shared(on_close_request)
+                        .content_shared(content)
+                        .nested_scroll_connection(nested_scroll_connection.clone());
                 });
         } else {
             surface()
                 .style(container_color.into())
-                .shape(sheet_shape(position))
-                .modifier(Modifier::new().fill_max_height())
+                .shape(sheet_shape(edge))
+                .modifier(side_sheet_extent_modifier(controller))
                 .block_input(true)
                 .child(move || {
-                    let content = content;
-                    let parent_nested_scroll =
-                        use_context::<NestedScrollConnection>().map(|context| context.get());
-                    let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
-                        controller,
-                        on_close_request,
-                        position,
-                        parent_nested_scroll,
-                    );
-                    layout()
-                        .modifier(Modifier::new().padding_all(Dp(24.0)))
-                        .child(move || {
-                            let content = content;
-                            provide_context(
-                                || nested_scroll_connection.clone(),
-                                move || {
-                                    content.render();
-                                },
-                            );
-                        });
+                    side_sheet_body()
+                        .controller(controller)
+                        .position(position)
+                        .on_close_shared(on_close_request)
+                        .content_shared(content)
+                        .nested_scroll_connection(nested_scroll_connection.clone());
                 });
         }
     });
