@@ -664,6 +664,7 @@ impl tessera_ui::LayoutModifierNode for TooltipLayout {
 ///   fallback
 /// - `persistent` — keep a touch-triggered popup open until dismissal
 /// - `modifier` — modifiers for the page-sized host
+/// - `popup_modifier` — modifiers for the tooltip container
 /// - `child` — page content, containing one anchor for this provider
 ///
 /// ## Examples
@@ -689,6 +690,7 @@ pub fn tooltip_provider(
     placement: Option<TooltipPlacement>,
     persistent: Option<bool>,
     modifier: Option<Modifier>,
+    popup_modifier: Option<Modifier>,
     child: Option<RenderSlot>,
 ) {
     let active = if let Some(context) = use_context::<TooltipContext>() {
@@ -762,6 +764,7 @@ pub fn tooltip_provider(
         variant,
         persistent,
         actions,
+        popup_modifier,
     );
     let render_data = remember(|| next.clone());
     if render_data.with(|current| current != &next) {
@@ -803,11 +806,13 @@ pub fn tooltip_provider(
                         variant,
                         persistent,
                         actions,
+                        popup_modifier,
                     ) = render_data.get();
                     child.render();
                     if open {
                         let has_actions = actions.is_some();
                         tooltip_panel(message.clone())
+                            .modifier_optional(popup_modifier)
                             .variant(variant)
                             .headline(headline.clone().unwrap_or_default())
                             .action_label(action_label.clone().unwrap_or_default())
@@ -893,6 +898,7 @@ fn tooltip_panel(
     controller: Option<State<TooltipController>>,
     popup: Option<Arc<RwLock<PxRect>>>,
     persistent: Option<bool>,
+    modifier: Option<Modifier>,
 ) {
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
@@ -919,7 +925,8 @@ fn tooltip_panel(
     if render_data.with(|current| current != &next) {
         render_data.set(next);
     }
-    let modifier = Modifier::new()
+    let modifier = modifier
+        .unwrap_or_default()
         .constrain(
             Some(AxisConstraint::new(
                 Dp(40.0).to_px(),
@@ -1005,10 +1012,10 @@ fn tooltip_panel(
                         theme.typography.body_small
                     });
                     if rich && has_actions {
-                        crate::spacer::spacer().modifier(Modifier::new().height(Dp(8.0)));
+                        crate::spacer::spacer().modifier(Modifier::new().height(Dp(12.0)));
                         actions.render();
                     } else if rich && action_label.is_some() {
-                        crate::spacer::spacer().modifier(Modifier::new().height(Dp(8.0)));
+                        crate::spacer::spacer().modifier(Modifier::new().height(Dp(12.0)));
                         button()
                             .text()
                             .accessibility_label(action_label.clone().unwrap_or_default())
@@ -1209,6 +1216,7 @@ mod tests {
     }
 
     thread_local! {
+        static POPUP_BOUNDS: Cell<Option<PxRect>> = const { Cell::new(None) };
         static CONTROLLER: Cell<Option<State<TooltipController>>> = const { Cell::new(None) };
         static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
         static CLICKS: Cell<Option<State<u32>>> = const { Cell::new(None) };
@@ -1232,6 +1240,7 @@ mod tests {
         material_theme().child(move || {
             let config = settings.get();
             let tooltip = tooltip_provider(if config.changed { "Updated help text with multiple words that wraps within the tooltip's maximum width." } else { "Helpful description" })
+                .popup_modifier(Modifier::new().on_globally_positioned(|bounds| POPUP_BOUNDS.set(Some(bounds))))
                 .controller(controller)
                 .variant(if config.rich { TooltipVariant::Rich } else { TooltipVariant::Plain })
                 .headline("More information")
@@ -1273,10 +1282,9 @@ mod tests {
     }
 
     fn renderer() -> HeadlessRenderer {
+        POPUP_BOUNDS.set(None);
         let mut renderer = HeadlessRenderer::new(
-            Box::new(|| {
-                fixture();
-            }),
+            Box::new(fixture),
             vec![Box::new(crate::TesseraComponents)],
             HeadlessConfig {
                 width: 400,
@@ -1337,6 +1345,13 @@ mod tests {
             .expect("tooltip");
         assert_eq!(tooltip.1.label(), Some("Helpful description"));
         let bounds = tooltip.1.bounds().expect("bounds");
+        let observed = POPUP_BOUNDS
+            .get()
+            .expect("popup modifier observes the actual container");
+        assert_eq!(observed.x.0 as f64, bounds.x0);
+        assert_eq!(observed.y.0 as f64, bounds.y0);
+        assert_eq!(observed.width.0 as f64, bounds.width());
+        assert_eq!(observed.height.0 as f64, bounds.height());
         assert!(bounds.x1 - bounds.x0 <= 200.0);
         assert!(bounds.y1 - bounds.y0 >= 24.0);
         let trigger = tree
@@ -1370,6 +1385,29 @@ mod tests {
             tree.nodes
                 .iter()
                 .any(|(_, node)| node.role() == Role::Dialog)
+        );
+        let body = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == Role::Label && node.label() == Some("Helpful description")
+            })
+            .expect("rich supporting text")
+            .1
+            .bounds()
+            .expect("supporting text bounds");
+        let action = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::Button && node.label() == Some("Got it"))
+            .expect("rich action")
+            .1
+            .bounds()
+            .expect("action bounds");
+        assert_eq!(
+            action.y0 - body.y1,
+            12.0,
+            "rich tooltip separates supporting text from actual actions by 12dp"
         );
         let controller = CONTROLLER.get().expect("controller");
         let trigger = controller.with(|controller| controller.focus);
