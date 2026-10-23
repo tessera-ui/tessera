@@ -315,6 +315,22 @@ mod tests {
     use super::*;
 
     #[test]
+    fn active_inner_corner_tokens_keep_extra_small_distinct_from_small() {
+        assert_eq!(
+            SplitButtonDefaults::active_inner_corner_size(SplitButtonSize::ExtraSmall),
+            Dp(8.0)
+        );
+        assert_eq!(
+            SplitButtonDefaults::active_inner_corner_size(SplitButtonSize::Small),
+            Dp(12.0)
+        );
+        assert_eq!(
+            SplitButtonDefaults::inner_corner_size(SplitButtonSize::ExtraSmall),
+            Dp(4.0)
+        );
+    }
+
+    #[test]
     fn corner_rotation_and_elevation_motion_preserve_velocity_and_settle() {
         let initial = MotionTarget {
             fraction: 0.0,

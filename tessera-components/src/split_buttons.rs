@@ -163,7 +163,8 @@ impl SplitButtonDefaults {
     /// Returns the inner corner radius for hover, focus, and press feedback.
     pub const fn active_inner_corner_size(size: SplitButtonSize) -> Dp {
         Dp(match size {
-            SplitButtonSize::ExtraSmall | SplitButtonSize::Small | SplitButtonSize::Medium => 12.0,
+            SplitButtonSize::ExtraSmall => 8.0,
+            SplitButtonSize::Small | SplitButtonSize::Medium => 12.0,
             SplitButtonSize::Large | SplitButtonSize::ExtraLarge => 20.0,
         })
     }

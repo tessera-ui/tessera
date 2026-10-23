@@ -17,6 +17,7 @@ use tessera_ui::{
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     icon::icon as icon_component,
+    layout_flex::cross_axis_child_constraint,
     material_icons::filled,
     modifier::{InteractionState, ModifierExt as _, Padding},
     painter::Painter,
@@ -225,6 +226,8 @@ impl SegmentedButtonDefaults {
 /// - `shape` — shape of the segment.
 /// - `colors` — optional color overrides for the segment.
 /// - `border_width` — border width around the segment.
+/// - `min_height` — minimum visual height; defaults to 40dp while retaining the
+///   minimum interactive target.
 /// - `content_padding` — internal padding for the segment content.
 /// - `on_click` — optional click callback.
 /// - `accessibility_label` — optional accessibility label.
@@ -284,6 +287,7 @@ pub fn segmented_button(
     shape: Option<Shape>,
     colors: Option<SegmentedButtonColors>,
     border_width: Option<Dp>,
+    min_height: Option<Dp>,
     content_padding: Option<Padding>,
     on_click: Option<Callback>,
     #[prop(into)] accessibility_label: Option<String>,
@@ -331,7 +335,7 @@ pub fn segmented_button(
     let mut modifier = modifier.size_in(
         Some(Dp(58.0)),
         None,
-        Some(SegmentedButtonDefaults::HEIGHT),
+        Some(min_height.unwrap_or(SegmentedButtonDefaults::HEIGHT)),
         None,
     );
     if enabled
@@ -677,7 +681,7 @@ impl tessera_ui::LayoutModifierNode for SegmentedButtonRowLayout {
         let row_constraint = *input.parent_constraint().as_ref();
         let child_constraint = Constraint::new(
             AxisConstraint::new(Px::ZERO, row_constraint.width.resolve_max()),
-            row_constraint.height,
+            cross_axis_child_constraint(row_constraint.height, self.cross_axis_alignment),
         );
 
         let mut children_sizes = vec![None; children.len()];
@@ -709,7 +713,10 @@ impl tessera_ui::LayoutModifierNode for SegmentedButtonRowLayout {
 
             for (index, &child) in children.iter().enumerate() {
                 let child_width = width + Px(i32::from((index as i32) < remainder));
-                let equal_constraint = Constraint::new(child_width, row_constraint.height);
+                let equal_constraint = Constraint::new(
+                    child_width,
+                    cross_axis_child_constraint(row_constraint.height, self.cross_axis_alignment),
+                );
                 let child_result = child.measure(input, &equal_constraint)?;
                 children_sizes[index] = Some(child_result.size());
                 total_width += child_result.width;

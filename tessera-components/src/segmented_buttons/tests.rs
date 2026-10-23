@@ -35,6 +35,7 @@ struct Settings {
     width: Dp,
     natural: bool,
     calls: usize,
+    height: f64,
 }
 
 impl Default for Settings {
@@ -47,6 +48,7 @@ impl Default for Settings {
             width: Dp(360.0),
             natural: true,
             calls: 0,
+            height: 40.0,
         }
     }
 }
@@ -86,6 +88,11 @@ fn fixture() {
                         for (index, label) in ["Day", "Week", "Month"].into_iter().enumerate() {
                             segmented_button()
                                 .label(label)
+                                .min_height(Dp(settings.get().height))
+                                .content_padding(crate::modifier::Padding::symmetric(
+                                    Dp(12.0),
+                                    Dp(((settings.get().height - 20.0) * 0.5).clamp(0.0, 8.0)),
+                                ))
                                 .accessibility_label(format!("Single {label}"))
                                 .selected(settings.get().selected == index)
                                 .enabled(index != 1 || !settings.get().disabled)
@@ -367,6 +374,33 @@ fn check_segments_at_density(samples: u32, scale: f64) {
         }
     }
     assert_eq!(text_height(&renderer, "Month"), (20.0 * scale) as i64);
+    for height in [40.0, 36.0, 32.0, 28.0] {
+        settings.with_mut(|settings| {
+            settings.height = height;
+            settings.selected = 0;
+            settings.width = Dp(360.0);
+            settings.natural = false;
+        });
+        renderer.render_frames(5);
+        let target = node(&renderer, "Single Day").1.bounds().unwrap();
+        assert_eq!(
+            target.height(),
+            (48.0 * scale).floor(),
+            "density preserves the interactive height"
+        );
+        let pixels = renderer.read_pixels().unwrap();
+        let width = renderer.physical_size().width as usize;
+        let background = &pixels[..4];
+        let x = ((target.x0 + target.x1) * 0.5) as usize;
+        let occupied = (target.y0 as usize..target.y1 as usize)
+            .filter(|y| &pixels[(*y * width + x) * 4..(*y * width + x) * 4 + 4] != background)
+            .collect::<Vec<_>>();
+        let painted = (occupied.last().unwrap() - occupied.first().unwrap() + 1) as f64;
+        assert!(
+            (painted - height * scale).abs() <= 1.0,
+            "painted height {painted} for density height {height} at {scale}"
+        );
+    }
 }
 
 #[test]
