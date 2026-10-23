@@ -96,10 +96,12 @@ struct SearchBarProps {
     on_active_change: Option<CallbackWith<bool, ()>>,
     shape: Shape,
     colors: SearchBarColors,
+    results_container_color: Option<Color>,
     tonal_elevation: Dp,
     shadow_elevation: Dp,
     dropdown_shape: Shape,
     dropdown_gap: Dp,
+    show_divider: bool,
     content_padding: Dp,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
@@ -120,10 +122,12 @@ impl Default for SearchBarProps {
             on_active_change: None,
             shape: SearchBarDefaults::input_shape(),
             colors: SearchBarDefaults::colors(),
+            results_container_color: None,
             tonal_elevation: SearchBarDefaults::TONAL_ELEVATION,
             shadow_elevation: SearchBarDefaults::SHADOW_ELEVATION,
             dropdown_shape: SearchBarDefaults::docked_dropdown_shape(),
             dropdown_gap: SearchBarDefaults::DOCKED_DROPDOWN_GAP,
+            show_divider: true,
             content_padding: DEFAULT_RESULTS_PADDING,
             controller: None,
             content: None,
@@ -205,7 +209,7 @@ enum SearchBarLayoutKind {
 /// - `enabled` - whether the input is enabled.
 /// - `read_only` - whether the input is read-only.
 /// - `is_active` - whether the search bar is currently expanded.
-/// - `placeholder` - optional placeholder text.
+/// - `placeholder` - input hint and accessible name for the search field.
 /// - `leading_icon` - optional leading icon slot.
 /// - `trailing_icon` - optional trailing icon slot.
 /// - `on_query_change` - optional callback for query changes.
@@ -213,10 +217,14 @@ enum SearchBarLayoutKind {
 /// - `on_active_change` - optional callback invoked when active state changes.
 /// - `shape` - shape used for the search input.
 /// - `colors` - search bar color configuration.
+/// - `results_container_color` - results surface color, matching the input by
+///   default.
 /// - `tonal_elevation` - tonal elevation for the search container.
 /// - `shadow_elevation` - shadow elevation for the search container.
 /// - `dropdown_shape` - shape used for docked result surfaces.
 /// - `dropdown_gap` - gap between a docked field and its results.
+/// - `show_divider` - show the results divider; disable for separated contained
+///   surfaces.
 /// - `content_padding` - padding inside the result surface.
 /// - `controller` - optional external controller for active/query state.
 /// - `content` - optional results content slot.
@@ -251,10 +259,12 @@ pub fn search_bar(
     on_active_change: Option<CallbackWith<bool, ()>>,
     shape: Option<Shape>,
     colors: Option<SearchBarColors>,
+    results_container_color: Option<Color>,
     tonal_elevation: Option<Dp>,
     shadow_elevation: Option<Dp>,
     dropdown_shape: Option<Shape>,
     dropdown_gap: Option<Dp>,
+    show_divider: Option<bool>,
     content_padding: Option<Dp>,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
@@ -272,10 +282,12 @@ pub fn search_bar(
         on_active_change,
         shape,
         colors,
+        results_container_color,
         tonal_elevation,
         shadow_elevation,
         dropdown_shape,
         dropdown_gap,
+        show_divider,
         content_padding,
         controller,
         content,
@@ -296,10 +308,12 @@ fn resolve_search_bar(
     on_active_change: Option<CallbackWith<bool, ()>>,
     shape: Option<Shape>,
     colors: Option<SearchBarColors>,
+    results_container_color: Option<Color>,
     tonal_elevation: Option<Dp>,
     shadow_elevation: Option<Dp>,
     dropdown_shape: Option<Shape>,
     dropdown_gap: Option<Dp>,
+    show_divider: Option<bool>,
     content_padding: Option<Dp>,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
@@ -321,6 +335,7 @@ fn resolve_search_bar(
     let shadow_elevation = shadow_elevation.unwrap_or(defaults.shadow_elevation);
     let dropdown_shape = dropdown_shape.unwrap_or(defaults.dropdown_shape);
     let dropdown_gap = dropdown_gap.unwrap_or(defaults.dropdown_gap);
+    let show_divider = show_divider.unwrap_or(defaults.show_divider);
     let content_padding = content_padding.unwrap_or(defaults.content_padding);
     let controller = controller
         .unwrap_or_else(|| remember(|| SearchBarController::new(is_active.unwrap_or(false))));
@@ -338,10 +353,12 @@ fn resolve_search_bar(
             on_active_change,
             shape,
             colors,
+            results_container_color,
             tonal_elevation,
             shadow_elevation,
             dropdown_shape,
             dropdown_gap,
+            show_divider,
             content_padding,
             controller: Some(controller),
             content,
@@ -393,10 +410,12 @@ pub fn docked_search_bar(
     on_active_change: Option<CallbackWith<bool, ()>>,
     shape: Option<Shape>,
     colors: Option<SearchBarColors>,
+    results_container_color: Option<Color>,
     tonal_elevation: Option<Dp>,
     shadow_elevation: Option<Dp>,
     dropdown_shape: Option<Shape>,
     dropdown_gap: Option<Dp>,
+    show_divider: Option<bool>,
     content_padding: Option<Dp>,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
@@ -414,10 +433,12 @@ pub fn docked_search_bar(
         on_active_change,
         shape,
         colors,
+        results_container_color,
         tonal_elevation,
         shadow_elevation,
         dropdown_shape,
         dropdown_gap,
+        show_divider,
         content_padding,
         controller,
         content,
@@ -435,10 +456,12 @@ fn mount_search_bar(args: SearchBarProps, kind: SearchBarLayoutKind) {
             .read_only(render_args.read_only)
             .shape(render_args.shape)
             .colors(render_args.colors)
+            .results_container_color_optional(render_args.results_container_color)
             .tonal_elevation(render_args.tonal_elevation)
             .shadow_elevation(render_args.shadow_elevation)
             .dropdown_shape(render_args.dropdown_shape)
             .dropdown_gap(render_args.dropdown_gap)
+            .show_divider(render_args.show_divider)
             .content_padding(render_args.content_padding)
             .controller(render_args.controller)
             .content_shared(render_args.content)
@@ -481,10 +504,12 @@ fn build_search_bar_props(args: SearchBarProps, kind: SearchBarLayoutKind) -> Se
             .unwrap_or_else(CallbackWith::default_value),
         shape: args.shape,
         colors: args.colors,
+        results_container_color: args.results_container_color,
         tonal_elevation: args.tonal_elevation,
         shadow_elevation: args.shadow_elevation,
         dropdown_shape: args.dropdown_shape,
         dropdown_gap: args.dropdown_gap,
+        show_divider: args.show_divider,
         content_padding: args.content_padding,
         controller,
         content,
@@ -505,10 +530,12 @@ struct SearchBarRenderArgs {
     on_active_change: CallbackWith<bool, ()>,
     shape: Shape,
     colors: SearchBarColors,
+    results_container_color: Option<Color>,
     tonal_elevation: Dp,
     shadow_elevation: Dp,
     dropdown_shape: Shape,
     dropdown_gap: Dp,
+    show_divider: bool,
     content_padding: Dp,
     controller: State<SearchBarController>,
     content: RenderSlot,
@@ -519,6 +546,7 @@ struct SearchResultsSurfaceArgs {
     kind: SearchBarLayoutKind,
     container_color: Color,
     divider_color: Color,
+    show_divider: bool,
     dropdown_shape: Shape,
     tonal_elevation: Dp,
     shadow_elevation: Dp,
@@ -602,10 +630,12 @@ fn search_bar_inner(
     on_active_change: Option<CallbackWith<bool, ()>>,
     shape: Option<Shape>,
     colors: Option<SearchBarColors>,
+    results_container_color: Option<Color>,
     tonal_elevation: Option<Dp>,
     shadow_elevation: Option<Dp>,
     dropdown_shape: Option<Shape>,
     dropdown_gap: Option<Dp>,
+    show_divider: Option<bool>,
     content_padding: Option<Dp>,
     controller: Option<State<SearchBarController>>,
     content: Option<RenderSlot>,
@@ -619,6 +649,7 @@ fn search_bar_inner(
     let shadow_elevation = shadow_elevation.expect("search_bar_inner requires shadow_elevation");
     let dropdown_shape = dropdown_shape.expect("search_bar_inner requires dropdown_shape");
     let dropdown_gap = dropdown_gap.expect("search_bar_inner requires dropdown_gap");
+    let show_divider = show_divider.expect("search_bar_inner requires show_divider");
     let content_padding = content_padding.expect("search_bar_inner requires content_padding");
     let controller = controller.expect("search_bar_inner requires controller");
     let content = content.expect("search_bar_inner requires content");
@@ -648,8 +679,9 @@ fn search_bar_inner(
 
     let results_surface_args = SearchResultsSurfaceArgs {
         kind,
-        container_color: colors.container_color,
+        container_color: results_container_color.unwrap_or(colors.container_color),
         divider_color: colors.divider_color,
+        show_divider,
         dropdown_shape,
         tonal_elevation,
         shadow_elevation,
@@ -696,6 +728,7 @@ fn search_bar_inner(
 
                 let content = results_surface_args.content;
                 let divider_color = results_surface_args.divider_color;
+                let show_divider = results_surface_args.show_divider;
                 let content_padding = results_surface_args.content_padding;
 
                 surface()
@@ -708,7 +741,9 @@ fn search_bar_inner(
                     .child(move || {
                         let content = content;
                         column().children(move || {
-                            horizontal_divider().color(divider_color);
+                            if show_divider {
+                                horizontal_divider().color(divider_color);
+                            }
                             let content = content;
                             layout()
                                 .modifier(Modifier::new().padding_all(content_padding))
@@ -763,6 +798,7 @@ fn build_search_field(args: SearchFieldArgs) {
             next
         })
         .controller(args.input_controller)
+        .accessibility_label_optional(args.placeholder.clone())
         .placeholder_optional(args.placeholder)
         .leading_icon_optional(args.leading_icon.map(|leading_icon| {
             RenderSlot::new(move || {
@@ -812,17 +848,41 @@ mod tests {
     }
 
     #[tessera]
-    fn search_fixture(active: Option<bool>) {
+    fn search_fixture(active: Option<bool>, show_divider: Option<bool>) {
         let controller = remember(SearchBarController::default);
         CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
         material_theme().child(move || {
             docked_search_bar()
                 .controller(controller)
                 .is_active_optional(active)
+                .show_divider_optional(show_divider)
                 .content(|| {
-                    spacer().modifier(Modifier::new().height(tessera_ui::Dp(40.0)));
+                    spacer().modifier(
+                        Modifier::new()
+                            .fill_max_width()
+                            .height(tessera_ui::Dp(40.0))
+                            .semantics(crate::modifier::SemanticsArgs {
+                                test_tag: Some("search-results".into()),
+                                ..Default::default()
+                            }),
+                    );
                 });
         });
+    }
+
+    #[test]
+    fn contained_search_removes_divider_geometry_while_divided_search_preserves_it() {
+        for (show_divider, content_y) in [(None, 75), (Some(true), 75), (Some(false), 74)] {
+            let snapshot = layout_test(|| {
+                search_fixture()
+                    .active(true)
+                    .show_divider_optional(show_divider);
+            })
+            .viewport_px(400, 300)
+            .run();
+            assert_eq!(snapshot.node("search-results").bounds().y, Px(content_y));
+            snapshot.node("search-results").size(368, 40);
+        }
     }
 
     #[test]

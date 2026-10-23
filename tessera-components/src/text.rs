@@ -214,8 +214,11 @@ impl tessera_ui::LayoutModifierNode for TextLayout {
             .measure_info();
 
         Ok(LayoutResult::new(ComputedData {
-            width: info.size[0].into(),
-            height: info.size[1].into(),
+            width: input.parent_constraint().width().clamp(info.size[0].into()),
+            height: input
+                .parent_constraint()
+                .height()
+                .clamp(info.size[1].into()),
         }))
     }
 }
@@ -262,12 +265,51 @@ mod tests {
         boxed::boxed,
         column::column,
         modifier::{ModifierExt as _, SemanticsArgs},
+        row::row,
         theme::material_theme,
     };
 
     use super::*;
 
     thread_local! { static WIDTH: Cell<Option<State<Dp>>> = const { Cell::new(None) }; }
+
+    #[tessera]
+    fn weighted_labels_fixture() {
+        boxed().children(|| {
+            row()
+                .modifier(Modifier::new().width(Dp(300.0)))
+                .children(|| {
+                    for index in 0..3 {
+                        text()
+                            .content("Cell")
+                            .modifier(Modifier::new().weight(1.0).semantics(SemanticsArgs {
+                                test_tag: Some(format!("weighted-label-{index}")),
+                                ..Default::default()
+                            }));
+                    }
+                });
+        });
+    }
+
+    #[test]
+    fn weighted_text_respects_allocated_column_width() {
+        crate::test_utils::run_isolated_test(
+            "text::tests::weighted_text_respects_allocated_column_width",
+            || {
+                tessera_ui::dp::set_scale_factor(1.0);
+                let snapshot = layout_test(|| {
+                    weighted_labels_fixture();
+                })
+                .viewport_px(400, 100)
+                .run();
+                for index in 0..3 {
+                    let bounds = snapshot.node(&format!("weighted-label-{index}")).bounds();
+                    assert_eq!(bounds.width, Px(100));
+                    assert_eq!(bounds.x, Px(index * 100));
+                }
+            },
+        );
+    }
 
     #[tessera]
     fn reflow_fixture() {
