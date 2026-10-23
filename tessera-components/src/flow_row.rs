@@ -177,6 +177,23 @@ impl tessera_ui::LayoutModifierNode for FlowRowLayout {
         }
 
         let line_metrics = compute_row_line_metrics(&lines, &children_sizes, self.item_spacing);
+        if self.cross_axis_alignment == CrossAxisAlignment::Stretch {
+            for (line, metric) in lines.iter().zip(&line_metrics) {
+                for &index in line {
+                    let size = children_sizes[index].expect("measured flow child");
+                    let size = children[index]
+                        .measure(
+                            input,
+                            &Constraint::new(
+                                AxisConstraint::exact(size.width),
+                                AxisConstraint::exact(metric.cross),
+                            ),
+                        )?
+                        .size();
+                    children_sizes[index] = Some(size);
+                }
+            }
+        }
         let (content_width, content_height) =
             compute_row_content_size(&line_metrics, self.line_spacing);
 
@@ -680,6 +697,44 @@ mod tests {
             },
             expect: {
                 node("flow_row_center_sized").position(0, 0).size(4, 32);
+            }
+        }
+    }
+    #[tessera]
+    fn stretch_wrapped_case() {
+        flow_row()
+            .modifier(Modifier::new().constrain(
+                Some(AxisConstraint::exact(Px(60))),
+                Some(AxisConstraint::new(Px::ZERO, Some(Px(100)))),
+            ))
+            .cross_axis_alignment(CrossAxisAlignment::Stretch)
+            .item_spacing(Dp(5.0))
+            .line_spacing(Dp(4.0))
+            .children(|| {
+                sized_test_box()
+                    .tag("stretch_0".to_owned())
+                    .width(Dp(30.0))
+                    .height(Dp(10.0));
+                sized_test_box()
+                    .tag("stretch_1".to_owned())
+                    .width(Dp(25.0))
+                    .height(Dp(20.0));
+                sized_test_box()
+                    .tag("stretch_2".to_owned())
+                    .width(Dp(20.0))
+                    .height(Dp(12.0));
+            });
+    }
+
+    #[test]
+    fn stretch_matches_the_cross_size_of_each_wrapped_row() {
+        tessera_ui::assert_layout! {
+            viewport: (100, 100),
+            content: { stretch_wrapped_case(); },
+            expect: {
+                node("stretch_0").position(0, 0).size(30, 20);
+                node("stretch_1").position(35, 0).size(25, 20);
+                node("stretch_2").position(0, 24).size(20, 12);
             }
         }
     }
