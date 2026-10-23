@@ -38,8 +38,11 @@ use crate::{
 
 use navigation::{CalendarFocus, CalendarKeyboard, CalendarOwner};
 
+pub use docked::docked_date_picker;
+
 pub use range::{DateRangePickerState, date_range_picker};
 
+mod docked;
 mod navigation;
 mod range;
 
@@ -537,18 +540,21 @@ pub fn date_picker(
     let show_weekday_labels = show_weekday_labels.unwrap_or(true);
     let show_mode_toggle = show_mode_toggle.unwrap_or(true);
     let year_range = year_range.unwrap_or(DatePickerDefaults::YEAR_RANGE);
-    let state = state.unwrap_or_else(|| {
-        remember(|| {
-            DatePickerState::new(
-                initial_selected_date,
-                initial_displayed_month,
-                year_range.clone(),
-                is_selectable_date,
-                is_selectable_year,
-                display_mode,
-            )
-        })
-    });
+    let state = if let Some(state) = state {
+        state
+    } else {
+        // Resolve predicates before remember borrows the slot table for
+        // initialization.
+        let initial = DatePickerState::new(
+            initial_selected_date,
+            initial_displayed_month,
+            year_range,
+            is_selectable_date,
+            is_selectable_year,
+            display_mode,
+        );
+        remember(|| initial)
+    };
     date_picker_content(DatePickerConfig {
         modifier,
         first_day_of_week,
@@ -617,7 +623,7 @@ fn date_picker_content(args: DatePickerConfig) {
                                 text()
                                     .content(headline.clone())
                                     .style(theme.typography.headline_large)
-                                    .color(scheme.on_surface_variant);
+                                    .color(scheme.on_surface);
                                 if args.show_mode_toggle {
                                     date_mode_toggle(state);
                                 }
@@ -696,7 +702,11 @@ pub fn date_picker_dialog(
     #[prop(into)] picker_title: Option<String>,
     #[prop(into)] picker_headline: Option<String>,
 ) {
-    let state = state.unwrap_or_else(|| remember(DatePickerState::default));
+    let state = if let Some(state) = state {
+        state
+    } else {
+        remember(DatePickerState::default)
+    };
     let title = picker_title.or(title);
     let theme = use_context::<MaterialTheme>().unwrap().get();
     column()
@@ -946,6 +956,7 @@ fn calendar_day(
     selected: Option<bool>,
     enabled: Option<bool>,
     in_range: Option<bool>,
+    outside_month: Option<bool>,
     #[prop(into)] description: Option<String>,
     on_select: CallbackWith<CalendarDate>,
     today: CalendarDate,
@@ -965,6 +976,8 @@ fn calendar_day(
             scheme.on_secondary_container
         } else if is_today {
             scheme.primary
+        } else if outside_month.unwrap_or(false) {
+            scheme.on_surface_variant
         } else {
             scheme.on_surface
         };
@@ -1301,7 +1314,7 @@ fn date_input_view(state: State<DatePickerState>) {
         .modifier(Modifier::new().fill_max_width().padding_all(Dp(24.0)))
         .children(move || {
             TextFieldBuilder::outlined()
-                .modifier(Modifier::new().fill_max_width())
+                .modifier(Modifier::new().fill_max_width().height(Dp(56.0)))
                 .background_color(theme.color_scheme.surface_container_high)
                 .focus_background_color(theme.color_scheme.surface_container_high)
                 .controller(controller)
@@ -1775,6 +1788,38 @@ mod tests {
         crate::test_utils::run_isolated_test(
             "date_picker::tests::gpu_single_calendar_publishes_dates_focus_and_year_actions_msaa",
             || check_single_calendar_accessibility(4),
+        );
+    }
+
+    #[tessera]
+    fn internal_predicate_fixture() {
+        material_theme().child(|| {
+            column().children(|| {
+                date_picker()
+                    .initial_selected_date(CalendarDate::new(2026, 7, 18).unwrap())
+                    .initial_displayed_month(YearMonth::new(2026, 7).unwrap())
+                    .year_range(2026..=2026)
+                    .is_selectable_date(|date| date.day() % 2 == 0)
+                    .is_selectable_year(|year| year == 2026);
+            });
+        });
+    }
+
+    #[test]
+    fn internal_calendar_initializes_predicates_without_a_slot_borrow_conflict() {
+        crate::test_utils::run_isolated_test(
+            "date_picker::tests::internal_calendar_initializes_predicates_without_a_slot_borrow_conflict",
+            || {
+                let mut session = start_layout_test_session(
+                    layout_test(|| {
+                        internal_predicate_fixture();
+                    })
+                    .viewport_px(400, 600),
+                );
+                let snapshot = pump_layout_test_session(&mut session, 0);
+                snapshot.node("date-picker").size(360, 512);
+                snapshot.node("date-grid").size(336, 288);
+            },
         );
     }
 

@@ -321,17 +321,31 @@ fn click(renderer: &mut HeadlessRenderer, label: &str) {
 }
 
 fn input_bounds(renderer: &HeadlessRenderer) -> Vec<Rect> {
-    let mut bounds = renderer
-        .accessibility_snapshot()
-        .expect("tree")
-        .nodes
-        .into_iter()
-        .filter(|(_, node)| node.role() == Role::TextInput)
-        .map(|(_, node)| node.bounds().expect("input bounds"))
-        .collect::<Vec<_>>();
-    bounds.sort_by(|left, right| left.x0.total_cmp(&right.x0));
-    assert_eq!(bounds.len(), 2);
-    bounds
+    let nodes = renderer.accessibility_snapshot().expect("tree").nodes;
+    assert_eq!(
+        nodes
+            .iter()
+            .filter(|(_, node)| node.role() == Role::TextInput)
+            .count(),
+        2
+    );
+    let input = |label| {
+        nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::TextInput && node.label() == Some(label))
+            .unwrap_or_else(|| panic!("missing named input {label}"))
+            .1
+            .bounds()
+            .expect("input bounds")
+    };
+    let start = input("Start date");
+    let end = input("End date");
+    assert!(start.height() <= 56.0 && end.height() <= 56.0);
+    assert!(
+        start.x0 < end.x0,
+        "start and end inputs retain their reading order"
+    );
+    vec![start, end]
 }
 
 fn assert_color(renderer: &HeadlessRenderer, x: f64, y: f64, expected: [u8; 3]) {

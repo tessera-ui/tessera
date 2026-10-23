@@ -657,7 +657,7 @@ fn range_input_field(
     let error = state.with(|state| input_error(&value, start, state));
     let theme = use_context::<MaterialTheme>().expect("theme").get();
     TextFieldBuilder::outlined()
-        .modifier(Modifier::new().fill_max_width())
+        .modifier(Modifier::new().fill_max_width().height(Dp(56.0)))
         .controller(controller)
         .background_color(theme.color_scheme.surface_container_high)
         .focus_background_color(theme.color_scheme.surface_container_high)
