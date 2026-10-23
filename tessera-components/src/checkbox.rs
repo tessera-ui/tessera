@@ -5,8 +5,8 @@
 //! Use in forms, settings, or lists to enable boolean selections.
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, CallbackWith, Color, Dp, Modifier, PxSize,
-    RenderSlot, SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, CallbackWith, Color, Dp, FocusRequester,
+    Modifier, PxSize, RenderSlot, SemanticsModifierNode, State,
     accesskit::{Role, Toggled},
     current_frame_nanos,
     modifier::ModifierCapabilityExt as _,
@@ -240,6 +240,8 @@ impl CheckmarkState {
 /// ## Parameters
 ///
 /// - `modifier` — modifier chain applied to the checkbox subtree.
+/// - `focus_requester` — optional handle targeting the checkbox for focus
+///   requests.
 /// - `on_toggle` — toggle callback invoked with the new checked state.
 /// - `checked` — externally controlled checked state; omit to use the
 ///   controller.
@@ -291,6 +293,7 @@ impl CheckmarkState {
 #[tessera]
 pub fn checkbox(
     modifier: Option<Modifier>,
+    focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     checked: Option<bool>,
     indeterminate: Option<bool>,
@@ -371,6 +374,7 @@ pub fn checkbox(
     }
 
     checkbox_inner()
+        .focus_requester_optional(focus_requester)
         .modifier(modifier)
         .size(size)
         .color(color)
@@ -392,6 +396,7 @@ pub fn checkbox(
 #[tessera]
 fn checkbox_inner(
     modifier: Option<Modifier>,
+    focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     size: Option<Dp>,
     color: Option<Color>,
@@ -625,6 +630,7 @@ fn checkbox_inner(
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
         let toggle_args = ToggleableArgs {
+            focus_requester,
             value: is_checked,
             on_value_change,
             enabled: true,

@@ -5,8 +5,8 @@
 //! Use to control a boolean on/off state.
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
-    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
+    AxisConstraint, CallbackWith, Color, ComputedData, Constraint, Dp, FocusRequester,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::{Role, Toggled},
     current_frame_nanos,
     layout::{MeasureScope, PlacementResult, PlacementScope, layout},
@@ -366,6 +366,8 @@ impl Default for SwitchController {
 /// ## Parameters
 ///
 /// - `modifier` — optional modifier chain applied to the switch subtree.
+/// - `focus_requester` — optional handle targeting the switch for focus
+///   requests.
 /// - `on_toggle` — optional callback invoked when the switch toggles; omit for
 ///   a noninteractive state display that retains its accessibility value.
 /// - `enabled` — optional enabled state; defaults to `true`.
@@ -413,6 +415,7 @@ impl Default for SwitchController {
 #[tessera]
 pub fn switch(
     modifier: Option<Modifier>,
+    focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     enabled: Option<bool>,
     checked: Option<bool>,
@@ -476,6 +479,7 @@ pub fn switch(
     }
 
     switch_content()
+        .focus_requester_optional(focus_requester)
         .modifier_optional(modifier)
         .on_toggle_optional(on_toggle)
         .enabled(enabled)
@@ -502,6 +506,7 @@ pub fn switch(
 #[allow(clippy::too_many_arguments)]
 fn switch_content(
     modifier: Option<Modifier>,
+    focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     enabled: Option<bool>,
     width: Option<Dp>,
@@ -575,6 +580,7 @@ fn switch_content(
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
         let toggle_args = ToggleableArgs {
+            focus_requester,
             value: checked,
             on_value_change: CallbackWith::new(move |_| {
                 controller.with_mut(|c| c.toggle());

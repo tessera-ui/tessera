@@ -7,8 +7,8 @@
 use std::{cell::Cell, time::Duration};
 
 use tessera_ui::{
-    Color, Dp, FocusDirection, FocusManager, HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID,
-    Modifier, PressKeyEventType, PxPosition, State,
+    Color, Dp, FocusDirection, FocusManager, FocusRequester, HeadlessConfig, HeadlessRenderer,
+    MOUSE_POINTER_ID, Modifier, PressKeyEventType, PxPosition, State,
     accesskit::{Action, ActionRequest, Node, NodeId, Role, Toggled, TreeId},
     remember, tessera,
 };
@@ -25,6 +25,7 @@ thread_local! {
     static CHECKED: Cell<Option<State<bool>>> = const { Cell::new(None) };
     static CALLS: Cell<Option<State<[u32; 2]>>> = const { Cell::new(None) };
     static MIXED: Cell<Option<State<bool>>> = const { Cell::new(None) };
+    static REQUESTERS: Cell<Option<[FocusRequester;3]>> = const { Cell::new(None) };
 }
 
 #[tessera]
@@ -33,6 +34,15 @@ fn fixture() {
     let checked = remember(|| true);
     let calls = remember(|| [0u32; 2]);
     let mixed = remember(|| false);
+    let requesters = remember(|| {
+        [
+            FocusRequester::new(),
+            FocusRequester::new(),
+            FocusRequester::new(),
+        ]
+    })
+    .get();
+    REQUESTERS.set(Some(requesters));
     let internal = remember(|| {
         let mut controller = CheckboxController::new(false);
         controller.set_indeterminate(true);
@@ -46,8 +56,11 @@ fn fixture() {
         column()
             .modifier(Modifier::new().padding_all(Dp(16.0)))
             .children(move || {
-                radio_button().accessibility_label("Before");
+                radio_button()
+                    .focus_requester(requesters[2])
+                    .accessibility_label("Before");
                 checkbox()
+                    .focus_requester(requesters[0])
                     .checked(checked.get())
                     .indeterminate(mixed.get())
                     .disabled(!enabled.get())
@@ -59,6 +72,7 @@ fn fixture() {
                         calls.with_mut(|calls| calls[0] += 1);
                     });
                 switch()
+                    .focus_requester(requesters[1])
                     .checked(checked.get())
                     .enabled(enabled.get())
                     .accessibility_label("Switch")
@@ -169,6 +183,31 @@ fn check_controls(samples: u32) {
     assert_values(&renderer, false);
     ENABLED.get().unwrap().set(true);
     renderer.render_frames(12);
+    for (requester, label) in REQUESTERS
+        .get()
+        .unwrap()
+        .into_iter()
+        .zip(["Checkbox", "Switch", "Before"])
+    {
+        requester.request_focus();
+        renderer.render_frames(3);
+        assert_eq!(
+            renderer.accessibility_snapshot().unwrap().focus,
+            node(&renderer, label).0,
+            "external focus must target the control semantics"
+        );
+        assert_eq!(
+            CALLS.get().unwrap().get(),
+            [0, 0],
+            "focus requests must not activate controls"
+        );
+        assert_values(&renderer, false);
+        assert_eq!(
+            node(&renderer, "Before").1.toggled(),
+            Some(Toggled::False),
+            "requesting radio focus must not select it"
+        );
+    }
     for (index, label) in ["Checkbox", "Switch"].into_iter().enumerate() {
         let (id, control) = node(&renderer, label);
         assert_eq!(id, identities[index]);

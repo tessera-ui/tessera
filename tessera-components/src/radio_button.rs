@@ -9,8 +9,8 @@ use std::time::Duration;
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Callback, CallbackWith, Color,
-    Dp, FocusDirection, FocusManager, FocusState, FocusTraversalPolicy, Modifier, Px, PxSize,
-    RenderSlot, SemanticsModifierNode, State,
+    Dp, FocusDirection, FocusManager, FocusRequester, FocusState, FocusTraversalPolicy, Modifier,
+    Px, PxSize, RenderSlot, SemanticsModifierNode, State,
     accesskit::{Orientation, Role, Toggled},
     current_frame_nanos,
     layout::layout,
@@ -301,6 +301,8 @@ pub fn radio_group(
 /// ## Parameters
 ///
 /// - `modifier` — optional modifier chain applied to the radio button subtree.
+/// - `focus_requester` — optional handle targeting this option for focus
+///   requests.
 /// - `on_select` — optional callback invoked when the radio transitions to the
 ///   selected state.
 /// - `selected` — externally controlled selection; omit on every choice to let
@@ -336,6 +338,7 @@ pub fn radio_group(
 #[tessera]
 pub fn radio_button(
     modifier: Option<Modifier>,
+    focus_requester: Option<FocusRequester>,
     on_select: Option<CallbackWith<bool, ()>>,
     selected: Option<bool>,
     size: Option<Dp>,
@@ -389,6 +392,7 @@ pub fn radio_button(
     }
 
     radio_button_inner()
+        .focus_requester_optional(focus_requester)
         .modifier(modifier)
         .on_select_shared(on_select)
         .selected_optional(selected)
@@ -410,6 +414,7 @@ pub fn radio_button(
 #[tessera]
 fn radio_button_inner(
     modifier: Option<Modifier>,
+    focus_requester: Option<FocusRequester>,
     on_select: Option<CallbackWith<bool, ()>>,
     selected: Option<bool>,
     size: Option<Dp>,
@@ -546,6 +551,7 @@ fn radio_button_inner(
         let release_handler = ripple_state
             .map(|state| move |_ctx: PointerEventContext| state.with_mut(|s| s.release()));
         let selectable_args = SelectableArgs {
+            focus_requester,
             selected: is_selected,
             on_click,
             enabled: true,
