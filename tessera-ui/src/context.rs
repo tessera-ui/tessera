@@ -88,6 +88,23 @@ fn with_slot_table_mut<R>(f: impl FnOnce(&mut SlotTable) -> R) -> R {
     CONTEXT_GLOBALS.with(|globals| f(&mut globals.slot_table.borrow_mut()))
 }
 
+pub(crate) fn reset_context_slots() {
+    let removed = with_slot_table_mut(|table| {
+        let mut removed = Vec::new();
+        for entry in &mut table.entries {
+            if let Some(value) = entry.value.take() {
+                removed.push(value);
+            }
+            entry.generation = entry.generation.wrapping_add(1);
+        }
+        table.key_to_slot.clear();
+        table.slots_by_owner.clear();
+        table.free_list = (0..table.entries.len() as u32).collect();
+        removed
+    });
+    drop(removed);
+}
+
 #[derive(Default)]
 struct ContextSnapshotTracker {
     previous_by_instance_key: HashMap<u64, ContextMap>,
@@ -799,7 +816,7 @@ mod tests {
             }
         }
 
-        for recycle in [false, true] {
+        for cleanup in 0..3 {
             reset_test_state();
             let key = SlotKey {
                 instance_logic_id: 42,
@@ -817,7 +834,9 @@ mod tests {
                 table.begin_epoch();
             });
             let instances = super::HashSet::from_iter([42]);
-            if recycle {
+            if cleanup == 2 {
+                crate::runtime::reset_slots();
+            } else if cleanup == 1 {
                 super::recycle_recomposed_context_slots_for_instance_logic_ids(&instances);
             } else {
                 super::drop_context_slots_for_instance_logic_ids(&instances);

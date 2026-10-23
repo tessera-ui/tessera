@@ -3407,6 +3407,7 @@ pub fn begin_recompose_slot_epoch() {
 
 /// Reset all slot buffers (used on suspension).
 pub fn reset_slots() {
+    crate::context::reset_context_slots();
     let removed = with_slot_table_mut(SlotTable::reset);
     drop(removed);
 }
