@@ -1279,6 +1279,74 @@ mod tests {
     }
 
     #[test]
+    fn actions_reject_inaccessible_ancestors_and_resume_after_reveal() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let parent = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode::new().with_role(Role::Group)),
+        );
+        let target = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(parent),
+            Some(
+                AccessibilityNode::new()
+                    .with_role(Role::Button)
+                    .with_action(Action::Click),
+            ),
+        );
+        let calls = Arc::new(AtomicUsize::new(0));
+        let observed = Arc::clone(&calls);
+        metadatas
+            .get_mut(&target)
+            .unwrap()
+            .accessibility_action_handler = Some(Box::new(move |action| {
+            assert_eq!(action, Action::Click);
+            observed.fetch_add(1, Ordering::Relaxed);
+        }));
+        let mut owner = FocusOwner::new();
+        let request = || accesskit::ActionRequest {
+            action: Action::Click,
+            target_tree: TreeId::ROOT,
+            target_node: accesskit_id(target),
+            data: None,
+        };
+        assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        metadatas
+            .get_mut(&parent)
+            .unwrap()
+            .accessibility
+            .as_mut()
+            .unwrap()
+            .hidden = true;
+        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        let semantics = metadatas
+            .get_mut(&parent)
+            .unwrap()
+            .accessibility
+            .as_mut()
+            .unwrap();
+        semantics.hidden = false;
+        semantics.merge_descendants = false;
+        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        let metadata = metadatas.get_mut(&parent).unwrap();
+        metadata.accessibility.as_mut().unwrap().merge_descendants = true;
+        let position = metadata.abs_position.take();
+        assert!(!dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(calls.load(Ordering::Relaxed), 1);
+        metadatas.get_mut(&parent).unwrap().abs_position = position;
+        assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(calls.load(Ordering::Relaxed), 2);
+    }
+
+    #[test]
     fn focus_actions_reach_registered_targets_without_activating_their_handlers() {
         use crate::focus::{FocusNode, FocusRegistration};
 
