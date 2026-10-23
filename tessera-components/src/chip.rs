@@ -4,10 +4,10 @@
 //!
 //! Present compact actions, filters, or input tokens in dense UIs.
 use tessera_ui::{
-    Callback, Color, Dp, Modifier,
+    Callback, Color, Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     accesskit::{Role, Toggled},
     current_frame_nanos,
-    layout::layout,
+    layout::{MeasureScope, layout},
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
 
@@ -17,6 +17,7 @@ use crate::{
     boxed::boxed,
     icon::icon,
     image::image,
+    material_icons::filled,
     modifier::{InteractionState, ModifierExt as _, Padding},
     painter::Painter,
     row::row,
@@ -422,6 +423,8 @@ struct ChipResolvedArgs {
     shape_style: ChipShapeStyle,
     elevation: Option<Dp>,
     on_click: Option<Callback>,
+    on_remove: Option<Callback>,
+    remove_accessibility_label: Option<String>,
     accessibility_label: Option<String>,
     accessibility_description: Option<String>,
 }
@@ -499,7 +502,11 @@ impl ChipBuilder {
 /// - `shape_style` — optional selectable-chip shape behavior; defaults to
 ///   Expressive and is replaced by an explicit `shape`.
 /// - `elevation` — optional chip elevation override.
-/// - `on_click` — optional click callback.
+/// - `on_click` — optional body click callback.
+/// - `on_remove` — optional input-chip removal action; independent from body
+///   activation when both callbacks are provided.
+/// - `remove_accessibility_label` — optional removal label; defaults to "Remove
+///   {label}".
 /// - `accessibility_label` — optional accessibility label.
 /// - `accessibility_description` — optional accessibility description.
 ///
@@ -547,12 +554,14 @@ pub fn chip(
     shape_style: Option<ChipShapeStyle>,
     elevation: Option<Dp>,
     on_click: Option<Callback>,
+    on_remove: Option<Callback>,
+    #[prop(into)] remove_accessibility_label: Option<String>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
     let label = label.unwrap_or_default();
     let modifier = modifier.unwrap_or_default();
-    let args = ChipResolvedArgs {
+    let mut args = ChipResolvedArgs {
         variant: variant.unwrap_or_default(),
         style: style.unwrap_or_default(),
         label,
@@ -568,16 +577,31 @@ pub fn chip(
         shape_style: shape_style.unwrap_or_default(),
         elevation,
         on_click,
+        on_remove,
+        remove_accessibility_label,
         accessibility_label,
         accessibility_description,
     };
+    let on_remove = if args.variant == ChipVariant::Input {
+        args.on_remove
+    } else {
+        None
+    };
+    let separate_remove = on_remove.is_some() && args.on_click.is_some();
+    let remove_only = on_remove.is_some() && args.on_click.is_none();
+    if on_remove.is_some() && args.trailing_icon.is_none() {
+        args.trailing_icon = Some(filled::CLOSE_SVG.into());
+    }
+    if remove_only {
+        args.on_click = on_remove;
+    }
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
     let typography = theme.typography;
     let variant = args.variant;
     let style = args.style;
-    let selectable = matches!(variant, ChipVariant::Filter | ChipVariant::Input);
+    let selectable = matches!(variant, ChipVariant::Filter | ChipVariant::Input) && !remove_only;
     let selected = args.selected && selectable;
     let custom_colors = args.colors.is_some();
     let colors = args
@@ -725,13 +749,24 @@ pub fn chip(
     };
 
     let label = args.label;
-    let accessibility_label = args
-        .accessibility_label
-        .or_else(|| (!label.is_empty()).then(|| label.clone()));
+    let remove_label = args
+        .remove_accessibility_label
+        .unwrap_or_else(|| format!("Remove {label}"));
+    let removal_icon = args.trailing_icon.clone();
+    let accessibility_label = args.accessibility_label.or_else(|| {
+        if remove_only {
+            Some(remove_label.clone())
+        } else {
+            (!label.is_empty()).then(|| label.clone())
+        }
+    });
 
     let modifier = args
         .modifier
-        .default_min_size(Dp::ZERO, ChipDefaults::HEIGHT)
+        .default_min_size(
+            if separate_remove { Dp(88.0) } else { Dp::ZERO },
+            ChipDefaults::HEIGHT,
+        )
         .minimum_interactive_component_size();
     let has_on_click = args.on_click.is_some();
     let leading_icon = args.leading_icon;
@@ -743,90 +778,182 @@ pub fn chip(
         MaterialAlpha::DISABLED_CONTENT
     };
 
-    surface()
-        .modifier(modifier)
-        .style(surface_style)
-        .shape(shape)
-        .content_alignment(Alignment::Center)
-        .content_color(label_color)
-        .enabled(args.enabled)
-        .ripple_color(label_color)
-        .elevation(shadow_elevation)
-        .interaction_state(interaction_state)
-        .on_click_optional(args.on_click)
-        .accessibility_role_optional((has_on_click || selectable).then_some(if selectable {
-            Role::CheckBox
-        } else {
-            Role::Button
-        }))
-        .accessibility_toggled_optional(selectable.then_some(if selected {
-            Toggled::True
-        } else {
-            Toggled::False
-        }))
-        .accessibility_focusable_optional(has_on_click.then_some(true))
-        .accessibility_label_optional(accessibility_label)
-        .accessibility_description_optional(args.accessibility_description)
+    layout()
+        .policy(ChipRemovalLayout {
+            separate_remove,
+            trailing_padding: padding.right,
+        })
         .child(move || {
             let avatar = avatar.clone();
             let leading_icon = leading_icon.clone();
             let trailing_icon = trailing_icon.clone();
             let label = label.clone();
-            provide_context(
-                || typography.label_large,
-                move || {
-                    let inherited = use_context::<TextStyle>().expect("chip text style");
-                    if inherited.get() != typography.label_large {
-                        inherited.set(typography.label_large);
-                    }
-                    layout()
-                        .modifier(Modifier::new().padding(padding))
-                        .child(move || {
-                            let avatar = avatar.clone();
-                            let leading_icon = leading_icon.clone();
-                            let trailing_icon = trailing_icon.clone();
-                            let label = label.clone();
-                            row()
-                                .cross_axis_alignment(CrossAxisAlignment::Center)
-                                .children(move || {
-                                    let spacing = ChipDefaults::ELEMENT_SPACING;
-                                    let mut item_count = 0;
+            surface()
+                .modifier(modifier.clone())
+                .style(surface_style.clone())
+                .shape(shape)
+                .content_alignment(Alignment::Center)
+                .content_color(label_color)
+                .enabled(args.enabled)
+                .ripple_color(label_color)
+                .elevation(shadow_elevation)
+                .interaction_state(interaction_state)
+                .on_click_optional(args.on_click)
+                .accessibility_role_optional((has_on_click || selectable).then_some(
+                    if selectable {
+                        Role::CheckBox
+                    } else {
+                        Role::Button
+                    },
+                ))
+                .accessibility_toggled_optional(selectable.then_some(if selected {
+                    Toggled::True
+                } else {
+                    Toggled::False
+                }))
+                .accessibility_focusable_optional(has_on_click.then_some(true))
+                .accessibility_label_optional(accessibility_label.clone())
+                .accessibility_description_optional(args.accessibility_description.clone())
+                .child(move || {
+                    let avatar = avatar.clone();
+                    let leading_icon = leading_icon.clone();
+                    let trailing_icon = trailing_icon.clone();
+                    let label = label.clone();
+                    provide_context(
+                        || typography.label_large,
+                        move || {
+                            let inherited = use_context::<TextStyle>().expect("chip text style");
+                            if inherited.get() != typography.label_large {
+                                inherited.set(typography.label_large);
+                            }
+                            layout()
+                                .modifier(Modifier::new().padding(padding))
+                                .child(move || {
+                                    let avatar = avatar.clone();
+                                    let leading_icon = leading_icon.clone();
+                                    let trailing_icon = trailing_icon.clone();
+                                    let label = label.clone();
+                                    row()
+                                        .cross_axis_alignment(CrossAxisAlignment::Center)
+                                        .children(move || {
+                                            let spacing = ChipDefaults::ELEMENT_SPACING;
+                                            let mut item_count = 0;
 
-                                    if let Some(avatar) = avatar.clone() {
-                                        item_count += 1;
-                                        chip_avatar().painter(avatar).alpha(avatar_alpha);
-                                    } else if let Some(icon_content) = leading_icon.clone() {
-                                        if item_count > 0 {
-                                            spacer().modifier(Modifier::new().width(spacing));
-                                        }
-                                        item_count += 1;
-                                        icon()
-                                            .painter(icon_content.clone())
-                                            .size(ChipDefaults::ICON_SIZE)
-                                            .tint(leading_icon_color);
-                                    }
+                                            if let Some(avatar) = avatar.clone() {
+                                                item_count += 1;
+                                                chip_avatar().painter(avatar).alpha(avatar_alpha);
+                                            } else if let Some(icon_content) = leading_icon.clone()
+                                            {
+                                                if item_count > 0 {
+                                                    spacer()
+                                                        .modifier(Modifier::new().width(spacing));
+                                                }
+                                                item_count += 1;
+                                                icon()
+                                                    .painter(icon_content.clone())
+                                                    .size(ChipDefaults::ICON_SIZE)
+                                                    .tint(leading_icon_color);
+                                            }
 
-                                    if has_label {
-                                        if item_count > 0 {
-                                            spacer().modifier(Modifier::new().width(spacing));
-                                        }
-                                        item_count += 1;
-                                        text().content(label.clone());
-                                    }
+                                            if has_label {
+                                                if item_count > 0 {
+                                                    spacer()
+                                                        .modifier(Modifier::new().width(spacing));
+                                                }
+                                                item_count += 1;
+                                                text().content(label.clone());
+                                            }
 
-                                    if let Some(icon_content) = trailing_icon.clone() {
-                                        if item_count > 0 {
-                                            spacer().modifier(Modifier::new().width(spacing));
-                                        }
-                                        icon()
-                                            .painter(icon_content.clone())
-                                            .size(ChipDefaults::ICON_SIZE)
-                                            .tint(trailing_icon_color);
-                                    }
+                                            if let Some(icon_content) = trailing_icon.clone() {
+                                                if item_count > 0 {
+                                                    spacer()
+                                                        .modifier(Modifier::new().width(spacing));
+                                                }
+                                                if separate_remove {
+                                                    spacer().modifier(Modifier::new().size(
+                                                        ChipDefaults::ICON_SIZE,
+                                                        ChipDefaults::ICON_SIZE,
+                                                    ));
+                                                } else {
+                                                    icon()
+                                                        .painter(icon_content.clone())
+                                                        .size(ChipDefaults::ICON_SIZE)
+                                                        .tint(trailing_icon_color);
+                                                }
+                                            }
+                                        });
                                 });
-                        });
-                },
+                        },
+                    );
+                });
+            if separate_remove {
+                chip_remove_action(remove_label.clone(), on_remove.expect("input chip removal"))
+                    .icon_optional(removal_icon.clone())
+                    .enabled(args.enabled)
+                    .color(trailing_icon_color);
+            }
+        });
+}
+
+#[derive(Clone, Copy, PartialEq)]
+struct ChipRemovalLayout {
+    separate_remove: bool,
+    trailing_padding: Dp,
+}
+
+impl tessera_ui::LayoutModifierNode for ChipRemovalLayout {
+    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let children = scope.children();
+        let constraints = scope.parent_constraint().without_min();
+        let body = children[0];
+        let size = body.measure(scope, &constraints)?.size();
+        let mut result = LayoutResult::new(size);
+        result.place_child(body, PxPosition::ZERO);
+        if self.separate_remove {
+            let remove = children[1];
+            let remove_size = remove.measure(scope, &constraints)?.size();
+            let center = size.width
+                - Px::from(self.trailing_padding)
+                - Px::from(ChipDefaults::ICON_SIZE) / 2;
+            result.place_child(
+                remove,
+                PxPosition::new(
+                    center - remove_size.width / 2,
+                    (size.height - remove_size.height) / 2,
+                ),
             );
+        }
+        Ok(result)
+    }
+}
+
+#[tessera]
+fn chip_remove_action(
+    icon: Option<Painter>,
+    enabled: Option<bool>,
+    color: Option<Color>,
+    label: String,
+    on_remove: Callback,
+) {
+    let enabled = enabled.unwrap_or(true);
+    surface()
+        .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
+        .shape(Shape::Ellipse)
+        .style(Color::TRANSPARENT.into())
+        .content_alignment(Alignment::Center)
+        .enabled(enabled)
+        .accessibility_role(Role::Button)
+        .accessibility_label(label)
+        .accessibility_focusable(enabled)
+        .ripple_color(color.unwrap_or(Color::BLACK))
+        .on_click_shared(on_remove)
+        .child(move || {
+            if let Some(icon) = icon.clone() {
+                crate::icon::icon()
+                    .painter(icon)
+                    .size(ChipDefaults::ICON_SIZE)
+                    .tint_optional(color);
+            }
         });
 }
 
@@ -915,3 +1042,6 @@ mod avatar_tests;
 
 #[cfg(test)]
 mod shape_tests;
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod remove_tests;
