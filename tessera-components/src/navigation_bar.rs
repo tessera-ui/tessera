@@ -173,7 +173,10 @@ fn navigation_bar_item_view_content(
                 provide_context(
                     || typography.label_medium,
                     move || {
-                        text().content(label.clone()).color(label_color);
+                        text()
+                            .content(label.clone())
+                            .color(label_color)
+                            .style(typography.label_medium);
                     },
                 );
             }
@@ -200,7 +203,6 @@ impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
             .unwrap_or(Px::ZERO);
 
         let min_height = CONTAINER_HEIGHT.to_px();
-        let parent_height = input.parent_constraint().height().clamp(min_height);
 
         let indicator_background = children[0];
         let indicator_ripple = children[1];
@@ -229,15 +231,42 @@ impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
             None
         };
 
+        let horizontal = self.icon_position == NavigationBarIconPosition::Start && self.has_label;
         let label_size = if let Some(label_id) = label_id {
-            Some(label_id.measure(input, &child_constraint)?)
+            let reserved = if horizontal {
+                icon_size.map_or(Px::ZERO, |size| size.width) + Dp(36.0).to_px()
+            } else {
+                Dp(8.0).to_px()
+            };
+            Some(label_id.measure(
+                input,
+                &Constraint::new(
+                    AxisConstraint::new(Px::ZERO, Some((parent_width - reserved).max(Px::ZERO))),
+                    AxisConstraint::NONE,
+                ),
+            )?)
         } else {
             None
         };
 
         let width = parent_width;
-        let height = parent_height;
-        let horizontal = self.icon_position == NavigationBarIconPosition::Start && self.has_label;
+        let icon_height = icon_size.map_or(Px::ZERO, |size| size.height);
+        let label_height = label_size.map_or(Px::ZERO, |size| size.height);
+        let natural_height = if horizontal {
+            icon_height.max(label_height) + Dp(40.0).to_px()
+        } else if self.has_label {
+            icon_height
+                + INDICATOR_VERTICAL_PADDING.to_px() * 2
+                + INDICATOR_TO_LABEL_PADDING.to_px()
+                + label_height
+                + Dp(12.0).to_px()
+        } else {
+            INDICATOR_HEIGHT.to_px() + Dp(12.0).to_px()
+        };
+        let height = input
+            .parent_constraint()
+            .height()
+            .clamp(min_height.max(natural_height));
         let indicator_width = if horizontal {
             icon_size.map_or(Px::ZERO, |size| size.width)
                 + label_size.map_or(Px::ZERO, |size| size.width)
@@ -246,7 +275,7 @@ impl tessera_ui::LayoutModifierNode for NavigationBarItemLayout {
             INDICATOR_WIDTH.to_px()
         };
         let indicator_height = if horizontal {
-            Dp(40.0).to_px()
+            Dp(40.0).to_px().max(label_height + Dp(16.0).to_px())
         } else {
             INDICATOR_HEIGHT.to_px()
         };
@@ -417,6 +446,7 @@ fn navigation_bar_item_view(
         enabled: true,
         role: Some(Role::Tab),
         label: Some(label),
+        description: item.accessibility_description.clone(),
         interaction_state: Some(interaction_state),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
@@ -442,6 +472,7 @@ struct NavigationBarItemDefinition {
     label: String,
     icon: Option<RenderSlot>,
     on_click: Callback,
+    accessibility_description: Option<String>,
     label_behavior: NavigationBarLabelBehavior,
     icon_position: NavigationBarIconPosition,
 }
@@ -461,6 +492,8 @@ struct NavigationBarItemDefinition {
 /// - `selected` — whether this item is the active destination.
 /// - `icon_position` — place the icon above or before the label.
 /// - `on_click` — callback invoked after the item becomes selected.
+/// - `accessibility_description` — additional announcement such as an unread
+///   count.
 /// - `label_behavior` — whether the label is always shown or only when
 ///   selected.
 ///
@@ -489,6 +522,7 @@ pub fn navigation_bar_item(
     label_behavior: Option<NavigationBarLabelBehavior>,
     selected: Option<bool>,
     icon_position: Option<NavigationBarIconPosition>,
+    #[prop(into)] accessibility_description: Option<String>,
 ) {
     let icon_position = icon_position
         .filter(|position| *position != NavigationBarIconPosition::Auto)
@@ -530,6 +564,7 @@ pub fn navigation_bar_item(
                 label: label.clone(),
                 icon,
                 on_click,
+                accessibility_description: accessibility_description.clone(),
                 label_behavior,
                 icon_position,
             };
@@ -608,7 +643,11 @@ pub fn navigation_bar(
     layout().modifier(modifier).child({
         move || {
             surface()
-                .modifier(Modifier::new().fill_max_width().height(CONTAINER_HEIGHT))
+                .modifier(
+                    Modifier::new()
+                        .fill_max_width()
+                        .default_min_size(Dp::ZERO, CONTAINER_HEIGHT),
+                )
                 .style(scheme.surface_container.into())
                 .block_input(true)
                 .child(move || {
@@ -646,10 +685,8 @@ impl tessera_ui::LayoutModifierNode for NavigationBarLayout {
             .width()
             .resolve_max()
             .unwrap_or(Px::ZERO);
-        let height = input
-            .parent_constraint()
-            .height()
-            .clamp(CONTAINER_HEIGHT.to_px());
+        let minimum_height = CONTAINER_HEIGHT.to_px();
+        let mut height = input.parent_constraint().height().clamp(minimum_height);
         let count = children.len();
         let padding = if self.centered && count <= 6 {
             Px((width.to_f32() * ((100.0 - 10.0 * (count as f32 + 3.0)) / 200.0)).round() as i32)
@@ -658,16 +695,31 @@ impl tessera_ui::LayoutModifierNode for NavigationBarLayout {
         };
         let available = width - padding * 2;
         let mut result = LayoutResult::default();
+        let mut measured = Vec::with_capacity(count);
+        let maximum_height = input.parent_constraint().height().resolve_max();
         for (index, child) in children.into_iter().enumerate() {
             let start = Px(available.0 * index as i32 / count as i32);
             let end = Px(available.0 * (index + 1) as i32 / count as i32);
-            child.measure(
+            let size = child.measure(
                 input,
                 &Constraint::new(
                     AxisConstraint::exact(end - start),
-                    AxisConstraint::exact(height),
+                    AxisConstraint::new(minimum_height, maximum_height),
                 ),
             )?;
+            height = height.max(size.height);
+            measured.push((child, start, end, size.height));
+        }
+        for (child, start, end, child_height) in measured {
+            if child_height != height {
+                child.measure(
+                    input,
+                    &Constraint::new(
+                        AxisConstraint::exact(end - start),
+                        AxisConstraint::exact(height),
+                    ),
+                )?;
+            }
             result.place_child(child, PxPosition::new(padding + start, Px::ZERO));
         }
         Ok(result.with_size(ComputedData { width, height }))

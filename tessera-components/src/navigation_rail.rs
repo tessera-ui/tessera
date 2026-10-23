@@ -8,7 +8,7 @@ use std::time::Duration;
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxRect, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, layout},
@@ -19,6 +19,7 @@ use tessera_ui::{
 use crate::{
     alignment::{CrossAxisAlignment, MainAxisAlignment},
     animation,
+    badge::BadgeDefaults,
     column::column,
     modifier::{InteractionState, ModifierExt, Padding, PointerEventContext, SelectableArgs},
     ripple_state::{RippleSpec, RippleState},
@@ -28,6 +29,10 @@ use crate::{
     text::text,
     theme::{ContentColor, MaterialTheme},
 };
+
+#[cfg(test)]
+#[path = "navigation_destination_tests.rs"]
+mod destination_tests;
 
 const ANIMATION_DURATION: Duration = Duration::from_millis(300);
 const COLLAPSED_WIDTH: Dp = Dp(96.0);
@@ -68,7 +73,7 @@ enum NavigationRailIconPosition {
     Start,
 }
 
-#[derive(Clone)]
+#[derive(Clone, PartialEq)]
 struct NavigationRailCompositionContext {
     icon_position: NavigationRailIconPosition,
     indicator_start_width: Dp,
@@ -81,15 +86,14 @@ fn navigation_rail_item_view_content(
     item: Option<NavigationRailItemDefinition>,
     icon_position: Option<NavigationRailIconPosition>,
     selection_fraction: Option<f32>,
-    indicator_start_width: Option<Dp>,
     item_min_height: Option<Dp>,
     interaction_state: Option<State<InteractionState>>,
     ripple_state: Option<State<RippleState>>,
+    indicator_geometry: Option<State<RailRippleGeometry>>,
 ) {
     let item = item.unwrap_or_default();
     let icon_position = icon_position.unwrap_or_default();
     let selection_fraction = selection_fraction.unwrap_or(0.0);
-    let indicator_start_width = indicator_start_width.unwrap_or(Dp(0.0));
     let item_min_height = item_min_height.unwrap_or(Dp(0.0));
     let interaction_state = interaction_state.expect("interaction_state must be set");
     let ripple_state = ripple_state.expect("ripple_state must be set");
@@ -101,6 +105,7 @@ fn navigation_rail_item_view_content(
 
     let has_label = !item.label.is_empty();
     let has_icon = item.icon.is_some();
+    let has_badge = item.badge.is_some();
 
     let icon_color = interpolate_color(
         scheme.on_surface_variant,
@@ -109,31 +114,23 @@ fn navigation_rail_item_view_content(
     );
     let label_color = interpolate_color(
         scheme.on_surface_variant,
-        scheme.secondary,
+        if icon_position == NavigationRailIconPosition::Start {
+            scheme.on_secondary_container
+        } else {
+            scheme.secondary
+        },
         selection_fraction,
     );
     let ripple_color = icon_color;
     let indicator_color = scheme.secondary_container.with_alpha(selection_fraction);
-
-    let indicator_base_width = match icon_position {
-        NavigationRailIconPosition::Top => INDICATOR_TOP_WIDTH,
-        NavigationRailIconPosition::Start => indicator_start_width,
-    };
-    let indicator_height = match icon_position {
-        NavigationRailIconPosition::Top => INDICATOR_TOP_HEIGHT,
-        NavigationRailIconPosition::Start => INDICATOR_START_HEIGHT,
-    };
-    let indicator_width_px = indicator_base_width.to_px();
-    let animated_indicator_width_px = Px(((indicator_width_px.0 as f32)
-        * selection_fraction.max(0.0))
-    .round()
-    .max(0.0) as i32);
 
     layout()
         .policy(NavigationRailItemLayout {
             icon_position,
             has_label,
             has_icon,
+            has_badge,
+            selection_fraction,
             item_min_height,
         })
         .child(move || {
@@ -142,10 +139,6 @@ fn navigation_rail_item_view_content(
                     color: indicator_color,
                 })
                 .shape(Shape::CAPSULE)
-                .modifier(Modifier::new().constrain(
-                    Some(AxisConstraint::exact(animated_indicator_width_px)),
-                    Some(AxisConstraint::exact(indicator_height.to_px())),
-                ))
                 .show_state_layer(false)
                 .show_ripple(false)
                 .child(|| {});
@@ -155,7 +148,18 @@ fn navigation_rail_item_view_content(
                     color: Color::TRANSPARENT,
                 })
                 .shape(Shape::CAPSULE)
-                .modifier(Modifier::new().size(indicator_base_width, indicator_height))
+                .modifier(Modifier::new().on_globally_positioned(
+                    move |bounds: tessera_ui::PxRect| {
+                        if let Some(indicator_geometry) = indicator_geometry {
+                            if indicator_geometry.with(|geometry| geometry.indicator)
+                                != Some(bounds)
+                            {
+                                indicator_geometry
+                                    .with_mut(|geometry| geometry.indicator = Some(bounds));
+                            }
+                        }
+                    },
+                ))
                 .enabled(true)
                 .interaction_state(interaction_state)
                 .ripple_color(ripple_color)
@@ -165,7 +169,7 @@ fn navigation_rail_item_view_content(
                             color: Color::TRANSPARENT,
                         })
                         .shape(Shape::CAPSULE)
-                        .modifier(Modifier::new().size(indicator_base_width, indicator_height))
+                        .modifier(Modifier::new().fill_max_size())
                         .enabled(true)
                         .ripple_color(ripple_color)
                         .show_state_layer(false)
@@ -199,9 +203,15 @@ fn navigation_rail_item_view_content(
                 provide_context(
                     || label_style,
                     move || {
-                        text().content(label.clone()).color(label_color);
+                        text()
+                            .content(label.clone())
+                            .color(label_color)
+                            .style(label_style);
                     },
                 );
+            }
+            if let Some(badge) = item.badge {
+                crate::boxed::boxed().children_shared(badge);
             }
         });
 }
@@ -211,6 +221,8 @@ struct NavigationRailItemLayout {
     icon_position: NavigationRailIconPosition,
     has_label: bool,
     has_icon: bool,
+    has_badge: bool,
+    selection_fraction: f32,
     item_min_height: Dp,
 }
 
@@ -224,7 +236,6 @@ impl tessera_ui::LayoutModifierNode for NavigationRailItemLayout {
             .resolve_max()
             .unwrap_or(Px::ZERO);
         let min_height = self.item_min_height.to_px();
-        let parent_height = input.parent_constraint().height().clamp(min_height);
 
         let indicator_background = children[0];
         let indicator_ripple = children[1];
@@ -240,29 +251,131 @@ impl tessera_ui::LayoutModifierNode for NavigationRailItemLayout {
 
         let label_id = if self.has_label {
             let id = children[child_index];
+            child_index += 1;
             Some(id)
         } else {
             None
         };
 
         let child_constraint = Constraint::NONE;
-        let indicator_size = indicator_background
-            .measure(input, &child_constraint)?
-            .size();
-        let indicator_ripple_size = indicator_ripple.measure(input, &child_constraint)?.size();
         let icon_size = icon_id
             .map(|id| id.measure(input, &child_constraint))
             .transpose()?
             .map(|size| size.size())
             .unwrap_or(ComputedData::ZERO);
-        let label_size = label_id
+        let badge_id = self.has_badge.then(|| children[child_index]);
+        let badge_size = badge_id
             .map(|id| id.measure(input, &child_constraint))
             .transpose()?
             .map(|size| size.size())
             .unwrap_or(ComputedData::ZERO);
+        let label_size = label_id
+            .map(|id| {
+                id.measure(
+                    input,
+                    &Constraint::new(
+                        AxisConstraint::new(
+                            Px::ZERO,
+                            Some(
+                                (parent_width
+                                    - if self.icon_position == NavigationRailIconPosition::Start {
+                                        ITEM_HORIZONTAL_PADDING.to_px() * 2
+                                            + START_ICON_INDICATOR_HORIZONTAL_PADDING.to_px() * 2
+                                            + icon_size.width
+                                            + if self.has_icon {
+                                                START_ICON_TO_LABEL_PADDING.to_px()
+                                            } else {
+                                                Px::ZERO
+                                            }
+                                            + badge_size.width
+                                            + if self.has_badge {
+                                                Dp(8.0).to_px()
+                                            } else {
+                                                Px::ZERO
+                                            }
+                                    } else {
+                                        Dp(8.0).to_px()
+                                    })
+                                .max(Px::ZERO),
+                            ),
+                        ),
+                        AxisConstraint::NONE,
+                    ),
+                )
+            })
+            .transpose()?
+            .map(|size| size.size())
+            .unwrap_or(ComputedData::ZERO);
 
+        let expanded = self.icon_position == NavigationRailIconPosition::Start;
+        let label_gap = if self.has_icon && self.has_label {
+            START_ICON_TO_LABEL_PADDING.to_px()
+        } else {
+            Px::ZERO
+        };
+        let badge_gap = if self.has_badge && (self.has_icon || self.has_label) {
+            Dp(8.0).to_px()
+        } else {
+            Px::ZERO
+        };
+        let content_width =
+            icon_size.width + label_gap + label_size.width + badge_gap + badge_size.width;
+        let base_width = if expanded {
+            (content_width + START_ICON_INDICATOR_HORIZONTAL_PADDING.to_px() * 2)
+                .min((parent_width - ITEM_HORIZONTAL_PADDING.to_px() * 2).max(Px::ZERO))
+        } else {
+            INDICATOR_TOP_WIDTH.to_px()
+        };
+        let indicator_height = if expanded {
+            INDICATOR_START_HEIGHT.to_px().max(
+                icon_size
+                    .height
+                    .max(label_size.height)
+                    .max(badge_size.height)
+                    + START_ICON_INDICATOR_HORIZONTAL_PADDING.to_px() * 2,
+            )
+        } else {
+            INDICATOR_TOP_HEIGHT.to_px()
+        };
+        let animated_width =
+            Px((base_width.0 as f32 * self.selection_fraction.clamp(0.0, 1.0)).round() as i32);
+        let indicator_size = indicator_background
+            .measure(
+                input,
+                &Constraint::new(
+                    AxisConstraint::exact(animated_width),
+                    AxisConstraint::exact(indicator_height),
+                ),
+            )?
+            .size();
+        let indicator_ripple_size = indicator_ripple
+            .measure(
+                input,
+                &Constraint::new(
+                    AxisConstraint::exact(base_width),
+                    AxisConstraint::exact(indicator_height),
+                ),
+            )?
+            .size();
         let width = parent_width;
-        let height = parent_height;
+        let content_height = if expanded {
+            icon_size
+                .height
+                .max(label_size.height)
+                .max(badge_size.height)
+                + START_ICON_INDICATOR_HORIZONTAL_PADDING.to_px() * 2
+        } else if self.has_label {
+            icon_size.height
+                + label_size.height
+                + TOP_ICON_INDICATOR_VERTICAL_PADDING.to_px() * 3
+                + INDICATOR_TOP_TO_LABEL_PADDING.to_px()
+        } else {
+            icon_size.height.max(INDICATOR_TOP_HEIGHT.to_px())
+        };
+        let height = input
+            .parent_constraint()
+            .height()
+            .clamp(min_height.max(content_height));
 
         match self.icon_position {
             NavigationRailIconPosition::Start => {
@@ -297,6 +410,15 @@ impl tessera_ui::LayoutModifierNode for NavigationRailItemLayout {
                     result.place_child(label_id, PxPosition::new(label_x, label_y));
                 }
 
+                if let Some(badge_id) = badge_id {
+                    let badge_x =
+                        content_x + icon_size.width + label_gap + label_size.width + badge_gap;
+                    result.place_child(
+                        badge_id,
+                        PxPosition::new(badge_x, (height - badge_size.height) / 2),
+                    );
+                }
+
                 return Ok(result.with_size(ComputedData { width, height }));
             }
             NavigationRailIconPosition::Top => {}
@@ -317,6 +439,29 @@ impl tessera_ui::LayoutModifierNode for NavigationRailItemLayout {
                 let icon_x = (width - icon_size.width) / 2;
                 let icon_y = (height - icon_size.height) / 2;
                 result.place_child(icon_id, PxPosition::new(icon_x, icon_y));
+            }
+
+            if let Some(badge_id) = badge_id {
+                let large = badge_size.width > BadgeDefaults::SIZE.to_px();
+                let dx = if large {
+                    BadgeDefaults::WITH_CONTENT_HORIZONTAL_OFFSET
+                } else {
+                    BadgeDefaults::OFFSET
+                }
+                .to_px();
+                let dy = if large {
+                    BadgeDefaults::WITH_CONTENT_VERTICAL_OFFSET
+                } else {
+                    BadgeDefaults::OFFSET
+                }
+                .to_px();
+                result.place_child(
+                    badge_id,
+                    PxPosition::new(
+                        (width + icon_size.width) / 2 - dx,
+                        (height - icon_size.height) / 2 - badge_size.height + dy,
+                    ),
+                );
             }
 
             return Ok(result.with_size(ComputedData { width, height }));
@@ -357,6 +502,29 @@ impl tessera_ui::LayoutModifierNode for NavigationRailItemLayout {
             result.place_child(label_id, PxPosition::new(label_x, label_y));
         }
 
+        if let Some(badge_id) = badge_id {
+            let large = badge_size.width > BadgeDefaults::SIZE.to_px();
+            let dx = if large {
+                BadgeDefaults::WITH_CONTENT_HORIZONTAL_OFFSET
+            } else {
+                BadgeDefaults::OFFSET
+            }
+            .to_px();
+            let dy = if large {
+                BadgeDefaults::WITH_CONTENT_VERTICAL_OFFSET
+            } else {
+                BadgeDefaults::OFFSET
+            }
+            .to_px();
+            result.place_child(
+                badge_id,
+                PxPosition::new(
+                    icon_x + icon_size.width - dx,
+                    icon_y - badge_size.height + dy,
+                ),
+            );
+        }
+
         Ok(result.with_size(ComputedData { width, height }))
     }
 }
@@ -381,6 +549,7 @@ fn navigation_rail_item_view(
     let tap_recognizer = remember(TapRecognizer::default);
 
     let label = item.label.clone();
+    let description = item.accessibility_description.clone();
     let on_click = item.on_click;
     let ripple_size = match icon_position {
         NavigationRailIconPosition::Top => {
@@ -392,6 +561,7 @@ fn navigation_rail_item_view(
         ),
     };
 
+    let indicator_geometry = remember(RailRippleGeometry::default);
     let on_press = {
         move |ctx: PointerEventContext| {
             let spec = RippleSpec {
@@ -399,7 +569,25 @@ fn navigation_rail_item_view(
                 radius: None,
             };
             ripple_state.with_mut(|state| {
-                state.start_animation_with_spec(ctx.normalized_pos, ripple_size, spec);
+                let geometry = indicator_geometry.get();
+                let (position, size) = if let (Some(target), Some(indicator)) =
+                    (geometry.target, geometry.indicator)
+                {
+                    (
+                        [
+                            (target.x.to_f32() + ctx.normalized_pos[0] * ctx.size.width.to_f32()
+                                - indicator.x.to_f32())
+                                / indicator.width.to_f32().max(1.0),
+                            (target.y.to_f32() + ctx.normalized_pos[1] * ctx.size.height.to_f32()
+                                - indicator.y.to_f32())
+                                / indicator.height.to_f32().max(1.0),
+                        ],
+                        PxSize::new(indicator.width, indicator.height),
+                    )
+                } else {
+                    (ctx.normalized_pos, ripple_size)
+                };
+                state.start_animation_with_spec(position, size, spec);
             });
         }
     };
@@ -415,6 +603,7 @@ fn navigation_rail_item_view(
         enabled: true,
         role: Some(Role::Tab),
         label: Some(label),
+        description,
         interaction_state: Some(interaction_state),
         on_press: Some(on_press.into()),
         on_release: Some(on_release.into()),
@@ -422,7 +611,13 @@ fn navigation_rail_item_view(
         ..Default::default()
     };
 
-    let modifier = Modifier::new().selectable_with(selectable_args);
+    let modifier = Modifier::new()
+        .selectable_with(selectable_args)
+        .on_globally_positioned(move |bounds: PxRect| {
+            if indicator_geometry.with(|geometry| geometry.target) != Some(bounds) {
+                indicator_geometry.with_mut(|geometry| geometry.target = Some(bounds));
+            }
+        });
     layout().modifier(modifier).child({
         let item = item.clone();
         move || {
@@ -430,18 +625,26 @@ fn navigation_rail_item_view(
                 .item(item.clone())
                 .icon_position(icon_position)
                 .selection_fraction(selection_fraction)
-                .indicator_start_width(indicator_start_width)
                 .item_min_height(item_min_height)
                 .interaction_state(interaction_state)
-                .ripple_state(ripple_state);
+                .ripple_state(ripple_state)
+                .indicator_geometry(indicator_geometry);
         }
     });
+}
+
+#[derive(Clone, Copy, Default, PartialEq)]
+struct RailRippleGeometry {
+    target: Option<PxRect>,
+    indicator: Option<PxRect>,
 }
 
 #[derive(Clone, PartialEq, Default)]
 struct NavigationRailItemDefinition {
     label: String,
     icon: Option<RenderSlot>,
+    badge: Option<RenderSlot>,
+    accessibility_description: Option<String>,
     on_click: Callback,
 }
 
@@ -457,6 +660,10 @@ struct NavigationRailItemDefinition {
 ///
 /// - `label` — text label shown next to or below the icon.
 /// - `icon` — optional icon rendered for the item.
+/// - `badge` — optional update marker, overlapping a collapsed icon or
+///   following an expanded label.
+/// - `accessibility_description` — additional announcement such as a
+///   notification count.
 /// - `selected` — whether this item is the active destination.
 /// - `on_click` — callback invoked after the item becomes selected.
 ///
@@ -483,6 +690,8 @@ pub fn navigation_rail_item(
     icon: Option<RenderSlot>,
     on_click: Option<Callback>,
     selected: Option<bool>,
+    badge: Option<RenderSlot>,
+    #[prop(into)] accessibility_description: Option<String>,
 ) {
     let label = label.unwrap_or_default();
     let on_click = on_click.unwrap_or_default();
@@ -521,6 +730,8 @@ pub fn navigation_rail_item(
             let item = NavigationRailItemDefinition {
                 label: label.clone(),
                 icon,
+                badge,
+                accessibility_description: accessibility_description.clone(),
                 on_click,
             };
             navigation_rail_item_view()
@@ -661,9 +872,15 @@ pub fn navigation_rail(
                             }
 
                             let provided_context = content_context.clone();
+                            let content_context = content_context.clone();
                             provide_context(
                                 move || provided_context.clone(),
                                 move || {
+                                    let current =
+                                        use_context::<NavigationRailCompositionContext>().unwrap();
+                                    if current.get() != content_context {
+                                        current.set(content_context.clone());
+                                    }
                                     content.render();
                                 },
                             );
