@@ -263,6 +263,8 @@ impl TopAppBarBuilder {
 /// - `elevation` — optional surface elevation.
 /// - `content_padding` — optional padding applied to app bar content.
 /// - `title` — title text displayed in the bar.
+/// - `title_content` — optional image, logo or custom title content replacing
+///   the title text while retaining the subtitle and alignment.
 /// - `title_area_modifier` — modifier chain applied to the title and subtitle
 ///   area.
 /// - `navigation_icon` — optional leading icon slot.
@@ -322,6 +324,7 @@ pub fn top_app_bar(
     elevation: Option<Dp>,
     content_padding: Option<Padding>,
     #[prop(into)] title: Option<String>,
+    title_content: Option<RenderSlot>,
     title_area_modifier: Option<Modifier>,
     navigation_icon: Option<RenderSlot>,
     #[prop(skip_setter)] actions: Option<Vec<RenderSlot>>,
@@ -479,7 +482,9 @@ pub fn top_app_bar(
                         CrossAxisAlignment::Start
                     })
                     .children(move || {
-                        if !compact_title.is_empty() {
+                        if let Some(content) = title_content {
+                            content.render();
+                        } else if !compact_title.is_empty() {
                             text()
                                 .content(compact_title.clone())
                                 .style(theme.typography.title_large)
@@ -532,7 +537,9 @@ pub fn top_app_bar(
                             CrossAxisAlignment::Start
                         })
                         .children(move || {
-                            if !title.is_empty() {
+                            if let Some(content) = title_content {
+                                content.render();
+                            } else if !title.is_empty() {
                                 text()
                                     .content(title.clone())
                                     .style(title_style)

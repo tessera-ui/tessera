@@ -19,6 +19,7 @@ struct Settings {
     actions: usize,
     title: String,
     changed_colors: bool,
+    custom_title: bool,
 }
 
 impl Default for Settings {
@@ -31,6 +32,7 @@ impl Default for Settings {
             actions: 2,
             title: "Inbox".to_owned(),
             changed_colors: false,
+            custom_title: false,
         }
     }
 }
@@ -80,6 +82,19 @@ fn fixture() {
                             .icon(painter.get())
                             .accessibility_label("Back")
                             .on_click(move || clicks.set(clicks.get() + 1));
+                    });
+                }
+                if values.custom_title {
+                    bar = bar.title_content(|| {
+                        surface().style(Color::BLACK.into()).modifier(
+                            Modifier::new().width(Dp(80.0)).height(Dp(24.0)).semantics(
+                                SemanticsArgs {
+                                    role: Some(Role::Image),
+                                    label: Some("Brand".to_owned()),
+                                    ..Default::default()
+                                },
+                            ),
+                        );
                     });
                 }
                 for index in 0..values.actions {
@@ -247,7 +262,37 @@ fn check_bar(samples: u32) {
     click(&mut renderer, "Action 1");
     assert_eq!(clicks.get(), 2);
 
+    for variant in [
+        TopAppBarVariant::Small,
+        TopAppBarVariant::MediumFlexible,
+        TopAppBarVariant::LargeFlexible,
+    ] {
+        settings.with_mut(|values| {
+            values.custom_title = true;
+            values.variant = variant;
+            values.alignment = AppBarTitleAlignment::Center;
+            values.subtitle = Some("Brand subtitle".to_owned());
+        });
+        renderer.render_frames(5);
+        let brand = bounds(&renderer, "Brand", Role::Image);
+        near(brand.width(), 120.0);
+        near(brand.height(), 36.0);
+        near((brand.x0 + brand.x1) * 0.5, 270.0);
+        let subtitle = bounds(&renderer, "Brand subtitle", Role::Label);
+        near(subtitle.y0, brand.y1);
+        assert!(
+            !renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("Inbox")),
+            "custom content replaces the default text title"
+        );
+    }
+
     settings.with_mut(|values| {
+        values.custom_title = false;
         values.navigation = false;
         values.alignment = AppBarTitleAlignment::Start;
         values.subtitle = None;

@@ -59,6 +59,8 @@ fn toolbar_actions(visible: bool, actions: Option<RenderSlot>) {
 /// - `orientation` — horizontal by default, or vertical.
 /// - `color_style` — standard surface or vibrant primary container colors.
 /// - `container_color`, `content_color` — optional color overrides.
+/// - `elevation` — shadow elevation, zero by default; use 3dp when paired with
+///   an expanded FAB.
 /// - `expanded` — whether optional leading and trailing actions are visible.
 /// - `leading`, `trailing` — additional actions shown while expanded.
 /// - `content` — persistent actions, preferably with 48dp touch targets.
@@ -86,6 +88,7 @@ pub fn floating_toolbar(
     color_style: Option<ToolbarColorStyle>,
     container_color: Option<Color>,
     content_color: Option<Color>,
+    elevation: Option<Dp>,
     expanded: Option<bool>,
     leading: Option<RenderSlot>,
     content: Option<RenderSlot>,
@@ -114,7 +117,7 @@ pub fn floating_toolbar(
         .style(background.into())
         .content_color(foreground)
         .shape(Shape::CAPSULE)
-        .elevation(Dp(0.0))
+        .elevation(elevation.unwrap_or(Dp::ZERO))
         .block_input(false)
         .accessibility_role(Role::Toolbar)
         .accessibility_label_optional(accessibility_label)
