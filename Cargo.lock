@@ -6752,6 +6752,7 @@ dependencies = [
  "tessera-ui",
  "thiserror 2.0.20",
  "tracing",
+ "unicode-linebreak",
  "unicode-segmentation",
  "usvg 0.47.0",
 ]

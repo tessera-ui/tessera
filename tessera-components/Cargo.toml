@@ -20,6 +20,7 @@ parking_lot = "0.12.5"
 tessera-foundation = { path = "../tessera-foundation" }
 tessera-ui = { path = "../tessera-ui" }
 tessera-platform = { path = "../tessera-platform" }
+unicode-linebreak = "0.1.5"
 unicode-segmentation = "1.12.0"
 encase = "0.12.0"
 glam = { version = "0.32.0", features = ["encase"] }

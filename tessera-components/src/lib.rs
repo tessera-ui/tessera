@@ -141,6 +141,7 @@ pub mod text;
 mod text_edit_core;
 pub mod text_field;
 pub mod text_input;
+pub mod text_table;
 pub mod theme;
 pub mod time_picker;
 pub mod toolbar;
