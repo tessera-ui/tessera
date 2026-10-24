@@ -10,8 +10,9 @@ use console::style;
 use ra_ap_base_db::{Crate, SourceDatabase};
 use ra_ap_hir::{
     AsAssocItem, CallableKind, EditionedFileId, Function, ModuleDef, PathResolution, Semantics,
-    Trait, Type,
+    Trait, Type, crate_def_map,
 };
+use ra_ap_hir_def::nameres::diagnostics::DefDiagnosticKind;
 use ra_ap_ide::{FileId, RootDatabase};
 use ra_ap_syntax::{
     AstNode, SyntaxNode,
@@ -103,6 +104,52 @@ impl<'db> ColorAnalyzer<'db> {
             ));
         }
 
+        let file_crates = metadata_files
+            .iter()
+            .map(|file_id| {
+                let crates = sema
+                    .file_to_module_defs(*file_id)
+                    .map(|module| module.krate(db).base())
+                    .collect::<HashSet<_>>();
+                (*file_id, crates)
+            })
+            .collect::<HashMap<_, _>>();
+        let relevant_crates = file_crates
+            .values()
+            .flat_map(|crates| crates.iter().copied())
+            .collect::<HashSet<_>>();
+        let mut inactive_by_crate = HashMap::new();
+        for krate in relevant_crates {
+            let mut ranges_by_file = HashMap::<FileId, Vec<_>>::new();
+            for diagnostic in crate_def_map(db, krate).diagnostics() {
+                if let DefDiagnosticKind::UnconfiguredCode { ast_id, .. } = &diagnostic.kind
+                    && let Some(file_id) = ast_id.file_id.file_id()
+                {
+                    ranges_by_file
+                        .entry(file_id.file_id(db))
+                        .or_default()
+                        .push(ast_id.to_range(db));
+                }
+            }
+            inactive_by_crate.insert(krate, ranges_by_file);
+        }
+        let inactive_code_ranges = metadata_files
+            .iter()
+            .map(|file_id| {
+                let contexts = file_crates[file_id]
+                    .iter()
+                    .map(|krate| {
+                        inactive_by_crate
+                            .get(krate)
+                            .and_then(|files| files.get(file_id))
+                            .cloned()
+                            .unwrap_or_default()
+                    })
+                    .collect();
+                (*file_id, contexts)
+            })
+            .collect();
+
         Ok(ColorAnalyzer {
             db,
             sema,
@@ -115,6 +162,7 @@ impl<'db> ColorAnalyzer<'db> {
             tessera_function_paths: HashSet::new(),
             render_slot_setter_indexes_by_component_name: HashMap::new(),
             render_slot_setter_indexes_by_type_path: HashMap::new(),
+            inactive_code_ranges,
             diagnostics: Vec::new(),
         })
     }
@@ -148,6 +196,23 @@ impl<'db> ColorAnalyzer<'db> {
         Ok(())
     }
 
+    fn is_inactive(&self, syntax: &SyntaxNode) -> bool {
+        let source = self.sema.original_range(syntax);
+        let file_id = source.file_id.file_id(self.db);
+        self.inactive_code_ranges
+            .get(&file_id)
+            .is_some_and(|contexts| {
+                // A shared file remains active if any loaded crate context
+                // enables it.
+                !contexts.is_empty()
+                    && contexts.iter().all(|ranges| {
+                        ranges
+                            .iter()
+                            .any(|range| range.contains_range(source.range))
+                    })
+            })
+    }
+
     fn analyze_file(&mut self, file_id: FileId) -> Result<()> {
         let tree = self
             .sema
@@ -160,6 +225,9 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn collect_tessera_function_names_from_item(&mut self, item: &ast::Item) {
+        if self.is_inactive(item.syntax()) {
+            return;
+        }
         match item {
             ast::Item::Fn(function) if self.is_tessera_function(function) => {
                 if let Some(name) = function.name() {
@@ -182,6 +250,9 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn analyze_item(&mut self, item: ast::Item) {
+        if self.is_inactive(item.syntax()) {
+            return;
+        }
         match item {
             ast::Item::Fn(function) => self.analyze_function(function, false),
             ast::Item::Impl(item_impl) => {
@@ -209,6 +280,9 @@ impl<'db> ColorAnalyzer<'db> {
         }
     }
     fn collect_render_slot_carriers_from_item(&mut self, item: &ast::Item) {
+        if self.is_inactive(item.syntax()) {
+            return;
+        }
         match item {
             ast::Item::Fn(function) => {
                 self.collect_generated_slot_setters_from_function(function);
@@ -289,6 +363,9 @@ impl<'db> ColorAnalyzer<'db> {
             let ast::AssocItem::Fn(function) = item else {
                 continue;
             };
+            if self.is_inactive(function.syntax()) {
+                continue;
+            }
             let Some(name) = function.name() else {
                 continue;
             };
@@ -482,6 +559,9 @@ impl<'db> ColorAnalyzer<'db> {
     }
 
     fn analyze_function(&mut self, function: ast::Fn, allow_runtime_body: bool) {
+        if self.is_inactive(function.syntax()) {
+            return;
+        }
         let Some(body) = function.body() else {
             return;
         };
@@ -513,6 +593,9 @@ impl<'db> ColorAnalyzer<'db> {
 
     fn walk_node(&mut self, node: &SyntaxNode, color: ContextColor, allow_entry_point_new: bool) {
         for child in node.children() {
+            if self.is_inactive(&child) {
+                continue;
+            }
             if let Some(function) = ast::Fn::cast(child.clone()) {
                 self.analyze_function(function, false);
                 continue;
@@ -715,33 +798,30 @@ impl<'db> ColorAnalyzer<'db> {
         if self.tessera_function_paths.contains(&path) {
             return true;
         }
-        if self.package_matches(function)
-            && self
-                .tessera_function_names
-                .contains(function.name(self.db).as_str())
-        {
-            return true;
-        }
 
         let Some(source) = self.sema.source(function) else {
             return false;
         };
-        let Some(file_id) = source
+        let original = self
+            .sema
+            .original_ast_node(source.value.clone())
+            .unwrap_or(source.value);
+        let file_id = self
+            .sema
+            .original_range(original.syntax())
             .file_id
-            .file_id()
-            .map(|file_id| file_id.file_id(self.db))
-        else {
-            return false;
-        };
-        if !self.local_files.contains(&file_id) {
+            .file_id(self.db);
+        if !self.local_files.contains(&file_id) || !self.package_matches(function) {
             return false;
         }
-        if !self.package_matches(function) {
+        if original
+            .name()
+            .is_none_or(|name| name.text() != function.name(self.db).as_str())
+        {
             return false;
         }
 
-        source
-            .value
+        original
             .attrs()
             .any(|attr| self.is_tessera_attribute(&attr))
     }
@@ -1764,6 +1844,40 @@ pub fn helper() {
     }
 
     #[test]
+    fn selected_target_cfg_excludes_inactive_helpers_but_keeps_active_unresolved_calls() {
+        let source = r#"
+#[tessera_ui::tessera]
+fn control() {}
+
+#[cfg(target_family = "wasm")]
+mod web {
+    fn control() {}
+    pub fn helper() { control(); }
+}
+
+#[cfg(not(target_family = "wasm"))]
+mod native {
+    fn control() {}
+    pub fn helper() { control(); }
+}
+
+pub fn unresolved() { missing::control(); }
+"#;
+        for target in [None, Some("wasm32-unknown-unknown")] {
+            with_analyzer_target(source, target, |analyzer| {
+                let diagnostics = analyzer
+                    .diagnostics
+                    .iter()
+                    .map(|diagnostic| diagnostic.message.as_str())
+                    .collect::<Vec<_>>();
+                assert_eq!(diagnostics.len(), 1, "{target:?}: {diagnostics:?}");
+                assert!(diagnostics[0].contains("semantically unresolved"));
+                assert!(diagnostics[0].contains("missing::control"));
+            });
+        }
+    }
+
+    #[test]
     fn diagnostics_render_rustc_like_human_output() {
         let rendered = with_analyzer(
             r#"
@@ -1844,13 +1958,21 @@ pub fn helper() {
     }
 
     fn with_analyzer<T>(source: &str, inspect: impl FnOnce(&ColorAnalyzer<'_>) -> T) -> T {
+        with_analyzer_target(source, None, inspect)
+    }
+
+    fn with_analyzer_target<T>(
+        source: &str,
+        target: Option<&str>,
+        inspect: impl FnOnce(&ColorAnalyzer<'_>) -> T,
+    ) -> T {
         let _lock = CURRENT_DIR_LOCK
             .get_or_init(|| Mutex::new(()))
             .lock()
             .expect("current directory lock poisoned");
         let project = FixtureProject::new(source);
         let _current_dir = CurrentDirGuard::push(project.root());
-        let options = CheckOptions::new(Some("fixture"), None);
+        let options = CheckOptions::new(Some("fixture"), target);
         let workspace = workspace::load_workspace(&options).expect("fixture workspace should load");
         let db = workspace.host.raw_database();
 
@@ -1904,6 +2026,8 @@ pub fn helper() {
             )
             .expect("fixture manifest should be written");
             fs::write(root.join("src/lib.rs"), source).expect("fixture source should be written");
+            fs::write(root.join("src/main.rs"), "fn main() {}")
+                .expect("fixture binary source should be written");
 
             Self { root }
         }

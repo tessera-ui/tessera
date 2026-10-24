@@ -61,6 +61,7 @@ pub(crate) struct ColorAnalyzer<'db> {
         HashMap<String, HashMap<String, HashSet<usize>>>,
     pub(crate) render_slot_setter_indexes_by_type_path:
         HashMap<String, HashMap<String, HashSet<usize>>>,
+    pub(crate) inactive_code_ranges: HashMap<FileId, Vec<Vec<TextRange>>>,
     pub(crate) diagnostics: Vec<Diagnostic>,
 }
 

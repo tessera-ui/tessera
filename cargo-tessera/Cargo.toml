@@ -36,6 +36,7 @@ inquire = { version = "0.9.3", default-features = false, features = [
 notify = "8.2.0"
 owo-colors = "4.3"
 ra_ap_hir = "=0.0.333"
+ra_ap_hir_def = "=0.0.333"
 ra_ap_ide = "=0.0.333"
 ra_ap_base_db = "=0.0.333"
 ra_ap_load-cargo = "=0.0.333"
