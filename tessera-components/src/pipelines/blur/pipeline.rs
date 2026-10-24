@@ -480,6 +480,7 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
     /// Dispatches one or more blur compute commands within the active pass.
     fn dispatch(&mut self, context: &mut ComputeContext<DualBlurCommand>) {
         for item in context.items {
+            let coordinate_scale = item.geometry.local_to_window.scale();
             let target_area = item.target_area;
             let area_x = target_area.x.0 as u32;
             let area_y = target_area.y.0 as u32;
@@ -494,7 +495,7 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
                 .command
                 .passes
                 .iter()
-                .map(|pass| pass.radius)
+                .map(|pass| pass.radius * coordinate_scale)
                 .fold(0.0f32, f32::max);
             let scale = downscale_factor_for_radius(max_radius).max(1);
             let down_width = area_width.div_ceil(scale);
@@ -571,7 +572,7 @@ impl ComputablePipeline<DualBlurCommand> for BlurPipeline {
             let mut read_view = downsample_view.clone();
             let mut write_view = blur_view.clone();
             for pass in &item.command.passes {
-                let effective_radius = (pass.radius / scale as f32).max(0.0);
+                let effective_radius = (pass.radius * coordinate_scale / scale as f32).max(0.0);
 
                 // Fetch cached optimized blur parameters
                 let weight_entry = self.weights_for_radius(effective_radius);

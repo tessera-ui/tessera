@@ -4,7 +4,6 @@ use encase::{ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxSize,
-    px::PxPosition,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu::{self, include_wgsl},
 };
@@ -162,20 +161,19 @@ impl SimpleRectPipeline {
 }
 
 fn build_instances(
-    commands: &[(&SimpleRectCommand, PxSize, PxPosition)],
+    commands: &[(&SimpleRectCommand, tessera_ui::DrawGeometry)],
     target_size: PxSize,
 ) -> Vec<RectUniform> {
     commands
         .iter()
-        .map(|(command, size, position)| RectUniform {
-            position: Vec4::new(
-                position.x,
-                position.y,
-                size.width.raw() as f32,
-                size.height.raw() as f32,
-            ),
-            color: Vec4::from_array(command.color.to_array()),
-            screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
+        .map(|(command, geometry)| {
+            let position = geometry.window_origin();
+            let [width, height] = geometry.window_size();
+            RectUniform {
+                position: Vec4::new(position.x, position.y, width, height),
+                color: Vec4::from_array(command.color.to_array()),
+                screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
+            }
         })
         .collect()
 }

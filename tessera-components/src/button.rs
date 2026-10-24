@@ -18,9 +18,9 @@ use crate::{
     animation::Animatable,
     boxed::boxed,
     icon::IconSize,
-    modifier::{InteractionState, ModifierExt, Padding},
+    modifier::{InteractionState, InteractionVisualState, ModifierExt, Padding},
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceStyle, surface},
+    surface::{RipplePresentation, SurfaceStyle, surface},
     theme::{
         ContentColor, MaterialAlpha, MaterialColorScheme, MaterialTheme, TextStyle,
         content_color_for,
@@ -333,7 +333,12 @@ struct ButtonResolvedArgs {
 /// - `shape_style` — round or square preset; defaults to round.
 /// - `selected` — controlled toggle state; omit for an ordinary action. Text
 ///   buttons do not support toggling. Update this value in `on_click`.
-/// - `interaction_state` — optional shared state for interaction previews.
+/// - `interaction_state` — optional shared state tracking live pointer and
+///   focus interactions.
+/// - `presentation_ripple` — optional static circular ripple for pressed visual
+///   presentation.
+/// - `presentation_state` — optional visual interaction without changing input
+///   or focus.
 /// - `enabled` — optional enabled flag.
 /// - `modifier` — modifier chain applied to the button subtree.
 /// - `color` — optional container color override.
@@ -397,6 +402,8 @@ pub fn button(
     shape_style: Option<ButtonShape>,
     selected: Option<bool>,
     interaction_state: Option<State<InteractionState>>,
+    presentation_state: Option<InteractionVisualState>,
+    presentation_ripple: Option<RipplePresentation>,
     enabled: Option<bool>,
     modifier: Option<Modifier>,
     color: Option<Color>,
@@ -443,9 +450,11 @@ pub fn button(
     {
         interaction_state.with_mut(|state| *state = InteractionState::new());
     }
-    let pressed = enabled && interaction_state.with(InteractionState::is_pressed);
-    let hovered = enabled && interaction_state.with(InteractionState::is_hovered);
-    let focused = enabled && interaction_state.with(InteractionState::is_focused);
+    let visual =
+        interaction_state.with(|state| state.with_presentation(presentation_state, enabled));
+    let pressed = visual.is_pressed();
+    let hovered = visual.is_hovered();
+    let focused = visual.is_focused();
     let (
         default_container_color,
         default_content_color,
@@ -746,6 +755,9 @@ pub fn button(
         .enabled(button_args.enabled)
         .tonal_elevation(button_args.tonal_elevation)
         .interaction_state(interaction_state)
+        .presentation_state_optional(presentation_state)
+        .presentation_ripple_optional(presentation_ripple)
+        .show_focus_indicator(true)
         .accessibility_toggled_optional(selected.map(|selected| {
             if selected {
                 Toggled::True
@@ -913,7 +925,7 @@ mod tests {
 
     use tessera_ui::{
         HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, PxPosition, State,
-        remember,
+        modifier::FocusModifierExt as _, remember,
     };
 
     use crate::{
@@ -933,6 +945,9 @@ mod tests {
 
     #[derive(Clone, Copy, Default)]
     struct Settings {
+        focus_reference: bool,
+        presentation_ripple: Option<RipplePresentation>,
+        presentation_state: Option<InteractionVisualState>,
         disabled: bool,
         variant: ButtonVariant,
         size: Option<ButtonSize>,
@@ -944,6 +959,7 @@ mod tests {
     }
 
     thread_local! {
+        static FOCUS_REFERENCE: Cell<Option<tessera_ui::PxRect>> = const { Cell::new(None) };
         static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
         static INTERACTIONS: RefCell<[Option<State<InteractionState>>; 5]> = const { RefCell::new([None; 5]) };
         static ACTIVATED: Cell<Option<State<Vec<usize>>>> = const { Cell::new(None) };
@@ -986,49 +1002,88 @@ mod tests {
             boxed()
                 .modifier(Modifier::new().fill_max_size().background(Color::WHITE))
                 .children(move || {
-                    column().children(move || {
-                        for (index, size) in SIZES.into_iter().enumerate() {
-                            let value = settings.get();
-                            let interaction = remember(InteractionState::new);
-                            INTERACTIONS
-                                .with(|states| states.borrow_mut()[index] = Some(interaction));
-                            button()
-                                .size(if index == 2 {
-                                    value.size.unwrap_or(size)
-                                } else {
-                                    size
-                                })
-                                .modifier(Modifier::new().width(Dp(260.0)))
-                                .variant(value.variant)
-                                .shape_style(value.shape)
-                                .shape_optional(value.custom_shape)
-                                .selected_optional(value.selected)
-                                .interaction_state(interaction)
-                                .color_optional(value.color)
-                                .content_color_optional(value.content)
-                                .enabled(!value.disabled)
-                                .accessibility_label(format!("Button {index}"))
-                                .on_click(move || {
-                                    clicks.with_mut(|value| *value += 1);
-                                    activated.with_mut(|items| items.push(index));
-                                    settings.with_mut(|settings| {
-                                        if let Some(selected) = &mut settings.selected {
-                                            *selected = !*selected;
-                                        }
+                    column()
+                        .modifier(Modifier::new().offset(
+                            Dp(if settings.with(|settings| settings.focus_reference) {
+                                8.0
+                            } else {
+                                0.0
+                            }),
+                            Dp(0.0),
+                        ))
+                        .children(move || {
+                            for (index, size) in SIZES.into_iter().enumerate() {
+                                let value = settings.get();
+                                let interaction = remember(InteractionState::new);
+                                INTERACTIONS
+                                    .with(|states| states.borrow_mut()[index] = Some(interaction));
+                                button()
+                                    .size(if index == 2 {
+                                        value.size.unwrap_or(size)
+                                    } else {
+                                        size
+                                    })
+                                    .modifier(Modifier::new().width(Dp(260.0)))
+                                    .variant(value.variant)
+                                    .shape_style(value.shape)
+                                    .shape_optional(value.custom_shape)
+                                    .selected_optional(value.selected)
+                                    .interaction_state(interaction)
+                                    .presentation_state_optional(if index == 2 {
+                                        value.presentation_state
+                                    } else {
+                                        None
+                                    })
+                                    .presentation_ripple_optional(if index == 2 {
+                                        value.presentation_ripple
+                                    } else {
+                                        None
+                                    })
+                                    .color_optional(value.color)
+                                    .content_color_optional(value.content)
+                                    .enabled(!value.disabled)
+                                    .accessibility_label(format!("Button {index}"))
+                                    .on_click(move || {
+                                        clicks.with_mut(|value| *value += 1);
+                                        activated.with_mut(|items| items.push(index));
+                                        settings.with_mut(|settings| {
+                                            if let Some(selected) = &mut settings.selected {
+                                                *selected = !*selected;
+                                            }
+                                        });
+                                    })
+                                    .leading_icon(move || {
+                                        icon_probe(index);
+                                    })
+                                    .trailing_icon(move || {
+                                        icon_probe(index + 5);
+                                    })
+                                    .child(move || {
+                                        label(index);
                                     });
-                                })
-                                .leading_icon(move || {
-                                    icon_probe(index);
-                                })
-                                .trailing_icon(move || {
-                                    icon_probe(index + 5);
-                                })
-                                .child(move || {
-                                    label(index);
-                                });
-                            spacer().modifier(Modifier::new().height(Dp(8.0)));
-                        }
-                    });
+                                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                            }
+                            if settings.with(|settings| settings.focus_reference) {
+                                let reference_modifier = Modifier::new()
+                                    .size(Dp(270.0), Dp(66.0))
+                                    .on_globally_positioned(|bounds| {
+                                        FOCUS_REFERENCE.set(Some(bounds))
+                                    });
+                                surface()
+                                    .shape(Shape::CAPSULE)
+                                    .style(SurfaceStyle::Filled {
+                                        color: Color::WHITE,
+                                    })
+                                    .show_state_layer(false)
+                                    .presentation_state_optional(
+                                        settings.with(|settings| settings.presentation_state),
+                                    )
+                                    .presentation_ripple_optional(
+                                        settings.with(|settings| settings.presentation_ripple),
+                                    )
+                                    .modifier(reference_modifier);
+                            }
+                        });
                 });
         });
     }
@@ -1520,5 +1575,307 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn expressive_size_geometry_typography_outline_and_disabled_layout_msaa4() {
         check_sizes(4);
+    }
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn controlled_presentation_matches_native_states_without_taking_focus() {
+        crate::test_utils::run_isolated_test(
+            "button::tests::controlled_presentation_matches_native_states_without_taking_focus",
+            || {
+                use tessera_ui::accesskit::{Action, ActionRequest, TreeId};
+
+                let mut renderer = HeadlessRenderer::new(
+                    Box::new(fixture),
+                    vec![Box::new(crate::TesseraComponents)],
+                    HeadlessConfig {
+                        width: 400,
+                        height: 640,
+                        frame_time: std::time::Duration::from_millis(100),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                renderer.render_frames(20);
+                let settings = SETTINGS.get().unwrap();
+                settings.with_mut(|settings| settings.focus_reference = true);
+                renderer.render_frames(20);
+                let tree = renderer.accessibility_snapshot().unwrap();
+                let id = tree
+                    .nodes
+                    .iter()
+                    .find(|(_, node)| node.label() == Some("Button 2"))
+                    .unwrap()
+                    .0;
+                let rect = bounds(&tree, 2);
+                let point = PxPosition::from_f32_xy(
+                    ((rect.x0 + rect.x1) / 2.0) as f32,
+                    ((rect.y0 + rect.y1) / 2.0) as f32,
+                );
+                let outside = PxPosition::from_f32_xy((400 - 2) as f32, (640 - 2) as f32);
+                let crop = |pixels: &[u8]| {
+                    let mut result = Vec::new();
+                    for y in rect.y0 as usize..rect.y1 as usize {
+                        let start = (y * 400 + rect.x0 as usize) * 4;
+                        result.extend_from_slice(&pixels[start..start + rect.width() as usize * 4]);
+                    }
+                    result
+                };
+                let focus_crop = |pixels: &[u8]| {
+                    let mut result = Vec::new();
+                    for y in rect.y0 as usize - 6..rect.y1 as usize + 6 {
+                        let start = (y * 400 + rect.x0 as usize - 6) * 4;
+                        result.extend_from_slice(
+                            &pixels[start..start + (rect.width() as usize + 12) * 4],
+                        );
+                    }
+                    result
+                };
+                let mut focus_preview = None;
+                let rest_pixels = renderer.read_pixels().unwrap();
+                let rest = crop(&rest_pixels);
+                let mut previews = Vec::new();
+                for presentation in [
+                    InteractionVisualState::Hover,
+                    InteractionVisualState::Focus,
+                    InteractionVisualState::Pressed,
+                ] {
+                    settings.with_mut(|settings| settings.presentation_state = Some(presentation));
+                    renderer.render_frames(20);
+                    let preview = crop(&renderer.read_pixels().unwrap());
+                    assert_ne!(
+                        preview, rest,
+                        "presentation changes native appearance: {presentation:?}"
+                    );
+                    let live = INTERACTIONS
+                        .with(|states| states.borrow()[2].unwrap())
+                        .get();
+                    assert_eq!(live, InteractionState::new());
+                    assert_ne!(renderer.accessibility_snapshot().unwrap().focus, id);
+                    assert_eq!(CLICKS.get().unwrap().get(), 0);
+
+                    if presentation == InteractionVisualState::Focus {
+                        let pixels = renderer.read_pixels().unwrap();
+                        focus_preview = Some(focus_crop(&pixels));
+                        let mut changed = Vec::new();
+                        for y in rect.y0 as usize - 6..rect.y1 as usize + 6 {
+                            for x in rect.x0 as usize - 6..rect.x1 as usize + 6 {
+                                let offset = (y * 400 + x) * 4;
+                                if pixels[offset..offset + 4] != rest_pixels[offset..offset + 4] {
+                                    changed.push((x, y));
+                                }
+                            }
+                        }
+                        let ink = (
+                            changed.iter().map(|p| p.0).min().unwrap(),
+                            changed.iter().map(|p| p.1).min().unwrap(),
+                            changed.iter().map(|p| p.0).max().unwrap() + 1,
+                            changed.iter().map(|p| p.1).max().unwrap() + 1,
+                        );
+                        assert_eq!(
+                            ink,
+                            (
+                                rect.x0 as usize - 5,
+                                rect.y0 as usize - 5,
+                                rect.x1 as usize + 5,
+                                rect.y1 as usize + 5
+                            ),
+                            "native focus outline extends five pixels beyond the container"
+                        );
+                    }
+                    previews.push(preview);
+                    settings.with_mut(|settings| settings.presentation_state = None);
+                    renderer.render_frames(20);
+                    assert_eq!(
+                        crop(&renderer.read_pixels().unwrap()),
+                        rest,
+                        "clearing retained presentation restores native rest"
+                    );
+                }
+                settings.with_mut(|settings| {
+                    settings.presentation_state = Some(InteractionVisualState::Pressed);
+                    settings.presentation_ripple = Some(RipplePresentation {
+                        origin: [0.7, 0.9],
+                        radius: 0.4,
+                        opacity: 0.2,
+                    });
+                });
+                renderer.render_frames(20);
+                let sampled = crop(&renderer.read_pixels().unwrap());
+                let pixels = renderer.read_pixels().unwrap();
+                let reference = FOCUS_REFERENCE.get().unwrap();
+                let x = (reference.x.0 as f32 + reference.width.0 as f32 * 0.7) as usize;
+                let y = (reference.y.0 as f32 + reference.height.0 as f32 * 0.9) as usize;
+                assert!(
+                    pixels[(y * 400 + x) * 4..(y * 400 + x) * 4 + 3]
+                        .iter()
+                        .any(|value| *value < 240),
+                    "static ripple draws on a noninteractive surface with its state layer disabled"
+                );
+
+                assert_ne!(
+                    sampled, previews[2],
+                    "explicit native ripple sample changes pressed pixels"
+                );
+                renderer.render_frames(20);
+                assert_eq!(
+                    crop(&renderer.read_pixels().unwrap()),
+                    sampled,
+                    "presentation ripple remains static across frame timestamps"
+                );
+                assert_eq!(renderer.diagnostics().paint_nodes_recorded, 0);
+                settings.with_mut(|settings| settings.presentation_ripple = None);
+                renderer.render_frames(20);
+                assert_eq!(crop(&renderer.read_pixels().unwrap()), previews[2]);
+                settings.with_mut(|settings| {
+                    settings.presentation_ripple = Some(RipplePresentation {
+                        origin: [f32::NAN, f32::INFINITY],
+                        radius: -1.0,
+                        opacity: f32::NAN,
+                    })
+                });
+                renderer.render_frames(20);
+                assert_eq!(
+                    crop(&renderer.read_pixels().unwrap()),
+                    previews[2],
+                    "invalid samples safely disable the ripple"
+                );
+                settings.with_mut(|settings| {
+                    settings.presentation_ripple = None;
+                    settings.presentation_state = None;
+                });
+                renderer.render_frames(20);
+                renderer.pointer_move(MOUSE_POINTER_ID, point);
+                renderer.render_frames(20);
+                assert_eq!(
+                    crop(&renderer.read_pixels().unwrap()),
+                    previews[0],
+                    "preview hover matches actual pointer hover"
+                );
+                settings.with_mut(|settings| {
+                    settings.presentation_state = Some(InteractionVisualState::Pressed)
+                });
+                renderer.render_frames(20);
+                assert_eq!(
+                    crop(&renderer.read_pixels().unwrap()),
+                    previews[0],
+                    "live hover overrides pressed presentation"
+                );
+                renderer.pointer_move(MOUSE_POINTER_ID, outside);
+                settings.with_mut(|settings| settings.presentation_state = None);
+                renderer.render_frames(20);
+                assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                    action: Action::Focus,
+                    target_tree: TreeId::ROOT,
+                    target_node: id,
+                    data: None,
+                }));
+                renderer.render_frames(20);
+                assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
+                assert_eq!(
+                    focus_crop(&renderer.read_pixels().unwrap()),
+                    focus_preview.as_ref().unwrap().as_slice(),
+                    "preview focus matches actual native focus"
+                );
+                settings.with_mut(|settings| {
+                    settings.presentation_state = Some(InteractionVisualState::Hover)
+                });
+                renderer.render_frames(20);
+                assert_eq!(
+                    focus_crop(&renderer.read_pixels().unwrap()),
+                    focus_preview.as_ref().unwrap().as_slice(),
+                    "live focus overrides hover presentation"
+                );
+                settings.with_mut(|settings| settings.presentation_state = None);
+                renderer.pointer_move(MOUSE_POINTER_ID, point);
+                renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+                renderer.render_frames(20);
+                assert_eq!(
+                    renderer.accessibility_snapshot().unwrap().focus,
+                    id,
+                    "pointer modality preserves actual focus ownership"
+                );
+                let pointer_pixels = renderer.read_pixels().unwrap();
+                for y in rect.y0 as usize - 5..rect.y1 as usize + 5 {
+                    for x in rect.x0 as usize - 5..rect.x1 as usize + 5 {
+                        if x >= rect.x0 as usize
+                            && x < rect.x1 as usize
+                            && y >= rect.y0 as usize
+                            && y < rect.y1 as usize
+                        {
+                            continue;
+                        }
+                        let offset = (y * 400 + x) * 4;
+                        assert_eq!(
+                            &pointer_pixels[offset..offset + 4],
+                            &rest_pixels[offset..offset + 4],
+                            "actual pointer press hides only the outside focus indicator"
+                        );
+                    }
+                }
+                renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+                renderer.pointer_move(MOUSE_POINTER_ID, outside);
+                renderer.render_frames(20);
+                assert_eq!(renderer.accessibility_snapshot().unwrap().focus, id);
+                assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                    action: Action::Focus,
+                    target_tree: TreeId::ROOT,
+                    target_node: id,
+                    data: None,
+                }));
+                renderer.render_frames(20);
+                assert_eq!(
+                    focus_crop(&renderer.read_pixels().unwrap()),
+                    focus_preview.as_ref().unwrap().as_slice(),
+                    "explicit accessibility focus restores the ring on the same focused handle"
+                );
+                renderer.pointer_move(MOUSE_POINTER_ID, point);
+                renderer.pointer_press(MOUSE_POINTER_ID, point, PressKeyEventType::Left);
+                renderer.render_frames(20);
+                assert!(
+                    INTERACTIONS
+                        .with(|states| states.borrow()[2].unwrap())
+                        .with(InteractionState::is_pressed)
+                );
+                tessera_ui::FocusManager::current().clear_focus(true);
+                renderer.render_frames(20);
+                let held = INTERACTIONS
+                    .with(|states| states.borrow()[2].unwrap())
+                    .get();
+                assert!(
+                    held.is_pressed(),
+                    "clearing keyboard focus preserves the actual held pointer press"
+                );
+                assert!(!held.is_focused());
+                let mask = |pixels: &[u8]| {
+                    pixels
+                        .chunks_exact(4)
+                        .map(|pixel| pixel[..3] != [255, 255, 255])
+                        .collect::<Vec<_>>()
+                };
+                assert_eq!(
+                    mask(&crop(&renderer.read_pixels().unwrap())),
+                    mask(&previews[2]),
+                    "pressed presentation uses the actual native pressed silhouette"
+                );
+                renderer.pointer_release(MOUSE_POINTER_ID, outside, PressKeyEventType::Left);
+                renderer.pointer_move(MOUSE_POINTER_ID, outside);
+                tessera_ui::FocusManager::current().clear_focus(true);
+                renderer.render_frames(20);
+                assert_eq!(CLICKS.get().unwrap().get(), 0);
+                settings.with_mut(|settings| {
+                    settings.disabled = true;
+                    settings.presentation_state = Some(InteractionVisualState::Pressed);
+                });
+                renderer.render_frames(20);
+                let disabled = renderer.read_pixels().unwrap();
+                settings.with_mut(|settings| settings.presentation_state = None);
+                renderer.render_frames(20);
+                assert_eq!(
+                    renderer.read_pixels().unwrap(),
+                    disabled,
+                    "disabled styling overrides presentation"
+                );
+            },
+        );
     }
 }

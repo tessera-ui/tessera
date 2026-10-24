@@ -10,7 +10,7 @@ use tessera_ui::{
 
 use crate::{
     boxed::boxed,
-    modifier::ModifierExt as _,
+    modifier::{InteractionVisualState, ModifierExt as _},
     theme::{MaterialTheme, material_theme},
 };
 
@@ -67,6 +67,7 @@ impl PlacementModifierNode for FractionalOrigin {
 
 #[derive(Clone, Copy, Default)]
 struct Settings {
+    presentation_state: Option<InteractionVisualState>,
     kind: Kind,
     size: SliderSize,
     orientation: SliderOrientation,
@@ -92,6 +93,7 @@ struct Settings {
 
 thread_local! {
     static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
+    static CONTROLLER: Cell<Option<State<super::SliderController>>> = const { Cell::new(None) };
     static VALUE: Cell<Option<State<f32>>> = const { Cell::new(None) };
     static RANGE: Cell<Option<State<(f32, f32)>>> = const { Cell::new(None) };
     static THEME: Cell<Option<Context<MaterialTheme>>> = const { Cell::new(None) };
@@ -100,6 +102,8 @@ thread_local! {
 #[tessera]
 fn fixture() {
     let settings = remember(Settings::default);
+    let controller = remember(super::SliderController::new);
+    CONTROLLER.set(Some(controller));
     let value = remember(|| 0.25_f32);
     let range = remember(|| (0.25_f32, 0.75_f32));
     SETTINGS.set(Some(settings));
@@ -143,6 +147,8 @@ fn fixture() {
                             match settings.kind {
                                 Kind::Single => {
                                     slider()
+                                        .controller(controller)
+                                        .presentation_state_optional(settings.presentation_state)
                                         .modifier(modifier)
                                         .value(value.get())
                                         .on_change(move |next| value.set(next))
@@ -180,6 +186,8 @@ fn fixture() {
                                 }
                                 Kind::Centered => {
                                     centered_slider()
+                                        .controller(controller)
+                                        .presentation_state_optional(settings.presentation_state)
                                         .modifier(modifier)
                                         .value(value.get())
                                         .on_change(move |next| value.set(next))
@@ -1255,5 +1263,136 @@ fn slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa4() 
     crate::test_utils::run_isolated_test(
         "slider::orientation_tests::slider_value_indicators_follow_handles_props_visibility_and_lifetime_msaa4",
         || check_value_indicators(4),
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn presentation_uses_native_handle_geometry_without_starting_interaction() {
+    crate::test_utils::run_isolated_test(
+        "slider::orientation_tests::presentation_uses_native_handle_geometry_without_starting_interaction",
+        || {
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(fixture),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 500,
+                    height: 500,
+                    sample_count: 1,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(3);
+            let settings = SETTINGS.get().unwrap();
+            let controller = CONTROLLER.get().unwrap();
+            for kind in [Kind::Single, Kind::Centered] {
+                for orientation in [SliderOrientation::Horizontal, SliderOrientation::Vertical] {
+                    settings.set(Settings {
+                        kind,
+                        orientation,
+                        overrides: true,
+                        presentation_state: Some(InteractionVisualState::Pressed),
+                        ..Default::default()
+                    });
+                    renderer.render_frames(3);
+                    let before = VALUE.get().unwrap().get();
+                    assert!(!controller.with(|controller| controller.is_dragging()));
+                    assert!(!controller.with(|controller| controller.is_focused()));
+                    let semantics = renderer.accessibility_snapshot().unwrap();
+                    let id = semantics
+                        .nodes
+                        .iter()
+                        .find(|(_, node)| node.label() == Some("Value"))
+                        .unwrap()
+                        .0;
+                    assert_ne!(semantics.focus, id);
+                    let pressed = renderer.read_pixels().unwrap();
+                    let thumb_span = |pixels: &[u8]| {
+                        let points: Vec<_> = pixels
+                            .chunks_exact(4)
+                            .enumerate()
+                            .filter(|(_, pixel)| pixel[0] > 240 && pixel[1] > 240 && pixel[2] < 240)
+                            .map(|(index, _)| {
+                                if orientation == SliderOrientation::Horizontal {
+                                    index % 500
+                                } else {
+                                    index / 500
+                                }
+                            })
+                            .collect();
+                        assert!(
+                            !points.is_empty(),
+                            "native yellow thumb pixels must be visible: {kind:?}, {orientation:?}"
+                        );
+                        points.iter().max().unwrap() - points.iter().min().unwrap() + 1
+                    };
+                    assert_eq!(
+                        thumb_span(&pressed),
+                        2,
+                        "pressed handle uses the native two-pixel width"
+                    );
+                    settings.with_mut(|settings| {
+                        settings.presentation_state = Some(InteractionVisualState::Focus)
+                    });
+                    renderer.render_frames(3);
+                    let focus_preview = renderer.read_pixels().unwrap();
+                    let changed: Vec<_> = focus_preview
+                        .chunks_exact(4)
+                        .zip(pressed.chunks_exact(4))
+                        .enumerate()
+                        .filter(|(_, (focused, pressed))| focused != pressed)
+                        .map(|(index, _)| (index % 500, index / 500))
+                        .collect();
+                    let ring_width = changed.iter().map(|point| point.0).max().unwrap()
+                        - changed.iter().map(|point| point.0).min().unwrap()
+                        + 1;
+                    let ring_height = changed.iter().map(|point| point.1).max().unwrap()
+                        - changed.iter().map(|point| point.1).min().unwrap()
+                        + 1;
+                    assert_eq!(
+                        (ring_width, ring_height),
+                        if orientation == SliderOrientation::Horizontal {
+                            (20, 64)
+                        } else {
+                            (64, 20)
+                        }
+                    );
+                    controller.with(|controller| controller.focus.request_focus());
+                    renderer.render_frames(3);
+                    assert!(controller.with(|controller| controller.is_focused()));
+                    assert_eq!(
+                        renderer.read_pixels().unwrap(),
+                        focus_preview,
+                        "actual focus and presentation use the same native focus ring"
+                    );
+                    settings.with_mut(|settings| {
+                        settings.presentation_state = Some(InteractionVisualState::Pressed)
+                    });
+                    renderer.render_frames(3);
+                    assert_eq!(
+                        renderer.read_pixels().unwrap(),
+                        focus_preview,
+                        "actual focus overrides pressed presentation"
+                    );
+                    FocusManager::current().clear_focus(true);
+                    renderer.render_frames(3);
+
+                    settings.with_mut(|settings| settings.presentation_state = None);
+                    renderer.render_frames(3);
+                    assert_eq!(thumb_span(&renderer.read_pixels().unwrap()), 4);
+                    assert_eq!(VALUE.get().unwrap().get(), before);
+                    settings.with_mut(|settings| {
+                        settings.disabled = true;
+                        settings.presentation_state = Some(InteractionVisualState::Pressed);
+                    });
+                    renderer.render_frames(3);
+                    let disabled = renderer.read_pixels().unwrap();
+                    settings.with_mut(|settings| settings.presentation_state = None);
+                    renderer.render_frames(3);
+                    assert_eq!(renderer.read_pixels().unwrap(), disabled);
+                }
+            }
+        },
     );
 }

@@ -11,8 +11,8 @@ use tessera_ui::{
     DrawModifierContent, DrawModifierContext, DrawModifierNode, FocusDirection, FocusManager,
     FocusRequester, FocusScopeNode, FocusTraversalPolicy, FrameNanosControl, KeyboardInput,
     KeyboardInputModifierNode, LayoutResult, MOUSE_POINTER_ID, MeasurementError, Modifier,
-    ParentConstraint, PointerInput, PointerInputModifierNode, Px, PxPosition, PxRect, PxSize,
-    RenderSlot, State,
+    ParentConstraint, PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, RenderSlot,
+    State,
     accesskit::{HasPopup, Role, Toggled},
     current_frame_nanos,
     layout::{MeasureScope, layout},
@@ -193,6 +193,7 @@ pub enum MenuPlacement {
 #[derive(Clone, PartialEq)]
 struct MenuProviderConfig {
     pub anchor: Option<MenuAnchor>,
+    pub precise_anchor: Option<tessera_ui::FloatRect>,
     pub bounds: Option<MenuBoundsHandle>,
     pub focus_scope: Option<FocusScopeNode>,
     pub parent_request: Option<State<MenuPopupRequest>>,
@@ -221,6 +222,7 @@ impl Default for MenuProviderConfig {
     fn default() -> Self {
         Self {
             anchor: None,
+            precise_anchor: None,
             bounds: None,
             focus_scope: None,
             parent_request: None,
@@ -277,7 +279,7 @@ struct MenuLayout {
     has_background: bool,
     placement: MenuPlacement,
     offset: [Dp; 2],
-    anchor: Option<MenuAnchor>,
+    anchor: Option<tessera_ui::FloatRect>,
     bounds: Arc<RwLock<Option<MenuBounds>>>,
 }
 
@@ -358,7 +360,7 @@ impl tessera_ui::LayoutModifierNode for MenuLayout {
         let menu_size = menu_size.size();
         let main_size = main_size.size();
         let anchor = self.anchor.unwrap_or_else(|| {
-            MenuAnchor::new(
+            tessera_ui::FloatRect::from_position_size(
                 PxPosition::ZERO,
                 PxSize::new(main_size.width, main_size.height),
             )
@@ -377,16 +379,16 @@ impl tessera_ui::LayoutModifierNode for MenuLayout {
 }
 
 fn resolve_menu_position(
-    anchor: MenuAnchor,
+    anchor: tessera_ui::FloatRect,
     placement: MenuPlacement,
     menu_size: ComputedData,
     available: ComputedData,
     offset: [Dp; 2],
 ) -> PxPosition {
-    let anchor_x = anchor.origin.x;
-    let anchor_y = anchor.origin.y;
-    let anchor_end_x = anchor_x + anchor.size.width.0 as f32;
-    let anchor_end_y = anchor_y + anchor.size.height.0 as f32;
+    let anchor_x = anchor.x;
+    let anchor_y = anchor.y;
+    let anchor_end_x = anchor_x + anchor.width;
+    let anchor_end_y = anchor_y + anchor.height;
 
     let width = menu_size.width.to_f32();
     let height = menu_size.height.to_f32();
@@ -592,6 +594,7 @@ pub fn menu_provider(
         .color_scheme;
     let mut provider_args = MenuProviderConfig {
         anchor,
+        precise_anchor: None,
         bounds: None,
         focus_scope: None,
         parent_request: None,
@@ -661,7 +664,12 @@ fn menu_provider_content(provider: Option<MenuProviderConfig>) {
     let pending_focus_restore = remember(|| None::<Option<FocusRequester>>);
 
     let (is_open, anchor) = controller.with(|c| c.snapshot());
-    let anchor = provider_args.anchor.or(anchor);
+    let anchor = provider_args.precise_anchor.or_else(|| {
+        provider_args
+            .anchor
+            .or(anchor)
+            .map(|anchor| tessera_ui::FloatRect::from_position_size(anchor.origin, anchor.size))
+    });
     let mut just_opened = false;
     let mut just_closed = false;
     menu_open_state.with_mut(|was_open| {
@@ -969,6 +977,16 @@ fn menu_panel(
     });
 }
 
+/// Selection behavior announced for a menu item.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum MenuItemSelectionMode {
+    /// One checked item in a mutually exclusive set.
+    #[default]
+    Radio,
+    /// An independently checked item in a set of choices.
+    Checkbox,
+}
+
 #[derive(Clone, PartialEq)]
 struct MenuItemConfig {
     pub label: String,
@@ -980,6 +998,7 @@ struct MenuItemConfig {
     pub submenu_placement: MenuPlacement,
     pub selected: bool,
     pub selection: Option<Toggled>,
+    pub selection_mode: Option<MenuItemSelectionMode>,
     pub shape: Shape,
     pub container_color: Color,
     pub enabled: bool,
@@ -1003,6 +1022,7 @@ impl MenuItemConfig {
             submenu_placement: MenuPlacement::RightStart,
             selected: false,
             selection: None,
+            selection_mode: None,
             shape: MenuDefaults::item_shape(MenuPosition::Standalone, false),
             container_color: Color::TRANSPARENT,
             enabled: true,
@@ -1042,6 +1062,8 @@ impl Default for MenuItemConfig {
 /// - `submenu_content` — optional submenu opened by activation or mouse dwell
 /// - `submenu_placement` — optional submenu placement override
 /// - `selected` — whether the item renders as selected
+/// - `selection_mode` — optional radio or checkbox semantics; omitted for an
+///   action
 /// - `position` — item position within its group, controlling corner shapes
 /// - `shape` — optional fixed item shape override
 /// - `container_color` — optional item background override
@@ -1090,6 +1112,7 @@ pub fn menu_item(
     submenu_content: Option<RenderSlot>,
     submenu_placement: Option<MenuPlacement>,
     selected: Option<bool>,
+    selection_mode: Option<MenuItemSelectionMode>,
     position: Option<MenuPosition>,
     shape: Option<Shape>,
     container_color: Option<Color>,
@@ -1103,8 +1126,14 @@ pub fn menu_item(
     on_click: Option<Callback>,
 ) {
     let label = label.unwrap_or_default();
-    let selection = selected.map(|value| if value { Toggled::True } else { Toggled::False });
     let selected = selected.unwrap_or(false);
+    let selection = selection_mode.map(|_| {
+        if selected {
+            Toggled::True
+        } else {
+            Toggled::False
+        }
+    });
     let position = position.unwrap_or_default();
     let enabled = enabled.unwrap_or(true) && (on_click.is_some() || submenu_content.is_some());
     let inherited_style = use_context::<MenuColorStyle>().map(|style| style.get());
@@ -1123,6 +1152,7 @@ pub fn menu_item(
         submenu_content,
         submenu_placement: submenu_placement.unwrap_or(MenuPlacement::RightStart),
         selected,
+        selection_mode,
         selection,
         shape: shape.unwrap_or_else(|| MenuDefaults::item_shape(position, selected)),
         container_color: container_color.unwrap_or_else(|| {
@@ -1236,7 +1266,7 @@ fn menu_item_surface(
                 input.block_keyboard();
             }
         })
-        .on_globally_positioned(move |bounds| {
+        .on_layout_coordinates(move |bounds| {
             let anchor = request.get().anchor;
             if anchor.get() != bounds {
                 anchor.set(bounds);
@@ -1292,8 +1322,12 @@ fn menu_item_surface(
                     })
                     .push_semantics(MenuItemDisclosure(expanded)),
             )
-            .accessibility_role(if selection.is_some() && !has_submenu {
-                Role::MenuItemRadio
+            .accessibility_role(if !has_submenu {
+                match item.selection_mode {
+                    Some(MenuItemSelectionMode::Radio) => Role::MenuItemRadio,
+                    Some(MenuItemSelectionMode::Checkbox) => Role::MenuItemCheckBox,
+                    None => Role::MenuItem,
+                }
             } else {
                 Role::MenuItem
             })
@@ -1487,7 +1521,7 @@ fn menu_item_inner(args: Option<MenuItemConfig>) {
             host: host.clone(),
             parent,
             controller: submenu_controller,
-            anchor: remember(PxRect::default),
+            anchor: remember(tessera_ui::LayoutCoordinates::default),
             scope: remember(FocusScopeNode::new).get(),
             fallback: focus_requester,
             content: submenu_content,
@@ -1700,6 +1734,10 @@ mod focus_tests;
 #[cfg(test)]
 #[path = "menus/appearance_tests.rs"]
 mod appearance_tests;
+
+#[cfg(test)]
+#[path = "menus/selection_tests.rs"]
+mod selection_tests;
 
 #[cfg(test)]
 #[path = "menus/submenu_tests.rs"]

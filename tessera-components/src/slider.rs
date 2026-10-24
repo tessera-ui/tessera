@@ -17,6 +17,7 @@ use tessera_ui::{
 use crate::{
     icon::icon,
     image_vector::TintMode,
+    modifier::{InteractionState, InteractionVisualState},
     painter::Painter,
     theme::{MaterialAlpha, MaterialColorScheme, MaterialTheme},
 };
@@ -177,7 +178,7 @@ fn range_slider_thumb(
     colors: Option<SliderColors>,
     focus: Option<FocusRequester>,
     accessibility: Option<RangeThumbAccessibility>,
-    indicator_anchor: Option<State<tessera_ui::PxRect>>,
+    indicator_anchor: Option<State<tessera_ui::LayoutCoordinates>>,
 ) {
     let thumb_layout = thumb_layout.expect("range_slider_thumb requires thumb layout to be set");
     let handle_width = handle_width.unwrap_or(Px::ZERO);
@@ -199,7 +200,7 @@ fn range_slider_thumb(
     );
 
     let modifier = if let Some(anchor) = indicator_anchor {
-        modifier.on_globally_positioned(move |rect| {
+        modifier.on_layout_coordinates(move |rect| {
             if anchor.get() != rect {
                 anchor.set(rect);
             }
@@ -211,7 +212,8 @@ fn range_slider_thumb(
         slider_handle()
             .layout(thumb_layout)
             .width(handle_width)
-            .colors(colors);
+            .colors(colors)
+            .focused(focus.is_focus_visible());
     });
 }
 
@@ -271,12 +273,12 @@ struct SliderPointerModifierNode {
 
 impl PointerInputModifierNode for SliderPointerModifierNode {
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let (is_dragging, is_focused) = self
+        let visual = self
             .controller
-            .with(|controller| (controller.is_dragging(), controller.is_focused()));
+            .with(|controller| controller.visual_state(&self.args));
         let base_handle_width = self.args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
-        let handle_width = if is_dragging || is_focused {
+        let handle_width = if visual.is_dragged() || visual.is_pressed() || visual.is_focused() {
             pressed_handle_width
         } else {
             base_handle_width
@@ -361,12 +363,12 @@ struct CenteredSliderPointerModifierNode {
 
 impl PointerInputModifierNode for CenteredSliderPointerModifierNode {
     fn on_pointer_input(&self, mut input: PointerInput<'_>) {
-        let (is_dragging, is_focused) = self
+        let visual = self
             .controller
-            .with(|controller| (controller.is_dragging(), controller.is_focused()));
+            .with(|controller| controller.visual_state(&self.args));
         let base_handle_width = self.args.thumb_diameter.to_px();
         let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
-        let handle_width = if is_dragging || is_focused {
+        let handle_width = if visual.is_dragged() || visual.is_pressed() || visual.is_focused() {
             pressed_handle_width
         } else {
             base_handle_width
@@ -657,6 +659,14 @@ pub struct SliderController {
 }
 
 impl SliderController {
+    fn visual_state(&self, args: &SliderConfig) -> InteractionState {
+        let mut live = InteractionState::new();
+        live.set_dragged(self.is_dragging());
+        live.set_focused(self.is_focused());
+        live.set_hovered(self.is_hovered());
+        live.with_presentation(args.presentation_state, !args.disabled)
+    }
+
     /// Creates a new slider controller.
     pub fn new() -> Self {
         Self {
@@ -722,6 +732,7 @@ pub enum SliderSize {
 /// Arguments for the `slider` component.
 #[derive(Clone, PartialEq)]
 struct SliderConfig {
+    pub presentation_state: Option<InteractionVisualState>,
     pub value_indicator: SliderValueIndicatorVisibility,
     pub value_label: Option<String>,
     axis: SliderAxis,
@@ -771,6 +782,7 @@ struct SliderConfig {
 impl Default for SliderConfig {
     fn default() -> Self {
         Self {
+            presentation_state: None,
             value_indicator: SliderValueIndicatorVisibility::Hidden,
             value_label: None,
             axis: SliderAxis::default(),
@@ -886,6 +898,7 @@ type SliderArgs = SliderConfig;
 type RangeSliderArgs = RangeSliderConfig;
 
 struct SliderParams {
+    presentation_state: Option<InteractionVisualState>,
     value_indicator: Option<SliderValueIndicatorVisibility>,
     value_label: Option<String>,
     axis: SliderAxis,
@@ -932,6 +945,7 @@ fn slider_theme_colors(scheme: &MaterialColorScheme) -> SliderThemeColors {
 fn slider_config_from_params(params: SliderParams, theme: SliderThemeColors) -> SliderConfig {
     let defaults = SliderConfig::default();
     SliderConfig {
+        presentation_state: params.presentation_state,
         value_indicator: params.value_indicator.unwrap_or_default(),
         value_label: params.value_label,
         axis: params.axis,
@@ -1276,6 +1290,8 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// - `inset_icon` — optional leading icon for larger size variants.
 /// - `controller` — optional shared focus and drag state.
 ///
+/// - `presentation_state` — optional visual interaction without changing focus
+///   or gestures.
 /// - `value_indicator` — hidden by default; show while focused/dragging or
 ///   always. Enable inside [`slider_value_indicator_provider`].
 /// - `value_label` — optional formatted value for the floating label and screen
@@ -1308,6 +1324,7 @@ fn range_slider_colors(args: &RangeSliderConfig, scheme: &MaterialColorScheme) -
 /// ```
 #[tessera]
 pub fn slider(
+    presentation_state: Option<InteractionVisualState>,
     modifier: Option<Modifier>,
     value: Option<f32>,
     on_change: Option<CallbackWith<f32>>,
@@ -1340,6 +1357,7 @@ pub fn slider(
     let steps = steps.unwrap_or(defaults.steps);
     let args = slider_config_from_params(
         SliderParams {
+            presentation_state,
             axis: SliderAxis {
                 orientation: orientation.unwrap_or_default(),
                 reversed: reverse_direction.unwrap_or(false),
@@ -1400,10 +1418,10 @@ fn slider_content(
     if keyboard_value.get() != clamped_value {
         keyboard_value.set(clamped_value);
     }
-    let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
+    let visual = controller.with(|c| c.visual_state(&args));
     let base_handle_width = args.thumb_diameter.to_px();
     let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
-    let handle_width = if is_dragging || is_focused {
+    let handle_width = if visual.is_dragged() || visual.is_pressed() || visual.is_focused() {
         pressed_handle_width
     } else {
         base_handle_width
@@ -1425,7 +1443,7 @@ fn slider_content(
     );
 
     let indicator_anchor = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
-        let anchor = remember(|| tessera_ui::PxRect::ZERO);
+        let anchor = remember(tessera_ui::LayoutCoordinates::default);
         indicator::register_indicator()
             .anchor(anchor)
             .label(
@@ -1433,12 +1451,12 @@ fn slider_content(
                     .clone()
                     .unwrap_or_else(|| default_value_label(clamped_value)),
             )
-            .visible(
-                args.value_indicator
-                    .visible(is_dragging || is_focused, args.disabled),
-            )
+            .visible(args.value_indicator.visible(
+                visual.is_dragged() || visual.is_pressed() || visual.is_focused(),
+                args.disabled,
+            ))
             .orientation(args.axis.orientation)
-            .interacting(is_dragging || is_focused);
+            .interacting(visual.is_dragged() || visual.is_pressed() || visual.is_focused());
         Some(anchor)
     } else {
         None
@@ -1449,6 +1467,9 @@ fn slider_content(
         clamped_value,
         handle_width,
         indicator_anchor,
+        visual.is_focused()
+            && controller
+                .with(|controller| !controller.is_focused() || controller.focus.is_focus_visible()),
     );
     let render_data = remember(|| next.clone());
     if render_data.with(|current| current != &next) {
@@ -1463,7 +1484,7 @@ fn slider_content(
             has_inset_icon: args.inset_icon.is_some(),
         })
         .child(move || {
-            let (args, initial_width, clamped_value, handle_width, indicator_anchor) =
+            let (args, initial_width, clamped_value, handle_width, indicator_anchor, focused) =
                 render_data.get();
             let slider_layout = slider_layout_with_handle_width(&args, initial_width, handle_width);
             let scheme = use_context::<MaterialTheme>()
@@ -1516,6 +1537,7 @@ fn slider_content(
                 .layout(slider_layout)
                 .width(handle_width)
                 .colors(colors)
+                .focused(focused)
                 .indicator_anchor_optional(indicator_anchor);
         });
 }
@@ -1732,6 +1754,8 @@ fn measure_centered_slider(
 /// - `inset_icon` — optional leading icon for larger size variants.
 /// - `controller` — optional shared focus and drag state.
 ///
+/// - `presentation_state` — optional visual interaction without changing focus
+///   or gestures.
 /// - `value_indicator` — hidden by default; show while focused/dragging or
 ///   always. Enable inside [`slider_value_indicator_provider`].
 /// - `value_label` — optional formatted value for the floating label and screen
@@ -1772,6 +1796,7 @@ fn measure_centered_slider(
 /// ```
 #[tessera]
 pub fn centered_slider(
+    presentation_state: Option<InteractionVisualState>,
     modifier: Option<Modifier>,
     value: Option<f32>,
     on_change: Option<CallbackWith<f32>>,
@@ -1804,6 +1829,7 @@ pub fn centered_slider(
     let steps = steps.unwrap_or(defaults.steps);
     let args = slider_config_from_params(
         SliderParams {
+            presentation_state,
             axis: SliderAxis {
                 orientation: orientation.unwrap_or_default(),
                 reversed: reverse_direction.unwrap_or(false),
@@ -1865,10 +1891,10 @@ fn centered_slider_content(
     if keyboard_value.get() != clamped_value {
         keyboard_value.set(clamped_value);
     }
-    let (is_dragging, is_focused) = controller.with(|c| (c.is_dragging(), c.is_focused()));
+    let visual = controller.with(|c| c.visual_state(&args));
     let base_handle_width = args.thumb_diameter.to_px();
     let pressed_handle_width = Px((base_handle_width.0 / 2).max(1));
-    let handle_width = if is_dragging || is_focused {
+    let handle_width = if visual.is_dragged() || visual.is_pressed() || visual.is_focused() {
         pressed_handle_width
     } else {
         base_handle_width
@@ -1890,7 +1916,7 @@ fn centered_slider_content(
     );
 
     let indicator_anchor = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
-        let anchor = remember(|| tessera_ui::PxRect::ZERO);
+        let anchor = remember(tessera_ui::LayoutCoordinates::default);
         indicator::register_indicator()
             .anchor(anchor)
             .label(
@@ -1898,12 +1924,12 @@ fn centered_slider_content(
                     .clone()
                     .unwrap_or_else(|| default_value_label(clamped_value)),
             )
-            .visible(
-                args.value_indicator
-                    .visible(is_dragging || is_focused, args.disabled),
-            )
+            .visible(args.value_indicator.visible(
+                visual.is_dragged() || visual.is_pressed() || visual.is_focused(),
+                args.disabled,
+            ))
             .orientation(args.axis.orientation)
-            .interacting(is_dragging || is_focused);
+            .interacting(visual.is_dragged() || visual.is_pressed() || visual.is_focused());
         Some(anchor)
     } else {
         None
@@ -1914,6 +1940,9 @@ fn centered_slider_content(
         clamped_value,
         handle_width,
         indicator_anchor,
+        visual.is_focused()
+            && controller
+                .with(|controller| !controller.is_focused() || controller.focus.is_focus_visible()),
     );
     let render_data = remember(|| next.clone());
     if render_data.with(|current| current != &next) {
@@ -1927,7 +1956,7 @@ fn centered_slider_content(
             handle_width,
         })
         .child(move || {
-            let (args, initial_width, clamped_value, handle_width, indicator_anchor) =
+            let (args, initial_width, clamped_value, handle_width, indicator_anchor, focused) =
                 render_data.get();
             let centered_layout = CenteredSliderLayout {
                 base: slider_layout_with_handle_width(&args, initial_width, handle_width),
@@ -1960,6 +1989,7 @@ fn centered_slider_content(
                 .layout(centered_layout.base)
                 .width(handle_width)
                 .colors(colors)
+                .focused(focused)
                 .indicator_anchor_optional(indicator_anchor);
         });
 }
@@ -2370,8 +2400,8 @@ fn range_slider_content(
     );
 
     let indicator_anchors = if args.value_indicator != SliderValueIndicatorVisibility::Hidden {
-        let start_anchor = remember(|| tessera_ui::PxRect::ZERO);
-        let end_anchor = remember(|| tessera_ui::PxRect::ZERO);
+        let start_anchor = remember(tessera_ui::LayoutCoordinates::default);
+        let end_anchor = remember(tessera_ui::LayoutCoordinates::default);
         indicator::register_indicator()
             .anchor(start_anchor)
             .label(

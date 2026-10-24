@@ -15,7 +15,7 @@ use tessera_ui::{
 
 use crate::{
     column::column,
-    modifier::{ModifierExt as _, SemanticsArgs},
+    modifier::{InteractionVisualState, ModifierExt as _, SemanticsArgs},
     spacer::spacer,
     surface::{SurfaceStyle, surface},
     theme::{MaterialTheme, material_theme},
@@ -36,6 +36,7 @@ struct Settings {
     custom: bool,
     generic_invalid: bool,
     activations: usize,
+    presentation: Option<InteractionVisualState>,
 }
 
 thread_local! {
@@ -70,6 +71,7 @@ fn fixture() {
                             .checked(value.checked)
                             .indeterminate(value.mixed)
                             .is_error(value.error)
+                            .presentation_state_optional(value.presentation)
                             .disabled(value.disabled)
                             .color_optional(value.custom.then_some(Color::GREEN))
                             .checked_color_optional(value.custom.then_some(CUSTOM_FILL))
@@ -268,6 +270,11 @@ fn check_states(samples: u32) {
         assert!(action(&mut renderer, Action::Focus));
         renderer.render_frames(30);
         assert_color(
+            pixel(&renderer, cx + 47, cy),
+            encoded(scheme.secondary, scheme.surface),
+            "actual focus paints the existing circular native focus indicator",
+        );
+        assert_color(
             pixel(&renderer, cx - 16, cy),
             encoded(scheme.error, scheme.surface),
             "error focus",
@@ -319,6 +326,58 @@ fn check_states(samples: u32) {
         assert_eq!(settings.get().activations, 1);
         FocusManager::current().clear_focus(true);
     }
+    for presentation in [
+        InteractionVisualState::Hover,
+        InteractionVisualState::Focus,
+        InteractionVisualState::Pressed,
+    ] {
+        settings.set(Settings {
+            checked: true,
+            error: true,
+            presentation: Some(presentation),
+            ..Default::default()
+        });
+        renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 150.0));
+        renderer.render_frames(30);
+        let scheme = &palettes[0].color_scheme;
+        assert_eq!(
+            node(&renderer, "Selection").1.invalid(),
+            Some(Invalid::True)
+        );
+        assert_color(
+            pixel(&renderer, cx + 47, cy),
+            encoded(
+                if presentation == InteractionVisualState::Focus {
+                    scheme.secondary
+                } else {
+                    scheme.surface
+                },
+                scheme.surface,
+            ),
+            "presentation focus keeps the native circular indicator",
+        );
+        assert_eq!(settings.get().activations, 0);
+        renderer.pointer_move(
+            MOUSE_POINTER_ID,
+            PxPosition::from_f32_xy(cx as f32, cy as f32),
+        );
+        renderer.render_frames(30);
+        assert_color(
+            pixel(&renderer, cx + 47, cy),
+            encoded(scheme.surface, scheme.surface),
+            "live hover wins over preview focus",
+        );
+        settings.with_mut(|value| value.disabled = true);
+        renderer.render_frames(30);
+        assert_color(
+            pixel(&renderer, cx + 47, cy),
+            encoded(scheme.surface, scheme.surface),
+            "disabled suppresses preview focus",
+        );
+        assert!(!action(&mut renderer, Action::Click));
+        assert_eq!(settings.get().activations, 0);
+    }
+    FocusManager::current().clear_focus(true);
 }
 
 #[test]

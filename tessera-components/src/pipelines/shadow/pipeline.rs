@@ -9,7 +9,7 @@ use std::sync::Arc;
 use encase::{ShaderSize, ShaderType, StorageBuffer, UniformBuffer};
 use glam::Vec4;
 use tessera_ui::{
-    Color, PxPosition, PxSize,
+    Color, PxSize,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu::{self, include_wgsl, util::DeviceExt},
 };
@@ -120,12 +120,12 @@ impl ShadowMaskPipeline {
     }
 
     fn build_instances(
-        commands: &[(&ShadowMaskCommand, PxSize, PxPosition)],
+        commands: &[(&ShadowMaskCommand, tessera_ui::DrawGeometry)],
         target_size: PxSize,
     ) -> Vec<ShapeUniforms> {
         commands
             .iter()
-            .map(|(command, size, position)| {
+            .map(|(command, geometry)| {
                 let shape_command = match command.shape {
                     crate::shape_def::ResolvedShape::Rounded {
                         corner_radii,
@@ -139,7 +139,15 @@ impl ShadowMaskPipeline {
                         color: command.color,
                     },
                 };
-                let mut uniforms = rect_to_uniforms(&shape_command, *size, *position);
+                let mut uniforms = rect_to_uniforms(
+                    &shape_command,
+                    geometry.local_size,
+                    geometry.window_origin(),
+                );
+                let origin = geometry.window_origin();
+                let [width, height] = geometry.window_size();
+                uniforms.position = Vec4::new(origin.x, origin.y, width, height);
+                uniforms.corner_radii *= geometry.local_to_window.scale();
                 uniforms.screen_size =
                     [target_size.width.to_f32(), target_size.height.to_f32()].into();
                 uniforms
@@ -314,20 +322,21 @@ impl ShadowCompositePipeline {
     }
 
     fn compute_uniforms(
-        start_pos: PxPosition,
-        size: PxSize,
+        geometry: tessera_ui::DrawGeometry,
         target_size: PxSize,
         color: Color,
         uv_origin: [f32; 2],
         uv_size: [f32; 2],
     ) -> CompositeUniforms {
+        let start_pos = geometry.window_origin();
+        let [width, height] = geometry.window_size();
         let rect = [
             (start_pos.x / target_size.width.to_f32()) * 2.0 - 1.0
-                + (size.width.0 as f32 / target_size.width.to_f32()),
+                + (width / target_size.width.to_f32()),
             (start_pos.y / target_size.height.to_f32()) * -2.0 + 1.0
-                - (size.height.0 as f32 / target_size.height.to_f32()),
-            size.width.0 as f32 / target_size.width.to_f32(),
-            size.height.0 as f32 / target_size.height.to_f32(),
+                - (height / target_size.height.to_f32()),
+            width / target_size.width.to_f32(),
+            height / target_size.height.to_f32(),
         ]
         .into();
 
@@ -348,10 +357,9 @@ impl DrawablePipeline<ShadowCompositeCommand> for ShadowCompositePipeline {
         context.render_pass.set_pipeline(&self.pipeline);
         let mut alive_buffers: Vec<wgpu::Buffer> = Vec::new();
 
-        for (command, size, start_pos) in context.commands.iter() {
+        for (command, geometry) in context.commands.iter() {
             let uniforms = Self::compute_uniforms(
-                *start_pos,
-                *size,
+                *geometry,
                 context.target_size,
                 command.color,
                 command.uv_origin,

@@ -169,26 +169,26 @@ impl DrawablePipeline<CheckmarkCommand> for CheckmarkPipeline {
             self.reserve(context.device, commands.len());
             self.staging.clear();
             self.staging
-                .extend(commands.iter().map(|(command, size, position)| Instance {
-                    position: [
-                        position.x,
-                        position.y,
-                        size.width.to_f32(),
-                        size.height.to_f32(),
-                    ],
-                    color: command.color.to_array(),
-                    parameters: [
-                        command.stroke_width,
-                        command.progress,
-                        command.indeterminate_fraction,
-                        if command.checkbox_geometry { 1.0 } else { 0.0 },
-                    ],
-                    padding_screen: [
-                        command.padding[0],
-                        command.padding[1],
-                        context.target_size.width.to_f32(),
-                        context.target_size.height.to_f32(),
-                    ],
+                .extend(commands.iter().map(|(command, geometry)| {
+                    let position = geometry.window_origin();
+                    let [width, height] = geometry.window_size();
+                    let scale = geometry.local_to_window.scale();
+                    Instance {
+                        position: [position.x, position.y, width, height],
+                        color: command.color.to_array(),
+                        parameters: [
+                            command.stroke_width * scale,
+                            command.progress,
+                            command.indeterminate_fraction,
+                            if command.checkbox_geometry { 1.0 } else { 0.0 },
+                        ],
+                        padding_screen: [
+                            command.padding[0] * scale,
+                            command.padding[1] * scale,
+                            context.target_size.width.to_f32(),
+                            context.target_size.height.to_f32(),
+                        ],
+                    }
                 }));
             let page = &self.pages[self.page];
             // Later batches and scene passes must not overwrite earlier draws

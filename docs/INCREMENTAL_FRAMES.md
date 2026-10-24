@@ -35,26 +35,65 @@ geometry stays unchanged, only its dirty child branches are visited. Changed
 origins, inherited clipping, opacity, placement order, and visibility propagate
 to their affected descendants. Unplaced layout subtrees lose input, semantics,
 drawing, and focus eligibility.
+An already hidden, unchanged subtree does not republish descendant geometry
+when a visible ancestor moves. First hiding, structural changes, and revealing
+still update the affected consumers.
+
+Geometry propagation uses retained direct layout adjacency, skipping transparent
+composition wrappers. An inherited translation reuses unchanged local placement
+results and their state dependencies; local placement changes still reevaluate
+the affected modifier chain.
 
 - Paint records queued visible nodes. Revealing a dirty hidden node queues its
   first recording.
 - Position observers inspect changed geometry and newly attached observers.
 - Focus attachments and ordered child indexes update only affected handles.
+  Placement-order changes have their own journal. Pure translations update
+  focus rectangles without rebuilding traversal paths; transparent composition
+  wrappers do not override the order of placed layout children.
 - Pointer plans persist with a spatial grid. Exact hit tests preserve ancestor
   shape clipping, modifier placement, overflow, and composition order. Dispatch
   includes current and previous hover candidates, sampled hit paths, captures,
   newly attached handlers, and invalidated state readers. Each sample finishes
   all three input passes before the next sample starts.
+  Geometry updates retain unchanged handlers and composition order. Moving an
+  already clipped handler does not schedule input delivery by itself; captures,
+  hover exits, and explicit state invalidations still schedule delivery.
 - The scene retains render-bearing branches and compresses transparent chains.
   An unchanged scene shares its render graph and cached execution ordering.
+  Transparent unary branches forward their current descendant output without
+  rebuilding every wrapper. Fully clipped output and draws that remain outside
+  the viewport retain their geometry until they can contribute again.
 - Accessibility retains stable semantic identities and child order. Ordinary
   frames publish changed nodes and focus. Initial platform activation and
   explicit headless snapshots publish the complete semantic tree. Inherited
   tooltip and semantic-boundary changes update the affected descendants.
+  Geometry-only changes update existing semantic bounds without rebuilding
+  labels, actions, parent relationships, or child ordering.
+  Platform publication starts after accessibility activation. Without an active
+  consumer, bounded change journals coalesce updates until an explicit semantic
+  snapshot or activation requests the current tree. Removed unpublished nodes
+  leave these journals instead of accumulating across navigation.
 
-Partial replay reads snapshots for its selected roots. State and context slot
-cleanup uses owner indexes and releases table borrows before dropping values.
-Persistent focus handles and frame receivers are also removed by owner.
+Partial replay reads snapshots for its selected roots. Reusing an unchanged
+subtree journals its root without republishing every descendant to input,
+focus, accessibility, and scene consumers. Replay compares the retained root's
+ancestor path before and after attachment. Changes in sibling order, semantic
+boundaries or inherited tooltips, and focus ancestry also update that root's
+descendants. Capturing these paths costs the depth of each retained root,
+rather than another traversal of its unchanged descendants.
+
+A dirty descendant does not force an equal-prop ancestor to execute. Replay
+retains that ancestor and schedules the remaining dirty boundary separately,
+including invalidations created while replaying its parent. Only boundaries
+actually executed in the frame count as covered. Writes targeting an already
+executed boundary are deferred to the next frame, preserving the validity of
+its replay snapshot. Replacement cleanup enumerates abandoned nodes rather
+than every descendant of a reused subtree.
+
+State and context slot cleanup uses owner indexes and releases table borrows
+before dropping values. Persistent focus handles and frame receivers are also
+removed by owner.
 
 ## Work that scales with affected output
 
@@ -76,6 +115,13 @@ geometry visits and updates, paint recordings, scene branch updates, pointer
 index updates and hit candidates, dispatch selection, and semantic updates.
 `HeadlessRenderer::diagnostics` exposes the most recent full frame's counters;
 profiling output includes the same fields.
+Semantic publication can flush after drawing; explicit headless semantic
+snapshots materialize current updates even when rendering had no active
+accessibility consumer. Layout test sessions flush semantics synchronously.
+Profiling maintains subtree counts during structural updates instead of walking
+reused subtrees to count them each frame. Optional tracing targets
+`tessera_ui::replay`, `tessera_ui::build_cost`, and `tessera_ui::frame_cost` expose
+replay boundaries, component build durations, and frame-consumer stage costs.
 
 Run deterministic core and component regressions with:
 

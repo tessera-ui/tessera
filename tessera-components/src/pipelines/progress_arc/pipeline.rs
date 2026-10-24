@@ -4,7 +4,6 @@ use encase::{ShaderSize, ShaderType, StorageBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
     PxSize,
-    px::PxPosition,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu::{self, include_wgsl},
 };
@@ -123,28 +122,28 @@ impl ProgressArcPipeline {
 }
 
 fn build_instances(
-    commands: &[(&ProgressArcCommand, PxSize, PxPosition)],
+    commands: &[(&ProgressArcCommand, tessera_ui::DrawGeometry)],
     target_size: PxSize,
 ) -> Vec<ArcUniform> {
     commands
         .iter()
-        .map(|(command, size, position)| ArcUniform {
-            position: Vec4::new(
-                position.x,
-                position.y,
-                size.width.raw() as f32,
-                size.height.raw() as f32,
-            ),
-            color: Vec4::from_array(command.color.to_array()),
-            screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
-            stroke_width: command.stroke_width_px,
-            start_angle_degrees: command.start_angle_degrees,
-            sweep_angle_degrees: command.sweep_angle_degrees,
-            cap: match command.cap {
-                ProgressArcCap::Round => 1,
-                ProgressArcCap::Butt => 0,
-            },
-            _pad: 0,
+        .map(|(command, geometry)| {
+            let position = geometry.window_origin();
+            let [width, height] = geometry.window_size();
+            let scale = geometry.local_to_window.scale();
+            ArcUniform {
+                position: Vec4::new(position.x, position.y, width, height),
+                color: Vec4::from_array(command.color.to_array()),
+                screen_size: Vec2::new(target_size.width.to_f32(), target_size.height.to_f32()),
+                stroke_width: command.stroke_width_px * scale,
+                start_angle_degrees: command.start_angle_degrees,
+                sweep_angle_degrees: command.sweep_angle_degrees,
+                cap: match command.cap {
+                    ProgressArcCap::Round => 1,
+                    ProgressArcCap::Butt => 0,
+                },
+                _pad: 0,
+            }
         })
         .collect()
 }

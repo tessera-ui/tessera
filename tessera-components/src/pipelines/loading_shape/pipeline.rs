@@ -174,9 +174,12 @@ impl DrawablePipeline<LoadingShapeCommand> for LoadingShapePipeline {
         let mut instances: Vec<_> = context
             .commands
             .iter()
-            .map(|(command, size, position)| {
+            .map(|(command, draw_geometry)| {
+                let position = draw_geometry.window_origin();
+                let [width, height] = draw_geometry.window_size();
+
                 let sequence = geometry().sequences[command.sequence];
-                let side = size.width.to_f32().min(size.height.to_f32());
+                let side = width.min(height);
                 // The cubic second-derivative bound limits chord error to
                 // 0.05px.
                 let segments = (0.75
@@ -194,8 +197,8 @@ impl DrawablePipeline<LoadingShapeCommand> for LoadingShapePipeline {
                 let (sin, cos) = command.rotation.to_radians().sin_cos();
                 Instance {
                     position: [
-                        position.x + (size.width.to_f32() - side) * 0.5,
-                        position.y + (size.height.to_f32() - side) * 0.5,
+                        position.x + (width - side) * 0.5,
+                        position.y + (height - side) * 0.5,
                         side,
                         side,
                     ],

@@ -13,6 +13,7 @@ struct ShapeUniforms {
 
 const MODE_FILL: f32 = 0.0;
 const MODE_OUTLINE: f32 = 1.0;
+const MODE_SCALED_FILL: f32 = 2.0;
 const MODE_RIPPLE_FILL: f32 = 3.0;
 const MODE_RIPPLE_OUTLINE: f32 = 4.0;
 const MODE_RIPPLE_FILLED_OUTLINE: f32 = 5.0;
@@ -178,10 +179,20 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
 
     var final_color: vec4f;
 
-    let shape_sample = sample_shape(p_object, half_size, instance.corner_radii, instance.corner_g2);
+    var shape_sample: vec3f;
+    if mode == MODE_SCALED_FILL {
+        let local_scale = instance.ripple_params.xy;
+        if any(local_scale <= vec2f(0.0)) {
+            discard;
+        }
+        let source_sample = sample_shape(p_object / local_scale, half_size, instance.corner_radii, instance.corner_g2);
+        shape_sample = vec3f(source_sample.x, source_sample.yz / local_scale);
+    } else {
+        shape_sample = sample_shape(p_object, half_size, instance.corner_radii, instance.corner_g2);
+    }
     let dist = shape_sample.x;
     // Analytic gradients keep coverage independent of screen derivative-quad alignment.
-    let dist_aa = max(abs(shape_sample.y) + abs(shape_sample.z), EPS_DISCARD);
+    let dist_aa = max(0.5 * (abs(shape_sample.y) + abs(shape_sample.z)), EPS_DISCARD);
     let shape_mask = aa_mask(dist, dist_aa);
     let ripple_center = instance.ripple_params.xy;
     let ripple_radius = instance.ripple_params.z;
@@ -195,7 +206,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
     let delta = p_pixel - center_pixel;
     let aa_ripple = max((abs(delta.x) + abs(delta.y)) / (max(dist_to_center_pixel, EPS_DISCARD) * max(min_dimension, 1.0)), EPS_DISCARD);
 
-    if mode == MODE_FILL {
+    if mode == MODE_FILL || mode == MODE_SCALED_FILL {
         if shape_mask <= EPS_DISCARD {
             discard;
         }
@@ -233,8 +244,17 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4f {
             } else {
                 let dist_inner_edge = dist + instance.border_width;
                 let t = smoothstep(-dist_aa, dist_aa, dist_inner_edge);
-                base_rgb = mix(instance.primary_color.rgb, instance.border_color.rgb, t);
-                base_a = mix(instance.primary_color.a, instance.border_color.a, t) * shape_mask;
+                let coverage_a = mix(instance.primary_color.a, instance.border_color.a, t);
+                let coverage_pm_rgb = mix(
+                    instance.primary_color.rgb * instance.primary_color.a,
+                    instance.border_color.rgb * instance.border_color.a,
+                    t,
+                );
+                base_rgb = vec3f(0.0);
+                if coverage_a > 0.0 {
+                    base_rgb = coverage_pm_rgb / coverage_a;
+                }
+                base_a = coverage_a * shape_mask;
             }
         }
 

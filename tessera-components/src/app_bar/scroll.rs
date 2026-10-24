@@ -5,8 +5,9 @@
 //! Coordinate a screen header with scrolling lists and feeds.
 
 use tessera_ui::{
-    CallbackWith, Dp, RenderSlot, ScrollEventSource, State, current_frame_nanos, layout::layout,
-    provide_context, receive_frame_nanos, remember, tessera, use_context,
+    CallbackWith, Dp, FocusModifierExt, Modifier, RenderSlot, ScrollEventSource, State,
+    current_frame_nanos, layout::layout, provide_context, receive_frame_nanos, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -387,7 +388,9 @@ pub fn app_bar_scroll_provider(
         });
     }
     let parent = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let coordinate_scale = remember(|| 1.0_f32);
     let connection = NestedScrollConnection::new()
+        .with_coordinate_scale(coordinate_scale)
         .with_parent(parent)
         .with_pre_scroll_handler(CallbackWith::new(move |input| {
             active.get().with_mut(|value| value.pre_scroll(input))
@@ -401,31 +404,40 @@ pub fn app_bar_scroll_provider(
             ScrollVelocity::ZERO
         }));
     let child = child.unwrap_or_else(RenderSlot::empty);
-    layout().child(move || {
-        let connection = connection.clone();
-        provide_context(
-            || AppBarScrollContext(state),
-            move || {
-                let context = use_context::<AppBarScrollContext>().expect("app bar scroll context");
-                if context.get().0 != state {
-                    context.set(AppBarScrollContext(state));
+    layout()
+        .modifier(Modifier::new().on_local_to_window(
+            move |transform: tessera_ui::LocalToWindow| {
+                if coordinate_scale.get() != transform.scale() {
+                    coordinate_scale.set(transform.scale());
                 }
-                let connection = connection.clone();
-                provide_context(
-                    {
-                        let connection = connection.clone();
-                        move || connection
-                    },
-                    move || {
-                        let context =
-                            use_context::<NestedScrollConnection>().expect("nested scroll context");
-                        if context.get() != connection {
-                            context.set(connection.clone());
-                        }
-                        child.render();
-                    },
-                );
             },
-        );
-    });
+        ))
+        .child(move || {
+            let connection = connection.clone();
+            provide_context(
+                || AppBarScrollContext(state),
+                move || {
+                    let context =
+                        use_context::<AppBarScrollContext>().expect("app bar scroll context");
+                    if context.get().0 != state {
+                        context.set(AppBarScrollContext(state));
+                    }
+                    let connection = connection.clone();
+                    provide_context(
+                        {
+                            let connection = connection.clone();
+                            move || connection
+                        },
+                        move || {
+                            let context = use_context::<NestedScrollConnection>()
+                                .expect("nested scroll context");
+                            if context.get() != connection {
+                                context.set(connection.clone());
+                            }
+                            child.render();
+                        },
+                    );
+                },
+            );
+        });
 }

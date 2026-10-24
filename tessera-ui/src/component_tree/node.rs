@@ -56,6 +56,9 @@ pub(crate) struct ComponentNode {
     /// layout node.
     pub(crate) role: NodeRole,
     pub(crate) layout_children: Option<Arc<[NodeId]>>,
+    #[cfg(feature = "profiling")]
+    pub(crate) subtree_len: usize,
+    pub(crate) children_scale: f32,
     /// Stable logic identifier of this concrete component instance.
     pub(crate) instance_logic_id: u64,
     /// Stable instance identifier for this node in the current frame.
@@ -127,6 +130,10 @@ pub(crate) struct ComponentNodeMetaData {
     /// This will be computed during drawing command's generation.
     /// None if the node is not drawn yet.
     pub base_abs_position: Option<PxPosition>,
+    pub local_to_window: Option<crate::LocalToWindow>,
+    pub(super) input_local_positions: Arc<[PxPosition]>,
+    pub input_transforms: Arc<[crate::LocalToWindow]>,
+    pub event_clip_bounds: Option<crate::FloatRect>,
     /// The node's start position, relative to the root window.
     /// After placement modifiers are applied.
     /// This will be computed during drawing command's generation.
@@ -166,6 +173,10 @@ impl ComponentNodeMetaData {
             placement_order: None,
             rel_position: None,
             base_abs_position: None,
+            local_to_window: None,
+            input_local_positions: Arc::from([]),
+            input_transforms: Arc::from([]),
+            event_clip_bounds: None,
             abs_position: None,
             event_clip_rect: None,
             fragment: RenderFragment::default(),
@@ -241,6 +252,7 @@ pub(crate) struct ComponentNodeMetaDatas {
     pub(super) geometry_changed: rustc_hash::FxHashSet<NodeId>,
     pub(super) paint_changed: rustc_hash::FxHashSet<NodeId>,
     pub(super) placement_order_dirty: rustc_hash::FxHashSet<NodeId>,
+    pub(crate) placement_order_changed: rustc_hash::FxHashSet<NodeId>,
     pub(super) paint_dirty_nodes: rustc_hash::FxHashSet<NodeId>,
 }
 
@@ -258,6 +270,7 @@ impl ComponentNodeMetaDatas {
         self.paint_dirty_nodes.clear();
         self.paint_changed.clear();
         self.placement_order_dirty.clear();
+        self.placement_order_changed.clear();
     }
 
     pub(crate) fn insert(
@@ -278,6 +291,7 @@ impl ComponentNodeMetaDatas {
         self.paint_dirty_nodes.remove(node_id);
         self.paint_changed.remove(node_id);
         self.placement_order_dirty.remove(node_id);
+        self.placement_order_changed.remove(node_id);
         self.entries.remove(node_id)
     }
 
@@ -360,7 +374,41 @@ pub type FocusBeyondBoundsHandler = CallbackWith<FocusDirection, bool>;
 /// Reveal callback attached to a scrollable container node.
 pub type FocusRevealHandler = CallbackWith<FocusRevealRequest, bool>;
 /// Callback invoked with this node's rectangle in window coordinates.
-pub type GloballyPositionedHandler = CallbackWith<PxRect>;
+#[derive(Clone, Copy, PartialEq)]
+pub enum GloballyPositionedHandler {
+    Pixels(CallbackWith<PxRect>),
+    Precise(CallbackWith<crate::FloatRect>),
+    Transform(CallbackWith<crate::LocalToWindow>),
+    Coordinates(CallbackWith<crate::LayoutCoordinates>),
+}
+
+#[derive(Clone, Copy)]
+pub(crate) struct GeometryObservation {
+    pub rounded: PxRect,
+    pub precise: crate::FloatRect,
+    pub transform: crate::LocalToWindow,
+    pub coordinates: crate::LayoutCoordinates,
+}
+
+impl GloballyPositionedHandler {
+    pub(crate) fn changed(self, previous: GeometryObservation, next: GeometryObservation) -> bool {
+        match self {
+            Self::Pixels(_) => previous.rounded != next.rounded,
+            Self::Precise(_) => previous.precise != next.precise,
+            Self::Transform(_) => previous.transform != next.transform,
+            Self::Coordinates(_) => previous.coordinates != next.coordinates,
+        }
+    }
+
+    pub(crate) fn call(self, geometry: GeometryObservation) {
+        match self {
+            Self::Pixels(handler) => handler.call(geometry.rounded),
+            Self::Precise(handler) => handler.call(geometry.precise),
+            Self::Transform(handler) => handler.call(geometry.transform),
+            Self::Coordinates(handler) => handler.call(geometry.coordinates),
+        }
+    }
+}
 
 /// Input for pointer handlers.
 ///
@@ -369,6 +417,9 @@ pub type GloballyPositionedHandler = CallbackWith<PxRect>;
 /// dedicated APIs such as semantics modifiers, hover cursor modifiers, window
 /// action helpers, or the IME session bridge instead of a generic request bag.
 pub struct PointerInput<'a> {
+    /// Maps this handler's local geometry and displacement units into the
+    /// window.
+    pub local_to_window: crate::LocalToWindow,
     /// Current pointer dispatch pass.
     pub pass: PointerEventPass,
     /// The size of the component node, computed during the measure stage.
@@ -387,6 +438,14 @@ pub struct PointerInput<'a> {
 }
 
 impl PointerInput<'_> {
+    /// Converts a displacement observed in window coordinates into local units.
+    pub fn local_delta(&self, dx: f32, dy: f32) -> (f32, f32) {
+        let delta = self
+            .local_to_window
+            .inverse_vector(PxPosition::from_f32_xy(dx, dy));
+        (delta.x, delta.y)
+    }
+
     /// Marks all current pointer changes as consumed.
     pub fn consume_pointer_changes(&mut self) {
         for change in self.pointer_changes.iter_mut() {

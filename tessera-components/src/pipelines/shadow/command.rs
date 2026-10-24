@@ -75,14 +75,19 @@ impl DrawCommand for ShadowCompositeCommand {
             .with_alpha((self.color.a * opacity).clamp(0.0, 1.0));
     }
 
-    fn ordering_rect(&self, position: PxPosition, _size: PxSize) -> Option<PxRect> {
+    fn ordering_rect(&self, geometry: tessera_ui::DrawGeometry) -> Option<PxRect> {
         if self.ordering_size.width.0 <= 0 || self.ordering_size.height.0 <= 0 {
             return None;
         }
-        Some(PxRect::from_position_size(
-            position + self.ordering_offset,
-            self.ordering_size,
-        ))
+        Some(
+            geometry
+                .local_to_window
+                .map_rect(tessera_ui::FloatRect::from_position_size(
+                    self.ordering_offset,
+                    self.ordering_size,
+                ))
+                .outward(),
+        )
     }
 }
 

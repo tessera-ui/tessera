@@ -3,7 +3,7 @@ use std::collections::HashMap;
 use encase::{ShaderType, UniformBuffer};
 use glam::{Vec2, Vec4};
 use tessera_ui::{
-    Color, PxPosition, PxSize,
+    Color, PxSize,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu::{self, util::DeviceExt},
 };
@@ -463,8 +463,8 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
             return;
         }
 
-        for (command, size, _) in context.commands.iter() {
-            if let Some((width, height)) = physical_dimensions(*size) {
+        for (command, geometry) in context.commands.iter() {
+            if let Some((width, height)) = physical_dimensions(*geometry) {
                 self.ensure_cached_entry(
                     context.device,
                     context.queue,
@@ -477,8 +477,8 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
 
         context.render_pass.set_pipeline(&self.sample_pipeline);
 
-        for (command, size, start_pos) in context.commands.iter() {
-            let Some((width, height)) = physical_dimensions(*size) else {
+        for (command, geometry) in context.commands.iter() {
+            let Some((width, height)) = physical_dimensions(*geometry) else {
                 continue;
             };
             let key = AtlasKey::new(&command.data, width, height);
@@ -488,8 +488,7 @@ impl DrawablePipeline<ImageVectorCommand> for ImageVectorPipeline {
             };
 
             let uniforms = compute_sample_uniforms(SampleUniformParams {
-                start_pos: *start_pos,
-                size: *size,
+                geometry: *geometry,
                 tint: command.tint,
                 tint_mode: command.tint_mode,
                 rotation: command.rotation,
@@ -590,8 +589,7 @@ fn raster_uniforms() -> ImageVectorUniforms {
 
 #[derive(Clone, PartialEq, Copy)]
 struct SampleUniformParams {
-    start_pos: PxPosition,
-    size: PxSize,
+    geometry: tessera_ui::DrawGeometry,
     tint: Color,
     tint_mode: VectorTintMode,
     rotation: f32,
@@ -602,8 +600,7 @@ struct SampleUniformParams {
 
 fn compute_sample_uniforms(params: SampleUniformParams) -> AtlasSampleUniforms {
     let SampleUniformParams {
-        start_pos,
-        size,
+        geometry,
         tint,
         tint_mode,
         rotation,
@@ -612,10 +609,12 @@ fn compute_sample_uniforms(params: SampleUniformParams) -> AtlasSampleUniforms {
         target_size,
     } = params;
 
+    let start_pos = geometry.window_origin();
+    let [width, height] = geometry.window_size();
     let left = (start_pos.x / target_size.width.to_f32()) * 2.0 - 1.0;
-    let right = ((start_pos.x + size.width.0 as f32) / target_size.width.to_f32()) * 2.0 - 1.0;
+    let right = ((start_pos.x + width) / target_size.width.to_f32()) * 2.0 - 1.0;
     let top = 1.0 - (start_pos.y / target_size.height.to_f32()) * 2.0;
-    let bottom = 1.0 - ((start_pos.y + size.height.0 as f32) / target_size.height.to_f32()) * 2.0;
+    let bottom = 1.0 - ((start_pos.y + height) / target_size.height.to_f32()) * 2.0;
 
     AtlasSampleUniforms {
         origin: Vec2::new(left, top),
@@ -631,11 +630,12 @@ fn compute_sample_uniforms(params: SampleUniformParams) -> AtlasSampleUniforms {
     }
 }
 
-fn physical_dimensions(size: PxSize) -> Option<(u32, u32)> {
-    if size.width.0 <= 0 || size.height.0 <= 0 {
+fn physical_dimensions(geometry: tessera_ui::DrawGeometry) -> Option<(u32, u32)> {
+    let [width, height] = geometry.window_size();
+    if width <= 0.0 || height <= 0.0 || width > u32::MAX as f32 || height > u32::MAX as f32 {
         None
     } else {
-        Some((size.width.0 as u32, size.height.0 as u32))
+        Some((width.ceil() as u32, height.ceil() as u32))
     }
 }
 

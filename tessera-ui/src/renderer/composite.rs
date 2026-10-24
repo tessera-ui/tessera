@@ -7,10 +7,10 @@
 use std::{any::TypeId, collections::HashMap};
 
 use crate::{
-    Command, CompositeCommand, PxPosition, PxSize, SendSync,
+    Command, CompositeCommand, PxSize, SendSync,
     render_graph::{
-        ExternalTextureDesc, RenderGraph, RenderGraphOp, RenderGraphParts, RenderResource,
-        RenderResourceId,
+        DrawGeometry, ExternalTextureDesc, RenderGraph, RenderGraphOp, RenderGraphParts,
+        RenderResource, RenderResourceId,
     },
 };
 
@@ -36,10 +36,8 @@ pub struct CompositeContext<'a> {
 pub struct ErasedCompositeBatchItem<'a> {
     /// The composite command to expand.
     pub command: &'a dyn CompositeCommand,
-    /// Measured size of the target region.
-    pub size: PxSize,
-    /// Absolute position of the target region.
-    pub position: PxPosition,
+    /// Local dimensions and their precise target mapping.
+    pub geometry: DrawGeometry,
     /// Opacity multiplier for the command.
     pub opacity: f32,
     /// Original sequence index for ordering.
@@ -52,10 +50,8 @@ pub struct ErasedCompositeBatchItem<'a> {
 pub struct CompositeBatchItem<'a, C: CompositeCommand> {
     /// The composite command to expand.
     pub command: &'a C,
-    /// Measured size of the target region.
-    pub size: PxSize,
-    /// Absolute position of the target region.
-    pub position: PxPosition,
+    /// Local dimensions and their precise target mapping.
+    pub geometry: DrawGeometry,
     /// Opacity multiplier for the command.
     pub opacity: f32,
     /// Original sequence index for ordering.
@@ -147,8 +143,7 @@ impl<C: CompositeCommand + 'static, P: CompositePipeline<C>> ErasedCompositePipe
                 .expect("Composite batch contained command of unexpected type");
             typed_items.push(CompositeBatchItem {
                 command,
-                size: item.size,
-                position: item.position,
+                geometry: item.geometry,
                 opacity: item.opacity,
                 sequence_index: item.sequence_index,
                 op_index: item.op_index,
@@ -230,8 +225,7 @@ pub(crate) fn expand_composites(
             });
             entry.push(ErasedCompositeBatchItem {
                 command: command.as_ref(),
-                size: op.size,
-                position: op.position,
+                geometry: op.geometry,
                 opacity: op.opacity,
                 sequence_index: op.sequence_index,
                 op_index: index,

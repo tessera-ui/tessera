@@ -9,12 +9,14 @@ use std::sync::Arc;
 use parking_lot::RwLock;
 use tessera_ui::{
     AxisConstraint, Color, ComputedData, Constraint, FrameNanosControl, LayoutResult,
-    MeasurementError, Modifier, Px, PxPosition, PxRect, RenderSlot, State, current_frame_nanos,
-    key,
+    MeasurementError, Modifier, Px, PxPosition, RenderSlot, State, current_frame_nanos, key,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context,
 };
+
+#[cfg(test)]
+use tessera_ui::PxRect;
 
 use crate::{
     alignment::Alignment,
@@ -54,7 +56,7 @@ impl SliderValueIndicatorVisibility {
 
 #[derive(Clone, PartialEq)]
 struct Request {
-    anchor: State<PxRect>,
+    anchor: State<tessera_ui::LayoutCoordinates>,
     label: String,
     visible: bool,
     interacting: bool,
@@ -170,8 +172,8 @@ impl tessera_ui::LayoutModifierNode for HostLayout {
 
 #[derive(Clone)]
 struct LabelLayout {
-    anchor: State<PxRect>,
-    origin: Arc<RwLock<PxRect>>,
+    anchor: State<tessera_ui::LayoutCoordinates>,
+    origin: Arc<RwLock<tessera_ui::LayoutCoordinates>>,
     orientation: SliderOrientation,
     scale: f32,
 }
@@ -186,7 +188,7 @@ impl PartialEq for LabelLayout {
 }
 
 fn position(
-    anchor: PxRect,
+    anchor: tessera_ui::FloatRect,
     popup: ComputedData,
     viewport: ComputedData,
     orientation: SliderOrientation,
@@ -196,11 +198,8 @@ fn position(
     let margin = tessera_ui::Dp(8.0).to_pixels_f32();
     let (w, h) = (popup.width.to_f32(), popup.height.to_f32());
     let (width, height) = (viewport.width.to_f32(), viewport.height.to_f32());
-    let (left, top) = (anchor.x.to_f32(), anchor.y.to_f32());
-    let (right, bottom) = (
-        (anchor.x + anchor.width).to_f32(),
-        (anchor.y + anchor.height).to_f32(),
-    );
+    let (left, top) = (anchor.x, anchor.y);
+    let (right, bottom) = (anchor.x + anchor.width, anchor.y + anchor.height);
     let (mut x, mut y) = match orientation {
         SliderOrientation::Horizontal => {
             let above = top - gap - h;
@@ -254,18 +253,13 @@ impl tessera_ui::LayoutModifierNode for LabelLayout {
         }
         let rect = self.anchor.get();
         let origin = *self.origin.read();
-        let anchor = PxRect::new(
-            rect.x - origin.x,
-            rect.y - origin.y,
-            rect.width,
-            rect.height,
-        );
-        if anchor.width <= Px::ZERO
-            || anchor.height <= Px::ZERO
-            || anchor.x + anchor.width <= Px::ZERO
-            || anchor.y + anchor.height <= Px::ZERO
-            || anchor.x >= size.width
-            || anchor.y >= size.height
+        let anchor = origin.local_to_window.inverse_rect(rect.window_bounds());
+        if anchor.width <= 0.0
+            || anchor.height <= 0.0
+            || anchor.x + anchor.width <= 0.0
+            || anchor.y + anchor.height <= 0.0
+            || anchor.x >= size.width.to_f32()
+            || anchor.y >= size.height.to_f32()
         {
             return Ok(result);
         }
@@ -284,7 +278,10 @@ impl tessera_ui::LayoutModifierNode for LabelLayout {
 }
 
 #[tessera]
-fn label_layer(request: Option<State<Request>>, origin: Option<Arc<RwLock<PxRect>>>) {
+fn label_layer(
+    request: Option<State<Request>>,
+    origin: Option<Arc<RwLock<tessera_ui::LayoutCoordinates>>>,
+) {
     #[cfg(test)]
     LABEL_BUILD_COUNT.set(LABEL_BUILD_COUNT.get() + 1);
     let request_state = request.expect("slider label request");
@@ -428,7 +425,7 @@ pub fn slider_value_indicator_provider(modifier: Option<Modifier>, child: Option
         return;
     }
     let entries = remember(Vec::<State<Request>>::new);
-    let origin = remember(|| Arc::new(RwLock::new(PxRect::ZERO))).get();
+    let origin = remember(|| Arc::new(RwLock::new(tessera_ui::LayoutCoordinates::default()))).get();
     let bounds = Arc::clone(&origin);
     let next = (
         modifier.unwrap_or_else(|| Modifier::new().fill_max_size()),
@@ -445,7 +442,7 @@ pub fn slider_value_indicator_provider(modifier: Option<Modifier>, child: Option
                 .modifier(
                     child_data
                         .with(|(modifier, _)| modifier.clone())
-                        .on_globally_positioned(move |rect| *bounds.write() = rect),
+                        .on_layout_coordinates(move |coordinates| *bounds.write() = coordinates),
                 )
                 .policy(HostLayout)
                 .child(move || {
@@ -471,7 +468,7 @@ pub fn slider_value_indicator_provider(modifier: Option<Modifier>, child: Option
 
 #[tessera]
 pub(super) fn register_indicator(
-    anchor: Option<State<PxRect>>,
+    anchor: Option<State<tessera_ui::LayoutCoordinates>>,
     label: Option<String>,
     visible: Option<bool>,
     interacting: Option<bool>,

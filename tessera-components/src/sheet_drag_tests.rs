@@ -158,6 +158,20 @@ fn connection() -> NestedScrollConnection {
     CONNECTION.with_borrow(|c| c.clone().unwrap())
 }
 
+fn assert_reused_measurements(renderer: &HeadlessRenderer, kind: Kind) {
+    let diagnostics = renderer.diagnostics();
+    assert_eq!(
+        (
+            diagnostics.cache_miss_no_entry,
+            diagnostics.cache_miss_constraint,
+            diagnostics.cache_miss_dirty_self,
+            diagnostics.cache_miss_child_size,
+        ),
+        (0, 0, 0, 0),
+        "{kind:?}: fixed sheet geometry must reuse measurements: {diagnostics:?}"
+    );
+}
+
 fn drag_handle(renderer: &mut HeadlessRenderer, scale: f64) -> PxPosition {
     let handle = renderer
         .accessibility_snapshot()
@@ -215,6 +229,7 @@ fn check(samples: u32) {
             renderer.render_frames(10);
             let origin = bounds(&renderer);
             let baseline = renderer.read_pixels().unwrap();
+            assert_reused_measurements(&renderer, kind);
             let short = if matches!(kind, Kind::Bottom) {
                 40.0
             } else {
@@ -229,6 +244,7 @@ fn check(samples: u32) {
             assert!(
                 (displacement(kind, origin, bounds(&renderer)) - short as f64 * scale).abs() < 0.01
             );
+            assert_reused_measurements(&renderer, kind);
             connection().pre_fling(ScrollVelocity::ZERO);
             renderer.step_frame();
             let after_release = displacement(kind, origin, bounds(&renderer));
@@ -236,6 +252,7 @@ fn check(samples: u32) {
                 after_release > 0.0 && after_release < short as f64 * scale,
                 "{kind:?}: release must animate rather than snap"
             );
+            assert_reused_measurements(&renderer, kind);
             renderer.render_frames(80);
             assert_eq!(CLOSES.get(), 0);
             assert_eq!(bounds(&renderer), origin);
@@ -411,6 +428,42 @@ fn check(samples: u32) {
                 assert_eq!(bounds(&renderer), flipped);
             } else {
                 ACCEPT_CLOSE.set(true);
+                for width in [600.0, 700.0] {
+                    let width = (width * scale) as u32;
+                    renderer.resize(width, 600);
+                    renderer.step_frame();
+                    assert!(
+                        renderer.diagnostics().cache_miss_constraint > 0,
+                        "resizing across the sheet width limit must update constraints"
+                    );
+                    renderer.render_frames(10);
+                    let resized = bounds(&renderer);
+                    assert_eq!(resized.width(), origin.width());
+                    assert_eq!(resized.height(), origin.height());
+                    assert_eq!(resized.y1, origin.y1);
+                    assert!((resized.x0 - (f64::from(width) - resized.width()) / 2.0).abs() < 0.01);
+                    let resized_pixels = renderer.read_pixels().unwrap();
+                    connection().post_scroll(
+                        ScrollDelta::ZERO,
+                        scroll(kind, 20.0 * scale as f32),
+                        ScrollEventSource::Touch,
+                    );
+                    renderer.step_frame();
+                    assert!(
+                        (displacement(kind, resized, bounds(&renderer)) - 20.0 * scale).abs()
+                            < 0.01
+                    );
+                    assert_reused_measurements(&renderer, kind);
+                    connection().pre_fling(ScrollVelocity::ZERO);
+                    renderer.render_frames(80);
+                    assert_eq!(bounds(&renderer), resized);
+                    assert_eq!(CLOSES.get(), 3);
+                    assert!(renderer.read_pixels().unwrap() == resized_pixels);
+                }
+                renderer.resize(800, 600);
+                renderer.render_frames(10);
+                assert_eq!(bounds(&renderer), origin);
+                assert!(renderer.read_pixels().unwrap() == baseline);
                 let end = drag_handle(&mut renderer, scale);
                 renderer.render_frames(10);
                 renderer.pointer_release(MOUSE_POINTER_ID, end, PressKeyEventType::Left);

@@ -6,7 +6,7 @@
 pub mod command;
 pub mod pipeline;
 
-use crate::{PxPosition, px::PxSize};
+use crate::{px::PxSize, render_graph::DrawGeometry};
 
 pub use command::DrawCommand;
 pub use pipeline::{DrawablePipeline, ErasedDrawContext, PipelineRegistry};
@@ -88,15 +88,14 @@ impl Drawer {
     /// render pass, and positioning information.
     ///
     /// # Arguments
-    /// * `cmd` - The draw command to execute
-    /// * `size` - Size of the component being drawn
-    /// * `start_pos` - Position where drawing should begin
-    /// * `scene_texture_view` - Optional background texture for sampling
-    /// * `compute_texture_view` - Compute pipeline output texture
+    ///
+    /// * `context` - Render-pass resources and the active clipping rectangle.
+    /// * `commands` - Commands with local dimensions and precise target
+    ///   mappings.
     pub fn submit(
         &mut self,
         context: ErasedDrawContext<'_, '_>,
-        commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
+        commands: &[(&dyn DrawCommand, DrawGeometry)],
     ) {
         self.pipeline_registry.dispatch(context, commands);
     }

@@ -11,6 +11,10 @@
 //! the worker side of the `cargo tessera headless` protocol and is invoked by
 //! [`crate::entry_point::EntryPoint::run_desktop`] when `TESSERA_HEADLESS` is
 //! set.
+//!
+//! Set `TESSERA_HEADLESS_PROFILE=summary` with profiling enabled to export
+//! frame timings and layout diagnostics without component trees. Explicit
+//! snapshots remain available through the session protocol.
 
 use std::{
     io::{BufRead, BufReader, Write},
@@ -39,10 +43,12 @@ use crate::{
     pipeline_context::PipelineContext,
     render_module::RenderModule,
     renderer::{
-        RenderCore, TesseraConfig, composite::expand_composites, core::OffscreenReadbackError,
+        MAX_FOCUS_SETTLING_RETRIES, RenderCore, TesseraConfig, composite::expand_composites,
+        core::OffscreenReadbackError, focus_settling_can_progress,
     },
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
+        has_pending_build_invalidations, has_pending_layout_invalidations,
         prune_persistent_focus_handles, reset_build_invalidations, reset_component_replay_tracking,
         reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
         reset_render_slot_read_dependencies, reset_slots, reset_state_read_dependencies,
@@ -53,8 +59,8 @@ use crate::{
 
 #[cfg(feature = "profiling")]
 use crate::profiler::{
-    FrameMeta, begin_frame as profiler_begin_frame, end_frame as profiler_end_frame,
-    submit_frame_meta,
+    FrameMeta, begin_frame as profiler_begin_frame, begin_frame_summary,
+    end_frame as profiler_end_frame, submit_frame_meta, submit_frame_summary,
 };
 
 /// Environment variable that switches a Tessera application into headless mode.
@@ -171,6 +177,8 @@ pub struct HeadlessRenderer {
     current_frame_nanos: u64,
     frame_time: Duration,
     diagnostics: crate::component_tree::LayoutFrameDiagnostics,
+    #[cfg(feature = "profiling")]
+    profile_summary: bool,
 }
 
 impl HeadlessRenderer {
@@ -221,6 +229,8 @@ impl HeadlessRenderer {
             current_frame_nanos: 0,
             frame_time: config.frame_time.max(Duration::from_nanos(1)),
             diagnostics: Default::default(),
+            #[cfg(feature = "profiling")]
+            profile_summary: false,
         })
     }
 
@@ -360,7 +370,11 @@ impl HeadlessRenderer {
             .saturating_add(self.frame_time.as_nanos().min(u64::MAX as u128) as u64);
         let frame_time = self.frame_origin + Duration::from_nanos(self.current_frame_nanos);
         #[cfg(feature = "profiling")]
-        profiler_begin_frame(self.frame_index);
+        if self.profile_summary {
+            begin_frame_summary(self.frame_index);
+        } else {
+            profiler_begin_frame(self.frame_index);
+        }
         #[cfg(feature = "profiling")]
         let frame_timer = Instant::now();
         begin_frame_clock(frame_time);
@@ -368,46 +382,75 @@ impl HeadlessRenderer {
         // consumed by the current recomposition pass.
         tick_frame_nanos_receivers();
 
-        let _build_tree_result = build_component_tree(&self.entry);
+        let mut _build_tree_result = build_component_tree(&self.entry);
 
         #[cfg(feature = "profiling")]
         let draw_timer = Instant::now();
         let cursor_position = self.cursor.position();
-        let pointer_changes = self.cursor.take_events();
-        let keyboard_events = self.keyboard.take_events();
-        let ime_events = self.ime.take_events();
+        let mut pointer_changes = Some(self.cursor.take_events());
+        let mut keyboard_events = Some(self.keyboard.take_events());
+        let mut ime_events = Some(self.ime.take_events());
         let modifiers = self.keyboard.modifiers();
-        let layout_dirty_nodes = take_layout_dirty_nodes();
         let screen_size = self.size;
-
-        self.core.compute_resource_manager_mut().clear();
-
-        let core = &mut self.core;
-        let (graph, _diagnostics, _record_cost) = TesseraRuntime::with_mut(|runtime| {
-            let (gpu, compute_resource_manager) = core.record_resources();
-            let (graph, _requests, diagnostics, record_cost, _move, _reveal, _keyboard) =
-                runtime.component_tree.compute(
-                    ComputeParams {
-                        screen_size,
-                        cursor_position,
-                        pointer_changes,
-                        keyboard_events,
-                        ime_events,
-                        retry_focus_move: None,
-                        retry_focus_reveal: false,
-                        modifiers,
-                        layout_dirty_nodes: &layout_dirty_nodes,
-                    },
-                    ComputeMode::Full {
-                        compute_resource_manager,
-                        gpu,
-                    },
-                );
-            (graph, diagnostics, record_cost)
-        });
+        let mut retry_focus_move = None;
+        let mut retry_focus_reveal = false;
+        let mut retries = 0;
+        let mut _record_cost = Duration::ZERO;
+        let (graph, _diagnostics) = loop {
+            self.core.compute_resource_manager_mut().clear();
+            let layout_dirty_nodes = take_layout_dirty_nodes();
+            let core = &mut self.core;
+            let (graph, _requests, diagnostics, record_cost, next_move, next_reveal, next_keyboard) =
+                TesseraRuntime::with_mut(|runtime| {
+                    let (gpu, compute_resource_manager) = core.record_resources();
+                    runtime.component_tree.compute(
+                        ComputeParams {
+                            screen_size,
+                            cursor_position,
+                            pointer_changes: pointer_changes.take().unwrap_or_default(),
+                            keyboard_events: keyboard_events.take().unwrap_or_default(),
+                            ime_events: ime_events.take().unwrap_or_default(),
+                            retry_focus_move,
+                            retry_focus_reveal,
+                            modifiers,
+                            layout_dirty_nodes: &layout_dirty_nodes,
+                        },
+                        ComputeMode::Full {
+                            compute_resource_manager,
+                            gpu,
+                        },
+                    )
+                });
+            _record_cost += record_cost;
+            flush_pending_focus_callbacks();
+            crate::component_tree::flush_pending_globally_positioned_callbacks();
+            let next_keyboard = next_keyboard
+                || TesseraRuntime::with(|runtime| {
+                    runtime.component_tree.has_pending_focus_reveal()
+                });
+            if next_move.is_none() && !next_reveal && !next_keyboard {
+                break (graph, diagnostics);
+            }
+            if retries >= MAX_FOCUS_SETTLING_RETRIES || !focus_settling_can_progress(next_keyboard)
+            {
+                if next_reveal
+                    && (has_pending_build_invalidations() || has_pending_layout_invalidations())
+                {
+                    TesseraRuntime::with_mut(|runtime| {
+                        runtime
+                            .component_tree
+                            .focus_owner_mut()
+                            .retain_reveal_retry();
+                    });
+                }
+                break (graph, diagnostics);
+            }
+            retries += 1;
+            retry_focus_move = next_move;
+            retry_focus_reveal = next_reveal;
+            _build_tree_result.absorb_retry(build_component_tree(&self.entry));
+        };
         self.diagnostics = _diagnostics;
-        flush_pending_focus_callbacks();
-        crate::component_tree::flush_pending_globally_positioned_callbacks();
         prune_persistent_focus_handles();
         #[cfg(feature = "profiling")]
         let draw_duration = draw_timer.elapsed();
@@ -445,7 +488,11 @@ impl HeadlessRenderer {
         {
             let breakdown = self.core.last_render_breakdown();
             let metadata_timer = tracing::enabled!(tracing::Level::DEBUG).then(Instant::now);
-            let nodes = TesseraRuntime::with_mut(|rt| rt.component_tree.profiler_nodes());
+            let nodes = if self.profile_summary {
+                Vec::new()
+            } else {
+                TesseraRuntime::with_mut(|rt| rt.component_tree.profiler_nodes())
+            };
             if let Some(metadata_timer) = metadata_timer {
                 tracing::debug!(
                     frame_index,
@@ -458,7 +505,7 @@ impl HeadlessRenderer {
             let render_gpu_ns = self.core.read_gpu_time().map(|time| time.as_nanos());
             #[cfg(target_arch = "wasm32")]
             let render_gpu_ns = None;
-            submit_frame_meta(FrameMeta {
+            let metadata = FrameMeta {
                 frame_idx: self.frame_index,
                 build_mode: _build_tree_result.profiler_build_mode(),
                 redraw_reasons: Vec::new(),
@@ -479,7 +526,12 @@ impl HeadlessRenderer {
                 frame_total_ns: Some(frame_duration.as_nanos()),
                 layout_diagnostics: Some(_diagnostics),
                 nodes,
-            });
+            };
+            if self.profile_summary {
+                submit_frame_summary(metadata);
+            } else {
+                submit_frame_meta(metadata);
+            }
             profiler_end_frame();
         }
 
@@ -572,6 +624,14 @@ impl HeadlessRenderer {
     }
 }
 
+fn snapshot_coordinate(value: f32) -> Value {
+    if value.fract() == 0.0 {
+        json!(value as i64)
+    } else {
+        json!(value)
+    }
+}
+
 fn snapshot_node(
     tree: &ComponentNodeTree,
     metadatas: &ComponentNodeMetaDatas,
@@ -592,11 +652,18 @@ fn snapshot_node(
         .and_then(|metadata| {
             let position = metadata.abs_position?;
             let size = metadata.computed_data?;
+            let transform = metadata.local_to_window.unwrap_or_else(|| {
+                crate::LocalToWindow::new(1.0, position).expect("Placed origin must be finite")
+            });
+            let bounds = transform.map_rect(crate::FloatRect::from_position_size(
+                PxPosition::ZERO,
+                PxSize::new(size.width, size.height),
+            ));
             Some(json!({
-                "x": position.x_px().0,
-                "y": position.y_px().0,
-                "width": size.width.0,
-                "height": size.height.0,
+                "x": snapshot_coordinate(bounds.x),
+                "y": snapshot_coordinate(bounds.y),
+                "width": snapshot_coordinate(bounds.width),
+                "height": snapshot_coordinate(bounds.height),
             }))
         })
         .unwrap_or(Value::Null);
@@ -685,7 +752,11 @@ pub fn run_headless(
     let mut renderer = HeadlessRenderer::new(entry, modules, headless_config)?;
     renderer.frame_time = frame_time;
     #[cfg(feature = "profiling")]
-    crate::profiler::set_output_path(crate::renderer::resolve_profiler_output_path(&config));
+    {
+        crate::profiler::set_output_path(crate::renderer::resolve_profiler_output_path(&config));
+        renderer.profile_summary = std::env::var("TESSERA_HEADLESS_PROFILE")
+            .is_ok_and(|value| value.eq_ignore_ascii_case("summary"));
+    }
 
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
@@ -752,8 +823,7 @@ fn handle_request(
             button,
         } => {
             let pointer_id = pointer_id.unwrap_or(MOUSE_POINTER_ID);
-            let position =
-                PxPosition::new(Px(x.unwrap_or(0.0) as i32), Px(y.unwrap_or(0.0) as i32));
+            let position = PxPosition::from_f32_xy(x.unwrap_or(0.0), y.unwrap_or(0.0));
             let button = button.unwrap_or_default().to_press_key();
             match kind {
                 InputKind::Press => renderer.pointer_press(pointer_id, position, button),
@@ -1110,3 +1180,7 @@ mod tests {
         assert!(png.windows(4).any(|window| window == b"IDAT"));
     }
 }
+
+#[cfg(test)]
+#[path = "headless_protocol_tests.rs"]
+mod protocol_tests;

@@ -22,8 +22,8 @@ use crate::{
     RippleProps,
     alignment::Alignment,
     modifier::{
-        ClickableArgs, InteractionState, ModifierExt, PointerEventContext, ShadowArgs,
-        apply_combined_clickable_modifier,
+        ClickableArgs, InteractionState, InteractionVisualState, ModifierExt, PointerEventContext,
+        ShadowArgs, apply_combined_clickable_modifier,
     },
     pipelines::{shape::command::ShapeCommand, simple_rect::command::SimpleRectCommand},
     pos_misc::is_position_inside_bounds,
@@ -110,6 +110,88 @@ impl From<Color> for SurfaceStyle {
     }
 }
 
+/// A deterministic circular ripple for a pressed visual presentation.
+///
+/// This sample affects drawing only. It does not dispatch input, activate the
+/// surface, or start a ripple animation.
+///
+/// ```rust
+/// use tessera_components::{
+///     button::button,
+///     modifier::{InteractionState, InteractionVisualState},
+///     surface::RipplePresentation,
+///     theme::material_theme,
+/// };
+/// use tessera_ui::{remember, tessera};
+///
+/// #[tessera]
+/// fn sample() {
+///     let live = remember(InteractionState::new);
+///     material_theme().child(move || {
+///         button()
+///             .interaction_state(live)
+///             .presentation_state(InteractionVisualState::Pressed)
+///             .presentation_ripple(RipplePresentation {
+///                 origin: [0.75, 1.0],
+///                 radius: 0.7,
+///                 opacity: 0.1,
+///             });
+///         assert_eq!(live.get(), InteractionState::new());
+///     });
+/// }
+/// sample();
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct RipplePresentation {
+    /// Origin relative to the surface: `[0, 0]` is the top-left corner and
+    /// `[1, 1]` is the bottom-right corner. Origins may lie outside the
+    /// surface. Non-finite coordinates use the center; coordinates are
+    /// bounded to `[-1024, 1024]`.
+    pub origin: [f32; 2],
+    /// Radius in multiples of the surface's shorter dimension, bounded to
+    /// `[0, 1024]`. Non-finite or negative radii produce no ripple.
+    pub radius: f32,
+    /// Ripple opacity in `[0, 1]`. Non-finite or negative opacity produces no
+    /// ripple.
+    pub opacity: f32,
+}
+
+impl RipplePresentation {
+    fn sanitized(self) -> Self {
+        let coordinate = |value: f32| {
+            if value.is_finite() {
+                value.clamp(-1024.0, 1024.0)
+            } else {
+                0.5
+            }
+        };
+        Self {
+            origin: self.origin.map(coordinate),
+            radius: if self.radius.is_finite() {
+                self.radius.clamp(0.0, 1024.0)
+            } else {
+                0.0
+            },
+            opacity: if self.opacity.is_finite() {
+                self.opacity.clamp(0.0, 1.0)
+            } else {
+                0.0
+            },
+        }
+    }
+
+    fn props(self, color: Color, bounded: bool) -> RippleProps {
+        let presentation = self.sanitized();
+        RippleProps {
+            center: [presentation.origin[0] - 0.5, presentation.origin[1] - 0.5],
+            bounded,
+            radius: presentation.radius,
+            alpha: presentation.opacity,
+            color: color.with_alpha(1.0),
+        }
+    }
+}
+
 #[derive(Clone, Default, PartialEq)]
 struct SurfaceResolvedArgs {
     modifier: Modifier,
@@ -127,6 +209,9 @@ struct SurfaceResolvedArgs {
     ripple_bounded: bool,
     ripple_radius: Option<Dp>,
     interaction_state: Option<State<InteractionState>>,
+    presentation_state: Option<InteractionVisualState>,
+    presentation_ripple: Option<RipplePresentation>,
+    show_focus_indicator: bool,
     show_state_layer: bool,
     show_ripple: bool,
     ripple_state: Option<State<RippleState>>,
@@ -515,14 +600,21 @@ struct SurfaceLayout {
     scheme: MaterialColorScheme,
     absolute_tonal_elevation: Dp,
     ripple_frame_nanos: Option<u64>,
+    focus_visible: bool,
 }
 
 impl SurfaceLayout {
     fn has_foreground(&self) -> bool {
         !matches!(self.args.style, SurfaceStyle::Filled { .. })
-            || (self.args.show_state_layer && self.interaction_state.is_some())
+            || (self.args.show_state_layer
+                && (self.interaction_state.is_some() || self.args.presentation_state.is_some()))
+            || (self.args.show_focus_indicator
+                && (self.interaction_state.is_some() || self.args.presentation_state.is_some()))
             || (self.args.show_ripple
-                && (self.args.on_click.is_some() || self.ripple_state.is_some()))
+                && (self.args.on_click.is_some()
+                    || self.ripple_state.is_some()
+                    || (self.args.presentation_state == Some(InteractionVisualState::Pressed)
+                        && self.args.presentation_ripple.is_some())))
     }
 }
 
@@ -532,6 +624,7 @@ impl PartialEq for SurfaceLayout {
             && self.interaction_state == other.interaction_state
             && self.ripple_state == other.ripple_state
             && self.ripple_frame_nanos == other.ripple_frame_nanos
+            && self.focus_visible == other.focus_visible
             && self.scheme == other.scheme
             && self.absolute_tonal_elevation == other.absolute_tonal_elevation
     }
@@ -700,15 +793,17 @@ impl tessera_ui::DrawModifierNode for SurfaceForeground {
         content: &mut dyn tessera_ui::DrawModifierContent,
     ) {
         let policy = &self.0;
+        let live = policy
+            .interaction_state
+            .map(|state| state.get())
+            .unwrap_or_default();
+        let visual = live.with_presentation(policy.args.presentation_state, policy.args.enabled);
         let alpha = if policy.args.enabled && policy.args.show_state_layer {
-            policy
-                .interaction_state
-                .map(|state| state.with(|state| state.state_layer_alpha()))
-                .unwrap_or(0.0)
+            visual.state_layer_alpha()
         } else {
             0.0
         };
-        let ripple = if policy.args.enabled {
+        let mut ripple = if policy.args.enabled {
             policy
                 .ripple_frame_nanos
                 .map(|frame_nanos| {
@@ -718,6 +813,14 @@ impl tessera_ui::DrawModifierNode for SurfaceForeground {
         } else {
             RippleProps::default()
         };
+        if policy.args.enabled
+            && policy.args.show_ripple
+            && live == InteractionState::new()
+            && policy.args.presentation_state == Some(InteractionVisualState::Pressed)
+            && let Some(presentation) = policy.args.presentation_ripple
+        {
+            ripple = presentation.props(policy.args.ripple_color, policy.args.ripple_bounded);
+        }
         let style = match policy.args.style {
             SurfaceStyle::Filled { .. } => SurfaceStyle::Filled {
                 color: Color::TRANSPARENT,
@@ -742,8 +845,58 @@ impl tessera_ui::DrawModifierNode for SurfaceForeground {
                 apply_state_layer_to_style(&style, policy.args.ripple_color.with_alpha(1.0), alpha);
             record_surface_style(ctx.render_input, &policy.args, &style, ripple);
         }
+        if policy.args.show_focus_indicator
+            && visual.is_focused()
+            && (!live.is_focused() || policy.focus_visible)
+        {
+            record_focus_indicator(ctx.render_input, policy.args.shape, policy.scheme.secondary);
+        }
         content.draw(ctx.render_input);
     }
+}
+
+pub(crate) fn record_focus_indicator(
+    input: &mut tessera_ui::layout::RenderInput<'_>,
+    shape: Shape,
+    color: Color,
+) {
+    let mut metadata = input.metadata_mut();
+    let bounds = metadata
+        .computed_data()
+        .expect("surface focus indicator bounds");
+    let (command, size, position) =
+        focus_indicator_geometry(shape, PxSize::new(bounds.width, bounds.height), color);
+    let fragment = metadata.fragment_mut();
+    let index = fragment.push_draw_command(command);
+    let op = &mut fragment.ops_mut()[index as usize];
+    op.position_override = Some(position);
+    op.size_override = Some(size);
+}
+
+fn focus_indicator_geometry(
+    shape: Shape,
+    body_size: PxSize,
+    color: Color,
+) -> (ShapeCommand, PxSize, PxPosition) {
+    let expansion = Dp(10.0).to_px();
+    let outset = expansion.to_f32() / 2.0;
+    let size = PxSize::new(body_size.width + expansion, body_size.height + expansion);
+    let command = match shape.resolve_for_size(body_size) {
+        ResolvedShape::Rounded {
+            corner_radii,
+            corner_g2,
+        } => ShapeCommand::OutlinedRect {
+            color,
+            corner_radii: corner_radii.map(|radius| radius + outset),
+            corner_g2,
+            border_width: Dp(3.0).to_pixels_f32(),
+        },
+        ResolvedShape::Ellipse => ShapeCommand::OutlinedEllipse {
+            color,
+            border_width: Dp(3.0).to_pixels_f32(),
+        },
+    };
+    (command, size, PxPosition::from_f32_xy(-outset, -outset))
 }
 
 #[tessera]
@@ -783,6 +936,10 @@ fn surface_content(
     ripple_state: Option<State<RippleState>>,
 ) {
     let surface = resolved.expect("surface_content requires resolved args");
+    let focus_visible = surface.show_focus_indicator
+        && surface
+            .focus_requester
+            .is_some_and(|requester| requester.is_focus_visible());
     let scheme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get()
@@ -858,6 +1015,7 @@ fn surface_content(
         scheme,
         absolute_tonal_elevation,
         ripple_frame_nanos,
+        focus_visible,
     };
     let current_context = (absolute_tonal_elevation, content_color, policy.args.child);
     let context = remember(|| current_context);
@@ -945,6 +1103,12 @@ fn surface_content(
 /// - `ripple_bounded` — optional bounded-ripple flag.
 /// - `ripple_radius` — optional explicit ripple radius.
 /// - `interaction_state` — optional shared interaction state.
+/// - `presentation_state` — optional visual interaction; live input and
+///   disabled styling take precedence.
+/// - `presentation_ripple` — optional static circular ripple for an idle
+///   pressed presentation.
+/// - `show_focus_indicator` — show a 3dp focus outline with a 2dp gap; defaults
+///   to false.
 /// - `show_state_layer` — optional state-layer visibility flag.
 /// - `show_ripple` — optional ripple visibility flag.
 /// - `ripple_state` — optional shared ripple state.
@@ -1003,6 +1167,9 @@ pub fn surface(
     ripple_bounded: Option<bool>,
     ripple_radius: Option<Dp>,
     interaction_state: Option<State<InteractionState>>,
+    presentation_state: Option<InteractionVisualState>,
+    presentation_ripple: Option<RipplePresentation>,
+    show_focus_indicator: Option<bool>,
     show_state_layer: Option<bool>,
     show_ripple: Option<bool>,
     ripple_state: Option<State<RippleState>>,
@@ -1021,7 +1188,7 @@ pub fn surface(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let resolved = SurfaceResolvedArgs {
+    let mut resolved = SurfaceResolvedArgs {
         modifier: modifier.unwrap_or_default(),
         style: style.unwrap_or(SurfaceStyle::Filled {
             color: scheme.surface,
@@ -1041,6 +1208,9 @@ pub fn surface(
         ripple_bounded: ripple_bounded.unwrap_or(true),
         ripple_radius,
         interaction_state,
+        presentation_state,
+        presentation_ripple: presentation_ripple.map(RipplePresentation::sanitized),
+        show_focus_indicator: show_focus_indicator.unwrap_or(false),
         show_state_layer: show_state_layer.unwrap_or(true),
         show_ripple: show_ripple.unwrap_or(true),
         ripple_state,
@@ -1058,6 +1228,7 @@ pub fn surface(
     let interactive = resolved.enabled && clickable;
     let internal_focus_requester = remember(FocusRequester::new).get();
     let bound_focus_requester = resolved.focus_requester.unwrap_or(internal_focus_requester);
+    resolved.focus_requester = Some(bound_focus_requester);
     let interaction_state = resolved
         .interaction_state
         .or_else(|| interactive.then(|| remember(InteractionState::new)));
@@ -1273,6 +1444,48 @@ mod tests {
 
     use super::{SurfaceLayout, SurfaceResolvedArgs, SurfaceStyle};
 
+    #[test]
+    fn focus_indicator_preserves_measured_stroke_gap_and_corners() {
+        crate::test_utils::run_isolated_test(
+            "surface::tests::focus_indicator_preserves_measured_stroke_gap_and_corners",
+            || {
+                use tessera_ui::{Px, PxPosition, PxSize};
+
+                use crate::{pipelines::shape::command::ShapeCommand, shape_def::Shape};
+
+                for (shape, body, expected_size, expected_radii) in [
+                    (
+                        Shape::CAPSULE,
+                        PxSize::new(Px(56), Px(56)),
+                        PxSize::new(Px(66), Px(66)),
+                        [33.0; 4],
+                    ),
+                    (
+                        Shape::rounded_rectangle(Dp(12.0)),
+                        PxSize::new(Px(100), Px(40)),
+                        PxSize::new(Px(110), Px(50)),
+                        [17.0; 4],
+                    ),
+                ] {
+                    let (command, size, position) =
+                        super::focus_indicator_geometry(shape, body, Color::RED);
+                    assert_eq!(size, expected_size);
+                    assert_eq!(position, PxPosition::from_f32_xy(-5.0, -5.0));
+                    let ShapeCommand::OutlinedRect {
+                        border_width,
+                        corner_radii,
+                        ..
+                    } = command
+                    else {
+                        panic!("rounded containers require a rounded focus outline");
+                    };
+                    assert_eq!(border_width, 3.0);
+                    assert_eq!(corner_radii, expected_radii);
+                }
+            },
+        );
+    }
+
     thread_local! {
         static ENABLED: Cell<Option<State<bool>>> = const { Cell::new(None) };
         static CONTENT_COLOR: Cell<Color> = const { Cell::new(Color::BLACK) };
@@ -1322,6 +1535,7 @@ mod tests {
             interaction_state: None,
             ripple_state: None,
             ripple_frame_nanos: None,
+            focus_visible: false,
             scheme: MaterialColorScheme::default(),
             absolute_tonal_elevation: Dp(0.0),
         }
@@ -1430,6 +1644,133 @@ mod tests {
                 );
             }
         }
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct TransparentOutlineSample {
+        fill_color: Color,
+        ripple_opacity: f32,
+    }
+
+    impl tessera_ui::DrawModifierNode for TransparentOutlineSample {
+        fn draw(
+            &self,
+            ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
+            content: &mut dyn tessera_ui::DrawModifierContent,
+        ) {
+            ctx.render_input
+                .metadata_mut()
+                .fragment_mut()
+                .push_draw_command(
+                    crate::pipelines::shape::command::ShapeCommand::RippleFilledOutlinedRect {
+                        color: self.fill_color,
+                        border_color: Color::new(0.1, 0.4, 0.2, 1.0),
+                        corner_radii: [12.0; 4],
+                        corner_g2: [2.0; 4],
+                        border_width: 3.0,
+                        ripple: crate::RippleProps {
+                            center: [0.0, 0.0],
+                            radius: 0.6,
+                            alpha: self.ripple_opacity,
+                            bounded: true,
+                            color: Color::BLACK,
+                        },
+                    },
+                );
+            content.draw(ctx.render_input);
+        }
+    }
+
+    #[tessera]
+    fn transparent_outline_rgb_sample(fill_color: Color, ripple_opacity: f32) {
+        tessera_ui::layout::layout()
+            .modifier(Modifier::new().required_size(Dp(64.0), Dp(64.0)))
+            .draw(TransparentOutlineSample {
+                fill_color,
+                ripple_opacity,
+            });
+    }
+
+    #[tessera]
+    fn transparent_outline_rgb_fixture() {
+        material_theme().child(|| {
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_size()
+                        .background(Color::WHITE)
+                        .padding_all(Dp(8.0)),
+                )
+                .children(|| {
+                    column().children(|| {
+                        for opacity in [0.0, 0.25] {
+                            row().children(move || {
+                                for color in [Color::RED, Color::BLUE] {
+                                    transparent_outline_rgb_sample(color.with_alpha(0.0), opacity);
+                                    spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                }
+                            });
+                            spacer().modifier(Modifier::new().height(Dp(8.0)));
+                        }
+                    });
+                });
+        });
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn transparent_outline_fill_rgb_does_not_affect_border_with_or_without_ripple() {
+        crate::test_utils::run_isolated_test(
+            "surface::tests::transparent_outline_fill_rgb_does_not_affect_border_with_or_without_ripple",
+            || {
+                let mut renderer = tessera_ui::HeadlessRenderer::new(
+                    Box::new(|| {
+                        transparent_outline_rgb_fixture();
+                    }),
+                    vec![Box::new(crate::TesseraComponents)],
+                    tessera_ui::HeadlessConfig {
+                        width: 160,
+                        height: 160,
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                renderer.render_frames(4);
+                let pixels = renderer.read_pixels().unwrap();
+                let crop = |left: usize, top: usize| {
+                    let mut result = Vec::new();
+                    for y in top..top + 64 {
+                        let offset = (y * 160 + left) * 4;
+                        result.extend_from_slice(&pixels[offset..offset + 64 * 4]);
+                    }
+                    result
+                };
+                let zero_ripple = crop(8, 8);
+                assert!(
+                    zero_ripple
+                        .chunks_exact(4)
+                        .any(|pixel| pixel[..3] != [255; 3]),
+                    "the fixture renders a visible outline"
+                );
+                for (top, label) in [(8, "zero ripple"), (80, "static ripple")] {
+                    let left = crop(8, top);
+                    let right = crop(80, top);
+                    let difference = left
+                        .chunks_exact(4)
+                        .zip(right.chunks_exact(4))
+                        .position(|(a, b)| a != b);
+                    assert_eq!(
+                        difference, None,
+                        "transparent hidden RGB must not tint border coverage with {label}"
+                    );
+                }
+                assert_ne!(
+                    zero_ripple,
+                    crop(8, 80),
+                    "the second pair renders a visible native ripple"
+                );
+            },
+        );
     }
 
     #[test]

@@ -516,40 +516,33 @@ impl Div<f64> for Dp {
 
 #[cfg(test)]
 mod set_scale_factor_tests {
+    use std::{
+        panic::{AssertUnwindSafe, catch_unwind},
+        process::Command,
+    };
+
     use super::*;
-    use std::panic::{AssertUnwindSafe, catch_unwind};
-    use std::sync::{Mutex, MutexGuard};
 
-    /// Serializes every test that touches the process-global [`SCALE_FACTOR`].
-    ///
-    /// The factor is shared by the whole test binary, so tests that mutate it
-    /// must not run concurrently. The guard also restores the value that was
-    /// current on entry (even if the test panics).
-    static SCALE_FACTOR_TEST_LOCK: Mutex<()> = Mutex::new(());
-
-    /// RAII guard holding the module-wide lock and restoring the original scale
-    /// factor on drop.
-    struct ScaleFactorGuard {
-        // Held until the guard is dropped so the restore below is race-free.
-        _lock: MutexGuard<'static, ()>,
-        original: f64,
-    }
-
-    impl Drop for ScaleFactorGuard {
-        fn drop(&mut self) {
-            super::set_scale_factor(self.original);
+    fn run_isolated(test_name: &str) -> bool {
+        const CHILD_TEST: &str = "TESSERA_DENSITY_TEST_CHILD";
+        if std::env::var(CHILD_TEST).as_deref() == Ok(test_name) {
+            return false;
         }
-    }
-
-    fn guard() -> ScaleFactorGuard {
-        let lock = SCALE_FACTOR_TEST_LOCK
-            .lock()
-            .unwrap_or_else(|poisoned| poisoned.into_inner());
-        let original = scale_factor();
-        ScaleFactorGuard {
-            _lock: lock,
-            original,
-        }
+        let output = Command::new(std::env::current_exe().expect("Test binary must be available"))
+            .args([
+                "--exact",
+                &format!("dp::set_scale_factor_tests::{test_name}"),
+            ])
+            .env(CHILD_TEST, test_name)
+            .output()
+            .expect("Density test child must start");
+        let stdout = String::from_utf8_lossy(&output.stdout);
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        assert!(
+            output.status.success() && stdout.contains("test result: ok. 1 passed;"),
+            "Density test child did not pass exactly one test: {test_name}\n{stdout}\n{stderr}"
+        );
+        true
     }
 
     /// Calls [`set_scale_factor`], containing the `debug_assert!` panic that
@@ -572,7 +565,9 @@ mod set_scale_factor_tests {
 
     #[test]
     fn set_scale_factor_accepts_positive_finite_values() {
-        let _guard = guard();
+        if run_isolated("set_scale_factor_accepts_positive_finite_values") {
+            return;
+        }
         set_scale_factor(2.5);
         assert_eq!(scale_factor(), 2.5);
         assert_eq!(Dp(10.0).to_pixels_f64(), 25.0);
@@ -580,7 +575,9 @@ mod set_scale_factor_tests {
 
     #[test]
     fn set_scale_factor_rejects_nan_keeping_previous_factor() {
-        let _guard = guard();
+        if run_isolated("set_scale_factor_rejects_nan_keeping_previous_factor") {
+            return;
+        }
         set_scale_factor(2.0);
         set_scale_factor_expecting_rejection(f64::NAN);
 
@@ -592,7 +589,9 @@ mod set_scale_factor_tests {
 
     #[test]
     fn set_scale_factor_rejects_zero_keeping_previous_factor() {
-        let _guard = guard();
+        if run_isolated("set_scale_factor_rejects_zero_keeping_previous_factor") {
+            return;
+        }
         set_scale_factor(2.0);
         set_scale_factor_expecting_rejection(0.0);
 
@@ -603,7 +602,9 @@ mod set_scale_factor_tests {
 
     #[test]
     fn set_scale_factor_rejects_negative_keeping_previous_factor() {
-        let _guard = guard();
+        if run_isolated("set_scale_factor_rejects_negative_keeping_previous_factor") {
+            return;
+        }
         set_scale_factor(2.0);
         set_scale_factor_expecting_rejection(-1.0);
 
@@ -618,7 +619,9 @@ mod set_scale_factor_tests {
 
     #[test]
     fn set_scale_factor_rejects_non_finite_keeping_previous_factor() {
-        let _guard = guard();
+        if run_isolated("set_scale_factor_rejects_non_finite_keeping_previous_factor") {
+            return;
+        }
         set_scale_factor(2.0);
         set_scale_factor_expecting_rejection(f64::INFINITY);
         set_scale_factor_expecting_rejection(f64::NEG_INFINITY);

@@ -726,18 +726,20 @@ impl PointerInputModifierNode for CarouselInput {
         if drag.updated {
             self.controller.with_mut(|state| {
                 let delta = if self.vertical {
-                    drag.delta_y
+                    input.local_delta(0.0, drag.delta_y.to_f32()).1
                 } else {
-                    drag.delta_x
-                }
-                .to_f32()
-                    * if self.reverse { 1.0 } else { -1.0 };
+                    input.local_delta(drag.delta_x.to_f32(), 0.0).0
+                } * if self.reverse { 1.0 } else { -1.0 };
                 let dt = state
                     .last_input
                     .map(|last| now.saturating_sub(last) as f32 * 1.0e-9)
                     .unwrap_or(1.0 / 60.0)
                     .clamp(0.004, 0.1);
-                state.drag_velocity = state.drag_velocity * 0.6 + delta / dt * 0.4;
+                let window = input
+                    .local_to_window
+                    .map_vector(PxPosition::from_f32_xy(delta, delta));
+                let window_delta = if self.vertical { window.y } else { window.x };
+                state.drag_velocity = state.drag_velocity * 0.6 + window_delta / dt * 0.4;
                 state.last_input = Some(now);
                 state.move_by(delta);
             });
@@ -746,8 +748,11 @@ impl PointerInputModifierNode for CarouselInput {
             && self.controller.with(|state| state.dragging)
             && !drag.ended;
         if drag.ended || cancelled {
-            self.controller
-                .with_mut(|state| state.end_drag(self.behavior, now, cancelled));
+            self.controller.with_mut(|state| {
+                let local = input.local_delta(state.drag_velocity, state.drag_velocity);
+                state.drag_velocity = if self.vertical { local.1 } else { local.0 };
+                state.end_drag(self.behavior, now, cancelled);
+            });
         }
     }
 }

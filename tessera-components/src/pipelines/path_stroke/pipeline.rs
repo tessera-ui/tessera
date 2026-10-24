@@ -181,12 +181,15 @@ impl DrawablePipeline<PathStrokeCommand> for PathStrokePipeline {
         }
         let mut instances = Vec::new();
         let mut segments = Vec::new();
-        for (command, size, position) in context.commands {
+        for (command, geometry) in context.commands {
+            let size = geometry.local_size;
+            let position = geometry.window_origin();
+            let scale = geometry.local_to_window.scale();
             if command.points.len() < 2 || command.stroke <= 0.0 {
                 continue;
             }
             let radius = command.stroke * 0.5;
-            let padding = glam::Vec2::splat(radius + 1.0);
+            let padding = glam::Vec2::splat(radius + scale.recip());
             let mut path: Vec<_> = command
                 .points
                 .windows(2)
@@ -263,7 +266,7 @@ impl DrawablePipeline<PathStrokeCommand> for PathStrokePipeline {
                 let offset = segments.len();
                 segments.extend(bin);
                 instances.push(Instance {
-                    position: [position.x, position.y, radius, 0.0],
+                    position: [position.x, position.y, radius, scale],
                     bounds: [start.x, start.y, end.x, end.y],
                     color: command.color.to_array(),
                     screen: [

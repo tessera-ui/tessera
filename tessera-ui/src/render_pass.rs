@@ -3,8 +3,10 @@
 use smallvec::SmallVec;
 
 use crate::{
-    Command, ComputeCommand, DrawCommand, DrawRegion, Px, PxPosition, PxRect, PxSize, SampleRegion,
-    render_graph::{ExternalTextureDesc, RenderGraphOp, RenderResource, RenderResourceId},
+    Command, ComputeCommand, DrawCommand, DrawRegion, Px, PxRect, PxSize, SampleRegion,
+    render_graph::{
+        DrawGeometry, ExternalTextureDesc, RenderGraphOp, RenderResource, RenderResourceId,
+    },
 };
 
 /// A pass planning result for the current frame.
@@ -27,8 +29,7 @@ impl RenderPassGraph {
         for op in ops {
             let RenderGraphOp {
                 command,
-                size,
-                position,
+                geometry,
                 type_id,
                 read,
                 write,
@@ -66,7 +67,7 @@ impl RenderPassGraph {
                     let reads_scene = read_resource == Some(RenderResourceId::SceneColor);
                     let sampling_rect = if reads_scene {
                         cmd.sample_region().map(|region| {
-                            extract_sampling_rect(Some(region), op.size, op.position, read_extent)
+                            extract_sampling_rect(Some(region), geometry, read_extent)
                         })
                     } else {
                         None
@@ -87,8 +88,7 @@ impl RenderPassGraph {
                     draw_builder.push_draw(DrawCommandInput {
                         command: cmd,
                         type_id,
-                        size,
-                        start_pos: position,
+                        geometry,
                         texture_size: target_extent,
                         sampling_rect,
                         read_resource,
@@ -114,12 +114,11 @@ impl RenderPassGraph {
                     }
 
                     let sampling_rect =
-                        extract_sampling_rect(Some(cmd.barrier()), size, position, read_extent);
-                    let target_rect = extract_target_rect(size, position, write_extent);
+                        extract_sampling_rect(Some(cmd.barrier()), geometry, read_extent);
+                    let target_rect = extract_target_rect(geometry, write_extent);
                     compute_builder.push_compute(ComputePlanItem {
                         command: cmd,
-                        size,
-                        start_pos: position,
+                        geometry,
                         target_rect,
                         sampling_rect,
                     });
@@ -184,8 +183,7 @@ struct DrawPassBuilder {
 struct DrawCommandInput {
     command: Box<dyn DrawCommand>,
     type_id: std::any::TypeId,
-    size: PxSize,
-    start_pos: PxPosition,
+    geometry: DrawGeometry,
     texture_size: wgpu::Extent3d,
     sampling_rect: Option<PxRect>,
     read_resource: Option<RenderResourceId>,
@@ -241,15 +239,13 @@ impl DrawPassBuilder {
         }
         let draw_rect = extract_draw_rect(
             input.command.draw_region(),
-            input.size,
-            input.start_pos,
+            input.geometry,
             input.texture_size,
         );
         self.draws.push(DrawOrClip::Draw(DrawCommandWithMetadata {
             command: input.command,
             type_id: input.type_id,
-            size: input.size,
-            start_pos: input.start_pos,
+            geometry: input.geometry,
             draw_rect,
             read_resource: input.read_resource,
         }));
@@ -273,8 +269,7 @@ impl DrawPassBuilder {
 /// Compute work required for a render pass.
 pub(crate) struct ComputePlanItem {
     pub(crate) command: Box<dyn ComputeCommand>,
-    pub(crate) size: PxSize,
-    pub(crate) start_pos: PxPosition,
+    pub(crate) geometry: DrawGeometry,
     pub(crate) target_rect: PxRect,
     pub(crate) sampling_rect: PxRect,
 }
@@ -283,8 +278,7 @@ pub(crate) struct ComputePlanItem {
 pub(crate) struct DrawCommandWithMetadata {
     pub(crate) command: Box<dyn DrawCommand>,
     pub(crate) type_id: std::any::TypeId,
-    pub(crate) size: PxSize,
-    pub(crate) start_pos: PxPosition,
+    pub(crate) geometry: DrawGeometry,
     pub(crate) draw_rect: PxRect,
     pub(crate) read_resource: Option<RenderResourceId>,
 }
@@ -346,35 +340,6 @@ impl ComputePassBuilder {
     }
 }
 
-fn compute_padded_rect(
-    size: PxSize,
-    start_pos: PxPosition,
-    top: Px,
-    right: Px,
-    bottom: Px,
-    left: Px,
-    texture_size: wgpu::Extent3d,
-) -> PxRect {
-    let x = (start_pos.x - left.to_f32())
-        .floor()
-        .clamp(0.0, texture_size.width as f32);
-    let y = (start_pos.y - top.to_f32())
-        .floor()
-        .clamp(0.0, texture_size.height as f32);
-    let end_x = (start_pos.x + size.width.to_f32() + right.to_f32())
-        .ceil()
-        .clamp(0.0, texture_size.width as f32);
-    let end_y = (start_pos.y + size.height.to_f32() + bottom.to_f32())
-        .ceil()
-        .clamp(0.0, texture_size.height as f32);
-    PxRect::new(
-        Px(x as i32),
-        Px(y as i32),
-        Px((end_x - x).max(0.0) as i32),
-        Px((end_y - y).max(0.0) as i32),
-    )
-}
-
 fn clamp_rect_to_texture(rect: PxRect, texture_size: wgpu::Extent3d) -> PxRect {
     rect.intersection(&PxRect::new(
         Px::ZERO,
@@ -387,8 +352,7 @@ fn clamp_rect_to_texture(rect: PxRect, texture_size: wgpu::Extent3d) -> PxRect {
 
 fn extract_sampling_rect(
     barrier: Option<SampleRegion>,
-    size: PxSize,
-    start_pos: PxPosition,
+    geometry: DrawGeometry,
     texture_size: wgpu::Extent3d,
 ) -> PxRect {
     match barrier {
@@ -398,24 +362,18 @@ fn extract_sampling_rect(
             width: Px(texture_size.width as i32),
             height: Px(texture_size.height as i32),
         },
-        Some(SampleRegion::PaddedLocal(sampling)) => compute_padded_rect(
-            size,
-            start_pos,
-            sampling.top,
-            sampling.right,
-            sampling.bottom,
-            sampling.left,
+        Some(SampleRegion::PaddedLocal(sampling)) => clamp_rect_to_texture(
+            geometry.padded_window_bounds(sampling).outward(),
             texture_size,
         ),
         Some(SampleRegion::Absolute(rect)) => clamp_rect_to_texture(rect, texture_size),
-        None => extract_target_rect(size, start_pos, texture_size),
+        None => extract_target_rect(geometry, texture_size),
     }
 }
 
 fn extract_draw_rect(
     region: DrawRegion,
-    size: PxSize,
-    start_pos: PxPosition,
+    geometry: DrawGeometry,
     texture_size: wgpu::Extent3d,
 ) -> PxRect {
     match region {
@@ -425,37 +383,22 @@ fn extract_draw_rect(
             width: Px(texture_size.width as i32),
             height: Px(texture_size.height as i32),
         },
-        DrawRegion::PaddedLocal(padding) => compute_padded_rect(
-            size,
-            start_pos,
-            padding.top,
-            padding.right,
-            padding.bottom,
-            padding.left,
+        DrawRegion::PaddedLocal(padding) => clamp_rect_to_texture(
+            geometry.padded_window_bounds(padding).outward(),
             texture_size,
         ),
         DrawRegion::Absolute(rect) => clamp_rect_to_texture(rect, texture_size),
     }
 }
 
-fn extract_target_rect(
-    size: PxSize,
-    start_pos: PxPosition,
-    texture_size: wgpu::Extent3d,
-) -> PxRect {
-    compute_padded_rect(
-        size,
-        start_pos,
-        Px::ZERO,
-        Px::ZERO,
-        Px::ZERO,
-        Px::ZERO,
-        texture_size,
-    )
+fn extract_target_rect(geometry: DrawGeometry, texture_size: wgpu::Extent3d) -> PxRect {
+    clamp_rect_to_texture(geometry.window_bounds().outward(), texture_size)
 }
 
 #[cfg(test)]
 mod tests {
+    use crate::PxPosition;
+
     use super::*;
 
     #[derive(Clone)]
@@ -476,8 +419,10 @@ mod tests {
             read: None,
             write: Some(RenderResourceId::SceneColor),
             deps: SmallVec::new(),
-            size: PxSize::new(Px(10), Px(10)),
-            position: PxPosition::new(Px(x), Px(0)),
+            geometry: DrawGeometry::from_position_size(
+                PxPosition::new(Px(x), Px(0)),
+                PxSize::new(Px(10), Px(10)),
+            ),
             opacity: 1.0,
             sequence_index,
         }
@@ -548,6 +493,7 @@ mod tests {
     fn fractional_draw_and_sample_bounds_round_outwards() {
         let size = PxSize::new(Px(20), Px(10));
         let position = PxPosition::from_f32_xy(10.25, 10.75);
+        let geometry = DrawGeometry::from_position_size(position, size);
         let target = wgpu::Extent3d {
             width: 100,
             height: 100,
@@ -557,8 +503,7 @@ mod tests {
         assert_eq!(
             extract_draw_rect(
                 DrawRegion::PaddedLocal(crate::PaddingRect::ZERO),
-                size,
-                position,
+                geometry,
                 target
             ),
             expected
@@ -566,13 +511,83 @@ mod tests {
         assert_eq!(
             extract_sampling_rect(
                 Some(SampleRegion::PaddedLocal(crate::PaddingRect::ZERO)),
-                size,
-                position,
+                geometry,
                 target
             ),
             expected
         );
-        assert_eq!(extract_target_rect(size, position, target), expected);
+        assert_eq!(
+            extract_target_rect(DrawGeometry::from_position_size(position, size), target),
+            expected
+        );
+    }
+
+    #[test]
+    fn scaled_draw_plan_preserves_local_geometry_and_window_sampling_under_clips() {
+        let geometry = DrawGeometry::new(
+            PxSize::new(Px(240), Px(56)),
+            crate::LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5)).unwrap(),
+        );
+        let mut draw = op(Command::Draw(Box::new(ProbeDraw(true))), 1, 0);
+        draw.geometry = geometry;
+        let passes = RenderPassGraph::build(
+            vec![
+                op(
+                    Command::ClipPush(PxRect::new(Px(12), Px(24), Px(4), Px(4))),
+                    0,
+                    0,
+                ),
+                draw,
+            ],
+            &[],
+            &[],
+            wgpu::Extent3d {
+                width: 400,
+                height: 200,
+                depth_or_array_layers: 1,
+            },
+        )
+        .into_passes();
+        assert!(passes.iter().flat_map(|pass| &pass.draws).any(|command| {
+            matches!(command, DrawOrClip::Clip(ClipOps::Push(rect)) if *rect == PxRect::new(Px(12), Px(24), Px(4), Px(4)))
+        }));
+        let draw = passes
+            .iter()
+            .flat_map(|pass| &pass.draws)
+            .find_map(|command| match command {
+                DrawOrClip::Draw(draw) => Some(draw),
+                DrawOrClip::Clip(_) => None,
+            })
+            .expect("missing native draw");
+        assert_eq!(draw.geometry, geometry);
+        assert_eq!(draw.geometry.local_size, PxSize::new(Px(240), Px(56)));
+        assert_eq!(draw.draw_rect, PxRect::new(Px(10), Px(20), Px(151), Px(36)));
+        assert_eq!(
+            extract_sampling_rect(
+                Some(SampleRegion::uniform_padding_local(Px(4))),
+                draw.geometry,
+                wgpu::Extent3d {
+                    width: 400,
+                    height: 200,
+                    depth_or_array_layers: 1
+                },
+            ),
+            PxRect::new(Px(7), Px(18), Px(156), Px(40)),
+            "sampling must scale local padding and remain independent of draw clipping"
+        );
+        let absolute = PxRect::new(Px(30), Px(40), Px(50), Px(60));
+        assert_eq!(
+            extract_sampling_rect(
+                Some(SampleRegion::Absolute(absolute)),
+                draw.geometry,
+                wgpu::Extent3d {
+                    width: 400,
+                    height: 200,
+                    depth_or_array_layers: 1
+                },
+            ),
+            absolute
+        );
     }
 
     #[test]
@@ -584,8 +599,10 @@ mod tests {
         };
         assert_eq!(
             extract_target_rect(
-                PxSize::new(Px(20), Px(10)),
-                PxPosition::from_f32_xy(-3.25, -2.5),
+                DrawGeometry::from_position_size(
+                    PxPosition::from_f32_xy(-3.25, -2.5),
+                    PxSize::new(Px(20), Px(10))
+                ),
                 target
             ),
             PxRect::new(Px(0), Px(0), Px(17), Px(8))

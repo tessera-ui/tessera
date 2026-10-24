@@ -7,7 +7,8 @@ use downcast_rs::{Downcast, impl_downcast};
 use dyn_clone::DynClone;
 
 use crate::{
-    px::{PxPosition, PxRect, PxSize},
+    px::PxRect,
+    render_graph::DrawGeometry,
     render_scene::{DrawRegion, PaddingRect, SampleRegion},
 };
 
@@ -67,7 +68,7 @@ pub trait DrawCommand: DynClone + Downcast + Send + Sync {
     ///
     /// The default implementation returns `None`, which falls back to the draw
     /// region derived from the command size and position.
-    fn ordering_rect(&self, _position: PxPosition, _size: PxSize) -> Option<PxRect> {
+    fn ordering_rect(&self, _geometry: DrawGeometry) -> Option<PxRect> {
         None
     }
 }

@@ -760,6 +760,7 @@ mod tests {
         static POSITION_ATTACHED: Cell<Option<State<bool>>> = const { Cell::new(None) };
         static POSITION_COUNTS: Cell<Option<State<(u32, u32)>>> = const { Cell::new(None) };
         static POSITION_WIDTH: Cell<Option<State<i32>>> = const { Cell::new(None) };
+        static POSITION_GEOMETRY_COUNTS: Cell<Option<State<(u32, u32, u32)>>> = const { Cell::new(None) };
     }
 
     #[tessera(crate)]
@@ -772,13 +773,27 @@ mod tests {
         POSITION_ATTACHED.set(Some(attached));
         POSITION_COUNTS.set(Some(counts));
         POSITION_WIDTH.set(Some(width));
+        let geometry_counts = remember(|| (0_u32, 0_u32, 0_u32));
+        POSITION_GEOMETRY_COUNTS.set(Some(geometry_counts));
         let mut modifier = Modifier::new().on_globally_positioned(move |_| {
             counts.with_mut(|counts| counts.0 += 1);
         });
         if attached.get() {
-            modifier = modifier.on_globally_positioned(move |_| {
-                counts.with_mut(|counts| counts.1 += 1);
-            });
+            modifier = modifier
+                .on_globally_positioned(move |_| {
+                    counts.with_mut(|counts| counts.1 += 1);
+                })
+                .on_globally_positioned_precise(move |_: crate::FloatRect| {
+                    geometry_counts.with_mut(|counts| counts.0 += 1);
+                })
+                .on_layout_coordinates(move |coordinates: crate::LayoutCoordinates| {
+                    assert_eq!(coordinates.local_size.height, Px(20));
+                    geometry_counts.with_mut(|counts| counts.1 += 1);
+                })
+                .on_local_to_window(move |transform: crate::LocalToWindow| {
+                    assert_eq!(transform, crate::LocalToWindow::IDENTITY);
+                    geometry_counts.with_mut(|counts| counts.2 += 1);
+                });
         }
         crate::layout::layout()
             .modifier(modifier)
@@ -799,6 +814,8 @@ mod tests {
         pump_layout_test_session(&mut session, 0);
         let counts = POSITION_COUNTS.get().expect("counts");
         let attached = POSITION_ATTACHED.get().expect("attachment");
+        let geometry_counts = POSITION_GEOMETRY_COUNTS.get().expect("geometry counts");
+        assert_eq!(geometry_counts.get(), (0, 0, 0));
         assert_eq!(counts.get(), (1, 0));
         attached.set(true);
         pump_layout_test_session(&mut session, 16_666_667);
@@ -807,8 +824,14 @@ mod tests {
             (1, 1),
             "only the newly attached handler receives the unchanged rectangle"
         );
+        assert_eq!(
+            geometry_counts.get(),
+            (1, 1, 1),
+            "new observer kinds must receive unchanged valid geometry"
+        );
         pump_layout_test_session(&mut session, 33_333_334);
         assert_eq!(counts.get(), (1, 1), "idle layouts do not repeat callbacks");
+        assert_eq!(geometry_counts.get(), (1, 1, 1));
         attached.set(false);
         pump_layout_test_session(&mut session, 50_000_001);
         attached.set(true);
@@ -825,8 +848,14 @@ mod tests {
             (2, 3),
             "changed bounds notify both attached handlers"
         );
+        assert_eq!(
+            geometry_counts.get(),
+            (3, 3, 2),
+            "size changes notify size observers while an unchanged transform remains quiet"
+        );
         pump_layout_test_session(&mut session, 100_000_002);
         assert_eq!(counts.get(), (2, 3));
+        assert_eq!(geometry_counts.get(), (3, 3, 2));
     }
 
     struct ResourceLease {

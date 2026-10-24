@@ -1,23 +1,8 @@
-//! Core module for text editing logic and state management in Tessera UI.
+//! Editable text buffers, selection, and caret rendering.
 //!
-//! This module provides the foundational structures and functions for building
-//! text editing components, including text buffer management, selection and
-//! cursor handling, rendering logic, and keyboard event mapping. It is designed
-//! to be shared across UI components via the `TextEditorController` wrapper,
-//! enabling consistent access to editor state.
-//! and efficient text editing experiences.
+//! ## Usage
 //!
-//! Typical use cases include single-line and multi-line text editors, input
-//! fields, and any UI element requiring advanced text manipulation, selection,
-//! and IME support.
-//!
-//! The module integrates with the Tessera component system and rendering
-//! pipelines, supporting selection highlighting, cursor blinking, clipboard
-//! operations, and extensible keyboard shortcuts.
-//!
-//! Most applications should interact with [`TextEditorController`] for state
-//! management and [`text_edit_core()`] for rendering and layout within a
-//! component tree.
+//! Build custom editors for short-form input, documents, and text selection.
 
 use std::ops::Range;
 
@@ -30,7 +15,7 @@ use tessera_ui::{
     CallbackWith, Color, ComputedData, Dp, FocusRequester, LayoutResult, MeasurementError, Px,
     PxPosition, State, current_frame_nanos,
     layout::{MeasureScope, layout},
-    receive_frame_nanos, tessera,
+    receive_frame_nanos, remember, tessera,
     time::Instant,
     winit,
 };
@@ -476,7 +461,7 @@ struct PreviewReplaceResult {
     replaced_range: Range<usize>,
 }
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 struct TextLayoutCacheKey {
     layout_version: u64,
     max_width_bits: Option<u32>,
@@ -874,6 +859,7 @@ struct TextSelectionState {
     selection_color: Color,
     last_click_time: Option<Instant>,
     last_click_position: Option<PxPosition>,
+    last_click_window_position: Option<PxPosition>,
     click_count: u32,
     is_dragging: bool,
     drag_selection_mode: DragSelectionMode,
@@ -889,15 +875,21 @@ impl TextSelectionState {
         self.selection_color = color;
     }
 
-    fn handle_click(&mut self, position: PxPosition, timestamp: Instant) -> ClickType {
+    fn handle_click(
+        &mut self,
+        position: PxPosition,
+        window_position: PxPosition,
+        timestamp: Instant,
+    ) -> ClickType {
         const DOUBLE_CLICK_TIME_MS: u128 = 500;
         const CLICK_DISTANCE_THRESHOLD: Px = Px(5);
 
         let click_type = if let (Some(last_time), Some(last_pos)) =
-            (self.last_click_time, self.last_click_position)
+            (self.last_click_time, self.last_click_window_position)
         {
             let time_diff = timestamp.duration_since(last_time).as_millis();
-            let distance = (position.x - last_pos.x).abs() + (position.y - last_pos.y).abs();
+            let distance =
+                (window_position.x - last_pos.x).abs() + (window_position.y - last_pos.y).abs();
 
             if time_diff <= DOUBLE_CLICK_TIME_MS
                 && distance <= CLICK_DISTANCE_THRESHOLD.abs() as f32
@@ -922,6 +914,7 @@ impl TextSelectionState {
 
         self.last_click_time = Some(timestamp);
         self.last_click_position = Some(position);
+        self.last_click_window_position = Some(window_position);
         self.is_dragging = false;
         self.drag_selection_mode = DragSelectionMode::Character;
         self.drag_origin_selection = None;
@@ -1309,6 +1302,9 @@ impl TextLayoutState {
     }
 
     fn sync_snapshot_scroll(&mut self, scroll: glyphon::cosmic_text::Scroll) {
+        if let Some(data) = self.snapshot.text_data.as_mut() {
+            data.set_scroll(scroll);
+        }
         if let Some(buffer) = self.snapshot.buffer.as_mut()
             && buffer.scroll() != scroll
         {
@@ -1337,9 +1333,11 @@ impl TextLayoutState {
         scroll: glyphon::cosmic_text::Scroll,
     ) -> Option<TextData> {
         let cache_key = self.text_cache_key(constraint);
-        let text_data = self.cached_text_data(cache_key)?;
+        if self.snapshot.text_cache_key != Some(cache_key) {
+            return None;
+        }
         self.sync_snapshot_scroll(scroll);
-        Some(text_data)
+        self.cached_text_data(cache_key)
     }
 
     fn set_text_snapshot(
@@ -1796,6 +1794,7 @@ pub struct TextEditorController {
     scroll_state: TextScrollControllerState,
     ime_state: TextImeState,
     layout_state: TextLayoutState,
+    intrinsic_size_cache: Option<(TextLayoutCacheKey, ComputedData)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -1903,6 +1902,42 @@ impl TextEditorController {
         self.layout_state.cached_geometry_for_constraint(constraint)
     }
 
+    fn cached_intrinsic_size(&self, constraint: &TextConstraint) -> Option<ComputedData> {
+        let key = TextLayoutCacheKey::new(self.text_layout_version(), constraint);
+        self.intrinsic_size_cache
+            .filter(|(cached, _)| *cached == key)
+            .map(|(_, size)| size)
+    }
+
+    fn measure_intrinsic_size(&mut self, constraint: &TextConstraint) -> ComputedData {
+        let raw = self.edit_state.text();
+        let display = self
+            .edit_state
+            .display_transform_ref()
+            .map(|transform| transform.call(raw.clone()));
+        let content = display
+            .as_ref()
+            .map_or(raw.as_str(), |display| display.text());
+        let (metrics, _) = self.edit_state.metrics_and_scroll();
+        let buffer = build_display_buffer(
+            content,
+            self.edit_state.text_color(),
+            metrics.font_size,
+            metrics.line_height,
+            constraint,
+            self.wrap_mode(),
+            glyphon::cosmic_text::Scroll::default(),
+            Some(self.edit_state.style),
+        );
+        let text_data = TextData::from_buffer(buffer);
+        let size = measured_editor_size(&text_data, constraint, self.single_line());
+        self.intrinsic_size_cache = Some((
+            TextLayoutCacheKey::new(self.text_layout_version(), constraint),
+            size,
+        ));
+        size
+    }
+
     fn sync_layout_snapshot_scroll(&mut self) {
         self.layout_state
             .sync_snapshot_scroll(self.scroll_state.as_scroll());
@@ -1977,6 +2012,7 @@ impl TextEditorController {
                 selection_color,
                 last_click_time: None,
                 last_click_position: None,
+                last_click_window_position: None,
                 click_count: 0,
                 is_dragging: false,
                 drag_selection_mode: DragSelectionMode::Character,
@@ -1985,6 +2021,7 @@ impl TextEditorController {
             scroll_state,
             ime_state: TextImeState { composition: None },
             layout_state: TextLayoutState::new(),
+            intrinsic_size_cache: None,
         }
     }
 
@@ -2045,6 +2082,15 @@ impl TextEditorController {
         text_data
     }
 
+    /// Requests keyboard focus for this editor while it is attached and
+    /// available.
+    ///
+    /// Hidden or disabled editors reject the request. A scrollable ancestor may
+    /// reveal an attached editor that is outside its viewport.
+    pub fn request_focus(&self) {
+        self.focus_handler.request_focus();
+    }
+
     // Returns a reference to the internal focus handler.
     pub(crate) fn focus_handler(&self) -> &FocusRequester {
         &self.focus_handler
@@ -2078,11 +2124,13 @@ impl TextEditorController {
     }
 
     // Returns the latest frame timestamp observed by this controller.
+    #[cfg(test)]
     fn current_frame_nanos(&self) -> u64 {
         self.current_frame_nanos
     }
 
     // Updates the latest frame timestamp used by cursor blink rendering.
+    #[cfg(test)]
     fn update_frame_nanos(&mut self, frame_nanos: u64) {
         self.current_frame_nanos = frame_nanos;
     }
@@ -2257,8 +2305,14 @@ impl TextEditorController {
 
     // Handles a mouse click event and determines the click type (single,
     // double, triple).
-    pub(crate) fn handle_click(&mut self, position: PxPosition, timestamp: Instant) -> ClickType {
-        self.selection_state.handle_click(position, timestamp)
+    pub(crate) fn handle_click(
+        &mut self,
+        position: PxPosition,
+        window_position: PxPosition,
+        timestamp: Instant,
+    ) -> ClickType {
+        self.selection_state
+            .handle_click(position, window_position, timestamp)
     }
 
     // Starts a drag operation (for text selection).
@@ -3317,6 +3371,28 @@ fn clip_and_take_visible(rects: Vec<RectDef>, visible_x1: Px, visible_y1: Px) ->
         .collect()
 }
 
+fn measured_editor_size(
+    text: &TextData,
+    constraint: &TextConstraint,
+    single_line: bool,
+) -> ComputedData {
+    let height = constraint.max_height.map_or(text.size[1], |height| {
+        text.size[1].min(Px::from_f32(height).abs())
+    });
+    let width = Px::from(text.size[0]) + CURSOR_WIDTH.to_px();
+    let width = if single_line {
+        constraint
+            .max_width
+            .map_or(width, |max| width.min(Px::from(Px::from_f32(max).abs())))
+    } else {
+        width
+    };
+    ComputedData {
+        width,
+        height: height.into(),
+    }
+}
+
 #[derive(Clone)]
 struct TextEditLayout {
     controller: State<TextEditorController>,
@@ -3339,6 +3415,16 @@ impl tessera_ui::LayoutModifierNode for TextEditLayout {
             max_width: max_width_pixels.map(|px: Px| px.to_f32()),
             max_height: max_height_pixels.map(|px: Px| px.to_f32()),
         };
+        if input.is_intrinsic() {
+            let cached = self
+                .controller
+                .with(|controller| controller.cached_intrinsic_size(&text_constraint));
+            let size = cached.unwrap_or_else(|| {
+                self.controller
+                    .with_mut(|controller| controller.measure_intrinsic_size(&text_constraint))
+            });
+            return Ok(result.with_size(size));
+        }
         if let Some((_, _, _, computed_data)) =
             self.controller.with(|c| c.cached_layout(&text_constraint))
         {
@@ -3374,25 +3460,9 @@ impl tessera_ui::LayoutModifierNode for TextEditLayout {
             height: line_height,
         });
         let ime_rect = active_ime_rect(&selection_rects, &composition_rects, cursor_rect.clone());
-        let constrained_height = if let Some(max_h) = max_height_pixels {
-            text_data.size[1].min(max_h.abs())
-        } else {
-            text_data.size[1]
-        };
-        let measured_width = Px::from(text_data.size[0]) + CURSOR_WIDTH.to_px();
-        let constrained_width = if self.controller.with(|c| c.single_line()) {
-            if let Some(max_width) = max_width_pixels {
-                measured_width.min(Px::from(max_width.abs()))
-            } else {
-                measured_width
-            }
-        } else {
-            measured_width
-        };
-        let computed_data = ComputedData {
-            width: constrained_width,
-            height: constrained_height.into(),
-        };
+        let computed_data = self.controller.with(|controller| {
+            measured_editor_size(&text_data, &text_constraint, controller.single_line())
+        });
         self.controller.with_mut(|c| {
             c.update_layout_geometry(
                 &text_constraint,
@@ -3408,7 +3478,14 @@ impl tessera_ui::LayoutModifierNode for TextEditLayout {
     }
 }
 
-impl tessera_ui::DrawModifierNode for TextEditLayout {
+#[derive(Clone, PartialEq)]
+struct TextEditDraw {
+    controller: State<TextEditorController>,
+    presentation_focused: bool,
+    blink: State<(u64, bool)>,
+}
+
+impl tessera_ui::DrawModifierNode for TextEditDraw {
     fn draw(
         &self,
         ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
@@ -3429,9 +3506,12 @@ impl tessera_ui::DrawModifierNode for TextEditLayout {
             cursor_visible,
             text_data,
         ) = self.controller.with(|c| {
-            let elapsed = c
-                .current_frame_nanos()
-                .saturating_sub(c.blink_start_frame_nanos());
+            let (blink_start, visible) = self.blink.get();
+            let cursor_visible = if focused {
+                blink_start != c.blink_start_frame_nanos() || visible
+            } else {
+                self.presentation_focused
+            };
             (
                 c.current_selection_rects().to_vec(),
                 c.current_composition_rects().to_vec(),
@@ -3439,7 +3519,7 @@ impl tessera_ui::DrawModifierNode for TextEditLayout {
                 c.selection_color(),
                 c.cursor_color(),
                 c.cursor_color(),
-                focused && elapsed % 1_000_000_000 < 500_000_000,
+                cursor_visible,
                 c.current_text_data(),
             )
         });
@@ -3459,39 +3539,57 @@ impl tessera_ui::DrawModifierNode for TextEditLayout {
     }
 }
 
-/// Core text editing component for rendering text, selection, and cursor.
+/// # text_edit_core
 ///
-/// This component is responsible for rendering the text buffer, selection
-/// highlights, and cursor. It does not handle user events directly; instead, it
-/// is intended to be used inside a container that manages user interaction and
-/// passes state updates via `TextEditorController`.
+/// Render editable text, selection, and a caret for custom input controls.
 ///
-/// # Arguments
+/// ## Usage
 ///
-/// * `controller` - Shared controller for the text editor.
+/// Build custom text editors with shared content and selection state.
+///
+/// ## Parameters
+///
+/// - `controller` — shared text, selection, and keyboard focus state.
+/// - `presentation_focused` — show a static caret without requesting focus;
+///   actual keyboard focus continues to use its normal blinking caret.
+
 #[tessera]
-pub fn text_edit_core(controller: Option<State<TextEditorController>>) {
+pub fn text_edit_core(
+    controller: Option<State<TextEditorController>>,
+    presentation_focused: Option<bool>,
+) {
     let controller = controller.expect("text_edit_core requires a controller");
     let layout_version = controller.with(|c| c.layout_version());
     let policy = TextEditLayout {
         controller,
         layout_version,
     };
-    layout().policy(policy.clone()).draw(policy).child(move || {
-        let focused = controller.with(|c| c.focus_handler().clone()).is_focused();
+    let initial_blink = (controller.with(|c| c.blink_start_frame_nanos()), true);
+    let blink = remember(|| initial_blink);
+    let draw = TextEditDraw {
+        controller,
+        presentation_focused: presentation_focused.unwrap_or(false),
+        blink,
+    };
+    layout().policy(policy).draw(draw).child(move || {
+        let focused = controller.with(|c| c.focus_handler().is_focused());
         if focused {
-            let frame_nanos = current_frame_nanos();
-            controller.with_mut(|controller| controller.update_frame_nanos(frame_nanos));
             receive_frame_nanos(move |frame_nanos| {
-                let is_focused = controller.with_mut(|controller| {
-                    controller.update_frame_nanos(frame_nanos);
-                    controller.focus_handler().is_focused()
+                let (is_focused, blink_start) = controller.with(|controller| {
+                    (
+                        controller.focus_handler().is_focused(),
+                        controller.blink_start_frame_nanos(),
+                    )
                 });
-                if is_focused {
-                    tessera_ui::FrameNanosControl::Continue
-                } else {
-                    tessera_ui::FrameNanosControl::Stop
+                if !is_focused {
+                    return tessera_ui::FrameNanosControl::Stop;
                 }
+                let visible = frame_nanos.saturating_sub(blink_start) % 1_000_000_000 < 500_000_000;
+                let next = (blink_start, visible);
+                if blink.get() != next {
+                    blink.set(next);
+                }
+                tessera_ui::FrameNanosControl::Continue
             });
         }
     });
@@ -3519,7 +3617,9 @@ mod tests {
             testing::{layout_test, pump_layout_test_session, start_layout_test_session},
         };
 
-        use super::super::{TextEditorController, text_edit_core};
+        use super::super::{
+            DisplayTransform, TextEditorController, TransformedText, text_edit_core,
+        };
 
         thread_local! {
             static BUILDS: Cell<usize> = const { Cell::new(0) };
@@ -3540,6 +3640,183 @@ mod tests {
                 let _ = controller.with(|c| c.layout_version());
                 text_edit_core().controller(controller);
             });
+        }
+
+        thread_local! {
+            static DISPLAY_TRANSFORM: Cell<Option<DisplayTransform>> = const { Cell::new(None) };
+            static PROBE_ENABLED: Cell<Option<State<bool>>> = const {Cell::new(None)};
+            static PROBE_WIDTH: Cell<Option<State<i32>>> = const {Cell::new(None)};
+            static PROBE_SIZE: Cell<tessera_ui::ComputedData> = const {Cell::new(tessera_ui::ComputedData::ZERO)};
+        }
+
+        #[derive(Clone, PartialEq)]
+        struct ProbeAfterFinal {
+            enabled: State<bool>,
+            width: State<i32>,
+        }
+
+        impl tessera_ui::LayoutModifierNode for ProbeAfterFinal {
+            fn measure(
+                &self,
+                input: &mut tessera_ui::layout::MeasureScope<'_>,
+            ) -> Result<tessera_ui::layout::LayoutResult, tessera_ui::MeasurementError>
+            {
+                let child = input.children()[0];
+                let normal = child.measure(
+                    input,
+                    &tessera_ui::Constraint::exact(tessera_ui::Px(200), tessera_ui::Px(80)),
+                )?;
+                if self.enabled.get() {
+                    let natural = child.probe_intrinsic(
+                        input,
+                        &tessera_ui::Constraint::new(
+                            tessera_ui::AxisConstraint::exact(tessera_ui::Px(self.width.get())),
+                            tessera_ui::AxisConstraint::NONE,
+                        ),
+                    )?;
+                    PROBE_SIZE.set(natural.size());
+                }
+                let mut result = tessera_ui::layout::LayoutResult::new(normal.size());
+                result.place_child(child, tessera_ui::PxPosition::ZERO);
+                Ok(result)
+            }
+        }
+
+        #[tessera]
+        fn intrinsic_editor_probe() {
+            let display_transform = DisplayTransform::new(|raw: String| {
+                TransformedText::from_strings(&raw, String::new())
+            });
+            DISPLAY_TRANSFORM.set(Some(display_transform));
+            let controller = remember(|| {
+                let mut controller = TextEditorController::new(Dp(14.0), None);
+                controller.set_text("one two three four five six seven eight nine");
+                controller
+            });
+            CONTROLLER.with(|slot| *slot.borrow_mut() = Some(controller));
+            let enabled = remember(|| false);
+            let width = remember(|| 40_i32);
+            PROBE_ENABLED.set(Some(enabled));
+            PROBE_WIDTH.set(Some(width));
+            layout()
+                .policy(ProbeAfterFinal { enabled, width })
+                .child(move || {
+                    BUILDS.with(|builds| builds.set(builds.get() + 1));
+                    let _ = controller.with(|controller| controller.layout_version());
+                    text_edit_core().controller(controller);
+                });
+        }
+
+        #[test]
+        fn intrinsic_editor_probe_preserves_final_layout_and_invalidates_only_its_size_cache() {
+            use super::super::{CURSOR_WIDTH, TextLayoutCacheKey};
+            use crate::{pipelines::text::command::TextConstraint, theme::TextStyle};
+            use tessera_ui::Px;
+
+            BUILDS.set(0);
+            let mut session = start_layout_test_session(
+                layout_test(intrinsic_editor_probe).viewport_px(400, 200),
+            );
+            for frame in 0..4 {
+                pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            let controller = CONTROLLER.with(|slot| slot.borrow().unwrap());
+            let normal = TextConstraint {
+                max_width: Some(200.0),
+                max_height: Some(80.0),
+            };
+            let before = controller.with(|controller| {
+                (
+                    controller.text_cache_key(),
+                    controller.current_text_data().unwrap().size,
+                    controller.current_cursor_rect(),
+                    controller.layout_state.ime_rect(),
+                    controller
+                        .edit_state
+                        .with_buffer(|buffer| (buffer.size(), buffer.scroll())),
+                )
+            });
+            assert!(before.2.is_some());
+            PROBE_ENABLED.get().unwrap().set(true);
+            for frame in 4..8 {
+                pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            let after = controller.with(|controller| {
+                (
+                    controller.text_cache_key(),
+                    controller.current_text_data().unwrap().size,
+                    controller.current_cursor_rect(),
+                    controller.layout_state.ime_rect(),
+                    controller
+                        .edit_state
+                        .with_buffer(|buffer| (buffer.size(), buffer.scroll())),
+                )
+            });
+            assert_eq!(
+                after, before,
+                "intrinsic probing must not publish editor viewport, draw snapshot, cursor, IME or scroll changes"
+            );
+            let narrow = PROBE_SIZE.get();
+            assert!(narrow.height > Px(before.1[1] as i32));
+            PROBE_WIDTH.get().unwrap().set(80);
+            for frame in 8..11 {
+                pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            assert!(
+                PROBE_SIZE.get().height < narrow.height,
+                "a wider intrinsic constraint must reshape wrapped content"
+            );
+            controller.with_mut(|controller| controller.set_text("hi"));
+            for frame in 11..14 {
+                pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            let short = PROBE_SIZE.get();
+            assert!(short.height < narrow.height);
+            controller.with_mut(|controller| {
+                controller.set_text_style(TextStyle {
+                    font_size: Dp(24.0),
+                    line_height: Some(Dp(44.0)),
+                    ..Default::default()
+                })
+            });
+            for frame in 14..17 {
+                pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            assert!(PROBE_SIZE.get().height >= Px(44));
+            assert!(PROBE_SIZE.get().height > short.height);
+            controller
+                .with_mut(|controller| controller.set_display_transform(DISPLAY_TRANSFORM.get()));
+            for frame in 17..20 {
+                pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            assert_eq!(
+                PROBE_SIZE.get().width,
+                CURSOR_WIDTH.to_px(),
+                "intrinsic sizing must use transformed display text"
+            );
+            controller.with(|controller| {
+                assert!(controller.cached_layout(&normal).is_some());
+                assert_eq!(
+                    controller.text_cache_key(),
+                    Some(TextLayoutCacheKey::new(
+                        controller.text_layout_version(),
+                        &normal
+                    ))
+                );
+                assert_eq!(
+                    controller.edit_state.with_buffer(|buffer| buffer.size()),
+                    (Some(200.0), Some(80.0))
+                );
+            });
+            let settled = BUILDS.get();
+            for frame in 20..28 {
+                pump_layout_test_session(&mut session, frame * 16_666_667);
+            }
+            assert_eq!(
+                BUILDS.get(),
+                settled,
+                "a cached intrinsic probe must not perpetually invalidate editor readers"
+            );
         }
 
         #[test]

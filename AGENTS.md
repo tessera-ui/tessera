@@ -108,6 +108,8 @@ This document defines how You should assist in the Tessera project to ensure cod
 - Direct layout-child adjacency is persistent and updated at build/replay structure changes. Stable frames must not rebuild these lists or restore cached layout subtrees recursively.
 - Keep Compose, Measure, Place, and Paint dependencies separate. State reads during measurement invalidate measurement; placement-only calculations may use `MeasureScope::placement` or `LayoutModifierInput::placement` and must not determine sizes or constraints. Implement `place_children` when a policy supports cached placement.
 - Draw-only properties must be excluded from both measurement and placement equality. Placement transforms invalidate window geometry without measuring. Parent-data modifiers should implement `equivalent` when their values can be compared so unchanged weights or alignment do not invalidate the parent.
+- Keep measured control dimensions in local units and share one inherited `LocalToWindow` transformation across rendering, clipping, pointer input, focus reveal, IME, and accessibility. Use `LayoutCoordinates` for local-size consumers; do not feed window rectangle dimensions back into local layout or drawing. See [local layout coordinates](docs/LOCAL_COORDINATES.md).
+- Canonical pointer samples and gesture histories remain in window coordinates. Convert displacements and nested-scroll remainder through each handler's coordinate space, and apply a scene transformation exactly once, including when compositing local textures.
 
 ---
 

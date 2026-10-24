@@ -7,7 +7,7 @@ use tracing::{debug, error, warn};
 use crate::{
     DrawCommand, Px, PxPosition, PxRect, PxSize, SampleRegion,
     render_graph::{
-        ExternalTextureDesc, RenderGraphExecution, RenderResource, RenderResourceId,
+        DrawGeometry, ExternalTextureDesc, RenderGraphExecution, RenderResource, RenderResourceId,
         RenderTextureDesc,
     },
     render_pass::{
@@ -1164,8 +1164,7 @@ fn do_compute_with_targets<T: ComputeTargets>(
             batch_sampling_rects.push(sampling_area);
             batch_items.push(ErasedComputeBatchItem {
                 command: &*candidate.command,
-                size: candidate.size,
-                position: candidate.start_pos,
+                geometry: candidate.geometry,
                 target_area: candidate.target_rect,
             });
             cursor += 1;
@@ -1175,8 +1174,7 @@ fn do_compute_with_targets<T: ComputeTargets>(
             batch_sampling_rects.push(command.sampling_rect);
             batch_items.push(ErasedComputeBatchItem {
                 command: &*command.command,
-                size: command.size,
-                position: command.start_pos,
+                geometry: command.geometry,
                 target_area: command.target_rect,
             });
             cursor = index + 1;
@@ -1326,7 +1324,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
     clipper.restore(&mut rpass, target_size, apply_clip);
 
     // Prepare buffered submission state
-    let mut buffer: Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)> = Vec::new();
+    let mut buffer: Vec<(Box<dyn DrawCommand>, DrawGeometry)> = Vec::new();
     let mut last_command_type_id = None;
     let mut current_batch_draw_rect: Option<PxRect> = None;
     let mut current_batch_read: Option<RenderResourceId> = None;
@@ -1423,7 +1421,7 @@ fn render_current_pass(params: RenderPassParams<'_, '_>) {
 
         // Add the command to the buffer and update the current batch rect
         // (extracted merge helper).
-        buffer.push((cmd.command, cmd.size, cmd.start_pos));
+        buffer.push((cmd.command, cmd.geometry));
         last_command_type_id = Some(cmd.type_id);
         current_batch_read = read_resource;
         current_batch_draw_rect = Some(merge_batch_rect(current_batch_draw_rect, cmd.draw_rect));
@@ -1504,7 +1502,7 @@ fn resolve_scene_view(
 fn submit_buffered_commands(
     rpass: &mut wgpu::RenderPass<'_>,
     params: SubmitBatchParams<'_, '_>,
-    buffer: &mut Vec<(Box<dyn DrawCommand>, PxSize, PxPosition)>,
+    buffer: &mut Vec<(Box<dyn DrawCommand>, DrawGeometry)>,
 ) {
     let SubmitBatchParams {
         drawer,
@@ -1519,7 +1517,7 @@ fn submit_buffered_commands(
     let commands = mem::take(buffer);
     let commands = commands
         .iter()
-        .map(|(cmd, sz, pos)| (&**cmd, *sz, *pos))
+        .map(|(cmd, geometry)| (&**cmd, *geometry))
         .collect::<Vec<_>>();
 
     // Apply clipping to the current batch rectangle; if nothing remains, abort
@@ -1640,22 +1638,7 @@ fn scene_sampling_rect(commands: &[DrawOrClip], target_size: PxSize) -> Option<P
             SampleRegion::Global => return Some(target),
             SampleRegion::Absolute(rect) => rect,
             SampleRegion::PaddedLocal(padding) => {
-                // Fractional positions must expand outward so edge samples
-                // remain available while a component moves between pixels.
-                let left = (command.start_pos.x - padding.left.to_f32()).floor();
-                let top = (command.start_pos.y - padding.top.to_f32()).floor();
-                let right =
-                    (command.start_pos.x + command.size.width.to_f32() + padding.right.to_f32())
-                        .ceil();
-                let bottom =
-                    (command.start_pos.y + command.size.height.to_f32() + padding.bottom.to_f32())
-                        .ceil();
-                PxRect::new(
-                    Px::from_f32(left),
-                    Px::from_f32(top),
-                    Px::from_f32((right - left).max(0.0)),
-                    Px::from_f32((bottom - top).max(0.0)),
-                )
+                command.geometry.padded_window_bounds(padding).outward()
             }
         };
         if let Some(rect) = rect.intersection(&target) {
@@ -1741,8 +1724,7 @@ mod tests {
         DrawOrClip::Draw(crate::render_pass::DrawCommandWithMetadata {
             command: Box::new(SampleCommand(region)),
             type_id: std::any::TypeId::of::<SampleCommand>(),
-            size,
-            start_pos: position,
+            geometry: DrawGeometry::from_position_size(position, size),
             draw_rect: PxRect::from_position_size(position, size),
             read_resource: Some(RenderResourceId::SceneColor),
         })

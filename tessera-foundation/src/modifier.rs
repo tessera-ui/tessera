@@ -21,8 +21,8 @@ use layout::{
 };
 
 pub use interaction::{
-    ClickableArgs, DragDelta, DraggableArgs, InteractionState, PointerEventContext, SelectableArgs,
-    ToggleableArgs,
+    ClickableArgs, DragDelta, DraggableArgs, InteractionState, InteractionVisualState,
+    PointerEventContext, SelectableArgs, ToggleableArgs,
 };
 pub use layout::{
     AlignmentParentData, MinimumInteractiveComponentEnforcement, Padding, WeightParentData,

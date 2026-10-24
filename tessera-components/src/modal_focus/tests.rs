@@ -17,7 +17,7 @@ use crate::{
     bottom_sheet::bottom_sheet_provider,
     button::button,
     column::column,
-    dialog::{basic_dialog, dialog_provider, full_screen_dialog},
+    dialog::{DialogRole, basic_dialog, dialog_provider, full_screen_dialog},
     modifier::ModifierExt as _,
     side_sheet::{SideSheetPosition, modal_side_sheet_provider, standard_side_sheet_provider},
     text::text,
@@ -37,6 +37,7 @@ enum Kind {
 #[derive(Clone, PartialEq)]
 struct Settings {
     label: String,
+    role: DialogRole,
     open: bool,
     show_origin: bool,
     origin_enabled: bool,
@@ -49,6 +50,155 @@ struct Settings {
 thread_local! {
     static KIND: Cell<Kind> = const { Cell::new(Kind::Dialog) };
     static SETTINGS: Cell<Option<State<Settings>>> = const { Cell::new(None) };
+    static LONG_DIALOG_STATE: Cell<Option<State<(bool, usize)>>> = const { Cell::new(None) };
+}
+
+#[tessera]
+fn long_dialog_fixture() {
+    let state = remember(|| (true, 0_usize));
+    LONG_DIALOG_STATE.set(Some(state));
+    material_theme().child(move || {
+        dialog_provider()
+            .accessibility_label("Long message")
+            .is_open(state.get().0)
+            .on_close_request(move || state.with_mut(|state| state.0 = false))
+            .dialog_content(move || {
+                basic_dialog()
+                    .headline("Long message")
+                    .content(|| {
+                        column().children(|| {
+                            for index in 0..30 {
+                                text().content(format!("Message line {index:02}"));
+                            }
+                        });
+                    })
+                    .dismiss_button(move || {
+                        button()
+                            .text()
+                            .accessibility_label("Keep editing")
+                            .on_click(move || state.with_mut(|state| state.0 = false))
+                            .child(|| {
+                                text().content("Keep editing");
+                            });
+                    })
+                    .confirm_button(move || {
+                        button()
+                            .text()
+                            .accessibility_label("Confirm message")
+                            .on_click(move || {
+                                state.with_mut(|state| {
+                                    state.0 = false;
+                                    state.1 += 1;
+                                })
+                            })
+                            .child(|| {
+                                text().content("Confirm");
+                            });
+                    });
+            });
+    });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible() {
+    crate::test_utils::run_isolated_test(
+        "modal_focus::tests::basic_dialog_scrolls_long_body_while_headline_and_actions_remain_visible",
+        || {
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(long_dialog_fixture),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 640,
+                    height: 360,
+                    sample_count: 1,
+                    frame_time: Duration::from_millis(20),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(4);
+            let dialog = labeled_node(&renderer, "Long message", Role::Dialog)
+                .1
+                .bounds()
+                .unwrap();
+            let title = labeled_node(&renderer, "Long message", Role::Label)
+                .1
+                .bounds()
+                .unwrap();
+            let dismiss = node(&renderer, "Keep editing").1.bounds().unwrap();
+            let confirm = node(&renderer, "Confirm message").1.bounds().unwrap();
+            assert!(
+                title.y0 >= dialog.y0 && title.y1 <= dialog.y1,
+                "headline remains within the dialog"
+            );
+            assert!(
+                dismiss.y0 >= dialog.y0 && dismiss.y1 <= dialog.y1,
+                "dismiss action remains within the dialog"
+            );
+            assert!(
+                confirm.y0 >= dialog.y0 && confirm.y1 <= dialog.y1,
+                "confirm action remains within the dialog"
+            );
+            let first = labeled_node(&renderer, "Message line 03", Role::Label)
+                .1
+                .bounds()
+                .unwrap();
+            renderer.pointer_scroll(
+                MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(
+                    ((dialog.x0 + dialog.x1) * 0.5) as f32,
+                    ((title.y1 + confirm.y0) * 0.5) as f32,
+                ),
+                0.0,
+                -36.0,
+            );
+            renderer.render_frames(4);
+            let shifted = labeled_node(&renderer, "Message line 03", Role::Label)
+                .1
+                .bounds()
+                .unwrap();
+            assert!(
+                shifted.y0 < first.y0,
+                "the actual body responds to wheel input"
+            );
+            assert_eq!(
+                labeled_node(&renderer, "Long message", Role::Label)
+                    .1
+                    .bounds(),
+                Some(title)
+            );
+            assert_eq!(node(&renderer, "Keep editing").1.bounds(), Some(dismiss));
+            assert_eq!(node(&renderer, "Confirm message").1.bounds(), Some(confirm));
+            renderer.pointer_scroll(
+                MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(
+                    ((dialog.x0 + dialog.x1) * 0.5) as f32,
+                    ((title.y1 + confirm.y0) * 0.5) as f32,
+                ),
+                0.0,
+                -10_000.0,
+            );
+            renderer.render_frames(24);
+            let last = labeled_node(&renderer, "Message line 29", Role::Label)
+                .1
+                .bounds()
+                .unwrap();
+            assert!(
+                last.y0 >= title.y1 && last.y1 <= confirm.y0,
+                "scrolling reaches the final body line above the pinned actions"
+            );
+            assert_eq!(
+                labeled_node(&renderer, "Long message", Role::Label)
+                    .1
+                    .bounds(),
+                Some(title)
+            );
+            assert_eq!(node(&renderer, "Confirm message").1.bounds(), Some(confirm));
+            action(&mut renderer, "Confirm message", Action::Click);
+            assert_eq!(LONG_DIALOG_STATE.get().unwrap().get(), (false, 1));
+        },
+    );
 }
 
 #[tessera]
@@ -104,6 +254,7 @@ fn modal_content() {
 fn fixture() {
     let settings = remember(|| Settings {
         label: "Example modal".to_string(),
+        role: DialogRole::Dialog,
         open: false,
         show_origin: true,
         origin_enabled: true,
@@ -117,6 +268,7 @@ fn fixture() {
         Kind::Dialog => {
             dialog_provider()
                 .accessibility_label(settings.get().label)
+                .role(settings.get().role)
                 .is_open(settings.get().open)
                 .on_close_request(move || settings.with_mut(|s| s.open = false))
                 .main_content(|| {
@@ -257,6 +409,8 @@ fn open(renderer: &mut HeadlessRenderer) {
                 renderer,
                 if matches!(KIND.get(), Kind::FullScreenDialog) {
                     "Close dialog"
+                } else if matches!(KIND.get(), Kind::BottomSheet) {
+                    "Drag handle"
                 } else {
                     "First action"
                 }
@@ -399,11 +553,21 @@ fn check(samples: u32) {
                 assert_eq!(renderer.accessibility_snapshot().unwrap().focus, other);
                 continue;
             }
-            for (direction, label) in [
-                (FocusDirection::Next, "Second action"),
-                (FocusDirection::Next, "First action"),
-                (FocusDirection::Previous, "Second action"),
-            ] {
+            let traversal = if matches!(kind, Kind::BottomSheet) {
+                vec![
+                    (FocusDirection::Next, "First action"),
+                    (FocusDirection::Next, "Second action"),
+                    (FocusDirection::Next, "Drag handle"),
+                    (FocusDirection::Previous, "Second action"),
+                ]
+            } else {
+                vec![
+                    (FocusDirection::Next, "Second action"),
+                    (FocusDirection::Next, "First action"),
+                    (FocusDirection::Previous, "Second action"),
+                ]
+            };
+            for (direction, label) in traversal {
                 assert!(FocusManager::current().request_move_focus(direction));
                 renderer.render_frames(3);
                 assert_eq!(
@@ -610,6 +774,49 @@ fn check_full_screen(samples: u32) {
     assert!(
         (512.0..=560.0).contains(&width),
         "maximum basic dialog width includes its content padding"
+    );
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration() {
+    crate::test_utils::run_isolated_test(
+        "modal_focus::tests::explicit_alert_dialog_role_preserves_modal_controls_and_focus_restoration",
+        || {
+            KIND.set(Kind::Dialog);
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(fixture),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 640,
+                    height: 360,
+                    sample_count: 1,
+                    frame_time: Duration::from_millis(20),
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(4);
+            let state = SETTINGS.get().unwrap();
+            state.with_mut(|state| state.role = DialogRole::AlertDialog);
+            let origin = node(&renderer, "Open modal").0;
+            open(&mut renderer);
+            let (id, alert) = labeled_node(&renderer, "Example modal", Role::AlertDialog);
+            assert!(alert.is_modal());
+            assert_eq!(
+                renderer.accessibility_snapshot().unwrap().focus,
+                node(&renderer, "First action").0
+            );
+            state.with_mut(|state| state.label = "Updated alert".to_owned());
+            renderer.render_frames(3);
+            assert_eq!(
+                labeled_node(&renderer, "Updated alert", Role::AlertDialog).0,
+                id
+            );
+            action(&mut renderer, "First action", Action::Click);
+            assert!(!state.get().open);
+            assert_eq!(renderer.accessibility_snapshot().unwrap().focus, origin);
+        },
     );
 }
 

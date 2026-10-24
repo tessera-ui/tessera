@@ -5,9 +5,11 @@
 //! Show blocking alerts, confirmations, wizards and forms.
 
 use tessera_ui::{
-    AxisConstraint, Callback, Color, ComputedData, Dp, FocusProperties, FocusScopeNode,
+    AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
-    State, current_frame_nanos,
+    State,
+    accesskit::Role,
+    current_frame_nanos,
     layout::{MeasureScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera, use_context, winit,
@@ -24,7 +26,7 @@ use crate::{
     material_icons::filled,
     modal_focus::{ModalFocusState, modal_focus_modifier},
     modifier::{ModifierExt, SemanticsArgs, with_keyboard_input},
-    overlay_semantics::{dialog_semantics, overlay_background},
+    overlay_semantics::{dialog_semantics_with_role, overlay_background},
     row::row,
     scrollable::ScrollableController,
     shape_def::{RoundedCorner, Shape},
@@ -33,6 +35,25 @@ use crate::{
     text::text,
     theme::{ContentColor, MaterialTheme},
 };
+
+/// The purpose announced for a modal dialog.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DialogRole {
+    /// A modal task, form, or informational dialog.
+    #[default]
+    Dialog,
+    /// An urgent message that requires an immediate response.
+    AlertDialog,
+}
+
+impl DialogRole {
+    fn accessibility_role(self) -> Role {
+        match self {
+            Self::Dialog => Role::Dialog,
+            Self::AlertDialog => Role::AlertDialog,
+        }
+    }
+}
 
 /// Controller for [`dialog_provider`], controlling visibility and animation.
 pub struct DialogController {
@@ -114,6 +135,7 @@ fn make_keyboard_handler(
 #[tessera]
 fn dialog_content_wrapper(
     accessibility_label: Option<String>,
+    role: Option<DialogRole>,
     alpha: Option<f32>,
     padding: Option<Dp>,
     just_opened: Option<bool>,
@@ -129,7 +151,7 @@ fn dialog_content_wrapper(
     let on_close_request = on_close_request.unwrap_or_default();
     let content = content.expect("dialog_content_wrapper requires content");
     let focus_scope = focus_scope.expect("modal content requires its focus scope");
-    let modifier = dialog_semantics(
+    let modifier = dialog_semantics_with_role(
         with_keyboard_input(
             Modifier::new()
                 .focus_scope_with(focus_scope)
@@ -143,6 +165,7 @@ fn dialog_content_wrapper(
         ),
         accessibility_label,
         true,
+        role.unwrap_or_default().accessibility_role(),
     );
     if just_opened {
         focus_scope.request_focus();
@@ -258,6 +281,8 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 /// ## Parameters
 ///
 /// - `accessibility_label` — accessible name describing the dialog or sheet.
+/// - `role` — dialog purpose; use [`DialogRole::AlertDialog`] for an urgent
+///   message that requires a response. Defaults to [`DialogRole::Dialog`].
 /// - `on_close_request` — optional close-request callback.
 /// - `padding` — padding applied inside the dialog surface.
 /// - `full_screen` — fill the available height without outer margins or rounded
@@ -296,6 +321,7 @@ impl tessera_ui::DrawModifierNode for DialogContentLayout {
 #[tessera]
 pub fn dialog_provider(
     #[prop(into)] accessibility_label: Option<String>,
+    role: Option<DialogRole>,
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
     full_screen: Option<bool>,
@@ -328,6 +354,7 @@ pub fn dialog_provider(
     }
     dialog_provider_render()
         .accessibility_label_optional(accessibility_label)
+        .role(role.unwrap_or_default())
         .on_close_request_shared(on_close_request)
         .padding(padding)
         .full_screen(full_screen)
@@ -339,6 +366,7 @@ pub fn dialog_provider(
 #[tessera]
 fn dialog_provider_render(
     accessibility_label: Option<String>,
+    role: Option<DialogRole>,
     on_close_request: Option<Callback>,
     padding: Option<Dp>,
     full_screen: Option<bool>,
@@ -414,6 +442,7 @@ fn dialog_provider_render(
 
             dialog_content_wrapper()
                 .accessibility_label_optional(accessibility_label.clone())
+                .role(role.unwrap_or_default())
                 .focus_scope(focus_scope)
                 .alpha(content_alpha)
                 .padding(padding)
@@ -545,7 +574,7 @@ pub fn full_screen_dialog(
 
 /// # basic_dialog
 ///
-/// A Material Design 3 basic dialog component.
+/// Present a brief confirmation or alert with a scrollable message body.
 ///
 /// ## Usage
 ///
@@ -557,6 +586,7 @@ pub fn full_screen_dialog(
 /// - `headline` — optional headline text.
 /// - `supporting_text` — body text shown in the dialog.
 /// - `content` — optional custom body replacing the supporting text.
+///   Overflowing content scrolls while the headline and actions remain visible.
 /// - `confirm_button` — optional confirm button slot.
 /// - `dismiss_button` — optional dismiss button slot.
 ///
@@ -603,8 +633,9 @@ pub fn basic_dialog(
     } else {
         CrossAxisAlignment::Start
     };
+    let scroll = remember(ScrollableController::new);
 
-    column()
+    layout()
         .modifier(Modifier::new().constrain(
             Some(AxisConstraint::new(
                 Dp(232.0).into(),
@@ -612,87 +643,176 @@ pub fn basic_dialog(
             )),
             Some(AxisConstraint::NONE),
         ))
-        .cross_axis_alignment(alignment)
-        .children(move || {
-            if let Some(icon) = icon.as_ref() {
-                let icon = *icon;
-                let icon_color = scheme.secondary;
-                {
-                    provide_context(
-                        || ContentColor {
-                            current: icon_color,
-                        },
-                        || {
-                            icon.render();
-                        },
-                    );
-                };
-                {
-                    spacer().modifier(Modifier::new().height(Dp(16.0)));
-                };
-            }
-
-            if let Some(headline) = headline.as_ref() {
-                let headline = headline.clone();
-                {
-                    text()
-                        .content(headline.clone())
-                        .style(theme.typography.headline_small)
-                        .color(scheme.on_surface);
-                };
-                {
-                    spacer().modifier(Modifier::new().height(Dp(16.0)));
-                };
-            }
-
-            {
-                if let Some(content) = content {
-                    content.render();
-                } else {
-                    text()
-                        .content(supporting_text.clone())
-                        .style(theme.typography.body_medium)
-                        .color(scheme.on_surface_variant);
+        .policy(BasicDialogLayout {
+            center: icon.is_some(),
+        })
+        .child(move || {
+            let headline = headline.clone();
+            let supporting_text = supporting_text.clone();
+            column().cross_axis_alignment(alignment).children(move || {
+                if let Some(icon) = icon.as_ref() {
+                    let icon = *icon;
+                    let icon_color = scheme.secondary;
+                    {
+                        provide_context(
+                            || ContentColor {
+                                current: icon_color,
+                            },
+                            || {
+                                icon.render();
+                            },
+                        );
+                    };
+                    {
+                        spacer().modifier(Modifier::new().height(Dp(16.0)));
+                    };
                 }
-            };
 
-            if confirm_button.is_some() || dismiss_button.is_some() {
-                {
-                    spacer().modifier(Modifier::new().height(Dp(24.0)));
-                };
-                let action_color = scheme.primary;
-                {
-                    provide_context(
-                        || ContentColor {
-                            current: action_color,
-                        },
-                        || {
-                            row()
-                                .modifier(Modifier::new().fill_max_width())
-                                .main_axis_alignment(MainAxisAlignment::End)
-                                .children(move || {
-                                    let has_dismiss = dismiss_button.is_some();
-                                    let has_confirm = confirm_button.is_some();
+                if let Some(headline) = headline.as_ref() {
+                    let headline = headline.clone();
+                    {
+                        text()
+                            .content(headline.clone())
+                            .style(theme.typography.headline_small)
+                            .color(scheme.on_surface);
+                    };
+                    {
+                        spacer().modifier(Modifier::new().height(Dp(16.0)));
+                    };
+                }
+            });
 
-                                    if let Some(dismiss) = dismiss_button.as_ref() {
-                                        let dismiss = *dismiss;
-                                        dismiss.render();
-                                    }
+            column()
+                .modifier(Modifier::new().vertical_scroll(scroll))
+                .cross_axis_alignment(alignment)
+                .children(move || {
+                    if let Some(content) = content {
+                        content.render();
+                    } else {
+                        text()
+                            .content(supporting_text.clone())
+                            .style(theme.typography.body_medium)
+                            .color(scheme.on_surface_variant);
+                    }
+                });
 
-                                    if has_dismiss && has_confirm {
-                                        {
-                                            spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                        };
-                                    }
+            column().children(move || {
+                if confirm_button.is_some() || dismiss_button.is_some() {
+                    {
+                        spacer().modifier(Modifier::new().height(Dp(24.0)));
+                    };
+                    let action_color = scheme.primary;
+                    {
+                        provide_context(
+                            || ContentColor {
+                                current: action_color,
+                            },
+                            || {
+                                row()
+                                    .modifier(Modifier::new().fill_max_width())
+                                    .main_axis_alignment(MainAxisAlignment::End)
+                                    .children(move || {
+                                        let has_dismiss = dismiss_button.is_some();
+                                        let has_confirm = confirm_button.is_some();
 
-                                    if let Some(confirm) = confirm_button.as_ref() {
-                                        let confirm = *confirm;
-                                        confirm.render();
-                                    }
-                                });
-                        },
-                    );
-                };
-            }
+                                        if let Some(dismiss) = dismiss_button.as_ref() {
+                                            let dismiss = *dismiss;
+                                            dismiss.render();
+                                        }
+
+                                        if has_dismiss && has_confirm {
+                                            {
+                                                spacer().modifier(Modifier::new().width(Dp(8.0)));
+                                            };
+                                        }
+
+                                        if let Some(confirm) = confirm_button.as_ref() {
+                                            let confirm = *confirm;
+                                            confirm.render();
+                                        }
+                                    });
+                            },
+                        );
+                    };
+                }
+            });
         });
+}
+
+#[derive(Clone, PartialEq)]
+struct BasicDialogLayout {
+    center: bool,
+}
+
+impl tessera_ui::LayoutModifierNode for BasicDialogLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let children = input.children();
+        let (Some(header), Some(body), Some(actions)) = (
+            children.first().copied(),
+            children.get(1).copied(),
+            children.get(2).copied(),
+        ) else {
+            return Ok(LayoutResult::default());
+        };
+        let parent = input.parent_constraint().without_min();
+        let actions_size = actions.measure(input, &parent)?;
+        let header_constraint = Constraint::new(
+            parent.width,
+            AxisConstraint::new(
+                Px::ZERO,
+                parent
+                    .height
+                    .resolve_max()
+                    .map(|height| (height - actions_size.height).max(Px::ZERO)),
+            ),
+        );
+        let header_size = header.measure(input, &header_constraint)?;
+        let body_constraint = Constraint::new(
+            parent.width,
+            AxisConstraint::new(
+                Px::ZERO,
+                parent.height.resolve_max().map(|height| {
+                    (height - actions_size.height - header_size.height).max(Px::ZERO)
+                }),
+            ),
+        );
+        let mut body_size = body.measure(input, &body_constraint)?;
+        let width = input.parent_constraint().width().clamp(
+            header_size
+                .width
+                .max(body_size.width)
+                .max(actions_size.width),
+        );
+        if body_size.width != width {
+            body_size = body.measure(
+                input,
+                &Constraint::new(AxisConstraint::exact(width), body_constraint.height),
+            )?;
+        }
+        let height = input
+            .parent_constraint()
+            .height()
+            .clamp(header_size.height + body_size.height + actions_size.height);
+        let x = |child_width: Px| {
+            if self.center {
+                (width.0 - child_width.0) as f32 * 0.5
+            } else {
+                0.0
+            }
+        };
+        let mut result = LayoutResult::default();
+        result.place_child(header, PxPosition::from_f32_xy(x(header_size.width), 0.0));
+        result.place_child(
+            body,
+            PxPosition::from_f32_xy(x(body_size.width), header_size.height.to_f32()),
+        );
+        result.place_child(
+            actions,
+            PxPosition::from_f32_xy(
+                x(actions_size.width),
+                (header_size.height + body_size.height).to_f32(),
+            ),
+        );
+        Ok(result.with_size(ComputedData { width, height }))
+    }
 }

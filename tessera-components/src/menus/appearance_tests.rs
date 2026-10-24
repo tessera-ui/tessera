@@ -13,7 +13,10 @@ use crate::{
     theme::{MaterialTheme, material_theme},
 };
 
-use super::{MenuColorStyle, MenuController, MenuPosition, menu_group, menu_item, menu_provider};
+use super::{
+    MenuColorStyle, MenuController, MenuItemSelectionMode, MenuPosition, menu_group, menu_item,
+    menu_provider,
+};
 
 #[derive(Clone, Copy)]
 struct Settings {
@@ -92,6 +95,7 @@ fn fixture() {
                                 .label("Priority")
                                 .position(MenuPosition::Last)
                                 .selected(settings.get().selected)
+                                .selection_mode(MenuItemSelectionMode::Radio)
                                 .enabled(settings.get().enabled)
                                 .close_on_click(false)
                                 .on_click(move || {

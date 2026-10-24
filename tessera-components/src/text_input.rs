@@ -6,10 +6,10 @@
 use glyphon::Action as GlyphonAction;
 use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer};
 use tessera_ui::{
-    AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData, Dp,
-    ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput, KeyboardInputModifierNode, Modifier,
-    PointerInput, PointerInputModifierNode, Px, PxPosition, PxSize, ScrollDeltaUnit,
-    SemanticsModifierNode, State,
+    AccessibilityActionHandler, AccessibilityNode, Callback, CallbackWith, Color, ComputedData,
+    CursorEventContent, Dp, ImeInput, ImeInputModifierNode, ImeRequest, KeyboardInput,
+    KeyboardInputModifierNode, Modifier, PointerInput, PointerInputModifierNode, Px, PxPosition,
+    PxSize, ScrollDeltaUnit, SemanticsModifierNode, State,
     accesskit::{Action, Role},
     clipboard::{ClipboardAction, ClipboardInput, ClipboardInputModifierNode},
     layout::layout,
@@ -18,7 +18,7 @@ use tessera_ui::{
 };
 
 use crate::{
-    modifier::ModifierExt as _,
+    modifier::{InteractionState, InteractionVisualState, ModifierExt as _},
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
     surface::{SurfaceStyle, surface},
@@ -194,10 +194,12 @@ fn apply_text_input_input_modifiers(
 pub(crate) struct TextInputProps {
     /// Whether the editor is enabled for user input.
     pub enabled: bool,
+    pub presentation_state: Option<InteractionVisualState>,
     /// Whether the editor is read-only.
     pub read_only: bool,
     /// Whether the field is displaying an error state.
     pub is_error: bool,
+    pub(crate) is_secure: bool,
     /// Optional modifier chain applied to the editor container.
     pub modifier: Modifier,
     /// Called when the text content changes. The closure receives the new text
@@ -266,8 +268,10 @@ impl Default for TextInputProps {
     fn default() -> Self {
         Self {
             enabled: true,
+            presentation_state: None,
             read_only: false,
             is_error: false,
+            is_secure: false,
             modifier: Modifier::new(),
             on_change: CallbackWith::default_value(),
             on_submit: Callback::noop(),
@@ -368,6 +372,8 @@ impl TextInputBuilder {
 /// - `border_color` — optional border color.
 /// - `shape` — container shape.
 /// - `padding` — internal padding.
+/// - `presentation_state` — optional visual interaction; live interaction takes
+///   precedence.
 /// - `focus_border_color` — optional focused border color.
 /// - `focus_border_width` — optional focused border width.
 /// - `focus_background_color` — optional focused background color.
@@ -407,6 +413,7 @@ impl TextInputBuilder {
 #[tessera]
 pub fn text_input(
     enabled: Option<bool>,
+    presentation_state: Option<InteractionVisualState>,
     read_only: Option<bool>,
     is_error: Option<bool>,
     modifier: Option<Modifier>,
@@ -473,8 +480,10 @@ pub fn text_input(
     let single_line = single_line.unwrap_or(false);
     let args = TextInputProps {
         enabled,
+        presentation_state,
         read_only,
         is_error,
+        is_secure: false,
         modifier,
         on_change: on_change.unwrap_or_else(CallbackWith::default_value),
         on_submit: on_submit.unwrap_or_else(Callback::noop),
@@ -540,8 +549,14 @@ pub fn text_input(
         scroll_recognizer,
     );
 
+    let current = editor_args;
+    let editor_args = remember(|| current.clone());
+    if editor_args.with(|args| args != &current) {
+        editor_args.set(current);
+    }
     layout().modifier(modifier).child(move || {
-        let text_input_surface = create_surface_args(&editor_args, &controller, &scheme);
+        let args = editor_args.get();
+        let text_input_surface = create_surface_args(&args, &controller, &scheme);
         surface()
             .style(text_input_surface.style)
             .shape(text_input_surface.shape)
@@ -549,7 +564,7 @@ pub fn text_input(
             .modifier(text_input_surface.modifier)
             .child(move || {
                 text_input_padded_content()
-                    .padding(editor_args.padding)
+                    .props(editor_args)
                     .controller(controller);
             });
     });
@@ -586,22 +601,40 @@ fn text_input_editor(props: TextInputProps) {
         scroll_recognizer,
     );
 
+    let current = editor_args;
+    let editor_args = remember(|| current.clone());
+    if editor_args.with(|args| args != &current) {
+        editor_args.set(current);
+    }
     layout().modifier(modifier).child(move || {
         text_input_padded_content()
-            .padding(editor_args.padding)
+            .props(editor_args)
             .controller(controller);
     });
 }
 
 #[tessera]
-fn text_input_padded_content(padding: Option<Dp>, controller: Option<State<TextInputController>>) {
-    let padding = padding.unwrap_or(Dp(0.0));
+fn text_input_padded_content(
+    props: Option<State<TextInputProps>>,
+    controller: Option<State<TextInputController>>,
+) {
+    let props = props.expect("text_input_padded_content requires props to be set");
+    let padding = props.with(|args| args.padding);
     let controller = controller.expect("text_input_padded_content requires controller to be set");
     layout()
         .modifier(Modifier::new().padding_all(padding))
         .child(move || {
-            text_edit_core().controller(controller);
+            text_edit_core()
+                .controller(controller)
+                .presentation_focused(visual_focus(&props.get(), controller));
         });
+}
+
+pub(crate) fn visual_focus(args: &TextInputProps, controller: State<TextInputController>) -> bool {
+    let mut live = InteractionState::new();
+    live.set_focused(controller.with(|c| c.focus_handler().is_focused()));
+    live.with_presentation(args.presentation_state, args.enabled)
+        .is_focused()
 }
 
 pub(crate) fn text_input_core(args: &TextInputProps, controller: State<TextInputController>) {
@@ -688,8 +721,19 @@ fn handle_text_input(
                     return;
                 };
                 // Determine click type and handle accordingly
-                let click_type =
-                    controller.with_mut(|s| s.handle_click(text_relative_pos, click_timestamp));
+                let window_position = input
+                    .pointer_changes
+                    .iter()
+                    .find(|change| {
+                        change.timestamp == click_timestamp
+                            && matches!(change.content, CursorEventContent::Pressed(_))
+                    })
+                    .and_then(|change| change.position())
+                    .or_else(|| input.cursor_position_abs())
+                    .unwrap_or_else(|| input.local_to_window.map_point(cursor_pos));
+                let click_type = controller.with_mut(|s| {
+                    s.handle_click(text_relative_pos, window_position, click_timestamp)
+                });
 
                 match click_type {
                     ClickType::Single => {
@@ -1316,7 +1360,7 @@ pub(crate) fn create_surface_args(
     state: &State<TextInputController>,
     scheme: &MaterialColorScheme,
 ) -> TextInputSurfaceArgs {
-    let focused = state.with(|c| c.focus_handler().is_focused());
+    let focused = visual_focus(args, *state);
     let border_width = determine_border_width(args, focused);
     let is_outlined = border_width.to_pixels_f32() > 0.0;
     let style = if is_outlined {
@@ -1571,13 +1615,17 @@ fn apply_text_input_semantics(
         focus.is_focused(),
         args.on_submit != Callback::noop(),
     );
-    accessibility.role = Some(text_input_accessibility_role(args.single_line));
+    accessibility.role = Some(if args.is_secure {
+        Role::PasswordInput
+    } else {
+        text_input_accessibility_role(args.single_line)
+    });
     accessibility.disabled = !args.enabled;
     accessibility.label = args.accessibility_label.clone();
     accessibility.description = args.accessibility_description.clone();
 
     let current_text = state.with(|c| c.text());
-    accessibility.value = (!current_text.is_empty()).then_some(current_text);
+    accessibility.value = (!args.is_secure && !current_text.is_empty()).then_some(current_text);
 
     accessibility.is_editable_text = args.enabled && !args.read_only;
     accessibility.focusable = args.enabled;
@@ -1900,7 +1948,7 @@ mod tests {
         let drag_position = pointer_position_for_offset(text, 1);
         let click_time = Instant::now();
 
-        let click_type = controller.handle_click(start_position, click_time);
+        let click_type = controller.handle_click(start_position, start_position, click_time);
         assert!(matches!(click_type, ClickType::Single));
         controller.apply_pointer_action(GlyphonAction::Click {
             x: start_position.x_px().0,
@@ -1926,14 +1974,16 @@ mod tests {
         let first_click_time = Instant::now();
         let second_click_time = first_click_time + Duration::from_millis(100);
 
-        let first_click_type = controller.handle_click(first_position, first_click_time);
+        let first_click_type =
+            controller.handle_click(first_position, first_position, first_click_time);
         assert!(matches!(first_click_type, ClickType::Single));
         controller.apply_pointer_action(GlyphonAction::Click {
             x: first_position.x_px().0,
             y: first_position.y_px().0,
         });
 
-        let second_click_type = controller.handle_click(first_position, second_click_time);
+        let second_click_type =
+            controller.handle_click(first_position, first_position, second_click_time);
         assert!(matches!(second_click_type, ClickType::Double));
         controller.apply_pointer_action(GlyphonAction::DoubleClick {
             x: first_position.x_px().0,
@@ -1960,21 +2010,24 @@ mod tests {
         let second_click_time = first_click_time + Duration::from_millis(100);
         let third_click_time = second_click_time + Duration::from_millis(100);
 
-        let first_click_type = controller.handle_click(line_position, first_click_time);
+        let first_click_type =
+            controller.handle_click(line_position, line_position, first_click_time);
         assert!(matches!(first_click_type, ClickType::Single));
         controller.apply_pointer_action(GlyphonAction::Click {
             x: line_position.x_px().0,
             y: line_position.y_px().0,
         });
 
-        let second_click_type = controller.handle_click(line_position, second_click_time);
+        let second_click_type =
+            controller.handle_click(line_position, line_position, second_click_time);
         assert!(matches!(second_click_type, ClickType::Double));
         controller.apply_pointer_action(GlyphonAction::DoubleClick {
             x: line_position.x_px().0,
             y: line_position.y_px().0,
         });
 
-        let third_click_type = controller.handle_click(line_position, third_click_time);
+        let third_click_type =
+            controller.handle_click(line_position, line_position, third_click_time);
         assert!(matches!(third_click_type, ClickType::Triple));
         controller.apply_pointer_action(GlyphonAction::TripleClick {
             x: line_position.x_px().0,

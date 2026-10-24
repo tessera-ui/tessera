@@ -8,7 +8,7 @@ use std::time::Duration;
 use tessera_foundation::gesture::TapRecognizer;
 use tessera_ui::{
     AxisConstraint, Callback, Color, ComputedData, Constraint, Dp, FocusTraversalPolicy,
-    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxRect, PxSize, RenderSlot, State,
+    LayoutResult, MeasurementError, Modifier, Px, PxPosition, PxSize, RenderSlot, State,
     accesskit::Role,
     current_frame_nanos,
     layout::{MeasureScope, layout},
@@ -148,8 +148,8 @@ fn navigation_rail_item_view_content(
                     color: Color::TRANSPARENT,
                 })
                 .shape(Shape::CAPSULE)
-                .modifier(Modifier::new().on_globally_positioned(
-                    move |bounds: tessera_ui::PxRect| {
+                .modifier(Modifier::new().on_layout_coordinates(
+                    move |bounds: tessera_ui::LayoutCoordinates| {
                         if let Some(indicator_geometry) = indicator_geometry {
                             if indicator_geometry.with(|geometry| geometry.indicator)
                                 != Some(bounds)
@@ -573,16 +573,17 @@ fn navigation_rail_item_view(
                 let (position, size) = if let (Some(target), Some(indicator)) =
                     (geometry.target, geometry.indicator)
                 {
+                    let point = target.local_to_window.map_point(PxPosition::from_f32_xy(
+                        ctx.normalized_pos[0] * ctx.size.width.to_f32(),
+                        ctx.normalized_pos[1] * ctx.size.height.to_f32(),
+                    ));
+                    let point = indicator.local_to_window.inverse_point(point);
                     (
                         [
-                            (target.x.to_f32() + ctx.normalized_pos[0] * ctx.size.width.to_f32()
-                                - indicator.x.to_f32())
-                                / indicator.width.to_f32().max(1.0),
-                            (target.y.to_f32() + ctx.normalized_pos[1] * ctx.size.height.to_f32()
-                                - indicator.y.to_f32())
-                                / indicator.height.to_f32().max(1.0),
+                            point.x / indicator.local_size.width.to_f32().max(1.0),
+                            point.y / indicator.local_size.height.to_f32().max(1.0),
                         ],
-                        PxSize::new(indicator.width, indicator.height),
+                        indicator.local_size,
                     )
                 } else {
                     (ctx.normalized_pos, ripple_size)
@@ -613,7 +614,7 @@ fn navigation_rail_item_view(
 
     let modifier = Modifier::new()
         .selectable_with(selectable_args)
-        .on_globally_positioned(move |bounds: PxRect| {
+        .on_layout_coordinates(move |bounds: tessera_ui::LayoutCoordinates| {
             if indicator_geometry.with(|geometry| geometry.target) != Some(bounds) {
                 indicator_geometry.with_mut(|geometry| geometry.target = Some(bounds));
             }
@@ -635,8 +636,8 @@ fn navigation_rail_item_view(
 
 #[derive(Clone, Copy, Default, PartialEq)]
 struct RailRippleGeometry {
-    target: Option<PxRect>,
-    indicator: Option<PxRect>,
+    target: Option<tessera_ui::LayoutCoordinates>,
+    indicator: Option<tessera_ui::LayoutCoordinates>,
 }
 
 #[derive(Clone, PartialEq, Default)]

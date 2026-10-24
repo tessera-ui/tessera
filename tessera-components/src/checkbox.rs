@@ -18,7 +18,8 @@ use crate::{
     boxed::boxed,
     checkmark::checkmark,
     modifier::{
-        DisabledToggleSemantics, InteractionState, ModifierExt, PointerEventContext, ToggleableArgs,
+        DisabledToggleSemantics, InteractionState, InteractionVisualState, ModifierExt,
+        PointerEventContext, ToggleableArgs,
     },
     ripple_state::{RippleSpec, RippleState},
     shape_def::{RoundedCorner, Shape},
@@ -247,6 +248,8 @@ impl CheckmarkState {
 ///   controller.
 /// - `indeterminate` — partial selection, taking precedence over `checked`;
 ///   activation clears this state and requests `true` through `on_toggle`.
+/// - `presentation_state` — optional visual interaction; live input and
+///   disabled state take precedence.
 /// - `is_error` — validation error state; publishes invalid semantics and uses
 ///   error colors unless explicitly overridden. Supply validation details with
 ///   `accessibility_description`. Disabled colors take precedence.
@@ -298,6 +301,7 @@ pub fn checkbox(
     checked: Option<bool>,
     indeterminate: Option<bool>,
     is_error: Option<bool>,
+    presentation_state: Option<InteractionVisualState>,
     size: Option<Dp>,
     color: Option<Color>,
     checked_color: Option<Color>,
@@ -311,6 +315,11 @@ pub fn checkbox(
     #[prop(into)] accessibility_description: Option<String>,
     controller: Option<State<CheckboxController>>,
 ) {
+    let focus_requester = if let Some(focus_requester) = focus_requester {
+        focus_requester
+    } else {
+        remember(FocusRequester::new).get()
+    };
     let modifier = modifier.unwrap_or_default();
     let disabled = disabled.unwrap_or(false);
     let is_error = is_error.unwrap_or(false);
@@ -374,7 +383,7 @@ pub fn checkbox(
     }
 
     checkbox_inner()
-        .focus_requester_optional(focus_requester)
+        .focus_requester(focus_requester)
         .modifier(modifier)
         .size(size)
         .color(color)
@@ -385,6 +394,7 @@ pub fn checkbox(
         .shape(shape)
         .disabled(disabled)
         .is_error(is_error)
+        .presentation_state_optional(presentation_state)
         .disabled_color(disabled_color)
         .disabled_checkmark_color(disabled_checkmark_color)
         .controller(controller)
@@ -407,6 +417,7 @@ fn checkbox_inner(
     shape: Option<Shape>,
     disabled: Option<bool>,
     is_error: Option<bool>,
+    presentation_state: Option<InteractionVisualState>,
     disabled_color: Option<Color>,
     disabled_checkmark_color: Option<Color>,
     accessibility_label: Option<String>,
@@ -462,10 +473,10 @@ fn checkbox_inner(
         .expect("MaterialTheme must be provided")
         .get()
         .color_scheme;
-    let color = if enabled
-        && interaction_state.is_some_and(|state| {
-            state.with(|state| state.is_hovered() || state.is_focused() || state.is_pressed())
-        }) {
+    let visual = interaction_state
+        .map(|state| state.with(|state| state.with_presentation(presentation_state, enabled)))
+        .unwrap_or_else(|| InteractionState::new().with_presentation(presentation_state, enabled));
+    let color = if visual.is_hovered() || visual.is_focused() || visual.is_pressed() {
         unchecked_interaction_color.unwrap_or(scheme.on_surface)
     } else {
         color
@@ -603,6 +614,9 @@ fn checkbox_inner(
                 .ripple_radius(Dp(CheckboxDefaults::STATE_LAYER_SIZE.0 / 2.0))
                 .ripple_color(state_layer_base)
                 .interaction_state_optional(interaction_state)
+                .presentation_state_optional(presentation_state)
+                .focus_requester_optional(focus_requester)
+                .show_focus_indicator(true)
                 .ripple_state_optional(ripple_state);
         })
     };

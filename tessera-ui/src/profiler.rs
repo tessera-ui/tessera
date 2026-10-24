@@ -112,6 +112,9 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(all(feature = "headless", feature = "profiling"))]
+use std::cell::Cell;
+
 use indextree::NodeId;
 use serde::Serialize;
 use serde_json;
@@ -306,6 +309,10 @@ pub struct RuntimeMeta {
 enum Message {
     Sample(Sample),
     FrameMeta(FrameMeta),
+    #[cfg(all(feature = "headless", feature = "profiling"))]
+    FrameSummary(FrameMeta),
+    #[cfg(all(test, feature = "headless", feature = "profiling"))]
+    Flush(mpsc::Sender<()>),
     WakeMeta(WakeMeta),
     RuntimeMeta(RuntimeMeta),
 }
@@ -348,6 +355,9 @@ struct WorkerState {
 
 static RUNTIME: OnceLock<ProfilerRuntime> = OnceLock::new();
 static FRAME_INDEX: AtomicU64 = AtomicU64::new(0);
+
+#[cfg(all(feature = "headless", feature = "profiling"))]
+thread_local! { static FRAME_SUMMARY: Cell<bool> = const { Cell::new(false) }; }
 static OUTPUT_PATH: OnceLock<PathBuf> = OnceLock::new();
 
 fn output_path() -> PathBuf {
@@ -485,6 +495,16 @@ fn worker_loop(receiver: mpsc::Receiver<Message>) {
                     .unwrap_or_default();
                 flush_frame(&mut state, frame_meta, samples);
             }
+            #[cfg(all(feature = "headless", feature = "profiling"))]
+            Message::FrameSummary(frame_meta) => {
+                state.frames.remove(&frame_meta.frame_idx);
+                flush_frame(&mut state, frame_meta, Vec::new());
+            }
+            #[cfg(all(test, feature = "headless", feature = "profiling"))]
+            Message::Flush(done) => {
+                let _ = state.writer.flush();
+                let _ = done.send(());
+            }
             Message::WakeMeta(wake_meta) => {
                 let event = TraceEvent::Wake(WakeEventRecord {
                     frame: wake_meta.frame_idx,
@@ -532,7 +552,15 @@ fn write_event(state: &mut WorkerState, event: &TraceEvent) {
 
 /// Reset the active frame index.
 pub fn begin_frame(frame_idx: u64) {
+    #[cfg(all(feature = "headless", feature = "profiling"))]
+    FRAME_SUMMARY.set(false);
     FRAME_INDEX.store(frame_idx, Ordering::Relaxed);
+}
+
+#[cfg(all(feature = "headless", feature = "profiling"))]
+pub(crate) fn begin_frame_summary(frame_idx: u64) {
+    begin_frame(frame_idx);
+    FRAME_SUMMARY.set(true);
 }
 
 /// Samples are sent immediately; no-op for compatibility.
@@ -543,6 +571,10 @@ fn current_frame_idx() -> u64 {
 }
 
 fn push_sample(sample: Sample) {
+    #[cfg(all(feature = "headless", feature = "profiling"))]
+    if FRAME_SUMMARY.get() {
+        return;
+    }
     if let Err(err) = profiler_runtime().sender.send(Message::Sample(sample)) {
         error!("tessera profiler sample send failed: {err}");
     }
@@ -995,6 +1027,29 @@ pub fn submit_frame_meta(frame_meta: FrameMeta) {
     }
 }
 
+#[cfg(all(feature = "headless", feature = "profiling"))]
+pub(crate) fn submit_frame_summary(mut frame_meta: FrameMeta) {
+    frame_meta.nodes.clear();
+    if let Err(err) = profiler_runtime()
+        .sender
+        .send(Message::FrameSummary(frame_meta))
+    {
+        error!("tessera profiler summary send failed: {err}");
+    }
+}
+
+#[cfg(all(test, feature = "headless", feature = "profiling"))]
+pub(crate) fn flush_for_test() {
+    let (sender, receiver) = mpsc::channel();
+    profiler_runtime()
+        .sender
+        .send(Message::Flush(sender))
+        .expect("Profiler worker");
+    receiver
+        .recv_timeout(Duration::from_secs(10))
+        .expect("Profiler flush");
+}
+
 /// Submit redraw wake metadata.
 pub fn submit_wake_meta(wake_meta: WakeMeta) {
     if let Err(err) = profiler_runtime().sender.send(Message::WakeMeta(wake_meta)) {
@@ -1071,6 +1126,16 @@ impl Drop for ScopeGuard {
     fn drop(&mut self) {
         if let Some(mut sample) = self.sample.take() {
             sample.end = Instant::now();
+            if matches!(sample.phase, Phase::Build) {
+                tracing::trace!(
+                    target: "tessera_ui::build_cost",
+                    fn_name = sample.fn_name.as_deref(),
+                    node_id = ?sample.node_id,
+                    parent_node_id = ?sample.parent_node_id,
+                    duration_ns = sample.end.duration_since(sample.start).as_nanos(),
+                    "component_build_cpu"
+                );
+            }
             push_sample(sample);
         }
     }

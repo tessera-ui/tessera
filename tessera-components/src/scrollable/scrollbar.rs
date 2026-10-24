@@ -2,13 +2,12 @@
 //!
 //! ## Usage
 //!
-//! Compose a scrollbar next to a `Modifier::vertical_scroll` or
-//! `Modifier::horizontal_scroll` viewport to show and drag the scroll thumb.
+//! Show and drag scroll thumbs beside overflowing content.
 
 use std::sync::Arc;
 
 use parking_lot::RwLock;
-use tessera_foundation::gesture::{DragRecognizer, TapRecognizer};
+use tessera_foundation::gesture::{DragRecognizer, ScrollRecognizer, TapRecognizer};
 use tessera_ui::{
     AccessibilityActionHandler, AccessibilityNode, AxisConstraint, Color, ComputedData, Constraint,
     Dp, LayoutResult, MeasurementError, Modifier, Px, PxPosition, SemanticsModifierNode, State,
@@ -21,7 +20,8 @@ use tessera_ui::{
 
 use crate::{
     modifier::{ModifierExt as _, with_pointer_input},
-    scrollable::{ScrollBarBehavior, ScrollableController},
+    nested_scroll::NestedScrollConnection,
+    scrollable::{ScrollBarBehavior, ScrollableController, ScrollbarWheelModifierNode},
     shape_def::Shape,
     surface::surface,
     theme::{MaterialColorScheme, MaterialTheme},
@@ -783,13 +783,14 @@ fn handle_state_h(
 ///
 /// ## Usage
 ///
-/// Compose next to a `Modifier::vertical_scroll` viewport to indicate and drag
-/// the current vertical scroll offset.
+/// Show and drag the vertical offset of overflowing content.
 ///
 /// ## Parameters
 ///
-/// - `total` — content extent along the scroll axis, in physical pixels.
-/// - `visible` — viewport extent along the scroll axis, in physical pixels.
+/// - `total` — content extent in physical pixels; defaults to controller
+///   content.
+/// - `visible` — viewport extent in physical pixels; defaults to controller
+///   viewport.
 /// - `offset` — current scroll offset; defaults to the controller position.
 /// - `thickness` — thickness of the scrollbar track.
 /// - `state` — scroll controller the scrollbar reads and drives.
@@ -797,6 +798,35 @@ fn handle_state_h(
 /// - `track_color`, `thumb_color`, `thumb_hover_color` — themed colors.
 /// - `scrollbar_state` — shared interaction state; created internally when
 ///   absent.
+///
+/// Wheel input follows the attached viewport. A custom track without a viewport
+/// retains tap, drag and accessibility actions and leaves wheel input to
+/// ancestors.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_components::scrollable::{ScrollableController, scrollbar_v};
+/// use tessera_components::theme::material_theme;
+/// use tessera_ui::{Px, PxPosition, remember, tessera};
+/// #[tessera]
+/// fn tracked_content() {
+///     material_theme().child(|| {
+///         let controller = remember(ScrollableController::new);
+///         let offset = PxPosition::new(Px::ZERO, Px(-40));
+///         controller.with_mut(|controller| controller.set_scroll_position(offset));
+///         assert_eq!(
+///             controller.with(|controller| controller.child_position()),
+///             offset
+///         );
+///         scrollbar_v()
+///             .state(controller)
+///             .total(Px(600))
+///             .visible(Px(200));
+///     });
+/// }
+/// tracked_content();
+/// ```
 #[tessera]
 pub fn scrollbar_v(
     total: Option<Px>,
@@ -810,9 +840,12 @@ pub fn scrollbar_v(
     thumb_hover_color: Option<Color>,
     scrollbar_state: Option<ScrollBarState>,
 ) {
-    let total = total.unwrap_or(Px::ZERO);
-    let visible = visible.unwrap_or(Px::ZERO);
-    let offset = offset.unwrap_or(Px::ZERO);
+    let state = state.expect("scrollbar_v requires state");
+    let total = total.unwrap_or_else(|| state.with(|controller| controller.child_size().height));
+    let visible =
+        visible.unwrap_or_else(|| state.with(|controller| controller.visible_size().height));
+    let offset =
+        offset.unwrap_or_else(|| state.with(|controller| controller.child_position().y_px()));
     let thickness = thickness.unwrap_or(ScrollbarDefaults::THICKNESS);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scheme = use_context::<MaterialTheme>()
@@ -822,7 +855,6 @@ pub fn scrollbar_v(
     let thumb_color = thumb_color.unwrap_or_else(|| ScrollbarDefaults::thumb_color(&scheme));
     let thumb_hover_color =
         thumb_hover_color.unwrap_or_else(|| ScrollbarDefaults::thumb_hover_color(&scheme));
-    let state = state.expect("scrollbar_v requires state");
     let args = ScrollBarConfig {
         total,
         visible,
@@ -843,6 +875,9 @@ pub fn scrollbar_v(
     let _ = frame_tick.with(|tick| *tick);
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
+    let nested_scroll_connection =
+        use_context::<NestedScrollConnection>().map(|context| context.get());
     let frame_nanos = current_frame_nanos();
 
     handle_autohide_if_needed(&args, &state, frame_nanos);
@@ -901,6 +936,13 @@ pub fn scrollbar_v(
             frame_nanos,
         );
     })
+    .push_pointer_input(ScrollbarWheelModifierNode {
+        controller: args.state,
+        recognizer: scroll_recognizer,
+        connection: nested_scroll_connection,
+        scrollbar_state: state.clone(),
+        behavior: args.scrollbar_behavior.clone(),
+    })
     .push_semantics(ScrollbarSemanticsModifierNode {
         args: args.clone(),
         state: state.clone(),
@@ -951,13 +993,14 @@ pub fn scrollbar_v(
 ///
 /// ## Usage
 ///
-/// Compose next to a `Modifier::horizontal_scroll` viewport to indicate and
-/// drag the current horizontal scroll offset.
+/// Show and drag the horizontal offset of overflowing content.
 ///
 /// ## Parameters
 ///
-/// - `total` — content extent along the scroll axis, in physical pixels.
-/// - `visible` — viewport extent along the scroll axis, in physical pixels.
+/// - `total` — content extent in physical pixels; defaults to controller
+///   content.
+/// - `visible` — viewport extent in physical pixels; defaults to controller
+///   viewport.
 /// - `offset` — current scroll offset; defaults to the controller position.
 /// - `thickness` — thickness of the scrollbar track.
 /// - `state` — scroll controller the scrollbar reads and drives.
@@ -965,6 +1008,35 @@ pub fn scrollbar_v(
 /// - `track_color`, `thumb_color`, `thumb_hover_color` — themed colors.
 /// - `scrollbar_state` — shared interaction state; created internally when
 ///   absent.
+///
+/// Wheel input follows the attached viewport. A custom track without a viewport
+/// retains tap, drag and accessibility actions and leaves wheel input to
+/// ancestors.
+///
+/// ## Examples
+///
+/// ```
+/// use tessera_components::scrollable::{ScrollableController, scrollbar_h};
+/// use tessera_components::theme::material_theme;
+/// use tessera_ui::{Px, PxPosition, remember, tessera};
+/// #[tessera]
+/// fn tracked_content() {
+///     material_theme().child(|| {
+///         let controller = remember(ScrollableController::new);
+///         let offset = PxPosition::new(Px(-40), Px::ZERO);
+///         controller.with_mut(|controller| controller.set_scroll_position(offset));
+///         assert_eq!(
+///             controller.with(|controller| controller.child_position()),
+///             offset
+///         );
+///         scrollbar_h()
+///             .state(controller)
+///             .total(Px(600))
+///             .visible(Px(200));
+///     });
+/// }
+/// tracked_content();
+/// ```
 #[tessera]
 pub fn scrollbar_h(
     total: Option<Px>,
@@ -978,9 +1050,12 @@ pub fn scrollbar_h(
     thumb_hover_color: Option<Color>,
     scrollbar_state: Option<ScrollBarState>,
 ) {
-    let total = total.unwrap_or(Px::ZERO);
-    let visible = visible.unwrap_or(Px::ZERO);
-    let offset = offset.unwrap_or(Px::ZERO);
+    let state = state.expect("scrollbar_h requires state");
+    let total = total.unwrap_or_else(|| state.with(|controller| controller.child_size().width));
+    let visible =
+        visible.unwrap_or_else(|| state.with(|controller| controller.visible_size().width));
+    let offset =
+        offset.unwrap_or_else(|| state.with(|controller| controller.child_position().x_px()));
     let thickness = thickness.unwrap_or(ScrollbarDefaults::THICKNESS);
     let scrollbar_behavior = scrollbar_behavior.unwrap_or_default();
     let scheme = use_context::<MaterialTheme>()
@@ -990,7 +1065,6 @@ pub fn scrollbar_h(
     let thumb_color = thumb_color.unwrap_or_else(|| ScrollbarDefaults::thumb_color(&scheme));
     let thumb_hover_color =
         thumb_hover_color.unwrap_or_else(|| ScrollbarDefaults::thumb_hover_color(&scheme));
-    let state = state.expect("scrollbar_h requires state");
     let args = ScrollBarConfig {
         total,
         visible,
@@ -1011,6 +1085,9 @@ pub fn scrollbar_h(
     let _ = frame_tick.with(|tick| *tick);
     let tap_recognizer = remember(TapRecognizer::default);
     let drag_recognizer = remember(DragRecognizer::default);
+    let scroll_recognizer = remember(ScrollRecognizer::default);
+    let nested_scroll_connection =
+        use_context::<NestedScrollConnection>().map(|context| context.get());
     let frame_nanos = current_frame_nanos();
 
     handle_autohide_if_needed(&args, &state, frame_nanos);
@@ -1068,6 +1145,13 @@ pub fn scrollbar_h(
             &mut input,
             frame_nanos,
         );
+    })
+    .push_pointer_input(ScrollbarWheelModifierNode {
+        controller: args.state,
+        recognizer: scroll_recognizer,
+        connection: nested_scroll_connection,
+        scrollbar_state: state.clone(),
+        behavior: args.scrollbar_behavior.clone(),
     })
     .push_semantics(ScrollbarSemanticsModifierNode {
         args: args.clone(),
@@ -1157,3 +1241,7 @@ mod tests {
         assert!((faded.a - thumb.a).abs() > 1e-3);
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "scrollbar_bindings_tests.rs"]
+mod bindings_tests;

@@ -22,13 +22,20 @@ struct CachedRectInstances {
 }
 
 fn build_instances(
-    commands: &[(&ShapeCommand, PxSize, PxPosition)],
+    commands: &[(&ShapeCommand, tessera_ui::DrawGeometry)],
     target_size: PxSize,
 ) -> Vec<ShapeUniforms> {
     commands
         .iter()
-        .flat_map(|(command, size, start_pos)| {
-            let mut uniforms = rect_to_uniforms(command, *size, *start_pos);
+        .flat_map(|(command, geometry)| {
+            let mut uniforms =
+                rect_to_uniforms(command, geometry.local_size, geometry.window_origin());
+            let [width, height] = geometry.window_size();
+            let origin = geometry.window_origin();
+            let scale = geometry.local_to_window.scale();
+            uniforms.position = Vec4::new(origin.x, origin.y, width, height);
+            uniforms.corner_radii *= scale;
+            uniforms.border_width *= scale;
             uniforms.screen_size = [target_size.width.to_f32(), target_size.height.to_f32()].into();
             vec![uniforms]
         })
@@ -42,7 +49,7 @@ impl ShapePipeline {
         gpu_queue: &wgpu::Queue,
         target_size: PxSize,
         render_pass: &mut wgpu::RenderPass<'_>,
-        commands: &[(&ShapeCommand, PxSize, PxPosition)],
+        commands: &[(&ShapeCommand, tessera_ui::DrawGeometry)],
         indices: &[usize],
     ) {
         if indices.is_empty() {

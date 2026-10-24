@@ -4,7 +4,7 @@ use encase::{ShaderType, StorageBuffer, UniformBuffer};
 use glam::{Vec2, Vec4};
 use lru::LruCache;
 use tessera_ui::{
-    PxPosition, PxSize,
+    PxSize,
     px::PxRect,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline},
     wgpu,
@@ -49,8 +49,7 @@ struct PreparedGlassInstance {
 
 struct InstanceBuildInput<'a> {
     command: &'a FluidGlassCommand,
-    size: &'a PxSize,
-    start_pos: &'a PxPosition,
+    geometry: tessera_ui::DrawGeometry,
     target_size: PxSize,
     clip_rect: Option<PxRect>,
     device: &'a wgpu::Device,
@@ -519,14 +518,16 @@ impl FluidGlassPipeline {
     fn build_instance(&mut self, input: InstanceBuildInput<'_>) -> PreparedGlassInstance {
         let InstanceBuildInput {
             command,
-            size,
-            start_pos,
+            geometry,
             target_size,
             clip_rect,
             device: gpu,
             queue,
         } = input;
         let render = &command.render;
+        let size = &geometry.local_size;
+        let start_pos = geometry.window_origin();
+        let [world_width, world_height] = geometry.window_size();
         let screen_w = target_size.width.to_f32();
         let screen_h = target_size.height.to_f32();
 
@@ -545,8 +546,8 @@ impl FluidGlassPipeline {
         let rect_uv_bounds = [
             start_pos.x / screen_w,
             start_pos.y / screen_h,
-            (start_pos.x + size.width.0 as f32) / screen_w,
-            (start_pos.y + size.height.0 as f32) / screen_h,
+            (start_pos.x + world_width) / screen_w,
+            (start_pos.y + world_height) / screen_h,
         ];
 
         let resolved_shape = render.shape.resolve_for_size(*size);
@@ -570,8 +571,11 @@ impl FluidGlassPipeline {
             .map(|b| b.width.0 as f32)
             .unwrap_or(0.0);
 
-        let sdf_key =
-            self.maybe_get_sdf_entry(gpu, queue, size, corner_radii, shape_type, corner_g2);
+        let sdf_key = if geometry.local_to_window.scale() == 1.0 {
+            self.maybe_get_sdf_entry(gpu, queue, size, corner_radii, shape_type, corner_g2)
+        } else {
+            None
+        };
 
         let uniforms = GlassUniforms {
             tint_color: render.tint_color.to_array().into(),
@@ -597,7 +601,7 @@ impl FluidGlassPipeline {
 
     fn build_instances(
         &mut self,
-        commands: &[(&FluidGlassCommand, PxSize, PxPosition)],
+        commands: &[(&FluidGlassCommand, tessera_ui::DrawGeometry)],
         target_size: PxSize,
         clip_rect: Option<PxRect>,
         gpu: &wgpu::Device,
@@ -605,11 +609,10 @@ impl FluidGlassPipeline {
     ) -> Vec<PreparedGlassInstance> {
         let mut instances = commands
             .iter()
-            .map(|(cmd, size, pos)| {
+            .map(|(cmd, geometry)| {
                 self.build_instance(InstanceBuildInput {
                     command: cmd,
-                    size,
-                    start_pos: pos,
+                    geometry: *geometry,
                     target_size,
                     clip_rect,
                     device: gpu,

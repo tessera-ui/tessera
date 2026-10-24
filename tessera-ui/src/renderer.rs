@@ -47,10 +47,11 @@ use crate::{
     runtime::{
         TesseraRuntime, begin_frame_clock, clear_persistent_focus_handles, clear_redraw_waker,
         has_pending_build_invalidations, has_pending_frame_nanos_receivers,
-        has_pending_layout_invalidations, install_redraw_waker, prune_persistent_focus_handles,
-        reset_build_invalidations, reset_component_replay_tracking, reset_focus_read_dependencies,
-        reset_frame_clock, reset_layout_dirty_tracking, reset_render_slot_read_dependencies,
-        reset_state_read_dependencies, take_layout_dirty_nodes, tick_frame_nanos_receivers,
+        has_pending_layout_invalidations, has_pending_persistent_focus_prune, install_redraw_waker,
+        prune_persistent_focus_handles, reset_build_invalidations, reset_component_replay_tracking,
+        reset_focus_read_dependencies, reset_frame_clock, reset_layout_dirty_tracking,
+        reset_render_slot_read_dependencies, reset_state_read_dependencies,
+        take_layout_dirty_nodes, tick_frame_nanos_receivers,
     },
     thread_utils,
     time::Instant,
@@ -132,7 +133,33 @@ struct RuntimePendingWork {
     frame_receiver_pending: bool,
 }
 
+pub(crate) const MAX_FOCUS_SETTLING_RETRIES: usize = 8;
+
+pub(crate) fn focus_settling_can_progress(pending_keyboard_retry: bool) -> bool {
+    pending_keyboard_retry
+        || has_pending_build_invalidations()
+        || has_pending_layout_invalidations()
+}
+
 impl RuntimePendingWork {
+    fn capture(pending_keyboard_retry: bool) -> Self {
+        Self {
+            invalidation_pending: has_pending_build_invalidations()
+                || crate::clipboard::has_pending_requests()
+                || pending_keyboard_retry
+                || has_pending_persistent_focus_prune()
+                || TesseraRuntime::with(|runtime| {
+                    runtime.component_tree.has_pending_focus_reveal()
+                        || runtime
+                            .component_tree
+                            .focus_owner()
+                            .has_pending_navigation()
+                }),
+            layout_pending: has_pending_layout_invalidations(),
+            frame_receiver_pending: has_pending_frame_nanos_receivers(),
+        }
+    }
+
     fn requires_redraw(self) -> bool {
         self.invalidation_pending || self.layout_pending || self.frame_receiver_pending
     }
@@ -392,6 +419,7 @@ pub struct Renderer<F: Fn()> {
     config: TesseraConfig,
     /// AccessKit adapter for accessibility support
     accessibility_adapter: Option<AccessKitAdapter>,
+    accessibility_active: bool,
     /// Event loop proxy for posting user events (accessibility/runtime wakeups)
     event_loop_proxy: Option<winit::event_loop::EventLoopProxy<RendererUserEvent>>,
     /// Pending programmatic desktop window action requested through plugin
@@ -560,6 +588,7 @@ impl<F: Fn()> Renderer<F> {
             ime_bridge_state,
             config,
             accessibility_adapter: None,
+            accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
             pending_desktop_window_action: Arc::new(RwLock::new(None)),
             frame_index: 0,
@@ -623,6 +652,7 @@ impl<F: Fn()> Renderer<F> {
             ime_bridge_state,
             config,
             accessibility_adapter: None,
+            accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
             pending_desktop_window_action: Arc::new(RwLock::new(None)),
             frame_index: 0,
@@ -761,6 +791,7 @@ impl<F: Fn()> Renderer<F> {
             android_ime_opened: false,
             config,
             accessibility_adapter: None,
+            accessibility_active: false,
             event_loop_proxy: Some(event_loop_proxy),
             pending_desktop_window_action: Arc::new(RwLock::new(None)),
             frame_index: 0,
@@ -864,7 +895,6 @@ impl RendererImeBridgeState {
 
 impl<F: Fn()> Renderer<F> {
     const RESIZE_EDGE_THRESHOLD: f64 = 8.0;
-    const MAX_FOCUS_BEYOND_BOUNDS_RETRIES: usize = 8;
 
     const fn supports_native_window_frame_controls() -> bool {
         !cfg!(any(
@@ -1160,6 +1190,8 @@ Fps: {:.2}
         });
         flush_pending_focus_callbacks();
         crate::component_tree::flush_pending_globally_positioned_callbacks();
+        let pending_keyboard_retry = pending_keyboard_retry
+            || TesseraRuntime::with(|runtime| runtime.component_tree.has_pending_focus_reveal());
 
         let draw_cost = draw_timer.elapsed();
         debug!("Draw commands computed in {draw_cost:?}");
@@ -1334,8 +1366,8 @@ Fps: {:.2}
             || pending_focus_reveal_retry
             || pending_keyboard_retry
         {
-            if beyond_bounds_retry_count >= Self::MAX_FOCUS_BEYOND_BOUNDS_RETRIES
-                || (!pending_keyboard_retry && !has_pending_build_invalidations())
+            if beyond_bounds_retry_count >= MAX_FOCUS_SETTLING_RETRIES
+                || !focus_settling_can_progress(pending_keyboard_retry)
             {
                 break;
             }
@@ -1372,6 +1404,16 @@ Fps: {:.2}
             pending_focus_move_retry = next_focus_move_retry;
             pending_focus_reveal_retry = next_focus_reveal_retry;
             pending_keyboard_retry = next_keyboard_retry;
+        }
+        if pending_focus_reveal_retry
+            && (has_pending_build_invalidations() || has_pending_layout_invalidations())
+        {
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .focus_owner_mut()
+                    .retain_reveal_retry();
+            });
         }
         prune_persistent_focus_handles();
         #[cfg(not(feature = "profiling"))]
@@ -1529,19 +1571,7 @@ Fps: {:.2}
         // End of frame cleanup
         args.cursor_state.frame_cleanup();
 
-        let runtime_pending_work = RuntimePendingWork {
-            invalidation_pending: has_pending_build_invalidations()
-                || crate::clipboard::has_pending_requests()
-                || pending_keyboard_retry
-                || TesseraRuntime::with(|runtime| {
-                    runtime
-                        .component_tree
-                        .focus_owner()
-                        .has_pending_navigation()
-                }),
-            layout_pending: has_pending_layout_invalidations(),
-            frame_receiver_pending: has_pending_frame_nanos_receivers(),
-        };
+        let runtime_pending_work = RuntimePendingWork::capture(pending_keyboard_retry);
 
         RenderFrameOutcome {
             accessibility_update,
@@ -1887,6 +1917,14 @@ impl<F: Fn()> Renderer<F> {
             consumed: false,
             tap_claimed: false,
         };
+        if state == winit::event::ElementState::Pressed {
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .focus_owner_mut()
+                    .record_pointer_press(event.timestamp);
+            });
+        }
         self.cursor_state.push_event(event);
         debug!("Mouse input: {state:?} button {button:?}");
     }
@@ -1920,6 +1958,12 @@ impl<F: Fn()> Renderer<F> {
         );
         match touch_event.phase {
             winit::event::TouchPhase::Started => {
+                TesseraRuntime::with_mut(|runtime| {
+                    runtime
+                        .component_tree
+                        .focus_owner_mut()
+                        .record_pointer_press(Instant::now());
+                });
                 // Use new touch start handling method
                 self.cursor_state.handle_touch_start(touch_event.id, pos);
             }
@@ -1943,6 +1987,12 @@ impl<F: Fn()> Renderer<F> {
 
     fn handle_keyboard_input(&mut self, event: winit::event::KeyEvent) {
         debug!("Keyboard input: {event:?}");
+        TesseraRuntime::with_mut(|runtime| {
+            runtime
+                .component_tree
+                .focus_owner_mut()
+                .record_keyboard_input(event.state, Instant::now());
+        });
         self.keyboard_state.push_event(event);
     }
 
@@ -1957,7 +2007,8 @@ impl<F: Fn()> Renderer<F> {
         };
 
         app.resize_if_needed();
-        let accessibility_enabled = self.accessibility_adapter.is_some();
+        let accessibility_enabled =
+            self.accessibility_adapter.is_some() && self.accessibility_active;
         let frame_idx = self.frame_index;
         #[cfg(feature = "profiling")]
         let redraw_reasons = self.take_pending_redraw_reasons();
@@ -2177,6 +2228,7 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
 
         // Initialize AccessKit adapter BEFORE showing the window
         if let Some(proxy) = self.event_loop_proxy.clone() {
+            self.accessibility_active = false;
             self.accessibility_adapter = Some(AccessKitAdapter::with_event_loop_proxy(
                 event_loop, &window, proxy,
             ));
@@ -2248,6 +2300,7 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
 
         // Clean up AccessKit adapter
         self.accessibility_adapter = None;
+        self.accessibility_active = false;
 
         self.cursor_state = CursorState::default();
         self.keyboard_state = KeyboardState::default();
@@ -2453,6 +2506,7 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
                 }
                 match event.window_event {
                     AccessKitWindowEvent::InitialTreeRequested => {
+                        self.accessibility_active = true;
                         self.send_accessibility_update();
                     }
                     AccessKitWindowEvent::ActionRequested(action_request) => {
@@ -2474,6 +2528,7 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
                         }
                     }
                     AccessKitWindowEvent::AccessibilityDeactivated => {
+                        self.accessibility_active = false;
                         debug!("AccessKit deactivated");
                     }
                 }
@@ -2484,12 +2539,276 @@ impl<F: Fn()> ApplicationHandler<RendererUserEvent> for Renderer<F> {
 
 #[cfg(test)]
 mod tests {
+    use std::cell::{Cell, RefCell};
+
     use winit::dpi::PhysicalSize;
 
+    use crate::{
+        FocusRequester, Modifier, PxRect, State,
+        component_tree::dispatch_pending_focus_reveal_request,
+        focus::flush_pending_focus_callbacks,
+        layout::{LayoutResult, MeasureScope, layout},
+        modifier::{FocusModifierExt as _, LayoutModifierNode},
+        remember,
+        runtime::{TesseraRuntime, prune_persistent_focus_handles},
+        testing::{layout_test, pump_layout_test_session, start_layout_test_session},
+    };
+
     use super::{
-        RendererImeBridgeState, RendererImeBridgeUpdate, canvas_physical_size,
+        RendererImeBridgeState, RendererImeBridgeUpdate, RuntimePendingWork, canvas_physical_size,
         resolve_startup_window_size,
     };
+
+    thread_local! {
+        static FRAME_END_FOCUS: Cell<Option<(State<bool>, FocusRequester, FocusRequester)>> = const { Cell::new(None) };
+        static FRAME_END_FALLBACK_EVENTS: Cell<usize> = const { Cell::new(0) };
+        static FRAME_END_REVEALS: RefCell<Vec<PxRect>> = const { RefCell::new(Vec::new()) };
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct FocusLeafLayout;
+
+    impl LayoutModifierNode for FocusLeafLayout {
+        fn measure(
+            &self,
+            _scope: &mut MeasureScope<'_>,
+        ) -> Result<LayoutResult, crate::MeasurementError> {
+            Ok(LayoutResult::new(crate::ComputedData {
+                width: crate::Px(64),
+                height: crate::Px(24),
+            }))
+        }
+    }
+
+    #[crate::tessera(crate)]
+    fn frame_end_removable_target(requester: FocusRequester) {
+        layout()
+            .policy(FocusLeafLayout)
+            .modifier(Modifier::new().focusable().focus_requester(requester));
+    }
+
+    #[crate::tessera(crate)]
+    fn frame_end_focus_fixture() {
+        let visible = remember(|| true);
+        let removed = remember(FocusRequester::new).get();
+        let fallback = remember(FocusRequester::new).get();
+        FRAME_END_FOCUS.set(Some((visible, removed, fallback)));
+        layout()
+            .modifier(
+                Modifier::new()
+                    .focus_restorer(Some(fallback))
+                    .focus_reveal_handler(|request: crate::focus::FocusRevealRequest| {
+                        FRAME_END_REVEALS.with_borrow_mut(|rects| rects.push(request.target_rect));
+                        false
+                    }),
+            )
+            .child(move || {
+                if visible.get() {
+                    frame_end_removable_target(removed);
+                }
+                layout().policy(FocusLeafLayout).modifier(
+                    Modifier::new()
+                        .focusable()
+                        .focus_requester(fallback)
+                        .on_focus_changed(|state: crate::focus::FocusState| {
+                            if state.is_focused() {
+                                FRAME_END_FALLBACK_EVENTS.set(FRAME_END_FALLBACK_EVENTS.get() + 1);
+                            }
+                        }),
+                );
+            });
+    }
+
+    thread_local! {
+        static VISIBLE_FOCUS: Cell<Option<(FocusRequester, FocusRequester)>> = const { Cell::new(None) };
+        static VISIBLE_READS: RefCell<Vec<bool>> = const { RefCell::new(Vec::new()) };
+    }
+
+    #[crate::tessera(crate)]
+    fn focus_visibility_observer(requester: FocusRequester) {
+        VISIBLE_READS.with_borrow_mut(|reads| reads.push(requester.is_focus_visible()));
+        layout().policy(FocusLeafLayout);
+    }
+
+    #[crate::tessera(crate)]
+    fn focus_visibility_fixture() {
+        let first = remember(FocusRequester::new).get();
+        let second = remember(FocusRequester::new).get();
+        VISIBLE_FOCUS.set(Some((first, second)));
+        layout().child(move || {
+            frame_end_removable_target(first);
+            frame_end_removable_target(second);
+            focus_visibility_observer(first);
+        });
+    }
+
+    #[test]
+    fn focus_visibility_replays_subscribers_without_changing_same_target_ownership() {
+        use std::time::Duration;
+
+        use winit::event::ElementState;
+
+        use crate::{
+            CursorEventContent, GestureState, MOUSE_POINTER_ID, PointerChange, PxPosition,
+            cursor::PressKeyEventType, testing::pump_layout_test_session_with_input, time::Instant,
+        };
+
+        VISIBLE_READS.with_borrow_mut(Vec::clear);
+        let mut session = start_layout_test_session(layout_test(focus_visibility_fixture));
+        pump_layout_test_session(&mut session, 0);
+        let (first, second) = VISIBLE_FOCUS.get().unwrap();
+        first.request_focus();
+        first.capture_focus();
+        pump_layout_test_session(&mut session, 1);
+        assert!(!first.is_focus_visible());
+        let origin = Instant::now();
+        let keyboard = origin + Duration::from_millis(10);
+        let press = origin + Duration::from_millis(20);
+        let newer_keyboard = origin + Duration::from_millis(30);
+        let key = |timestamp| {
+            TesseraRuntime::with_mut(|runtime| {
+                runtime
+                    .component_tree
+                    .focus_owner_mut()
+                    .record_keyboard_input(ElementState::Pressed, timestamp);
+            });
+        };
+        key(keyboard);
+        pump_layout_test_session(&mut session, 2);
+        assert!(first.is_captured());
+        assert_eq!(
+            VISIBLE_READS.with_borrow(|reads| reads.last().copied()),
+            Some(true)
+        );
+        let pointer = |timestamp| PointerChange {
+            timestamp,
+            pointer_id: MOUSE_POINTER_ID,
+            content: CursorEventContent::Pressed(PressKeyEventType::Left),
+            gesture_state: GestureState::TapCandidate,
+            sampled_position: Default::default(),
+            consumed: false,
+            tap_claimed: false,
+        };
+        pump_layout_test_session_with_input(
+            &mut session,
+            3,
+            vec![pointer(press)],
+            Some(PxPosition::ZERO),
+        );
+        pump_layout_test_session(&mut session, 4);
+        assert!(first.is_captured());
+        assert_eq!(
+            VISIBLE_READS.with_borrow(|reads| reads.last().copied()),
+            Some(false)
+        );
+        key(keyboard);
+        first.request_focus();
+        pump_layout_test_session(&mut session, 5);
+        assert!(!first.is_focus_visible());
+        key(newer_keyboard);
+        pump_layout_test_session_with_input(
+            &mut session,
+            6,
+            vec![pointer(press)],
+            Some(PxPosition::ZERO),
+        );
+        pump_layout_test_session(&mut session, 7);
+        assert!(first.is_captured());
+        assert_eq!(
+            VISIBLE_READS.with_borrow(|reads| reads.last().copied()),
+            Some(true)
+        );
+        let mut hover = pointer(origin + Duration::from_millis(40));
+        hover.content = CursorEventContent::Moved(PxPosition::ZERO);
+        let mut wheel = pointer(origin + Duration::from_millis(50));
+        wheel.content = CursorEventContent::Scroll(crate::cursor::ScrollEventContent {
+            delta_x: 0.0,
+            delta_y: -24.0,
+            unit: crate::cursor::ScrollDeltaUnit::Pixel,
+            source: crate::cursor::ScrollEventSource::Wheel,
+        });
+        pump_layout_test_session_with_input(
+            &mut session,
+            8,
+            vec![hover, wheel],
+            Some(PxPosition::ZERO),
+        );
+        assert!(first.is_captured());
+        assert!(first.is_focus_visible());
+        first.free_focus();
+        second.request_focus();
+        assert!(second.is_focus_visible());
+        assert!(!first.is_focus_visible());
+        pump_layout_test_session_with_input(
+            &mut session,
+            9,
+            vec![pointer(origin + Duration::from_millis(60))],
+            Some(PxPosition::ZERO),
+        );
+        first.request_focus();
+        assert!(first.is_focused());
+        assert!(!first.is_focus_visible());
+    }
+
+    fn dispatch_frame_end_reveal() {
+        TesseraRuntime::with_mut(|runtime| {
+            let (tree, metadatas, focus_owner) =
+                runtime.component_tree.accessibility_dispatch_context();
+            dispatch_pending_focus_reveal_request(tree, metadatas, focus_owner, false);
+        });
+    }
+
+    #[test]
+    fn pruned_focus_restoration_keeps_a_frame_scheduled_until_its_reveal_is_dispatched() {
+        FRAME_END_FALLBACK_EVENTS.set(0);
+        FRAME_END_REVEALS.with_borrow_mut(Vec::clear);
+        let mut session = start_layout_test_session(layout_test(frame_end_focus_fixture));
+        pump_layout_test_session(&mut session, 0);
+        let (visible, removed, fallback) = FRAME_END_FOCUS.get().unwrap();
+        removed.request_focus();
+        assert!(removed.is_focused());
+        dispatch_frame_end_reveal();
+        pump_layout_test_session(&mut session, 1);
+        assert!(!RuntimePendingWork::capture(false).requires_redraw());
+
+        visible.set(false);
+        pump_layout_test_session(&mut session, 2);
+        assert!(!fallback.is_focused());
+        prune_persistent_focus_handles();
+        assert!(!fallback.is_focused());
+        assert!(RuntimePendingWork::capture(false).requires_redraw());
+        pump_layout_test_session(&mut session, 3);
+        prune_persistent_focus_handles();
+        flush_pending_focus_callbacks();
+        assert!(fallback.is_focused());
+        assert_eq!(FRAME_END_FALLBACK_EVENTS.get(), 1);
+
+        pump_layout_test_session(&mut session, 4);
+        assert!(!crate::runtime::has_pending_build_invalidations());
+        assert!(!crate::runtime::has_pending_layout_invalidations());
+        assert!(!crate::runtime::has_pending_frame_nanos_receivers());
+        assert!(!crate::runtime::has_pending_persistent_focus_prune());
+        assert!(!crate::clipboard::has_pending_requests());
+        assert!(!TesseraRuntime::with(|runtime| {
+            runtime
+                .component_tree
+                .focus_owner()
+                .has_pending_navigation()
+        }));
+        assert!(RuntimePendingWork::capture(false).requires_redraw());
+        assert_eq!(FRAME_END_REVEALS.with_borrow(Vec::len), 1);
+
+        dispatch_frame_end_reveal();
+        assert_eq!(
+            FRAME_END_REVEALS.with_borrow(|rects| rects.clone()),
+            vec![
+                PxRect::new(crate::Px(0), crate::Px(0), crate::Px(64), crate::Px(24)),
+                PxRect::new(crate::Px(0), crate::Px(0), crate::Px(64), crate::Px(24)),
+            ]
+        );
+        assert!(fallback.is_focused());
+        assert!(!RuntimePendingWork::capture(false).requires_redraw());
+    }
 
     #[test]
     fn web_canvas_size_tracks_css_density_and_fractional_dimensions() {

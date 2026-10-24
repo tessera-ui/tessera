@@ -12,9 +12,9 @@ use tessera_foundation::{
 };
 use tessera_ui::{
     Callback, CursorEventContent, Dp, Modifier, PointerEventPass, PointerInput,
-    PointerInputModifierNode, PressKeyEventType, RenderSlot, State, current_frame_nanos,
-    current_frame_time, layout::layout, modifier::ModifierCapabilityExt as _, provide_context,
-    remember, tessera, time::Instant,
+    PointerInputModifierNode, PressKeyEventType, PxPosition, RenderSlot, State,
+    current_frame_nanos, current_frame_time, layout::layout, modifier::ModifierCapabilityExt as _,
+    provide_context, remember, tessera, time::Instant,
 };
 
 use crate::{
@@ -100,7 +100,7 @@ impl SheetPointerGesture {
             sample.map(std::slice::from_mut).unwrap_or(&mut []),
             within,
         );
-        self.pending_delta = result.delta_x.to_f32();
+        self.pending_delta = input.local_delta(result.delta_x.to_f32(), 0.0).0;
         self.pending_motion = result.updated;
         if cancelled || result.ended {
             let end = GestureEnd {
@@ -110,7 +110,7 @@ impl SheetPointerGesture {
                     .velocity
                     .take()
                     .and_then(|mut v| v.resolve(now))
-                    .map(|v| v.x)
+                    .map(|v| input.local_delta(v.x, 0.0).0)
                     .unwrap_or(0.0),
             };
             self.claimed = false;
@@ -133,7 +133,10 @@ impl SheetPointerGesture {
         self.claimed = true;
         let now = current_frame_time().unwrap_or_else(Instant::now);
         if let Some(velocity) = &mut self.velocity {
-            velocity.push_delta(now, self.pending_delta, 0.0);
+            let window = input
+                .local_to_window
+                .map_vector(PxPosition::from_f32_xy(self.pending_delta, 0.0));
+            velocity.push_delta(now, window.x, window.y);
         }
         input.consume_pointer_changes();
         Some((started, self.pending_delta))

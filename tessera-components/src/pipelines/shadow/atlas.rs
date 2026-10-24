@@ -130,8 +130,8 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
             let (pad_x, pad_y) = shadow_padding_xy(&layers);
             let pad_pos = PxPosition::new(pad_x, pad_y);
             let mask_size = PxSize::new(
-                item.size.width + pad_x + pad_x,
-                item.size.height + pad_y + pad_y,
+                item.geometry.local_size.width + pad_x + pad_x,
+                item.geometry.local_size.height + pad_y + pad_y,
             );
             if mask_size.width.0 <= 0 || mask_size.height.0 <= 0 {
                 continue;
@@ -147,8 +147,7 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
 
             shadows.push(ShadowItem {
                 op_index: item.op_index,
-                position: item.position,
-                size: item.size,
+                geometry: item.geometry,
                 opacity: item.opacity,
                 shape: item.command.shape,
                 pad_pos,
@@ -291,7 +290,7 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
                     std::any::TypeId::of::<ShadowMaskCommand>(),
                     None,
                     Some(mask_id),
-                    item.size,
+                    item.geometry.local_size,
                     inner_origin + item.pad_pos,
                     1.0,
                 ));
@@ -325,10 +324,8 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
                 }
                 let final_resource =
                     blur_resources[layer_index][(layer_info.radii.len().saturating_sub(1)) % 2];
-                let offset = PxPosition::new(
-                    Px::from_f32(layer_info.layer.offset[0]),
-                    Px::from_f32(layer_info.layer.offset[1]),
-                );
+                let offset =
+                    PxPosition::from_f32_xy(layer_info.layer.offset[0], layer_info.layer.offset[1]);
                 let composite_offset = offset - item.pad_pos;
 
                 let mut composite = ShadowCompositeCommand::new(layer_info.layer.color)
@@ -337,13 +334,17 @@ impl CompositePipeline<ShadowAtlasCommand> for ShadowAtlasPipeline {
                 composite.uv_size = uv_size;
                 composite.apply_opacity(item.opacity);
 
-                ops.push(build_op(
+                ops.push(build_mapped_op(
                     Command::Draw(Box::new(composite)),
                     std::any::TypeId::of::<ShadowCompositeCommand>(),
                     Some(final_resource),
                     Some(RenderResourceId::SceneColor),
-                    item.mask_size,
-                    item.position + composite_offset,
+                    tessera_ui::DrawGeometry::new(
+                        item.mask_size,
+                        item.geometry
+                            .local_to_window
+                            .with_local_origin(composite_offset),
+                    ),
                     item.opacity,
                 ));
             }
@@ -369,8 +370,7 @@ struct ShadowLayerInfo {
 
 struct ShadowItem {
     op_index: usize,
-    position: PxPosition,
-    size: PxSize,
+    geometry: tessera_ui::DrawGeometry,
     opacity: f32,
     shape: ResolvedShape,
     pad_pos: PxPosition,
@@ -451,7 +451,7 @@ struct ShadowStampKey {
 fn build_stamp_key(item: &ShadowItem, sample_count: u32) -> ShadowStampKey {
     ShadowStampKey {
         shape: ResolvedShapeKey::from_shape(item.shape),
-        size: item.size,
+        size: item.geometry.local_size,
         mask_size: item.mask_size,
         pad_pos: (item.pad_pos.x_px().0, item.pad_pos.y_px().0),
         layers: item
@@ -972,14 +972,31 @@ fn build_op(
     position: PxPosition,
     opacity: f32,
 ) -> RenderGraphOp {
+    build_mapped_op(
+        command,
+        type_id,
+        read,
+        write,
+        tessera_ui::DrawGeometry::from_position_size(position, size),
+        opacity,
+    )
+}
+
+fn build_mapped_op(
+    command: Command,
+    type_id: std::any::TypeId,
+    read: Option<RenderResourceId>,
+    write: Option<RenderResourceId>,
+    geometry: tessera_ui::DrawGeometry,
+    opacity: f32,
+) -> RenderGraphOp {
     RenderGraphOp {
         command,
         type_id,
         read,
         write,
         deps: SmallVec::new(),
-        size,
-        position,
+        geometry,
         opacity,
         sequence_index: 0,
     }
@@ -998,7 +1015,7 @@ fn emit_fallback_item(output: &mut CompositeOutput, item: &ShadowItem) {
         std::any::TypeId::of::<ShadowMaskCommand>(),
         None,
         Some(mask_id),
-        item.size,
+        item.geometry.local_size,
         item.pad_pos,
         1.0,
     ));
@@ -1028,23 +1045,25 @@ fn emit_fallback_item(output: &mut CompositeOutput, item: &ShadowItem) {
             continue;
         };
 
-        let offset = PxPosition::new(
-            Px::from_f32(layer_info.layer.offset[0]),
-            Px::from_f32(layer_info.layer.offset[1]),
-        );
+        let offset =
+            PxPosition::from_f32_xy(layer_info.layer.offset[0], layer_info.layer.offset[1]);
         let composite_offset = offset - item.pad_pos;
 
         let mut composite = ShadowCompositeCommand::new(layer_info.layer.color)
             .with_ordering(PxPosition::ZERO, item.mask_size);
         composite.apply_opacity(item.opacity);
 
-        replacement_ops.push(build_op(
+        replacement_ops.push(build_mapped_op(
             Command::Draw(Box::new(composite)),
             std::any::TypeId::of::<ShadowCompositeCommand>(),
             Some(final_resource),
             Some(RenderResourceId::SceneColor),
-            item.mask_size,
-            item.position + composite_offset,
+            tessera_ui::DrawGeometry::new(
+                item.mask_size,
+                item.geometry
+                    .local_to_window
+                    .with_local_origin(composite_offset),
+            ),
             item.opacity,
         ));
     }

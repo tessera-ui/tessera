@@ -20,8 +20,8 @@ use crate::{
     boxed::boxed,
     icon::IconSize,
     modifier::{
-        DisabledToggleSemantics, InteractionState, ModifierExt, PointerEventContext, SemanticsArgs,
-        ToggleableArgs,
+        DisabledToggleSemantics, InteractionState, InteractionVisualState, ModifierExt,
+        PointerEventContext, SemanticsArgs, ToggleableArgs,
     },
     ripple_state::{RippleSpec, RippleState},
     shape_def::Shape,
@@ -371,6 +371,8 @@ impl Default for SwitchController {
 /// - `on_toggle` — optional callback invoked when the switch toggles; omit for
 ///   a noninteractive state display that retains its accessibility value.
 /// - `enabled` — optional enabled state; defaults to `true`.
+/// - `presentation_state` — optional visual interaction state; live input and
+///   disabled state take precedence.
 /// - `checked` — externally controlled checked state; omit to use the
 ///   controller.
 /// - `width` — optional track width override.
@@ -418,6 +420,7 @@ pub fn switch(
     focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     enabled: Option<bool>,
+    presentation_state: Option<InteractionVisualState>,
     checked: Option<bool>,
     width: Option<Dp>,
     height: Option<Dp>,
@@ -444,6 +447,11 @@ pub fn switch(
     {
         controller.with_mut(|controller| controller.toggle());
     }
+    let focus_requester = if let Some(focus_requester) = focus_requester {
+        focus_requester
+    } else {
+        remember(FocusRequester::new).get()
+    };
     let enabled = enabled.unwrap_or(true);
     let interactive = enabled && on_toggle.is_some();
     let interaction_state = if interactive {
@@ -479,10 +487,11 @@ pub fn switch(
     }
 
     switch_content()
-        .focus_requester_optional(focus_requester)
+        .focus_requester(focus_requester)
         .modifier_optional(modifier)
         .on_toggle_optional(on_toggle)
         .enabled(enabled)
+        .presentation_state_optional(presentation_state)
         .width_optional(width)
         .height_optional(height)
         .track_color_optional(track_color)
@@ -509,6 +518,7 @@ fn switch_content(
     focus_requester: Option<FocusRequester>,
     on_toggle: Option<CallbackWith<bool, ()>>,
     enabled: Option<bool>,
+    presentation_state: Option<InteractionVisualState>,
     width: Option<Dp>,
     height: Option<Dp>,
     track_color: Option<Color>,
@@ -539,10 +549,10 @@ fn switch_content(
     let track_checked_color = track_checked_color.unwrap_or(scheme.primary);
     let track_outline_color = track_outline_color.unwrap_or(scheme.outline);
     let track_outline_width = track_outline_width.unwrap_or(SwitchDefaults::TRACK_OUTLINE_WIDTH);
-    let interacting = enabled
-        && interaction_state.is_some_and(|state| {
-            state.with(|state| state.is_hovered() || state.is_focused() || state.is_pressed())
-        });
+    let visual = interaction_state
+        .map(|state| state.with(|state| state.with_presentation(presentation_state, enabled)))
+        .unwrap_or_else(|| InteractionState::new().with_presentation(presentation_state, enabled));
+    let interacting = visual.is_hovered() || visual.is_focused() || visual.is_pressed();
     let thumb_color = thumb_color.unwrap_or(if interacting {
         scheme.on_surface_variant
     } else {
@@ -625,9 +635,7 @@ fn switch_content(
     }
 
     let has_thumb_content = child.is_some();
-    let is_pressed = interaction_state
-        .map(|state| state.with(|s| s.is_pressed()))
-        .unwrap_or(false);
+    let is_pressed = visual.is_pressed();
     let colors = SwitchDefaults::resolve_colors(
         SwitchColorInputs {
             track_color,
@@ -721,6 +729,11 @@ fn switch_content(
                 .shape(Shape::CAPSULE)
                 .show_state_layer(false)
                 .show_ripple(false)
+                .focus_requester_optional(focus_requester)
+                .interaction_state_optional(interaction_state)
+                .presentation_state_optional(presentation_state)
+                .show_focus_indicator(true)
+                .enabled(enabled)
                 .child(|| {});
 
             surface()
@@ -742,6 +755,8 @@ fn switch_content(
                     scheme.on_surface
                 })
                 .interaction_state_optional(interaction_state)
+                .presentation_state_optional(presentation_state)
+                .enabled(enabled)
                 .ripple_state_optional(ripple_state)
                 .child(|| {});
             layout()

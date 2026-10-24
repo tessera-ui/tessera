@@ -120,6 +120,40 @@ impl DrawModifierNode for BackgroundModifierNode {
     }
 }
 
+#[derive(Clone, Copy)]
+pub(crate) struct ScaledBackgroundModifierNode {
+    pub color: Color,
+    pub shape: Shape,
+    pub scale: [f32; 2],
+}
+
+impl DrawModifierNode for ScaledBackgroundModifierNode {
+    fn draw(&self, ctx: &mut DrawModifierContext<'_, '_>, content: &mut dyn DrawModifierContent) {
+        {
+            let mut metadata = ctx.render_input.metadata_mut();
+            let size = metadata
+                .computed_data()
+                .expect("measured scaled background");
+            let (corner_radii, corner_g2) = match self.shape.resolve_for_size(size.into()) {
+                ResolvedShape::Rounded {
+                    corner_radii,
+                    corner_g2,
+                } => (corner_radii, corner_g2),
+                ResolvedShape::Ellipse => ([-1.0; 4], [0.0; 4]),
+            };
+            metadata
+                .fragment_mut()
+                .push_draw_command(ShapeCommand::ScaledRect {
+                    color: self.color,
+                    corner_radii,
+                    corner_g2,
+                    scale: self.scale,
+                });
+        }
+        content.draw(ctx.render_input);
+    }
+}
+
 #[derive(Clone)]
 pub(crate) struct BorderModifierNode {
     pub width: Dp,

@@ -16,6 +16,19 @@ pub enum ShapeCommand {
         /// k=2.0 results in standard G1 circular corners.
         corner_g2: [f32; 4],
     },
+    /// A filled rectangle scaled around its center without changing its draw
+    /// bounds.
+    ScaledRect {
+        /// Fill color.
+        color: Color,
+        /// Original circular corner radii in local pixels, ordered clockwise.
+        corner_radii: [f32; 4],
+        /// Original corner exponents, ordered clockwise.
+        corner_g2: [f32; 4],
+        /// Finite horizontal and vertical scales in the inclusive range
+        /// `0..=1`. A zero axis produces an empty shape.
+        scale: [f32; 2],
+    },
     /// An outlined rectangle
     OutlinedRect {
         /// Color of the border (RGBA)
@@ -120,7 +133,7 @@ impl DrawCommand for ShapeCommand {
 
         let factor = opacity.clamp(0.0, 1.0);
         match self {
-            ShapeCommand::Rect { color, .. } => {
+            ShapeCommand::Rect { color, .. } | ShapeCommand::ScaledRect { color, .. } => {
                 scale_color(color, factor);
             }
             ShapeCommand::OutlinedRect { color, .. } => {
@@ -232,6 +245,28 @@ pub(crate) fn rect_to_uniforms(
             0.0,
             None,
         ),
+        ShapeCommand::ScaledRect {
+            color,
+            corner_radii,
+            corner_g2,
+            scale,
+        } => {
+            assert!(
+                scale
+                    .iter()
+                    .all(|value| value.is_finite() && (0.0..=1.0).contains(value)),
+                "shape scales must be finite and in 0..=1",
+            );
+            (
+                *color,
+                Color::TRANSPARENT,
+                *corner_radii,
+                *corner_g2,
+                0.0,
+                2.0,
+                None,
+            )
+        }
         ShapeCommand::OutlinedRect {
             color,
             corner_radii,
@@ -345,7 +380,9 @@ pub(crate) fn rect_to_uniforms(
     let width = size.width;
     let height = size.height;
 
-    let (ripple_params, ripple_color) = if let Some(r_props) = ripple {
+    let (ripple_params, ripple_color) = if let ShapeCommand::ScaledRect { scale, .. } = command {
+        (Vec4::new(scale[0], scale[1], 0.0, 0.0), Vec4::ZERO)
+    } else if let Some(r_props) = ripple {
         let bounded_flag = if r_props.bounded { 1.0 } else { 0.0 };
         (
             Vec4::new(
@@ -378,3 +415,7 @@ pub(crate) fn rect_to_uniforms(
         screen_size: Vec2::ZERO, // Will be populated in the pipeline
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "scaled_rect_tests.rs"]
+mod scaled_rect_tests;

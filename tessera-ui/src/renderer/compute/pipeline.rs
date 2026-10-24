@@ -83,7 +83,9 @@
 
 use std::{any::TypeId, collections::HashMap};
 
-use crate::{PxPosition, PxRect, PxSize, SendSync, compute::resource::ComputeResourceManager};
+use crate::{
+    PxRect, PxSize, SendSync, compute::resource::ComputeResourceManager, render_graph::DrawGeometry,
+};
 
 use super::command::ComputeCommand;
 
@@ -91,10 +93,8 @@ use super::command::ComputeCommand;
 pub struct ErasedComputeBatchItem<'a> {
     /// The compute command to execute.
     pub command: &'a dyn ComputeCommand,
-    /// The measured size of the target region.
-    pub size: PxSize,
-    /// The absolute position of the target region.
-    pub position: PxPosition,
+    /// Local dimensions and their precise target mapping.
+    pub geometry: DrawGeometry,
     /// The rectangle of the content that will be written.
     pub target_area: PxRect,
 }
@@ -103,10 +103,8 @@ pub struct ErasedComputeBatchItem<'a> {
 pub struct ComputeBatchItem<'a, C: ComputeCommand> {
     /// The compute command to execute.
     pub command: &'a C,
-    /// The measured size of the target region.
-    pub size: PxSize,
-    /// The absolute position of the target region.
-    pub position: PxPosition,
+    /// Local dimensions and their precise target mapping.
+    pub geometry: DrawGeometry,
     /// The rectangle of the content that will be written.
     pub target_area: PxRect,
 }
@@ -302,8 +300,7 @@ impl<C: ComputeCommand + 'static, P: ComputablePipeline<C>> ErasedComputablePipe
                 .expect("Compute batch contained command of unexpected type");
             typed_items.push(ComputeBatchItem {
                 command,
-                size: item.size,
-                position: item.position,
+                geometry: item.geometry,
                 target_area: item.target_area,
             });
         }

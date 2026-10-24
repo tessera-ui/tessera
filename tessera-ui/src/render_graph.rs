@@ -13,9 +13,70 @@ use std::{
 use smallvec::SmallVec;
 
 use crate::{
-    Command, CompositeCommand, ComputeCommand, DrawCommand, DrawRegion, SampleRegion,
+    Command, CompositeCommand, ComputeCommand, DrawCommand, DrawRegion, FloatRect, LocalToWindow,
+    SampleRegion,
     px::{Px, PxPosition, PxRect, PxSize},
 };
+
+/// Local drawing dimensions and their precise placement in the render target.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct DrawGeometry {
+    /// Unscaled dimensions used by command coordinates, radii and strokes.
+    pub local_size: PxSize,
+    /// Mapping from command-local pixels to render-target pixels.
+    pub local_to_window: LocalToWindow,
+}
+
+impl DrawGeometry {
+    /// Creates drawing geometry with an explicit local-to-target mapping.
+    #[must_use]
+    pub const fn new(local_size: PxSize, local_to_window: LocalToWindow) -> Self {
+        Self {
+            local_size,
+            local_to_window,
+        }
+    }
+
+    /// Creates unscaled geometry at a target position.
+    #[must_use]
+    pub fn from_position_size(position: PxPosition, local_size: PxSize) -> Self {
+        Self::new(
+            local_size,
+            LocalToWindow::new(1.0, position).expect("finite draw position"),
+        )
+    }
+
+    /// Returns the precise target origin.
+    #[must_use]
+    pub fn window_origin(self) -> PxPosition {
+        self.local_to_window.map_point(PxPosition::ZERO)
+    }
+
+    /// Returns target dimensions without integer rounding.
+    #[must_use]
+    pub fn window_size(self) -> [f32; 2] {
+        self.local_to_window.map_size(self.local_size)
+    }
+
+    /// Returns precise target bounds.
+    #[must_use]
+    pub fn window_bounds(self) -> FloatRect {
+        self.padded_window_bounds(crate::PaddingRect::ZERO)
+    }
+
+    /// Maps local padding to target bounds without rounding individual edges.
+    #[must_use]
+    pub fn padded_window_bounds(self, padding: crate::PaddingRect) -> FloatRect {
+        self.local_to_window.map_rect(FloatRect {
+            x: -padding.left.to_f32(),
+            y: -padding.top.to_f32(),
+            width: self.local_size.width.to_f32() + padding.left.to_f32() + padding.right.to_f32(),
+            height: self.local_size.height.to_f32()
+                + padding.top.to_f32()
+                + padding.bottom.to_f32(),
+        })
+    }
+}
 
 /// Resource identifier used by render graph nodes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -195,10 +256,8 @@ pub struct RenderGraphOp {
     pub write: Option<RenderResourceId>,
     /// Dependencies on other ops by index.
     pub deps: SmallVec<[usize; 2]>,
-    /// Measured size of the op.
-    pub size: PxSize,
-    /// Absolute position of the op.
-    pub position: PxPosition,
+    /// Local drawing dimensions and their precise target mapping.
+    pub geometry: DrawGeometry,
     /// Opacity multiplier applied during record.
     pub opacity: f32,
     /// Sequence index used to preserve authoring order.
@@ -336,8 +395,7 @@ impl RenderGraphBuilder {
             read: None,
             write: None,
             deps: SmallVec::new(),
-            size: PxSize::ZERO,
-            position: PxPosition::ZERO,
+            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
             opacity: 1.0,
             sequence_index: self.sequence_index,
         });
@@ -352,8 +410,7 @@ impl RenderGraphBuilder {
             read: None,
             write: None,
             deps: SmallVec::new(),
-            size: PxSize::ZERO,
-            position: PxPosition::ZERO,
+            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
             opacity: 1.0,
             sequence_index: self.sequence_index,
         });
@@ -368,8 +425,7 @@ impl RenderGraphBuilder {
             read: None,
             write: None,
             deps: SmallVec::new(),
-            size: PxSize::ZERO,
-            position: PxPosition::ZERO,
+            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
             opacity: 1.0,
             sequence_index: self.sequence_index,
         });
@@ -380,8 +436,7 @@ impl RenderGraphBuilder {
     pub(crate) fn append_fragment(
         &mut self,
         mut fragment: RenderFragment,
-        size: PxSize,
-        position: PxPosition,
+        geometry: DrawGeometry,
         opacity: f32,
     ) {
         if fragment.ops.is_empty() {
@@ -400,7 +455,7 @@ impl RenderGraphBuilder {
         for mut op in fragment.ops.drain(..) {
             let writes_scene = op.write == Some(RenderResourceId::SceneColor);
             let position_override = op.position_override.unwrap_or(PxPosition::ZERO);
-            let size_override = op.size_override.unwrap_or(size);
+            let size_override = op.size_override.unwrap_or(geometry.local_size);
 
             let read = op.read.map(|r| map_resource(r, &resource_map));
             let write = op.write.map(|w| map_resource(w, &resource_map));
@@ -414,10 +469,12 @@ impl RenderGraphBuilder {
                 command.apply_opacity(opacity);
             }
 
-            let resolved_position = if writes_scene {
-                position + position_override
+            let mapping = if writes_scene {
+                geometry
+                    .local_to_window
+                    .with_local_origin(position_override)
             } else {
-                position_override
+                LocalToWindow::IDENTITY.with_local_origin(position_override)
             };
 
             self.ops.push(RenderGraphOp {
@@ -426,8 +483,7 @@ impl RenderGraphBuilder {
                 read,
                 write,
                 deps,
-                size: size_override,
-                position: resolved_position,
+                geometry: DrawGeometry::new(size_override, mapping),
                 opacity,
                 sequence_index: self.sequence_index,
             });
@@ -754,10 +810,8 @@ fn scene_read_rect(op: &RenderGraphOp) -> Option<PxRect> {
     match &op.command {
         Command::Draw(command) => command
             .sample_region()
-            .map(|region| sample_region_rect(region, op.position, op.size)),
-        Command::Compute(command) => {
-            Some(sample_region_rect(command.barrier(), op.position, op.size))
-        }
+            .map(|region| sample_region_rect(region, op.geometry)),
+        Command::Compute(command) => Some(sample_region_rect(command.barrier(), op.geometry)),
         Command::Composite(_) => None,
         Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => None,
     }
@@ -770,38 +824,29 @@ fn scene_write_rect(op: &RenderGraphOp) -> Option<PxRect> {
     match &op.command {
         Command::Draw(command) => Some(
             command
-                .ordering_rect(op.position, op.size)
-                .unwrap_or_else(|| draw_region_rect(command.draw_region(), op.position, op.size)),
+                .ordering_rect(op.geometry)
+                .unwrap_or_else(|| draw_region_rect(command.draw_region(), op.geometry)),
         ),
-        Command::Compute(_) => Some(PxRect::from_position_size(op.position, op.size)),
+        Command::Compute(_) => Some(op.geometry.window_bounds().outward()),
         Command::Composite(_) => None,
         Command::ClipPush(_) | Command::ShapeClipPush(_) | Command::ClipPop => None,
     }
 }
 
-fn sample_region_rect(region: SampleRegion, position: PxPosition, size: PxSize) -> PxRect {
+fn sample_region_rect(region: SampleRegion, geometry: DrawGeometry) -> PxRect {
     match region {
         SampleRegion::Global => PxRect::new(Px::ZERO, Px::ZERO, Px::MAX, Px::MAX),
-        SampleRegion::PaddedLocal(padding) => padded_rect(position, size, padding),
+        SampleRegion::PaddedLocal(padding) => geometry.padded_window_bounds(padding).outward(),
         SampleRegion::Absolute(rect) => rect,
     }
 }
 
-fn draw_region_rect(region: DrawRegion, position: PxPosition, size: PxSize) -> PxRect {
+fn draw_region_rect(region: DrawRegion, geometry: DrawGeometry) -> PxRect {
     match region {
         DrawRegion::Global => PxRect::new(Px::ZERO, Px::ZERO, Px::MAX, Px::MAX),
-        DrawRegion::PaddedLocal(padding) => padded_rect(position, size, padding),
+        DrawRegion::PaddedLocal(padding) => geometry.padded_window_bounds(padding).outward(),
         DrawRegion::Absolute(rect) => rect,
     }
-}
-
-fn padded_rect(position: PxPosition, size: PxSize, padding: crate::PaddingRect) -> PxRect {
-    PxRect::new(
-        position.x_px() - padding.left,
-        position.y_px() - padding.top,
-        size.width + padding.left + padding.right,
-        size.height + padding.top + padding.bottom,
-    )
 }
 
 fn is_state_change(op: &RenderGraphOp) -> bool {
@@ -913,6 +958,60 @@ mod tests {
         PaddingRect, Px, PxPosition, PxSize, SampleRegion, renderer::drawer::command::DrawCommand,
     };
 
+    #[test]
+    fn fragment_maps_scene_overrides_once_and_keeps_texture_generation_unscaled() {
+        let mut fragment = RenderFragment::default();
+        let local = fragment.add_local_texture(RenderTextureDesc {
+            size: PxSize::new(Px(64), Px(32)),
+            format: wgpu::TextureFormat::Rgba8Unorm,
+        });
+        fragment.push_draw_command(ProbeDraw {
+            id: 1,
+            sample: None,
+        });
+        fragment.push_draw_command(ProbeDraw {
+            id: 2,
+            sample: None,
+        });
+        fragment.ops_mut()[0].write = Some(local);
+        for op in fragment.ops_mut() {
+            op.size_override = Some(PxSize::new(Px(64), Px(32)));
+            op.position_override = Some(PxPosition::from_f32_xy(4.0, 8.0));
+        }
+        let mut builder = RenderGraphBuilder::new();
+        builder.append_fragment(
+            fragment,
+            DrawGeometry::new(
+                PxSize::new(Px(240), Px(56)),
+                LocalToWindow::new(0.625, PxPosition::from_f32_xy(10.25, 20.5)).unwrap(),
+            ),
+            1.0,
+        );
+        let graph = builder.finish();
+        let local = graph
+            .ops()
+            .iter()
+            .find(|op| op.write == Some(RenderResourceId::Local(0)))
+            .unwrap();
+        let scene = graph
+            .ops()
+            .iter()
+            .find(|op| op.write == Some(RenderResourceId::SceneColor))
+            .unwrap();
+        assert_eq!(local.geometry.local_to_window.scale(), 1.0);
+        assert_eq!(
+            local.geometry.window_origin(),
+            PxPosition::from_f32_xy(4.0, 8.0)
+        );
+        assert_eq!(local.geometry.window_size(), [64.0, 32.0]);
+        assert_eq!(scene.geometry.local_size, PxSize::new(Px(64), Px(32)));
+        assert_eq!(
+            scene.geometry.window_origin(),
+            PxPosition::from_f32_xy(12.75, 25.5)
+        );
+        assert_eq!(scene.geometry.window_size(), [40.0, 20.0]);
+    }
+
     #[derive(Clone)]
     struct ProbeDraw {
         id: u32,
@@ -934,8 +1033,10 @@ mod tests {
             read: None,
             write: Some(RenderResourceId::SceneColor),
             deps: SmallVec::new(),
-            size: PxSize::new(Px::new(w), Px::new(h)),
-            position: PxPosition::new(Px::new(x), Px::new(y)),
+            geometry: DrawGeometry::from_position_size(
+                PxPosition::new(Px::new(x), Px::new(y)),
+                PxSize::new(Px::new(w), Px::new(h)),
+            ),
             opacity: 1.0,
             sequence_index: sequence,
         }
@@ -968,8 +1069,7 @@ mod tests {
             read: None,
             write: None,
             deps: SmallVec::new(),
-            size: PxSize::ZERO,
-            position: PxPosition::ZERO,
+            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
             opacity: 1.0,
             sequence_index: sequence,
         }
@@ -982,8 +1082,7 @@ mod tests {
             read: None,
             write: None,
             deps: SmallVec::new(),
-            size: PxSize::ZERO,
-            position: PxPosition::ZERO,
+            geometry: DrawGeometry::new(PxSize::ZERO, LocalToWindow::IDENTITY),
             opacity: 1.0,
             sequence_index: sequence,
         }

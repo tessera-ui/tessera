@@ -10,7 +10,7 @@ use tessera_ui::{
     Callback, CallbackWith, Color, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     State, current_frame_nanos,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     receive_frame_nanos, remember, tessera, use_context, winit,
 };
@@ -260,14 +260,14 @@ fn is_close_direction(delta_x: f32, position: SideSheetPosition) -> bool {
 }
 
 fn side_sheet_extent_modifier(controller: State<SideSheetController>) -> Modifier {
-    Modifier::new()
-        .fill_max_height()
-        .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-            let extent = Dp::from_pixels_f64(f64::from(bounds.width.0)).0;
+    Modifier::new().fill_max_height().on_layout_coordinates(
+        move |coordinates: tessera_ui::LayoutCoordinates| {
+            let extent = Dp::from_pixels_f64(f64::from(coordinates.local_size.width.0)).0;
             if controller.with(|c| c.drag.extent() != extent) {
                 controller.with_mut(|c| c.drag.set_extent(extent, current_frame_nanos()));
             }
-        })
+        },
+    )
 }
 
 fn is_open_direction(delta_x: f32, position: SideSheetPosition) -> bool {
@@ -569,12 +569,14 @@ fn side_sheet_provider_render(
         current_position.set(position);
     }
     let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let coordinate_scale = remember(|| 1.0_f32);
     let nested_scroll_connection = build_side_sheet_nested_scroll_connection(
         controller,
         on_close_request,
         current_position,
         parent_nested_scroll,
-    );
+    )
+    .with_coordinate_scale(coordinate_scale);
     let (is_open, visibility, drag_offset) = controller.get().snapshot();
     let is_animating = controller.get().is_animating();
     let side_sheet_open_state = remember(|| false);
@@ -612,7 +614,13 @@ fn side_sheet_provider_render(
     };
 
     layout()
-        .modifier(modifier)
+        .modifier(
+            modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
+                if coordinate_scale.get() != transform.scale() {
+                    coordinate_scale.set(transform.scale());
+                }
+            }),
+        )
         .policy(SideSheetLayout {
             progress,
             is_open,
@@ -780,6 +788,41 @@ struct SideSheetLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for SideSheetLayout {
+    fn measure_eq(&self, _other: &Self) -> bool {
+        true
+    }
+
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        let children = input.children();
+        let main_content = children.first()?;
+        let mut result = LayoutResult::new(input.size());
+        result.place_child(*main_content, PxPosition::ZERO);
+        if let Some(scrim) = children.get(1) {
+            result.place_child(*scrim, PxPosition::ZERO);
+        }
+        if let Some(sheet) = children.get(2) {
+            let parent_width = input
+                .parent_constraint()
+                .width()
+                .resolve_max()
+                .unwrap_or(Px::ZERO);
+            let x = compute_side_sheet_x(
+                parent_width,
+                sheet.size().width,
+                self.progress,
+                self.is_open,
+                self.position,
+                self.drag_offset,
+            );
+            result.place_child(*sheet, PxPosition::from_f32_xy(x, 0.0));
+        }
+        Some(result.into_placement_result())
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();

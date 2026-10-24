@@ -303,6 +303,7 @@ pub mod entry_point;
 pub mod entry_registry;
 mod execution_context;
 pub mod focus;
+pub mod geometry;
 #[cfg(all(feature = "headless", not(target_family = "wasm")))]
 pub mod headless;
 mod ime_state;
@@ -361,6 +362,7 @@ pub use crate::{
         FocusRestorationTarget, FocusScopeNode, FocusState, FocusTraversalPolicy,
         FocusTraversalStrategy,
     },
+    geometry::{FloatRect, LayoutCoordinates, LocalToWindow, scaled_box},
     layout::{
         DefaultLayoutNode, DrawModifierHandle, LayoutModifierHandle, LayoutResult,
         NoopDrawModifier, RenderInput, RenderMetadataMut,
@@ -380,8 +382,8 @@ pub use crate::{
     prop::{Callback, CallbackWith, RenderSlot, RenderSlotWith, Slot},
     px::{Px, PxPosition, PxRect, PxSize},
     render_graph::{
-        ExternalTextureDesc, RenderFragment, RenderFragmentOp, RenderGraph, RenderGraphOp,
-        RenderGraphParts, RenderResource, RenderResourceId, RenderTextureDesc,
+        DrawGeometry, ExternalTextureDesc, RenderFragment, RenderFragmentOp, RenderGraph,
+        RenderGraphOp, RenderGraphParts, RenderResource, RenderResourceId, RenderTextureDesc,
     },
     render_module::RenderModule,
     render_scene::{Command, CompositeCommand, DrawRegion, PaddingRect, SampleRegion},

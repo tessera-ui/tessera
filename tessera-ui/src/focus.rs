@@ -15,9 +15,9 @@ use std::{
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
 use crate::{
-    NodeId, PxRect,
+    NodeId, PxPosition, PxRect,
     component_tree::{
-        ComponentNodeMetaDatas, ComponentNodeTree, nearest_replay_boundary_instance_key,
+        ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, nearest_replay_boundary_instance_key,
     },
     execution_context::{with_execution_context, with_execution_context_mut},
     prop::CallbackWith,
@@ -327,8 +327,11 @@ impl FocusTraversalPolicy {
 }
 
 /// A request for scroll containers to reveal a focused rectangle.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub struct FocusRevealRequest {
+    target_bounds: crate::FloatRect,
+    viewport_bounds: crate::FloatRect,
+    local_to_window: crate::LocalToWindow,
     /// The absolute rectangle of the focused target.
     pub target_rect: PxRect,
     /// The absolute visible viewport of the current reveal container.
@@ -336,12 +339,28 @@ pub struct FocusRevealRequest {
 }
 
 impl FocusRevealRequest {
-    /// Creates a new focus reveal request.
-    pub(crate) const fn new(target_rect: PxRect, viewport_rect: PxRect) -> Self {
+    pub(crate) fn with_geometry(
+        target_bounds: crate::FloatRect,
+        viewport_bounds: crate::FloatRect,
+        local_to_window: crate::LocalToWindow,
+    ) -> Self {
         Self {
-            target_rect,
-            viewport_rect,
+            target_rect: target_bounds.outward(),
+            viewport_rect: viewport_bounds.outward(),
+            target_bounds,
+            viewport_bounds,
+            local_to_window,
         }
+    }
+
+    /// Returns the focused rectangle in the reveal container's local units.
+    pub fn local_target_bounds(self) -> crate::FloatRect {
+        self.local_to_window.inverse_rect(self.target_bounds)
+    }
+
+    /// Returns the visible viewport in the reveal container's local units.
+    pub fn local_viewport_bounds(self) -> crate::FloatRect {
+        self.local_to_window.inverse_rect(self.viewport_bounds)
     }
 }
 
@@ -612,6 +631,24 @@ impl FocusRequester {
     /// Returns `true` when this node is the primary focused node.
     pub fn is_focused(&self) -> bool {
         self.state().is_focused()
+    }
+
+    /// Returns whether the focused target should display a keyboard focus
+    /// indicator.
+    ///
+    /// Pointer presses hide the indicator without releasing focus. Keyboard
+    /// input and accessibility focus actions show it; programmatic focus
+    /// inherits the most recent input mode. Read this during component
+    /// composition.
+    ///
+    /// ```
+    /// use tessera_ui::FocusRequester;
+    /// let target = FocusRequester::new();
+    /// assert!(!target.is_focus_visible());
+    /// ```
+    pub fn is_focus_visible(&self) -> bool {
+        track_focus_requester_read_dependency(self.id);
+        with_focus_owner(|owner| owner.is_requester_focus_visible(self.id))
     }
 
     /// Returns `true` when this node has captured focus.
@@ -1048,6 +1085,12 @@ enum FocusCommand {
     Restore(FocusHandleId),
 }
 
+#[derive(Clone, Copy)]
+struct DeferredFocusCommand {
+    command: FocusCommand,
+    reveal: bool,
+}
+
 #[derive(Clone, Copy, Default, PartialEq, Eq)]
 enum KeyboardLayoutBarrier {
     #[default]
@@ -1073,7 +1116,9 @@ pub(crate) struct FocusOwner {
     captured: Option<FocusHandleId>,
     suspended: Option<FocusHandleId>,
     owner_focused: bool,
-    pending: Vec<FocusCommand>,
+    focus_visible: bool,
+    latest_focus_input: Option<crate::time::Instant>,
+    pending: Vec<DeferredFocusCommand>,
     pending_notifications: Vec<FocusNotification>,
     pending_reveal: Option<FocusHandleId>,
     pending_navigation: Option<FocusDirection>,
@@ -1096,6 +1141,8 @@ impl FocusOwner {
             captured: None,
             suspended: None,
             owner_focused: true,
+            focus_visible: false,
+            latest_focus_input: None,
             pending: Vec::new(),
             pending_notifications: Vec::new(),
             pending_reveal: None,
@@ -1171,8 +1218,93 @@ impl FocusOwner {
         self.active
     }
 
+    pub(crate) fn has_pending_reveal(&self) -> bool {
+        self.pending_reveal.is_some()
+    }
+
     pub(crate) fn take_pending_reveal(&mut self) -> Option<FocusHandleId> {
         self.pending_reveal.take()
+    }
+
+    pub(crate) fn retain_reveal_retry(&mut self) {
+        if self.pending_reveal.is_none() {
+            self.pending_reveal = self.active;
+        }
+    }
+
+    pub(crate) fn cancel_pending_reveal_for_scroll(&mut self) {
+        self.pending_reveal = None;
+        for pending in &mut self.pending {
+            if matches!(
+                pending.command,
+                FocusCommand::Request(_) | FocusCommand::Restore(_)
+            ) {
+                pending.reveal = false;
+            }
+        }
+    }
+
+    pub(crate) fn record_keyboard_input(
+        &mut self,
+        state: winit::event::ElementState,
+        timestamp: crate::time::Instant,
+    ) {
+        if state == winit::event::ElementState::Pressed {
+            self.record_focus_input(true, timestamp);
+        }
+    }
+
+    pub(crate) fn record_pointer_press(&mut self, timestamp: crate::time::Instant) {
+        self.record_focus_input(false, timestamp);
+    }
+
+    pub(crate) fn observe_pointer_press(&mut self, timestamp: crate::time::Instant) {
+        if self
+            .latest_focus_input
+            .is_none_or(|latest| timestamp > latest)
+        {
+            self.record_pointer_press(timestamp);
+        }
+    }
+
+    pub(crate) fn record_accessibility_focus(&mut self, timestamp: crate::time::Instant) {
+        self.record_focus_input(true, timestamp);
+    }
+
+    fn record_focus_input(&mut self, visible: bool, timestamp: crate::time::Instant) {
+        if self
+            .latest_focus_input
+            .is_some_and(|latest| timestamp < latest)
+        {
+            return;
+        }
+        self.latest_focus_input = Some(timestamp);
+        if self.focus_visible == visible {
+            return;
+        }
+        self.focus_visible = visible;
+        let Some(active) = self.active else {
+            return;
+        };
+        if let Some(node) = self.nodes.get(&active)
+            && let Some(attachment) = node.attachment
+            && attachment.host_replay_boundary_key != 0
+        {
+            record_replay_boundary_invalidation_for_instance_key(
+                attachment.host_replay_boundary_key,
+            );
+        }
+        if let Some(requesters) = self.requesters_by_handle.get(&active) {
+            for requester in requesters {
+                for reader in focus_requester_read_subscribers(*requester) {
+                    record_replay_boundary_invalidation_for_instance_key(reader);
+                }
+            }
+        }
+    }
+
+    pub(crate) fn is_requester_focus_visible(&self, id: FocusRequesterId) -> bool {
+        self.owner_focused && self.focus_visible && self.state_of_requester(id).is_focused()
     }
 
     pub(crate) fn state_of_requester(&self, id: FocusRequesterId) -> FocusState {
@@ -1392,17 +1524,41 @@ impl FocusOwner {
             let rect = metadatas.get(node_id).and_then(|metadata| {
                 let position = metadata.abs_position?;
                 let size = metadata.computed_data?;
-                let rect =
-                    PxRect::from_position_size(position, PxSize::new(size.width, size.height));
+                let transform = metadata
+                    .local_to_window
+                    .unwrap_or_else(|| crate::LocalToWindow::new(1.0, position).unwrap());
+                let rect = transform
+                    .map_rect(crate::FloatRect::from_position_size(
+                        PxPosition::ZERO,
+                        PxSize::new(size.width, size.height),
+                    ))
+                    .outward();
                 Some(metadata.event_clip_rect.map_or(rect, |clip| {
                     clip.intersection(&rect).unwrap_or(PxRect::ZERO)
                 }))
             });
-            let order = node_id
+            if let Some(attachment) = self
+                .nodes
+                .get_mut(&handle)
+                .and_then(|node| node.attachment.as_mut())
+            {
+                attachment.focus_rect = rect;
+                if attachment.traversal_order.is_some()
+                    && !metadatas.placement_order_changed.contains(node_id)
+                {
+                    continue;
+                }
+            }
+            let mut order = node_id
                 .ancestors(tree)
                 .filter_map(|id| {
                     let node = tree.get(id)?;
                     node.parent()?;
+                    if node.get().role != NodeRole::Layout
+                        && node.get().focus_registration.is_none()
+                    {
+                        return None;
+                    }
                     Some((
                         metadatas
                             .get(&id)
@@ -1412,8 +1568,8 @@ impl FocusOwner {
                     ))
                 })
                 .collect::<Vec<_>>();
-            let order: Vec<_> = order.into_iter().rev().collect();
-            let previous_order = self.order_paths.insert(handle, order.clone());
+            order.reverse();
+            let order_changed = self.order_paths.get(&handle) != Some(&order);
             if let Some(attachment) = self
                 .nodes
                 .get_mut(&handle)
@@ -1421,6 +1577,10 @@ impl FocusOwner {
             {
                 attachment.focus_rect = rect;
                 attachment.traversal_order = Some(0);
+                if !order_changed {
+                    continue;
+                }
+                let previous_order = self.order_paths.insert(handle, order.clone());
                 let children = self
                     .children_by_parent
                     .entry(attachment.parent)
@@ -1497,9 +1657,14 @@ impl FocusOwner {
 
         let previous_states = self.snapshot_live_states();
         let commands = std::mem::take(&mut self.pending);
-        for command in commands {
-            if !self.apply_command_inner(command) && self.should_defer_command(command) {
-                self.pending.push(command);
+        for pending in commands {
+            let reveal = self.pending_reveal;
+            let applied = self.apply_command_inner(pending.command);
+            if !pending.reveal {
+                self.pending_reveal = reveal;
+            }
+            if !applied && self.should_defer_command(pending.command) {
+                self.pending.push(pending);
             }
         }
         self.recompute_states();
@@ -1746,9 +1911,24 @@ impl FocusOwner {
 
     fn execute_or_defer(&mut self, command: FocusCommand) {
         self.pending_navigation = None;
-        if !self.apply_command(command) && self.should_defer_command(command) {
-            self.pending.push(command);
+        if matches!(command, FocusCommand::Request(_) | FocusCommand::Restore(_)) {
+            self.discard_pending_focus_requests();
         }
+        if !self.apply_command(command) && self.should_defer_command(command) {
+            self.pending.push(DeferredFocusCommand {
+                command,
+                reveal: true,
+            });
+        }
+    }
+
+    fn discard_pending_focus_requests(&mut self) {
+        self.pending.retain(|pending| {
+            !matches!(
+                pending.command,
+                FocusCommand::Request(_) | FocusCommand::Restore(_)
+            )
+        });
     }
 
     fn should_defer_command(&self, command: FocusCommand) -> bool {
@@ -1817,6 +1997,7 @@ impl FocusOwner {
         if self.captured.is_some() && self.captured != Some(target) {
             return false;
         }
+        self.discard_pending_focus_requests();
         let changed = self.active != Some(target) || self.captured.is_some_and(|id| id != target);
         self.active = Some(target);
         if self.captured.is_some_and(|id| id != target) {

@@ -6,12 +6,15 @@
 
 use std::time::Duration;
 
-use tessera_foundation::{gesture::DragRecognizer, scroll_physics::ScrollVelocityTracker};
+use tessera_foundation::{
+    gesture::{DragRecognizer, TapRecognizer},
+    scroll_physics::ScrollVelocityTracker,
+};
 use tessera_ui::{
     AxisConstraint, Callback, CallbackWith, Constraint, Dp, FocusProperties, FocusScopeNode,
     FocusTraversalPolicy, LayoutResult, MeasurementError, Modifier, Px, PxPosition, RenderSlot,
     State, current_frame_nanos, current_frame_time,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     modifier::FocusModifierExt as _,
     provide_context, receive_frame_nanos, remember, tessera,
     time::Instant,
@@ -26,7 +29,10 @@ use crate::{
     },
     column::column,
     modal_focus::{ModalFocusState, modal_focus_modifier},
-    modifier::{ModifierExt, SemanticsArgs, with_keyboard_input, with_pointer_input},
+    modifier::{
+        ClickableArgs, InteractionState, ModifierExt, SemanticsArgs, with_keyboard_input,
+        with_pointer_input,
+    },
     nested_scroll::{
         NestedScrollConnection, PostScrollInput, PreFlingInput, PreScrollInput, ScrollDelta,
         ScrollVelocity,
@@ -35,21 +41,34 @@ use crate::{
     pos_misc::is_position_inside_bounds,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    surface::surface,
+    surface::{SurfaceStyle, surface},
     theme::MaterialTheme,
 };
 
-/// Controller for [`bottom_sheet_provider`], managing open/closed state.
+/// Height anchor of an open bottom sheet.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum BottomSheetExpansion {
+    /// Use the partial height, or the content's natural height when
+    /// unspecified.
+    #[default]
+    PartiallyExpanded,
+    /// Fill the height available below the sheet's top margin.
+    Expanded,
+}
+
+/// Controller for [`bottom_sheet_provider`], managing visibility and height.
 ///
 /// This controller can be created by the application and passed through
 /// `bottom_sheet_provider().controller(...)`. It is used to control the
-/// visibility of the sheet programmatically.
+/// visibility and selected height of the sheet programmatically.
 #[derive(Clone, PartialEq)]
 pub struct BottomSheetController {
     is_open: bool,
     motion: VisibilityMotion,
     is_dragging: bool,
     drag: SheetDrag,
+    expansion: BottomSheetExpansion,
+    can_resize: bool,
 }
 
 impl BottomSheetController {
@@ -60,6 +79,8 @@ impl BottomSheetController {
             motion: VisibilityMotion::new(initial_open, true),
             is_dragging: false,
             drag: SheetDrag::new(),
+            expansion: BottomSheetExpansion::PartiallyExpanded,
+            can_resize: true,
         }
     }
 
@@ -93,6 +114,30 @@ impl BottomSheetController {
     /// Returns whether the sheet is currently open.
     pub fn is_open(&self) -> bool {
         self.is_open
+    }
+
+    /// Returns the selected height anchor, including while the sheet is closed.
+    pub fn expansion(&self) -> BottomSheetExpansion {
+        self.expansion
+    }
+
+    /// Selects the expanded height without opening a closed sheet.
+    pub fn expand(&mut self) {
+        self.expansion = BottomSheetExpansion::Expanded;
+    }
+
+    /// Selects the partial height without opening a closed sheet.
+    pub fn partially_expand(&mut self) {
+        self.expansion = BottomSheetExpansion::PartiallyExpanded;
+    }
+
+    /// Switches between partial and expanded heights without changing
+    /// visibility.
+    pub fn toggle_expansion(&mut self) {
+        self.expansion = match self.expansion {
+            BottomSheetExpansion::PartiallyExpanded => BottomSheetExpansion::Expanded,
+            BottomSheetExpansion::Expanded => BottomSheetExpansion::PartiallyExpanded,
+        };
     }
 
     /// Returns whether the sheet is currently animating in either direction.
@@ -190,6 +235,8 @@ fn handle_drag_gestures(
     controller: State<BottomSheetController>,
     drag_recognizer: State<DragRecognizer>,
     velocity_tracker: State<Option<ScrollVelocityTracker>>,
+    tap_recognizer: State<TapRecognizer>,
+    interaction: State<InteractionState>,
     input: &mut tessera_ui::PointerInput<'_>,
     on_close: &Callback,
 ) {
@@ -227,14 +274,21 @@ fn handle_drag_gestures(
     });
 
     if drag_result.started {
+        tap_recognizer.with_mut(TapRecognizer::cancel);
+        interaction.with_mut(InteractionState::release);
         controller.with_mut(|c| c.set_dragging(true));
     }
 
     if drag_result.updated {
-        let consumed = controller.with_mut(|c| c.apply_drag_delta(drag_result.delta_y.to_f32()));
+        let consumed = controller.with_mut(|c| {
+            c.apply_drag_delta(input.local_delta(0.0, drag_result.delta_y.to_f32()).1)
+        });
         velocity_tracker.with_mut(|tracker| {
             if let Some(tracker) = tracker {
-                tracker.push_delta(now, 0.0, consumed);
+                let window = input
+                    .local_to_window
+                    .map_vector(PxPosition::from_f32_xy(0.0, consumed));
+                tracker.push_delta(now, window.x, window.y);
             }
         });
     }
@@ -247,6 +301,7 @@ fn handle_drag_gestures(
                 .map(|v| v.y)
                 .unwrap_or(0.0)
         });
+        let velocity = input.local_delta(0.0, velocity).1;
         let should_close = controller.with_mut(|c| c.complete_drag(velocity));
         if should_close {
             on_close.call();
@@ -269,6 +324,9 @@ fn place_bottom_sheet_if_present(
     is_open: bool,
     drag_offset: f32,
     progress: f32,
+    expansion: BottomSheetExpansion,
+    partial_height: Option<Dp>,
+    controller: State<BottomSheetController>,
 ) {
     let children = input.children();
     if children.len() <= 2 {
@@ -308,9 +366,31 @@ fn place_bottom_sheet_if_present(
 
     let constraint = Constraint::new(sheet_width, AxisConstraint::new(Px::ZERO, Some(max_height)));
 
-    let child_size = match bottom_sheet.measure(input, &constraint) {
+    let natural_size = match bottom_sheet.measure(input, &constraint) {
         Ok(s) => s,
         Err(_) => return,
+    };
+    let partial_height = partial_height
+        .map(|height| height.to_px().max(Dp(48.0).to_px()).min(max_height))
+        .unwrap_or(natural_size.height);
+    let can_resize = partial_height < max_height;
+    if controller.with(|controller| controller.can_resize != can_resize) {
+        controller.with_mut(|controller| controller.can_resize = can_resize);
+    }
+    let height = match expansion {
+        BottomSheetExpansion::PartiallyExpanded => partial_height,
+        BottomSheetExpansion::Expanded => max_height,
+    };
+    let child_size = if height == natural_size.height {
+        natural_size
+    } else {
+        match bottom_sheet.measure(
+            input,
+            &Constraint::new(sheet_width, AxisConstraint::exact(height)),
+        ) {
+            Ok(size) => size,
+            Err(_) => return,
+        }
     };
 
     let y = compute_bottom_sheet_y(
@@ -338,10 +418,18 @@ fn bottom_sheet_drag_handle(
     let controller = controller.expect("bottom_sheet_drag_handle requires controller");
     let drag_recognizer = remember(DragRecognizer::default);
     let velocity_tracker = remember(|| None::<ScrollVelocityTracker>);
+    let tap_recognizer = remember(TapRecognizer::default);
+    let interaction = remember(InteractionState::new);
     let modifier = with_pointer_input(
-        Modifier::new().semantics(SemanticsArgs {
-            role: Some(tessera_ui::accesskit::Role::Group),
+        Modifier::new().clickable_with(ClickableArgs {
+            enabled: controller.with(|controller| controller.can_resize),
             label: Some("Drag handle".to_string()),
+            block_input: false,
+            tap_recognizer: Some(tap_recognizer),
+            interaction_state: Some(interaction),
+            on_click: Callback::new(move || {
+                controller.with_mut(BottomSheetController::toggle_expansion)
+            }),
             ..Default::default()
         }),
         move |mut input| {
@@ -349,32 +437,46 @@ fn bottom_sheet_drag_handle(
                 controller,
                 drag_recognizer,
                 velocity_tracker,
+                tap_recognizer,
+                interaction,
                 &mut input,
                 &on_close,
             );
         },
     );
 
-    layout().modifier(modifier).child(|| {
+    layout().modifier(modifier).child(move || {
         column()
             .modifier(Modifier::new().fill_max_width())
             .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(|| {
-                spacer().modifier(Modifier::new().height(Dp(22.0)));
+            .children(move || {
+                spacer().modifier(Modifier::new().height(Dp(10.0)));
+                let scheme = use_context::<MaterialTheme>()
+                    .expect("MaterialTheme must be provided")
+                    .get()
+                    .color_scheme;
                 surface()
-                    .style(
-                        use_context::<MaterialTheme>()
-                            .expect("MaterialTheme must be provided")
-                            .get()
-                            .color_scheme
-                            .on_surface_variant
-                            .with_alpha(0.4)
-                            .into(),
-                    )
+                    .style(if interaction.with(InteractionState::is_focused) {
+                        SurfaceStyle::Outlined {
+                            color: scheme.secondary,
+                            width: Dp(2.0),
+                        }
+                    } else {
+                        tessera_ui::Color::TRANSPARENT.into()
+                    })
                     .shape(Shape::CAPSULE)
-                    .modifier(Modifier::new().size(Dp(32.0), Dp(4.0)))
-                    .child(|| {});
-                spacer().modifier(Modifier::new().height(Dp(22.0)));
+                    .modifier(Modifier::new().size(Dp(56.0), Dp(28.0)))
+                    .block_input(false)
+                    .content_alignment(crate::alignment::Alignment::Center)
+                    .child(move || {
+                        surface()
+                            .style(scheme.on_surface_variant.with_alpha(0.4).into())
+                            .shape(Shape::CAPSULE)
+                            .modifier(Modifier::new().size(Dp(32.0), Dp(4.0)))
+                            .block_input(false)
+                            .child(|| {});
+                    });
+                spacer().modifier(Modifier::new().height(Dp(10.0)));
             });
     });
 }
@@ -501,9 +603,9 @@ fn bottom_sheet_content_wrapper(
                 bottom_right: RoundedCorner::manual(Dp(0.0), 3.0),
                 bottom_left: RoundedCorner::manual(Dp(0.0), 3.0),
             })
-            .modifier(Modifier::new().fill_max_width().on_globally_positioned(
-                move |bounds: tessera_ui::PxRect| {
-                    let extent = Dp::from_pixels_f64(f64::from(bounds.height.0)).0;
+            .modifier(Modifier::new().fill_max_width().on_layout_coordinates(
+                move |coordinates: tessera_ui::LayoutCoordinates| {
+                    let extent = Dp::from_pixels_f64(f64::from(coordinates.local_size.height.0)).0;
                     if controller.with(|c| c.drag.extent() != extent) {
                         controller.with_mut(|c| c.drag.set_extent(extent, current_frame_nanos()));
                     }
@@ -530,6 +632,9 @@ fn bottom_sheet_content_wrapper(
 ///   closing.
 /// - `is_open` — declarative open state.
 /// - `controller` — optional external controller for programmatic open/close.
+/// - `partial_height` — optional partial height, including the drag handle;
+///   defaults to the content's natural height. It is limited to the available
+///   height and is at least 48dp when that space is available.
 /// - `main_content` — optional main content rendered behind the sheet.
 /// - `bottom_sheet_content` — optional content rendered inside the sheet.
 ///
@@ -549,6 +654,7 @@ fn bottom_sheet_content_wrapper(
 ///     .accessibility_label("Additional options")
 ///     .on_close_request(|| {})
 ///     .is_open(true)
+///     .partial_height(tessera_ui::Dp(240.0))
 ///     .main_content(|| { /* main content */ })
 ///     .bottom_sheet_content(|| { /* bottom sheet content */ });
 /// #     });
@@ -561,22 +667,26 @@ pub fn bottom_sheet_provider(
     on_close_request: Option<Callback>,
     is_open: Option<bool>,
     controller: Option<State<BottomSheetController>>,
+    partial_height: Option<Dp>,
     main_content: Option<RenderSlot>,
     bottom_sheet_content: Option<RenderSlot>,
 ) {
     let on_close_request = on_close_request.unwrap_or_default();
     let is_open = is_open.unwrap_or(false);
+    let partial_height = partial_height.filter(|height| height.0.is_finite());
     let main_content = main_content.unwrap_or_else(RenderSlot::empty);
     let bottom_sheet_content = bottom_sheet_content.unwrap_or_else(RenderSlot::empty);
     let external_controller = controller;
     let controller =
         external_controller.unwrap_or_else(|| remember(|| BottomSheetController::new(is_open)));
     let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
+    let coordinate_scale = remember(|| 1.0_f32);
     let nested_scroll_connection = build_bottom_sheet_nested_scroll_connection(
         controller,
         on_close_request,
         parent_nested_scroll,
-    );
+    )
+    .with_coordinate_scale(coordinate_scale);
 
     // In controlled mode (external controller provided), do not override
     // controller state from `is_open`.
@@ -593,6 +703,7 @@ pub fn bottom_sheet_provider(
 
     // Snapshot state to minimize locking overhead.
     let (is_open, visibility, drag_offset) = controller.with(|c| c.snapshot());
+    let expansion = controller.with(BottomSheetController::expansion);
     let is_animating = controller.with(|c| c.is_animating());
     let bottom_sheet_open_state = remember(|| false);
     let mut just_opened = false;
@@ -627,11 +738,20 @@ pub fn bottom_sheet_provider(
     };
 
     layout()
-        .modifier(modifier)
+        .modifier(
+            modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
+                if coordinate_scale.get() != transform.scale() {
+                    coordinate_scale.set(transform.scale());
+                }
+            }),
+        )
         .policy(BottomSheetLayout {
             progress,
             is_open,
             drag_offset,
+            expansion,
+            partial_height,
+            controller,
         })
         .child(move || {
             let bottom_sheet_content = bottom_sheet_content;
@@ -686,9 +806,57 @@ struct BottomSheetLayout {
     progress: f32,
     is_open: bool,
     drag_offset: f32,
+    expansion: BottomSheetExpansion,
+    partial_height: Option<Dp>,
+    controller: State<BottomSheetController>,
 }
 
 impl tessera_ui::LayoutModifierNode for BottomSheetLayout {
+    fn measure_eq(&self, other: &Self) -> bool {
+        self.expansion == other.expansion && self.partial_height == other.partial_height
+    }
+
+    fn place_children(
+        &self,
+        input: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        let children = input.children();
+        let main_content = children.first()?;
+        let mut result = LayoutResult::new(input.size());
+        result.place_child(*main_content, PxPosition::ZERO);
+        if let Some(scrim) = children.get(1) {
+            result.place_child(*scrim, PxPosition::ZERO);
+        }
+        if let Some(sheet) = children.get(2) {
+            let parent_width = input
+                .parent_constraint()
+                .width()
+                .resolve_max()
+                .unwrap_or(Px::ZERO);
+            let parent_height = input
+                .parent_constraint()
+                .height()
+                .resolve_max()
+                .unwrap_or(Px::ZERO);
+            let size = sheet.size();
+            let x = if parent_width >= Dp(640.0).to_px() {
+                (parent_width - size.width) / 2
+            } else {
+                Px::ZERO
+            };
+            let y = compute_bottom_sheet_y(
+                parent_height,
+                size.height,
+                self.progress,
+                self.is_open,
+                self.drag_offset,
+            );
+            result.place_child(*sheet, PxPosition::from_f32_xy(x.0 as f32, y));
+        }
+        Some(result.into_placement_result())
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();
@@ -709,6 +877,9 @@ impl tessera_ui::LayoutModifierNode for BottomSheetLayout {
             self.is_open,
             self.drag_offset,
             self.progress,
+            self.expansion,
+            self.partial_height,
+            self.controller,
         );
 
         Ok(result.with_size(main_content_size.size()))
@@ -731,3 +902,7 @@ mod placement_tests {
         }
     }
 }
+
+#[cfg(test)]
+#[path = "bottom_sheet_tests.rs"]
+mod accessibility_tests;

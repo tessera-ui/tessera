@@ -8,7 +8,7 @@ use std::{
 use encase::{ShaderType, UniformBuffer};
 use glam::Vec4;
 use tessera_ui::{
-    PxPosition, PxSize,
+    PxSize,
     renderer::drawer::pipeline::{DrawContext, DrawablePipeline, FrameContext},
     wgpu,
 };
@@ -269,20 +269,21 @@ impl ImagePipeline {
 
     /// Compute the ImageUniforms for a given command size and position.
     fn compute_uniforms(
-        start_pos: PxPosition,
-        size: PxSize,
+        geometry: tessera_ui::DrawGeometry,
         target_size: PxSize,
         opacity: f32,
     ) -> ImageUniforms {
+        let start_pos = geometry.window_origin();
+        let [width, height] = geometry.window_size();
         // Convert pixel positions/sizes into normalized device coordinates and
         // size ratios.
         let rect = [
             (start_pos.x / target_size.width.to_f32()) * 2.0 - 1.0
-                + (size.width.0 as f32 / target_size.width.to_f32()),
+                + (width / target_size.width.to_f32()),
             (start_pos.y / target_size.height.to_f32()) * -2.0 + 1.0
-                - (size.height.0 as f32 / target_size.height.to_f32()),
-            size.width.0 as f32 / target_size.width.to_f32(),
-            size.height.0 as f32 / target_size.height.to_f32(),
+                - (height / target_size.height.to_f32()),
+            width / target_size.width.to_f32(),
+            height / target_size.height.to_f32(),
         ]
         .into();
 
@@ -375,9 +376,8 @@ impl DrawablePipeline<ImageCommand> for ImagePipeline {
             .render_pass
             .set_index_buffer(self.quad_index_buffer.slice(..), wgpu::IndexFormat::Uint16);
 
-        for (command, size, start_pos) in context.commands.iter() {
-            let uniforms =
-                Self::compute_uniforms(*start_pos, *size, context.target_size, command.opacity);
+        for (command, geometry) in context.commands.iter() {
+            let uniforms = Self::compute_uniforms(*geometry, context.target_size, command.opacity);
 
             let mut buffer = UniformBuffer::new(Vec::new());
             buffer.write(&uniforms).expect("buffer write failed");

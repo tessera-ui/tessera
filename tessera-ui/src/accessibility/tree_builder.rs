@@ -41,17 +41,31 @@ pub(crate) struct AccessibilityIndex {
     root_label: Option<String>,
     last_focus: Option<AccessKitNodeId>,
     changed: HashSet<ComponentNodeId>,
+    geometry_changed: HashSet<ComponentNodeId>,
     removed: HashSet<ComponentNodeId>,
+    #[cfg(test)]
+    ancestor_visits: usize,
 }
 
 impl AccessibilityIndex {
+    pub(crate) fn invalidate_geometry(&mut self, changed: &HashSet<ComponentNodeId>) {
+        self.geometry_changed.extend(changed);
+    }
+
     pub(crate) fn invalidate(
         &mut self,
         changed: &HashSet<ComponentNodeId>,
         removed: &HashSet<ComponentNodeId>,
     ) {
-        self.changed.extend(changed);
-        self.removed.extend(removed);
+        for id in removed {
+            self.changed.remove(id);
+            self.geometry_changed.remove(id);
+            if self.components.contains_key(id) {
+                self.removed.insert(*id);
+            }
+        }
+        self.changed
+            .extend(changed.iter().filter(|id| !removed.contains(id)).copied());
     }
 
     pub(crate) fn update(
@@ -61,7 +75,34 @@ impl AccessibilityIndex {
         root: ComponentNodeId,
         order: &HashMap<ComponentNodeId, usize>,
     ) -> usize {
+        #[cfg(test)]
+        {
+            self.ancestor_visits = 0;
+        }
         let mut changed = std::mem::take(&mut self.changed);
+        let mut geometry_updated = 0;
+        for id in std::mem::take(&mut self.geometry_changed) {
+            if changed.contains(&id) || self.removed.contains(&id) {
+                continue;
+            }
+            let Some((key, context)) = self.components.get(&id) else {
+                changed.insert(id);
+                continue;
+            };
+            if id != root && !context.semantic {
+                continue;
+            }
+            let bounds = semantic_bounds(tree, metadatas, id);
+            if let (Some(entry), Some(bounds)) = (self.nodes.get_mut(key), bounds) {
+                if entry.node.bounds() != Some(bounds) {
+                    entry.node.set_bounds(bounds);
+                    self.pending.insert(*key);
+                }
+                geometry_updated += 1;
+            } else {
+                changed.insert(id);
+            }
+        }
         let mut removed_keys = HashSet::default();
         for id in std::mem::take(&mut self.removed) {
             if let Some((key, _)) = self.components.remove(&id) {
@@ -109,12 +150,21 @@ impl AccessibilityIndex {
                     traverses: semantics.is_none_or(|node| node.merge_descendants),
                 }
             });
+            let semantic = context.semantic;
             self.components.insert(id, (key, context));
+            if id != root && !semantic {
+                self.remove(key, &mut child_changes);
+                continue;
+            }
             let mut parent = None;
             let mut tooltip = None;
             let mut visible = true;
             let mut path = Vec::new();
             for ancestor in id.ancestors(tree) {
+                #[cfg(test)]
+                {
+                    self.ancestor_visits += 1;
+                }
                 path.push(order.get(&ancestor).copied().unwrap_or_default());
                 let Some(metadata) = metadatas.get(&ancestor) else {
                     visible = false;
@@ -229,7 +279,7 @@ impl AccessibilityIndex {
             }
         }
         self.root = Some(AccessKitNodeId(tree[root].get().instance_key));
-        changed.len()
+        changed.len() + geometry_updated
     }
 
     fn remove(&mut self, key: AccessKitNodeId, changed: &mut HashSet<AccessKitNodeId>) {
@@ -261,6 +311,7 @@ impl AccessibilityIndex {
         full: bool,
     ) -> Option<TreeUpdate> {
         let root = self.root?;
+        let full = full || self.last_focus.is_none();
         let focus = focused
             .and_then(|focused| {
                 tree.get(focused).filter(|node| !node.is_removed())?;
@@ -343,8 +394,6 @@ fn build_node(
 ) -> Option<(Node, bool)> {
     let metadata = metadatas.get(&node_id)?;
     let accessibility_node = metadata.accessibility.clone();
-    let abs_position = metadata.abs_position;
-    let computed_data = metadata.computed_data;
     let tooltip_description = accessibility_node.as_ref().and_then(|node| {
         (node.focusable && node.description.is_none())
             .then(|| inherited_tooltip.map(str::to_owned))
@@ -501,13 +550,8 @@ fn build_node(
             node.add_action(action);
         }
 
-        let bounds = match accessibility_node.bounds_padding {
-            Some(padding) => rect_from_geometry_with_padding(abs_position, computed_data, padding),
-            None => rect_from_geometry(abs_position, computed_data),
-        };
-
-        if let Some(bounds) = bounds {
-            node.set_bounds(clipped_shape_bounds(bounds, node_id, tree, metadatas));
+        if let Some(bounds) = semantic_bounds(tree, metadatas, node_id) {
+            node.set_bounds(bounds);
         }
 
         Some((node, focused))
@@ -517,7 +561,7 @@ fn build_node(
             node.set_label(label.to_string());
         }
 
-        if let Some(bounds) = rect_from_geometry(abs_position, computed_data) {
+        if let Some(bounds) = semantic_bounds(tree, metadatas, node_id) {
             node.set_bounds(bounds);
         }
 
@@ -527,17 +571,47 @@ fn build_node(
     }
 }
 
+fn semantic_bounds(
+    tree: &ComponentNodeTree,
+    metadatas: &ComponentNodeMetaDatas,
+    node_id: ComponentNodeId,
+) -> Option<Rect> {
+    let metadata = metadatas.get(&node_id)?;
+    let scale = metadata
+        .local_to_window
+        .map_or(1.0, |transform| transform.scale());
+    let bounds = match metadata
+        .accessibility
+        .as_ref()
+        .and_then(|node| node.bounds_padding)
+    {
+        Some(padding) => rect_from_geometry_with_padding(
+            metadata.abs_position,
+            metadata.computed_data,
+            padding,
+            scale,
+        ),
+        None => rect_from_geometry(metadata.abs_position, metadata.computed_data, scale),
+    }?;
+    Some(if metadata.accessibility.is_some() {
+        clipped_shape_bounds(bounds, node_id, tree, metadatas)
+    } else {
+        bounds
+    })
+}
+
 fn rect_from_geometry(
     abs_position: Option<PxPosition>,
     computed_data: Option<ComputedData>,
+    scale: f32,
 ) -> Option<Rect> {
     let position = abs_position?;
     let size = computed_data?;
 
     let x0 = position.x as f64;
     let y0 = position.y as f64;
-    let x1 = x0 + size.width.0 as f64;
-    let y1 = y0 + size.height.0 as f64;
+    let x1 = x0 + size.width.0 as f64 * scale as f64;
+    let y1 = y0 + size.height.0 as f64 * scale as f64;
 
     Some(Rect { x0, y0, x1, y1 })
 }
@@ -564,14 +638,17 @@ fn clipped_shape_bounds(
             y1: bounds.y1.min(clip.y1).max(y0),
         }
     };
-    if let Some(clip) = metadata.event_clip_rect {
+    if let Some(clip) = metadata
+        .event_clip_bounds
+        .or_else(|| metadata.event_clip_rect.map(Into::into))
+    {
         bounds = intersect(
             bounds,
             Rect {
-                x0: clip.x.to_f32() as f64,
-                y0: clip.y.to_f32() as f64,
-                x1: (clip.x + clip.width).to_f32() as f64,
-                y1: (clip.y + clip.height).to_f32() as f64,
+                x0: clip.x as f64,
+                y0: clip.y as f64,
+                x1: (clip.x + clip.width) as f64,
+                y1: (clip.y + clip.height) as f64,
             },
         );
     }
@@ -582,14 +659,18 @@ fn clipped_shape_bounds(
         let (Some(clip), Some(origin)) = (metadata.clip_region, metadata.abs_position) else {
             continue;
         };
-        let origin = origin + clip.position;
+        let transform = metadata
+            .local_to_window
+            .unwrap_or_else(|| crate::LocalToWindow::new(1.0, origin).unwrap());
+        let origin = transform.map_point(clip.position);
+        let scale = transform.scale();
         bounds = intersect(
             bounds,
             Rect {
                 x0: origin.x as f64,
                 y0: origin.y as f64,
-                x1: (origin.x + clip.size[0]) as f64,
-                y1: (origin.y + clip.size[1]) as f64,
+                x1: (origin.x + clip.size[0] * scale) as f64,
+                y1: (origin.y + clip.size[1] * scale) as f64,
             },
         );
     }
@@ -600,14 +681,19 @@ fn rect_from_geometry_with_padding(
     abs_position: Option<PxPosition>,
     computed_data: Option<ComputedData>,
     padding: crate::accessibility::AccessibilityPadding,
+    scale: f32,
 ) -> Option<Rect> {
     let position = abs_position?;
     let size = computed_data?;
 
-    let x0 = position.x as f64 - padding.left.0 as f64;
-    let y0 = position.y as f64 - padding.top.0 as f64;
-    let x1 = x0 + size.width.0 as f64 + (padding.left + padding.right).0 as f64;
-    let y1 = y0 + size.height.0 as f64 + (padding.top + padding.bottom).0 as f64;
+    let x0 = position.x as f64 - padding.left.0 as f64 * scale as f64;
+    let y0 = position.y as f64 - padding.top.0 as f64 * scale as f64;
+    let x1 = x0
+        + size.width.0 as f64 * scale as f64
+        + (padding.left + padding.right).0 as f64 * scale as f64;
+    let y1 = y0
+        + size.height.0 as f64 * scale as f64
+        + (padding.top + padding.bottom).0 as f64 * scale as f64;
 
     Some(Rect { x0, y0, x1, y1 })
 }
@@ -674,6 +760,7 @@ pub fn dispatch_action(
         });
         let registration = tree[node_id].get().focus_registration;
         if eligible && let Some(registration) = registration {
+            focus_owner.record_accessibility_focus(crate::time::Instant::now());
             focus_owner.request_focus(registration.id);
             return true;
         }
@@ -722,6 +809,9 @@ mod tests {
             fn_name: "test_node".to_string(),
             role: NodeRole::Layout,
             layout_children: None,
+            #[cfg(feature = "profiling")]
+            subtree_len: 1,
+            children_scale: 1.0,
             instance_logic_id: 0,
             instance_key: 0,
             pointer_preview_handlers: Vec::new(),
@@ -762,6 +852,97 @@ mod tests {
     }
 
     #[test]
+    fn deferred_semantic_publication_coalesces_removed_instances_and_publishes_current_geometry() {
+        let mut tree = ComponentNodeTree::new();
+        let mut metadatas = ComponentNodeMetaDatas::new();
+        let root = append_node(&mut tree, &mut metadatas, None, None);
+        let unchanged = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(AccessibilityNode::new().with_label("Unchanged")),
+        );
+        let mut child = append_node(
+            &mut tree,
+            &mut metadatas,
+            Some(root),
+            Some(
+                AccessibilityNode::new()
+                    .with_role(Role::Button)
+                    .with_label("Initial")
+                    .with_action(Action::Click),
+            ),
+        );
+        let mut index = AccessibilityIndex::default();
+        index.invalidate(
+            &[root, unchanged, child].into_iter().collect(),
+            &HashSet::default(),
+        );
+        index.update(
+            &tree,
+            &metadatas,
+            root,
+            &[(unchanged, 0), (child, 1)].into_iter().collect(),
+        );
+        assert!(
+            index
+                .tree_update(&tree, None, false)
+                .unwrap()
+                .tree
+                .is_some()
+        );
+        for revision in 1..=128 {
+            let previous = child;
+            previous.remove_subtree(&mut tree);
+            metadatas.remove(&previous);
+            child = append_node(
+                &mut tree,
+                &mut metadatas,
+                Some(root),
+                Some(
+                    AccessibilityNode::new()
+                        .with_role(Role::Button)
+                        .with_label(format!("Revision {revision}"))
+                        .with_action(Action::Click),
+                ),
+            );
+            tree[child].get_mut().instance_key = 1000 + revision;
+            metadatas.get_mut(&child).unwrap().abs_position =
+                Some(PxPosition::from_f32_xy(12.5, revision as f32));
+            index.invalidate(
+                &[root, child].into_iter().collect(),
+                &[previous].into_iter().collect(),
+            );
+            index.invalidate_geometry(&[child].into_iter().collect());
+            assert!(index.changed.len() <= 2);
+            assert!(index.removed.len() <= 1);
+            assert!(index.geometry_changed.len() <= 1);
+        }
+        index.update(
+            &tree,
+            &metadatas,
+            root,
+            &[(unchanged, 0), (child, 1)].into_iter().collect(),
+        );
+        let delta = index.tree_update(&tree, None, false).unwrap();
+        assert_eq!(delta.nodes.len(), 2);
+        let current = delta
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == AccessKitNodeId(1128))
+            .unwrap();
+        assert_eq!(current.1.label(), Some("Revision 128"));
+        assert_eq!(current.1.bounds().unwrap().x0, 12.5);
+        assert_eq!(current.1.bounds().unwrap().y0, 128.0);
+        assert!(current.1.supports_action(Action::Click));
+        assert_eq!(
+            node(&delta, root).children(),
+            &[accesskit_id(unchanged), AccessKitNodeId(1128)]
+        );
+        assert!(index.tree_update(&tree, None, false).is_none());
+    }
+
+    #[test]
     fn semantic_deltas_preserve_siblings_and_refresh_inherited_tooltips() {
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
@@ -775,10 +956,16 @@ mod tests {
                 ..AccessibilityNode::new()
             }),
         );
+        let mut wrappers = Vec::new();
+        let mut child_parent = parent;
+        for _ in 0..12 {
+            child_parent = append_node(&mut tree, &mut metadatas, Some(child_parent), None);
+            wrappers.push(child_parent);
+        }
         let child = append_node(
             &mut tree,
             &mut metadatas,
-            Some(parent),
+            Some(child_parent),
             Some(AccessibilityNode {
                 label: Some("Control".into()),
                 focusable: true,
@@ -796,12 +983,10 @@ mod tests {
         );
         let order = [(parent, 0), (child, 0), (sibling, 1)]
             .into_iter()
+            .chain(wrappers.iter().copied().map(|id| (id, 0)))
             .collect();
         let mut index = AccessibilityIndex::default();
-        index.invalidate(
-            &[root, parent, child, sibling].into_iter().collect(),
-            &HashSet::default(),
-        );
+        index.invalidate(&root.descendants(&tree).collect(), &HashSet::default());
         index.update(&tree, &metadatas, root, &order);
         let initial = index.tree_update(&tree, Some(child), true).unwrap();
         assert_eq!(
@@ -826,6 +1011,14 @@ mod tests {
         assert_eq!(index.update(&tree, &metadatas, root, &order), 0);
         assert!(index.tree_update(&tree, Some(child), false).is_none());
 
+        index.invalidate(&wrappers.iter().copied().collect(), &HashSet::default());
+        assert_eq!(
+            index.update(&tree, &metadatas, root, &order),
+            wrappers.len()
+        );
+        assert_eq!(index.ancestor_visits, 0);
+        assert!(index.tree_update(&tree, Some(child), false).is_none());
+
         metadatas
             .get_mut(&parent)
             .unwrap()
@@ -834,7 +1027,10 @@ mod tests {
             .unwrap()
             .tooltip = Some("Updated hint".into());
         index.invalidate(&[parent].into_iter().collect(), &HashSet::default());
-        assert_eq!(index.update(&tree, &metadatas, root, &order), 2);
+        assert_eq!(
+            index.update(&tree, &metadatas, root, &order),
+            wrappers.len() + 2
+        );
         let delta = index.tree_update(&tree, Some(child), false).unwrap();
         assert_eq!(delta.nodes.len(), 2);
         assert_eq!(delta.focus, child_key);
@@ -854,6 +1050,42 @@ mod tests {
                 .iter()
                 .any(|(id, _)| *id == AccessKitNodeId(tree[sibling].get().instance_key))
         );
+
+        metadatas.get_mut(&parent).unwrap().accessibility = None;
+        index.invalidate(&[parent].into_iter().collect(), &HashSet::default());
+        index.update(&tree, &metadatas, root, &order);
+        let delta = index.tree_update(&tree, Some(child), false).unwrap();
+        assert_eq!(delta.focus, child_key);
+        assert_eq!(delta.nodes.len(), 2);
+        assert_eq!(node(&delta, child).description(), None);
+        assert_eq!(
+            node(&delta, root).children(),
+            &[child_key, accesskit_id(sibling)]
+        );
+        assert!(!index.nodes.contains_key(&accesskit_id(parent)));
+
+        metadatas.get_mut(&child).unwrap().abs_position =
+            Some(PxPosition::from_f32_xy(10.25, -20.75));
+        index.invalidate(
+            &wrappers.iter().copied().chain([child]).collect(),
+            &HashSet::default(),
+        );
+        index.update(&tree, &metadatas, root, &order);
+        assert!(index.ancestor_visits > 0);
+        let delta = index.tree_update(&tree, Some(child), false).unwrap();
+        assert_eq!(delta.nodes.len(), 1);
+        assert_eq!(delta.nodes[0].0, child_key);
+        assert_eq!(
+            node(&delta, child).bounds(),
+            Some(Rect {
+                x0: 10.25,
+                y0: -20.75,
+                x1: 50.25,
+                y1: 29.25,
+            })
+        );
+        assert_eq!(delta.focus, child_key);
+        assert!(index.tree_update(&tree, Some(child), false).is_none());
     }
 
     #[test]
@@ -945,8 +1177,12 @@ mod tests {
             .get_mut(&child)
             .expect("child metadata")
             .has_shape_clipping = true;
-        let update =
-            build_tree_update(&tree, &metadatas, root, Some("Fixture"), None).expect("tree update");
+        let mut index = AccessibilityIndex::default();
+        let changed = [root, wrapper, child].into_iter().collect();
+        index.invalidate(&changed, &HashSet::default());
+        index.set_label(Some("Fixture"), root);
+        index.update(&tree, &metadatas, root, &HashMap::default());
+        let update = index.tree_update(&tree, None, true).expect("tree update");
         assert_eq!(update.nodes.len(), 2);
         assert_eq!(
             node(&update, child).bounds(),
@@ -960,6 +1196,44 @@ mod tests {
         assert!(node(&update, child).supports_action(Action::Click));
         assert!(node(&update, child).supports_action(Action::Focus));
         assert_eq!(update.focus, accesskit_id(child));
+
+        metadatas.get_mut(&child).unwrap().abs_position =
+            Some(PxPosition::from_f32_xy(20.5, 25.25));
+        index.invalidate_geometry(&[child].into_iter().collect());
+        index.update(&tree, &metadatas, root, &HashMap::default());
+        assert_eq!(index.ancestor_visits, 0);
+        let delta = index.tree_update(&tree, None, false).unwrap();
+        assert_eq!(delta.nodes.len(), 1);
+        assert_eq!(node(&delta, child).label(), Some("Masked action"));
+        assert!(node(&delta, child).supports_action(Action::Click));
+        assert_eq!(delta.focus, accesskit_id(child));
+        assert_eq!(
+            node(&delta, child).bounds(),
+            Some(Rect {
+                x0: 20.5,
+                y0: 25.25,
+                x1: 25.25,
+                y1: 35.5,
+            })
+        );
+
+        metadatas.get_mut(&child).unwrap().abs_position = None;
+        index.invalidate_geometry(&[child].into_iter().collect());
+        index.update(&tree, &metadatas, root, &HashMap::default());
+        let hidden = index.tree_update(&tree, None, true).unwrap();
+        assert!(
+            !hidden
+                .nodes
+                .iter()
+                .any(|(id, _)| *id == accesskit_id(child))
+        );
+        metadatas.get_mut(&child).unwrap().abs_position =
+            Some(PxPosition::from_f32_xy(20.5, 25.25));
+        index.invalidate_geometry(&[child].into_iter().collect());
+        index.update(&tree, &metadatas, root, &HashMap::default());
+        let restored = index.tree_update(&tree, None, true).unwrap();
+        assert!(node(&restored, child).supports_action(Action::Focus));
+        assert_eq!(restored.focus, accesskit_id(child));
     }
 
     fn accesskit_id(id: ComponentNodeId) -> AccessKitNodeId {
@@ -1348,7 +1622,7 @@ mod tests {
 
     #[test]
     fn focus_actions_reach_registered_targets_without_activating_their_handlers() {
-        use crate::focus::{FocusNode, FocusRegistration};
+        use crate::focus::{FocusNode, FocusRegistration, FocusRequester};
 
         let mut tree = ComponentNodeTree::new();
         let mut metadatas = ComponentNodeMetaDatas::new();
@@ -1359,6 +1633,8 @@ mod tests {
             Some(root),
             Some(AccessibilityNode::new().with_role(Role::Button).focusable()),
         );
+        let requester = FocusRequester::new();
+        tree[target].get_mut().focus_requester_binding = Some(requester);
         tree[target].get_mut().focus_registration =
             Some(FocusRegistration::target(FocusNode::new()));
         metadatas
@@ -1378,6 +1654,12 @@ mod tests {
         };
         assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
         assert_eq!(owner.active_component_node_id(), Some(target));
+        assert!(owner.is_requester_focus_visible(requester.requester_id()));
+        owner.record_pointer_press(crate::time::Instant::now());
+        assert!(!owner.is_requester_focus_visible(requester.requester_id()));
+        assert!(dispatch_action(&tree, &metadatas, &mut owner, request()));
+        assert_eq!(owner.active_component_node_id(), Some(target));
+        assert!(owner.is_requester_focus_visible(requester.requester_id()));
         owner.clear_focus_global(true);
         metadatas
             .get_mut(&target)

@@ -190,30 +190,35 @@ impl DrawablePipeline<DividerCommand> for DividerPipeline {
             self.reserve(context.device, commands.len());
             self.staging.clear();
             self.staging
-                .extend(commands.iter().map(|(command, size, position)| Instance {
-                    bounds: [
-                        position.x,
-                        position.y,
-                        position.x
-                            + if command.vertical {
-                                command.stroke
-                            } else {
-                                size.width.to_f32()
-                            },
-                        position.y
-                            + if command.vertical {
-                                size.height.to_f32()
-                            } else {
-                                command.stroke
-                            },
-                    ],
-                    color: command.color.to_array(),
-                    screen: [
-                        context.target_size.width.to_f32(),
-                        context.target_size.height.to_f32(),
-                        0.0,
-                        0.0,
-                    ],
+                .extend(commands.iter().map(|(command, geometry)| {
+                    let position = geometry.window_origin();
+                    let [width, height] = geometry.window_size();
+                    let scale = geometry.local_to_window.scale();
+                    Instance {
+                        bounds: [
+                            position.x,
+                            position.y,
+                            position.x
+                                + if command.vertical {
+                                    command.stroke * scale
+                                } else {
+                                    width
+                                },
+                            position.y
+                                + if command.vertical {
+                                    height
+                                } else {
+                                    command.stroke * scale
+                                },
+                        ],
+                        color: command.color.to_array(),
+                        screen: [
+                            context.target_size.width.to_f32(),
+                            context.target_size.height.to_f32(),
+                            0.0,
+                            0.0,
+                        ],
+                    }
                 }));
             let page = &self.pages[self.page];
             // Later batches and scene passes must not overwrite earlier draws

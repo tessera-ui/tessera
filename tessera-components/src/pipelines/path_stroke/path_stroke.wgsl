@@ -23,7 +23,7 @@ struct VertexOutput {
 fn vs_main(@builtin(vertex_index) vertex: u32, @builtin(instance_index) index: u32) -> VertexOutput {
     let corners = array<vec2<f32>, 6>(vec2(0.0, 0.0), vec2(1.0, 0.0), vec2(0.0, 1.0), vec2(0.0, 1.0), vec2(1.0, 0.0), vec2(1.0, 1.0));
     let tile = tiles[index];
-    let point = tile.position.xy + mix(tile.bounds.xy, tile.bounds.zw, corners[vertex]);
+    let point = tile.position.xy + mix(tile.bounds.xy, tile.bounds.zw, corners[vertex]) * tile.position.w;
     var output: VertexOutput;
     output.position = vec4(point / tile.screen.xy * vec2(2.0, -2.0) + vec2(-1.0, 1.0), 0.0, 1.0);
     output.tile = index;
@@ -33,7 +33,7 @@ fn vs_main(@builtin(vertex_index) vertex: u32, @builtin(instance_index) index: u
 @fragment
 fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
     let tile = tiles[input.tile];
-    let point = input.position.xy - tile.position.xy;
+    let point = (input.position.xy - tile.position.xy) / tile.position.w;
     var distance = 1e20;
     var cap_distance = -1e20;
     for (var i = 0u; i < tile.geometry.y; i++) {
@@ -55,7 +55,7 @@ fn fs_main(input: VertexOutput) -> @location(0) vec4<f32> {
         }
     }
     distance = max(distance - tile.position.z, cap_distance);
-    let coverage = clamp(0.5 - distance, 0.0, 1.0);
+    let coverage = clamp(0.5 - distance * tile.position.w, 0.0, 1.0);
     return vec4(tile.color.rgb, tile.color.a * coverage);
 }
 

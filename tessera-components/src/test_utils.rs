@@ -23,4 +23,10 @@ pub(crate) fn run_isolated_test(name: &str, test: impl FnOnce()) {
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
+    assert!(
+        String::from_utf8_lossy(&output.stdout).contains("test result: ok. 1 passed;"),
+        "isolated test {name} must execute exactly one test:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
 }

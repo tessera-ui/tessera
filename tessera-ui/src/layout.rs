@@ -288,7 +288,17 @@ impl<'a> MeasureScope<'a> {
                 let instance_key = self
                     .tree
                     .get(node_id)
-                    .expect("Direct child layout node must exist")
+                    .unwrap_or_else(|| {
+                        let owner = crate::runtime::current_node_id();
+                        let ancestry = owner
+                            .into_iter()
+                            .flat_map(|id| id.ancestors(self.tree))
+                            .map(|id| (id, self.tree[id].get().fn_name.clone()))
+                            .collect::<Vec<_>>();
+                        panic!(
+                            "Direct child layout node must exist: child={node_id:?}, owner={owner:?}, ancestry={ancestry:?}"
+                        )
+                    })
                     .get()
                     .instance_key;
                 LayoutChild {

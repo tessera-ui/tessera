@@ -160,9 +160,11 @@ fn check_appearance(samples: u32) {
             &pixels[edge_offset..edge_offset + 4]
         );
         if density == 1.25 {
-            assert!(
-                pixels[edge_offset + 3] < 235,
-                "fractional density must use a 2px outline instead of a 2.5px outline"
+            let inner_offset = ((cy * width + left + 2) * 4) as usize;
+            assert_eq!(
+                (pixels[edge_offset + 3], pixels[inner_offset + 3]),
+                (255, 0),
+                "the floored 2px outline must fully cover its interior pixel and leave the next inner pixel clear at density 1.25"
             );
         }
         let point = PxPosition::from_f32_xy(cx as f32, cy as f32);

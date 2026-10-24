@@ -4,11 +4,13 @@ use std::{
 };
 
 use tessera_ui::{
-    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, Px, PxPosition, State, remember, tessera,
+    Color, Dp, HeadlessConfig, HeadlessRenderer, Modifier, Px, PxPosition, State,
+    modifier::ModifierCapabilityExt as _, remember, tessera,
 };
 
 use crate::{
     boxed::boxed,
+    column::column,
     modifier::{ModifierExt as _, SemanticsArgs, with_pointer_input},
     row::row,
 };
@@ -23,6 +25,142 @@ struct Inputs {
 thread_local! {
     static INPUTS: Cell<Option<State<Inputs>>> = const { Cell::new(None) };
     static WAKE: Cell<Option<State<u32>>> = const { Cell::new(None) };
+    static CLIPPED_OFFSET: Cell<Option<State<PxPosition>>> = const { Cell::new(None) };
+}
+
+#[derive(PartialEq)]
+struct ClippedOffset(State<PxPosition>);
+
+static CLIPPED_HIT: AtomicUsize = AtomicUsize::new(usize::MAX);
+
+impl tessera_ui::PlacementModifierNode for ClippedOffset {
+    fn transform_position(&self, position: PxPosition) -> PxPosition {
+        position + self.0.get()
+    }
+}
+
+#[tessera]
+fn clipped_scene_fixture() {
+    let offset = remember(|| PxPosition::ZERO);
+    CLIPPED_OFFSET.set(Some(offset));
+    boxed()
+        .modifier(Modifier::new().size(Dp(64.0), Dp(64.0)).clip_to_bounds())
+        .children(move || {
+            column()
+                .modifier(Modifier::new().push_placement(ClippedOffset(offset)))
+                .children(|| {
+                    for index in 0..128 {
+                        let modifier = Modifier::new().size(Dp(32.0), Dp(16.0));
+                        let modifier = if index % 2 == 0 {
+                            modifier.clip_to_bounds()
+                        } else {
+                            modifier
+                        };
+                        let content = Modifier::new()
+                            .fill_max_size()
+                            .background(if index % 2 == 0 {
+                                Color::RED
+                            } else {
+                                Color::BLUE
+                            })
+                            .semantics(SemanticsArgs {
+                                label: Some(format!("Clipped row {index}")),
+                                ..Default::default()
+                            });
+                        boxed().modifier(modifier).children(move || {
+                            boxed().modifier(with_pointer_input(content.clone(), move |input| {
+                                if input.cursor_position_rel.is_some_and(|position| {
+                                    position.x >= 0.0
+                                        && position.x < 32.0
+                                        && position.y >= 0.0
+                                        && position.y < 16.0
+                                }) && input.pointer_changes.iter().any(|change| {
+                                    matches!(
+                                        change.content,
+                                        tessera_ui::CursorEventContent::Pressed(_)
+                                    )
+                                }) {
+                                    CLIPPED_HIT.store(index, Ordering::SeqCst);
+                                }
+                            }));
+                        });
+                    }
+                });
+        });
+}
+
+#[test]
+#[ignore = "Requires an offscreen GPU adapter"]
+fn clipped_translation_updates_visible_scene_branches_and_reveals_retained_pixels() {
+    crate::test_utils::run_isolated_test(
+        "layout_flex::drawing_tests::clipped_translation_updates_visible_scene_branches_and_reveals_retained_pixels",
+        || {
+            let mut renderer = HeadlessRenderer::new(
+                Box::new(clipped_scene_fixture),
+                vec![Box::new(crate::TesseraComponents)],
+                HeadlessConfig {
+                    width: 80,
+                    height: 80,
+                    sample_count: 1,
+                    ..Default::default()
+                },
+            )
+            .unwrap();
+            renderer.render_frames(3);
+            assert_eq!(pixel(&renderer, 4, 4), [255, 0, 0, 255]);
+            CLIPPED_OFFSET
+                .get()
+                .unwrap()
+                .set(PxPosition::from_f32_xy(0.0, -4.0));
+            renderer.step_frame();
+            assert!(
+                renderer.diagnostics().scene_nodes_updated < 100,
+                "A small scroll must not rebuild the scene for every fully clipped retained row: {:?}",
+                renderer.diagnostics()
+            );
+            assert_eq!(pixel(&renderer, 4, 4), [255, 0, 0, 255]);
+            assert_eq!(pixel(&renderer, 4, 14), [0, 0, 255, 255]);
+            assert!(renderer.diagnostics().pointer_nodes_dispatched < 32);
+            CLIPPED_OFFSET
+                .get()
+                .unwrap()
+                .set(PxPosition::from_f32_xy(0.0, -2016.0));
+            renderer.step_frame();
+            assert_eq!(pixel(&renderer, 4, 4), [255, 0, 0, 255]);
+            assert_eq!(pixel(&renderer, 4, 20), [0, 0, 255, 255]);
+            renderer.pointer_press(
+                tessera_ui::MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(4.0, 4.0),
+                tessera_ui::PressKeyEventType::Left,
+            );
+            renderer.step_frame();
+            assert_eq!(CLIPPED_HIT.load(Ordering::SeqCst), 126);
+            renderer.pointer_release(
+                tessera_ui::MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(4.0, 4.0),
+                tessera_ui::PressKeyEventType::Left,
+            );
+            renderer.step_frame();
+            let semantics = renderer.accessibility_snapshot().unwrap();
+            let last = semantics
+                .nodes
+                .iter()
+                .find(|(_, node)| node.label() == Some("Clipped row 127"))
+                .unwrap();
+            assert_eq!(last.1.bounds().unwrap().y0, 16.0);
+            CLIPPED_OFFSET.get().unwrap().set(PxPosition::ZERO);
+            renderer.step_frame();
+            assert_eq!(pixel(&renderer, 4, 4), [255, 0, 0, 255]);
+            assert_eq!(pixel(&renderer, 4, 20), [0, 0, 255, 255]);
+            renderer.pointer_press(
+                tessera_ui::MOUSE_POINTER_ID,
+                PxPosition::from_f32_xy(4.0, 4.0),
+                tessera_ui::PressKeyEventType::Left,
+            );
+            renderer.step_frame();
+            assert_eq!(CLIPPED_HIT.load(Ordering::SeqCst), 0);
+        },
+    );
 }
 
 static POINTER_CALLS: AtomicUsize = AtomicUsize::new(0);

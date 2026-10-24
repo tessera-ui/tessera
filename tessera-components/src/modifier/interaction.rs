@@ -694,15 +694,22 @@ impl SemanticsModifierNode for SelectableSemanticsModifierNode {
         accessibility: &mut AccessibilityNode,
         action_handler: &mut Option<AccessibilityActionHandler>,
     ) {
-        accessibility.role = Some(self.role.unwrap_or(accesskit::Role::Button));
+        let role = self.role.unwrap_or(accesskit::Role::Button);
+        accessibility.role = Some(role);
         accessibility.label = self.label.clone();
         accessibility.description = self.description.clone();
         accessibility.focusable = self.enabled;
-        accessibility.toggled = Some(if self.selected {
-            Toggled::True
+        if role == accesskit::Role::RadioButton {
+            accessibility.toggled = Some(if self.selected {
+                Toggled::True
+            } else {
+                Toggled::False
+            });
+            accessibility.selected = None;
         } else {
-            Toggled::False
-        });
+            accessibility.selected = Some(self.selected);
+            accessibility.toggled = None;
+        }
         accessibility.disabled = !self.enabled;
         accessibility.actions.clear();
         if self.enabled {

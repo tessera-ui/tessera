@@ -287,11 +287,16 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         });
 
         let mut cache_entries = Vec::with_capacity(context.commands.len());
-        for (command, size, position) in context.commands.iter() {
+        for (command, geometry) in context.commands.iter() {
+            let size = geometry.local_size;
+            let position = geometry.window_origin();
             // Fractional placement must evaluate coverage at the destination
             // samples rather than resample a mask baked at an integer origin.
-            let entry = if position.x.fract() == 0.0 && position.y.fract() == 0.0 {
-                self.get_or_create_cache_entry(context.device, context.queue, command, *size)
+            let entry = if geometry.local_to_window.scale() == 1.0
+                && position.x.fract() == 0.0
+                && position.y.fract() == 0.0
+            {
+                self.get_or_create_cache_entry(context.device, context.queue, command, size)
             } else {
                 None
             };
@@ -301,12 +306,14 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
         let mut pending_uncached: Vec<usize> = Vec::new();
         let mut pending_cached_run: CachedInstanceBatch = None;
 
-        for (idx, ((_, size, position), cache_entry)) in context
+        for (idx, ((_, geometry), cache_entry)) in context
             .commands
             .iter()
             .zip(cache_entries.iter())
             .enumerate()
         {
+            let size = geometry.local_size;
+            let position = geometry.window_origin();
             if let Some(entry) = cache_entry {
                 if !pending_uncached.is_empty() {
                     self.draw_uncached_batch(
@@ -322,7 +329,7 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
 
                 if let Some((current_entry, transforms)) = pending_cached_run.as_mut() {
                     if Arc::ptr_eq(current_entry, entry) {
-                        transforms.push((*position, *size));
+                        transforms.push((position, size));
                     } else {
                         self.flush_cached_run(
                             context.device,
@@ -331,10 +338,10 @@ impl DrawablePipeline<ShapeCommand> for ShapePipeline {
                             context.render_pass,
                             &mut pending_cached_run,
                         );
-                        pending_cached_run = Some((entry.clone(), vec![(*position, *size)]));
+                        pending_cached_run = Some((entry.clone(), vec![(position, size)]));
                     }
                 } else {
-                    pending_cached_run = Some((entry.clone(), vec![(*position, *size)]));
+                    pending_cached_run = Some((entry.clone(), vec![(position, size)]));
                 }
             } else {
                 self.flush_cached_run(

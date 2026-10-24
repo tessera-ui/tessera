@@ -344,33 +344,6 @@ fn retain_live_dirty_instance_keys(dirty_instance_keys: &HashSet<u64>) -> HashSe
     })
 }
 
-fn expand_dirty_instance_keys_for_reuse(dirty_instance_keys: &HashSet<u64>) -> HashSet<u64> {
-    TesseraRuntime::with(|runtime| {
-        let mut expanded = dirty_instance_keys.clone();
-        let tree = runtime.component_tree.tree();
-
-        for instance_key in dirty_instance_keys {
-            let Some(node_id) = runtime
-                .component_tree
-                .find_node_id_by_instance_key(*instance_key)
-            else {
-                continue;
-            };
-
-            let mut parent_id = tree.get(node_id).and_then(|node| node.parent());
-            while let Some(pid) = parent_id {
-                let Some(parent_node) = tree.get(pid) else {
-                    break;
-                };
-                expanded.insert(parent_node.get().instance_key);
-                parent_id = parent_node.parent();
-            }
-        }
-
-        expanded
-    })
-}
-
 fn dirty_roots_include_tree_root(dirty_roots: &[u64]) -> bool {
     TesseraRuntime::with(|runtime| {
         let tree = runtime.component_tree.tree();
@@ -401,14 +374,7 @@ fn subtree_node_count_by_instance_key(instance_key: u64) -> u64 {
                     "missing node for dirty instance key {instance_key}; this violates replay invariants"
                 )
             });
-        let tree = runtime.component_tree.tree();
-        let mut stack = vec![node_id];
-        let mut count = 0_u64;
-        while let Some(current) = stack.pop() {
-            count = count.saturating_add(1);
-            stack.extend(current.children(tree));
-        }
-        count
+        runtime.component_tree.tree()[node_id].get().subtree_len as u64
     })
 }
 
@@ -426,6 +392,9 @@ fn push_build_root_node() -> BuildRootNodeGuard {
             fn_name: "__tessera_build_root".to_string(),
             role: NodeRole::Composition,
             layout_children: None,
+            #[cfg(feature = "profiling")]
+            subtree_len: 1,
+            children_scale: 1.0,
             instance_logic_id: 0,
             instance_key: 0,
             pointer_preview_handlers: Vec::new(),
@@ -545,6 +514,7 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
         let mut pending_dirty_instance_keys = invalidations.dirty_instance_keys.clone();
         let mut replay_roots_for_debug = Vec::new();
         let mut deferred_backwards_instance_keys = HashSet::default();
+        let mut executed_instance_keys = HashSet::default();
         let mut fallback_to_root_recompose = false;
         #[cfg(feature = "profiling")]
         let mut replayed_nodes = 0_u64;
@@ -566,6 +536,23 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
             }
             let live_dirty_instance_keys =
                 retain_live_dirty_instance_keys(&pending_dirty_instance_keys);
+            if tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG) {
+                let dirty = TesseraRuntime::with(|runtime| {
+                    live_dirty_instance_keys
+                        .iter()
+                        .map(|&key| {
+                            let name = runtime
+                                .component_tree
+                                .find_node_id_by_instance_key(key)
+                                .and_then(|id| runtime.component_tree.get(id))
+                                .map(|node| node.fn_name.as_str())
+                                .unwrap_or("<missing>");
+                            (key, name.to_owned())
+                        })
+                        .collect::<Vec<_>>()
+                });
+                tracing::debug!(target: "tessera_ui::replay", ?dirty, "replay_dirty_boundaries");
+            }
             if live_dirty_instance_keys.is_empty() {
                 break;
             }
@@ -596,11 +583,7 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
 
             replay_roots_for_debug.extend(dirty_roots.iter().copied());
 
-            let reuse_guard_dirty_instance_keys =
-                expand_dirty_instance_keys_for_reuse(&live_dirty_instance_keys);
-            let mut round_covered_instance_keys = HashSet::default();
-
-            with_build_dirty_instance_keys(&reuse_guard_dirty_instance_keys, || {
+            with_build_dirty_instance_keys(&live_dirty_instance_keys, || {
                 for instance_key in &dirty_roots {
                     #[cfg(feature = "profiling")]
                     {
@@ -633,6 +616,9 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                     let replay_group_path = replay_snapshot.group_path.clone();
                     let replay_instance_key_override = replay_snapshot.instance_key_override;
 
+                    let replay_trace =
+                        tracing::enabled!(target: "tessera_ui::replay", tracing::Level::DEBUG);
+                    let detach_timer = replay_trace.then(Instant::now);
                     let replace_context = TesseraRuntime::with_mut(|runtime| {
                         runtime
                             .component_tree
@@ -650,7 +636,9 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                             )
                         }
                     };
+                    let detach_ns = detach_timer.map(|timer| timer.elapsed().as_nanos());
 
+                    let compose_timer = replay_trace.then(Instant::now);
                     with_context_snapshot(context_snapshot, || {
                         with_replay_scope(
                             replay_instance_logic_id,
@@ -661,7 +649,9 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                             },
                         );
                     });
+                    let compose_ns = compose_timer.map(|timer| timer.elapsed().as_nanos());
 
+                    let attach_timer = replay_trace.then(Instant::now);
                     let replace_result = TesseraRuntime::with_mut(|runtime| {
                         runtime
                             .component_tree
@@ -670,8 +660,25 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                     let replace_result = replace_result.unwrap_or_else(|_| {
                         panic!("finish_replace_subtree failed for instance key {instance_key}")
                     });
-                    round_covered_instance_keys
-                        .extend(replace_result.inserted_instance_keys.iter().copied());
+                    if replay_trace {
+                        tracing::debug!(
+                            target: "tessera_ui::replay",
+                            instance_key,
+                            fn_name = %replay_snapshot.fn_name,
+                            detach_ns,
+                            compose_ns,
+                            attach_ns = attach_timer.map(|timer| timer.elapsed().as_nanos()),
+                            inserted = replace_result.inserted_instance_keys.len(),
+                            reused = replace_result.reused_instance_logic_ids.len(),
+                            "replay_root_cpu"
+                        );
+                    }
+                    executed_instance_keys.extend(
+                        replace_result
+                            .inserted_instance_keys
+                            .difference(&replace_result.reused_instance_keys)
+                            .copied(),
+                    );
                     recomposed_instance_logic_ids.extend(
                         replace_result
                             .inserted_instance_logic_ids
@@ -694,7 +701,7 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
 
             let round_invalidations = take_build_invalidations();
             // A write from another component after an instance was rebuilt in
-            // this round means that instance observed a stale value. It cannot
+            // this frame means that instance observed a stale value. It cannot
             // be replayed again in this frame (its replay snapshot
             // is only recorded once the frame finishes), so it is
             // deferred to the next frame.
@@ -703,12 +710,12 @@ pub(crate) fn build_component_tree<F: Fn()>(entry_point: &F) -> BuildTreeResult 
                     .cross_instance_dirty_instance_keys
                     .iter()
                     .copied()
-                    .filter(|instance_key| round_covered_instance_keys.contains(instance_key)),
+                    .filter(|instance_key| executed_instance_keys.contains(instance_key)),
             );
             pending_dirty_instance_keys.extend(round_invalidations.dirty_instance_keys);
             pending_dirty_instance_keys.retain(|instance_key| {
                 !stale_instance_keys.contains(instance_key)
-                    && !round_covered_instance_keys.contains(instance_key)
+                    && !executed_instance_keys.contains(instance_key)
             });
         }
 

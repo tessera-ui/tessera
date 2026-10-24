@@ -83,6 +83,7 @@ impl ShapeCacheKey {
         }
 
         match command {
+            ShapeCommand::ScaledRect { .. } => None,
             ShapeCommand::Rect {
                 color,
                 corner_radii,

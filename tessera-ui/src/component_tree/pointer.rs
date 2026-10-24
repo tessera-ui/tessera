@@ -8,11 +8,11 @@ use std::cell::{Cell, RefCell};
 
 use rustc_hash::{FxHashMap as HashMap, FxHashSet as HashSet};
 
-use crate::{NodeId, PxPosition, PxRect, PxSize, modifier::OrderedModifierAction};
+use crate::{NodeId, PxPosition, PxSize, modifier::OrderedModifierAction, time::Instant};
 
 use super::{
     ComponentNodeMetaDatas, ComponentNodeTree, NodeRole, PointerDispatchPlan, PointerNodePlan,
-    bounds_hit_path, resolve_node_input_context,
+    bounds_hit_path, record_frame_stage, resolve_node_input_context,
 };
 
 const CELL_SIZE: f32 = 256.0;
@@ -62,43 +62,78 @@ impl PointerIndex {
         changed: &HashSet<NodeId>,
         removed: &HashSet<NodeId>,
     ) -> usize {
+        let mut stage_timer =
+            tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::DEBUG)
+                .then(Instant::now);
         let mut removed = removed.clone();
         removed.extend(std::mem::take(&mut self.removed));
+        let structural = std::mem::take(&mut self.changed);
+        let geometry_count = changed.len();
         let mut changed = changed.clone();
-        changed.extend(std::mem::take(&mut self.changed));
+        changed.extend(structural.iter().copied());
+        if tracing::enabled!(target: "tessera_ui::frame_cost", tracing::Level::TRACE) {
+            let mut structural_nodes = HashMap::default();
+            let mut stale = 0_usize;
+            for &id in &structural {
+                if let Some(node) = tree.get(id).filter(|node| !node.is_removed()) {
+                    *structural_nodes
+                        .entry(node.get().fn_name.as_str())
+                        .or_insert(0_usize) += 1;
+                } else {
+                    stale += 1;
+                }
+            }
+            tracing::trace!(
+                target: "tessera_ui::frame_cost",
+                geometry = geometry_count,
+                structural = structural.len(),
+                removed = removed.len(),
+                stale,
+                ?structural_nodes,
+                "pointer_index_invalidations"
+            );
+        }
         for &id in &removed {
             self.remove(id);
             self.hovered.remove(&id);
             self.pending.remove(&id);
         }
+        record_frame_stage(&mut stage_timer, "pointer_invalidations");
         for &id in &changed {
-            self.remove(id);
             let Some(node) = tree.get(id).filter(|node| !node.is_removed()) else {
+                self.remove(id);
                 continue;
             };
             let node = node.get();
             if node.role != NodeRole::Layout {
+                if self.entries.contains_key(&id) {
+                    self.remove(id);
+                }
                 continue;
             }
-            let actions = node.modifier.ordered_actions();
             let raw_input = !node.pointer_preview_handlers.is_empty()
                 || !node.pointer_handlers.is_empty()
                 || !node.pointer_final_handlers.is_empty();
-            if !raw_input
-                && !actions.iter().any(|action| {
-                    matches!(
-                        action,
-                        OrderedModifierAction::Cursor(_)
-                            | OrderedModifierAction::PointerPreviewInput(_)
-                            | OrderedModifierAction::PointerInput(_)
-                            | OrderedModifierAction::PointerFinalInput(_)
-                    )
-                })
-            {
+            let Some(metadata) = metadatas.get(&id) else {
+                self.remove(id);
+                continue;
+            };
+            if !raw_input && metadata.input_local_positions.is_empty() {
+                if self.entries.contains_key(&id) {
+                    self.remove(id);
+                }
                 continue;
             }
-            let Some(metadata) = metadatas.get(&id) else {
-                continue;
+            let was_oversized = self.oversized.contains(&id);
+            let previous = self.remove(id);
+            let was_exposed = was_oversized
+                || previous
+                    .as_ref()
+                    .is_some_and(|entry| !entry.cells.is_empty());
+            let retained = previous.filter(|_| !structural.contains(&id));
+            let (actions, retained_order) = match retained {
+                Some(entry) => (entry.plan.actions, Some(entry.order)),
+                None => (node.modifier.ordered_actions(), None),
             };
             if metadata.abs_position.is_none() {
                 continue;
@@ -110,18 +145,35 @@ impl PointerIndex {
                 context.node_computed_data.width,
                 context.node_computed_data.height,
             );
-            let mut bounds = raw_input.then(|| PxRect::from_position_size(context.abs_pos, size));
+            let mut bounds = raw_input.then(|| {
+                context
+                    .local_to_window
+                    .map_rect(crate::FloatRect::from_position_size(PxPosition::ZERO, size))
+                    .outward()
+            });
             let mut position = context.base_abs_pos;
-            for action in &actions {
+            for (index, action) in actions.iter().enumerate() {
+                if let Some(transform) = context.input_transforms.get(index) {
+                    position = transform.translation();
+                }
                 match action {
                     OrderedModifierAction::Placement(placement) => {
-                        position = placement.node().transform_position(position);
+                        if context.input_transforms.is_empty() {
+                            position = placement.node().transform_position(position);
+                        }
                     }
                     OrderedModifierAction::Cursor(_)
                     | OrderedModifierAction::PointerPreviewInput(_)
                     | OrderedModifierAction::PointerInput(_)
                     | OrderedModifierAction::PointerFinalInput(_) => {
-                        let rect = PxRect::from_position_size(position, size);
+                        let rect =
+                            crate::LocalToWindow::new(context.local_to_window.scale(), position)
+                                .unwrap()
+                                .map_rect(crate::FloatRect::from_position_size(
+                                    PxPosition::ZERO,
+                                    size,
+                                ))
+                                .outward();
                         bounds = Some(bounds.map_or(rect, |bounds| bounds.union(&rect)));
                     }
                     _ => {}
@@ -154,11 +206,14 @@ impl PointerIndex {
                     }
                 }
             }
-            let mut path: Vec<_> = id
-                .ancestors(tree)
-                .map(|id| order.get(&id).copied().unwrap_or_default())
-                .collect();
-            path.reverse();
+            let path = retained_order.unwrap_or_else(|| {
+                let mut path: Vec<_> = id
+                    .ancestors(tree)
+                    .map(|id| order.get(&id).copied().unwrap_or_default())
+                    .collect();
+                path.reverse();
+                path
+            });
             self.entries.insert(
                 id,
                 Entry {
@@ -167,23 +222,28 @@ impl PointerIndex {
                     cells,
                 },
             );
-            self.pending.insert(id);
+            if exposed || was_exposed || structural.contains(&id) {
+                self.pending.insert(id);
+            }
         }
+        record_frame_stage(&mut stage_timer, "pointer_index");
         changed.len()
     }
 
-    fn remove(&mut self, id: NodeId) {
-        if let Some(entry) = self.entries.remove(&id) {
-            for cell in entry.cells {
-                if let Some(nodes) = self.cells.get_mut(&cell) {
+    fn remove(&mut self, id: NodeId) -> Option<Entry> {
+        let entry = self.entries.remove(&id);
+        if let Some(entry) = &entry {
+            for cell in &entry.cells {
+                if let Some(nodes) = self.cells.get_mut(cell) {
                     nodes.remove(&id);
                     if nodes.is_empty() {
-                        self.cells.remove(&cell);
+                        self.cells.remove(cell);
                     }
                 }
             }
         }
         self.oversized.remove(&id);
+        entry
     }
 
     fn hits(

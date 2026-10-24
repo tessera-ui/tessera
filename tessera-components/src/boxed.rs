@@ -6,7 +6,7 @@
 use tessera_ui::{
     AxisConstraint, ComputedData, LayoutResult, MeasurementError, Modifier, Px, PxPosition,
     RenderSlot,
-    layout::{MeasureScope, layout},
+    layout::{MeasureScope, PlacementResult, PlacementScope, layout},
     tessera,
 };
 
@@ -111,6 +111,30 @@ struct BoxedLayout {
 }
 
 impl tessera_ui::LayoutModifierNode for BoxedLayout {
+    fn place_children(
+        &self,
+        scope: &PlacementScope<'_>,
+        _inner: &PlacementResult,
+    ) -> Option<PlacementResult> {
+        let size = scope.size();
+        let mut result = LayoutResult::new(size);
+        for child in scope.children() {
+            let alignment = child
+                .parent_data::<crate::modifier::AlignmentParentData>()
+                .map_or(self.alignment, |data| data.alignment);
+            let child_size = child.size();
+            let (x, y) = compute_child_offset(
+                alignment,
+                size.width,
+                size.height,
+                child_size.width,
+                child_size.height,
+            );
+            result.place_child(child, PxPosition::from_f32_xy(x, y));
+        }
+        Some(result.into_placement_result())
+    }
+
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let mut result = LayoutResult::default();
         let children = input.children();

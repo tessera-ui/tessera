@@ -144,32 +144,32 @@ impl DrawablePipeline<LinearWaveCommand> for LinearWavePipeline {
         let instances: Vec<_> = context
             .commands
             .iter()
-            .map(|(command, size, position)| Instance {
-                position: [
-                    position.x,
-                    position.y,
-                    size.width.to_f32(),
-                    size.height.to_f32(),
-                ],
-                color: command.color.to_array(),
-                curve: [
-                    command.start,
-                    command.end,
-                    command.stroke,
-                    command.wavelength,
-                ],
-                wave: [
-                    command.control_height,
-                    command.shift,
-                    f32::from(u8::from(command.round)),
-                    f32::from(u8::from(command.reverse)),
-                ],
-                screen: [
-                    context.target_size.width.to_f32(),
-                    context.target_size.height.to_f32(),
-                    0.0,
-                    0.0,
-                ],
+            .map(|(command, geometry)| {
+                let position = geometry.window_origin();
+                let [width, height] = geometry.window_size();
+                let scale = geometry.local_to_window.scale();
+                Instance {
+                    position: [position.x, position.y, width, height],
+                    color: command.color.to_array(),
+                    curve: [
+                        command.start * scale,
+                        command.end * scale,
+                        command.stroke * scale,
+                        command.wavelength * scale,
+                    ],
+                    wave: [
+                        command.control_height * scale,
+                        command.shift * scale,
+                        f32::from(u8::from(command.round)),
+                        f32::from(u8::from(command.reverse)),
+                    ],
+                    screen: [
+                        context.target_size.width.to_f32(),
+                        context.target_size.height.to_f32(),
+                        0.0,
+                        0.0,
+                    ],
+                }
             })
             .collect();
         self.ensure_buffer(context.device, instances.len());

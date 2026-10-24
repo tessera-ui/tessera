@@ -170,9 +170,9 @@ impl Default for SelectableArgs {
 /// Pointer delta produced by the `draggable` modifier.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Default)]
 pub struct DragDelta {
-    /// Horizontal delta in pixels.
+    /// Horizontal delta in local physical pixels.
     pub x: Px,
-    /// Vertical delta in pixels.
+    /// Vertical delta in local physical pixels.
     pub y: Px,
 }
 
@@ -215,6 +215,35 @@ impl Default for DraggableArgs {
     }
 }
 
+/// A visual interaction used when a control has no active user interaction.
+///
+/// Presentation changes appearance without requesting focus, dispatching input,
+/// or changing accessibility state. Disabled controls ignore presentation
+/// state.
+///
+/// ```
+/// use tessera_foundation::modifier::{InteractionState, InteractionVisualState};
+///
+/// let live = InteractionState::new();
+/// let visual = live.with_presentation(Some(InteractionVisualState::Focus), true);
+/// assert!(visual.is_focused());
+/// assert!(!live.is_focused());
+/// ```
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum InteractionVisualState {
+    /// The resting appearance.
+    #[default]
+    Rest,
+    /// The hovered appearance.
+    Hover,
+    /// The focused appearance.
+    Focus,
+    /// The pressed appearance.
+    Pressed,
+    /// The dragged appearance.
+    Dragged,
+}
+
 /// Tracks basic interaction flags and derives state-layer alpha.
 #[derive(Clone, PartialEq, Copy, Debug, Default)]
 pub struct InteractionState {
@@ -225,6 +254,30 @@ pub struct InteractionState {
 }
 
 impl InteractionState {
+    /// Resolves appearance while preserving all active user interaction flags.
+    ///
+    /// Disabled controls return a resting state. Otherwise, any active live
+    /// interaction takes precedence over the optional presentation state.
+    /// The returned snapshot does not modify the live interaction state.
+    pub fn with_presentation(
+        self,
+        presentation_state: Option<InteractionVisualState>,
+        enabled: bool,
+    ) -> Self {
+        if !enabled {
+            return Self::default();
+        }
+        if self.is_hovered || self.is_focused || self.is_dragged || self.is_pressed {
+            return self;
+        }
+        Self {
+            is_hovered: presentation_state == Some(InteractionVisualState::Hover),
+            is_focused: presentation_state == Some(InteractionVisualState::Focus),
+            is_dragged: presentation_state == Some(InteractionVisualState::Dragged),
+            is_pressed: presentation_state == Some(InteractionVisualState::Pressed),
+        }
+    }
+
     /// Creates a new interaction state with all flags cleared.
     pub fn new() -> Self {
         Self::default()
@@ -337,10 +390,14 @@ impl PointerInputModifierNode for DraggablePointerModifierNode {
         }
 
         if drag_result.updated {
-            self.on_drag_delta.call(DragDelta {
-                x: drag_result.delta_x,
-                y: drag_result.delta_y,
+            let (x, y) = self.drag_recognizer.with_mut(|recognizer| {
+                recognizer.local_integer_delta(
+                    drag_result.delta_x,
+                    drag_result.delta_y,
+                    input.local_to_window,
+                )
             });
+            self.on_drag_delta.call(DragDelta { x, y });
         }
 
         if drag_result.ended && was_dragging {
@@ -415,4 +472,54 @@ pub(crate) fn apply_draggable_modifier(base: Modifier, args: DraggableArgs) -> M
         on_drag_stopped,
         interaction_state,
     })
+}
+
+#[cfg(test)]
+mod presentation_tests {
+    use super::{InteractionState, InteractionVisualState};
+
+    #[test]
+    fn presentation_preserves_live_combinations_and_disabled_priority() {
+        for bits in 0..16 {
+            let mut live = InteractionState::new();
+            live.set_hovered(bits & 1 != 0);
+            live.set_focused(bits & 2 != 0);
+            live.set_pressed(bits & 4 != 0);
+            live.set_dragged(bits & 8 != 0);
+            assert_eq!(live.with_presentation(None, true), live);
+            for preview in [
+                InteractionVisualState::Rest,
+                InteractionVisualState::Hover,
+                InteractionVisualState::Focus,
+                InteractionVisualState::Pressed,
+                InteractionVisualState::Dragged,
+            ] {
+                assert_eq!(
+                    live.with_presentation(Some(preview), false),
+                    InteractionState::new(),
+                );
+                let visual = live.with_presentation(Some(preview), true);
+                if bits != 0 {
+                    assert_eq!(visual, live);
+                } else {
+                    assert_eq!(
+                        visual.is_hovered(),
+                        preview == InteractionVisualState::Hover
+                    );
+                    assert_eq!(
+                        visual.is_focused(),
+                        preview == InteractionVisualState::Focus
+                    );
+                    assert_eq!(
+                        visual.is_pressed(),
+                        preview == InteractionVisualState::Pressed
+                    );
+                    assert_eq!(
+                        visual.is_dragged(),
+                        preview == InteractionVisualState::Dragged
+                    );
+                }
+            }
+        }
+    }
 }

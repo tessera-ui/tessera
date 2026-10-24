@@ -10,7 +10,7 @@ use parking_lot::RwLock;
 use tessera_ui::{
     Callback, ComputedData, CursorEventContent, FocusManager, FocusRequester, FocusScopeNode,
     LayoutResult, MeasurementError, Modifier, PointerInput, PointerInputModifierNode, PxPosition,
-    PxRect, PxSize, RenderSlot, State, key,
+    RenderSlot, State, key,
     layout::{MeasureScope, layout},
     modifier::{FocusModifierExt as _, ModifierCapabilityExt as _},
     provide_context, remember, tessera, use_context,
@@ -19,7 +19,7 @@ use tessera_ui::{
 use crate::{modifier::ModifierExt as _, spacer::spacer};
 
 use super::{
-    MenuAnchor, MenuBounds, MenuBoundsHandle, MenuColorStyle, MenuController, MenuPlacement,
+    MenuBounds, MenuBoundsHandle, MenuColorStyle, MenuController, MenuPlacement,
     MenuProviderConfig, is_click_outside_menu, menu_provider_content,
 };
 
@@ -30,7 +30,7 @@ pub(super) struct MenuHost {
     restore_root: State<bool>,
     root_scope: FocusScopeNode,
     restore_parent: State<Option<FocusScopeNode>>,
-    origin: State<PxRect>,
+    origin: State<tessera_ui::LayoutCoordinates>,
     bounds: Arc<RwLock<Option<MenuBounds>>>,
     on_dismiss: Option<Callback>,
 }
@@ -79,7 +79,7 @@ impl MenuHost {
         point: Option<PxPosition>,
     ) -> bool {
         let origin = self.origin.get();
-        let point = point.map(|point| point - PxPosition::new(origin.x, origin.y));
+        let point = point.map(|point| origin.local_to_window.inverse_point(point));
         let mut hit = self
             .bounds
             .read()
@@ -262,7 +262,7 @@ pub(super) struct MenuPopupRequest {
     pub host: MenuHost,
     pub parent: State<MenuController>,
     pub controller: State<MenuController>,
-    pub anchor: State<PxRect>,
+    pub anchor: State<tessera_ui::LayoutCoordinates>,
     pub scope: FocusScopeNode,
     pub fallback: FocusRequester,
     pub content: RenderSlot,
@@ -347,7 +347,7 @@ pub(super) fn menu_host(provider: Option<MenuProviderConfig>) {
         restore_root: remember(|| false),
         root_scope: remember(FocusScopeNode::new).get(),
         restore_parent: remember(|| None),
-        origin: remember(PxRect::default),
+        origin: remember(tessera_ui::LayoutCoordinates::default),
         bounds: remember(|| Arc::new(RwLock::new(None))).get(),
         on_dismiss: provider.on_dismiss,
     };
@@ -378,7 +378,7 @@ pub(super) fn menu_host(provider: Option<MenuProviderConfig>) {
             let origin = host.origin;
             layout()
                 .policy(MenuHostLayout)
-                .modifier(modifier.clone().on_globally_positioned(move |bounds| {
+                .modifier(modifier.clone().on_layout_coordinates(move |bounds| {
                     if origin.get() != bounds {
                         origin.set(bounds);
                     }
@@ -407,6 +407,7 @@ fn menu_popup_layer(request: Option<State<MenuPopupRequest>>) {
     let value = request.get();
     let anchor = value.anchor.get();
     let origin = value.host.origin.get();
+    let anchor = origin.local_to_window.inverse_rect(anchor.window_bounds());
     let mut modifier = Modifier::new();
     if !value.controller.with(MenuController::is_open) {
         let host = value.host.clone();
@@ -418,10 +419,7 @@ fn menu_popup_layer(request: Option<State<MenuPopupRequest>>) {
         controller: Some(value.controller),
         placement: value.placement,
         offset: [tessera_ui::Dp::ZERO; 2],
-        anchor: Some(MenuAnchor::new(
-            PxPosition::new(anchor.x - origin.x, anchor.y - origin.y),
-            PxSize::new(anchor.width, anchor.height),
-        )),
+        precise_anchor: Some(anchor),
         focus_restorer_fallback: Some(value.fallback),
         focus_scope: Some(value.scope),
         parent_request: Some(request),

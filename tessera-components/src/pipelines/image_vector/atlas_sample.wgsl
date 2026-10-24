@@ -59,7 +59,7 @@ fn fs_main(in: VertexOutput) -> @location(0) vec4<f32> {
         let alpha = sampled.a * uniforms.tint.a;
         return vec4<f32>(uniforms.tint.rgb * alpha, alpha);
     } else {
-        let tinted = sampled * uniforms.tint;
-        return vec4<f32>(tinted.rgb * tinted.a, tinted.a);
+        // Atlas RGB already includes intrinsic coverage; only layer opacity remains.
+        return vec4<f32>(sampled.rgb * uniforms.tint.rgb * uniforms.tint.a, sampled.a * uniforms.tint.a);
     }
 }

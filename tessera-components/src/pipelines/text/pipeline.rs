@@ -14,7 +14,10 @@
 //! This module is intended for integration into custom UI components and
 //! rendering flows that require flexible and robust text display.
 
-use std::{num::NonZero, sync::OnceLock};
+use std::{
+    num::NonZero,
+    sync::{Arc, OnceLock},
+};
 
 use glyphon::fontdb;
 use parking_lot::{RwLock, RwLockReadGuard, RwLockWriteGuard};
@@ -336,12 +339,11 @@ impl DrawablePipeline<TextCommand> for GlyphonTextRender {
             return;
         }
 
-        let text_areas = context.commands.iter().map(|(command, _size, start_pos)| {
-            let start_pos = PxPosition::from_f32_xy(
-                start_pos.x + command.offset.x,
-                start_pos.y + command.offset.y,
-            );
-            command.data.text_area(start_pos)
+        let text_areas = context.commands.iter().map(|(command, geometry)| {
+            let origin = geometry.local_to_window.map_point(command.offset);
+            command
+                .data
+                .text_area(origin, geometry.local_to_window.scale())
         });
 
         // Batches in one submission need distinct buffers because queued
@@ -405,6 +407,17 @@ pub struct TextData {
     font_size: f32,
     line_height: f32,
     font: TextFont,
+    styled_identity: Option<Arc<Vec<StyledLineIdentity>>>,
+    base_span_colors: Option<Arc<Vec<Option<glyphon::Color>>>>,
+    span_opacity: f32,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+struct StyledLineIdentity {
+    text: String,
+    attrs: glyphon::AttrsList,
+    alignment: Option<glyphon::cosmic_text::Align>,
+    layout: Vec<glyphon::LayoutLine>,
 }
 
 /// Measurement result returned by `TextData::measure()`.
@@ -433,6 +446,9 @@ impl PartialEq for TextData {
             && self.font_size == other.font_size
             && self.line_height == other.line_height
             && self.font == other.font
+            && self.styled_identity == other.styled_identity
+            && self.span_opacity == other.span_opacity
+            && self.text_buffer.scroll() == other.text_buffer.scroll()
     }
 }
 
@@ -476,6 +492,9 @@ impl TextData {
             font_size,
             line_height,
             font,
+            styled_identity: None,
+            base_span_colors: None,
+            span_opacity: 1.0,
         };
         write_lru_cache().put(key, data.clone());
         data
@@ -483,6 +502,22 @@ impl TextData {
 
     /// Builds [`TextData`] directly from a pre-shaped glyphon buffer.
     pub fn from_buffer(text_buffer: glyphon::Buffer) -> Self {
+        let styled_identity = text_buffer
+            .lines
+            .iter()
+            .map(|line| StyledLineIdentity {
+                text: line.text().to_owned(),
+                attrs: line.attrs_list().clone(),
+                alignment: line.align(),
+                layout: line.layout_opt().cloned().unwrap_or_default(),
+            })
+            .collect();
+        let base_span_colors = text_buffer
+            .lines
+            .iter()
+            .flat_map(|line| line.layout_opt().into_iter().flatten())
+            .flat_map(|line| line.glyphs.iter().map(|glyph| glyph.color_opt))
+            .collect();
         let metrics = text_buffer.metrics();
         // Calculate text bounds
         let mut run_width: f32 = 0.0;
@@ -528,26 +563,66 @@ impl TextData {
                 tracking: 0.0,
                 family: None,
             },
+            styled_identity: Some(Arc::new(styled_identity)),
+            base_span_colors: Some(Arc::new(base_span_colors)),
+            span_opacity: 1.0,
         }
     }
 
     /// Get the glyphon text area from the text data
-    fn text_area(&'_ self, start_pos: PxPosition) -> glyphon::TextArea<'_> {
+    fn text_area(&'_ self, start_pos: PxPosition, scale: f32) -> glyphon::TextArea<'_> {
         let bounds = glyphon::TextBounds {
-            left: start_pos.x_px().raw(),
-            top: start_pos.y_px().raw(),
-            right: start_pos.x_px().raw() + self.size[0] as i32,
-            bottom: start_pos.y_px().raw() + self.size[1] as i32,
+            left: start_pos.x.floor() as i32,
+            top: start_pos.y.floor() as i32,
+            right: (start_pos.x + self.size[0] as f32 * scale).ceil() as i32,
+            bottom: (start_pos.y + self.size[1] as f32 * scale).ceil() as i32,
         };
         glyphon::TextArea {
             buffer: &self.text_buffer,
-            left: start_pos.x,
+            left: start_pos.x - self.text_buffer.scroll().horizontal * scale,
             top: start_pos.y,
-            scale: 1.0,
+            scale,
             bounds,
             default_color: color_to_glyphon(self.current_color),
             custom_glyphs: &[],
         }
+    }
+
+    pub(crate) fn set_scroll(&mut self, scroll: glyphon::cosmic_text::Scroll) {
+        if self.text_buffer.scroll() == scroll {
+            return;
+        }
+        self.text_buffer.set_scroll(scroll);
+        self.text_buffer
+            .shape_until_scroll(&mut write_font_system(), false);
+        let mut width = 0.0_f32;
+        self.first_baseline = 0.0;
+        self.last_baseline = 0.0;
+        self.line_count = 0;
+        for run in self.text_buffer.layout_runs() {
+            width = width.max(run.line_w);
+            if self.line_count == 0 {
+                self.first_baseline = run.line_y;
+            }
+            self.last_baseline = run.line_y;
+            self.line_count += 1;
+        }
+        if self.text_buffer.lines.iter().any(|line| {
+            matches!(
+                line.align(),
+                Some(
+                    glyphon::cosmic_text::Align::Center
+                        | glyphon::cosmic_text::Align::Right
+                        | glyphon::cosmic_text::Align::End
+                )
+            )
+        }) {
+            width = self.text_buffer.size().0.unwrap_or(width);
+        }
+        self.size = [
+            width as u32,
+            (self.line_count as f32 * self.text_buffer.metrics().line_height).ceil() as u32,
+        ];
     }
 
     fn build_buffer(
@@ -616,17 +691,35 @@ impl TextData {
     }
 
     pub(crate) fn apply_opacity(&mut self, opacity: f32) {
+        let opacity = opacity.clamp(0.0, 1.0);
         let target_alpha = (self.base_color.a * opacity).clamp(0.0, 1.0);
         let target_color = self.base_color.with_alpha(target_alpha);
         if (target_color.a - self.current_color.a).abs() <= f32::EPSILON
             && (target_color.r - self.current_color.r).abs() <= f32::EPSILON
             && (target_color.g - self.current_color.g).abs() <= f32::EPSILON
             && (target_color.b - self.current_color.b).abs() <= f32::EPSILON
+            && self.span_opacity == opacity
         {
             return;
         }
 
         self.current_color = target_color;
+        if let Some(colors) = &self.base_span_colors {
+            let mut colors = colors.iter();
+            for line in &mut self.text_buffer.lines {
+                line.map_layout_glyph_colors(|_| {
+                    colors.next().copied().flatten().map(|color| {
+                        glyphon::Color::rgba(
+                            color.r(),
+                            color.g(),
+                            color.b(),
+                            (f32::from(color.a()) * opacity).round() as u8,
+                        )
+                    })
+                });
+            }
+        }
+        self.span_opacity = opacity;
     }
 }
 
@@ -637,6 +730,35 @@ mod tests {
     use crate::theme::MaterialTypography;
 
     use super::{TextConstraint, TextData, read_font_system};
+
+    #[test]
+    fn horizontal_buffer_scroll_moves_glyph_origin_without_moving_clip_bounds() {
+        let shaped = TextData::shape(
+            "Scrollable editor text".into(),
+            Color::BLACK,
+            MaterialTypography::default().body_large,
+            TextConstraint {
+                max_width: Some(60.0),
+                max_height: Some(24.0),
+            },
+        );
+        let before = TextData::from_buffer(shaped.text_buffer.clone());
+        let mut buffer = shaped.text_buffer;
+        let mut scroll = buffer.scroll();
+        scroll.horizontal = 13.5;
+        buffer.set_scroll(scroll);
+        let after = TextData::from_buffer(buffer);
+        let origin = tessera_ui::PxPosition::from_f32_xy(80.25, 50.5);
+        let original_area = before.text_area(origin, 1.5);
+        let scrolled_area = after.text_area(origin, 1.5);
+        assert_eq!(scrolled_area.left, 60.0);
+        assert_eq!(scrolled_area.top, 50.5);
+        assert_eq!(scrolled_area.bounds, original_area.bounds);
+        assert_ne!(
+            before, after,
+            "scroll changes must invalidate retained text draws"
+        );
+    }
 
     #[test]
     fn wrapping_keeps_words_intact_and_falls_back_for_words_wider_than_the_line() {

@@ -98,7 +98,8 @@
 use std::{any::TypeId, collections::HashMap};
 
 use crate::{
-    px::{PxPosition, PxRect, PxSize},
+    px::{PxRect, PxSize},
+    render_graph::DrawGeometry,
     renderer::DrawCommand,
 };
 
@@ -155,8 +156,8 @@ pub struct PassContext<'a, 'b> {
 ///   format and dimensions.
 /// * `render_pass` - The active `wgpu::RenderPass` encoder, used to record
 ///   rendering commands.
-/// * `commands` - A slice of tuples, each containing a draw command, its size,
-///   and its position.
+/// * `commands` - A slice of commands with local dimensions and precise target
+///   mappings.
 /// * `scene_texture_view` - A view of the current scene texture, useful for
 ///   effects that sample from the background.
 /// * `clip_rect` - An optional rectangle defining the clipping area for the
@@ -173,7 +174,7 @@ pub struct DrawContext<'a, 'b, 'c, T> {
     /// The active render pass encoder.
     pub render_pass: &'a mut wgpu::RenderPass<'b>,
     /// The draw commands to be processed.
-    pub commands: &'c [(&'c T, PxSize, PxPosition)],
+    pub commands: &'c [(&'c T, DrawGeometry)],
     /// A view of the current scene texture.
     pub scene_texture_view: &'a wgpu::TextureView,
     /// An optional clipping rectangle for the draw call.
@@ -387,7 +388,7 @@ pub(crate) trait ErasedDrawablePipeline {
     fn draw_erased(
         &mut self,
         context: ErasedDrawContext<'_, '_>,
-        commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
+        commands: &[(&dyn DrawCommand, DrawGeometry)],
     ) -> bool;
 }
 
@@ -418,7 +419,7 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
     fn draw_erased(
         &mut self,
         context: ErasedDrawContext<'_, '_>,
-        commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
+        commands: &[(&dyn DrawCommand, DrawGeometry)],
     ) -> bool {
         let timing = tracing::enabled!(tracing::Level::DEBUG).then(crate::time::Instant::now);
         if commands.is_empty() {
@@ -436,15 +437,14 @@ impl<T: DrawCommand + 'static, P: DrawablePipeline<T> + 'static> ErasedDrawableP
         } = context;
 
         if commands[0].0.is::<T>() {
-            let typed_commands: Vec<(&T, PxSize, PxPosition)> = commands
+            let typed_commands: Vec<(&T, DrawGeometry)> = commands
                 .iter()
-                .map(|(cmd, size, pos)| {
+                .map(|(cmd, geometry)| {
                     (
                         cmd.downcast_ref::<T>().expect(
                             "FATAL: A command in a batch has a different type than the first one.",
                         ),
-                        *size,
-                        *pos,
+                        *geometry,
                     )
                 })
                 .collect();
@@ -626,7 +626,7 @@ impl PipelineRegistry {
     pub(crate) fn dispatch(
         &mut self,
         context: ErasedDrawContext<'_, '_>,
-        commands: &[(&dyn DrawCommand, PxSize, PxPosition)],
+        commands: &[(&dyn DrawCommand, DrawGeometry)],
     ) {
         if commands.is_empty() {
             return;

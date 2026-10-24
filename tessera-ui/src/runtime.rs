@@ -55,7 +55,7 @@ fn next_order_counter(kind: OrderCounterKind, empty_message: &str) -> u64 {
     with_execution_context_mut(|context| {
         debug_assert!(!context.order_frame_stack.is_empty(), "{empty_message}");
         let frame = context.order_frame_stack.last_mut().expect(empty_message);
-        match kind {
+        let counter = match kind {
             OrderCounterKind::Remember => {
                 let counter = frame.remember;
                 frame.remember = frame.remember.wrapping_add(1);
@@ -76,8 +76,17 @@ fn next_order_counter(kind: OrderCounterKind, empty_message: &str) -> u64 {
                 frame.frame_receiver = frame.frame_receiver.wrapping_add(1);
                 counter
             }
-        }
+        };
+        salt_order_counter(frame.occurrence_salt, counter)
     })
+}
+
+fn salt_order_counter(salt: u64, counter: u64) -> u64 {
+    if salt == 0 {
+        counter
+    } else {
+        hash_components(&[&salt, &counter])
+    }
 }
 
 fn next_child_instance_call_index() -> u64 {
@@ -87,7 +96,7 @@ fn next_child_instance_call_index() -> u64 {
         };
         let index = frame.instance;
         frame.instance = frame.instance.wrapping_add(1);
-        index
+        salt_order_counter(frame.occurrence_salt, index)
     })
 }
 
@@ -811,6 +820,10 @@ pub(crate) fn has_persistent_focus_handle(handle_id: FocusHandleId) -> bool {
     with_persistent_focus_handle_store(|store| store.contains_handle(handle_id))
 }
 
+pub(crate) fn has_pending_persistent_focus_prune() -> bool {
+    with_persistent_focus_handle_store(|store| !store.prune_candidates.is_empty())
+}
+
 pub(crate) fn prune_persistent_focus_handles() {
     let removed_owners =
         TesseraRuntime::with_mut(|runtime| runtime.component_tree.take_removed_focus_owners());
@@ -945,16 +958,6 @@ pub(crate) fn is_instance_key_build_dirty(instance_key: u64) -> bool {
             .last()
             .is_some_and(|dirty_instance_keys| dirty_instance_keys.contains(&instance_key))
     })
-}
-
-pub(crate) fn pending_build_instance_keys() -> HashSet<u64> {
-    let mut keys = with_build_invalidation_tracker(|tracker| tracker.dirty_instance_keys.clone());
-    with_execution_context(|context| {
-        if let Some(dirty) = context.build_dirty_instance_keys_stack.last() {
-            keys.extend(dirty.iter().copied());
-        }
-    });
-    keys
 }
 
 fn consume_pending_build_invalidation(instance_key: u64) -> bool {
@@ -2127,6 +2130,13 @@ impl TesseraRuntime {
         false
     }
 
+    pub(crate) fn set_current_children_scale(&mut self, scale: f32) {
+        self.component_tree
+            .current_node_mut()
+            .expect("Scale must be attached to a layout node")
+            .children_scale = scale;
+    }
+
     /// Sets the unified layout node for the current component node.
     pub(crate) fn set_current_layout_node_boxed(&mut self, policy: Box<dyn LayoutModifierDyn>) {
         if let Some(node) = self.component_tree.current_node_mut() {
@@ -3025,6 +3035,40 @@ pub struct GroupGuard {
 impl GroupGuard {
     /// Push a group id onto the current component's group stack.
     pub fn new(group_id: u64) -> Self {
+        let occurrence_salt = with_execution_context_mut(|context| {
+            let Some(frame) = context.order_frame_stack.last_mut() else {
+                return 0;
+            };
+            let occurrence = if let Some((_, next)) = frame
+                .group_occurrences
+                .iter_mut()
+                .find(|(id, _)| *id == group_id)
+            {
+                let occurrence = *next;
+                *next = next.wrapping_add(1);
+                occurrence
+            } else {
+                frame.group_occurrences.push((group_id, 1));
+                0
+            };
+            if occurrence == 0 && frame.occurrence_salt == 0 {
+                0
+            } else {
+                hash_components(&[&frame.occurrence_salt, &group_id, &occurrence])
+            }
+        });
+        let guard = Self::keyed(group_id);
+        with_execution_context_mut(|context| {
+            context
+                .order_frame_stack
+                .last_mut()
+                .expect("group order frame must exist")
+                .occurrence_salt = occurrence_salt;
+        });
+        guard
+    }
+
+    fn keyed(group_id: u64) -> Self {
         push_group_id(group_id);
         push_order_frame();
         Self { group_id }
@@ -3628,7 +3672,7 @@ where
     F: FnOnce() -> R,
 {
     let key_hash = hash_components(&[&key]);
-    let _group_guard = GroupGuard::new(key_hash);
+    let _group_guard = GroupGuard::keyed(key_hash);
     let _instance_guard = InstanceKeyGuard::new(key_hash);
     block()
 }
@@ -3649,6 +3693,141 @@ mod tests {
     use crate::modifier::{LayoutModifierChild, LayoutModifierInput, LayoutModifierNode};
     use crate::prop::{CallbackWith, ComponentReplayData, RenderSlot, make_component_runner};
     use crate::tessera;
+
+    thread_local! {
+        static CONDITIONAL_LOOP_VALUES: std::cell::Cell<[Option<State<usize>>; 3]> = const { std::cell::Cell::new([None; 3]) };
+        static CONDITIONAL_LOOP_ORDER: std::cell::Cell<Option<State<Vec<usize>>>> = const { std::cell::Cell::new(None) };
+        static CONDITIONAL_LOOP_TICK: std::cell::Cell<Option<State<usize>>> = const { std::cell::Cell::new(None) };
+    }
+
+    #[derive(Clone, PartialEq)]
+    struct ConditionalLoopWidth(State<usize>);
+
+    impl LayoutModifierNode for ConditionalLoopWidth {
+        fn measure(
+            &self,
+            _scope: &mut MeasureScope<'_>,
+        ) -> Result<crate::LayoutResult, crate::MeasurementError> {
+            Ok(crate::LayoutResult::new(crate::ComputedData {
+                width: crate::Px(self.0.get() as i32),
+                height: crate::Px(10),
+            }))
+        }
+    }
+
+    struct ConditionalLoopTag(usize);
+
+    impl crate::SemanticsModifierNode for ConditionalLoopTag {
+        fn apply(
+            &self,
+            semantics: &mut crate::AccessibilityNode,
+            _handler: &mut Option<crate::AccessibilityActionHandler>,
+        ) {
+            *semantics = semantics.clone().with_key(format!("loop-item-{}", self.0));
+        }
+    }
+
+    #[derive(Clone, Copy, PartialEq)]
+    struct ConditionalLoopRow;
+
+    impl LayoutModifierNode for ConditionalLoopRow {
+        fn measure(
+            &self,
+            scope: &mut MeasureScope<'_>,
+        ) -> Result<crate::LayoutResult, crate::MeasurementError> {
+            let mut result = crate::LayoutResult::new(crate::ComputedData::min_from_constraint(
+                scope.parent_constraint().as_ref(),
+            ));
+            let mut x = crate::Px::ZERO;
+            for child in scope.children() {
+                let measured = child.measure(scope, &crate::Constraint::NONE)?;
+                result.place_child(measured, crate::PxPosition::new(x, crate::Px::ZERO));
+                x += measured.width;
+            }
+            Ok(result)
+        }
+    }
+
+    #[tessera(crate)]
+    fn conditional_loop_item(index: usize) {
+        let value = remember(|| index);
+        let mut values = CONDITIONAL_LOOP_VALUES.get();
+        values[index] = Some(value);
+        CONDITIONAL_LOOP_VALUES.set(values);
+        crate::layout::layout()
+            .policy(ConditionalLoopWidth(value))
+            .modifier(crate::Modifier::new().push_semantics(ConditionalLoopTag(index)));
+    }
+
+    #[tessera(crate)]
+    fn conditional_loop_fixture(keyed: bool) {
+        let order = remember(|| vec![0, 1, 2]);
+        let tick = remember(|| 0);
+        CONDITIONAL_LOOP_ORDER.set(Some(order));
+        CONDITIONAL_LOOP_TICK.set(Some(tick));
+        crate::layout::layout()
+            .policy(ConditionalLoopRow)
+            .child(move || {
+                let _ = tick.get();
+                for index in order.get() {
+                    if index > 0 {
+                        if keyed {
+                            key(index, || {
+                                conditional_loop_item(index);
+                            });
+                        } else {
+                            conditional_loop_item(index);
+                        }
+                    }
+                }
+            });
+    }
+
+    #[test]
+    fn conditional_loop_components_keep_independent_state_through_replay_and_keyed_reorder() {
+        for keyed in [false, true] {
+            CONDITIONAL_LOOP_VALUES.set([None; 3]);
+            let mut session = crate::testing::start_layout_test_session(
+                crate::testing::layout_test(move || {
+                    conditional_loop_fixture(keyed);
+                })
+                .viewport_px(100, 20),
+            );
+            let initial = crate::testing::pump_layout_test_session(&mut session, 0);
+            let values = CONDITIONAL_LOOP_VALUES.get();
+            let first = values[1].unwrap();
+            let second = values[2].unwrap();
+            assert_eq!(first.get(), 1);
+            assert_eq!(second.get(), 2);
+            initial.node("loop-item-1").size(1, 10).position(0, 0);
+            initial.node("loop-item-2").size(2, 10).position(1, 0);
+
+            first.set(11);
+            let changed = crate::testing::pump_layout_test_session(&mut session, 16_666_667);
+            changed.node("loop-item-1").size(11, 10).position(0, 0);
+            changed.node("loop-item-2").size(2, 10).position(11, 0);
+            assert_eq!(second.get(), 2);
+            CONDITIONAL_LOOP_TICK.get().unwrap().set(1);
+            let replayed = crate::testing::pump_layout_test_session(&mut session, 33_333_334);
+            replayed.node("loop-item-1").size(11, 10).position(0, 0);
+            replayed.node("loop-item-2").size(2, 10).position(11, 0);
+
+            if keyed {
+                CONDITIONAL_LOOP_ORDER.get().unwrap().set(vec![0, 2, 1]);
+                let reordered = crate::testing::pump_layout_test_session(&mut session, 50_000_001);
+                reordered.node("loop-item-2").size(2, 10).position(0, 0);
+                reordered.node("loop-item-1").size(11, 10).position(2, 0);
+                assert!(CONDITIONAL_LOOP_VALUES.get()[1].unwrap() == first);
+                assert!(CONDITIONAL_LOOP_VALUES.get()[2].unwrap() == second);
+
+                CONDITIONAL_LOOP_ORDER.get().unwrap().set(vec![0, 2]);
+                let removed = crate::testing::pump_layout_test_session(&mut session, 66_666_668);
+                removed.node("loop-item-2").size(2, 10).position(0, 0);
+                assert!(!first.is_alive());
+                assert!(second.is_alive());
+            }
+        }
+    }
 
     #[tessera(crate)]
     fn required_value_component(value: Option<usize>, on_value: Option<CallbackWith<usize>>) {
@@ -3894,6 +4073,9 @@ mod tests {
                 fn_name: "root".to_string(),
                 role: NodeRole::Layout,
                 layout_children: None,
+                #[cfg(feature = "profiling")]
+                subtree_len: 1,
+                children_scale: 1.0,
                 instance_logic_id: 0,
                 instance_key: 0,
                 pointer_preview_handlers: Vec::new(),
@@ -4286,6 +4468,9 @@ mod tests {
                 fn_name: "root".to_string(),
                 role: NodeRole::Composition,
                 layout_children: None,
+                #[cfg(feature = "profiling")]
+                subtree_len: 1,
+                children_scale: 1.0,
                 instance_logic_id: 0,
                 instance_key: 0,
                 pointer_preview_handlers: Vec::new(),

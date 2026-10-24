@@ -1,6 +1,7 @@
 use std::{cell::RefCell, ptr::NonNull, sync::Arc};
 
 use rustc_hash::FxHashSet as HashSet;
+use smallvec::SmallVec;
 
 use crate::{NodeId, context::ContextMap, focus::FocusOwner, runtime::RuntimePhase};
 
@@ -29,13 +30,15 @@ impl ExecutionContext {
     }
 }
 
-#[derive(Clone, Copy, Default)]
+#[derive(Clone, Default)]
 pub(crate) struct OrderFrame {
     pub(crate) remember: u64,
     pub(crate) functor: u64,
     pub(crate) context: u64,
     pub(crate) instance: u64,
     pub(crate) frame_receiver: u64,
+    pub(crate) occurrence_salt: u64,
+    pub(crate) group_occurrences: SmallVec<[(u64, u64); 4]>,
 }
 
 thread_local! {

@@ -321,6 +321,7 @@ pub struct DragResult {
 /// Stateful drag gesture recognizer.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct DragRecognizer {
+    delta_remainder: PxPosition,
     settings: DragSettings,
     active_pointer: Option<PointerId>,
     track: PressTrack,
@@ -331,6 +332,7 @@ impl DragRecognizer {
     /// Creates a drag recognizer with custom settings.
     pub fn new(settings: DragSettings) -> Self {
         Self {
+            delta_remainder: PxPosition::ZERO,
             settings,
             active_pointer: None,
             track: PressTrack::default(),
@@ -375,6 +377,7 @@ impl DragRecognizer {
             }
             match change.content {
                 CursorEventContent::Pressed(PressKeyEventType::Left) if within_bounds => {
+                    self.delta_remainder = PxPosition::ZERO;
                     self.active_pointer = Some(change.pointer_id);
                     self.track.on_press(change.position());
                     self.dragging = false;
@@ -452,6 +455,19 @@ impl DragRecognizer {
     /// Returns whether dragging is currently active.
     pub fn is_dragging(&self) -> bool {
         self.dragging
+    }
+
+    pub(crate) fn local_integer_delta(
+        &mut self,
+        x: Px,
+        y: Px,
+        transform: tessera_ui::LocalToWindow,
+    ) -> (Px, Px) {
+        let window = PxPosition::new(x, y) + self.delta_remainder;
+        let local = transform.inverse_vector(window);
+        let rounded = (local.x_px(), local.y_px());
+        self.delta_remainder = window - transform.map_vector(PxPosition::new(rounded.0, rounded.1));
+        rounded
     }
 
     fn reset(&mut self) {
@@ -1167,6 +1183,42 @@ mod slop_tests {
         assert!(started.started);
         assert_eq!(started.delta_x, Px::new(15));
         assert_eq!(started.delta_y, Px::ZERO);
+    }
+
+    #[test]
+    fn local_integer_drag_delta_retains_fractional_movement_in_window_units() {
+        let mut drag = DragRecognizer::new(DragSettings {
+            slop_px: 0.0,
+            ..Default::default()
+        });
+        let now = Instant::now();
+        let mut press = [
+            change(CursorEventContent::Pressed(PressKeyEventType::Left), now)
+                .with_position(PxPosition::ZERO),
+        ];
+        drag.update(PointerEventPass::Main, &mut press, true);
+        let mut deltas = Vec::new();
+        for x in 1..=5 {
+            let mut movement = [change(moved(x, 0), now)];
+            let result = drag.update(PointerEventPass::Main, &mut movement, true);
+            assert!(result.updated);
+            let transform = tessera_ui::LocalToWindow::new(
+                0.625,
+                PxPosition::from_f32_xy(x as f32 * 10.25, 20.5),
+            )
+            .unwrap();
+            deltas.push(
+                drag.local_integer_delta(result.delta_x, result.delta_y, transform)
+                    .0
+                    .0,
+            );
+        }
+        assert_eq!(deltas, [2, 1, 2, 1, 2]);
+        assert_eq!(
+            deltas.iter().sum::<i32>(),
+            8,
+            "Five window pixels must preserve exactly eight local pixels"
+        );
     }
 
     #[test]

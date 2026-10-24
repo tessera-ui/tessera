@@ -4,8 +4,9 @@
 //!
 //! Trigger data reloads when users pull down at the top of a scrollable view.
 use tessera_ui::{
-    Callback, CallbackWith, Color, Dp, Modifier, Px, RenderSlot, State, current_frame_nanos,
-    layout::layout, provide_context, receive_frame_nanos, remember, tessera, use_context,
+    Callback, CallbackWith, Color, Dp, FocusModifierExt, Modifier, Px, RenderSlot, State,
+    current_frame_nanos, layout::layout, provide_context, receive_frame_nanos, remember, tessera,
+    use_context,
 };
 
 use crate::{
@@ -446,7 +447,9 @@ pub fn pull_refresh(
 
     let parent_nested_scroll = use_context::<NestedScrollConnection>().map(|context| context.get());
     let on_refresh = on_refresh.unwrap_or_default();
+    let coordinate_scale = remember(|| 1.0_f32);
     let nested_scroll_connection = NestedScrollConnection::new()
+        .with_coordinate_scale(coordinate_scale)
         .with_pre_scroll_handler(CallbackWith::new({
             move |input: PreScrollInput| {
                 if !enabled || input.source != tessera_ui::ScrollEventSource::Touch {
@@ -492,44 +495,52 @@ pub fn pull_refresh(
         }))
         .with_parent(parent_nested_scroll);
 
-    layout().modifier(modifier).child(move || {
-        let child = child;
-        let nested_scroll_connection = nested_scroll_connection.clone();
-        boxed()
-            .modifier(Modifier::new().fill_max_size())
-            .alignment(Alignment::TopCenter)
-            .children(move || {
-                let nested_scroll_connection = nested_scroll_connection.clone();
-                provide_context(
-                    || nested_scroll_connection.clone(),
-                    move || {
-                        child.render();
-                    },
-                );
-                layout()
-                    .modifier(Modifier::new().align(Alignment::TopCenter))
-                    .child(move || {
-                        let offset = indicator_offset_dp(
-                            controller,
-                            indicator_size.unwrap_or(PullRefreshDefaults::INDICATOR_SIZE),
-                        );
-                        pull_refresh_indicator_with_offset(PullRefreshIndicatorOffsetArgs {
-                            indicator_size: indicator_size
-                                .unwrap_or(PullRefreshDefaults::INDICATOR_SIZE),
-                            indicator_background_color,
-                            indicator_content_color,
-                            indicator_track_color: indicator_track_color
-                                .unwrap_or(Color::TRANSPARENT),
-                            indicator_stroke_width: indicator_stroke_width
-                                .unwrap_or(PullRefreshDefaults::INDICATOR_STROKE_WIDTH),
-                            indicator_elevation: indicator_elevation
-                                .unwrap_or(PullRefreshDefaults::INDICATOR_ELEVATION),
-                            refresh_controller: controller,
-                            offset,
+    layout()
+        .modifier(
+            modifier.on_local_to_window(move |transform: tessera_ui::LocalToWindow| {
+                if coordinate_scale.get() != transform.scale() {
+                    coordinate_scale.set(transform.scale());
+                }
+            }),
+        )
+        .child(move || {
+            let child = child;
+            let nested_scroll_connection = nested_scroll_connection.clone();
+            boxed()
+                .modifier(Modifier::new().fill_max_size())
+                .alignment(Alignment::TopCenter)
+                .children(move || {
+                    let nested_scroll_connection = nested_scroll_connection.clone();
+                    provide_context(
+                        || nested_scroll_connection.clone(),
+                        move || {
+                            child.render();
+                        },
+                    );
+                    layout()
+                        .modifier(Modifier::new().align(Alignment::TopCenter))
+                        .child(move || {
+                            let offset = indicator_offset_dp(
+                                controller,
+                                indicator_size.unwrap_or(PullRefreshDefaults::INDICATOR_SIZE),
+                            );
+                            pull_refresh_indicator_with_offset(PullRefreshIndicatorOffsetArgs {
+                                indicator_size: indicator_size
+                                    .unwrap_or(PullRefreshDefaults::INDICATOR_SIZE),
+                                indicator_background_color,
+                                indicator_content_color,
+                                indicator_track_color: indicator_track_color
+                                    .unwrap_or(Color::TRANSPARENT),
+                                indicator_stroke_width: indicator_stroke_width
+                                    .unwrap_or(PullRefreshDefaults::INDICATOR_STROKE_WIDTH),
+                                indicator_elevation: indicator_elevation
+                                    .unwrap_or(PullRefreshDefaults::INDICATOR_ELEVATION),
+                                refresh_controller: controller,
+                                offset,
+                            });
                         });
-                    });
-            });
-    });
+                });
+        });
 }
 
 struct PullRefreshIndicatorOffsetArgs {

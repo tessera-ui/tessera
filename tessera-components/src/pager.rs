@@ -823,9 +823,10 @@ impl PointerInputModifierNode for PagerPointerModifierNode {
                 .with_mut(|controller| controller.start_drag(frame_nanos));
         }
 
-        let drag_delta = self
-            .axis
-            .scroll_delta(drag_result.delta_x.to_f32(), drag_result.delta_y.to_f32());
+        let drag_delta = self.axis.scroll_delta(
+            input.local_delta(drag_result.delta_x.to_f32(), 0.0).0,
+            input.local_delta(0.0, drag_result.delta_y.to_f32()).1,
+        );
         if drag_result.updated && drag_delta.abs() >= 0.01 {
             self.controller
                 .with_mut(|controller| controller.apply_scroll_delta(drag_delta, frame_nanos));

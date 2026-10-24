@@ -6,29 +6,33 @@
 use glyphon::Action as GlyphonAction;
 use tessera_foundation::gesture::{ScrollRecognizer, TapRecognizer, TapSettings};
 use tessera_ui::{
-    Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult, MeasurementError,
-    Modifier, PressKeyEventType, Px, PxPosition, RenderSlot, ScrollDeltaUnit, State,
+    AxisConstraint, Callback, CallbackWith, Color, ComputedData, Constraint, Dp, LayoutResult,
+    MeasurementError, Modifier, PressKeyEventType, Px, PxPosition, PxSize, RenderSlot,
+    ScrollDeltaUnit, State,
     layout::{MeasureScope, layout},
-    modifier::CursorModifierExt as _,
+    modifier::{CursorModifierExt as _, FocusModifierExt as _},
     normalize_platform_scroll_delta, provide_context, remember, tessera, use_context, winit,
 };
+
+#[cfg(test)]
+use tessera_ui::PxRect;
 
 use crate::{
     alignment::{Alignment, CrossAxisAlignment},
     boxed::boxed,
     divider::horizontal_divider,
     menus::{MenuAnchor, MenuController, MenuPlacement, menu_item, menu_provider},
-    modifier::{ModifierExt as _, Padding, with_pointer_input},
+    modifier::{InteractionVisualState, ModifierExt as _, Padding, with_pointer_input},
     pos_misc::is_position_inside_bounds,
     row::row,
     shape_def::{RoundedCorner, Shape},
     spacer::spacer,
-    surface::surface,
+    surface::{SurfaceStyle, surface},
     text::text,
     text_edit_core::DisplayTransform,
     text_input::{
-        DISABLED_CONTENT_ALPHA, DISABLED_FILL_ALPHA, DisplayTransformText, TextInputController,
-        TextInputProps, create_surface_args, text_input_core,
+        DISABLED_CONTENT_ALPHA, DisplayTransformText, TextInputController, TextInputProps,
+        create_surface_args, text_input_core, visual_focus,
     },
     theme::{
         ContentColor, MaterialColorScheme, MaterialShapes, MaterialTheme, TextSelectionColors,
@@ -134,6 +138,7 @@ impl Default for TextFieldContextMenu {
 /// Arguments for configuring a Material text field.
 #[derive(Clone, PartialEq)]
 struct TextFieldProps {
+    pub presentation_state: Option<InteractionVisualState>,
     /// Whether the text field is enabled for user input.
     pub enabled: bool,
     /// Whether the text field is read-only.
@@ -254,6 +259,7 @@ impl Default for TextFieldProps {
     fn default() -> Self {
         let shape = filled_container_shape(&MaterialShapes::default());
         Self {
+            presentation_state: None,
             enabled: true,
             read_only: false,
             is_error: false,
@@ -358,8 +364,10 @@ fn build_editor_args(
 ) -> TextInputProps {
     TextInputProps {
         enabled: args.enabled,
+        presentation_state: args.presentation_state,
         read_only: args.read_only,
         is_error: args.is_error,
+        is_secure: args.obfuscation_char.is_some(),
         modifier: args.modifier.clone(),
         on_change: args.on_change,
         on_submit: args.on_submit,
@@ -467,23 +475,6 @@ fn resolve_indicator_style(
     }
 }
 
-fn resolve_container_color(
-    args: &TextFieldProps,
-    scheme: &MaterialColorScheme,
-    focused: bool,
-) -> Color {
-    if !args.enabled {
-        return scheme.on_surface.with_alpha(DISABLED_FILL_ALPHA);
-    }
-    if focused {
-        args.focus_background_color
-            .or(args.background_color)
-            .unwrap_or(scheme.surface)
-    } else {
-        args.background_color.unwrap_or(scheme.surface_variant)
-    }
-}
-
 fn resolve_border_width(args: &TextFieldProps, focused: bool) -> Dp {
     if focused {
         args.focus_border_width.unwrap_or(args.border_width)
@@ -510,36 +501,40 @@ fn resolve_text_field_menu_policy(
     menu
 }
 
-fn field_text_content_origin(args: &TextFieldProps, focused: bool) -> PxPosition {
-    let padding_px: Px = args.padding.into();
-    let border_width_px = Px(resolve_border_width(args, focused).to_pixels_u32() as i32);
-    PxPosition::new(padding_px + border_width_px, padding_px + border_width_px)
+#[derive(Default)]
+struct FieldGeometry {
+    outer: Option<tessera_ui::LayoutCoordinates>,
+    editor: Option<tessera_ui::LayoutCoordinates>,
 }
 
 fn field_click_pointer_position(
     cursor_pos: PxPosition,
-    size: ComputedData,
-    args: &TextFieldProps,
-    controller: &State<TextInputController>,
-) -> PxPosition {
-    let text_origin =
-        field_text_content_origin(args, controller.with(|c| c.focus_handler().is_focused()));
-    let (horizontal_scroll, vertical_scroll) =
-        controller.with(|s| (s.scroll_state().horizontal(), s.scroll_state().vertical()));
-    let viewport_width = (size.width.0 as f32 - text_origin.x - text_origin.x).max(0.0);
-    let viewport_height = (size.height.0 as f32 - text_origin.y - text_origin.y).max(0.0);
-    let text_relative_x = (cursor_pos.x - text_origin.x).max(0.0).min(viewport_width);
-    let text_relative_y = (cursor_pos.y - text_origin.y).max(0.0).min(viewport_height);
-    PxPosition::from_f32_xy(
-        text_relative_x + horizontal_scroll,
-        text_relative_y + vertical_scroll,
-    )
+    geometry: State<FieldGeometry>,
+    controller: State<TextInputController>,
+) -> Option<PxPosition> {
+    let (outer, editor) = geometry.with(|geometry| (geometry.outer, geometry.editor));
+    let (outer, editor) = (outer?, editor?);
+    let editor_cursor = editor
+        .local_to_window
+        .inverse_point(outer.local_to_window.map_point(cursor_pos));
+    let (horizontal, vertical) = controller.with(|controller| {
+        (
+            controller.scroll_state().horizontal(),
+            controller.scroll_state().vertical(),
+        )
+    });
+    Some(PxPosition::from_f32_xy(
+        editor_cursor.x.clamp(0.0, editor.local_size.width.to_f32()) + horizontal,
+        editor_cursor
+            .y
+            .clamp(0.0, editor.local_size.height.to_f32())
+            + vertical,
+    ))
 }
+
 #[derive(Clone, PartialEq)]
 struct OutlinedFloatingLabelLayout {
     label_offset: PxPosition,
-    notch_padding: Px,
-    notch_vertical_padding: Px,
 }
 
 impl tessera_ui::LayoutModifierNode for OutlinedFloatingLabelLayout {
@@ -548,24 +543,13 @@ impl tessera_ui::LayoutModifierNode for OutlinedFloatingLabelLayout {
         let children = input.children();
         debug_assert_eq!(
             children.len(),
-            2,
-            "OutlinedFloatingLabel expects exactly two children"
+            1,
+            "OutlinedFloatingLabel expects exactly one child"
         );
-        let notch = children[0];
-        let label = children[1];
+        let label = children[0];
 
         let parent_constraint = input.parent_constraint().without_min();
-        let label_measurement = label.measure(input, &parent_constraint)?;
-        let notch_width = label_measurement.width + self.notch_padding * 2;
-        let notch_height = label_measurement.height + self.notch_vertical_padding * 2;
-        let notch_constraint = Constraint::exact(notch_width, notch_height);
-        let _ = notch.measure(input, &notch_constraint)?;
-
-        let notch_position = PxPosition::from_f32_xy(
-            self.label_offset.x - self.notch_padding.0 as f32,
-            self.label_offset.y - self.notch_vertical_padding.0 as f32,
-        );
-        result.place_child(notch, notch_position);
+        label.measure(input, &parent_constraint)?;
         result.place_child(label, self.label_offset);
 
         Ok(result.with_size(ComputedData {
@@ -583,9 +567,7 @@ fn outlined_floating_label(
     label_line_height: Option<Dp>,
     label_offset_x: Option<Dp>,
     label_offset_y: Option<Dp>,
-    notch_fill_color: Option<Color>,
-    notch_padding: Option<Dp>,
-    notch_vertical_padding: Option<Dp>,
+    outline: Option<State<OutlineGeometry>>,
 ) {
     let typography = use_context::<MaterialTheme>().unwrap().get().typography;
     let label_text = label_text.unwrap_or_default();
@@ -594,19 +576,25 @@ fn outlined_floating_label(
     let label_line_height = label_line_height.unwrap_or(Dp(0.0));
     let label_offset_x = label_offset_x.unwrap_or(Dp(0.0));
     let label_offset_y = label_offset_y.unwrap_or(Dp(0.0));
-    let notch_fill_color = notch_fill_color.unwrap_or(Color::TRANSPARENT);
-    let notch_padding = notch_padding.unwrap_or(Dp(0.0));
-    let notch_vertical_padding = notch_vertical_padding.unwrap_or(Dp(0.0));
+    let outline = outline.expect("floating outlined label requires outline geometry");
     layout()
         .policy(OutlinedFloatingLabelLayout {
             label_offset: PxPosition::new(label_offset_x.into(), label_offset_y.into()),
-            notch_padding: notch_padding.into(),
-            notch_vertical_padding: notch_vertical_padding.into(),
         })
         .child(move || {
-            spacer().modifier(Modifier::new().background(notch_fill_color));
             text()
                 .content(label_text.clone())
+                .modifier(Modifier::new().on_layout_coordinates(
+                    move |coordinates: tessera_ui::LayoutCoordinates| {
+                        if outline.with(|outline| outline.label_width)
+                            != coordinates.local_size.width
+                        {
+                            outline.with_mut(|outline| {
+                                outline.label_width = coordinates.local_size.width
+                            });
+                        }
+                    },
+                ))
                 .color(label_color)
                 .style(TextStyle {
                     font_size: label_font_size,
@@ -616,23 +604,239 @@ fn outlined_floating_label(
         });
 }
 
+#[derive(Default, Clone, Copy, PartialEq)]
+struct OutlineGeometry {
+    size: PxSize,
+    label_width: Px,
+}
+
+#[derive(Clone, PartialEq)]
+struct OutlineSlicesLayout {
+    size: PxSize,
+    left: Px,
+    right: Px,
+    band: Px,
+}
+
+impl tessera_ui::LayoutModifierNode for OutlineSlicesLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let mut result = LayoutResult::default();
+        if input.is_intrinsic() {
+            return Ok(result);
+        }
+        let slices = [
+            (
+                PxPosition::new(Px::ZERO, self.band),
+                PxSize::new(
+                    self.size.width,
+                    Px((self.size.height.0 - self.band.0).max(0)),
+                ),
+            ),
+            (PxPosition::ZERO, PxSize::new(self.left, self.band)),
+            (
+                PxPosition::new(self.right, Px::ZERO),
+                PxSize::new(Px((self.size.width.0 - self.right.0).max(0)), self.band),
+            ),
+        ];
+        for (child, (position, size)) in input.children().into_iter().zip(slices) {
+            if size.width <= Px::ZERO || size.height <= Px::ZERO {
+                continue;
+            }
+            child.measure(input, &Constraint::exact(size.width, size.height))?;
+            result.place_child(child, position);
+        }
+        Ok(result)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct OutlineSliceLayout {
+    size: PxSize,
+    origin: PxPosition,
+}
+
+impl tessera_ui::LayoutModifierNode for OutlineSliceLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let Some(child) = input.children().first().copied() else {
+            return Ok(LayoutResult::default());
+        };
+        child.measure(input, &Constraint::exact(self.size.width, self.size.height))?;
+        let mut result = LayoutResult::new(ComputedData {
+            width: input.parent_constraint().width().clamp(Px::ZERO),
+            height: input.parent_constraint().height().clamp(Px::ZERO),
+        });
+        result.place_child(
+            child,
+            PxPosition::from_f32_xy(-self.origin.x, -self.origin.y),
+        );
+        Ok(result)
+    }
+}
+
+#[tessera]
+fn outlined_border(
+    geometry: OutlineGeometry,
+    padding: Dp,
+    width: Dp,
+    color: Color,
+    shape: Shape,
+    floating: bool,
+) {
+    let size = geometry.size;
+    let left = if floating {
+        Px(
+            (padding.to_px().0 - TextFieldDefaults::OUTLINED_LABEL_PADDING.to_px().0)
+                .clamp(0, size.width.0),
+        )
+    } else {
+        size.width
+    };
+    let right = if floating {
+        Px((padding.to_px().0
+            + geometry.label_width.0
+            + TextFieldDefaults::OUTLINED_LABEL_PADDING.to_px().0)
+            .clamp(left.0, size.width.0))
+    } else {
+        size.width
+    };
+    let band = Px((width.to_pixels_f32().ceil() as i32 + 1).min(size.height.0));
+    layout()
+        .policy(OutlineSlicesLayout {
+            size,
+            left,
+            right,
+            band,
+        })
+        .child(move || {
+            for origin in [
+                PxPosition::new(Px::ZERO, band),
+                PxPosition::ZERO,
+                PxPosition::new(right, Px::ZERO),
+            ] {
+                layout()
+                    .modifier(Modifier::new().clip_shape(Shape::RECTANGLE))
+                    .policy(OutlineSliceLayout { size, origin })
+                    .child(move || {
+                        surface()
+                            .style(SurfaceStyle::Outlined { color, width })
+                            .shape(shape)
+                            .block_input(false);
+                    });
+            }
+        });
+}
+
 type FieldContentData = (TextFieldProps, TextInputProps, MaterialTheme, bool, bool);
+
+#[derive(Clone, PartialEq)]
+struct FieldBodyHeight;
+
+impl tessera_ui::LayoutModifierNode for FieldBodyHeight {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let Some(child) = input.children().first().copied() else {
+            return Ok(LayoutResult::default());
+        };
+        let natural_constraints =
+            Constraint::new(input.parent_constraint().width(), AxisConstraint::NONE);
+        let natural = child.probe_intrinsic(input, &natural_constraints)?;
+        let height = input.parent_constraint().height().clamp(natural.height);
+        let constraints = Constraint::new(
+            input.parent_constraint().width(),
+            AxisConstraint::exact(height),
+        );
+        let measured = child.measure(input, &constraints)?;
+        let mut result = LayoutResult::new(measured.size());
+        result.place_child(child, PxPosition::ZERO);
+        Ok(result)
+    }
+}
+
+#[derive(Clone, PartialEq)]
+struct FieldDecorationLayout {
+    single_line: bool,
+    line_height: Px,
+}
+
+impl tessera_ui::LayoutModifierNode for FieldDecorationLayout {
+    fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
+        let Some(child) = input.children().first().copied() else {
+            return Ok(LayoutResult::default());
+        };
+        let constraints = if self.single_line {
+            Constraint::new(
+                AxisConstraint::NONE,
+                AxisConstraint::exact(self.line_height),
+            )
+        } else {
+            input.parent_constraint().without_min()
+        };
+        let measured = child.measure(input, &constraints)?;
+        let mut result = LayoutResult::new(ComputedData {
+            width: input.parent_constraint().width().clamp(measured.width),
+            height: input.parent_constraint().height().clamp(measured.height),
+        });
+        result.place_child(child, PxPosition::ZERO);
+        Ok(result)
+    }
+}
+
+#[tessera]
+fn field_decoration(content: String, color: Color, style: TextStyle, single_line: bool) {
+    let modifier = if single_line {
+        Modifier::new().clip_to_bounds()
+    } else {
+        Modifier::new()
+    };
+    layout()
+        .modifier(modifier)
+        .policy(FieldDecorationLayout {
+            single_line,
+            line_height: style
+                .line_height
+                .unwrap_or(Dp(style.font_size.0 * 1.2))
+                .to_px(),
+        })
+        .child(move || {
+            text().content(content.clone()).color(color).style(style);
+        });
+}
 
 #[tessera]
 fn text_field_content(
     args: Option<TextFieldProps>,
     controller: Option<State<TextInputController>>,
     editor: Option<TextInputProps>,
+    geometry: Option<State<FieldGeometry>>,
 ) {
     let args = args.expect("text_field_content requires args");
     let controller = controller.expect("text_field_content requires controller");
     let editor = editor.expect("text_field_content requires editor");
+    let geometry = geometry.expect("text_field_content requires geometry");
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
-    let focused = controller.with(|controller| controller.focus_handler().is_focused());
+    let focused = visual_focus(&editor, controller);
     let empty = editor_content_len(&controller) == 0;
     let surface_args = create_surface_args(&editor, &controller, &theme.color_scheme);
+    let outline = remember(OutlineGeometry::default);
+    let border = match surface_args.style {
+        SurfaceStyle::FilledOutlined {
+            border_color,
+            border_width,
+            ..
+        } => Some((border_color, border_width)),
+        SurfaceStyle::Outlined { color, width } => Some((color, width)),
+        _ => None,
+    };
+    let surface_style = match surface_args.style {
+        SurfaceStyle::FilledOutlined { fill_color, .. } => {
+            SurfaceStyle::Filled { color: fill_color }
+        }
+        SurfaceStyle::Outlined { .. } => SurfaceStyle::Filled {
+            color: Color::TRANSPARENT,
+        },
+        ref style => style.clone(),
+    };
     let color = args.text_color.unwrap_or(if args.enabled {
         theme.color_scheme.on_surface
     } else {
@@ -647,18 +851,43 @@ fn text_field_content(
         data.set(next);
     }
     surface()
-        .style(surface_args.style)
+        .style(surface_style)
         .shape(surface_args.shape)
         .block_input(!args.enabled)
-        .modifier(surface_args.modifier)
+        .modifier(surface_args.modifier.on_layout_coordinates(
+            move |coordinates: tessera_ui::LayoutCoordinates| {
+                let size = coordinates.local_size;
+                if outline.with(|outline| outline.size) != size {
+                    outline.with_mut(|outline| outline.size = size);
+                }
+            },
+        ))
         .content_color(color)
         .child(move || {
-            text_field_body(data, controller);
+            boxed().children(move || {
+                text_field_body(data, controller, geometry, outline);
+                if let Some((color, width)) = border {
+                    let args = data.with(|data| data.0.clone());
+                    outlined_border(
+                        outline.get(),
+                        args.padding,
+                        width,
+                        color,
+                        args.shape,
+                        args.label.is_some() && (focused || !empty),
+                    );
+                }
+            });
         });
 }
 
 #[tessera]
-fn text_field_body(data: State<FieldContentData>, controller: State<TextInputController>) {
+fn text_field_body(
+    data: State<FieldContentData>,
+    controller: State<TextInputController>,
+    geometry: State<FieldGeometry>,
+    outline: State<OutlineGeometry>,
+) {
     let (args, _, theme, focused, empty) = data.get();
     let outlined = resolve_border_width(&args, focused).0 > 0.0;
     let floating = args.label.is_some() && (focused || !empty);
@@ -695,128 +924,141 @@ fn text_field_body(data: State<FieldContentData>, controller: State<TextInputCon
             .on_surface
             .with_alpha(DISABLED_CONTENT_ALPHA)
     };
-    boxed().children(move || {
-        row()
-            .modifier(
-                Modifier::new()
-                    .fill_max_height()
-                    .padding(Padding::new(left, top, right, bottom)),
-            )
-            .cross_axis_alignment(CrossAxisAlignment::Center)
-            .children(move || {
-                let (args, _, _, _, _) = data.get();
-                if affixes && let Some(prefix) = args.prefix {
-                    text_field_slot(prefix, decoration);
-                    spacer()
-                        .modifier(Modifier::new().width(TextFieldDefaults::PREFIX_SUFFIX_PADDING));
-                }
+    layout().policy(FieldBodyHeight).child(move || {
+        boxed().children(move || {
+            row()
+                .modifier(
+                    Modifier::new()
+                        .fill_max_height()
+                        .padding(Padding::new(left, top, right, bottom)),
+                )
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    let (args, _, _, _, _) = data.get();
+                    if affixes && let Some(prefix) = args.prefix {
+                        text_field_slot(prefix, decoration);
+                        spacer().modifier(
+                            Modifier::new().width(TextFieldDefaults::PREFIX_SUFFIX_PADDING),
+                        );
+                    }
+                    boxed()
+                        .modifier(Modifier::new().weight(1.0))
+                        .children(move || {
+                            let (args, mut editor, theme, focused, empty) = data.get();
+                            editor.modifier = Modifier::new()
+                                .fill_max_size()
+                                .on_layout_coordinates(move |bounds| {
+                                    if geometry.with(|geometry| geometry.editor) != Some(bounds) {
+                                        geometry
+                                            .with_mut(|geometry| geometry.editor = Some(bounds));
+                                    }
+                                });
+                            editor.padding = Dp::ZERO;
+                            editor.border_width = Dp::ZERO;
+                            editor.focus_border_width = Some(Dp::ZERO);
+                            text_input_core(&editor, controller);
+                            let floating = args.label.is_some() && (focused || !empty);
+                            if empty
+                                && (args.label.is_none() || floating)
+                                && let Some(placeholder) = args.placeholder
+                            {
+                                field_decoration(
+                                    placeholder,
+                                    resolve_placeholder_color(&theme.color_scheme, args.enabled),
+                                    placeholder_text_style(&theme),
+                                    matches!(args.line_limit, TextFieldLineLimit::SingleLine),
+                                );
+                            }
+                            if !floating && let Some(label) = args.label {
+                                field_decoration(
+                                    label,
+                                    resolve_label_color(
+                                        &theme.color_scheme,
+                                        focused,
+                                        args.is_error,
+                                        args.enabled,
+                                    ),
+                                    label_resting_text_style(&theme),
+                                    true,
+                                );
+                            }
+                        });
+                    let (args, _, _, _, _) = data.get();
+                    if affixes && let Some(suffix) = args.suffix {
+                        spacer().modifier(
+                            Modifier::new().width(TextFieldDefaults::PREFIX_SUFFIX_PADDING),
+                        );
+                        text_field_slot(suffix, decoration);
+                    }
+                });
+            let (args, _, theme, focused, _) = data.get();
+            if let Some(content) = args.leading_icon {
                 boxed()
-                    .modifier(Modifier::new().weight(1.0))
-                    .children(move || {
-                        let (args, mut editor, theme, focused, empty) = data.get();
-                        editor.modifier = Modifier::new().fill_max_size();
-                        editor.padding = Dp::ZERO;
-                        editor.border_width = Dp::ZERO;
-                        editor.focus_border_width = Some(Dp::ZERO);
-                        text_input_core(&editor, controller);
-                        let floating = args.label.is_some() && (focused || !empty);
-                        if empty
-                            && (args.label.is_none() || floating)
-                            && let Some(placeholder) = args.placeholder
-                        {
-                            text()
-                                .content(placeholder)
-                                .color(resolve_placeholder_color(&theme.color_scheme, args.enabled))
-                                .style(placeholder_text_style(&theme));
-                        }
-                        if !floating && let Some(label) = args.label {
-                            text()
-                                .content(label)
-                                .color(resolve_label_color(
-                                    &theme.color_scheme,
-                                    focused,
-                                    args.is_error,
-                                    args.enabled,
-                                ))
-                                .style(label_resting_text_style(&theme));
-                        }
-                    });
-                let (args, _, _, _, _) = data.get();
-                if affixes && let Some(suffix) = args.suffix {
-                    spacer()
-                        .modifier(Modifier::new().width(TextFieldDefaults::PREFIX_SUFFIX_PADDING));
-                    text_field_slot(suffix, decoration);
-                }
-            });
-        let (args, _, theme, focused, _) = data.get();
-        if let Some(content) = args.leading_icon {
-            boxed()
-                .modifier(
-                    Modifier::new()
-                        .align(Alignment::CenterStart)
-                        .width(Dp(48.0))
-                        .fill_max_height(),
-                )
-                .alignment(Alignment::Center)
-                .children(move || {
-                    text_field_slot(content, decoration);
-                });
-        }
-        if let Some(content) = args.trailing_icon {
-            let color = if args.is_error && args.enabled {
-                theme.color_scheme.error
-            } else {
-                decoration
-            };
-            boxed()
-                .modifier(
-                    Modifier::new()
-                        .align(Alignment::CenterEnd)
-                        .width(Dp(48.0))
-                        .fill_max_height(),
-                )
-                .alignment(Alignment::Center)
-                .children(move || {
-                    text_field_slot(content, color);
-                });
-        }
-        if floating && let Some(label) = args.label.clone() {
-            let color =
-                resolve_label_color(&theme.color_scheme, focused, args.is_error, args.enabled);
-            if outlined {
-                let container = resolve_container_color(&args, &theme.color_scheme, focused);
-                outlined_floating_label()
-                    .label_text(label)
-                    .label_color(color)
-                    .label_font_size(label_style.font_size)
-                    .label_line_height(line_height)
-                    .label_offset_x(padding)
-                    .label_offset_y(Dp(-line_height.0 * 0.5))
-                    .notch_fill_color(if container.a <= 0.0 {
-                        theme.color_scheme.surface
-                    } else {
-                        container
-                    })
-                    .notch_padding(TextFieldDefaults::OUTLINED_LABEL_PADDING)
-                    .notch_vertical_padding(TextFieldDefaults::OUTLINED_NOTCH_VERTICAL_PADDING);
-            } else {
-                text()
-                    .content(label)
-                    .style(label_style)
-                    .color(color)
                     .modifier(
-                        Modifier::new().offset(left, TextFieldDefaults::FLOATING_LABEL_Y_OFFSET),
-                    );
+                        Modifier::new()
+                            .align(Alignment::CenterStart)
+                            .width(Dp(48.0))
+                            .fill_max_height(),
+                    )
+                    .alignment(Alignment::Center)
+                    .children(move || {
+                        text_field_slot(content, decoration);
+                    });
             }
-        }
-        if args.show_indicator && !outlined {
-            let (color, thickness) =
-                resolve_indicator_style(&theme.color_scheme, focused, args.is_error, args.enabled);
-            horizontal_divider()
-                .modifier(Modifier::new().align(Alignment::BottomStart))
-                .thickness(thickness)
-                .color(color);
-        }
+            if let Some(content) = args.trailing_icon {
+                let color = if args.is_error && args.enabled {
+                    theme.color_scheme.error
+                } else {
+                    decoration
+                };
+                boxed()
+                    .modifier(
+                        Modifier::new()
+                            .align(Alignment::CenterEnd)
+                            .width(Dp(48.0))
+                            .fill_max_height(),
+                    )
+                    .alignment(Alignment::Center)
+                    .children(move || {
+                        text_field_slot(content, color);
+                    });
+            }
+            if floating && let Some(label) = args.label.clone() {
+                let color =
+                    resolve_label_color(&theme.color_scheme, focused, args.is_error, args.enabled);
+                if outlined {
+                    outlined_floating_label()
+                        .label_text(label)
+                        .label_color(color)
+                        .label_font_size(label_style.font_size)
+                        .label_line_height(line_height)
+                        .label_offset_x(padding)
+                        .label_offset_y(Dp(-line_height.0 * 0.5))
+                        .outline(outline);
+                } else {
+                    text()
+                        .content(label)
+                        .style(label_style)
+                        .color(color)
+                        .modifier(
+                            Modifier::new()
+                                .offset(left, TextFieldDefaults::FLOATING_LABEL_Y_OFFSET),
+                        );
+                }
+            }
+            if args.show_indicator && !outlined {
+                let (color, thickness) = resolve_indicator_style(
+                    &theme.color_scheme,
+                    focused,
+                    args.is_error,
+                    args.enabled,
+                );
+                horizontal_divider()
+                    .modifier(Modifier::new().align(Alignment::BottomStart))
+                    .thickness(thickness)
+                    .color(color);
+            }
+        });
     });
 }
 
@@ -937,6 +1179,8 @@ fn text_field_menu_content(
 ///
 /// ## Parameters
 ///
+/// - `presentation_state` — optional visual interaction without changing input
+///   or focus.
 /// - `enabled` — whether the field accepts user input.
 /// - `read_only` — whether the field is read-only.
 /// - `is_error` — whether the field is displaying an error state.
@@ -998,6 +1242,7 @@ fn text_field_menu_content(
 #[tessera]
 pub fn text_field(
     enabled: Option<bool>,
+    presentation_state: Option<InteractionVisualState>,
     read_only: Option<bool>,
     is_error: Option<bool>,
     modifier: Option<Modifier>,
@@ -1070,6 +1315,7 @@ pub fn text_field(
     let context_menu = context_menu.unwrap_or(TextFieldProps::default().context_menu);
     let args = TextFieldProps {
         enabled,
+        presentation_state,
         read_only,
         is_error,
         modifier,
@@ -1123,6 +1369,7 @@ pub fn text_field(
     });
     let mut args = args.clone();
     args.controller = Some(controller);
+    let geometry = remember(FieldGeometry::default);
 
     let enabled = args.enabled;
     let read_only = args.read_only;
@@ -1153,6 +1400,11 @@ pub fn text_field(
     } else {
         Modifier::new()
     };
+    let modifier_base = modifier_base.on_layout_coordinates(move |bounds| {
+        if geometry.with(|geometry| geometry.outer) != Some(bounds) {
+            geometry.with_mut(|geometry| geometry.outer = Some(bounds));
+        }
+    });
     let modifier = with_pointer_input(modifier_base, move |mut input| {
         let cursor_pos = input.cursor_position_rel;
         let is_inside = cursor_pos
@@ -1197,22 +1449,20 @@ pub fn text_field(
                     .map(|timestamp| controller.with(|c| c.last_click_time() == Some(timestamp)))
                     .unwrap_or(false);
                 if !inner_handled_click {
-                    let click_position = field_click_pointer_position(
-                        cursor_pos,
-                        input.computed_data,
-                        &args,
-                        &controller,
-                    );
-                    controller.with_mut(|c| {
-                        if input.key_modifiers.shift_key() {
-                            c.extend_selection_to_point(click_position);
-                        } else {
-                            c.apply_pointer_action(GlyphonAction::Click {
-                                x: click_position.x_px().0,
-                                y: click_position.y_px().0,
-                            });
-                        }
-                    });
+                    if let Some(click_position) =
+                        field_click_pointer_position(cursor_pos, geometry, controller)
+                    {
+                        controller.with_mut(|c| {
+                            if input.key_modifiers.shift_key() {
+                                c.extend_selection_to_point(click_position);
+                            } else {
+                                c.apply_pointer_action(GlyphonAction::Click {
+                                    x: click_position.x_px().0,
+                                    y: click_position.y_px().0,
+                                });
+                            }
+                        });
+                    }
                 }
             }
         }
@@ -1281,7 +1531,8 @@ pub fn text_field(
                     text_field_content()
                         .args(render_args.clone())
                         .controller(controller)
-                        .editor(editor_args.clone());
+                        .editor(editor_args.clone())
+                        .geometry(geometry);
                 })
                 .menu_content(move || {
                     text_field_menu_content()
@@ -1293,7 +1544,8 @@ pub fn text_field(
             text_field_content()
                 .args(render_args.clone())
                 .controller(controller)
-                .editor(editor_args.clone());
+                .editor(editor_args.clone())
+                .geometry(geometry);
         }
     });
 }
@@ -1445,6 +1697,700 @@ mod tests {
                 .get()
                 .unwrap()
                 .with(|c| c.focus_handler().is_focused())
+        );
+    }
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod native_field_regressions {
+    use std::{
+        cell::{Cell, RefCell},
+        time::Duration,
+    };
+
+    use tessera_ui::{
+        HeadlessConfig, HeadlessRenderer, MOUSE_POINTER_ID, PressKeyEventType, accesskit::Role,
+        winit::event::Ime,
+    };
+
+    use super::*;
+
+    #[derive(Clone, Copy)]
+    enum Case {
+        Filled,
+        Outlined,
+        Multiline,
+        Affixes,
+        Secure,
+        ExplicitHeight,
+    }
+
+    thread_local! {
+        static NOTCH_CASE: Cell<(bool, bool)> = const { Cell::new((false, true)) };
+        static CASE: Cell<Case> = const {Cell::new(Case::Filled)};
+        static EDITOR: Cell<Option<State<TextInputController>>> = const {Cell::new(None)};
+        static BOUNDS: Cell<Option<PxRect>> = const {Cell::new(None)};
+        static CHANGES: RefCell<Vec<String>> = const {RefCell::new(Vec::new())};
+    }
+
+    #[tessera]
+    fn fixture() {
+        let case = CASE.get();
+        let controller = remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
+        let changes = remember(|| 0_usize);
+        EDITOR.set(Some(controller));
+        crate::theme::material_theme().child(move || {
+            boxed()
+                .alignment(Alignment::TopStart)
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    crate::column::column()
+                        .modifier(Modifier::new().width(Dp(180.0)))
+                        .children(move || {
+                            let mut field = if matches!(case, Case::Outlined) {
+                                TextFieldBuilder::outlined()
+                            } else {
+                                TextFieldBuilder::filled()
+                            };
+                            let mut field_modifier = Modifier::new()
+                                .fill_max_width()
+                                .on_globally_positioned(|rect| BOUNDS.set(Some(rect)));
+                            if matches!(case, Case::ExplicitHeight) {
+                                field_modifier = field_modifier.height(Dp(96.0));
+                            }
+                            field = field
+                                .controller(controller)
+                                .modifier(field_modifier)
+                                .min_width(Dp::ZERO)
+                                .min_height(Dp(if matches!(case, Case::Multiline) {
+                                    96.0
+                                } else {
+                                    56.0
+                                }))
+                                .label("Label")
+                                .placeholder("Placeholder text longer than the available input")
+                                .line_limit(if matches!(case, Case::Multiline) {
+                                    TextFieldLineLimit::MultiLine
+                                } else {
+                                    TextFieldLineLimit::SingleLine
+                                })
+                                .accessibility_label("Regression field")
+                                .leading_icon(|| {
+                                    boxed()
+                                        .modifier(Modifier::new().semantics(
+                                            crate::modifier::SemanticsArgs {
+                                                role: Some(Role::Image),
+                                                label: Some("Leading search decoration".into()),
+                                                ..Default::default()
+                                            },
+                                        ))
+                                        .children(|| {
+                                            crate::icon::icon()
+                                                .vector(crate::material_icons::filled::SEARCH_SVG)
+                                                .size(Dp(24.0));
+                                        });
+                                })
+                                .trailing_icon(|| {
+                                    crate::icon::icon()
+                                        .vector(crate::material_icons::filled::CANCEL_SVG)
+                                        .size(Dp(24.0));
+                                })
+                                .on_change(move |value: String| {
+                                    CHANGES.with_borrow_mut(|values| values.push(value.clone()));
+                                    changes.set(changes.get() + 1);
+                                    value
+                                });
+                            if matches!(case, Case::Affixes) {
+                                field = field
+                                    .prefix(|| {
+                                        text().content("$").accessibility_label("Dollar prefix");
+                                    })
+                                    .suffix(|| {
+                                        text().content("USD");
+                                    });
+                            }
+                            if matches!(case, Case::Secure) {
+                                field = field
+                                    .obfuscation_char('•')
+                                    .context_menu(TextFieldContextMenu::secure_default());
+                            }
+                            drop(field);
+                            text().content(format!("Changes: {}", changes.get()));
+                        });
+                });
+        });
+    }
+
+    #[tessera]
+    fn notch_fixture() {
+        let (dark, enabled) = NOTCH_CASE.get();
+        crate::theme::material_theme()
+            .theme(move || MaterialTheme::from_seed(Color::from_rgb(0.4, 0.3, 0.6), dark))
+            .child(move || {
+                surface()
+                    .style(SurfaceStyle::Filled {
+                        color: Color::from_rgb(0.21, 0.55, 0.31),
+                    })
+                    .modifier(Modifier::new().fill_max_size())
+                    .child(move || {
+                        boxed()
+                            .alignment(Alignment::TopStart)
+                            .modifier(Modifier::new().fill_max_size())
+                            .children(move || {
+                                let scheme =
+                                    use_context::<MaterialTheme>().unwrap().get().color_scheme;
+                                for (x, label) in [(24.5, true), (244.5, false)] {
+                                    if !label {
+                                        surface()
+                                            .modifier(
+                                                Modifier::new()
+                                                    .offset(Dp(x), Dp(40.5))
+                                                    .size(Dp(180.0), Dp(56.0)),
+                                            )
+                                            .shape(MaterialShapes::default().extra_small)
+                                            .style(SurfaceStyle::Outlined {
+                                                color: if enabled {
+                                                    scheme.outline
+                                                } else {
+                                                    scheme.on_surface.with_alpha(
+                                                        crate::text_input::DISABLED_OUTLINE_ALPHA,
+                                                    )
+                                                },
+                                                width: Dp(1.0),
+                                            });
+                                        continue;
+                                    }
+                                    let controller = remember(|| {
+                                        let mut controller =
+                                            TextInputController::new(Dp(16.0), Some(Dp(24.0)));
+                                        controller.set_text("Input");
+                                        controller
+                                    });
+                                    if label {
+                                        EDITOR.set(Some(controller));
+                                    }
+                                    let mut field = TextFieldBuilder::outlined()
+                                        .shape(MaterialShapes::default().extra_small)
+                                        .min_width(Dp::ZERO)
+                                        .controller(controller)
+                                        .enabled(enabled)
+                                        .modifier(
+                                            Modifier::new()
+                                                .offset(Dp(x), Dp(40.5))
+                                                .width(Dp(180.0))
+                                                .on_globally_positioned(move |bounds| {
+                                                    if label {
+                                                        BOUNDS.set(Some(bounds));
+                                                    }
+                                                }),
+                                        );
+                                    if label {
+                                        field = field.label("Label");
+                                    }
+                                    drop(field);
+                                }
+                            });
+                    });
+            });
+    }
+
+    #[test]
+    #[ignore = "Requires a native GPU adapter for outlined field pixels"]
+    fn outlined_label_notch_preserves_parent_pixels_and_fractional_stroke_opacity() {
+        for dark in [false, true] {
+            for enabled in [false, true] {
+                NOTCH_CASE.set((dark, enabled));
+                let mut renderer = HeadlessRenderer::new(
+                    Box::new(notch_fixture),
+                    vec![Box::new(crate::TesseraComponents)],
+                    HeadlessConfig {
+                        width: 460,
+                        height: 160,
+                        sample_count: 1,
+                        frame_time: Duration::from_nanos(16_666_667),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                renderer.render_frames(7);
+                for focused in [false, true] {
+                    if focused {
+                        if !enabled {
+                            break;
+                        }
+                        EDITOR
+                            .get()
+                            .unwrap()
+                            .with(|editor| editor.focus_handler().request_focus());
+                        renderer.render_frames(4);
+                    }
+                    let pixels = renderer.read_pixels().unwrap();
+                    let pixel = |x: usize, y: usize| -> [u8; 4] {
+                        pixels[(y * 460 + x) * 4..][..4].try_into().unwrap()
+                    };
+                    let bounds = BOUNDS.get().unwrap();
+                    assert_eq!(bounds.height, Dp(56.0).to_px());
+                    let x = bounds.x.0 as usize;
+                    let y = bounds.y.0 as usize;
+                    let background = pixel(2, 2);
+                    let tree = renderer.accessibility_snapshot().unwrap();
+                    let label = tree
+                        .nodes
+                        .iter()
+                        .find(|(_, node)| {
+                            node.role() == Role::Label && node.label() == Some("Label")
+                        })
+                        .unwrap()
+                        .1
+                        .bounds()
+                        .unwrap();
+                    let gap_x = label.x1.ceil() as usize + 1;
+                    assert_eq!(
+                        pixel(gap_x, y),
+                        background,
+                        "top stroke must stop at floating label: dark={dark}, enabled={enabled}, focused={focused}"
+                    );
+                    assert_eq!(
+                        pixel(label.x0.floor() as usize - 1, y - 3),
+                        background,
+                        "transparent notch must preserve arbitrary parent background"
+                    );
+                    assert_ne!(
+                        pixel(x + 120, y),
+                        background,
+                        "upper stroke outside notch remains painted: dark={dark}, enabled={enabled}, focused={focused}, bounds={bounds:?}, samples={:?}, reference={:?}",
+                        [
+                            pixel(x + 120, y - 1),
+                            pixel(x + 120, y),
+                            pixel(x + 120, y + 1)
+                        ],
+                        [
+                            pixel(x + 340, y - 1),
+                            pixel(x + 340, y),
+                            pixel(x + 340, y + 1)
+                        ]
+                    );
+                    if !focused {
+                        assert_eq!(
+                            pixel(x + 120, y),
+                            pixel(x + 340, y),
+                            "unfocused upper stroke must match the unsplit native reference"
+                        );
+                        for dy in 0..12 {
+                            for dx in 0..6 {
+                                assert_eq!(
+                                    pixel(x + dx, y + dy),
+                                    pixel(x + 220 + dx, y + dy),
+                                    "fractional clipped outline must match unsplit native stroke at {dx},{dy}; dark={dark}, enabled={enabled}"
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    fn renderer(case: Case) -> HeadlessRenderer {
+        CASE.set(case);
+        EDITOR.set(None);
+        BOUNDS.set(None);
+        CHANGES.with_borrow_mut(Vec::clear);
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(fixture),
+            vec![Box::new(crate::TesseraComponents)],
+            HeadlessConfig {
+                width: 400,
+                height: 320,
+                sample_count: 1,
+                frame_time: Duration::from_nanos(16_666_667),
+                ..Default::default()
+            },
+        )
+        .expect("native field renderer");
+        renderer.render_frames(5);
+        renderer
+    }
+
+    fn click(renderer: &mut HeadlessRenderer, label: &str, role: Role) {
+        let bounds = renderer
+            .accessibility_snapshot()
+            .expect("field semantics")
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == role && node.label() == Some(label))
+            .unwrap_or_else(|| panic!("missing {label}"))
+            .1
+            .bounds()
+            .expect("decoration bounds");
+        let position = PxPosition::from_f32_xy(
+            ((bounds.x0 + bounds.x1) * 0.5) as f32,
+            ((bounds.y0 + bounds.y1) * 0.5) as f32,
+        );
+        renderer.pointer_move(MOUSE_POINTER_ID, position);
+        renderer.pointer_press(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        renderer.pointer_release(MOUSE_POINTER_ID, position, PressKeyEventType::Left);
+        renderer.render_frames(4);
+    }
+
+    #[test]
+    #[ignore = "Requires a native GPU adapter for actual text shaping and field rendering"]
+    fn narrow_single_line_fields_keep_one_line_decorations_and_queued_commits() {
+        for case in [Case::Filled, Case::Outlined] {
+            let mut renderer = renderer(case);
+            let editor = EDITOR.get().expect("editor");
+            assert_eq!(
+                BOUNDS.get().expect("resting bounds").height,
+                Dp(56.0).to_px()
+            );
+            editor.with(|editor| editor.focus_handler().request_focus());
+            renderer.render_frames(4);
+            assert_eq!(
+                BOUNDS.get().expect("focused bounds").height,
+                Dp(56.0).to_px()
+            );
+            let tree = renderer.accessibility_snapshot().expect("placeholder tree");
+            let placeholder = tree
+                .nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.role() == Role::Label
+                        && node.label() == Some("Placeholder text longer than the available input")
+                })
+                .expect("native placeholder")
+                .1
+                .bounds()
+                .expect("placeholder bounds");
+            assert_eq!(placeholder.height(), 24.0);
+            for character in ["a", "l", "p", "h", "a"] {
+                renderer.inject_ime_event(Ime::Commit(character.into()));
+            }
+            renderer.render_frames(4);
+            assert_eq!(editor.with(|editor| editor.text()), "alpha");
+            assert_eq!(
+                CHANGES.with_borrow(|values| values.clone()),
+                ["a", "al", "alp", "alph", "alpha"]
+            );
+            renderer.inject_ime_event(Ime::Commit(" beta".into()));
+            renderer.render_frames(3);
+            assert_eq!(editor.with(|editor| editor.text()), "alpha beta");
+            let long = "AAAAAAAAAAAAAAAAAAAAAAAA zzzzzzzzzzzzzzzzzzzzzzzz";
+            editor.with_mut(|editor| {
+                editor.set_text_and_selection(
+                    long,
+                    crate::text_edit_core::TextSelection::collapsed(long.len()),
+                );
+                editor.focus_handler_mut().unfocus();
+            });
+            renderer.render_frames(4);
+            assert!(editor.with(|editor| editor.scroll_state().horizontal()) > 0.0);
+            let end_pixels = renderer.read_pixels().unwrap();
+            let input = renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .into_iter()
+                .find(|(_, node)| node.role() == Role::TextInput)
+                .unwrap()
+                .1
+                .bounds()
+                .unwrap();
+            editor.with_mut(|editor| {
+                editor.set_text_and_selection(
+                    long,
+                    crate::text_edit_core::TextSelection::collapsed(0),
+                );
+            });
+            renderer.render_frames(4);
+            assert_eq!(
+                editor.with(|editor| editor.scroll_state().horizontal()),
+                0.0
+            );
+            assert_eq!(editor.with(|editor| editor.text()), long);
+            let start_pixels = renderer.read_pixels().unwrap();
+            let mut changed_glyph_pixels = 0;
+            for y in input.y0.ceil() as usize..input.y1.floor() as usize {
+                for x in (input.x0.ceil() as usize + 3)..(input.x1.floor() as usize - 3) {
+                    let offset = (y * 400 + x) * 4;
+                    changed_glyph_pixels += usize::from(
+                        end_pixels[offset..offset + 4] != start_pixels[offset..offset + 4],
+                    );
+                }
+            }
+            assert!(
+                changed_glyph_pixels > 30,
+                "horizontal editor scrolling must move the visible glyphs, not only its caret"
+            );
+        }
+        let mut tall = renderer(Case::ExplicitHeight);
+        assert_eq!(BOUNDS.get().unwrap().height, Dp(96.0).to_px());
+        EDITOR
+            .get()
+            .unwrap()
+            .with(|editor| editor.focus_handler().request_focus());
+        tall.render_frames(4);
+        assert_eq!(
+            BOUNDS.get().unwrap().height,
+            Dp(96.0).to_px(),
+            "explicit caller height remains authoritative"
+        );
+        drop(tall);
+        let mut renderer = renderer(Case::Multiline);
+        EDITOR
+            .get()
+            .unwrap()
+            .with(|editor| editor.focus_handler().request_focus());
+        renderer.render_frames(4);
+        assert!(BOUNDS.get().expect("multiline bounds").height >= Dp(96.0).to_px());
+        let tree = renderer.accessibility_snapshot().unwrap();
+        let placeholder = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.role() == Role::Label
+                    && node.label() == Some("Placeholder text longer than the available input")
+            })
+            .expect("multiline placeholder")
+            .1
+            .bounds()
+            .unwrap();
+        assert!(
+            placeholder.height() > 24.0,
+            "multiline placeholders retain wrapping"
+        );
+    }
+
+    #[test]
+    #[ignore = "Requires a native GPU adapter for actual glyph caret placement"]
+    fn decorated_field_fallback_clicks_use_the_measured_editor_origin() {
+        let mut renderer = renderer(Case::Affixes);
+        let editor = EDITOR.get().unwrap();
+        let text = "iii";
+        editor.with_mut(|editor| {
+            editor.set_text_and_selection(
+                text,
+                crate::text_edit_core::TextSelection {
+                    start: text.len(),
+                    end: text.len(),
+                },
+            )
+        });
+        renderer.render_frames(4);
+        click(&mut renderer, "Leading search decoration", Role::Image);
+        assert_eq!(editor.with(|editor| editor.selection().start), 0);
+        editor.with_mut(|editor| {
+            editor.set_text_and_selection(
+                text,
+                crate::text_edit_core::TextSelection {
+                    start: text.len(),
+                    end: text.len(),
+                },
+            )
+        });
+        renderer.render_frames(3);
+        click(&mut renderer, "Dollar prefix", Role::Label);
+        assert_eq!(editor.with(|editor| editor.selection().start), 0);
+    }
+    #[test]
+    #[ignore = "Requires a native GPU adapter for an actual protected text field"]
+    fn obfuscated_field_uses_password_semantics_without_publishing_plaintext() {
+        let mut renderer = renderer(Case::Secure);
+        let editor = EDITOR.get().unwrap();
+        editor.with(|editor| editor.focus_handler().request_focus());
+        renderer.render_frames(3);
+        renderer.inject_ime_event(Ime::Commit("secret".into()));
+        renderer.render_frames(4);
+        assert_eq!(editor.with(|editor| editor.text()), "secret");
+        let tree = renderer.accessibility_snapshot().unwrap();
+        let node = &tree
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.label() == Some("Regression field") && node.role() == Role::PasswordInput
+            })
+            .expect("actual protected editor semantics")
+            .1;
+        assert_eq!(
+            node.value(),
+            None,
+            "protected text is not exposed through the accessibility value"
+        );
+        assert!(
+            !tree
+                .nodes
+                .iter()
+                .any(|(_, node)| node.value() == Some("secret"))
+        );
+    }
+}
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod presentation_regressions {
+    use std::{cell::Cell, time::Duration};
+
+    use tessera_ui::{HeadlessConfig, HeadlessRenderer, State};
+
+    use super::*;
+
+    type Presentation = (Option<InteractionVisualState>, bool);
+
+    thread_local! {
+        static PRESENTATION: Cell<Option<State<Presentation>>> = const { Cell::new(None) };
+        static EDITORS: Cell<[Option<State<TextInputController>>; 2]> = const { Cell::new([None; 2]) };
+        static CHANGES: Cell<usize> = const { Cell::new(0) };
+    }
+
+    #[tessera]
+    fn fixture() {
+        let presentation = remember(|| (Some(InteractionVisualState::Focus), true));
+        PRESENTATION.set(Some(presentation));
+        crate::theme::material_theme().child(move || {
+            boxed()
+                .modifier(Modifier::new().fill_max_size())
+                .children(move || {
+                    for index in 0..2 {
+                        let editor =
+                            remember(|| TextInputController::new(Dp(16.0), Some(Dp(24.0))));
+                        EDITORS.with(|editors| {
+                            let mut values = editors.get();
+                            values[index] = Some(editor);
+                            editors.set(values);
+                        });
+                        let (visual, enabled) = presentation.get();
+                        TextFieldBuilder::outlined()
+                            .controller(editor)
+                            .presentation_state_optional(visual)
+                            .enabled(enabled)
+                            .label("Label")
+                            .accessibility_label(format!("Preview {index}"))
+                            .modifier(
+                                Modifier::new()
+                                    .offset(Dp(20.0 + index as f64 * 300.0), Dp(20.0))
+                                    .width(Dp(280.0)),
+                            )
+                            .on_change(|value: String| {
+                                CHANGES.set(CHANGES.get() + 1);
+                                value
+                            });
+                    }
+                });
+        });
+    }
+
+    fn crop(pixels: &[u8], index: usize) -> Vec<u8> {
+        let mut result = Vec::new();
+        for y in 15..85 {
+            let start = (y * 620 + 15 + index * 300) * 4;
+            result.extend_from_slice(&pixels[start..start + 290 * 4]);
+        }
+        result
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn focus_presentation_draws_static_native_fields_without_taking_focus() {
+        crate::test_utils::run_isolated_test(
+            "text_field::presentation_regressions::focus_presentation_draws_static_native_fields_without_taking_focus",
+            || {
+                CHANGES.set(0);
+                let mut renderer = HeadlessRenderer::new(
+                    Box::new(fixture),
+                    vec![Box::new(crate::TesseraComponents)],
+                    HeadlessConfig {
+                        width: 620,
+                        height: 120,
+                        frame_time: Duration::from_millis(100),
+                        ..Default::default()
+                    },
+                )
+                .unwrap();
+                renderer.render_frames(4);
+                let editors = EDITORS.get().map(Option::unwrap);
+                assert!(
+                    editors
+                        .iter()
+                        .all(|editor| !editor.with(|editor| editor.focus_handler().is_focused()))
+                );
+                let semantics = renderer.accessibility_snapshot().unwrap();
+                let field_ids: Vec<_> = semantics
+                    .nodes
+                    .iter()
+                    .filter(|(_, node)| node.role() == tessera_ui::accesskit::Role::TextInput)
+                    .map(|(id, _)| *id)
+                    .collect();
+                assert_eq!(field_ids.len(), 2);
+                assert!(!field_ids.contains(&semantics.focus));
+                let preview = renderer.read_pixels().unwrap();
+                assert_eq!(crop(&preview, 0), crop(&preview, 1));
+                renderer.render_frames(6);
+                assert_eq!(
+                    renderer.read_pixels().unwrap(),
+                    preview,
+                    "preview carets stay visible across blink phases"
+                );
+                assert_eq!(renderer.diagnostics().paint_nodes_recorded, 0);
+                let presentation = PRESENTATION.get().unwrap();
+                presentation.set((None, true));
+                renderer.render_frames(3);
+                assert_ne!(
+                    crop(&renderer.read_pixels().unwrap(), 0),
+                    crop(&preview, 0),
+                    "native resting decoration differs from focused presentation"
+                );
+                let rest = renderer.read_pixels().unwrap();
+                presentation.set((Some(InteractionVisualState::Focus), true));
+                renderer.render_frames(3);
+                assert_eq!(
+                    renderer.read_pixels().unwrap(),
+                    preview,
+                    "retained props restore the static focus presentation"
+                );
+                presentation.set((None, true));
+                renderer.render_frames(3);
+                assert_eq!(
+                    renderer.read_pixels().unwrap(),
+                    rest,
+                    "retained props clear the static focus presentation again"
+                );
+                assert!(
+                    editors
+                        .iter()
+                        .all(|editor| !editor.with(|editor| editor.focus_handler().is_focused()))
+                );
+
+                presentation.set((Some(InteractionVisualState::Focus), false));
+                renderer.render_frames(3);
+                let disabled = renderer.read_pixels().unwrap();
+                presentation.set((None, false));
+                renderer.render_frames(3);
+                assert_eq!(
+                    renderer.read_pixels().unwrap(),
+                    disabled,
+                    "disabled style takes precedence over presentation"
+                );
+                presentation.set((Some(InteractionVisualState::Focus), true));
+                renderer.render_frames(3);
+                editors[0].with(|editor| editor.focus_handler().request_focus());
+                editors[0].with_mut(|editor| editor.set_text(""));
+                renderer.render_frames(2);
+                assert!(editors[0].with(|editor| editor.focus_handler().is_focused()));
+                let focused = renderer.read_pixels().unwrap();
+                assert_eq!(
+                    crop(&focused, 0),
+                    crop(&focused, 1),
+                    "actual focus and presentation share the native focused appearance"
+                );
+                renderer.render_frames(4);
+                let blink_off = renderer.read_pixels().unwrap();
+                assert_ne!(
+                    crop(&blink_off, 0),
+                    crop(&blink_off, 1),
+                    "only the actual focus caret blinks"
+                );
+                assert_eq!(renderer.diagnostics().measure_node_calls, 1);
+                assert_eq!(renderer.diagnostics().geometry_nodes_updated, 0);
+                assert_eq!(CHANGES.get(), 0);
+            },
         );
     }
 }

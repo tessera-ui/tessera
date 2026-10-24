@@ -15,7 +15,7 @@ use tessera_ui::{
 
 use crate::{
     icon::icon,
-    modifier::ModifierExt as _,
+    modifier::{InteractionVisualState, ModifierExt as _},
     pipelines::image_vector::command::{ImageVectorData, ImageVectorVertex},
     surface::{SurfaceStyle, surface},
     theme::{ContentColor, MaterialTheme, material_theme},
@@ -33,6 +33,7 @@ struct Settings {
     icon: bool,
     icon_size: Option<Dp>,
     activations: usize,
+    presentation: Option<InteractionVisualState>,
 }
 
 thread_local! {
@@ -83,6 +84,7 @@ fn fixture() {
                     switch()
                         .checked(value.checked)
                         .enabled(!value.disabled)
+                        .presentation_state_optional(value.presentation)
                         .thumb_color_optional(value.custom.then_some(Color::GREEN))
                         .thumb_checked_color_optional(value.custom.then_some(Color::GREEN))
                         .accessibility_label("Connectivity")
@@ -258,6 +260,7 @@ fn check_states(samples: u32) {
                 };
                 assert_pixel(&renderer, 52, 24, track, "track");
                 assert_pixel(&renderer, x, 12, scheme.surface, "resting state layer");
+                assert_pixel(&renderer, 52, 8, scheme.surface, "no resting focus ring");
                 if !disabled {
                     renderer
                         .pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(x as f32, 48.0));
@@ -297,6 +300,13 @@ fn check_states(samples: u32) {
                     assert!(action(&mut renderer, Action::Focus));
                     renderer.render_frames(30);
                     assert_pixel(&renderer, x, 62, active, "focused thumb");
+                    assert_pixel(
+                        &renderer,
+                        52,
+                        8,
+                        scheme.secondary,
+                        "actual accessibility focus ring",
+                    );
                     assert_pixel(
                         &renderer,
                         x,
@@ -348,6 +358,70 @@ fn check_states(samples: u32) {
                 );
             }
         }
+    }
+    for presentation in [
+        InteractionVisualState::Hover,
+        InteractionVisualState::Focus,
+        InteractionVisualState::Pressed,
+    ] {
+        FocusManager::current().clear_focus(true);
+        settings.set(Settings {
+            checked: true,
+            presentation: Some(presentation),
+            ..Default::default()
+        });
+        renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(190.0, 130.0));
+        renderer.render_frames(30);
+        let scheme = &palettes[0].color_scheme;
+        assert_eq!(settings.get().activations, 0);
+        assert_pixel(
+            &renderer,
+            72,
+            62,
+            scheme.primary_container,
+            "presented interaction thumb",
+        );
+        assert_pixel(
+            &renderer,
+            52,
+            8,
+            if presentation == InteractionVisualState::Focus {
+                scheme.secondary
+            } else {
+                scheme.surface
+            },
+            "presented focus ring is exclusive to focus",
+        );
+        if presentation == InteractionVisualState::Pressed {
+            assert_pixel(
+                &renderer,
+                98,
+                48,
+                scheme.primary_container,
+                "presented native28dp pressed thumb",
+            );
+        }
+        renderer.pointer_move(MOUSE_POINTER_ID, PxPosition::from_f32_xy(72.0, 48.0));
+        renderer.render_frames(30);
+        assert_pixel(
+            &renderer,
+            52,
+            8,
+            scheme.surface,
+            "live hover overrides presented focus",
+        );
+        settings.with_mut(|value| value.disabled = true);
+        renderer.render_frames(30);
+        assert_pixel(
+            &renderer,
+            52,
+            8,
+            scheme.surface,
+            "disabled presentation has no focus ring",
+        );
+        assert_eq!(node(&renderer).1.toggled(), Some(Toggled::True));
+        assert!(!action(&mut renderer, Action::Click));
+        assert_eq!(settings.get().activations, 0);
     }
     for disabled in [false, true] {
         for checked in [false, true] {

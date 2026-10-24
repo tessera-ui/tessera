@@ -89,7 +89,7 @@ pub struct TooltipController {
     pending_show: Option<u64>,
     pending_hide: Option<u64>,
     touch: Option<TouchPress>,
-    anchor: PxRect,
+    anchor: tessera_ui::FloatRect,
     focus: FocusRequester,
     popup_focus: FocusRequester,
     popup_group: FocusGroupNode,
@@ -114,7 +114,7 @@ impl Default for TooltipController {
             pending_show: None,
             pending_hide: None,
             touch: None,
-            anchor: PxRect::ZERO,
+            anchor: tessera_ui::FloatRect::ZERO,
             focus: FocusRequester::new(),
             popup_focus: FocusRequester::new(),
             popup_group: FocusGroupNode::new(),
@@ -272,13 +272,9 @@ struct TooltipPointer {
     persistent: bool,
 }
 
-fn within(position: Option<PxPosition>, rect: PxRect) -> bool {
-    position.is_some_and(|position| {
-        position.x >= rect.x.0 as f32
-            && position.y >= rect.y.0 as f32
-            && position.x < (rect.x + rect.width).0 as f32
-            && position.y < (rect.y + rect.height).0 as f32
-    })
+fn within(position: Option<PxPosition>, rect: impl Into<tessera_ui::FloatRect>) -> bool {
+    let rect = rect.into();
+    position.is_some_and(|position| rect.contains(position))
 }
 
 impl PointerInputModifierNode for TooltipPointer {
@@ -306,6 +302,7 @@ impl PointerInputModifierNode for TooltipPointer {
         if self.popup {
             return;
         }
+        let window_position = input.cursor_position_abs();
         for event in input
             .pointer_changes
             .iter_mut()
@@ -316,7 +313,7 @@ impl PointerInputModifierNode for TooltipPointer {
                 CursorEventContent::Pressed(PressKeyEventType::Left)
                     if inside && !event.is_consumed() =>
                 {
-                    if let Some(origin) = input.cursor_position_rel {
+                    if let Some(origin) = event.position().or(window_position) {
                         self.controller.with_mut(|controller| {
                             controller.touch_focus_suppressed = true;
                             controller.anchor_focused = false;
@@ -342,10 +339,13 @@ impl PointerInputModifierNode for TooltipPointer {
                     }) =>
                 {
                     let touch = active.expect("active touch was checked");
-                    let moved = input.cursor_position_rel.is_some_and(|position| {
-                        (position.x - touch.origin.x).hypot(position.y - touch.origin.y)
-                            > Dp(8.0).to_pixels_f32()
-                    });
+                    let moved = event
+                        .position()
+                        .or(window_position)
+                        .is_some_and(|position| {
+                            (position.x - touch.origin.x).hypot(position.y - touch.origin.y)
+                                > Dp(8.0).to_pixels_f32()
+                        });
                     if moved || !inside || event.gesture_state == GestureState::Dragged {
                         self.controller
                             .with_mut(|controller| controller.touch = None);
@@ -381,7 +381,7 @@ impl PointerInputModifierNode for TooltipPointer {
 
 struct TooltipDismissInput {
     controller: State<TooltipController>,
-    popup: Arc<RwLock<PxRect>>,
+    popup: Arc<RwLock<tessera_ui::FloatRect>>,
 }
 
 impl TooltipDismissInput {
@@ -551,8 +551,8 @@ impl PointerInputModifierNode for TooltipRestoreInput {
 #[derive(Clone)]
 struct TooltipLayout {
     open: bool,
-    anchor: PxRect,
-    origin: Arc<RwLock<PxRect>>,
+    anchor: tessera_ui::FloatRect,
+    origin: Arc<RwLock<tessera_ui::LayoutCoordinates>>,
     placement: TooltipPlacement,
 }
 
@@ -563,26 +563,28 @@ impl PartialEq for TooltipLayout {
 }
 
 fn popup_position(
-    anchor: PxRect,
+    anchor: tessera_ui::FloatRect,
     size: ComputedData,
     available: ComputedData,
     placement: TooltipPlacement,
 ) -> PxPosition {
-    let gap = Dp(4.0).to_px().0;
-    let margin = Dp(8.0).to_px().0;
-    let width = available.width.0.max(0);
-    let height = available.height.0.max(0);
-    let above = anchor.y.0 - gap - size.height.0;
-    let below = anchor.y.0 + anchor.height.0 + gap;
-    let start = anchor.x.0 - gap - size.width.0;
-    let end = anchor.x.0 + anchor.width.0 + gap;
-    let center_x = anchor.x.0 + (anchor.width.0 - size.width.0) / 2;
-    let center_y = anchor.y.0 + (anchor.height.0 - size.height.0) / 2;
+    let gap = Dp(4.0).to_pixels_f32();
+    let margin = Dp(8.0).to_pixels_f32();
+    let width = available.width.to_f32().max(0.0);
+    let height = available.height.to_f32().max(0.0);
+    let popup_width = size.width.to_f32();
+    let popup_height = size.height.to_f32();
+    let above = anchor.y - gap - popup_height;
+    let below = anchor.y + anchor.height + gap;
+    let start = anchor.x - gap - popup_width;
+    let end = anchor.x + anchor.width + gap;
+    let center_x = anchor.x + (anchor.width - popup_width) * 0.5;
+    let center_y = anchor.y + (anchor.height - popup_height) * 0.5;
     let (x, y) = match placement {
         TooltipPlacement::Above => (center_x, if above >= margin { above } else { below }),
         TooltipPlacement::Below => (
             center_x,
-            if below + size.height.0 <= height - margin {
+            if below + popup_height <= height - margin {
                 below
             } else {
                 above
@@ -590,7 +592,7 @@ fn popup_position(
         ),
         TooltipPlacement::Start => (if start >= margin { start } else { end }, center_y),
         TooltipPlacement::End => (
-            if end + size.width.0 <= width - margin {
+            if end + popup_width <= width - margin {
                 end
             } else {
                 start
@@ -598,15 +600,15 @@ fn popup_position(
             center_y,
         ),
     };
-    PxPosition::new(
-        Px(x.clamp(
+    PxPosition::from_f32_xy(
+        x.clamp(
             margin.min(width),
-            (width - size.width.0 - margin).max(margin.min(width)),
-        )),
-        Px(y.clamp(
+            (width - popup_width - margin).max(margin.min(width)),
+        ),
+        y.clamp(
             margin.min(height),
-            (height - size.height.0 - margin).max(margin.min(height)),
-        )),
+            (height - popup_height - margin).max(margin.min(height)),
+        ),
     )
 }
 
@@ -630,12 +632,7 @@ impl tessera_ui::LayoutModifierNode for TooltipLayout {
             );
             let popup = children[1].measure(input, &constraint)?;
             let origin = *self.origin.read();
-            let anchor = PxRect::new(
-                self.anchor.x - origin.x,
-                self.anchor.y - origin.y,
-                self.anchor.width,
-                self.anchor.height,
-            );
+            let anchor = origin.local_to_window.inverse_rect(self.anchor);
             let position = popup_position(anchor, popup.size(), main.size(), self.placement);
             result.place_child(children[1], position);
         }
@@ -721,8 +718,8 @@ pub fn tooltip_provider(
         });
     }
     let child = child.unwrap_or_else(RenderSlot::empty);
-    let origin = remember(|| Arc::new(RwLock::new(PxRect::ZERO))).get();
-    let popup = remember(|| Arc::new(RwLock::new(PxRect::ZERO))).get();
+    let origin = remember(|| Arc::new(RwLock::new(tessera_ui::LayoutCoordinates::default()))).get();
+    let popup = remember(|| Arc::new(RwLock::new(tessera_ui::FloatRect::ZERO))).get();
     if controller.with(TooltipController::needs_frame) {
         receive_frame_nanos(move |now| {
             controller.with_mut(|controller| controller.advance(now));
@@ -783,7 +780,7 @@ pub fn tooltip_provider(
         .push_keyboard_input(TooltipRestoreInput { controller })
         .push_pointer_final_input(TooltipRestoreInput { controller });
     let bounds = Arc::clone(&origin);
-    modifier = modifier.on_globally_positioned(move |rect| *bounds.write() = rect);
+    modifier = modifier.on_layout_coordinates(move |coordinates| *bounds.write() = coordinates);
     provide_context(
         || TooltipContext { controller, active },
         || {
@@ -873,7 +870,7 @@ pub fn tooltip_anchor(
         .focus_group()
         .focus_requester(focus)
         .on_focus_changed(move |_: FocusState| sync_tooltip_focus(controller, false))
-        .on_globally_positioned(move |rect| {
+        .on_globally_positioned_precise(move |rect| {
             if controller.with(|controller| controller.anchor) != rect {
                 controller.with_mut(|controller| controller.anchor = rect);
             }
@@ -896,7 +893,7 @@ fn tooltip_panel(
     actions: Option<RenderSlot>,
     has_actions: Option<bool>,
     controller: Option<State<TooltipController>>,
-    popup: Option<Arc<RwLock<PxRect>>>,
+    popup: Option<Arc<RwLock<tessera_ui::FloatRect>>>,
     persistent: Option<bool>,
     modifier: Option<Modifier>,
 ) {
@@ -927,19 +924,13 @@ fn tooltip_panel(
     }
     let modifier = modifier
         .unwrap_or_default()
-        .constrain(
-            Some(AxisConstraint::new(
-                Dp(40.0).to_px(),
-                Some(max_width.to_px()),
-            )),
-            Some(AxisConstraint::new(Dp(24.0).to_px(), None)),
-        )
+        .size_in(Some(Dp(40.0)), Some(max_width), Some(Dp(24.0)), None)
         .focus_group_with(controller.with(|controller| controller.popup_group))
         .focus_requester(controller.with(|controller| controller.popup_focus))
         .on_focus_changed(move |_: FocusState| sync_tooltip_focus(controller, true))
         .push_keyboard_input(TooltipRestoreInput { controller })
         .push_pointer_final_input(TooltipRestoreInput { controller })
-        .on_globally_positioned(move |rect| *popup.write() = rect)
+        .on_globally_positioned_precise(move |rect| *popup.write() = rect)
         .push_pointer_preview_input(TooltipPointer {
             controller,
             popup: true,
@@ -1191,15 +1182,20 @@ mod tests {
                 PxRect::new(Px(360), Px(100), Px(40), Px(40)),
                 PxPosition::new(Px(236), Px(100)),
             ),
+            (
+                TooltipPlacement::Below,
+                PxRect::new(Px(150), Px(100), Px(41), Px(40)),
+                PxPosition::from_f32_xy(110.5, 144.0),
+            ),
         ];
         for (placement, anchor, expected) in cases {
             assert_eq!(
-                popup_position(anchor, popup, available, placement),
+                popup_position(anchor.into(), popup, available, placement),
                 expected
             );
         }
         let left = popup_position(
-            PxRect::new(Px(0), Px(100), Px(40), Px(40)),
+            PxRect::new(Px(0), Px(100), Px(40), Px(40)).into(),
             popup,
             available,
             TooltipPlacement::Above,
@@ -1213,6 +1209,7 @@ mod tests {
         changed: bool,
         focus_stress: bool,
         custom_actions: bool,
+        popup_width: Option<Dp>,
     }
 
     thread_local! {
@@ -1239,8 +1236,15 @@ mod tests {
         ACTIONS.set(Some(actions));
         material_theme().child(move || {
             let config = settings.get();
+            let popup_modifier = Modifier::new()
+                .on_globally_positioned(|bounds| POPUP_BOUNDS.set(Some(bounds)));
+            let popup_modifier = if let Some(width) = config.popup_width {
+                popup_modifier.width(width)
+            } else {
+                popup_modifier
+            };
             let tooltip = tooltip_provider(if config.changed { "Updated help text with multiple words that wraps within the tooltip's maximum width." } else { "Helpful description" })
-                .popup_modifier(Modifier::new().on_globally_positioned(|bounds| POPUP_BOUNDS.set(Some(bounds))))
+                .popup_modifier(popup_modifier)
                 .controller(controller)
                 .variant(if config.rich { TooltipVariant::Rich } else { TooltipVariant::Plain })
                 .headline("More information")
@@ -1302,7 +1306,7 @@ mod tests {
             .get()
             .expect("controller")
             .with(|controller| controller.anchor);
-        PxPosition::new(rect.x + rect.width / 2, rect.y + rect.height / 2)
+        PxPosition::from_f32_xy(rect.x + rect.width * 0.5, rect.y + rect.height * 0.5)
     }
 
     #[test]
@@ -1315,6 +1319,51 @@ mod tests {
     #[ignore = "requires a native GPU adapter"]
     fn gpu_custom_actions_restore_focus_and_pixels_after_parent_rebuild() {
         check_tooltip_interactions(true);
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn gpu_popup_modifier_preserves_requested_width_and_restores_natural_bounds() {
+        let mut renderer = renderer();
+        let settings = SETTINGS.get().expect("settings");
+        settings.with_mut(|settings| {
+            settings.rich = true;
+            settings.popup_width = Some(Dp(312.0));
+        });
+        CONTROLLER
+            .get()
+            .expect("controller")
+            .with_mut(TooltipController::show);
+        renderer.render_frames(4);
+        let requested = renderer.accessibility_snapshot().expect("tree");
+        let requested = requested
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::Dialog)
+            .expect("rich tooltip")
+            .1
+            .bounds()
+            .expect("popup bounds");
+        assert_eq!(requested.width(), 312.0);
+        assert_eq!(POPUP_BOUNDS.get().expect("observed popup").width.0, 312);
+
+        settings.with_mut(|settings| settings.popup_width = None);
+        renderer.render_frames(4);
+        let natural = renderer.accessibility_snapshot().expect("tree");
+        let natural = natural
+            .nodes
+            .iter()
+            .find(|(_, node)| node.role() == Role::Dialog)
+            .expect("rich tooltip")
+            .1
+            .bounds()
+            .expect("popup bounds");
+        assert!(natural.width() >= 40.0 && natural.width() <= 320.0);
+        assert!(natural.width() < requested.width());
+        assert_eq!(
+            POPUP_BOUNDS.get().expect("observed popup").width.0 as f64,
+            natural.width()
+        );
     }
 
     fn check_tooltip_interactions(custom_actions: bool) {
@@ -1415,7 +1464,7 @@ mod tests {
         renderer.render_frames(2);
         let navigation = TooltipDismissInput {
             controller,
-            popup: Arc::new(RwLock::new(PxRect::ZERO)),
+            popup: Arc::new(RwLock::new(tessera_ui::FloatRect::ZERO)),
         };
         for _ in 0..2 {
             assert!(navigation.handle_tab(ElementState::Pressed, false));

@@ -14,10 +14,10 @@ use crate::{
     alignment::Alignment,
     animation::Animatable,
     boxed::boxed,
-    modifier::{InteractionState, ModifierExt as _},
+    modifier::{InteractionState, InteractionVisualState, ModifierExt as _},
     painter::Painter,
     shape_def::{RoundedCorner, Shape},
-    surface::{SurfaceStyle, surface},
+    surface::{RipplePresentation, SurfaceStyle, surface},
     theme::{ContentColor, MaterialColorScheme, MaterialTheme, content_color_for},
 };
 
@@ -346,6 +346,10 @@ fn resolve_colors(
 ///   variants.
 /// - `color` / `content_color` — enabled container and icon color overrides.
 /// - `interaction_state` — optional shared pointer and focus state.
+/// - `presentation_ripple` — optional static circular ripple for pressed visual
+///   presentation.
+/// - `presentation_state` — optional visual interaction without changing input
+///   or focus.
 /// - `accessibility_label` / `accessibility_description` — action name and
 ///   supporting help.
 ///
@@ -391,6 +395,8 @@ pub fn icon_button(
     color: Option<Color>,
     content_color: Option<Color>,
     interaction_state: Option<State<InteractionState>>,
+    presentation_state: Option<InteractionVisualState>,
+    presentation_ripple: Option<RipplePresentation>,
     #[prop(into)] accessibility_label: Option<String>,
     #[prop(into)] accessibility_description: Option<String>,
 ) {
@@ -411,6 +417,8 @@ pub fn icon_button(
     if !interactive && interaction_state.with(|state| *state != InteractionState::new()) {
         interaction_state.set(InteractionState::new());
     }
+    let visual =
+        interaction_state.with(|state| state.with_presentation(presentation_state, enabled));
     let target = if shape.is_some() {
         IconButtonCorner {
             fraction: 0.0,
@@ -421,7 +429,7 @@ pub fn icon_button(
             size,
             shape_style.unwrap_or_default(),
             selected.unwrap_or(false),
-            interactive && interaction_state.with(InteractionState::is_pressed),
+            visual.is_pressed(),
         )
     };
     let frame = current_frame_nanos();
@@ -483,6 +491,9 @@ pub fn icon_button(
         .content_color(content)
         .enabled(enabled)
         .interaction_state(interaction_state)
+        .presentation_state_optional(presentation_state)
+        .presentation_ripple_optional(presentation_ripple)
+        .show_focus_indicator(true)
         .ripple_color(content)
         .accessibility_role(Role::Button)
         .accessibility_toggled_optional(

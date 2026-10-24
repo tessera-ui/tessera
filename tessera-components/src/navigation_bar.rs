@@ -632,8 +632,8 @@ pub fn navigation_bar(
         .color_scheme;
 
     let modifier = Modifier::new()
-        .on_globally_positioned(move |bounds: tessera_ui::PxRect| {
-            let value = bounds.width.to_f32() >= Dp(600.0).to_pixels_f32();
+        .on_layout_coordinates(move |coordinates: tessera_ui::LayoutCoordinates| {
+            let value = coordinates.local_size.width.to_f32() >= Dp(600.0).to_pixels_f32();
             if value != wide.get() {
                 wide.set(value);
             }

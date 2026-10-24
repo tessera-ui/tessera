@@ -439,7 +439,7 @@ enum ModifierAction {
     ImePreviewInput(Arc<dyn ImeInputModifierNode>),
     ImeInput(Arc<dyn ImeInputModifierNode>),
     Focus(FocusModifierOp),
-    GloballyPositioned(CallbackWith<crate::PxRect>),
+    GloballyPositioned(crate::component_tree::GloballyPositionedHandler),
 }
 
 #[derive(Clone)]
@@ -594,6 +594,22 @@ pub trait FocusModifierExt {
     fn on_globally_positioned<F>(self, handler: F) -> Modifier
     where
         F: Into<CallbackWith<crate::PxRect>>;
+
+    /// Observes this node's exact fractional rectangle in window coordinates.
+    fn on_globally_positioned_precise<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<crate::FloatRect>>;
+
+    /// Observes the transformation from this node's local units to the window.
+    fn on_local_to_window<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<crate::LocalToWindow>>;
+
+    /// Observes local layout dimensions and their exact transformation to the
+    /// window.
+    fn on_layout_coordinates<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<crate::LayoutCoordinates>>;
 }
 
 /// Cursor-specific modifier extensions for [`Modifier`].
@@ -812,7 +828,9 @@ impl Modifier {
     }
 
     fn push_globally_positioned(self, handler: CallbackWith<crate::PxRect>) -> Self {
-        self.push_action(ModifierAction::GloballyPositioned(handler))
+        self.push_action(ModifierAction::GloballyPositioned(
+            crate::component_tree::GloballyPositionedHandler::Pixels(handler),
+        ))
     }
 
     fn push_focus_op(self, op: FocusModifierOp) -> Self {
@@ -918,6 +936,69 @@ impl Modifier {
                 | ModifierAction::GloballyPositioned(_) => None,
             })
             .collect()
+    }
+
+    pub(crate) fn input_geometry_eq(&self, other: &Self) -> bool {
+        let shape = |modifier: &Self| {
+            let mut pointer = false;
+            let mut actions = Vec::new();
+            modifier.element.fold_actions(&mut |action| {
+                pointer |= matches!(
+                    action,
+                    ModifierAction::Cursor(_)
+                        | ModifierAction::PointerPreviewInput(_)
+                        | ModifierAction::PointerInput(_)
+                        | ModifierAction::PointerFinalInput(_)
+                );
+                if !matches!(
+                    action,
+                    ModifierAction::Build(_)
+                        | ModifierAction::Semantics(_)
+                        | ModifierAction::Focus(_)
+                        | ModifierAction::GloballyPositioned(_)
+                ) {
+                    actions.push(std::mem::discriminant(action));
+                }
+            });
+            (pointer, actions)
+        };
+        let (left_pointer, left) = shape(self);
+        let (right_pointer, right) = shape(other);
+        (!left_pointer && !right_pointer) || (left_pointer == right_pointer && left == right)
+    }
+
+    pub(crate) fn resolve_placement(
+        &self,
+        mut position: PxPosition,
+    ) -> (PxPosition, Vec<PxPosition>) {
+        let mut pointer = false;
+        self.element.fold_actions(&mut |action| {
+            pointer |= matches!(
+                action,
+                ModifierAction::Cursor(_)
+                    | ModifierAction::PointerPreviewInput(_)
+                    | ModifierAction::PointerInput(_)
+                    | ModifierAction::PointerFinalInput(_)
+            );
+        });
+        let mut positions = Vec::new();
+        self.element.fold_actions(&mut |action| {
+            if let ModifierAction::Placement(node) = action {
+                position = node.node().transform_position(position);
+            }
+            if pointer
+                && !matches!(
+                    action,
+                    ModifierAction::Build(_)
+                        | ModifierAction::Semantics(_)
+                        | ModifierAction::Focus(_)
+                        | ModifierAction::GloballyPositioned(_)
+                )
+            {
+                positions.push(position);
+            }
+        });
+        (position, positions)
     }
 
     pub(crate) fn layout_measure_eq(&self, other: &Self) -> bool {
@@ -1196,6 +1277,33 @@ impl FocusModifierExt for Modifier {
     {
         self.push_globally_positioned(handler.into())
     }
+
+    fn on_globally_positioned_precise<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<crate::FloatRect>>,
+    {
+        self.push_action(ModifierAction::GloballyPositioned(
+            crate::component_tree::GloballyPositionedHandler::Precise(handler.into()),
+        ))
+    }
+
+    fn on_local_to_window<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<crate::LocalToWindow>>,
+    {
+        self.push_action(ModifierAction::GloballyPositioned(
+            crate::component_tree::GloballyPositionedHandler::Transform(handler.into()),
+        ))
+    }
+
+    fn on_layout_coordinates<F>(self, handler: F) -> Modifier
+    where
+        F: Into<CallbackWith<crate::LayoutCoordinates>>,
+    {
+        self.push_action(ModifierAction::GloballyPositioned(
+            crate::component_tree::GloballyPositionedHandler::Coordinates(handler.into()),
+        ))
+    }
 }
 
 impl fmt::Debug for Modifier {
@@ -1269,7 +1377,10 @@ fn hash_modifier_action<H: Hasher>(action: &ModifierAction, state: &mut H) {
         ModifierAction::ImeInput(node) => hash_arc(node, state),
         ModifierAction::Focus(op) => hash_focus_op(op, state),
         ModifierAction::GloballyPositioned(handler) => {
-            std::ptr::hash(handler as *const CallbackWith<crate::PxRect>, state);
+            std::ptr::hash(
+                handler as *const crate::component_tree::GloballyPositionedHandler,
+                state,
+            );
         }
     }
 }

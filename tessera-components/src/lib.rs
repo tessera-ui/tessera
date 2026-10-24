@@ -192,3 +192,9 @@ mod overlay_motion_tests;
 
 #[cfg(test)]
 mod sheet_drag_tests;
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod scaled_controls_tests;
+
+#[cfg(all(test, not(target_family = "wasm")))]
+mod overlay_precision_tests;

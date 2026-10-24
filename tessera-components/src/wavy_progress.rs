@@ -240,8 +240,11 @@ pub fn circular_wavy_progress_indicator(
                     numeric_range: progress.map(|_| (0.0, 1.0)),
                     ..Default::default()
                 })
-                .on_globally_positioned(move |rect: tessera_ui::PxRect| {
-                    let size = [rect.width.to_f32(), rect.height.to_f32()];
+                .on_layout_coordinates(move |coordinates: tessera_ui::LayoutCoordinates| {
+                    let size = [
+                        coordinates.local_size.width.to_f32(),
+                        coordinates.local_size.height.to_f32(),
+                    ];
                     if measured_size.get() != Some(size) {
                         measured_size.set(Some(size));
                     }

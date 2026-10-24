@@ -1,4 +1,8 @@
-use tessera_ui::{CallbackWith, ScrollEventSource};
+use tessera_ui::{CallbackWith, LocalToWindow, PxPosition, ScrollEventSource, State};
+
+#[cfg(test)]
+#[path = "nested_scroll_tests.rs"]
+mod tests;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct ScrollDelta {
@@ -102,6 +106,7 @@ pub(crate) struct PreFlingInput {
 
 #[derive(Clone, PartialEq, Eq)]
 pub(crate) struct NestedScrollConnection {
+    coordinate_scale: Option<State<f32>>,
     parent: Option<Box<NestedScrollConnection>>,
     on_pre_scroll: CallbackWith<PreScrollInput, ScrollDelta>,
     on_post_scroll: CallbackWith<PostScrollInput, ScrollDelta>,
@@ -112,11 +117,32 @@ pub(crate) struct NestedScrollConnection {
 impl NestedScrollConnection {
     pub(crate) fn new() -> Self {
         Self {
+            coordinate_scale: None,
             parent: None,
             on_pre_scroll: CallbackWith::default_value(),
             on_post_scroll: CallbackWith::default_value(),
             on_pre_fling: CallbackWith::default_value(),
             on_post_fling: CallbackWith::default_value(),
+        }
+    }
+
+    pub(crate) fn with_coordinate_scale(mut self, scale: State<f32>) -> Self {
+        self.coordinate_scale = Some(scale);
+        self
+    }
+
+    fn transform(&self) -> LocalToWindow {
+        LocalToWindow::new(
+            self.coordinate_scale.map_or(1.0, |scale| scale.get()),
+            PxPosition::ZERO,
+        )
+        .expect("Nested scroll scale must be finite and positive")
+    }
+
+    pub(crate) fn in_space(&self, transform: LocalToWindow) -> NestedScrollSpace<'_> {
+        NestedScrollSpace {
+            connection: self,
+            transform,
         }
     }
 
@@ -154,10 +180,13 @@ impl NestedScrollConnection {
         available: ScrollDelta,
         source: ScrollEventSource,
     ) -> ScrollDelta {
-        let local = available.clamp_consumed(
-            self.on_pre_scroll
-                .call(PreScrollInput { available, source }),
-        );
+        let local = available.clamp_consumed(map_delta(
+            self.transform(),
+            self.on_pre_scroll.call(PreScrollInput {
+                available: unmap_delta(self.transform(), available),
+                source,
+            }),
+        ));
         let remaining = available - local;
         let parent = self
             .parent
@@ -176,7 +205,11 @@ impl NestedScrollConnection {
     }
 
     pub(crate) fn post_fling(&self, available: ScrollVelocity) -> ScrollVelocity {
-        let local = available.clamp_consumed(self.on_post_fling.call(available));
+        let local = available.clamp_consumed(map_velocity(
+            self.transform(),
+            self.on_post_fling
+                .call(unmap_velocity(self.transform(), available)),
+        ));
         let parent = self
             .parent
             .as_ref()
@@ -191,11 +224,14 @@ impl NestedScrollConnection {
         available: ScrollDelta,
         source: ScrollEventSource,
     ) -> ScrollDelta {
-        let local = available.clamp_consumed(self.on_post_scroll.call(PostScrollInput {
-            consumed_by_child,
-            available,
-            source,
-        }));
+        let local = available.clamp_consumed(map_delta(
+            self.transform(),
+            self.on_post_scroll.call(PostScrollInput {
+                consumed_by_child: unmap_delta(self.transform(), consumed_by_child),
+                available: unmap_delta(self.transform(), available),
+                source,
+            }),
+        ));
         let remaining = available - local;
         let parent = self
             .parent
@@ -206,7 +242,12 @@ impl NestedScrollConnection {
     }
 
     pub(crate) fn pre_fling(&self, available: ScrollVelocity) -> ScrollVelocity {
-        let local = available.clamp_consumed(self.on_pre_fling.call(PreFlingInput { available }));
+        let local = available.clamp_consumed(map_velocity(
+            self.transform(),
+            self.on_pre_fling.call(PreFlingInput {
+                available: unmap_velocity(self.transform(), available),
+            }),
+        ));
         let remaining = available - local;
         let parent = self
             .parent
@@ -230,5 +271,69 @@ fn clamp_axis_consumed(available: f32, consumed: f32) -> f32 {
         consumed.clamp(available, 0.0)
     } else {
         0.0
+    }
+}
+
+fn map_delta(transform: LocalToWindow, value: ScrollDelta) -> ScrollDelta {
+    let value = transform.map_vector(PxPosition::from_f32_xy(value.x, value.y));
+    ScrollDelta::new(value.x, value.y)
+}
+fn unmap_delta(transform: LocalToWindow, value: ScrollDelta) -> ScrollDelta {
+    let value = transform.inverse_vector(PxPosition::from_f32_xy(value.x, value.y));
+    ScrollDelta::new(value.x, value.y)
+}
+fn map_velocity(transform: LocalToWindow, value: ScrollVelocity) -> ScrollVelocity {
+    let value = transform.map_vector(PxPosition::from_f32_xy(value.x, value.y));
+    ScrollVelocity::new(value.x, value.y)
+}
+fn unmap_velocity(transform: LocalToWindow, value: ScrollVelocity) -> ScrollVelocity {
+    let value = transform.inverse_vector(PxPosition::from_f32_xy(value.x, value.y));
+    ScrollVelocity::new(value.x, value.y)
+}
+
+pub(crate) struct NestedScrollSpace<'a> {
+    connection: &'a NestedScrollConnection,
+    transform: LocalToWindow,
+}
+impl NestedScrollSpace<'_> {
+    pub(crate) fn pre_scroll(
+        &self,
+        available: ScrollDelta,
+        source: ScrollEventSource,
+    ) -> ScrollDelta {
+        unmap_delta(
+            self.transform,
+            self.connection
+                .pre_scroll(map_delta(self.transform, available), source),
+        )
+    }
+    pub(crate) fn post_scroll(
+        &self,
+        consumed: ScrollDelta,
+        available: ScrollDelta,
+        source: ScrollEventSource,
+    ) -> ScrollDelta {
+        unmap_delta(
+            self.transform,
+            self.connection.post_scroll(
+                map_delta(self.transform, consumed),
+                map_delta(self.transform, available),
+                source,
+            ),
+        )
+    }
+    pub(crate) fn pre_fling(&self, available: ScrollVelocity) -> ScrollVelocity {
+        unmap_velocity(
+            self.transform,
+            self.connection
+                .pre_fling(map_velocity(self.transform, available)),
+        )
+    }
+    pub(crate) fn post_fling(&self, available: ScrollVelocity) -> ScrollVelocity {
+        unmap_velocity(
+            self.transform,
+            self.connection
+                .post_fling(map_velocity(self.transform, available)),
+        )
     }
 }

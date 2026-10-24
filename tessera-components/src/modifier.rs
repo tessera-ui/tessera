@@ -15,7 +15,7 @@ use tessera_ui::{
 };
 
 pub use tessera_foundation::modifier::{
-    ClickableArgs, DragDelta, DraggableArgs, InteractionState,
+    ClickableArgs, DragDelta, DraggableArgs, InteractionState, InteractionVisualState,
     MinimumInteractiveComponentEnforcement, Padding, PointerEventContext, SelectableArgs,
     SemanticsArgs, ToggleableArgs,
 };
@@ -83,6 +83,13 @@ pub trait ModifierExt {
 
     /// Draws a background behind the subtree using a custom shape.
     fn background_with_shape(self, color: Color, shape: Shape) -> Modifier;
+
+    /// Draws a background scaled around its center while preserving layout and
+    /// input bounds.
+    ///
+    /// Both scale axes must be finite and in `0..=1`. A zero axis draws
+    /// nothing.
+    fn background_with_scaled_shape(self, color: Color, shape: Shape, scale: [f32; 2]) -> Modifier;
 
     /// Draws a border stroke above the subtree.
     fn border(self, width: Dp, color: Color) -> Modifier;
@@ -253,6 +260,20 @@ impl ModifierExt for Modifier {
         }
 
         self.push_draw(BackgroundModifierNode { color, shape })
+    }
+
+    fn background_with_scaled_shape(self, color: Color, shape: Shape, scale: [f32; 2]) -> Modifier {
+        assert!(
+            scale
+                .iter()
+                .all(|value| value.is_finite() && (0.0..=1.0).contains(value)),
+            "background scales must be finite and in 0..=1",
+        );
+        self.push_draw(visual::ScaledBackgroundModifierNode {
+            color,
+            shape,
+            scale,
+        })
     }
 
     fn border(self, width: Dp, color: Color) -> Modifier {
