@@ -324,7 +324,7 @@ pub mod render_scene;
 pub mod renderer;
 mod runtime;
 pub mod scroll;
-#[cfg(feature = "testing")]
+#[cfg(any(test, feature = "testing"))]
 pub mod testing;
 mod thread_utils;
 pub mod time;

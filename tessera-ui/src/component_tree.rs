@@ -430,7 +430,7 @@ pub(crate) enum ComputeMode<'a> {
         compute_resource_manager: &'a mut ComputeResourceManager,
         gpu: &'a wgpu::Device,
     },
-    #[cfg(feature = "testing")]
+    #[cfg(any(test, feature = "testing"))]
     LayoutOnly,
 }
 
@@ -1077,6 +1077,7 @@ impl ComponentTree {
     /// This is used for accessibility tree building and other introspection
     /// needs.
     #[cfg(any(
+        test,
         feature = "testing",
         all(feature = "headless", not(target_family = "wasm")),
         feature = "debug-dirty-overlay"
@@ -1914,7 +1915,7 @@ impl ComponentTree {
                 compute_resource_manager,
                 gpu,
             } => (compute_resource_manager, gpu),
-            #[cfg(feature = "testing")]
+            #[cfg(any(test, feature = "testing"))]
             ComputeMode::LayoutOnly => {
                 diagnostics_snapshot.geometry_nodes_updated =
                     populate_layout_metadata(root_node, &self.tree, &mut self.metadatas);

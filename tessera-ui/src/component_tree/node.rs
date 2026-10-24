@@ -322,7 +322,7 @@ impl ComponentNodeMetaDatas {
         }
     }
 
-    #[cfg(feature = "testing")]
+    #[cfg(any(test, feature = "testing"))]
     pub(crate) fn with_entries<R>(
         &self,
         f: impl FnOnce(&FxHashMap<NodeId, ComponentNodeMetaData>) -> R,
