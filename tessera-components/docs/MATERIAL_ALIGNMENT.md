@@ -30,7 +30,7 @@ support; browser publication and assistive-technology actions remain open.
 | Icon buttons | `icon_button` | Five sizes, three widths, round/square presets, controlled toggles, vibrant/inherited colors, and 48dp targets implemented; native 1×/4× GPU geometry, fractional density, dynamic colors, input, selection semantics, and resize recovery verified; WASM four styles, three widths, pointer/keyboard activation, long press, disabled input, narrow wrapping, and lazy-list state retention verified; complete normalized reference state snapshots, dark themes, custom-shape states, and motion comparisons |
 | Segmented buttons | `segmented_buttons` | Standard M3 control retained; Expressive recommends connected button groups. Native 1x/4x checks at four densities cover roles, group metadata, selection, default checkmarks, focus, disabled input, live typography, stable natural widths, exact bounded widths, and zero-width recovery; WASM pointer/arrow/Tab/Space/Enter selection and stable group widths verified; icon/label motion, custom icons, full state snapshots, and RTL remain |
 | Split buttons | `split_buttons` | Five-size typography and icon contexts, sized outlines, trailing width priority, optical offsets, pressed/hover/focus shapes, controlled menu expansion, and arrow/elevation motion implemented; native 1×/4× GPU and fractional-density geometry, dynamic props, disabled semantics, and width-priority checks passed; full example menus, resizing, and lazy-list retention exercised on native and WASM; mixed-size/wrapped-label visual-height synchronization covered by 1×/4× native pixel readback at 1.5 density and WASM 390px/877px resize recovery; complete normalized state snapshots, dark themes, and motion-curve comparisons |
-| Date pickers | `date_picker` | Single-date layout/input/year grid tested; range state, virtualized months, inclusive endpoints, restricted dates, and joint manual input implemented; native 1×/4× GPU checks cover range bands, semantics, selection, restrictions, month requests, resize recovery, local focus restoration, unavailable-date focus pixels, and one-stop Tab exit; day/week/month/year navigation, week boundaries, short-month/leap-day clamping, rapid navigation/selection, and forward/reverse Tab checked in WASM at normal and narrow widths; implement docked variants and complete modal integration, year-grid/grid-semantics audits, resize scroll-anchor retention, and normalized reference states |
+| Date pickers | `date_picker` | Single-date layout/input/year grid tested; native diagram callouts remain stable under integer/fractional viewport translation and update for real view changes; range state, virtualized months, inclusive endpoints, restricted dates, and joint manual input implemented; native 1×/4× GPU checks cover range bands, semantics, selection, restrictions, month requests, resize recovery, local focus restoration, unavailable-date focus pixels, and one-stop Tab exit; day/week/month/year navigation, week boundaries, short-month/leap-day clamping, rapid navigation/selection, and forward/reverse Tab checked in WASM at normal and narrow widths; implement docked variants and complete modal integration, year-grid/grid-semantics audits, resize scroll-anchor retention, and normalized reference states |
 | Time pickers | `time_picker` | Native 1x/4x GPU checks cover individual clock button roles, labels, selected state, focus and activation, AM/PM radio semantics, roving traversal, exact values, pointer snapping, dynamic steps, 12/24-hour recovery, and manual entry; horizontal layout, narrow fallback, stable focus across resize, and 48dp period hit targets implemented; WASM horizontal 12/24-hour layouts, narrow fallback and resize recovery, arrow focus, Enter/Space activation, radio navigation, Tab exit, mode changes, input and confirmation checked; complete modal integration, automatic layout choice, outer-list resize anchoring, normalized state, dark-theme, and motion comparisons; browser screen-reader publication remains open |
 | Loading indicator | `loading_indicator` (new) | Official cubic morph data and spring timing verified; 48 GPU comparisons across eight sequences and 1×/4× sampling meet a 2.5% normalized coverage-error limit; animation/paused frames reuse buffers; native progress semantics and WASM pause/resume plus 0/50/100% progress verified; complete reference-theme screenshots and custom-size/container comparisons |
 | Progress indicators | `progress`, `wavy_progress` (new) | Straight and wavy linear/circular determinate/indeterminate variants present; wavy variants include independent stroke styles, adaptive gaps, reverse flow, frame-clock motion, and pause/resume; circle/star morph geometry checked against the independent Graphics Shapes library; complete normalized state, custom geometry, and straight-motion audits |
@@ -53,9 +53,9 @@ support; browser publication and assistive-technology actions remain open.
 | Search | `search` | Focus, typing, submit/dismiss fixed; audit expanded/full-screen layouts and state screenshots |
 | Sliders | `slider` | Single, centered, and range keyboard adjustment, fixed Tab order, peer constraints, disabled input, dynamic steps, and retained callbacks verified in native tests and WASM; published AccessKit handles retain identity across value/step changes and expose current peer limits; vertical orientation and direction reversal share layout, pointer coordinates, corner mapping, and keyboard behavior across all three variants; website color roles, independent tick colors, theme updates, marker gaps, and end-stop visibility implemented; optional floating value indicators, formatted screen-reader values, focus/drag visibility, and window-edge placement implemented; complete nested-viewport occlusion, fractional-anchor precision, range-label collision, focus-ring, and normalized reference state comparisons |
 | Snackbar | `snackbar` | Polite status messages, named action/close buttons, customizable dismiss labels, appearance focus preservation, dismissal restoration, controlled timeout and consecutive actions verified at two densities and 1x/4x MSAA; complete queue/host lifecycle, normalized geometry/states, motion, platform accessibility timeout preferences, and browser semantics remain |
-| Switch | `switch` | Native 1x/4x checks cover semantics, targets, controlled updates, colors, input, icon sizing, spatial size/offset transitions, reversal, cancelled press/release, controller snapping, pixel recovery, and idle clocks; WASM dynamic icons, cancelled dragging, and keyboard operation verified; normalized reference geometry, intrinsic empty-slot sizing, focus-ring and ripple-motion audits, and cross-platform motion comparisons remain |
+| Switch | `switch` | Native 1x/4x checks cover semantics, targets, controlled updates, colors, input, icon sizing, spatial size/offset transitions, reversal, cancelled press/release, controller snapping, pixel recovery, and idle clocks; WASM dynamic icons, cancelled dragging, and keyboard operation verified; native accessibility focus rings and optional interaction-state previews are covered at 1x/4x MSAA, including live-input precedence and disabled suppression; the 20-control article States figure passes native independent-pointer, disabled, focus-without-activation and responsive-target checks; normalized whole-figure pixel comparisons remain; normalized reference geometry, intrinsic empty-slot sizing, ripple-motion audits, and cross-platform motion comparisons remain |
 | Tabs | `tabs` | Primary/secondary heights, colors, indicator geometry, selected semantics, roving traversal, dynamic props, controlled selection, focus recovery, and narrow scrolling covered by native 1x/4x GPU tests; manual/automatic keyboard activation exercised in WASM; complete final-build responsive browser checks, inline icons/badges, normalized state snapshots, primary indicator inset, dark themes, RTL, motion, and nested scroll-edge behavior |
-| Text fields | `text_field` | Shared typography and outline fixes verified; focused clipboard input, accepted/rejected/stale cut completion, and edit/policy pipelines tested natively; WASM full-date paste, copy readback, cut, rapid replacement, cross-field Tab routing, keyboard save, and read-only policy verified; complete delayed-write/lifecycle/cross-browser audits and error, supporting text, counters, icons, multiline comparisons |
+| Text fields | `text_field` | Shared typography and outline fixes verified; Anatomy uses one theme-aware 1024×300 native artboard with outlined callout capsules, matching the official 2048×600 reference proportions; native checks cover both themes, clear actions, narrow scaling and retained values; focused clipboard input, accepted/rejected/stale cut completion, and edit/policy pipelines tested natively; WASM full-date paste, copy readback, cut, rapid replacement, cross-field Tab routing, keyboard save, and read-only policy verified; complete normalized diagram comparisons, delayed-write/lifecycle/cross-browser audits and error, supporting text, counters, icons, multiline comparisons remain |
 | Toolbars | `toolbar` (new) | Floating horizontal/vertical and collapsed layouts tested; docked 64dp height and 4–32dp spacing tested at 132/140/320/800px widths; pointer/keyboard activation and docked actions verified in WASM; complete transitions, FAB combination, scroll behavior, and full state screenshots |
 | Tooltips | `tooltip` (new) | Plain/rich page-level overlays, placement fallback, delayed hover, focus, touch hold, Escape/outside dismissal, and custom actions implemented; native GPU tests verify focus, descriptions, content/variant updates, pixel restoration, release cancellation, later clicks, and scroll cancellation; WASM rendering, word wrapping, pointer actions, repeated forward/reverse Tab, action activation, dismissal, and trigger re-entry verified; complete reference state snapshots, short-viewport/lifecycle/host coordination, caret and motion audits |
 
@@ -4382,3 +4382,374 @@ instances, including offscreen illustrations. Absolute-window geometry observers
 also invalidate annotation state during whole-figure scrolling. These mechanisms
 are potential contributors, not a measured attribution of the slow CPU phase;
 SVG contents are cached, and no persistent idle redraw loop was observed.
+
+The final bounded follow-up also passes release WASM and semantic call-color
+validation. Browser proof confirms the three badge destinations and a slider
+value change from 40 to 60 with its measurement leader following the handle.
+No console errors were captured; slow-frame warnings remain. Responsive figure
+scaling and performance therefore remain open acceptance items. Screenshots are
+stored outside the repository in the dated specification-QA directory.
+
+## Native configuration and annotation follow-up (2026-10-23)
+
+Docked calendars now accept an optional shared `DockedDatePickerView` state for
+calendar, month and year presentation. The menus use a 64dp navigation header,
+full-width 48dp choices, selection checkmarks and a 28dp bottom inset. Their
+360x428dp surface omits calendar arrows and action buttons; the calendar remains
+360x460dp with actions. Its 16dp circular corners are checked with actual pixels
+outside the antialiasing edge. The existing calendar GPU scenario also covers
+external view changes, live menu transitions and unchanged date commitment.
+
+The date article uses real independent views in the reference's two-row
+configuration arrangement and adds the month-menu anatomy and measurements.
+The slider sizes illustration now places XS/S/M above L/XL, with native controls,
+measured bounds, numbered captions and dimension/corner overlays. The new slider
+regression exposed a 2dp XS/S placement error caused by assuming a 48dp measured
+height; their actual 44dp height is now used to preserve the intended centers.
+Snackbar anatomy now includes four leaders, endpoint and action/icon outlines;
+its native regression checks the callouts against actual controls and activation.
+
+The first combined run passed 19 of 20 example scenarios; the new slider test
+caught that placement discrepancy. Final verification after its correction is
+recorded below. Component verification passes 323 ordinary tests, 113 runnable
+rustdoc examples and the extended native docked-calendar scenario.
+
+Remaining acceptance work includes whole-subtree responsive figure scaling,
+initial modal year-selection figures, complete modal/input configuration
+canvases, and item-level annotation observations after arbitrary menu scrolling.
+The added source figures increase Date Specs from 18 to 22 mounted picker
+instances; older slow-frame measurements are not a valid comparison for this
+changed workload. Performance remains unaccepted.
+
+The corrected combined example run passes all 20 GPU scenarios. The extended
+date-anatomy regression also verifies that markers 2 and 3 are both published
+and painted. Their construction now uses a single component call per iteration
+instead of separate conditional paths.
+
+## Text field regression investigation (2026-10-23)
+
+Browser reproduction identified a narrow single-line placeholder wrapping and
+increasing the field height, and an external Clear control modifying a read-only
+example. Native regression then exposed a separate bounded-parent problem:
+internal fill-height modifiers expanded fields to the available parent height.
+The field now probes its natural body height and performs final measurement
+within the caller's constraints. Single-line decorations remain on one line;
+explicit heights and multiline wrapping remain supported.
+
+Decoration clicks now use the measured editor origin rather than a padding
+estimate. Obfuscated fields publish the password role without a plaintext
+accessibility value; revealing and hiding the value retains the editor content.
+Three native field scenarios and 323 ordinary component tests pass.
+
+The example disables Clear while disabled or read-only, removes empty-value
+clear icons, exposes validation messages as alerts, and reports counter overflow
+without discarding input. Specs anatomy now has native numbered callouts and
+internal outlines; leaders stop at caption edges. The combined native example
+run passes all 23 scenarios, including the new text-field interactions and
+caption pixel assertions. Release WASM and semantic call-color checking pass
+for that revision.
+
+Subsequent browser inspection of Outlined examples exposed two additional
+issues. Their nested dark theme changed text colors while the example panel
+retained a light background. Separately, the surface's foreground border was
+drawn after the label's painted notch, crossing the floating label; its fallback
+theme-colored rectangle also disagreed with arbitrary parent backgrounds.
+Color panels now paint their nested theme's surface. Outlined fields paint the
+container once and draw the native outline through precise shape clips, leaving
+a real gap at the floating label without covering the parent background. The
+new GPU regression compares fractional enabled/disabled outlines against an
+unsplit native surface in both themes; all four native field scenarios pass.
+All four example field scenarios also pass, including actual background pixels,
+supporting-text contrast and numbered-caption interiors.
+
+Intrinsic editor sizing now uses a separate bounded size cache keyed by text
+revision and constraints. A miss shapes an isolated zero-scroll display buffer;
+it does not replace the live editor's viewport, draw snapshot, cursor or IME
+geometry. Final combined verification is recorded below.
+
+Final native verification passes 324 ordinary component tests, all four
+field GPU regressions, all 24 example GPU scenarios and 113 runnable rustdoc
+examples. The actual intrinsic-probe regression also confirms width, content,
+style and display-transform invalidation and that settled frames stop rebuilding.
+Formatting and whitespace checks pass. A second read-only review found no
+additional concrete correctness regressions. Final release WASM and semantic
+call-color checking pass. Browser verification of that artifact confirms normal
+and focused Outlined notches in both themes, readable dark panels, stable narrow
+empty fields and disabled read-only clearing. No browser errors were captured.
+Temporary focus-event instrumentation was removed and the clean preview reloaded.
+These checks do not establish overall responsive pixel parity or an uncontended
+scrolling-performance improvement.
+
+An intermittent browser scroll clamp was observed after focusing a field. A
+fresh reload then allowed two complete scroll-away checks while retaining focus;
+typing while the field was offscreen and returning confirmed that focus remained
+on the same editor. No production focus change was made without a stable
+reproduction. The separate native manual-wheel scenario exercises actual pointer
+input and later idle frames and passes. It also observes the actual field's
+window bounds beyond the viewport and uses explicit frame timestamps. This
+protects the normal manual-scroll contract while the intermittent browser
+observation remains unclassified.
+
+### Native field measurement and article navigation follow-up
+
+Filled and Outlined measurement figures now render real 240dp fields with
+native icons, supporting text and counters. Their overlays follow actual text
+and subtree focus, including clearing a populated field and entering text into
+an initially empty field. The shared initialization no longer reads another
+remembered state while the slot table is borrowed. The existing constrained
+editing scenario now exercises both field variants, including the focused
+empty 56dp container and read-only clearing restrictions.
+
+Articles now include Previous and Up next links between available chapters and
+adjacent component overviews. Each link has an independent control identity;
+the navigation group preserves its actionable descendants. Route context is
+updated before mounting the destination article. Pill tabs use roving keyboard
+focus with manual activation, matching the inspected official behavior.
+
+Modal date pickers expose shared calendar/year view state, and year buttons
+publish their accessible names. Modal range input uses its 120dp header while
+the calendar keeps its compact header. The six affected native picker scenarios
+and 324 ordinary component tests pass. These changes do not establish complete
+responsive pixel parity across all articles.
+
+The combined native example run passes all 27 scenarios, and all 113 runnable
+component documentation examples pass. Browser follow-up confirms manual tab
+activation after pointer focus. It also exposed an article scroll jump to an
+earlier chapter tab before the Clear callback ran, including on blank-area
+clicks. DOM event capture did not observe a focus/blur transition. Clear actions
+now request their own editor's focus before removing the button; this protects
+button removal but does not by itself resolve that earlier pointer observation.
+The five field regressions pass with an added real-pointer sequence in both
+variants that checks the focused editor, scroll offset and window rectangle.
+The four native field GPU scenarios also pass, including fractional outline
+pixels and transparent label notches.
+
+### Parallel figure reconstruction and performance verification
+
+Independent visual audits now cover all four Text fields, Date pickers, Sliders
+and Menus chapters. Configuration, color, state and accessibility figures are
+being reconstructed with native controls and annotations. Reference dimensions
+and role legends remain separate from interaction tests; compilation alone does
+not establish pixel parity. Responsive scaling, instructional scenes and several
+chapter-specific diagrams remain incomplete.
+
+The normalized date-annotation boundary skips its heavy inner SVG composition
+during pure article translation. A complete native profiling capture still
+reports approximately 19,585 geometry updates and 19,690 scene updates per
+scrolling frame, with 15 cached measurements. Actual GPU timestamp samples are
+approximately 0.2ms; these captures identify CPU maintenance as the main cost.
+Concurrent compilation makes the CPU timings unsuitable as stable benchmarks.
+Forced headless frames at rest reuse their caches and do not prove desktop or
+browser idle scheduling.
+
+The core suite passes 141 tests with two GPU tests ignored. Repeated conditional
+branches inside loops previously shared component identities, causing remembered
+state collisions and stale layout children. Local occurrence salts distinguish
+these branches while explicit keys preserve reordered state. The regression
+fails before the fix and passes afterward; the exact native date-selection and
+chapter-navigation reproduction now completes through frame 452 without a panic
+or missing layout metadata. Temporary structural diagnostics have been removed.
+
+Native nested-scroll focus reveal now consumes placement retries, and finite
+focus-handle cleanup keeps the next frame scheduled. Real nested-scroll and
+manual-wheel regressions pass. The updated WASM passes semantic color checking
+and loads in the browser. That browser build retains its position during steady
+manual scrolling, but clicking a chapter tab immediately before scrolling exposes
+a focus-reveal ordering issue. A native regression using the actual article tabs
+reproduces the issue and passes after stale reveal requests are cancelled by newer
+manual scrolling. Deferred focus ownership and later keyboard reveal remain
+covered. A fresh WASM build passes semantic checking and verifies the same
+immediate-click-and-wheel sequence in the browser: the article retains its
+scrolled position at rest, and subsequent Right/Enter keys reveal and activate
+the next chapter tab. Temporary focus tracing has been removed from the sources.
+Overall pixel and performance parity remains unverified.
+
+Native GPU regressions also cover requested tooltip widths surviving internal
+constraints and transparent outline colors remaining independent of invisible
+fill RGB, with and without a ripple. Live outside focus rings now use a separate
+focus-visible signal; pointer presses hide the ring without clearing ownership,
+and accessibility focus restores it. Core and native button/icon regressions
+pass; the updated focus-visible behavior still requires browser verification.
+Native date and year choices now share the same focus-outline geometry. Their
+visibility is read during composition so focus changes invalidate the real draw
+policy. A native GPU regression verifies that assistive-technology focus changes
+pixels outside the visual body without selecting a date, and subsequent actions
+still select a date or navigate to a year. The six ordinary date regressions and
+shared focus-geometry regression also pass.
+
+A fresh, fully drained native capture uses the normal optimized development
+build at 1280 × 800, density 1, and four samples, without concurrent compilation.
+Actual range selection updates the headline to August 12–19, and an inner
+calendar wheel reveals September without moving the article. Across 18 wheel
+frames, median CPU frame time is 17.23ms and GPU time is 0.099ms. Eight settled
+frames perform no measurement stores, paint records, geometry, scene, or
+accessibility updates. Selection transitions still reach 94–146ms on the CPU
+and update tens of thousands of retained consumer nodes; this remains an open
+performance issue. These measurements precede the uniform-coordinate rollout.
+
+Before the uniform-coordinate rollout, all seven native Text fields GPU scenarios
+passed, including retained translation, idle painting, reflow, and annotations.
+Cached Boxed placement avoids needless measurement during translation. The two
+native Sheets context scenarios also passed with real playback, track selection,
+filter changes, and reopening. These
+results do not establish complete article or browser parity. Native uniform
+subtree scaling is being verified separately; its coordinate contract is
+documented in [Local layout coordinates](../../docs/LOCAL_COORDINATES.md).
+
+Native fractional-scale GPU coverage now passes at both one and four samples.
+An actual 240 × 56 outlined field occupies 150 × 35 window pixels at scale
+0.625 and fractional origin (10.25, 20.5). Its icon, editor inset, accessible
+bounds, transparent label notch, IME editing, focus, and ancestor shape clipping
+are exercised through the real control. A native 256-pixel clock dial occupies
+160 pixels; its 48-pixel digit target occupies 30 pixels and a physical click
+changes the selected hour. Four additional native GPU scenarios preserve
+fractional tooltip and submenu placement through resize, canonical touch slop
+through ancestor translation, and scaled editor multi-click selection. A real
+wheel-to-bottom regression reproduces a stale offset after responsive resizing:
+the old valid offset of -628 must become -516 before any later input. Placement
+now reconciles those extents, and the regression passes together with 328 ordinary
+component tests. Complete scaled article and browser comparisons remain separate,
+pending verification.
+
+Retained replay no longer republishes every unchanged descendant to pointer,
+focus, accessibility, and scene consumers. The production replay regression
+failed before the fix: the same leaf update published 23 pointer nodes with a
+small retained sibling and 203 with a larger sibling. It now passes alongside
+actual retained reorder and semantic/focus ancestry scenarios. All 149 ordinary
+core tests pass, as does the native headless protocol regression for fractional
+input and scaled bounds. A subsequent normal optimized capture at the same
+1280 × 800, density-1, four-sample configuration preserves range selection,
+inner-calendar scrolling, article position, and zero-work settled frames. The
+three selection CPU peaks fall from 94–146ms to 36–44ms; date-selection pointer
+and accessibility publications fall from 27,540 to 763, and scene publications
+from 27,609 to 832. Median wheel CPU time falls from 17.23ms to 14.92ms.
+
+GPU results require a separate conclusion: a same-environment rerun of the
+unchanged baseline binary also raises quiet GPU time from 0.097ms to 0.335ms and
+wheel GPU time from 0.099ms to 4.06ms. The updated binary records 0.349ms and
+6.11ms respectively. These captures do not isolate a rendering regression or
+establish GPU parity. Existing identity-reconciliation walks and remaining
+interaction latency still need investigation.
+
+
+The first canonical article wave has 22 distinct passing native GPU scenarios,
+including Date, Sliders, Dialogs, Menus, article navigation, and the complete
+component-directory traversal. The tests exercise real physical input,
+fractional annotation geometry, resizing, and independent article chapters.
+A subsequent draw-only correction changes the article chapter tabs to circular
+capsule ends; its three focused native scenarios also pass. The successful
+WebAssembly build and initial browser comparison precede that capsule correction.
+Neither result establishes pixel parity for all articles. The next table, sheet,
+and date instructional diagrams are undergoing integration and separate checks.
+
+The integrated articles now reserve a real 15dp scrollbar track from the first
+frame. Native regressions exercise viewport sizing at multiple densities,
+wheel and drag input through the track, accessibility actions, focus reveal,
+and nested-scroll boundary propagation. Omitted scrollbar metrics use the
+provided controller. All 119 component rustdoc examples pass.
+
+The native Date instructional scenarios pass real editing, focus, selection,
+and clearing checks together with annotation-notch and canvas-size pixel
+assertions. Sheet color figures pass checks at one and four samples, including
+fractional scaling, independent theme halves, and icon colors compared with
+equivalent native icon controls. Shared native text tables cover intrinsic
+column sizing, spans, typography changes, independent heading ink updates, and
+accessible row/cell structure. Specification headers now use the reference's
+400 weight and muted foreground, and the Switch measurement table has the
+reference's three columns, 18 data rows, and merged element cells.
+These checks establish the exercised contracts rather than complete visual
+parity with every official figure.
+
+The preceding WebAssembly milestone passed semantic checking and compilation.
+A browser check verifies the real directory, the article back button, independent
+chapter selection, and immediate scrolling after selecting Guidelines in Buttons.
+This is a limited browser check rather than an all-page comparison. The complete
+native directory traversal is being rerun after a targeted diagnostic established
+that its Loading geometry assertion ran before the responsive header settled:
+the first measured viewport reduces the hero height by 8 pixels, while subsequent
+frames and actual control toggles preserve the settled bounds. The original
+bounds-stability assertion remains in place. A subsequent native chapter-tab
+regression passes hover, press, typography, focus, stable targets, and idle
+painting checks at one and four samples. Native clock-driven selection transitions
+now pass geometry, pixel, and idle-work checks; complete browser motion comparisons
+remain open.
+The fresh browser build for these subsequent changes is still being verified.
+
+The browser also reports expensive article transitions dominated by CPU tree
+building. Concurrent correctness tests make these observations unsuitable for a
+controlled performance comparison, but they do not support a claim of smooth
+navigation or complete performance parity.
+
+That browser milestone exposed a Date accessibility integration defect: opening
+an instructional calendar placed its bottom actions below the window. The
+native correction hosts dialogs above the article viewport and restores 48px
+action targets while preserving the 360 × 572 dialog size. The actual article
+route regression passes Entry, Formatting, and Labels selection and cancellation,
+visible actions, modal focus, background hiding, scrim coverage outside the
+figure, and narrow-window resizing. The custom titlebar is outside that host.
+Hardware keyboard ordering and the corrected browser scene still need checking.
+
+The chapter-tab pixel assertions also exposed overly soft shared shape edges.
+An independent native 2px border reproduced gray pixels where black fully covers
+the pixel. Correcting the analytic coverage half-width passes that unchanged
+test at one and four samples, including fractional placement and clipping, plus
+the original strict chapter-tab border assertions. Scaled fields, the clock,
+calendar focus, and scrollbar interaction regressions also pass.
+
+The current source inventory contains 36 directory destinations, each declaring
+Overview, Specs, Guidelines, and Accessibility chapters. This establishes the
+declared navigation structure, not the fidelity of their contents. Several
+action and selection articles still share generic instructional figures; these
+must be replaced with the corresponding component-specific native layouts.
+Every article still needs its own reference comparison and interaction review.
+
+Odd-width app-bar centering currently follows the integer `Px` layout contract:
+a 32-pixel logo in a 725-pixel bar starts at relative x=346. The native directory
+assertion checks this exact placement. It does not establish the half-pixel
+centering that a browser's fractional CSS layout can produce; that difference
+remains part of the visual comparison.
+
+
+Long specification chapters now compose visible sections on demand while retaining
+visited examples within the chapter. Unplaced sections leave drawing, pointer,
+and accessibility geometry; the active focused item remains available for reveal.
+Chapter switches preserve the common header and tab identities. Native regressions
+cover cold TOC navigation, later wheel input, real control state, focus traversal,
+and cleanup. Fixed-size figure canvases preserve canonical dimensions before
+outer scaling, preventing clipped outlines and inaccessible trailing buttons when
+a section first appears. The affected figure and interaction run passes 53 native
+scenarios, alongside 332 ordinary component tests and 119 runnable component docs.
+The updated WASM build and color check pass. Browser checks verify the corrected
+date-input canvas, calendar opening, and synchronized confirmed values.
+
+A local 1280×800, density-1, four-sample headless probe records Date States wheel
+CPU medians of 7.3ms and 7.7ms in light and dark scenes, compared with 349ms and
+356ms in the earlier eager chapter. Maximum geometry updates fall from 28,506 to
+1,649 nodes in those phases. This is a scoped development-profile measurement;
+desktop load and GPU clocks are uncontrolled. Unknown section extents still use
+estimates until measured, and retained offscreen animation consumers can remain
+active. The historical all-directory interaction scenario still needs
+viewport-aware queries: compact variant checks must navigate back from their
+measurement sections. Date and time controls remain in their own lazy sections;
+their integrated checks must first reveal the corresponding section.
+Its assertions have not been removed or counted as a passing current catalog run.
+Complete normalized references and all-page interaction verification remain open.
+
+Outlined text-field anatomy now positions its live fields and nine callouts from
+the canonical reference geometry. The floating-label and supporting-text boxes,
+solid connectors, and endpoint circles are drawn as vectors around real editable
+fields. Eight native text-field scenarios pass, including light and dark anatomy,
+clear actions, retained values after resizing, and constrained editor interactions.
+This scoped geometry check does not establish full-page pixel equivalence.
+
+A narrow-editor rendering regression showed that text could retain its leading
+glyphs after the controller scrolled to the caret. The text pipeline now applies
+horizontal buffer scrolling to the glyph origin while retaining its clip bounds.
+Scroll changes also update cached editor draw data and participate in draw-command
+equality. The actual filled and outlined field pixel regression passes, alongside
+333 ordinary component tests and eight native text-field showcase scenarios.
+The updated WASM build and color check pass. Browser checks verify complete
+per-key input values and visible glyph movement between Home and End without
+changing the text. Whole-string browser automation typing is not treated as
+evidence of a framework input failure; direct per-key input and paste are checked
+separately.
