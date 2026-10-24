@@ -1,0 +1,6 @@
+Material Symbols Outlined, Google LLC, Apache License2.0.
+Source: https://github.com/google/material-design-icons/tree/master/variablefont
+Font: MaterialSymbolsOutlined[FILL,GRAD,opsz,wght].ttf
+Axes: opsz24, GRAD0, FILL0/1, wght300/400/600.
+Paths retain the original960-unit viewport and use a vertical coordinate flip.
+The adjacent LICENSE contains the upstream Apache2.0 license.
