@@ -150,7 +150,8 @@ pub struct ScrollableController {
     /// Floating-point current position retained between rendered pixel
     /// positions.
     child_position_f32: (f32, f32),
-    // Preserve interpolation steps smaller than f32 precision in long virtualized lists.
+    // Preserve interpolation steps smaller than f32 precision in long
+    // virtualized lists.
     animation_position: (f64, f64),
     /// The child component size
     child_size: ComputedData,

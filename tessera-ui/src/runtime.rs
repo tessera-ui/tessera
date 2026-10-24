@@ -631,8 +631,8 @@ pub(crate) struct BuildInvalidationSet {
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct StateReadDependencyKey {
-    // Keep generation in the dependency key to avoid ABA when a slot is recycled
-    // and later reused for another state value.
+    // Keep generation in the dependency key to avoid ABA when a slot is
+    // recycled and later reused for another state value.
     slot: SlotHandle,
     generation: u64,
 }

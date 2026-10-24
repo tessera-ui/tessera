@@ -37,7 +37,8 @@ struct ImageResources {
 }
 
 struct ImageAlias {
-    // Keep allocation identities unique without retaining duplicate pixel buffers.
+    // Keep allocation identities unique without retaining duplicate pixel
+    // buffers.
     pixels: Weak<Vec<u8>>,
     key: ImageData,
 }

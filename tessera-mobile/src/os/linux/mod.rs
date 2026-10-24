@@ -84,8 +84,8 @@ impl Application {
                                         .and_then(|section| section.attr("Exec").first())
                                         .map(Into::into)
                                         .ok_or(DetectEditorError::ExecFieldMissing)?,
-                                    // The icon is optional, we try getting it because the Exec
-                                    // value may need it
+                                    // The icon is optional, we try getting it
+                                    // because the Exec value may need it
                                     icon: parsed_entry
                                         .section("Desktop Entry")
                                         .and_then(|section| section.attr("Icon").first())

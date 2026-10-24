@@ -58,8 +58,8 @@ pub struct HardwareProperties {
 #[derive(Debug, Deserialize)]
 #[serde(untagged)]
 pub enum MaybeHardwareProperties {
-    // order matters, if we can deserialize to HardwareProperties we get Self::KnownProperties,
-    // fallback to Self::Invalid
+    // order matters, if we can deserialize to HardwareProperties we get
+    // Self::KnownProperties, fallback to Self::Invalid
     KnownProperties(HardwareProperties),
     #[allow(dead_code)]
     Invalid(serde_json::Value),
