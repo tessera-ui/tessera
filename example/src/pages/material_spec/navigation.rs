@@ -34,13 +34,13 @@ use tessera_ui::{
     accesskit::Role, modifier::FocusModifierExt as _, remember, tessera, use_context,
 };
 
+use self::article_pages::{Figure, Kind, detailed_article};
 use super::{
     ACCENT,
     annotations::{self, Geometry, Rect, dotted, relative, watch},
     article::SpecSection,
     gap, panel, spec_table, subheading, type_style,
 };
-use article_pages::{Figure, Kind, detailed_article};
 
 #[cfg(all(test, not(target_family = "wasm")))]
 #[path = "navigation_figures_tests.rs"]
