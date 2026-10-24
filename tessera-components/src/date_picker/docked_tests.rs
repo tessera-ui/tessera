@@ -14,11 +14,14 @@ use tessera_ui::{
 
 use crate::theme::material_theme;
 
-use super::{CalendarDate, DatePickerState, Weekday, YearMonth, docked_date_picker};
+use super::{
+    CalendarDate, DatePickerState, DockedDatePickerView, Weekday, YearMonth, docked_date_picker,
+};
 
 thread_local! {
     static STATE: Cell<Option<State<DatePickerState>>> = const { Cell::new(None) };
     static CHANGES: Cell<Option<State<u32>>> = const { Cell::new(None) };
+    static VIEW: Cell<Option<State<DockedDatePickerView>>> = const { Cell::new(None) };
 }
 
 #[tessera]
@@ -35,11 +38,14 @@ fn fixture() {
         );
         let state = remember(move || initial);
         let changes = remember(|| 0_u32);
+        let view = remember(|| DockedDatePickerView::Month);
         STATE.set(Some(state));
         CHANGES.set(Some(changes));
+        VIEW.set(Some(view));
         crate::boxed::boxed().children(move || {
             docked_date_picker()
                 .state(state)
+                .view(view)
                 .today(CalendarDate::new(2025, 8, 17).unwrap())
                 .first_day_of_week(Weekday::Monday)
                 .on_date_change(move |_| changes.with_mut(|count| *count += 1));
@@ -93,10 +99,58 @@ fn check_calendar() {
     .unwrap();
     renderer.render_frames(4);
     let bounds = node(&renderer, "Docked calendar").1.bounds().unwrap();
-    assert_eq!((bounds.width(), bounds.height()), (360.0, 460.0));
-    assert!(node(&renderer, "August 18, 2025").1.is_disabled());
+    assert_eq!((bounds.width(), bounds.height()), (360.0, 428.0));
+    let pixels = renderer.read_pixels().unwrap();
+    let pixel = |x: usize, y: usize| {
+        let x = bounds.x0 as usize + x;
+        let y = bounds.y0 as usize + y;
+        &pixels[(y * 420 + x) * 4..][..4]
+    };
+    assert_eq!(pixel(5, 1), pixel(1, 1));
+    assert_ne!(pixel(16, 1), pixel(1, 1));
+    let month_options = renderer.accessibility_snapshot().unwrap();
+    assert!(!month_options.nodes.iter().any(|(_, node)| {
+        matches!(
+            node.label(),
+            Some("Cancel" | "OK" | "Previous month" | "Next year")
+        )
+    }));
     let state = STATE.get().unwrap();
     let changes = CHANGES.get().unwrap();
+    let view = VIEW.get().unwrap();
+    assert!(
+        renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, node)| {
+                node.role() == tessera_ui::accesskit::Role::ListBoxOption
+                    && node.label() == Some("August")
+                    && node.is_selected() == Some(true)
+            })
+    );
+    activate(&mut renderer, "Choose month");
+    assert_eq!(view.get(), DockedDatePickerView::Calendar);
+    let bounds = node(&renderer, "Docked calendar").1.bounds().unwrap();
+    assert_eq!((bounds.width(), bounds.height()), (360.0, 460.0));
+    assert!(node(&renderer, "August 18, 2025").1.is_disabled());
+    view.set(DockedDatePickerView::Year);
+    renderer.render_frames(3);
+    assert!(
+        renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .iter()
+            .any(|(_, node)| {
+                node.role() == tessera_ui::accesskit::Role::ListBoxOption
+                    && node.label() == Some("2025")
+                    && node.is_selected() == Some(true)
+            })
+    );
+    activate(&mut renderer, "2025");
+    assert_eq!(view.get(), DockedDatePickerView::Calendar);
     activate(&mut renderer, "July 31, 2025");
     assert_eq!(
         state.with(DatePickerState::selected_date),
@@ -112,13 +166,17 @@ fn check_calendar() {
     );
     assert!(node(&renderer, "Previous year").1.is_disabled());
     activate(&mut renderer, "Choose month");
+    assert_eq!(view.get(), DockedDatePickerView::Month);
     activate(&mut renderer, "June");
+    assert_eq!(view.get(), DockedDatePickerView::Calendar);
     assert_eq!(
         state.with(DatePickerState::displayed_month),
         YearMonth::new(2024, 6).unwrap()
     );
     activate(&mut renderer, "Choose year");
+    assert_eq!(view.get(), DockedDatePickerView::Year);
     activate(&mut renderer, "2026");
+    assert_eq!(view.get(), DockedDatePickerView::Calendar);
     assert_eq!(
         state.with(DatePickerState::displayed_month),
         YearMonth::new(2026, 6).unwrap()

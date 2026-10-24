@@ -259,6 +259,8 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 ///   mode.
 /// - `modifier` — sizing and layout of the picker body.
 /// - `first_day_of_week` — weekday at the start of each calendar row.
+/// - `today` — current date used for the date outline and initial keyboard
+///   focus; defaults to the system date.
 /// - `calendar_height` — scrollable month viewport height; defaults to 360dp.
 /// - `show_mode_toggle` — whether people can switch calendar and input modes.
 /// - `title` — optional title override.
@@ -274,7 +276,9 @@ fn date_key(date: CalendarDate) -> (i32, u8, u8) {
 /// fn demo() {
 ///     let state = remember(DateRangePickerState::default);
 ///     material_theme().child(move || {
-///         date_range_picker().state(state);
+///         date_range_picker()
+///             .state(state)
+///             .today(CalendarDate::new(2026, 7, 16).unwrap());
 ///     });
 /// }
 /// let mut state = DateRangePickerState::default();
@@ -290,23 +294,41 @@ pub fn date_range_picker(
     state: Option<State<DateRangePickerState>>,
     modifier: Option<Modifier>,
     first_day_of_week: Option<Weekday>,
+    today: Option<CalendarDate>,
     calendar_height: Option<Dp>,
     show_mode_toggle: Option<bool>,
     #[prop(into)] title: Option<String>,
     #[prop(into)] headline: Option<String>,
 ) {
+    let today = today.unwrap_or_else(CalendarDate::today);
     let state = if let Some(state) = state {
         state
     } else {
-        remember(DateRangePickerState::default)
+        remember(|| {
+            DateRangePickerState::new(
+                None,
+                None,
+                Some(super::fallback_displayed_month_at(
+                    &DatePickerDefaults::YEAR_RANGE,
+                    today,
+                )),
+                DatePickerDefaults::YEAR_RANGE,
+                None,
+                None,
+                DatePickerDisplayMode::Picker,
+            )
+        })
     };
     let theme = use_context::<MaterialTheme>()
         .expect("MaterialTheme must be provided")
         .get();
     let input = state.with(|state| state.display_mode() == DatePickerDisplayMode::Input);
     let title =
-        title.unwrap_or_else(|| if input { "Enter dates" } else { "Select dates" }.to_owned());
+        title.unwrap_or_else(|| if input { "Select date" } else { "Select dates" }.to_owned());
     let headline = headline.unwrap_or_else(|| {
+        if input {
+            return "Enter dates".to_owned();
+        }
         state.with(|state| {
             let cross_year = state
                 .selected_start_date()
@@ -338,48 +360,86 @@ pub fn date_range_picker(
         .children(move || {
             let title = title.clone();
             let headline = headline.clone();
-            row()
-                .modifier(
-                    Modifier::new()
-                        .fill_max_width()
-                        .constrain(None, Some(AxisConstraint::new(Dp(68.0).to_px(), None)))
-                        .padding(Padding::new(Dp(64.0), Dp::ZERO, Dp(12.0), Dp(12.0))),
-                )
-                .cross_axis_alignment(CrossAxisAlignment::End)
-                .children(move || {
-                    let title = title.clone();
-                    let headline = headline.clone();
-                    column()
-                        .modifier(Modifier::new().weight(1.0))
-                        .children(move || {
-                            text()
-                                .content(title.clone())
-                                .style(theme.typography.label_large)
-                                .color(theme.color_scheme.on_surface_variant);
-                            spacer().modifier(Modifier::new().height(Dp(4.0)));
-                            text()
-                                .content(headline.clone())
-                                .style(theme.typography.title_large)
-                                .color(theme.color_scheme.on_surface_variant);
-                        });
-                    if show_mode_toggle.unwrap_or(true) {
-                        icon_button()
-                            .standard()
-                            .icon(if input {
-                                filled::CALENDAR_TODAY_SVG
-                            } else {
-                                filled::EDIT_SVG
-                            })
-                            .accessibility_label(if input {
-                                "Switch to range calendar"
-                            } else {
-                                "Switch to date range input"
-                            })
-                            .on_click(move || {
-                                state.with_mut(DateRangePickerState::toggle_display_mode)
+            if input {
+                column()
+                    .modifier(
+                        Modifier::new()
+                            .fill_max_width()
+                            .height(Dp(120.0))
+                            .padding(Padding::new(Dp(24.0), Dp(16.0), Dp(12.0), Dp(12.0))),
+                    )
+                    .children(move || {
+                        text()
+                            .content(title.clone())
+                            .style(theme.typography.label_large)
+                            .color(theme.color_scheme.on_surface_variant);
+                        spacer().modifier(Modifier::new().height(Dp(24.0)));
+                        let headline = headline.clone();
+                        row()
+                            .modifier(Modifier::new().fill_max_width().height(Dp(48.0)))
+                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                            .children(move || {
+                                text()
+                                    .content(headline.clone())
+                                    .style(theme.typography.headline_large)
+                                    .color(theme.color_scheme.on_surface)
+                                    .modifier(Modifier::new().weight(1.0));
+                                if show_mode_toggle.unwrap_or(true) {
+                                    icon_button()
+                                        .standard()
+                                        .icon(filled::CALENDAR_TODAY_SVG)
+                                        .accessibility_label("Switch to range calendar")
+                                        .on_click(move || {
+                                            state
+                                                .with_mut(DateRangePickerState::toggle_display_mode)
+                                        });
+                                }
                             });
-                    }
-                });
+                    });
+            } else {
+                row()
+                    .modifier(
+                        Modifier::new()
+                            .fill_max_width()
+                            .constrain(None, Some(AxisConstraint::new(Dp(68.0).to_px(), None)))
+                            .padding(Padding::new(Dp(64.0), Dp::ZERO, Dp(12.0), Dp(12.0))),
+                    )
+                    .cross_axis_alignment(CrossAxisAlignment::End)
+                    .children(move || {
+                        let title = title.clone();
+                        let headline = headline.clone();
+                        column()
+                            .modifier(Modifier::new().weight(1.0))
+                            .children(move || {
+                                text()
+                                    .content(title.clone())
+                                    .style(theme.typography.label_large)
+                                    .color(theme.color_scheme.on_surface_variant);
+                                spacer().modifier(Modifier::new().height(Dp(4.0)));
+                                text()
+                                    .content(headline.clone())
+                                    .style(theme.typography.title_large)
+                                    .color(theme.color_scheme.on_surface_variant);
+                            });
+                        if show_mode_toggle.unwrap_or(true) {
+                            icon_button()
+                                .standard()
+                                .icon(if input {
+                                    filled::CALENDAR_TODAY_SVG
+                                } else {
+                                    filled::EDIT_SVG
+                                })
+                                .accessibility_label(if input {
+                                    "Switch to range calendar"
+                                } else {
+                                    "Switch to date range input"
+                                })
+                                .on_click(move || {
+                                    state.with_mut(DateRangePickerState::toggle_display_mode)
+                                });
+                        }
+                    });
+            }
             horizontal_divider().color(theme.color_scheme.outline_variant);
             if input {
                 range_input(state);
@@ -388,18 +448,23 @@ pub fn date_range_picker(
                     state,
                     first_day_of_week.unwrap_or_default(),
                     calendar_height.unwrap_or(Dp(360.0)),
+                    today,
                 );
             }
         });
 }
 
 #[tessera]
-fn range_calendar(state: State<DateRangePickerState>, first_day: Weekday, height: Dp) {
+fn range_calendar(
+    state: State<DateRangePickerState>,
+    first_day: Weekday,
+    height: Dp,
+    today: CalendarDate,
+) {
     let theme = use_context::<MaterialTheme>().expect("theme").get();
     let controller = remember(LazyListController::new);
     let focus_scope = remember(FocusScopeNode::new).get();
     let viewport_focus = remember(FocusRequester::new).get();
-    let today = CalendarDate::today();
     let owner = CalendarOwner::Range(state);
     let initial = owner.initial_date(today);
     let focus = remember(move || CalendarFocus::new(initial));
@@ -408,6 +473,10 @@ fn range_calendar(state: State<DateRangePickerState>, first_day: Weekday, height
         owner,
         first_day,
     };
+    let current_date = remember(|| today);
+    if current_date.get() != today {
+        current_date.set(today);
+    }
     let first_year = state.with(|state| *state.year_range().start());
     let months = state
         .with(|state| ((*state.year_range().end() as i64 - first_year as i64 + 1) * 12) as usize);
@@ -441,6 +510,7 @@ fn range_calendar(state: State<DateRangePickerState>, first_day: Weekday, height
         layout()
             .policy(DateGridLayout {
                 columns: DATE_COLUMNS,
+                row_height: DATE_CELL_SIZE,
             })
             .child(move || {
                 for day in weekday_sequence(first_day) {
@@ -485,7 +555,7 @@ fn range_calendar(state: State<DateRangePickerState>, first_day: Weekday, height
                     let month = YearMonth::new(first_year, 1)
                         .expect("January")
                         .add_months(index as i32);
-                    range_month(state, month, first_day, keyboard);
+                    range_month(state, month, first_day, keyboard, current_date.get());
                 }),
             );
     });
@@ -497,6 +567,7 @@ fn range_month(
     month: YearMonth,
     first_day: Weekday,
     keyboard: CalendarKeyboard,
+    today: CalendarDate,
 ) {
     let theme = use_context::<MaterialTheme>().expect("theme").get();
     let grid: [Option<CalendarDate>; DATE_COLUMNS * super::DATE_ROWS] =
@@ -505,7 +576,6 @@ fn range_month(
             .expect("six calendar rows");
     let start = state.with(DateRangePickerState::selected_start_date);
     let end = state.with(DateRangePickerState::selected_end_date);
-    let today = CalendarDate::today();
     let on_select = CallbackWith::new(move |date| {
         state.with_mut(|state| state.select_date(date));
     });
@@ -533,6 +603,7 @@ fn range_month(
             layout()
                 .policy(DateGridLayout {
                     columns: DATE_COLUMNS,
+                    row_height: DATE_CELL_SIZE,
                 })
                 .child(move || {
                     for date in grid.iter().copied() {

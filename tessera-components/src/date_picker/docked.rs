@@ -14,17 +14,18 @@ use crate::{
     boxed::boxed,
     button::button,
     column::column,
+    divider::horizontal_divider,
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
     modifier::{ModifierExt as _, SemanticsArgs},
     row::row,
     scrollable::ScrollableController,
-    shape_def::Shape,
+    shape_def::{RoundedCorner, Shape},
     spacer::spacer,
     surface::surface,
     text::text,
-    theme::MaterialTheme,
+    theme::{MaterialAlpha, MaterialTheme},
 };
 
 use super::{
@@ -34,11 +35,15 @@ use super::{
     weekday_narrow_label, weekday_sequence,
 };
 
-#[derive(Clone, Copy, Default, PartialEq)]
-enum Menu {
+/// The content displayed beneath a docked calendar's navigation header.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum DockedDatePickerView {
+    /// The weekday headings and date grid.
     #[default]
-    Closed,
+    Calendar,
+    /// The list of months in the displayed year.
     Month,
+    /// The list of years allowed by the date-picker state.
     Year,
 }
 
@@ -54,6 +59,8 @@ enum Menu {
 ///
 /// - `modifier` — placement and optional constraints on the 360dp calendar.
 /// - `state` — selection, displayed month and selectable-date restrictions.
+/// - `view` — optional shared calendar/month/year view state; when omitted, the
+///   calendar manages its own view.
 /// - `first_day_of_week` — first weekday in the calendar, Monday by default.
 /// - `today` — date outlined as today; defaults to the system date.
 /// - `show_actions` — show Cancel and OK, enabled by default.
@@ -74,6 +81,7 @@ enum Menu {
 pub fn docked_date_picker(
     modifier: Option<Modifier>,
     state: Option<State<DatePickerState>>,
+    view: Option<State<DockedDatePickerView>>,
     first_day_of_week: Option<Weekday>,
     today: Option<CalendarDate>,
     show_actions: Option<bool>,
@@ -83,68 +91,173 @@ pub fn docked_date_picker(
 ) {
     let internal = remember(DatePickerState::default);
     let state = state.unwrap_or(internal);
-    let menu = remember(Menu::default);
+    let internal_view = remember(DockedDatePickerView::default);
+    let menu = view.unwrap_or(internal_view);
     let first_day = first_day_of_week.unwrap_or_default();
     let today = today.unwrap_or_else(CalendarDate::today);
     let scheme = use_context::<MaterialTheme>().unwrap().get().color_scheme;
     let change = on_date_change.unwrap_or_else(|| CallbackWith::new(|_| {}));
+    let corner = RoundedCorner::manual(Dp(16.0), 2.0);
     surface()
         .modifier(modifier.unwrap_or_default().width(DATE_PICKER_MAX_WIDTH))
-        .shape(Shape::rounded_rectangle(Dp(8.0)))
+        .shape(Shape::RoundedRectangle {
+            top_left: corner,
+            top_right: corner,
+            bottom_right: corner,
+            bottom_left: corner,
+        })
         .style(scheme.surface_container_high.into())
         .accessibility_role(Role::Group)
         .accessibility_label("Docked calendar")
         .block_input(false)
         .child(move || {
-            column()
-                .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
+            if menu.get() != DockedDatePickerView::Calendar {
+                column()
+                    .modifier(Modifier::new().fill_max_width())
+                    .children(move || {
+                        menu_header(state, menu);
+                        match menu.get() {
+                            DockedDatePickerView::Month => {
+                                month_menu(state, menu);
+                            }
+                            DockedDatePickerView::Year => {
+                                year_menu(state, menu);
+                            }
+                            DockedDatePickerView::Calendar => unreachable!(),
+                        }
+                        spacer().modifier(Modifier::new().height(Dp(28.0)));
+                    });
+            } else {
+                calendar_content(
+                    state,
+                    menu,
+                    first_day,
+                    today,
+                    change,
+                    show_actions.unwrap_or(true),
+                    on_cancel.unwrap_or_default(),
+                    on_confirm.unwrap_or_default(),
+                );
+            }
+        });
+}
+
+#[tessera]
+fn calendar_content(
+    state: State<DatePickerState>,
+    menu: State<DockedDatePickerView>,
+    first_day: Weekday,
+    today: CalendarDate,
+    change: CallbackWith<CalendarDate>,
+    show_actions: bool,
+    on_cancel: Callback,
+    on_confirm: Callback,
+) {
+    column()
+        .modifier(Modifier::new().fill_max_width().padding_all(Dp(12.0)))
+        .children(move || {
+            boxed()
+                .modifier(Modifier::new().fill_max_width().height(Dp(44.0)))
                 .children(move || {
-                    boxed()
-                        .modifier(Modifier::new().fill_max_width().height(Dp(44.0)))
-                        .children(move || {
-                            header(state, menu);
-                        });
-                    match menu.get() {
-                        Menu::Closed => {
-                            calendar(state, first_day, today, change);
-                        }
-                        Menu::Month => {
-                            month_menu(state, menu);
-                        }
-                        Menu::Year => {
-                            year_menu(state, menu);
-                        }
-                    }
-                    if show_actions.unwrap_or(true) {
-                        spacer().modifier(Modifier::new().height(Dp(8.0)));
-                        row()
-                            .modifier(Modifier::new().fill_max_width().height(Dp(48.0)))
-                            .main_axis_alignment(MainAxisAlignment::End)
-                            .cross_axis_alignment(CrossAxisAlignment::Center)
+                    header(state, menu);
+                });
+            calendar(state, first_day, today, change);
+            if show_actions {
+                spacer().modifier(Modifier::new().height(Dp(8.0)));
+                row()
+                    .modifier(Modifier::new().fill_max_width().height(Dp(48.0)))
+                    .main_axis_alignment(MainAxisAlignment::End)
+                    .cross_axis_alignment(CrossAxisAlignment::Center)
+                    .children(move || {
+                        button()
+                            .text()
+                            .accessibility_label("Cancel")
+                            .on_click_shared(on_cancel)
+                            .child(|| {
+                                text().content("Cancel");
+                            });
+                        spacer().modifier(Modifier::new().width(Dp(8.0)));
+                        button()
+                            .text()
+                            .accessibility_label("OK")
+                            .on_click_shared(on_confirm)
+                            .child(|| {
+                                text().content("OK");
+                            });
+                    });
+            }
+        });
+}
+
+#[tessera]
+fn menu_header(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
+    let current = state.with(DatePickerState::displayed_month);
+    let theme = use_context::<MaterialTheme>().unwrap().get();
+    boxed()
+        .modifier(Modifier::new().fill_max_width().height(Dp(64.0)))
+        .children(move || {
+            row()
+                .modifier(Modifier::new().fill_max_size())
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    for (view, label, description) in [
+                        (
+                            DockedDatePickerView::Month,
+                            format_month_name(current.month())[..3].to_owned(),
+                            "Choose month",
+                        ),
+                        (
+                            DockedDatePickerView::Year,
+                            current.year().to_string(),
+                            "Choose year",
+                        ),
+                    ] {
+                        boxed()
+                            .alignment(Alignment::Center)
+                            .modifier(Modifier::new().weight(1.0).fill_max_height())
                             .children(move || {
-                                button()
-                                    .text()
-                                    .accessibility_label("Cancel")
-                                    .on_click_shared(on_cancel.unwrap_or_default())
-                                    .child(|| {
-                                        text().content("Cancel");
-                                    });
-                                spacer().modifier(Modifier::new().width(Dp(8.0)));
-                                button()
-                                    .text()
-                                    .accessibility_label("OK")
-                                    .on_click_shared(on_confirm.unwrap_or_default())
-                                    .child(|| {
-                                        text().content("OK");
-                                    });
+                                if menu.get() == view {
+                                    menu_button(
+                                        label.clone(),
+                                        description.into(),
+                                        if view == DockedDatePickerView::Month {
+                                            Dp(64.0)
+                                        } else {
+                                            Dp(72.0)
+                                        },
+                                        true,
+                                        Callback::new(move || {
+                                            menu.set(DockedDatePickerView::Calendar)
+                                        }),
+                                    );
+                                } else {
+                                    text()
+                                        .content(label.clone())
+                                        .style(theme.typography.label_large)
+                                        .color(
+                                            theme
+                                                .color_scheme
+                                                .on_surface
+                                                .with_alpha(MaterialAlpha::DISABLED_CONTENT),
+                                        );
+                                }
                             });
                     }
+                });
+            boxed()
+                .modifier(
+                    Modifier::new()
+                        .align(Alignment::BottomStart)
+                        .fill_max_width(),
+                )
+                .children(|| {
+                    horizontal_divider();
                 });
         });
 }
 
 #[tessera]
-fn header(state: State<DatePickerState>, menu: State<Menu>) {
+fn header(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
     let month = state.with(DatePickerState::displayed_month);
     let years = state.with(|state| state.year_range().clone());
     row()
@@ -162,12 +275,12 @@ fn header(state: State<DatePickerState>, menu: State<Menu>) {
                 format_month_name(month.month())[..3].to_owned(),
                 "Choose month".into(),
                 Dp(64.0),
-                menu.get() == Menu::Month,
+                menu.get() == DockedDatePickerView::Month,
                 Callback::new(move || {
-                    menu.set(if menu.get() == Menu::Month {
-                        Menu::Closed
+                    menu.set(if menu.get() == DockedDatePickerView::Month {
+                        DockedDatePickerView::Calendar
                     } else {
-                        Menu::Month
+                        DockedDatePickerView::Month
                     })
                 }),
             );
@@ -180,7 +293,7 @@ fn header(state: State<DatePickerState>, menu: State<Menu>) {
             arrow(
                 "Previous year".into(),
                 false,
-                menu.get() != Menu::Month && month.year() > *years.start(),
+                menu.get() != DockedDatePickerView::Month && month.year() > *years.start(),
                 Callback::new(move || {
                     state.with_mut(|state| {
                         let current = state.displayed_month();
@@ -195,19 +308,19 @@ fn header(state: State<DatePickerState>, menu: State<Menu>) {
                 month.year().to_string(),
                 "Choose year".into(),
                 Dp(72.0),
-                menu.get() == Menu::Year,
+                menu.get() == DockedDatePickerView::Year,
                 Callback::new(move || {
-                    menu.set(if menu.get() == Menu::Year {
-                        Menu::Closed
+                    menu.set(if menu.get() == DockedDatePickerView::Year {
+                        DockedDatePickerView::Calendar
                     } else {
-                        Menu::Year
+                        DockedDatePickerView::Year
                     })
                 }),
             );
             arrow(
                 "Next year".into(),
                 true,
-                menu.get() != Menu::Month && month.year() < *years.end(),
+                menu.get() != DockedDatePickerView::Month && month.year() < *years.end(),
                 Callback::new(move || {
                     state.with_mut(|state| {
                         let current = state.displayed_month();
@@ -254,14 +367,7 @@ fn menu_button(label: String, description: String, width: Dp, expanded: bool, ac
                 }),
         )
         .shape(Shape::rounded_rectangle(Dp(8.0)))
-        .style(
-            if expanded {
-                theme.color_scheme.surface_container_highest
-            } else {
-                tessera_ui::Color::TRANSPARENT
-            }
-            .into(),
-        )
+        .style(tessera_ui::Color::TRANSPARENT.into())
         .on_click_shared(action)
         .accessibility_label(description)
         .child(move || {
@@ -276,11 +382,7 @@ fn menu_button(label: String, description: String, width: Dp, expanded: bool, ac
                         .color(theme.color_scheme.on_surface);
                     spacer().modifier(Modifier::new().width(Dp(4.0)));
                     icon()
-                        .vector(if expanded {
-                            filled::ARROW_DROP_UP_SVG
-                        } else {
-                            filled::ARROW_DROP_DOWN_SVG
-                        })
+                        .vector(filled::ARROW_DROP_DOWN_SVG)
                         .size(Dp(18.0))
                         .tint(theme.color_scheme.on_surface_variant);
                 });
@@ -322,6 +424,7 @@ fn calendar(
             layout()
                 .policy(DateGridLayout {
                     columns: DATE_COLUMNS,
+                    row_height: DATE_CELL_SIZE,
                 })
                 .child(move || {
                     for weekday in weekday_sequence(first) {
@@ -339,6 +442,7 @@ fn calendar(
             layout()
                 .policy(DateGridLayout {
                     columns: DATE_COLUMNS,
+                    row_height: DATE_CELL_SIZE,
                 })
                 .modifier(
                     Modifier::new()
@@ -391,7 +495,7 @@ fn day(
 }
 
 #[tessera]
-fn month_menu(state: State<DatePickerState>, menu: State<Menu>) {
+fn month_menu(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
     let current = state.with(DatePickerState::displayed_month);
     let scroll = remember(move || {
         let mut scroll = ScrollableController::new();
@@ -423,7 +527,7 @@ fn month_menu(state: State<DatePickerState>, menu: State<Menu>) {
 }
 
 #[tessera]
-fn month_item(state: State<DatePickerState>, menu: State<Menu>, month: u8) {
+fn month_item(state: State<DatePickerState>, menu: State<DockedDatePickerView>, month: u8) {
     let current = state.with(DatePickerState::displayed_month);
     let year = current.year();
     let enabled = (1..=super::days_in_month(year, month)).any(|day| {
@@ -446,13 +550,13 @@ fn month_item(state: State<DatePickerState>, menu: State<Menu>, month: u8) {
                     YearMonth::new(state.displayed_month().year(), month).unwrap(),
                 )
             });
-            menu.set(Menu::Closed);
+            menu.set(DockedDatePickerView::Calendar);
         }),
     );
 }
 
 #[tessera]
-fn year_menu(state: State<DatePickerState>, menu: State<Menu>) {
+fn year_menu(state: State<DatePickerState>, menu: State<DockedDatePickerView>) {
     let current = state.with(DatePickerState::displayed_month);
     let years = state.with(|state| state.year_range().clone());
     let first = i64::from(*years.start());
@@ -490,7 +594,7 @@ fn year_menu(state: State<DatePickerState>, menu: State<Menu>) {
 }
 
 #[tessera]
-fn year_item(state: State<DatePickerState>, menu: State<Menu>, year: i32) {
+fn year_item(state: State<DatePickerState>, menu: State<DockedDatePickerView>, year: i32) {
     let current = state.with(DatePickerState::displayed_month);
     let enabled = state.with(|state| {
         state
@@ -507,7 +611,7 @@ fn year_item(state: State<DatePickerState>, menu: State<Menu>, year: i32) {
                     YearMonth::new(year, state.displayed_month().month()).unwrap(),
                 )
             });
-            menu.set(Menu::Closed);
+            menu.set(DockedDatePickerView::Calendar);
         }),
     );
 }
@@ -540,11 +644,25 @@ fn choice(label: String, selected: bool, enabled: bool, action: Callback) {
         .accessibility_label(label.clone())
         .content_alignment(Alignment::CenterStart)
         .child(move || {
-            text()
-                .content(label.clone())
-                .style(theme.typography.body_large)
-                .color(theme.color_scheme.on_surface)
-                .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO));
+            let label = label.clone();
+            row()
+                .modifier(Modifier::new().padding_symmetric(Dp(16.0), Dp::ZERO))
+                .cross_axis_alignment(CrossAxisAlignment::Center)
+                .children(move || {
+                    if selected {
+                        icon()
+                            .vector(filled::CHECK_SVG)
+                            .size(Dp(24.0))
+                            .tint(theme.color_scheme.on_surface);
+                    } else {
+                        spacer().modifier(Modifier::new().width(Dp(24.0)));
+                    }
+                    spacer().modifier(Modifier::new().width(Dp(16.0)));
+                    text()
+                        .content(label.clone())
+                        .style(theme.typography.body_large)
+                        .color(theme.color_scheme.on_surface);
+                });
         });
 }
 

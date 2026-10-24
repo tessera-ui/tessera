@@ -659,3 +659,74 @@ fn gpu_date_range_selection_scrolling_input_and_resize() {
 fn gpu_date_range_selection_scrolling_input_and_resize_msaa() {
     check_range(4);
 }
+
+#[tessera]
+fn header_fixture() {
+    let state = remember(|| {
+        DateRangePickerState::new(
+            None,
+            None,
+            YearMonth::new(2026, 7),
+            2026..=2027,
+            None,
+            None,
+            DatePickerDisplayMode::Picker,
+        )
+    });
+    STATE.set(Some(state));
+    material_theme().child(move || {
+        date_range_picker().state(state);
+    });
+}
+
+#[test]
+#[ignore = "requires a native GPU adapter"]
+fn gpu_range_input_uses_modal_header_while_calendar_keeps_compact_header() {
+    let mut renderer = HeadlessRenderer::new(
+        Box::new(header_fixture),
+        vec![Box::new(crate::TesseraComponents)],
+        HeadlessConfig {
+            width: 400,
+            height: 700,
+            sample_count: 1,
+            ..Default::default()
+        },
+    )
+    .unwrap();
+    renderer.render_frames(4);
+    let bounds = |renderer: &HeadlessRenderer, label: &str| {
+        renderer
+            .accessibility_snapshot()
+            .unwrap()
+            .nodes
+            .into_iter()
+            .find(|(_, node)| node.label() == Some(label) && node.bounds().is_some())
+            .unwrap_or_else(|| panic!("missing {label}"))
+            .1
+            .bounds()
+            .unwrap()
+    };
+    let picker_title = bounds(&renderer, "Select dates");
+    assert_eq!(picker_title.x0, 64.0);
+    assert!(picker_title.y1 <= 28.0);
+    STATE
+        .get()
+        .unwrap()
+        .with_mut(|state| state.set_display_mode(DatePickerDisplayMode::Input));
+    renderer.render_frames(4);
+    let input_title = bounds(&renderer, "Select date");
+    let input_headline = bounds(&renderer, "Enter dates");
+    assert_eq!(input_title.x0, 24.0);
+    assert_eq!(input_title.y0, 16.0);
+    assert_eq!(input_headline.x0, 24.0);
+    assert!(input_headline.y0 >= 60.0 && input_headline.y1 <= 108.0);
+    let inputs = input_bounds(&renderer);
+    assert_eq!(inputs.len(), 2);
+    assert!(inputs.iter().all(|rect| rect.y0 >= 145.0));
+    STATE
+        .get()
+        .unwrap()
+        .with_mut(|state| state.set_display_mode(DatePickerDisplayMode::Picker));
+    renderer.render_frames(4);
+    assert_eq!(bounds(&renderer, "Select dates"), picker_title);
+}

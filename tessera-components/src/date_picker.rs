@@ -23,26 +23,27 @@ use crate::{
     icon::icon,
     icon_button::icon_button,
     material_icons::filled,
-    modifier::{ClickableArgs, InteractionState, ModifierExt as _, Padding, SemanticsArgs},
-    pipelines::shape::command::ShapeCommand,
+    modifier::{ModifierExt as _, Padding, SemanticsArgs},
     row::row,
     scrollable::{ScrollBarBehavior, ScrollableController, scrollable},
     shape_def::Shape,
     spacer::spacer,
-    surface::{SurfaceStyle, surface},
+    surface::surface,
     text::text,
     text_field::TextFieldBuilder,
     text_input::TextInputController,
-    theme::{ContentColor, MaterialAlpha, MaterialTheme},
+    theme::{ContentColor, MaterialTheme},
 };
 
 use navigation::{CalendarFocus, CalendarKeyboard, CalendarOwner};
 
-pub use docked::docked_date_picker;
-
+pub use cell::{CalendarRangePosition, date_picker_day, date_picker_year};
+pub use docked::{DockedDatePickerView, docked_date_picker};
 pub use range::{DateRangePickerState, date_range_picker};
 
+mod cell;
 mod docked;
+mod focus;
 mod navigation;
 mod range;
 
@@ -202,6 +203,16 @@ pub enum DatePickerDisplayMode {
     Picker,
     /// Manual input with stepper controls.
     Input,
+}
+
+/// Calendar content displayed by a modal date picker.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum DatePickerView {
+    /// Show weekdays and dates for the displayed month.
+    #[default]
+    Calendar,
+    /// Show the scrollable year selection grid.
+    Year,
 }
 
 /// Defaults for date picker behavior.
@@ -461,12 +472,14 @@ impl PartialEq for DatePickerSnapshot {
 #[derive(Clone, PartialEq)]
 struct DatePickerConfig {
     modifier: Modifier,
+    today: CalendarDate,
     first_day_of_week: Weekday,
     show_weekday_labels: bool,
     show_mode_toggle: bool,
     title: Option<String>,
     headline: Option<String>,
     state: Option<State<DatePickerState>>,
+    view: Option<State<DatePickerView>>,
 }
 
 /// # date_picker
@@ -491,12 +504,15 @@ struct DatePickerConfig {
 ///   `None` allows every year.
 /// - `display_mode` — initial display mode for the internal state.
 /// - `first_day_of_week` — first day of the week for the calendar grid.
+/// - `today` — current date used for date and year outlines and initial
+///   keyboard focus; defaults to the system date.
 /// - `show_weekday_labels` — whether weekday labels are rendered.
 /// - `show_mode_toggle` — whether the display mode toggle is shown.
 /// - `title` — optional override for the title text.
 /// - `headline` — optional override for the headline text.
 /// - `state` — optional external state for selection, month navigation, and
 ///   mode.
+/// - `view` — optional shared calendar or year selection view.
 ///
 /// ## Examples
 ///
@@ -504,13 +520,13 @@ struct DatePickerConfig {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::date_picker::{DatePickerState, date_picker};
+/// use tessera_components::date_picker::{CalendarDate, DatePickerState, date_picker};
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
 /// # material_theme()
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
-/// date_picker();
+/// date_picker().today(CalendarDate::new(2026, 7, 16).unwrap());
 ///
 /// let mut state = DatePickerState::default();
 /// assert!(state.selected_date().is_none());
@@ -528,12 +544,15 @@ pub fn date_picker(
     is_selectable_year: Option<CallbackWith<i32, bool>>,
     display_mode: Option<DatePickerDisplayMode>,
     first_day_of_week: Option<Weekday>,
+    today: Option<CalendarDate>,
     show_weekday_labels: Option<bool>,
     show_mode_toggle: Option<bool>,
     #[prop(into)] title: Option<String>,
     #[prop(into)] headline: Option<String>,
     state: Option<State<DatePickerState>>,
+    view: Option<State<DatePickerView>>,
 ) {
+    let today = today.unwrap_or_else(CalendarDate::today);
     let modifier = modifier.unwrap_or_default();
     let display_mode = display_mode.unwrap_or_default();
     let first_day_of_week = first_day_of_week.unwrap_or_default();
@@ -547,7 +566,11 @@ pub fn date_picker(
         // initialization.
         let initial = DatePickerState::new(
             initial_selected_date,
-            initial_displayed_month,
+            initial_displayed_month.or_else(|| {
+                initial_selected_date
+                    .and_then(|date| YearMonth::new(date.year(), date.month()))
+                    .or_else(|| Some(fallback_displayed_month_at(&year_range, today)))
+            }),
             year_range,
             is_selectable_date,
             is_selectable_year,
@@ -557,12 +580,14 @@ pub fn date_picker(
     };
     date_picker_content(DatePickerConfig {
         modifier,
+        today,
         first_day_of_week,
         show_weekday_labels,
         show_mode_toggle,
         title,
         headline,
         state: Some(state),
+        view,
     });
 }
 
@@ -638,7 +663,13 @@ fn date_picker_content(args: DatePickerConfig) {
             });
             match snapshot.display_mode {
                 DatePickerDisplayMode::Picker => {
-                    calendar_view(state, args.first_day_of_week, args.show_weekday_labels);
+                    calendar_view(
+                        state,
+                        args.first_day_of_week,
+                        args.show_weekday_labels,
+                        args.today,
+                    )
+                    .view_optional(args.view);
                 }
                 DatePickerDisplayMode::Input => {
                     date_input_view(state);
@@ -665,10 +696,13 @@ fn date_picker_content(args: DatePickerConfig) {
 /// - `picker_modifier` — modifier chain applied to the embedded picker.
 /// - `picker_first_day_of_week` — first day of the week for the embedded
 ///   picker.
+/// - `picker_today` — current date used for outlines and initial keyboard
+///   focus; defaults to the system date.
 /// - `picker_show_weekday_labels` — whether weekday labels are rendered.
 /// - `picker_show_mode_toggle` — whether the display mode toggle is shown.
 /// - `picker_title` — optional picker title override.
 /// - `picker_headline` — optional picker headline override.
+/// - `picker_view` — optional shared calendar or year selection view.
 ///
 /// ## Examples
 ///
@@ -676,7 +710,7 @@ fn date_picker_content(args: DatePickerConfig) {
 /// # use tessera_ui::tessera;
 /// # #[tessera]
 /// # fn component() {
-/// use tessera_components::date_picker::{DatePickerState, date_picker_dialog};
+/// use tessera_components::date_picker::{CalendarDate, DatePickerState, date_picker_dialog};
 /// use tessera_ui::remember;
 /// # use tessera_components::theme::{MaterialTheme, material_theme};
 ///
@@ -684,7 +718,9 @@ fn date_picker_content(args: DatePickerConfig) {
 /// #     .theme(|| MaterialTheme::default())
 /// #     .child(|| {
 /// let state = remember(DatePickerState::default);
-/// date_picker_dialog().state(state);
+/// date_picker_dialog()
+///     .state(state)
+///     .picker_today(CalendarDate::new(2026, 7, 16).unwrap());
 /// #     });
 /// # }
 /// # component();
@@ -697,15 +733,30 @@ pub fn date_picker_dialog(
     dismiss_button: Option<RenderSlot>,
     picker_modifier: Option<Modifier>,
     picker_first_day_of_week: Option<Weekday>,
+    picker_today: Option<CalendarDate>,
     picker_show_weekday_labels: Option<bool>,
     picker_show_mode_toggle: Option<bool>,
     #[prop(into)] picker_title: Option<String>,
     #[prop(into)] picker_headline: Option<String>,
+    picker_view: Option<State<DatePickerView>>,
 ) {
+    let today = picker_today.unwrap_or_else(CalendarDate::today);
     let state = if let Some(state) = state {
         state
     } else {
-        remember(DatePickerState::default)
+        remember(|| {
+            DatePickerState::new(
+                None,
+                Some(fallback_displayed_month_at(
+                    &DatePickerDefaults::YEAR_RANGE,
+                    today,
+                )),
+                DatePickerDefaults::YEAR_RANGE,
+                None,
+                None,
+                DatePickerDisplayMode::Picker,
+            )
+        })
     };
     let title = picker_title.or(title);
     let theme = use_context::<MaterialTheme>().unwrap().get();
@@ -714,12 +765,14 @@ pub fn date_picker_dialog(
         .children(move || {
             date_picker_content(DatePickerConfig {
                 modifier: picker_modifier.clone().unwrap_or_default(),
+                today,
                 first_day_of_week: picker_first_day_of_week.unwrap_or_default(),
                 show_weekday_labels: picker_show_weekday_labels.unwrap_or(true),
                 show_mode_toggle: picker_show_mode_toggle.unwrap_or(true),
                 title: title.clone(),
                 headline: picker_headline.clone(),
                 state: Some(state),
+                view: picker_view,
             });
             if confirm_button.is_some() || dismiss_button.is_some() {
                 provide_context(
@@ -731,8 +784,8 @@ pub fn date_picker_dialog(
                             .modifier(
                                 Modifier::new()
                                     .fill_max_width()
-                                    .height(Dp(56.0))
-                                    .padding(Padding::new(Dp(12.0), Dp(8.0), Dp(12.0), Dp(8.0))),
+                                    .height(Dp(60.0))
+                                    .padding(Padding::new(Dp(12.0), Dp(4.0), Dp(12.0), Dp(8.0))),
                             )
                             .main_axis_alignment(MainAxisAlignment::End)
                             .cross_axis_alignment(CrossAxisAlignment::Center)
@@ -758,9 +811,15 @@ fn calendar_view(
     state: State<DatePickerState>,
     first_day_of_week: Weekday,
     show_weekday_labels: bool,
+    today: CalendarDate,
+    view: Option<State<DatePickerView>>,
 ) {
     let snapshot = state.with(DatePickerState::snapshot);
-    let years_visible = remember(|| false);
+    let view = if let Some(view) = view {
+        view
+    } else {
+        remember(DatePickerView::default)
+    };
     let can_prev = can_navigate_prev(snapshot.displayed_month, &snapshot.year_range);
     let can_next = can_navigate_next(snapshot.displayed_month, &snapshot.year_range);
     let theme = use_context::<MaterialTheme>().unwrap().get();
@@ -786,7 +845,15 @@ fn calendar_view(
                         .shape(Shape::CAPSULE)
                         .style(Color::TRANSPARENT.into())
                         .content_alignment(Alignment::Center)
-                        .on_click(move || years_visible.with_mut(|v| *v = !*v))
+                        .on_click(move || {
+                            view.with_mut(|value| {
+                                *value = if *value == DatePickerView::Calendar {
+                                    DatePickerView::Year
+                                } else {
+                                    DatePickerView::Calendar
+                                }
+                            })
+                        })
                         .accessibility_label("Choose year")
                         .child(move || {
                             row()
@@ -798,7 +865,7 @@ fn calendar_view(
                                         .color(scheme.on_surface_variant);
                                     spacer().modifier(Modifier::new().width(Dp(8.0)));
                                     icon()
-                                        .vector(if years_visible.get() {
+                                        .vector(if view.get() == DatePickerView::Year {
                                             filled::ARROW_DROP_UP_SVG
                                         } else {
                                             filled::ARROW_DROP_DOWN_SVG
@@ -806,7 +873,7 @@ fn calendar_view(
                                         .tint(scheme.on_surface_variant);
                                 });
                         });
-                    if !years_visible.get() {
+                    if view.get() != DatePickerView::Year {
                         row().children(move || {
                             boxed()
                                 .modifier(Modifier::new().size(Dp(48.0), Dp(48.0)))
@@ -839,13 +906,14 @@ fn calendar_view(
                         spacer().modifier(Modifier::new().size(Dp(96.0), Dp(48.0)));
                     }
                 });
-            if years_visible.get() {
-                date_year_grid(state, years_visible);
+            if view.get() == DatePickerView::Year {
+                date_year_grid(state, view, today);
             } else {
                 if show_weekday_labels {
                     layout()
                         .policy(DateGridLayout {
                             columns: DATE_COLUMNS,
+                            row_height: DATE_CELL_SIZE,
                         })
                         .child(move || {
                             for weekday in weekday_sequence(first_day_of_week) {
@@ -862,15 +930,14 @@ fn calendar_view(
                             }
                         });
                 }
-                date_grid(state, first_day_of_week);
+                date_grid(state, first_day_of_week, today);
             }
         });
 }
 
 #[tessera]
-fn date_grid(state: State<DatePickerState>, first_day_of_week: Weekday) {
+fn date_grid(state: State<DatePickerState>, first_day_of_week: Weekday, today: CalendarDate) {
     let snapshot = state.with(DatePickerState::snapshot);
-    let today = CalendarDate::today();
     let owner = CalendarOwner::Single(state);
     let initial = owner.initial_date(today);
     let focus = remember(move || CalendarFocus::new(initial));
@@ -887,6 +954,7 @@ fn date_grid(state: State<DatePickerState>, first_day_of_week: Weekday) {
     layout()
         .policy(DateGridLayout {
             columns: DATE_COLUMNS,
+            row_height: DATE_CELL_SIZE,
         })
         .modifier(
             Modifier::new()
@@ -921,13 +989,14 @@ fn date_grid(state: State<DatePickerState>, first_day_of_week: Weekday) {
 #[derive(Clone, PartialEq)]
 struct DateGridLayout {
     columns: usize,
+    row_height: Dp,
 }
 
 impl tessera_ui::LayoutModifierNode for DateGridLayout {
     fn measure(&self, input: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
         let children = input.children();
         let width = input.parent_constraint().width().clamp(Dp(336.0).to_px());
-        let row_height = DATE_CELL_SIZE.to_px();
+        let row_height = self.row_height.to_px();
         let height = row_height * children.len().div_ceil(self.columns) as i32;
         let mut result = LayoutResult::new(ComputedData { width, height });
         for (index, child) in children.into_iter().enumerate() {
@@ -963,98 +1032,30 @@ fn calendar_day(
     keyboard: Option<CalendarKeyboard>,
     range_band: Option<CalendarRangeBand>,
 ) {
-    let theme = use_context::<MaterialTheme>().unwrap().get();
-    let scheme = theme.color_scheme;
     if let Some(date) = cell {
-        let interaction = remember(InteractionState::new);
-        let selected = selected.unwrap_or(false);
-        let enabled = enabled.unwrap_or(true);
-        let is_today = date == today;
-        let color = if selected {
-            scheme.on_primary
-        } else if in_range.unwrap_or(false) {
-            scheme.on_secondary_container
-        } else if is_today {
-            scheme.primary
-        } else if outside_month.unwrap_or(false) {
-            scheme.on_surface_variant
-        } else {
-            scheme.on_surface
-        };
-        let color = if enabled {
-            color
-        } else {
-            color.with_alpha(MaterialAlpha::DISABLED_CONTENT)
-        };
-        let visual = CalendarDayVisual {
-            fill: if selected {
-                scheme.primary
-            } else {
-                Color::TRANSPARENT
-            },
-            outline: (!selected && is_today).then_some(scheme.primary),
-            content_color: color,
-            interaction,
-            disabled_focus: !enabled
-                && keyboard
-                    .and_then(|keyboard| keyboard.requester(date))
-                    .is_some_and(|requester| requester.is_focused()),
-        };
-        let modifier = Modifier::new()
-            .size(DATE_CELL_SIZE, DATE_CELL_SIZE)
-            .clickable_with(ClickableArgs {
-                on_click: tessera_ui::Callback::new(move || on_select.call(date)),
-                enabled,
-                block_input: false,
-                interaction_state: Some(interaction),
-                description,
-                focus_requester: keyboard.and_then(|keyboard| keyboard.requester(date)),
-                label: Some(format!(
-                    "{} {}, {}",
-                    format_month_name(date.month()),
-                    date.day(),
-                    date.year()
-                )),
-                ..Default::default()
-            });
-        let modifier = if let Some(keyboard) = keyboard {
-            keyboard.day_modifier(modifier, date)
-        } else {
-            modifier
-        };
-        layout()
+        let modifier = keyboard.map_or_else(Modifier::new, |keyboard| {
+            keyboard.day_modifier(Modifier::new(), date)
+        });
+        let range_position = range_band.map(|band| match (band.start, band.end) {
+            (true, true) => CalendarRangePosition::Isolated,
+            (true, false) => CalendarRangePosition::Start,
+            (false, false) => CalendarRangePosition::Middle,
+            (false, true) => CalendarRangePosition::End,
+        });
+        date_picker_day(date)
+            .on_select_shared(on_select)
+            .selected_optional(selected)
+            .enabled_optional(enabled)
+            .in_range_optional(in_range)
+            .outside_month_optional(outside_month)
+            .is_today(date == today)
             .modifier(modifier)
-            .policy(CalendarDayLayout {
-                fractional_center: false,
-                range_band,
-            })
-            .child(move || {
-                if range_band.is_some() {
-                    layout().modifier(Modifier::new().background(scheme.secondary_container));
-                }
-                layout()
-                    .modifier(Modifier::new().size(DATE_VISUAL_SIZE, DATE_VISUAL_SIZE))
-                    .policy(CalendarDayLayout {
-                        fractional_center: true,
-                        range_band: None,
-                    })
-                    .draw(visual)
-                    .child(move || {
-                        text()
-                            .content(date.day().to_string())
-                            .style(theme.typography.body_large)
-                            .color(color);
-                    });
-            });
+            .focus_requester_optional(keyboard.and_then(|keyboard| keyboard.requester(date)))
+            .range_position_optional(range_position)
+            .accessibility_description_optional(description);
     } else {
         spacer().modifier(Modifier::new().size(DATE_CELL_SIZE, DATE_CELL_SIZE));
     }
-}
-
-#[derive(Clone, PartialEq)]
-struct CalendarDayLayout {
-    fractional_center: bool,
-    range_band: Option<CalendarRangeBand>,
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -1063,103 +1064,9 @@ struct CalendarRangeBand {
     end: bool,
 }
 
-impl tessera_ui::LayoutModifierNode for CalendarDayLayout {
-    fn measure(&self, scope: &mut MeasureScope<'_>) -> Result<LayoutResult, MeasurementError> {
-        let width = scope
-            .parent_constraint()
-            .width()
-            .clamp(DATE_CELL_SIZE.to_px());
-        let height = scope
-            .parent_constraint()
-            .height()
-            .clamp(DATE_CELL_SIZE.to_px());
-        let mut result = LayoutResult::new(ComputedData { width, height });
-        let children = scope.children();
-        for (index, child) in children.into_iter().enumerate() {
-            if index == 0
-                && let Some(band) = self.range_band
-            {
-                let visual = DATE_VISUAL_SIZE.to_px().min(height);
-                let x = if band.start { width / 2 } else { Px::ZERO };
-                let end = if band.end { width / 2 } else { width };
-                child.measure(scope, &Constraint::new((end - x).max(Px::ZERO), visual))?;
-                result.place_child(child, PxPosition::new(x, (height - visual) / 2));
-                continue;
-            }
-            let size = child.measure(scope, &scope.parent_constraint().without_min())?;
-            let position = if self.fractional_center {
-                PxPosition::from_f32_xy(
-                    (width - size.width).0.max(0) as f32 / 2.0,
-                    (height - size.height).0.max(0) as f32 / 2.0,
-                )
-            } else {
-                PxPosition::new((width - size.width) / 2, (height - size.height) / 2)
-            };
-            result.place_child(child, position);
-        }
-        Ok(result)
-    }
-}
-
-#[derive(Clone, Copy, PartialEq)]
-struct CalendarDayVisual {
-    fill: Color,
-    outline: Option<Color>,
-    content_color: Color,
-    interaction: State<InteractionState>,
-    disabled_focus: bool,
-}
-
-impl tessera_ui::DrawModifierNode for CalendarDayVisual {
-    fn draw(
-        &self,
-        ctx: &mut tessera_ui::DrawModifierContext<'_, '_>,
-        content: &mut dyn tessera_ui::DrawModifierContent,
-    ) {
-        let alpha = self
-            .interaction
-            .with(InteractionState::state_layer_alpha)
-            .max(if self.disabled_focus {
-                MaterialAlpha::FOCUSED
-            } else {
-                0.0
-            });
-        let fill = self
-            .fill
-            .blend_over(self.content_color.with_alpha(1.0), alpha);
-        if self.outline.is_none() && fill.a == 0.0 {
-            content.draw(ctx.render_input);
-            return;
-        }
-        let command = if let Some(color) = self.outline {
-            if alpha > 0.0 {
-                ShapeCommand::FilledOutlinedEllipse {
-                    color: fill,
-                    border_color: color,
-                    border_width: Dp(1.0).to_pixels_f32(),
-                }
-            } else {
-                ShapeCommand::OutlinedEllipse {
-                    color,
-                    border_width: Dp(1.0).to_pixels_f32(),
-                }
-            }
-        } else {
-            ShapeCommand::Ellipse { color: fill }
-        };
-        ctx.render_input
-            .metadata_mut()
-            .fragment_mut()
-            .push_draw_command(command);
-        content.draw(ctx.render_input);
-    }
-}
-
 #[tessera]
-fn date_year_grid(state: State<DatePickerState>, years_visible: State<bool>) {
+fn date_year_grid(state: State<DatePickerState>, view: State<DatePickerView>, today: CalendarDate) {
     let snapshot = state.with(DatePickerState::snapshot);
-    let theme = use_context::<MaterialTheme>().unwrap().get();
-    let scheme = theme.color_scheme;
     let first = *snapshot.year_range.start();
     let count = (*snapshot.year_range.end() as i64 - first as i64 + 1) as usize;
     let rows = count.div_ceil(3);
@@ -1168,17 +1075,19 @@ fn date_year_grid(state: State<DatePickerState>, years_visible: State<bool>) {
         let row = ((snapshot.displayed_month.year() as i64 - first as i64) / 3)
             .saturating_sub(3)
             .max(0);
-        controller.set_scroll_position(PxPosition::new(Px::ZERO, -Dp(row as f64 * 48.0).to_px()));
+        controller.set_scroll_position(PxPosition::new(Px::ZERO, -Dp(row as f64 * 52.0).to_px()));
         controller
     });
     let offset = scroll.with(|c| -c.child_position().y);
-    let start =
-        ((offset / Dp(48.0).to_pixels_f32()).floor().max(0.0) as usize).min(rows.saturating_sub(1));
+    let start = (((offset - Dp(8.0).to_pixels_f32()).max(0.0) / Dp(52.0).to_pixels_f32())
+        .floor()
+        .max(0.0) as usize)
+        .min(rows.saturating_sub(1));
     let end = (start + 8).min(rows);
     scrollable()
         .modifier(
             Modifier::new()
-                .size(Dp(336.0), Dp(336.0))
+                .size(Dp(336.0), Dp(288.0))
                 .semantics(SemanticsArgs {
                     role: Some(tessera_ui::accesskit::Role::Group),
                     label: Some("Choose year".to_owned()),
@@ -1195,9 +1104,12 @@ fn date_year_grid(state: State<DatePickerState>, years_visible: State<bool>) {
             column()
                 .modifier(Modifier::new().width(Dp(336.0)))
                 .children(move || {
-                    spacer().modifier(Modifier::new().height(Dp(start as f64 * 48.0)));
+                    spacer().modifier(Modifier::new().height(Dp(8.0 + start as f64 * 52.0)));
                     layout()
-                        .policy(DateGridLayout { columns: 3 })
+                        .policy(DateGridLayout {
+                            columns: 3,
+                            row_height: Dp(52.0),
+                        })
                         .child(move || {
                             for index in start * 3..(end * 3).min(count) {
                                 let year = (first as i64 + index as i64) as i32;
@@ -1206,58 +1118,23 @@ fn date_year_grid(state: State<DatePickerState>, years_visible: State<bool>) {
                                     .is_selectable_year
                                     .as_ref()
                                     .is_none_or(|predicate| predicate.call(year));
-                                let today = CalendarDate::today().year() == year;
-                                let style = if selected {
-                                    scheme.primary.into()
-                                } else if today {
-                                    SurfaceStyle::Outlined {
-                                        color: scheme.primary,
-                                        width: Dp(1.0),
-                                    }
-                                } else {
-                                    Color::TRANSPARENT.into()
-                                };
-                                surface()
-                                    .style(Color::TRANSPARENT.into())
-                                    .modifier(Modifier::new().size(Dp(112.0), Dp(48.0)))
-                                    .shape(Shape::CAPSULE)
-                                    .content_alignment(Alignment::Center)
+                                let today = today.year() == year;
+                                date_picker_year(year)
+                                    .selected(selected)
+                                    .is_today(today)
                                     .enabled(enabled)
-                                    .on_click(move || {
+                                    .on_select(move |year: i32| {
                                         state.with_mut(|s| {
                                             s.set_displayed_month(YearMonth::new_unchecked(
                                                 year,
                                                 s.displayed_month.month(),
                                             ))
                                         });
-                                        years_visible.set(false);
-                                    })
-                                    .child(move || {
-                                        surface()
-                                            .modifier(Modifier::new().size(Dp(72.0), Dp(36.0)))
-                                            .shape(Shape::CAPSULE)
-                                            .style(style.clone())
-                                            .content_alignment(Alignment::Center)
-                                            .child(move || {
-                                                text()
-                                                    .content(year.to_string())
-                                                    .style(theme.typography.body_large)
-                                                    .color(if !enabled {
-                                                        scheme.on_surface.with_alpha(
-                                                            MaterialAlpha::DISABLED_CONTENT,
-                                                        )
-                                                    } else if selected {
-                                                        scheme.on_primary
-                                                    } else if today {
-                                                        scheme.primary
-                                                    } else {
-                                                        scheme.on_surface_variant
-                                                    });
-                                            });
+                                        view.set(DatePickerView::Calendar);
                                     });
                             }
                         });
-                    spacer().modifier(Modifier::new().height(Dp((rows - end) as f64 * 48.0)));
+                    spacer().modifier(Modifier::new().height(Dp((rows - end) as f64 * 52.0)));
                 });
         });
 }
@@ -1512,7 +1389,10 @@ fn normalize_year_range(range: RangeInclusive<i32>) -> RangeInclusive<i32> {
 }
 
 fn fallback_displayed_month(year_range: &RangeInclusive<i32>) -> YearMonth {
-    let today = CalendarDate::today();
+    fallback_displayed_month_at(year_range, CalendarDate::today())
+}
+
+fn fallback_displayed_month_at(year_range: &RangeInclusive<i32>, today: CalendarDate) -> YearMonth {
     let year = if year_range.contains(&today.year()) {
         today.year()
     } else {
@@ -1611,12 +1491,398 @@ mod tests {
     use crate::{button::button, column::column, text::text, theme::material_theme};
 
     use super::{
-        CalendarDate, DatePickerState, Weekday, YearMonth, date_picker, format_date_input,
-        parse_date_input,
+        CalendarDate, DatePickerState, DatePickerView, Weekday, YearMonth, date_picker,
+        date_picker_dialog, format_date_input, parse_date_input,
     };
 
     thread_local! {
         static STATE: Cell<Option<State<DatePickerState>>> = const { Cell::new(None) };
+        static VIEW: Cell<Option<State<DatePickerView>>> = const { Cell::new(None) };
+        static ACTION: Cell<u8> = const { Cell::new(0) };
+        static TODAY: Cell<Option<State<CalendarDate>>> = const { Cell::new(None) };
+        static RANGE_STATE: Cell<Option<State<super::DateRangePickerState>>> = const { Cell::new(None) };
+    }
+
+    #[tessera]
+    fn today_fixture(range: bool, dialog: bool) {
+        let today = remember(|| CalendarDate::new(2026, 7, 16).unwrap());
+        let state = remember(|| {
+            DatePickerState::new(
+                None,
+                YearMonth::new(2026, 7),
+                2025..=2028,
+                None,
+                None,
+                Default::default(),
+            )
+        });
+        let range_state = remember(|| {
+            super::DateRangePickerState::new(
+                None,
+                None,
+                YearMonth::new(2026, 7),
+                2025..=2028,
+                None,
+                None,
+                Default::default(),
+            )
+        });
+        let view = remember(DatePickerView::default);
+        TODAY.set(Some(today));
+        RANGE_STATE.set(Some(range_state));
+        STATE.set(Some(state));
+        VIEW.set(Some(view));
+        material_theme()
+            .theme(|| {
+                let mut theme = crate::theme::MaterialTheme::default();
+                theme.color_scheme.primary = tessera_ui::Color::new(0.05, 0.15, 0.8, 1.0);
+                theme
+            })
+            .child(move || {
+                if range {
+                    super::date_range_picker()
+                        .state(range_state)
+                        .today(today.get())
+                        .first_day_of_week(Weekday::Sunday);
+                } else if dialog {
+                    date_picker_dialog()
+                        .state(state)
+                        .picker_today(today.get())
+                        .picker_view(view)
+                        .picker_first_day_of_week(Weekday::Sunday);
+                } else {
+                    date_picker()
+                        .state(state)
+                        .today(today.get())
+                        .view(view)
+                        .first_day_of_week(Weekday::Sunday);
+                }
+            });
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn assert_today_outline(
+        renderer: &tessera_ui::HeadlessRenderer,
+        label: &str,
+        radius: f64,
+        expected: bool,
+    ) {
+        let tree = renderer.accessibility_snapshot().unwrap();
+        let node = tree
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.label() == Some(label) && node.role() == tessera_ui::accesskit::Role::Button
+            })
+            .unwrap_or_else(|| panic!("missing actionable {label}"));
+        let rect = node.1.bounds().expect("date target bounds");
+        let x = (rect.x0 + rect.x1) / 2.0;
+        let y = (rect.y0 + rect.y1) / 2.0;
+        let pixels = renderer.read_pixels().unwrap();
+        let width = renderer.physical_size().width as usize;
+        let blue = ((y - radius - 1.0).floor() as usize..(y - radius + 4.0).ceil() as usize)
+            .flat_map(|y| ((x - 8.0) as usize..(x + 8.0) as usize).map(move |x| (x, y)))
+            .any(|(x, y)| {
+                let offset = (y * width + x) * 4;
+                let color = &pixels[offset..offset + 3];
+                i32::from(color[2]) > i32::from(color[0]) + 60
+                    && i32::from(color[2]) > i32::from(color[1]) + 60
+            });
+        assert_eq!(blue, expected, "current-date outline for {label}");
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    fn check_today_override(range: bool, dialog: bool) {
+        use tessera_ui::{FocusManager, HeadlessConfig, HeadlessRenderer};
+
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(move || {
+                today_fixture(range, dialog);
+            }),
+            vec![Box::new(crate::TesseraComponents)],
+            HeadlessConfig {
+                width: 400,
+                height: 650,
+                sample_count: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(8);
+        assert_today_outline(&renderer, "July 16, 2026", 20.0, true);
+        assert_today_outline(&renderer, "July 17, 2026", 20.0, false);
+        super::navigation::test_keyboard()
+            .focus_requester()
+            .request_focus();
+        renderer.render_frames(4);
+        let tree = renderer.accessibility_snapshot().unwrap();
+        assert_eq!(
+            tree.nodes
+                .iter()
+                .find(|(id, _)| *id == tree.focus)
+                .and_then(|(_, node)| node.label()),
+            Some("July 16, 2026")
+        );
+        FocusManager::current().clear_focus(true);
+        TODAY
+            .get()
+            .unwrap()
+            .set(CalendarDate::new(2026, 7, 17).unwrap());
+        renderer.render_frames(4);
+        assert_today_outline(&renderer, "July 16, 2026", 20.0, false);
+        assert_today_outline(&renderer, "July 17, 2026", 20.0, true);
+        if !range {
+            VIEW.get().unwrap().set(DatePickerView::Year);
+            TODAY
+                .get()
+                .unwrap()
+                .set(CalendarDate::new(2027, 7, 17).unwrap());
+            renderer.render_frames(4);
+            assert_today_outline(&renderer, "2027", 18.0, true);
+            assert_today_outline(&renderer, "2028", 18.0, false);
+            TODAY
+                .get()
+                .unwrap()
+                .set(CalendarDate::new(2028, 7, 17).unwrap());
+            renderer.render_frames(4);
+            assert_today_outline(&renderer, "2027", 18.0, false);
+            assert_today_outline(&renderer, "2028", 18.0, true);
+            VIEW.get().unwrap().set(DatePickerView::Calendar);
+            STATE
+                .get()
+                .unwrap()
+                .with_mut(|state| state.set_displayed_month(YearMonth::new(2028, 7).unwrap()));
+            renderer.render_frames(4);
+            super::navigation::test_keyboard()
+                .focus_requester()
+                .request_focus();
+            renderer.render_frames(4);
+            let tree = renderer.accessibility_snapshot().unwrap();
+            assert_eq!(
+                tree.nodes
+                    .iter()
+                    .find(|(id, _)| *id == tree.focus)
+                    .and_then(|(_, node)| node.label()),
+                Some("July 17, 2028")
+            );
+        } else {
+            TODAY
+                .get()
+                .unwrap()
+                .set(CalendarDate::new(2028, 7, 17).unwrap());
+            RANGE_STATE
+                .get()
+                .unwrap()
+                .with_mut(|state| state.set_displayed_month(YearMonth::new(2028, 7).unwrap()));
+            renderer.render_frames(8);
+            super::navigation::test_keyboard()
+                .focus_requester()
+                .request_focus();
+            renderer.render_frames(4);
+            let tree = renderer.accessibility_snapshot().unwrap();
+            assert_eq!(
+                tree.nodes
+                    .iter()
+                    .find(|(id, _)| *id == tree.focus)
+                    .and_then(|(_, node)| node.label()),
+                Some("July 17, 2028")
+            );
+        }
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    #[cfg(not(target_family = "wasm"))]
+    fn gpu_today_override_controls_single_and_dialog_outlines_and_keyboard_fallback() {
+        crate::test_utils::run_isolated_test(
+            "date_picker::tests::gpu_today_override_controls_single_and_dialog_outlines_and_keyboard_fallback",
+            || {
+                check_today_override(false, false);
+                check_today_override(false, true);
+            },
+        );
+    }
+
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    #[cfg(not(target_family = "wasm"))]
+    fn gpu_today_override_controls_range_outline_and_keyboard_fallback() {
+        crate::test_utils::run_isolated_test(
+            "date_picker::tests::gpu_today_override_controls_range_outline_and_keyboard_fallback",
+            || check_today_override(true, false),
+        );
+    }
+
+    #[tessera]
+    fn external_year_fixture() {
+        let state = remember(|| {
+            DatePickerState::new(
+                CalendarDate::new(2025, 8, 17),
+                YearMonth::new(2025, 8),
+                2021..=2100,
+                None,
+                None,
+                Default::default(),
+            )
+        });
+        let view = remember(|| DatePickerView::Year);
+        STATE.set(Some(state));
+        VIEW.set(Some(view));
+        material_theme().child(move || {
+            date_picker_dialog()
+                .state(state)
+                .picker_view(view)
+                .confirm_button(|| {
+                    button()
+                        .text()
+                        .accessibility_label("Confirm external view")
+                        .on_click(|| ACTION.set(1))
+                        .child(|| {
+                            text().content("OK");
+                        });
+                })
+                .dismiss_button(|| {
+                    button()
+                        .text()
+                        .accessibility_label("Cancel external view")
+                        .on_click(|| ACTION.set(2))
+                        .child(|| {
+                            text().content("Cancel");
+                        });
+                });
+        });
+    }
+
+    #[cfg(not(target_family = "wasm"))]
+    #[test]
+    #[ignore = "requires a native GPU adapter"]
+    fn gpu_external_year_view_tracks_header_toggle_selection_and_dialog_actions() {
+        use tessera_ui::{
+            HeadlessConfig, HeadlessRenderer,
+            accesskit::{Action, ActionRequest, TreeId},
+        };
+        fn activate(renderer: &mut HeadlessRenderer, label: &str) {
+            let target_node = renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .into_iter()
+                .find(|(_, node)| {
+                    node.label() == Some(label) && node.supports_action(Action::Click)
+                })
+                .unwrap_or_else(|| panic!("missing actionable {label}"))
+                .0;
+            assert!(renderer.dispatch_accessibility_action(ActionRequest {
+                action: Action::Click,
+                target_tree: TreeId::ROOT,
+                target_node,
+                data: None
+            }));
+            renderer.render_frames(4);
+        }
+        let mut renderer = HeadlessRenderer::new(
+            Box::new(external_year_fixture),
+            vec![Box::new(crate::TesseraComponents)],
+            HeadlessConfig {
+                width: 400,
+                height: 650,
+                sample_count: 1,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        renderer.render_frames(4);
+        let state = STATE.get().unwrap();
+        let view = VIEW.get().unwrap();
+        let selected = CalendarDate::new(2025, 8, 17);
+        let initial_tree = renderer.accessibility_snapshot().unwrap();
+        assert!(
+            initial_tree.nodes.iter().any(
+                |(_, node)| node.label() == Some("2025") && node.supports_action(Action::Click)
+            ),
+            "initial Year view must expose its selected year as a named action: {:?}",
+            initial_tree.nodes
+        );
+        let bounds = |label: &str| {
+            initial_tree
+                .nodes
+                .iter()
+                .find(|(_, node)| {
+                    node.label() == Some(label) && node.supports_action(Action::Click)
+                })
+                .unwrap()
+                .1
+                .bounds()
+                .unwrap()
+        };
+        let first = bounds("2021");
+        let second = bounds("2022");
+        let next_row = bounds("2024");
+        assert_eq!((first.width(), first.height()), (112.0, 52.0));
+        assert_eq!(second.x0 - first.x0, 112.0);
+        assert_eq!(next_row.y0 - first.y0, 52.0);
+        let viewport = initial_tree
+            .nodes
+            .iter()
+            .find(|(_, node)| {
+                node.label() == Some("Choose year")
+                    && node.bounds().is_some_and(|rect| rect.height() == 288.0)
+            })
+            .unwrap()
+            .1
+            .bounds()
+            .unwrap();
+        assert_eq!(viewport.width(), 336.0);
+        assert_eq!(first.y0 - viewport.y0, 8.0);
+        let confirm = bounds("Confirm external view");
+        assert_eq!(confirm.y0 - viewport.y1, 8.0);
+        let target_node = initial_tree
+            .nodes
+            .iter()
+            .find(|(_, node)| node.label() == Some("2039"))
+            .expect("virtualized overscan must retain the next focusable rows")
+            .0;
+        assert!(renderer.dispatch_accessibility_action(ActionRequest {
+            action: Action::Focus,
+            target_tree: TreeId::ROOT,
+            target_node,
+            data: None
+        }));
+        renderer.render_frames(4);
+        let focused_tree = renderer.accessibility_snapshot().unwrap();
+        let focused = focused_tree
+            .nodes
+            .iter()
+            .find(|(id, _)| *id == focused_tree.focus)
+            .unwrap();
+        assert_eq!(focused.1.label(), Some("2039"));
+        let revealed = focused.1.bounds().unwrap();
+        assert!(revealed.y0 >= viewport.y0 && revealed.y1 <= viewport.y1);
+        assert_eq!(state.with(DatePickerState::selected_date), selected);
+        activate(&mut renderer, "Choose year");
+        assert_eq!(view.get(), DatePickerView::Calendar);
+        assert!(
+            renderer
+                .accessibility_snapshot()
+                .unwrap()
+                .nodes
+                .iter()
+                .any(|(_, node)| node.label() == Some("August 17, 2025"))
+        );
+        view.set(DatePickerView::Year);
+        renderer.render_frames(4);
+        activate(&mut renderer, "2027");
+        assert_eq!(view.get(), DatePickerView::Calendar);
+        assert_eq!(
+            state.with(DatePickerState::displayed_month),
+            YearMonth::new(2027, 8).unwrap()
+        );
+        assert_eq!(state.with(DatePickerState::selected_date), selected);
+        activate(&mut renderer, "Confirm external view");
+        assert_eq!(ACTION.get(), 1);
+        activate(&mut renderer, "Cancel external view");
+        assert_eq!(ACTION.get(), 2);
+        assert_eq!(state.with(DatePickerState::selected_date), selected);
     }
 
     #[test]
@@ -1895,7 +2161,7 @@ mod tests {
                 );
                 if step == 0 && index == 1 {
                     let snapshot = pump_layout_test_session(&mut session, 50_000_001);
-                    snapshot.node("date-years").size(336, 336);
+                    snapshot.node("date-years").size(336, 288);
                 }
             }
         }
@@ -1982,3 +2248,7 @@ mod tests {
         );
     }
 }
+
+#[cfg(all(test, not(target_family = "wasm")))]
+#[path = "date_picker/focus_tests.rs"]
+mod focus_tests;
